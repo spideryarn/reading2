@@ -78,8 +78,23 @@ export interface SearchApi {
   /** The same criterion again — for a run whose model call failed. */
   retry(id: string): void;
   remove(id: string): void;
+  /** Pin a saved search to a palette slot — `null` puts it back on the hash. */
+  recolour(id: string, colour: number | null): void;
   /** A failure of the *transport*, not of the model. Model failures live on the run. */
   error: string | null;
+}
+
+/**
+ * One run wearing a colour choice — `null` or `undefined` meaning automatic.
+ *
+ * The key is **removed** rather than set to `undefined`, and that is the whole
+ * reason this is a function rather than a spread at each call site: this object
+ * gets spread over elsewhere, and an explicit `colour: undefined` sitting in a
+ * spread overwrites a real value with nothing.
+ */
+function withChoice(run: SearchRun, colour: number | null | undefined): SearchRun {
+  const { colour: _was, ...rest } = run;
+  return colour === null || colour === undefined ? rest : { ...rest, colour };
 }
 
 export function useSearch(slug: string): SearchApi {
@@ -107,10 +122,54 @@ export function useSearch(slug: string): SearchApi {
   /** Ids the reader deleted while their answer was still in the air. */
   const deleted = useRef(new Set<string>());
 
+  /**
+   * Colours this tab has chosen, by run id — the reader's word on the subject.
+   *
+   * It exists for one race, and the race is easy to hit because a meaning
+   * search takes half a minute and the row is on screen the whole time.
+   * Recolour a run that is still streaming, and the `done` frame that lands a
+   * moment later is a snapshot of the row **as the server finished writing
+   * it** — which may predate the PATCH. `put` would then paint the run back to
+   * the colour it had before the reader pressed anything, and it would stay
+   * wrong until a reload, even though the disk is correct.
+   *
+   * So every frame is re-stamped with what this tab last chose. A choice from
+   * *another* tab arriving in a frame therefore loses here, which is the right
+   * way round: the reader is looking at this one, and a reload reconciles.
+   *
+   * `null` is a value in this map rather than a deletion, because "put it back
+   * on automatic" is itself a choice that has to beat a stale frame carrying
+   * the colour it used to have.
+   */
+  const chosen = useRef(new Map<string, number | null>());
+
+  /**
+   * The last PATCH in flight for each run, so a second one waits for it.
+   *
+   * Two presses in quick succession are two independent requests, and nothing
+   * makes them arrive in the order they were sent. Pick 2 then 4, let 4 land
+   * first, and the store finishes on 2 while the screen — correctly following
+   * `chosen` — shows 4. Nothing is visibly wrong until a reload, which is the
+   * worst version of this: the reader is told their choice took, and it did
+   * not. A colour has no version to conflict on, so there is nothing for the
+   * server to reject; the ordering has to be kept here.
+   *
+   * One chain per run, not one for the panel: recolouring two different
+   * searches has no ordering to preserve, and making the second wait for the
+   * first would be a stall for nothing. GPT Sol's review, 2026-08-27.
+   */
+  const patching = useRef(new Map<string, Promise<void>>());
+
   // Switching article throws the tombstones away with the runs they name.
   useEffect(() => {
     const gone = deleted.current;
-    return () => gone.clear();
+    const picks = chosen.current;
+    const chains = patching.current;
+    return () => {
+      gone.clear();
+      picks.clear();
+      chains.clear();
+    };
   }, [slug]);
 
   useEffect(() => {
@@ -155,8 +214,11 @@ export function useSearch(slug: string): SearchApi {
 
   /** Replace one run in place, or append it if it is new. */
   const put = useCallback((next: SearchRun) => {
+    // Whatever the frame says about the colour, this tab's own choice wins —
+    // see `chosen`. Nothing happens to a run the reader has not recoloured.
+    const run = chosen.current.has(next.id) ? withChoice(next, chosen.current.get(next.id)) : next;
     setRuns((prev) =>
-      prev.some((r) => r.id === next.id) ? prev.map((r) => (r.id === next.id ? next : r)) : [...prev, next],
+      prev.some((r) => r.id === run.id) ? prev.map((r) => (r.id === run.id ? run : r)) : [...prev, run],
     );
   }, []);
 
@@ -320,6 +382,62 @@ export function useSearch(slug: string): SearchApi {
     [runs, send],
   );
 
+  /**
+   * Pin one saved search to a palette slot, or hand it back to the hash.
+   *
+   * **Optimistic, and it stays optimistic even if the request fails.** Every
+   * other write in this hook rolls back or reports, and this one deliberately
+   * does neither of those two things loudly: the reader pressed a swatch and
+   * the row changed colour, and a colour that flicked back a second later
+   * would read as the app arguing with them. The transport error is still set,
+   * so the panel says something went wrong; what does not happen is the hue
+   * jumping about while they read the message.
+   *
+   * **The response is deliberately not read**, even though the route answers
+   * with the whole list. Pinning one search really can move another's hue —
+   * `assignSlots` walks the list, so taking a slot pushes whoever had it along
+   * — but that assignment happens *here*, in the browser, over the array this
+   * hook already holds. The server stores a number and has no opinion about
+   * what colour it is (src/web/hit-colours.ts § the seam), so its list says
+   * nothing this one does not. Adopting it would also be actively harmful: it
+   * carries no hits for a run this tab is streaming into right now, so a
+   * swatch pressed mid-search would wipe the passages arriving on screen.
+   */
+  const recolour = useCallback(
+    (id: string, colour: number | null) => {
+      chosen.current.set(id, colour);
+      setRuns((prev) => prev.map((r) => (r.id === id ? withChoice(r, colour) : r)));
+
+      const send = async () => {
+        try {
+          const r = await apiFetch(
+            `/api/search/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ colour }),
+            },
+          );
+          // Same line, same reason, as `forget` above: a PATCH that 500s used
+          // to change the colour on screen and say nothing, so the reader saw
+          // their choice take and found it gone after a reload.
+          if (!r.ok) throw await failure(r);
+        } catch (e) {
+          setError(describeFetchFailure(e as Error));
+        }
+      };
+
+      /* Behind whatever is already out for *this* run — see `patching`. The
+         `.then(send, send)` rather than `.then(send)` is the load-bearing part:
+         a failed PATCH must not stop the next one being sent, or one dropped
+         connection wedges that row's colour for the rest of the session. */
+      const next = (patching.current.get(id) ?? Promise.resolve()).then(send, send);
+      patching.current.set(id, next);
+      void next;
+    },
+    [slug],
+  );
+
   const remove = useCallback(
     (id: string) => {
       deleted.current.add(id);
@@ -353,5 +471,5 @@ export function useSearch(slug: string): SearchApi {
     [runs, fingerprint],
   );
 
-  return { runs: decided, loaded, ask, retry, remove, error };
+  return { runs: decided, loaded, ask, retry, remove, recolour, error };
 }

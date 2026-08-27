@@ -11,13 +11,20 @@ the reasoning, the sources, and the honest account of what each one gets wrong.
 > — Greg, 2026-08-26
 
 One of them is in use today: the categorical set gives every saved search its own colour
-([search.md](search.md)). The other two are built now rather than when they are needed, because the
+([search.md](search.md)) — derived from a hash of the search's id, or, since 2026-08-27, chosen by
+the reader from a swatch popover on the row ([search.md § Changing a row's colour](search.md),
+[search-row-colour.md](../plans/search-row-colour.md)). **The picker is the one control in the app
+that shows a reader this palette, and it still does not know what is in it**: a swatch is
+`var(--cat-N-rgb)` and a choice is the number `N`, so everything on this page stays one edit in one
+stylesheet. That is also why the survey of colour-picker libraries came back recommending none of
+them — every one of them wants a parsed colour value, and an arbitrary colour is the thing the
+argument below is against. The other two are built now rather than when they are needed, because the
 alternative is that the first feature to want a ramp invents one inline, and by the time there are
 two of those neither can be changed.
 
 | Scale | Tokens | Means | Status |
 |---|---|---|---|
-| **Categorical** | `--cat-0` … `--cat-7` (+ `-rgb`) | these are different things | in use — one per saved search |
+| **Categorical** | `--cat-0` … `--cat-7` (+ `-rgb`) | these are different things | in use — one per saved search, and since 2026-08-27 the reader can pick which |
 | **Sequential (hot)** | `--heat-0` … `--heat-8` | this much of it, and it is hot | ready, unused |
 | **Sequential (neutral)** | `--vir-0` … `--vir-8` (+ `-rgb`) | this much of it | in use — how far through the article a paragraph is |
 | **Diverging** | `--div-0` … `--div-8`, `--div-rg-0` … `--div-rg-8` | which side of the middle | ready, unused |

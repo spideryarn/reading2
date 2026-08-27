@@ -56,7 +56,7 @@ import { getDb } from "../db/client.js";
 import { articles, revisionBlocks, searchRuns } from "../db/schema.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
-import { MAX_RUNS, withRun } from "../searches.js";
+import { MAX_RUNS, requireColour, withRun } from "../searches.js";
 import { hashBlocks } from "../source-hash.js";
 import type { SearchHit, SearchRun } from "../types.js";
 import type { SearchStore, SweepOptions } from "./contracts.js";
@@ -110,6 +110,7 @@ function toRun(row: typeof searchRuns.$inferSelect): SearchRun {
     ...(row.model === null ? {} : { model: row.model }),
     ...(row.error === null ? {} : { error: row.error }),
     ...(row.sourceHash === null ? {} : { sourceHash: row.sourceHash }),
+    ...(row.colour === null ? {} : { colour: row.colour }),
   };
 }
 
@@ -397,6 +398,37 @@ export const pgSearchStore: SearchStore = {
     const remaining = await runsFor(articleId);
     logger.info({ slug, runId, remaining: remaining.length }, "search deleted");
     return remaining;
+  },
+
+  async recolour(slug: string, runId: string, colour: number | null): Promise<SearchRun[]> {
+    /* Before the article lookup, and in TypeScript rather than left to the
+       check constraint. The constraint is real and stays, but a store that
+       relies on it alone answers a bad value with a `StoreFailure` — "this app
+       asked its database for something it would not do" — where the filesystem
+       store answers with a 400. Two stores disagreeing about what a bad request
+       *is* is exactly the divergence a parity test on the happy path never
+       sees. GPT Sol's review, 2026-08-27. */
+    requireColour(colour);
+    const db = getDb();
+    const articleId = await articleIdFor(slug);
+    /* Unconditional on status, unlike every other write in this file. A colour
+       is not part of the answer: recolouring a run that is still `pending`, or
+       one that failed, is a perfectly ordinary thing for a reader to do to a
+       row they can see. So there is no attempt fence here and nothing to
+       race — two tabs setting different colours is last-write-wins, which for
+       a value with no history is the correct resolution rather than a
+       compromise.
+
+       An id that names no run updates nothing and is not an error: a second
+       tab can have deleted it, and the list that comes back says so. Same rule
+       as `withColour` on the filesystem side. */
+    await db
+      .update(searchRuns)
+      .set({ colour })
+      .where(and(eq(searchRuns.articleId, articleId), eq(searchRuns.id, runId)));
+    /* The whole list, not the row — one run's colour changes which slots are
+       free, so it can move another row's. `SearchStore.recolour` says why. */
+    return runsFor(articleId);
   },
 
   async sweepPending(slug: string, opts: SweepOptions): Promise<SearchRun[]> {

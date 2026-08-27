@@ -582,6 +582,41 @@ debt rather than a resolved question. The row button keeps the app's own orange 
 (`--highlight`, the convention `.cmt-dialog button:focus-visible` explains) inset by 2px, because
 the list is a scroller and an outward ring on the first or last row is clipped by it.
 
+### Changing a row's colour
+
+> In Search mode, I'd like to be able to change the colour for a given row.
+>
+> — Greg, 2026-08-27
+
+The fourth control on the row: a palette icon that opens a popover with the eight hues in it, and a
+ninth choice called **Automatic** which hands the row back to the hash. It is the day-after reversal
+of a decision on this exact subject, and [hit-colours.ts](../../src/web/hit-colours.ts) argues its
+own case both ways — the short version is that the objection to storing a colour was an objection to
+storing a *derived* value, and a colour the reader picked is not one. What that objection was really
+protecting is intact: **what gets stored is a slot number, and nothing outside `colourscales.css`
+ever learns what colour it is.**
+
+Three things about it are worth knowing before touching it, and all three are in
+[search-row-colour.md](../plans/search-row-colour.md) in full:
+
+- **The assignment is two passes now.** Every chosen slot is reserved before a single automatic run
+  probes, so a pin is a pin rather than a preference. And two searches *may* share a hue if the
+  reader says so — that is an instruction, not a collision.
+- **The check on the stored value is deliberately looser than the palette** (sixty-four, not eight).
+  The server does not know how many hues there are, so a tight bound would be a constraint holding
+  an opinion it cannot keep current. A slot past the end of the palette falls back to automatic;
+  a constraint pinned at 8 would instead refuse a reader's choice the day the palette grows.
+- **Slot 0 is a colour and `null` is a command.** Every obvious shape of validation gets one of them
+  wrong: `if (!colour)` refuses the first hue in the palette, `if (colour !== undefined)` lets a
+  float through to a custom-property name, where it paints nothing and says nothing.
+
+**No colour-picker library**, and not for the usual reasons — `react-colorful` is 5.9M downloads a
+week, zero dependencies and 4.8KB. It is the wrong tool because it picks an *arbitrary* colour, and
+an arbitrary colour is the thing this control must not offer: the eight hues were chosen together
+for a near-black page ([colour-scales.md](colour-scales.md)), and the first thing anybody reaches for
+on a black background is a dark one nobody will be able to see. The picker is Floating UI, which was
+already here for the tooltips, with `useClick` where the tooltip has `useHover`.
+
 ## The rail, and the shape of a search
 
 > And also show the Spine by default when "Search" mode is active, and add dots/thin vertical lines

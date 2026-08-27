@@ -1736,4 +1736,29 @@ export interface SearchRun {
    * it is fine, and this is the safe way round to be wrong.
    */
   sourceHash?: string;
+
+  /**
+   * **The palette slot the reader picked for this search** — absent means
+   * "whichever one the hash gives it".
+   *
+   * Greg, 2026-08-27: *"In Search mode, I'd like to be able to change the
+   * colour for a given row."* Until then every colour was derived, and
+   * src/web/hit-colours.ts said in as many words why it should stay that way:
+   * storing one *"means a schema change, a migration, and a server that has an
+   * opinion about the palette — for a value that is derived."* Two thirds of
+   * that objection stand and have been paid; the third one does not apply any
+   * more, because a colour the reader chose is not derived from anything. The
+   * argument was never against the field, it was against storing a value
+   * nobody had an opinion about.
+   *
+   * **A number, and the server has no idea what colour it is.** That is the
+   * one part of the old objection this field is still careful about: the hues
+   * live in styles/colourscales.css, the slot-to-hue step happens in the
+   * browser, and this column could hold a 5 for a palette that has not been
+   * designed yet. The server checks only that it is a small non-negative
+   * integer (`isStorableColour`, src/searches.ts); a value past the end of the
+   * palette is ignored by `assignSlots` and the row falls back to auto, which
+   * is what a shrinking palette should do rather than paint nothing.
+   */
+  colour?: number;
 }

@@ -14,6 +14,35 @@
  * a hex value beyond the reach of the theme, and a palette change would then
  * mean editing TypeScript.
  *
+ * ## The reader can override it — 2026-08-27
+ *
+ * Greg: *"In Search mode, I'd like to be able to change the colour for a given
+ * row."* So a run may carry a `colour` of its own (`SearchRun.colour`), and
+ * everything below applies to the runs that do not.
+ *
+ * This reverses a call made on this page a day earlier. Storing the colour was
+ * rejected as *"a schema change, a migration, and a server that has an opinion
+ * about the palette — for a value that is derived"*, and it is worth being
+ * exact about which third of that changed. The schema change and the migration
+ * were real and have been paid. The third was never an objection to the field:
+ * it was an objection to storing a value nobody had an opinion about, and a
+ * colour the reader picked is not derived from anything. **The seam it was
+ * really protecting is still intact** — what is stored is a slot *number*, the
+ * server never learns what colour it names, and the hues are still one edit in
+ * colourscales.css.
+ *
+ * Two consequences follow, and both are the reason the override is applied
+ * before anything else rather than as a special case inside the loop:
+ *
+ * - **A chosen slot is reserved.** An automatic run may not take a slot some
+ *   other run was pinned to, whether that run was created before it or after.
+ *   Otherwise pinning search five to slot 3 would depend on whether search two
+ *   had already probed its way there.
+ * - **Two chosen runs may share a hue.** If the reader pins two searches to the
+ *   same colour, they get the same colour. That is an instruction, not a
+ *   collision, and a picker that silently moved the second one would be the
+ *   panel arguing with the reader.
+ *
  * ## What the assignment has to be, and what it cannot be
  *
  * The requirement that shapes everything below is **stability**. A saved search
@@ -41,13 +70,21 @@
  * the change can walk along a probing cluster rather than stopping at one run.
  * Usually it moves nothing; the worst case is not "exactly one".
  *
- * Two ways out were considered and both are worse. Storing
- * the colour on the run means a schema change, a migration, and a server that
- * has an opinion about the palette — for a value that is derived. Never reusing
- * a freed slot means keeping a tombstone list forever so that the tenth search
- * in a five-colour palette knows what the third one used to be. A colour
- * changing when you delete the search above it is a thing the reader watched
- * happen; the other two are silent.
+ * Two ways out were considered and both are worse. Storing the colour on the
+ * run means a schema change, a migration, and a server that has an opinion
+ * about the palette — for a value that is derived. Never reusing a freed slot
+ * means keeping a tombstone list forever so that the tenth search in a
+ * five-colour palette knows what the third one used to be. A colour changing
+ * when you delete the search above it is a thing the reader watched happen;
+ * the other two are silent.
+ *
+ * **The first of those two was built anyway on 2026-08-27, and this paragraph
+ * is deliberately left standing.** It is still the right answer to the
+ * question it was asked — *should a derived colour be stored?* — and the
+ * override is not that. A run with no `colour` is still assigned exactly as
+ * described here, and still moves when the search above it is deleted. What
+ * the reader now has is a way to say *no, this one is blue*, which is the only
+ * thing that ever needed storing. See § The reader can override it, above.
  *
  * ## Why the *preference* is a hash rather than the position
  *
@@ -83,6 +120,47 @@
  * many. A ninth hue that nobody can tell from the third is not a ninth colour.
  */
 export const CATEGORICAL_SLOTS = 8;
+
+/**
+ * What `assignSlots` needs to know about a run: who it is, when it arrived,
+ * and whether the reader has already said what colour it should be.
+ *
+ * Structural rather than `SearchRun`, so this module still imports nothing —
+ * which is what lets `tests/hit-colours.test.ts` build six runs out of two
+ * fields each, and what keeps the file honest about depending on the ids and
+ * the clock and nothing else.
+ */
+export interface PalettedRun {
+  id: string;
+  createdAt: string;
+  /** The reader's own choice. Absent, or out of range, means "work it out". */
+  colour?: number | undefined;
+}
+
+/**
+ * Does this number name a hue we actually have?
+ *
+ * **The only place that can answer**, because it is the only side of the seam
+ * that knows how big the palette is — the server stores a slot without knowing
+ * what colour it is (`SearchRun.colour`), and the CSS knows the colours
+ * without knowing the number. So a stored `9` is not corrupt data and must not
+ * be treated as such: it is a choice this build cannot honour, and the row
+ * quietly goes back to its automatic hue rather than referring to
+ * `var(--cat-9-rgb)`, which is an invalid value and paints nothing at all.
+ *
+ * Both ends of the range, and `Number.isInteger` before either: the identical
+ * three-part check `annotate.ts` makes before interpolating a slot into a
+ * custom-property *name*, where `NaN` and `2.5` are not errors anywhere, they
+ * are just marks that never appear.
+ */
+export function isPaletteSlot(value: number | undefined): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value < CATEGORICAL_SLOTS
+  );
+}
 
 /**
  * FNV-1a, 32-bit — a hash chosen for being boring and identical everywhere.
@@ -158,10 +236,32 @@ function inCreationOrder<T extends { id: string; createdAt: string }>(runs: T[])
  * are switched on: a search's colour must not change when the reader ticks the
  * box next to it.
  */
-export function assignSlots(runs: { id: string; createdAt: string }[]): Map<string, number> {
+export function assignSlots(runs: PalettedRun[]): Map<string, number> {
   const slots = new Map<string, number>();
   const taken = new Set<number>();
+
+  /* The reader's own choices first, all of them, before a single automatic run
+     probes. Two passes rather than one because a pin is not a preference: an
+     automatic run must not be sitting in a slot that a *later* run was pinned
+     to, and inside one ordered walk it would be. `taken` collects them, so the
+     probing below routes around every pin at once.
+
+     A slot outside the palette is ignored rather than clamped, and the row
+     falls back to auto. The server stores a number and does not know how many
+     hues there are (`SearchRun.colour`), so this is the only place that can
+     tell, and clamping would silently answer a question the reader did not
+     ask — pin to 9 in an eight-hue palette and get 7, which is a colour they
+     chose against. */
+  const pinned = new Set<number>();
+  for (const run of runs) {
+    if (!isPaletteSlot(run.colour)) continue;
+    slots.set(run.id, run.colour);
+    taken.add(run.colour);
+    pinned.add(run.colour);
+  }
+
   for (const run of inCreationOrder(runs)) {
+    if (slots.has(run.id)) continue;
     const first = hash32(run.id) % CATEGORICAL_SLOTS;
     let slot = first;
     for (let step = 0; step < CATEGORICAL_SLOTS && taken.has(slot); step++) {
@@ -174,6 +274,24 @@ export function assignSlots(runs: { id: string; createdAt: string }[]): Map<stri
        point — clearing it would start a second pass that re-derived the same
        eight assignments and handed the ninth run slot 0 regardless of its hash,
        which is a worse collision than the hashed one. */
+    if (taken.has(slot) && pinned.has(slot)) {
+      /* **A repeat has to fall on an automatic slot before a pinned one.**
+         Repeating is unavoidable in a full palette, but the two repeats are not
+         equally bad: colliding with another automatic hue costs a distinction
+         nobody asked for, while colliding with a *chosen* one takes the meaning
+         out of the reader's own choice — the whole point of pinning a search is
+         that its colour says "this question", and a ninth search wearing it
+         says it twice. So one more probe, skipping only the pins. If every slot
+         is pinned there is genuinely nothing better, and the hashed first
+         choice stands. GPT Sol's review, 2026-08-27, which pointed out that the
+         reservation above stops holding at exactly the moment the palette
+         fills — and that a test using eight runs cannot see it. */
+      let alt = first;
+      for (let step = 0; step < CATEGORICAL_SLOTS && pinned.has(alt); step++) {
+        alt = (first + step + 1) % CATEGORICAL_SLOTS;
+      }
+      if (!pinned.has(alt)) slot = alt;
+    }
     slots.set(run.id, slot);
     taken.add(slot);
   }

@@ -93,6 +93,9 @@ beforeEach(() => {
       if (!postImpl) throw new Error("no postImpl set for this test");
       return postImpl(JSON.parse((init.body as string) ?? "{}"));
     }
+    if (init.method === "PATCH") {
+      return Promise.resolve({ ok: true, text: () => Promise.resolve("{}") } as unknown as Response);
+    }
     if (init.method === "DELETE") {
       return Promise.resolve({ ok: true, text: () => Promise.resolve("") } as unknown as Response);
     }
@@ -143,6 +146,244 @@ describe("hits stream in, and done is authoritative", () => {
     const run = latest?.runs.find((r) => r.id === runId);
     expect(run?.status).toBe("done");
     expect(run?.hits).toEqual([HIT1, HIT3]);
+  });
+});
+
+describe("the reader's colour choice beats a frame that predates it", () => {
+  it("keeps a colour picked mid-search when the done frame carries the old one", async () => {
+    /* The race the `chosen` ref exists for. A meaning search takes half a
+       minute and the row is on screen the whole time, so recolouring one that
+       is still running is an ordinary thing to do — and the `done` frame is a
+       snapshot of the row as the server finished writing it, which can predate
+       the PATCH. Without the ref, the colour the reader just picked is painted
+       back to the old one and stays wrong until a reload, while the disk is
+       correct the whole time.
+
+       The stream is split so that the recolour happens *between* `begin` and
+       `done`, which is the only way to reproduce it. */
+    await mount("a-slug");
+    await flush();
+
+    const createdAt = "2026-01-01T00:00:00.000Z";
+    let release: (() => void) | undefined;
+    postImpl = ({ id, criterion }) =>
+      Promise.resolve({
+        ok: true,
+        body: new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(
+              sseBytes([
+                { event: "begin", data: { id, criterion, createdAt, status: "pending", hits: [], colour: 1 } },
+              ]),
+            );
+            release = () => {
+              // The row as the server had it *before* the PATCH landed.
+              c.enqueue(
+                sseBytes([
+                  { event: "done", data: { id, criterion, createdAt, status: "done", hits: [], colour: 1 } },
+                ]),
+              );
+              c.close();
+            };
+          },
+        }),
+      } as unknown as Response);
+
+    const runId = latest?.ask("arguments against dualism") as string;
+    await flush();
+    expect(latest?.runs.find((r) => r.id === runId)?.colour).toBe(1);
+
+    await act(async () => {
+      latest?.recolour(runId, 6);
+    });
+    expect(latest?.runs.find((r) => r.id === runId)?.colour).toBe(6);
+
+    await act(async () => release?.());
+    await flush();
+
+    const run = latest?.runs.find((r) => r.id === runId);
+    expect(run?.status).toBe("done");
+    expect(run?.colour).toBe(6);
+  });
+
+  it("keeps 'automatic' too, which is a choice rather than the absence of one", async () => {
+    await mount("a-slug");
+    await flush();
+
+    const createdAt = "2026-01-01T00:00:00.000Z";
+    let release: (() => void) | undefined;
+    postImpl = ({ id, criterion }) =>
+      Promise.resolve({
+        ok: true,
+        body: new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(
+              sseBytes([
+                { event: "begin", data: { id, criterion, createdAt, status: "pending", hits: [], colour: 4 } },
+              ]),
+            );
+            release = () => {
+              c.enqueue(
+                sseBytes([
+                  { event: "done", data: { id, criterion, createdAt, status: "done", hits: [], colour: 4 } },
+                ]),
+              );
+              c.close();
+            };
+          },
+        }),
+      } as unknown as Response);
+
+    const runId = latest?.ask("arguments against dualism") as string;
+    await flush();
+
+    await act(async () => {
+      latest?.recolour(runId, null);
+    });
+    await act(async () => release?.());
+    await flush();
+
+    const run = latest?.runs.find((r) => r.id === runId);
+    // Absent, not `undefined` sitting in the object — see `withChoice`.
+    expect(run && "colour" in run).toBe(false);
+  });
+});
+
+describe("two colour choices in quick succession", () => {
+  it("reaches the server in the order the reader made them", async () => {
+    /* Two independent PATCHes have no ordering, and the failure is the quiet
+       kind: the screen follows the reader (via `chosen`) while the store
+       finishes on whichever request happened to land last. Nothing looks wrong
+       until a reload — which is the reader being told their choice took when
+       it did not.
+
+       The mock holds the first PATCH open until the second has been asked for,
+       so a hook that fires them in parallel sends both and this test sees two
+       in flight at once; one that chains them cannot get past the first. */
+    await mount("a-slug");
+    await flush();
+
+    const sent: (number | null)[] = [];
+    let inFlight = 0;
+    let peak = 0;
+    let releaseFirst: (() => void) | undefined;
+    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (_url: string, init?: RequestInit) => {
+        if (init?.method !== "PATCH") {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(JSON.stringify({ runs: [] })),
+          } as unknown as Response);
+        }
+        const { colour } = JSON.parse((init.body as string) ?? "{}") as { colour: number | null };
+        sent.push(colour);
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        const done = { ok: true, text: () => Promise.resolve("{}") } as unknown as Response;
+        if (sent.length === 1) {
+          return new Promise<Response>((resolve) => {
+            releaseFirst = () => {
+              inFlight--;
+              resolve(done);
+            };
+          });
+        }
+        inFlight--;
+        return Promise.resolve(done);
+      },
+    );
+
+    await act(async () => {
+      latest?.recolour("spya-aaaaaa", 2);
+      latest?.recolour("spya-aaaaaa", 4);
+    });
+    await flush(2);
+
+    // The second has not been sent while the first is still out.
+    expect(sent).toEqual([2]);
+    expect(peak).toBe(1);
+
+    await act(async () => releaseFirst?.());
+    await flush();
+
+    expect(sent).toEqual([2, 4]);
+    expect(peak).toBe(1);
+  });
+
+  it("does not wedge the row when one of them fails", async () => {
+    /* **Two things keep the chain alive and this pins the outcome, not either
+       of them** — which is worth saying, because it means the test does not go
+       red if you remove one. `send` catches its own failure, so the promise it
+       returns never rejects; and the chain hands the tail `.then(send, send)`
+       rather than `.then(send)`. Either alone is enough today. Both are kept
+       because the cost is nothing and the failure they prevent is the worst
+       shape there is: one dropped connection wedging that row's colour for the
+       rest of the session, silently. */
+    await mount("a-slug");
+    await flush();
+
+    const sent: (number | null)[] = [];
+    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (_url: string, init?: RequestInit) => {
+        if (init?.method !== "PATCH") {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(JSON.stringify({ runs: [] })),
+          } as unknown as Response);
+        }
+        const { colour } = JSON.parse((init.body as string) ?? "{}") as { colour: number | null };
+        sent.push(colour);
+        return sent.length === 1
+          ? Promise.reject(new Error("the connection dropped"))
+          : Promise.resolve({ ok: true, text: () => Promise.resolve("{}") } as unknown as Response);
+      },
+    );
+
+    await act(async () => latest?.recolour("spya-aaaaaa", 2));
+    await flush();
+    await act(async () => latest?.recolour("spya-aaaaaa", 5));
+    await flush();
+
+    expect(sent).toEqual([2, 5]);
+  });
+
+  it("does not make one run's colour wait for another's", async () => {
+    // One chain per run: two different searches have no ordering to keep, and
+    // making the second wait would be a stall for nothing.
+    await mount("a-slug");
+    await flush();
+
+    let inFlight = 0;
+    let peak = 0;
+    const held: (() => void)[] = [];
+    (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      (_url: string, init?: RequestInit) => {
+        if (init?.method !== "PATCH") {
+          return Promise.resolve({
+            ok: true,
+            text: () => Promise.resolve(JSON.stringify({ runs: [] })),
+          } as unknown as Response);
+        }
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        return new Promise<Response>((resolve) => {
+          held.push(() => {
+            inFlight--;
+            resolve({ ok: true, text: () => Promise.resolve("{}") } as unknown as Response);
+          });
+        });
+      },
+    );
+
+    await act(async () => {
+      latest?.recolour("spya-aaaaaa", 2);
+      latest?.recolour("spya-bbbbbb", 4);
+    });
+    await flush(2);
+    expect(peak).toBe(2);
+    await act(async () => {
+      for (const release of held) release();
+    });
   });
 });
 

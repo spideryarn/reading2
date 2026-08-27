@@ -51,6 +51,7 @@ import {
   deleteRun,
   finishRun,
   loadRuns,
+  recolourRun,
   update as updateRuns,
 } from "../searches.js";
 import { loadShelf, patchShelf, recordOpen } from "../shelf.js";
@@ -347,6 +348,11 @@ export const fsSearchStore: SearchStore = {
      is over the whole article rather than only the blocks a run cited. */
   sourceHash: currentSourceHash,
   remove: deleteRun,
+  /* The reader's own colour choice, which is the one field on a run neither
+     the model nor the pipeline writes. `withColour` is shared with the
+     Postgres half, so "clear it" means the same thing on both sides — the key
+     absent rather than a stored null. */
+  recolour: recolourRun,
 
   async begin(slug, criterion, wantedId, now) {
     return { run: await beginRun(slug, criterion, wantedId, now), attempt: undefined };

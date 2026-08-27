@@ -19,9 +19,12 @@ import {
   deleteRun,
   finishRun,
   isStale,
+  isStorableColour,
   loadRuns,
   MAX_RUNS,
+  MAX_STORED_COLOUR,
   readSearches,
+  recolourRun,
   update,
 } from "../src/searches.js";
 import type { Block, SearchHit, SearchRun } from "../src/types.js";
@@ -132,6 +135,100 @@ describe("saved-search storage", () => {
     const b = await beginRun(SLUG, "second");
     const left = await deleteRun(SLUG, a.id);
     expect(left.map((r) => r.id)).toEqual([b.id]);
+  });
+
+  it("keeps the reader's colour choice, and clears it back to absent", async () => {
+    const run = await beginRun(SLUG, "arguments against");
+    await recolourRun(SLUG, run.id, 5);
+    expect((await loadRuns(SLUG))[0]?.colour).toBe(5);
+
+    /* Absent, not `colour: null`. A null on disk would be a third state for a
+       field that has two, and `exactOptionalPropertyTypes` would let it through
+       anywhere the object is spread. `in` rather than a truthiness check,
+       because **slot 0 is a colour** — the one hue an `if (!colour)` anywhere
+       in this feature would have silently dropped. */
+    await recolourRun(SLUG, run.id, null);
+    const cleared = (await loadRuns(SLUG))[0];
+    expect(cleared && "colour" in cleared).toBe(false);
+    expect(JSON.parse(await readFile(FILE, "utf8")).runs[0]).not.toHaveProperty("colour");
+  });
+
+  it("keeps slot 0, which every truthiness check in this feature would drop", async () => {
+    const run = await beginRun(SLUG, "the first hue");
+    await recolourRun(SLUG, run.id, 0);
+    expect((await loadRuns(SLUG))[0]?.colour).toBe(0);
+  });
+
+  it("recolours one run without touching its neighbours, or the answer on it", async () => {
+    const a = await beginRun(SLUG, "first");
+    const b = await beginRun(SLUG, "second");
+    await finishRun(SLUG, a.id, { status: "done", hits: [HIT] });
+    const runs = await recolourRun(SLUG, a.id, 3);
+    expect(runs.find((r) => r.id === a.id)).toMatchObject({
+      colour: 3,
+      status: "done",
+      hits: [HIT],
+      criterion: "first",
+    });
+    expect(runs.find((r) => r.id === b.id)).not.toHaveProperty("colour");
+  });
+
+  it("shrugs at a colour for a run that is not there", async () => {
+    /* A second tab can delete a search between this one reading the list and
+       the reader pressing a swatch. The list that comes back says it is gone,
+       which is the answer — a 404 here would be the app reporting a fault for
+       something that already happened correctly. */
+    const run = await beginRun(SLUG, "first");
+    await expect(recolourRun(SLUG, "spya-zzzzzz", 4)).resolves.toHaveLength(1);
+    expect((await loadRuns(SLUG))[0]?.id).toBe(run.id);
+  });
+
+  it("keeps the reader's colour across a retry", async () => {
+    /* A retry rebuilds the run field by field, precisely so the failed
+       attempt's error and hits cannot survive underneath a later answer. The
+       colour is the one field that must survive it: it is not part of the
+       attempt, it is a property of the question, and the question is what a
+       retry keeps. Dropping it made this store disagree with the Postgres one,
+       whose reset simply does not name the column. GPT Sol, 2026-08-27. */
+    const run = await beginRun(SLUG, "arguments against", "spya-runab2");
+    await recolourRun(SLUG, run.id, 4);
+    await finishRun(SLUG, run.id, { status: "error", error: "the model fell over" });
+
+    const again = await beginRun(SLUG, "arguments against", run.id);
+    expect(again.id).toBe(run.id);
+    expect(again.status).toBe("pending");
+    expect(again.colour).toBe(4);
+    expect((await loadRuns(SLUG))[0]?.colour).toBe(4);
+  });
+
+  it("refuses a bad colour at the store, not only at the route", async () => {
+    /* The contract says both stores validate, so both stores have to. A store
+       that leaned on the route would let the importer — which writes this
+       column and does not go through a route — put a 2.5 on disk, where it
+       reaches the browser as `var(--cat-2.5-rgb)`: not an error anywhere, and
+       it paints nothing at all. And the Postgres half would refuse the same
+       call with a database failure rather than a 400, which is two stores
+       disagreeing about what a bad request *is*. */
+    const run = await beginRun(SLUG, "arguments against");
+    for (const bad of [64, -1, 2.5]) {
+      await expect(recolourRun(SLUG, run.id, bad)).rejects.toThrow(/storable colour/);
+    }
+    const stored = (await loadRuns(SLUG))[0];
+    expect(stored && "colour" in stored).toBe(false);
+  });
+
+  it("refuses to store anything that is not a small whole number", () => {
+    /* The guard the route leans on. Loose on purpose at the top end — the
+       server does not know how big the palette is (src/web/hit-colours.ts § the
+       seam) — and strict about *kind*, because a float or a string reaches the
+       browser as `var(--cat-2.5-rgb)`, which is not an error anywhere and
+       simply paints nothing. */
+    for (const good of [0, 1, 7, MAX_STORED_COLOUR - 1]) {
+      expect(isStorableColour(good)).toBe(true);
+    }
+    for (const bad of [-1, 2.5, Number.NaN, Infinity, MAX_STORED_COLOUR, "3", null, undefined, {}]) {
+      expect(isStorableColour(bad)).toBe(false);
+    }
   });
 
   it("drops the oldest once the cap is reached", async () => {

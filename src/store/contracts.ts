@@ -546,6 +546,25 @@ export interface SearchStore {
 
   remove(slug: string, runId: string): Promise<SearchRun[]>;
 
+  /**
+   * **The reader's colour choice for one run** — `null` puts it back on auto.
+   *
+   * The whole list comes back, the same shape as `remove`, because a colour is
+   * a property of the *set* rather than of one row: slots are assigned by
+   * walking the list (`assignSlots`, src/web/hit-colours.ts), so pinning this
+   * search to slot 3 can push the search that had slot 3 onto slot 4. The
+   * panel does not in fact read the response — it does that walk itself, over
+   * runs it already holds (src/web/useSearch.ts § recolour) — but a store
+   * whose answer was one row would make any *other* caller wrong, and the two
+   * writes beside this one already answer with a list.
+   *
+   * The number is stored and never interpreted. Neither store knows how many
+   * hues there are or what they look like — see `SearchRun.colour`. Both check
+   * only `isStorableColour` (src/searches.ts), and an id that names no run is
+   * a no-op rather than a 404: a second tab can have deleted it.
+   */
+  recolour(slug: string, runId: string, colour: number | null): Promise<SearchRun[]>;
+
   /** Turn abandoned `pending` runs into `error`. See `SweepOptions`. */
   sweepPending(slug: string, opts: SweepOptions): Promise<SearchRun[]>;
 }

@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleApi } from "../src/routes.js";
 import { createComment, loadComments } from "../src/comments.js";
 import { loadShelf } from "../src/shelf.js";
-import { deleteRun, loadRuns } from "../src/searches.js";
+import { beginRun, deleteRun, loadRuns } from "../src/searches.js";
 import { mintId } from "../src/ids.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
@@ -783,6 +783,91 @@ describe("POST /api/search/:slug is a stream too", () => {
     expect(frames.map((f) => f.event)).toEqual(["begin", "hit"]);
     expect(frames.some((f) => f.event === "done")).toBe(false);
     expect(await loadRuns(SEARCH_SLUG)).toHaveLength(0);
+  });
+});
+
+/**
+ * `PATCH /api/search/:slug/:id` — the reader's colour for one saved search.
+ *
+ * The route is four lines and three of them are the validation, which is where
+ * the whole of the risk is: **slot 0 is a colour and `null` is a command**, so
+ * every obvious shape of check gets one of them wrong. A truthiness test
+ * refuses the first hue in the palette; a plain `!== undefined` lets a string
+ * or a float through to a browser that will interpolate it into a custom
+ * property name and paint nothing at all.
+ */
+describe("PATCH /api/search/:slug/:id", () => {
+  const COLOUR_SLUG = "test-routes-colour-fixture";
+  const COLOUR_DIR = path.resolve(import.meta.dirname, "..", "data", COLOUR_SLUG);
+  afterEach(() => rm(COLOUR_DIR, { recursive: true, force: true }));
+
+  async function saved(criterion = "arguments against"): Promise<string> {
+    const { id } = await beginRun(COLOUR_SLUG, criterion);
+    return id;
+  }
+
+  it("stores the slot the reader picked", async () => {
+    const id = await saved();
+    const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, { colour: 5 });
+    expect(r.status).toBe(200);
+    expect((await loadRuns(COLOUR_SLUG))[0]?.colour).toBe(5);
+  });
+
+  it("accepts slot 0, which a truthiness check would refuse", async () => {
+    const id = await saved();
+    const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, { colour: 0 });
+    expect(r.status).toBe(200);
+    expect((await loadRuns(COLOUR_SLUG))[0]?.colour).toBe(0);
+  });
+
+  it("takes null as 'put it back on automatic', not as a missing field", async () => {
+    const id = await saved();
+    await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, { colour: 3 });
+    const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, { colour: null });
+    expect(r.status).toBe(200);
+    const run = (await loadRuns(COLOUR_SLUG))[0];
+    expect(run && "colour" in run).toBe(false);
+  });
+
+  it("refuses anything that is not a small whole number", async () => {
+    const id = await saved();
+    for (const colour of ["3", 2.5, -1, 64, true, {}]) {
+      const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, { colour });
+      expect(r.status).toBe(400);
+    }
+    // And nothing was written on the way to refusing.
+    const run = (await loadRuns(COLOUR_SLUG))[0];
+    expect(run && "colour" in run).toBe(false);
+  });
+
+  it("refuses a body with no colour in it at all", async () => {
+    const id = await saved();
+    const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, {});
+    expect(r.status).toBe(400);
+  });
+
+  it("answers a body that is not an object with 400, not 500", async () => {
+    /* A bare `null` is valid JSON, and destructuring it throws a TypeError the
+       generic handler reports as a server fault. A malformed request answered
+       as "this app is broken" is the one thing validation must never do — and
+       it is the shape a client bug takes, so it would be reported as ours. */
+    const id = await saved();
+    for (const body of ["null", "[]", '"3"', "7"]) {
+      const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${id}`, body);
+      expect(r.status).toBe(400);
+    }
+  });
+
+  it("answers with the whole list, the same shape as the delete beside it", async () => {
+    const first = await saved("first");
+    await saved("second");
+    const r = await call("PATCH", `/api/search/${COLOUR_SLUG}/${first}`, { colour: 1 });
+    expect((r.body as { runs?: unknown[] }).runs).toHaveLength(2);
+  });
+
+  it("refuses a slug that is not a path segment", async () => {
+    const r = await call("PATCH", "/api/search/..%2Fetc/spya-k3m9qt", { colour: 1 });
+    expect(r.status).toBeGreaterThanOrEqual(400);
   });
 });
 

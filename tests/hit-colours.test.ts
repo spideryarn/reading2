@@ -125,6 +125,92 @@ describe("assignSlots", () => {
     expect(new Set(answers).size).toBe(1);
   });
 
+  it("gives a run the colour the reader picked", () => {
+    const list = runs(4);
+    const pinned = list.map((r, i) => (i === 1 ? { ...r, colour: 5 } : r));
+    expect(assignSlots(pinned).get(list[1]?.id ?? "")).toBe(5);
+  });
+
+  it("reserves a chosen slot against every automatic run, however old", () => {
+    /* The property that makes the override a *pin* rather than a preference,
+       and the reason the assignment is two passes rather than one. The chosen
+       run here is the newest, so a single ordered walk would hand its slot to
+       whichever earlier run probed into it first and then push the reader's
+       choice somewhere else — and which run that was would depend on the hash,
+       so it would be right most of the time and wrong for no visible reason. */
+    const list = runs(CATEGORICAL_SLOTS);
+    const last = list.at(-1);
+    if (!last) throw new Error("fixture");
+    for (let pick = 0; pick < CATEGORICAL_SLOTS; pick++) {
+      const slots = assignSlots(list.map((r) => (r.id === last.id ? { ...r, colour: pick } : r)));
+      expect(slots.get(last.id)).toBe(pick);
+      const others = [...slots].filter(([id]) => id !== last.id).map(([, slot]) => slot);
+      expect(others).not.toContain(pick);
+    }
+  });
+
+  it("keeps reserving a chosen slot after the palette is full", () => {
+    /* The reservation above stops holding at exactly the moment the palette
+       fills, unless the exhaustion path knows about pins: the probe loop gives
+       up and restores the hashed first choice, which may be somebody's pin. A
+       ninth search is going to repeat *some* hue — that is unavoidable — but it
+       must repeat an automatic one, because the reader's pin is the only colour
+       here that was supposed to mean something. Nine runs, not eight, which is
+       why the test beside this one could not see it. GPT Sol, 2026-08-27. */
+    const list = runs(CATEGORICAL_SLOTS + 1);
+    const last = list.at(-1);
+    if (!last) throw new Error("fixture");
+    for (let pick = 0; pick < CATEGORICAL_SLOTS; pick++) {
+      const slots = assignSlots(list.map((r) => (r.id === last.id ? { ...r, colour: pick } : r)));
+      expect(slots.get(last.id)).toBe(pick);
+      const others = [...slots].filter(([id]) => id !== last.id).map(([, slot]) => slot);
+      expect(others).not.toContain(pick);
+    }
+  });
+
+  it("stands by the hash when every slot in the palette is pinned", () => {
+    /* The one case with no better answer: nine runs, eight of them pinned to
+       eight different slots. The ninth has to repeat something, and there is no
+       automatic hue left to repeat — so it takes its hashed first choice rather
+       than the panel inventing a rule nobody can predict. */
+    const list = runs(CATEGORICAL_SLOTS + 1);
+    const pinned = list.map((r, i) => (i < CATEGORICAL_SLOTS ? { ...r, colour: i } : r));
+    const last = list.at(-1);
+    if (!last) throw new Error("fixture");
+    const slot = assignSlots(pinned).get(last.id);
+    expect(slot).toBeGreaterThanOrEqual(0);
+    expect(slot).toBeLessThan(CATEGORICAL_SLOTS);
+    // And every pin is still exactly where it was asked to be.
+    for (let i = 0; i < CATEGORICAL_SLOTS; i++) {
+      expect(assignSlots(pinned).get(list[i]?.id ?? "")).toBe(i);
+    }
+  });
+
+  it("lets the reader put two searches on the same colour", () => {
+    /* An instruction, not a collision. A picker that silently moved the second
+       one would be the panel arguing with the reader — and it is also what a
+       one-pass implementation does by accident, which is why this is pinned. */
+    const list = runs(3).map((r) => ({ ...r, colour: 2 }));
+    expect([...assignSlots(list).values()]).toEqual([2, 2, 2]);
+  });
+
+  it("ignores a colour the palette does not have, rather than clamping it", () => {
+    /* The server stores a slot number without knowing how many hues there are
+       (SearchRun.colour), so this is the only place that can tell — and the
+       answer has to be "fall back to automatic". Clamping would answer a
+       question the reader did not ask: pin to 9 in an eight-hue palette and get
+       7, which is a colour they chose against. Painting it anyway is worse
+       still — `var(--cat-9-rgb)` is an invalid value and paints nothing. */
+    const list = runs(2);
+    const first = list[0];
+    if (!first) throw new Error("fixture");
+    const auto = assignSlots(list).get(first.id);
+    for (const bad of [CATEGORICAL_SLOTS, 99, -1, 2.5, Number.NaN]) {
+      const slots = assignSlots(list.map((r) => (r.id === first.id ? { ...r, colour: bad } : r)));
+      expect(slots.get(first.id)).toBe(auto);
+    }
+  });
+
   it("hands out slots deterministically for a known set of ids", () => {
     /* A golden test, so a change to the hash shows up as a diff rather than as
        "the colours look different this week". If this fails and the change was

@@ -1232,11 +1232,31 @@ export const searchRuns = spideryarn.table(
      */
     attemptId: text("attempt_id"),
     attemptStartedAt: timestamp("attempt_started_at", { withTimezone: true }),
+
+    /**
+     * **The palette slot the reader picked** — null means "whichever one the
+     * hash gives it", which is every run written before 2026-08-27.
+     *
+     * The one column on this table that neither the model nor the pipeline
+     * writes: it is the reader's own choice, from Greg's ask on 2026-08-27.
+     *
+     * **The database does not know what colour this is, and that is on
+     * purpose.** The eight hues live in styles/colourscales.css and the
+     * slot-to-hue step happens in the browser (src/web/hit-colours.ts § the
+     * seam). So the check below bounds it loosely rather than at the size of
+     * today's palette: a value past the end of the palette is ignored by
+     * `assignSlots` and the row falls back to its automatic hue, which is the
+     * safe way to be wrong. A tight check would instead refuse a reader's
+     * choice the day the palette grows, from a constraint nobody thought to
+     * migrate. `MAX_STORED_COLOUR`, src/searches.ts, is the same number.
+     */
+    colour: integer("colour"),
   },
   (t) => [
     primaryKey({ columns: [t.articleId, t.id] }),
     check("search_runs_status", sql`${t.status} in ('pending','done','error')`),
     check("search_runs_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    check("search_runs_colour", sql`${t.colour} is null or (${t.colour} >= 0 and ${t.colour} < 64)`),
     /* An attempt is both columns or neither. Half of one is a run that either
        cannot be swept (no age) or cannot be finished (no id), and both of those
        fail by leaving a `pending` row on the reader's screen for ever. */

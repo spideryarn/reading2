@@ -77,8 +77,22 @@
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
+  FloatingFocusManager,
+  FloatingPortal,
+  autoUpdate,
+  flip,
+  offset,
+  shift,
+  useClick,
+  useDismiss,
+  useFloating,
+  useInteractions,
+  useRole,
+} from "@floating-ui/react";
+import {
   AlertTriangle,
   LoaderCircle,
+  Palette,
   RotateCcw,
   Search as SearchIcon,
   Sparkles,
@@ -98,6 +112,7 @@ import {
 } from "./search-hits.js";
 import type { HitOrder, Matcher } from "./params.js";
 import { MATCHERS } from "./params.js";
+import { CATEGORICAL_SLOTS } from "./hit-colours.js";
 import { nextModeIndex } from "./Dock.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
@@ -131,6 +146,15 @@ interface Props {
   onToggleAll(on: boolean): void;
   onAsk(criterion: string): void;
   onRetry(id: string): void;
+  /**
+   * Pin one saved search to a palette slot — `null` hands it back to the hash.
+   *
+   * Greg, 2026-08-27: *"In Search mode, I'd like to be able to change the
+   * colour for a given row."* The panel deals in slot numbers only; see
+   * `ColourPicker` at the foot of this file for why there is no library behind
+   * it and why a colour value never reaches TypeScript.
+   */
+  onRecolour(id: string, colour: number | null): void;
   onDelete(id: string): void;
   /** The results of whichever matcher is running, already ordered and merged. */
   found: Found[];
@@ -168,6 +192,7 @@ export function SearchPanel({
   onToggleAll,
   onAsk,
   onRetry,
+  onRecolour,
   onDelete,
   found,
   all,
@@ -246,6 +271,7 @@ export function SearchPanel({
           onToggleAll={onToggleAll}
           onReuse={reuse}
           onRetry={onRetry}
+          onRecolour={onRecolour}
           onDelete={onDelete}
         />
       )}
@@ -579,6 +605,7 @@ function Saved({
   onToggleAll,
   onReuse,
   onRetry,
+  onRecolour,
   onDelete,
 }: {
   runs: SavedSearch[];
@@ -590,6 +617,7 @@ function Saved({
   onToggleAll(on: boolean): void;
   onReuse(criterion: string): void;
   onRetry(id: string): void;
+  onRecolour(id: string, colour: number | null): void;
   onDelete(id: string): void;
 }) {
   const sorted = [...runs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -740,6 +768,21 @@ function Saved({
                     <AlertTriangle size={13} />
                   </span>
                 ))}
+              {/* Fourth control on a row that already had three, in a band
+                  288px wide — so it is an icon in the same group rather than a
+                  coloured dot of its own. A dot would have been the more direct
+                  affordance and was rejected on two counts: the row already
+                  says its colour twice (the box and the left edge, § The dot is
+                  not the only thing), so a third coloured thing is noise; and a
+                  swatch pressed to *open* a menu sits a few pixels from a box
+                  that means something else entirely, which is the arrangement
+                  .srch-saved-tick's own comment warns about. */}
+              <ColourPicker
+                slot={slot}
+                chosen={run.colour}
+                criterion={run.criterion}
+                onPick={(colour) => onRecolour(run.id, colour)}
+              />
               <button
                 type="button"
                 className="srch-icon"
@@ -1494,5 +1537,179 @@ function Hit({
         </button>
       </Tooltip>
     </li>
+  );
+}
+
+/**
+ * **Pick this search's colour** — eight swatches in a popover, and *automatic*.
+ *
+ * Greg, 2026-08-27: *"In Search mode, I'd like to be able to change the colour
+ * for a given row."*
+ *
+ * ## Why there is no colour-picker library here
+ *
+ * A survey on the day (react-colorful, react-color, @uiw/react-color, React
+ * Aria's `ColorSwatchPicker`) came back recommending none of them, and the
+ * reason is not weight or maintenance — react-colorful is 5.9M downloads a
+ * week, zero dependencies and 4.8KB. It is that **every one of them is a
+ * picker for an arbitrary colour**, and an arbitrary colour is the one thing
+ * this control must not offer. The eight hues were chosen *together*: lifted
+ * off Okabe–Ito for a near-black page, checked against each other for
+ * colour-blind safety, and three of them moved because the published values
+ * vanish on this background (docs/project/colour-scales.md). A spectrum wheel
+ * invites a reader to pick a ninth colour nobody vetted, and the first thing
+ * they would reach for on a black page is a dark one.
+ *
+ * React Aria's `ColorSwatchPicker` *is* shaped right — a listbox of fixed
+ * swatches, real keyboard semantics, explicit React 19 support — and was
+ * rejected for a different reason: it takes a parsed `Color`, so the eight RGB
+ * triplets would have to be mirrored out of colourscales.css into TypeScript.
+ * That is precisely the seam hit-colours.ts exists to keep, and a palette
+ * change would then mean editing two files that cannot be checked against each
+ * other. It would also be a third UI-toolkit family for eight `<button>`s.
+ *
+ * So: Floating UI, which is already here for `Tooltip`, with `useClick` where
+ * the tooltip has `useHover`. Nothing in the panel ever handles a colour value
+ * — a swatch is `var(--cat-${i}-rgb)` and a choice is the number `i`.
+ *
+ * ## What the popover has to get right
+ *
+ * - **A grid of buttons, with focus moved into it and returned afterwards.**
+ *   `FloatingFocusManager` at `modal={false}`, so focus is *not* trapped —
+ *   tabbing past the last cell leaves the popover and closes it, which is the
+ *   behaviour wanted for a small menu beside a row. (This paragraph said
+ *   "focus trapped" until GPT Sol's review pointed out that `modal={false}`
+ *   means exactly the opposite of that.)
+ * - **`useDismiss` rather than our own outside-click listener**, so it closes on
+ *   Escape and on a press anywhere else without a second mechanism to keep in
+ *   step with the panel's other dismissals.
+ * - **Automatic is a choice, not a reset button in the corner.** It is the ninth
+ *   cell in the same list and it can be *current*, because "whichever colour it
+ *   would have had" is a state the row is genuinely in, not the absence of one.
+ * - **Two facts, two marks.** A row on automatic is still *wearing* a hue, so
+ *   the panel says both things: a faint ring on the swatch the row is showing
+ *   today, and the strong `current` mark on what the reader actually chose —
+ *   which in automatic mode is the ninth cell. `aria-pressed` follows the
+ *   *choice* rather than the drawn hue, because a reader who cannot see the
+ *   rings needs the answer to "have I pinned this?", and the derived hue
+ *   announcing itself as pressed answers a question nobody asked. GPT Sol's
+ *   review, 2026-08-27.
+ * - **No arrow keys.** The app has a global ↑/↓ listener (keynav.ts) and the
+ *   band's own steppers, so a roving-focus grid would be a third claimant on
+ *   two keys. Tab reaches all nine cells; that is enough for nine targets.
+ */
+function ColourPicker({
+  slot,
+  chosen,
+  criterion,
+  onPick,
+}: {
+  /** The hue the row is wearing right now, chosen or derived. */
+  slot: number | undefined;
+  /** The reader's stored choice, if there is one — `undefined` means automatic. */
+  chosen: number | undefined;
+  /** For the labels, so a screen reader is told which search this is about. */
+  criterion: string;
+  onPick(colour: number | null): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const { refs, floatingStyles, context } = useFloating({
+    open,
+    onOpenChange: setOpen,
+    placement: "left-start",
+    whileElementsMounted: autoUpdate,
+    /* `flip` before `shift`, and both with padding: the trigger sits in a
+       288px band against the left edge of the reading column, so the panel
+       has to be free to swing to the other side rather than be squeezed. */
+    middleware: [offset(6), flip({ padding: 8 }), shift({ padding: 8 })],
+  });
+  const { getReferenceProps, getFloatingProps } = useInteractions([
+    useClick(context),
+    useDismiss(context),
+    useRole(context, { role: "dialog" }),
+  ]);
+
+  const cells = Array.from({ length: CATEGORICAL_SLOTS }, (_, i) => i);
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={refs.setReference}
+        className="srch-icon"
+        title="Change this search's colour"
+        aria-label={`Change the colour of: ${criterion}`}
+        {...getReferenceProps()}
+      >
+        <Palette size={13} />
+      </button>
+      {open && (
+        <FloatingPortal>
+          <FloatingFocusManager context={context} modal={false}>
+            <div
+              ref={refs.setFloating}
+              style={floatingStyles}
+              className="srch-picker"
+              /* `useRole` puts the same role in `getFloatingProps()`, so this
+                 is written out only because a static check cannot see through
+                 a spread — and without it `aria-label` on a bare `<div>` is a
+                 lint error, which is the rule being right about every case
+                 except this one. */
+              role="dialog"
+              aria-label="Choose a colour for this search"
+              {...getFloatingProps()}
+            >
+              <div className="srch-picker-grid">
+                {cells.map((i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className={
+                      `srch-picker-swatch${chosen === i ? " current" : ""}` +
+                      // The hue the row is showing right now — the same swatch
+                      // as `current` whenever the reader has chosen one, and a
+                      // different one when they have not.
+                      (slot === i ? " showing" : "")
+                    }
+                    /* The hue as a palette reference, never a colour — the
+                       same seam every other file here keeps. This is the only
+                       component in the app that shows a reader the palette
+                       itself, and it still does not know what is in it. */
+                    style={{ "--cat-rgb": `var(--cat-${i}-rgb)` } as React.CSSProperties}
+                    /* Numbered from one, because the reader is counting
+                       swatches and not indexing an array. The number is here at
+                       all because "colour 3" is the only name these hues have —
+                       naming them "blue", "vermilion" and so on would be a
+                       second vocabulary that goes wrong the day a hue moves. */
+                    aria-label={`Colour ${i + 1}`}
+                    aria-pressed={chosen === i}
+                    onClick={() => {
+                      onPick(i);
+                      setOpen(false);
+                    }}
+                  />
+                ))}
+              </div>
+              {/* The ninth cell, and deliberately a full-width one with words
+                  on it. It is the only choice here that cannot be shown as a
+                  colour, because it *is* the absence of a choice — and it is
+                  the one a reader arrives at wanting after they have changed
+                  their mind, which is when a control with no label is worst. */}
+              <button
+                type="button"
+                className={`srch-picker-auto${chosen === undefined ? " current" : ""}`}
+                aria-pressed={chosen === undefined}
+                onClick={() => {
+                  onPick(null);
+                  setOpen(false);
+                }}
+              >
+                Automatic
+              </button>
+            </div>
+          </FloatingFocusManager>
+        </FloatingPortal>
+      )}
+    </>
   );
 }

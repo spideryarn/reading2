@@ -359,6 +359,100 @@ when("the Postgres searches store", () => {
    * article's hash is tests/store-parity.test.ts, which has real articles in
    * both.
    */
+  describe("the colour the reader picked", () => {
+    it("stores it, and clears it back to absent rather than to null", async () => {
+      const { run } = await pgSearchStore.begin(SLUG, "about time");
+      const set = await pgSearchStore.recolour(SLUG, run.id, 5);
+      expect(set.find((r) => r.id === run.id)?.colour).toBe(5);
+
+      /* Absent, not `colour: null`. The column is nullable and the wire form of
+         a null is not `{}` — the same rule `model` and `error` follow two
+         methods up, and the one a `toRun` written with a spread gets wrong. */
+      const cleared = await pgSearchStore.recolour(SLUG, run.id, null);
+      const row = cleared.find((r) => r.id === run.id);
+      expect(row && "colour" in row).toBe(false);
+    });
+
+    it("keeps slot 0, which every truthiness check in this feature would drop", async () => {
+      const { run } = await pgSearchStore.begin(SLUG, "the first hue");
+      const set = await pgSearchStore.recolour(SLUG, run.id, 0);
+      expect(set.find((r) => r.id === run.id)?.colour).toBe(0);
+    });
+
+    it("colours a run that is still running, and does not disturb the attempt", async () => {
+      /* The one write in this file with no fence on it, deliberately: a colour
+         is not part of the answer, so recolouring a `pending` row must not
+         make the model call that is in flight unfinishable. */
+      const { run, attempt } = await pgSearchStore.begin(SLUG, "about time");
+      await pgSearchStore.recolour(SLUG, run.id, 2);
+      const done = await pgSearchStore.finish(
+        SLUG,
+        run.id,
+        { status: "done", hits: [] },
+        attempt,
+      );
+      expect(done?.status).toBe("done");
+      expect(done?.colour).toBe(2);
+    });
+
+    it("shrugs at a run that is not there", async () => {
+      const { run } = await pgSearchStore.begin(SLUG, "about time");
+      // A second tab can have deleted it. The list that comes back says so.
+      await expect(pgSearchStore.recolour(SLUG, "spya-zzzzzz", 4)).resolves.toHaveLength(1);
+      expect((await pgSearchStore.load(SLUG))[0]?.id).toBe(run.id);
+    });
+
+    it("survives a retry, on this side as well as on the filesystem's", async () => {
+      /* The two stores have to agree, and they did not: the filesystem's retry
+         rebuilds the run field by field and was dropping the colour, while this
+         one simply does not name the column and kept it. Pinned on both sides
+         so a future tidy-up of either cannot quietly restore the divergence. */
+      const { run, attempt } = await pgSearchStore.begin(SLUG, "about time", "spya-runab2");
+      await pgSearchStore.recolour(SLUG, run.id, 4);
+      await pgSearchStore.finish(SLUG, run.id, { status: "error", error: "fell over" }, attempt);
+
+      const again = await pgSearchStore.begin(SLUG, "about time", run.id);
+      expect(again.run.id).toBe(run.id);
+      expect(again.run.status).toBe("pending");
+      expect(again.run.colour).toBe(4);
+    });
+
+    it("refuses a bad colour as a 400, rather than as a database failure", async () => {
+      /* The check constraint is the second line and stays. But a store that
+         relied on it alone would answer a bad value with a `StoreFailure` —
+         "this app asked its database for something it would not do" — where the
+         filesystem store answers with a 400, and two stores disagreeing about
+         what a bad request *is* is exactly what a parity test on the happy path
+         never sees. */
+      const { run } = await pgSearchStore.begin(SLUG, "about time");
+      for (const bad of [64, -1, 2.5]) {
+        await expect(pgSearchStore.recolour(SLUG, run.id, bad)).rejects.toThrow(
+          /storable colour/,
+        );
+      }
+    });
+
+    it("lets the database refuse a slot no palette will ever have", async () => {
+      /* The route checks this first (`isStorableColour`), so the constraint is
+         the second line rather than the first — and it is worth having anyway,
+         because the import path writes this column too and does not go through
+         a route. The bound is loose on purpose: see drizzle/0016_search_colour.sql. */
+      const { run } = await pgSearchStore.begin(SLUG, "about time");
+      /* Straight at the table, going round `recolour`'s own guard on purpose.
+         The store refuses these first (the test above), so the only way to see
+         whether the constraint is really there is to write past it — and it has
+         to be there, because the importer writes this column too. */
+      for (const bad of [64, -1]) {
+        await expect(
+          getDb()
+            .update(searchRuns)
+            .set({ colour: bad })
+            .where(and(eq(searchRuns.articleId, ARTICLE_ID), eq(searchRuns.id, run.id))),
+        ).rejects.toThrow();
+      }
+    });
+  });
+
   describe("the article a run was answered against", () => {
     it("has no fingerprint to offer for an article with no blocks", async () => {
       // Not an empty string and not a throw: "we cannot tell" is a value, and

@@ -39,6 +39,7 @@
  *   DELETE /api/chat/:slug/:threadId
  *   GET    /api/search/:slug     every saved meaning-search for the article
  *   POST   /api/search/:slug     { id?, criterion } → **a stream**, see `search`
+ *   PATCH  /api/search/:slug/:id  { colour } — the reader's palette slot, or null for auto
  *   DELETE /api/search/:slug/:id
  *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
  *   GET    /api/uploads/:id      what became of one upload
@@ -87,6 +88,11 @@ import {
    which store is live. Every write goes through `chatStore` above. */
 import { ChatConflict, withEdit, withRetry } from "./chat.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
+/* A pure predicate, so importing it here does not drag the filesystem store
+   into a file that must work with either one — the same rule the `withEdit` /
+   `withRetry` import above states. The palette's *size* is deliberately not in
+   it: see `SearchRun.colour`. */
+import { isStorableColour } from "./searches.js";
 /* Through the store, so SPIDERYARN_STORE moves comments and articles together.
    They cannot be split: a comment anchors to a block id, and leaving the
    questions on disk while the paragraphs they point at come from Postgres puts
@@ -2932,6 +2938,31 @@ async function serveApi(
          still reached through `send` for its *failures*: validation throws
          before a header is written, so a bad request is an ordinary 400. */
       await search(slugPart(searches, 1), await readBody(req), res);
+      return true;
+    }
+    if (oneRun && req.method === "PATCH") {
+      // Slug becomes a directory; the run id is only ever matched against a list.
+      const [slug, id] = [slugPart(oneRun, 1), part(oneRun, 2)];
+      const body = await readBody(req);
+      /* Checked before it is destructured. `readBody` will happily return a
+         bare JSON `null` — a body of exactly `null` is valid JSON — and
+         destructuring that throws a `TypeError`, which the generic handler
+         turns into a **500**. A malformed request answered as a server fault
+         is the one thing validation must never do. GPT Sol's review,
+         2026-08-27; the same hole is latent in the other PATCH routes here. */
+      if (typeof body !== "object" || body === null || Array.isArray(body)) {
+        throw httpError(400, "Expected a JSON object");
+      }
+      const { colour } = body as Record<string, unknown>;
+      /* `null` is a real value here — it is how the reader says "put this row
+         back on whatever colour it would have had". So the check cannot be a
+         truthiness one, and it cannot be `!colour` either: slot **0** is a
+         colour, and every `if (!colour)` in this route would have refused the
+         first hue in the palette while accepting the other seven. */
+      if (colour !== null && !isStorableColour(colour)) {
+        throw httpError(400, "Expected { colour } to be null or a small whole number");
+      }
+      send(res, 200, { runs: await searchStore.recolour(slug, id, colour) });
       return true;
     }
     if (oneRun && req.method === "DELETE") {

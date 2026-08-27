@@ -745,6 +745,10 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
              waited for. (That sentence named the glob directly until the `*`
              and `/` closed this comment three lines early.) */
           sourceHash: run.sourceHash ?? null,
+          // The reader's own colour choice — the same round-trip rule as the
+          // hash above, and the only field on a run neither the model nor the
+          // pipeline wrote.
+          colour: run.colour ?? null,
           model: run.model ?? null,
           error: run.error ?? null,
           createdAt: new Date(run.createdAt),

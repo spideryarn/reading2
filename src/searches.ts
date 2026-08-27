@@ -331,6 +331,16 @@ export function withRun(
       createdAt: existing.createdAt,
       status: "pending",
       hits: [],
+      /* **The reader's colour survives the retry**, and it is the one field
+         here that must. Everything else is rebuilt field by field precisely so
+         the failed attempt cannot leave anything behind — but a colour is not
+         part of the attempt, it is a property of the question, and the question
+         is the thing a retry keeps (`createdAt` is kept for the same reason two
+         lines up). Dropping it made the filesystem store disagree with the
+         Postgres one, whose reset simply does not name the column: press ↺ on a
+         search you had coloured and the colour was gone on files and kept on
+         Postgres. GPT Sol's review, 2026-08-27. */
+      ...(existing.colour === undefined ? {} : { colour: existing.colour }),
       /* The **new** attempt's article, not the failed one's. A retry is a fresh
          model call over whatever the article says today, so carrying the old
          hash forward would date the answer to a version of the piece this
@@ -453,4 +463,89 @@ export async function deleteRun(slug: string, runId: string): Promise<SearchRun[
   // apart from one that did.
   log("store").info({ slug, runId, remaining: remaining.length }, "search deleted");
   return remaining;
+}
+
+/**
+ * The ceiling on a stored colour — **not** the size of the palette.
+ *
+ * The palette is eight hues (`CATEGORICAL_SLOTS`, src/web/hit-colours.ts) and
+ * that number lives in the browser and in styles/colourscales.css, which is
+ * the seam that whole file exists to keep: *the colour belongs to the design
+ * tokens*. So the server deliberately does not know how many hues there are.
+ * What it knows is that a slot is a small non-negative integer, and that is
+ * enough to keep nonsense — a float, a negative, a hex string, a number with
+ * eleven digits — out of the store.
+ *
+ * The two ways to be wrong are not symmetrical, which is why the bound is
+ * loose rather than tight. Too loose and a reader picking colour 9 in some
+ * future nine-hue build stores a 9 that today's `assignSlots` ignores, so the
+ * row goes back to its automatic hue — visible, harmless, self-correcting.
+ * Too tight and the day the palette grows, every choice past the old end is
+ * refused by a server nobody thought to change, which looks like a broken
+ * button.
+ */
+export const MAX_STORED_COLOUR = 64;
+
+/** Is this something we are willing to write into `SearchRun.colour`? */
+export function isStorableColour(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value < MAX_STORED_COLOUR
+  );
+}
+
+/**
+ * Refuse a colour neither store is willing to write. Tagged `400`, so
+ * `httpErrorFrom` in src/routes.ts answers with the same 400 the route's own
+ * check gives — see src/profile.ts for the same shape.
+ *
+ * **The route checks this too, and that is not redundancy to tidy away.** The
+ * route is the only place that can refuse *before* anything is read, and this
+ * is the only place that covers a caller that is not a route: the importer
+ * writes this column, and so does anything anybody adds next. A contract that
+ * says both stores validate has to be true of the stores.
+ */
+export function requireColour(colour: number | null): void {
+  if (colour !== null && !isStorableColour(colour)) {
+    throw Object.assign(
+      new Error(`Not a storable colour: ${JSON.stringify(colour)}`),
+      { status: 400 },
+    );
+  }
+}
+
+/**
+ * The reader's colour choice, applied to one run — pure, so both stores share it.
+ *
+ * `null` clears the override and puts the row back on the hash. Absent rather
+ * than `colour: null` on the way out, because `exactOptionalPropertyTypes` is
+ * on and because a `"colour": null` in searches.json would be a third state on
+ * disk for a field that has two.
+ *
+ * A run id that names nothing is returned unchanged rather than thrown at: a
+ * second tab can delete a search between this tab reading the list and pressing
+ * a swatch, and recolouring a search that is gone is not a fault worth a 404 —
+ * the list that comes back says it is gone, which is the answer.
+ */
+export function withColour(
+  runs: SearchRun[],
+  runId: string,
+  colour: number | null,
+): SearchRun[] {
+  requireColour(colour);
+  return runs.map((run) => {
+    if (run.id !== runId) return run;
+    const { colour: _old, ...rest } = run;
+    return colour === null ? rest : { ...rest, colour };
+  });
+}
+
+export async function recolourRun(
+  slug: string,
+  runId: string,
+  colour: number | null,
+): Promise<SearchRun[]> {
+  return update(slug, (runs) => withColour(runs, runId, colour));
 }

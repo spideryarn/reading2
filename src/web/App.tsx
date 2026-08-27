@@ -1833,7 +1833,7 @@ function SearchBand({
   onOpenHit(next: string | null): void;
 }) {
   useRenderCount("SearchBand");
-  const { runs, loaded, ask, retry, remove, error } = useSearch(slug);
+  const { runs, loaded, ask, retry, remove, recolour, error } = useSearch(slug);
   const [match, setMatcher] = useQueryState("match", matchParam);
   const [find, setFind] = useQueryState("find", findParam);
   /* `?match=` has no default of its own, so that a URL carrying `?find=` and
@@ -2024,6 +2024,10 @@ function SearchBand({
         onOpenHit(null);
       }}
       onRetry={retry}
+      /* Straight through. Unlike every other write on this panel it does not
+         touch `?runs=` or the open row: a colour changes what a mark looks
+         like, never which marks are drawn or which one the reader is on. */
+      onRecolour={recolour}
       onDelete={(id) => {
         remove(id);
         void setRunIds(active.filter((x) => x !== id));
@@ -2142,10 +2146,11 @@ function SummaryBand({
  * already on the page — stage 4 wrote a gist onto every internal node, and the
  * block ranges give the sizes — so unlike chat, glossary, search and summary
  * there is no artefact to wait for, no job to run, and nothing to pay a model
- * for. That is the reason `strata` is the default picture: the one thing this
- * mode says that nothing else in the app says (how much of the article a
- * section is) is free on every article that has been through the pipeline at
- * all. See docs/project/diagram.md.
+ * for — and that is what `tree`, the default picture, is drawn from. **The
+ * other three all spend a model call**, which is why the default is the free
+ * one: opening a mode should not bill you. `useSimilar` and `useProjection`,
+ * inside the panel, are what fetch for those three, each gated on its own
+ * picture being the one on screen. See docs/project/diagram.md.
  */
 function DiagramBand({
   slug,

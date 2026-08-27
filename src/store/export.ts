@@ -355,6 +355,10 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
            to "we cannot tell", which reads as *out of date* — src/searches.ts
            § isStale. `compact` turns a null back into an absent key. */
         sourceHash: row.sourceHash,
+        /* The reader's colour choice, for the same reason: dropping it puts
+           every hand-coloured search back on its automatic hue, which is a
+           change to what the page looks like that nothing announces. */
+        colour: row.colour,
       }) as SearchRun,
     );
     await put("searches.json", { runs });
