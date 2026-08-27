@@ -196,6 +196,30 @@ export function worthRetrying(message: string | null | undefined): boolean {
  * codes the file's messages carry, which is what stops this table and the
  * messages becoming two lists maintained by memory.
  */
+/**
+ * **Nobody came back for this job.**
+ *
+ * A claimant takes a job for one step and its lease says how long that step may
+ * take. A lease that runs out means the process holding it is gone — frozen by
+ * the host, restarted, or killed — and the job would otherwise sit `running`
+ * for ever, holding the one running slot with it.
+ *
+ * The sentence says what happened and offers the retry, because this is the one
+ * failure where retrying is not just permitted but likely to work: `stepIsDone`
+ * derives what is finished from the artefacts, so a retry resumes rather than
+ * starting again. What it deliberately does not do is *take the job over* by
+ * itself. A lease that has expired does not prove the old claimant has stopped
+ * — only that it stopped saying so — and two runners writing one article is
+ * worse than one click. docs/plans/durable-queue-and-uploads.md § 2.
+ */
+export const INTERRUPTED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This stopped part-way through, and whatever was running it did not come back. " +
+    "The steps that finished are kept, so trying again picks up where it left off rather than " +
+    "starting over. [jb-gone]",
+};
+
 export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-busy": "retry",
   "ai-no-credit": "ours",
@@ -218,6 +242,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-filtered": "blocked",
   "ai-no-room": "blocked",
   "ai-empty": "retry",
+  /* Not a model call, and not the reader's fault either. `retry` on purpose:
+     an interrupted job resumes from its artefacts rather than starting again,
+     so another go is both allowed and cheap. See `INTERRUPTED`. */
+  "jb-gone": "retry",
   /* Not a model call. `db-` rather than `ai-` so that a reader quoting four
      characters, and whoever they quote them to, can tell the two apart at a
      glance — see `STORAGE_BUSY`. */

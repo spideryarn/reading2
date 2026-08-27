@@ -157,6 +157,30 @@ function chainOf(err: unknown, depth = 0): unknown[] {
 }
 
 /**
+ * **Did this fail because a named unique index refused it?**
+ *
+ * Asked of the whole `cause` chain, not of the outermost error, and that is the
+ * whole reason this is a function rather than `err.code === "23505"` written at
+ * the call site. Drizzle's wrapper carries **neither the SQLSTATE nor the
+ * constraint name** — from the top a unique violation looks like nothing at all
+ * — so the obvious check compiles, reads correctly, and never matches. Written
+ * after `pgJobStore.claim` did exactly that and let `jobs_only_one_running`
+ * escape as a 500 where it should have been an ordinary `busy`.
+ *
+ * By **name**, never by code alone: two partial unique indexes on `jobs` both
+ * raise 23505 and mean completely different things — one is "something else is
+ * running", the other is "this slug is taken". Catching the code would turn the
+ * second into the first.
+ */
+export function violatesConstraint(err: unknown, constraint: string): boolean {
+  return chainOf(err).some(
+    (link) =>
+      sqlstateOf(link) === "23505" &&
+      (link as { constraint?: unknown }).constraint === constraint,
+  );
+}
+
+/**
  * Whether waiting and asking again could plausibly give a different answer.
  *
  * Asked of the **whole chain**, not of the outermost error. Drizzle's wrapper

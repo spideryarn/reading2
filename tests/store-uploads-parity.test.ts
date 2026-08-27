@@ -26,6 +26,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 
 import { loadEnvLocal } from "../src/env.js";
+import { DEV_OWNER_ID } from "../src/owner.js";
 import { closeDb } from "../src/db/client.js";
 import type { UploadRecord, UploadStore } from "../src/store/uploads.js";
 import { fsUploadStore } from "../src/store/uploads-fs.js";
@@ -54,9 +55,18 @@ if (process.env.DATABASE_URL) {
   await pool.end();
 }
 
-/** The dev owner. A real `auth.users` row, because `uploads_owner_fk` is real. */
-const OWNER = "00000000-0000-4000-8000-000000000001";
-const STRANGER = "00000000-0000-4000-8000-0000000000ff";
+/**
+ * The dev owner, **imported rather than written out**, because
+ * `uploads_owner_fk` means it has to be a real `auth.users` row and there is
+ * exactly one of those. A literal here would be a second copy of a value the
+ * app already owns — and `tests/fixture-ids.test.ts` would rightly flag it as
+ * shared with every other file that needed the same row.
+ *
+ * The stranger is this file's own, and never inserted: it exists only to prove
+ * that somebody else's upload reads as one that is not there.
+ */
+const OWNER: string = DEV_OWNER_ID;
+const STRANGER = "00000000-0000-4000-8000-00000000d107";
 
 const made: { store: UploadStore; id: string }[] = [];
 afterEach(async () => {
