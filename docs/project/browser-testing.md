@@ -475,35 +475,73 @@ roughly 900px**, and 700px is comfortably past the point where it stops meaning 
 
 *This section is derived from the stylesheet, not observed* — see the tooling caveat below.
 
-## A backgrounded tab is not slow, it is stopped — and the poll is how you tell
+## The tab stops running, and the page's own polling is how you find out
 
-**Measured 2026-08-27.** An agent clicked a button, the tab stopped answering every CDP call for
-two minutes (`Script injection timed out`, `the renderer may be frozen`), and the obvious reading
-was that the click handler was blocking the main thread. It was not, and the server log said so in
-one line: **the page's own `GET /api/jobs` poll had stopped six minutes before the click**, and the
-request that handler makes never arrived at all. The handler never ran.
+**Measured twice, 2026-08-27.** An agent clicked a button, the tab stopped answering every CDP call
+(`Script injection timed out`, `Input.dispatchMouseEvent timed out`, `the renderer may be frozen`),
+and the obvious reading was that the click handler was blocking the main thread. It was not, and
+the server log said so in one line each time:
 
-What actually happened is Chrome freezing or hard-throttling a tab that had been in the background
-— the same trap as [§ scroll events in a hidden tab](#scroll-then-read-the-address-bar), one step
-further along: not "some events do not fire" but "nothing runs". Two other tabs were open.
+```
+  05:49:01  GET /api/library, GET /api/jobs      the page loads
+  05:49:10  GET /api/jobs
+  05:49:19  GET /api/jobs
+  05:49:28  GET /api/jobs
+  05:49:37  GET /api/jobs                        <-- the last one, ever
+     …                                           <-- the click, about a minute later
+  (no POST /api/uploads, ever)
+```
 
-So, two rules:
+**The page stopped running its own timers before the click, and the request that handler makes
+never arrived** — so the handler never executed a line and cannot be the cause. Same signature on
+the earlier attempt: polls stop, click minutes later, no request.
 
-- **Keep the tab you are driving in the foreground**, and do not open or switch to another between
-  starting something and it finishing. A tab you are not looking at may not be running.
-- **The app's own polling is a free liveness signal.** `useJobs` asks for `/api/jobs` every eight
-  seconds, so a gap in that cadence in the server log is a tab that stopped executing, timestamped.
-  Reach for it *before* diagnosing anything as slow code — it is the difference between a bug in
-  the page and a browser doing what browsers do.
+So the rule worth having is the diagnostic, not the theory:
 
-### `file_upload` cannot carry a file over 10 MB
+> **The app's own polling is a free liveness signal.** `useJobs` asks for `/api/jobs` every eight
+> seconds, so a gap in that cadence in the server log is a tab that stopped executing, timestamped
+> to the second. Reach for it *before* diagnosing anything as slow code.
 
-Its own words: *"total upload size would exceed 10 MB. file_upload sends file contents over the
-browser bridge in a single message."* That is the tool, not the page — the bytes never reach the
-input. It matters here because the file most worth testing an upload with is the big one, and
-`evals/pdf/harder/source.pdf` at 11.5 MB is out of reach this way. `much-harder/source.pdf` is
-6.1 MB, still comfortably over Vercel's 4.5 MB body limit, and so still proves what the big file
-was there to prove.
+**What it is not**, since the first version of this section said so confidently and was wrong: it
+is not simply a backgrounded tab. The second attempt was made in a foregrounded tab, kept active
+throughout, verified running by two `Date.now()` calls eleven seconds apart, with no other tab
+touched. Backgrounding is a real trap — see [§ scroll events in a hidden tab](#scroll-then-read-the-address-bar)
+— and it is not the explanation here.
+
+What the two occurrences do have in common is that both followed a **multi-megabyte `file_upload`**
+within a minute. That is a correlation on two samples and the mechanism is unknown, so it is
+recorded as an observation rather than a cause.
+
+### The control that clears the page, and the recipe that works
+
+Both of those wedged before the app ran anything, so neither says whether the page is sound. This
+does: the same 6 MB file put into the same `<input type=file>` **from page JavaScript** — a
+`DataTransfer`, then `btn.click()` — went through in about one second, PUT and all. Same size, same
+input, same handler, same build. The only difference is how the bytes reached the input and how the
+click was delivered.
+
+So when a file has to be more than a megabyte or two, prefer building it in the page:
+
+```js
+const bytes = new Uint8Array(6 * 1024 * 1024);
+bytes.set(new TextEncoder().encode("%PDF-1.4\n"), 0);
+const dt = new DataTransfer();
+dt.items.add(new File([bytes], "probe.pdf", { type: "application/pdf" }));
+input.files = dt.files;
+input.dispatchEvent(new Event("change", { bubbles: true }));
+```
+
+It is also faster, needs no screenshots, and lets you spy on `XMLHttpRequest.prototype` to observe
+the request's URL and headers directly rather than through the network panel.
+
+**And `file_upload` cannot carry a file over 10 MB at all.** Its own words: *"total upload size
+would exceed 10 MB. file_upload sends file contents over the browser bridge in a single message."*
+That is the tool, not the page — the bytes never reach the input. Which is the other reason to
+build the file in the page: `evals/pdf/harder/source.pdf` at 11.5 MB is unreachable any other way.
+
+**One caution about a long `await` inside `javascript_exec`.** The CDP evaluate has its own 45-second
+ceiling, so a poll loop that runs longer than that reports `the renderer may be frozen` about a
+perfectly healthy page. Keep the loop under about thirty seconds and call again.
 
 ## A browser subagent stalls silently unless the parent does the handshake first
 

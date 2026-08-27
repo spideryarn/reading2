@@ -1117,9 +1117,17 @@ minting derives `staging/<server-generated UUID>` which acquisition derives agai
 
 ### The browser pass, and the bug only it could find
 
-**2026-08-27.** Two Sonnet subagents stalled before reaching the app (both traps are now in
-[browser-testing.md](../project/browser-testing.md)), so the pass was driven directly, without
-screenshots: a 6 MB file built in the page, put into the file input, and sent with one click.
+**2026-08-27.** Two Sonnet subagents stalled — the first on an auth gate, then both on tabs that
+stopped executing before they could click anything (all of it is now in
+[browser-testing.md](../project/browser-testing.md)). So the pass was driven directly, without
+screenshots: a 6 MB file built **in the page** — a `DataTransfer`, not `file_upload` — put into the
+file input, and sent with one click.
+
+That last detail is what made it work rather than a preference. Both agents wedged their tab within
+a minute of a multi-megabyte `file_upload`, and in both cases the server log shows the page's own
+eight-second poll stopping *before* the click and no request ever arriving — so the submit handler
+never ran and could not have been the cause. Building the file in the page is the control that
+clears it: same size, same input, same handler, one second.
 
 What was observed rather than assumed:
 
