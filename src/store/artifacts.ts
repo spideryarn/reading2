@@ -123,6 +123,35 @@ export interface ArtifactMap {
 /** Some or all of one step's artefacts, handed to `write` in one call. */
 export type ArtifactParts = Partial<{ [K in ArtifactKind]: ArtifactMap[K] }>;
 
+/* ------------------------------------------------------ the two constants -- */
+/**
+ * What `revision_step_runs.implementation_version` says for a row this seam
+ * wrote, and it is load-bearing that it is **not** `"imported"`.
+ *
+ * The importer withdraws inferred rows by deleting everything stamped
+ * `imported` whose artefact has gone (src/store/import.ts), scoped that way
+ * precisely so that *a migration tool cannot delete a pipeline record*. A row
+ * from here carrying that marker would be inside the blast radius of every
+ * `npm run db:import`.
+ *
+ * There is no real implementation version to write yet — no step declares one
+ * (see `StepStamp.implementationVersion` in artifacts.ts) — so this says where
+ * the row came from and nothing it cannot back up.
+ */
+export const PIPELINE_RUN = "pipeline";
+
+/**
+ * The `input_hash` for a step that records nothing about its input.
+ *
+ * `fetch`, `extract` and `blocks` write no `sourceHash` anywhere, so their
+ * stamp is `null` in every store (artifacts.ts § `STAMP_SOURCE`) — and the
+ * column is `not null`. A sentinel that can never equal a hash is the honest
+ * filler: **it must not be the draft's block hash**, which would claim the step
+ * ran against blocks it has never seen, and would make the metadata page report
+ * a stale stage as current.
+ */
+export const NO_INPUT_HASH = "unstamped";
+
 /**
  * What a step's output was made from, and by what.
  *

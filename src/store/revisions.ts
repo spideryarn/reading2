@@ -57,6 +57,7 @@
 import { log } from "../log.js";
 import type { StepName } from "../types.js";
 import type { ArtifactStore } from "./artifacts.js";
+import { NO_INPUT_HASH, PIPELINE_RUN } from "./artifacts.js";
 import { guardDbStore } from "./db-errors.js";
 import { STORE } from "./live.js";
 import {
@@ -120,32 +121,22 @@ export interface RevisionLifecycle {
 /* ------------------------------------------------------ the two constants -- */
 
 /**
- * What `revision_step_runs.implementation_version` says for a row this seam
- * wrote, and it is load-bearing that it is **not** `"imported"`.
+ * `PIPELINE_RUN` and `NO_INPUT_HASH` **live in artifacts.ts now**, and are
+ * re-exported here so that every existing importer keeps working.
  *
- * The importer withdraws inferred rows by deleting everything stamped
- * `imported` whose artefact has gone (src/store/import.ts), scoped that way
- * precisely so that *a migration tool cannot delete a pipeline record*. A row
- * from here carrying that marker would be inside the blast radius of every
- * `npm run db:import`.
+ * They moved on 2026-08-27 because `pg-revisions.ts` needs them —
+ * `beginStepRun` writes both — and importing them from this file made a cycle,
+ * since this file imports `pg-revisions.ts`. The linter caught it
+ * (`lint/suspicious/noImportCycles`) and it was right to: the runtime happened
+ * to be fine, because the values are only read inside function bodies, but
+ * "happens to work given the current evaluation order" is not a property worth
+ * depending on.
  *
- * There is no real implementation version to write yet — no step declares one
- * (see `StepStamp.implementationVersion` in artifacts.ts) — so this says where
- * the row came from and nothing it cannot back up.
+ * artifacts.ts is the right home rather than merely a convenient one: it is a
+ * leaf that imports nothing from `store/`, and both constants are facts about
+ * a **step run's stamp**, which is what that file defines.
  */
-export const PIPELINE_RUN = "pipeline";
-
-/**
- * The `input_hash` for a step that records nothing about its input.
- *
- * `fetch`, `extract` and `blocks` write no `sourceHash` anywhere, so their
- * stamp is `null` in every store (artifacts.ts § `STAMP_SOURCE`) — and the
- * column is `not null`. A sentinel that can never equal a hash is the honest
- * filler: **it must not be the draft's block hash**, which would claim the step
- * ran against blocks it has never seen, and would make the metadata page report
- * a stale stage as current.
- */
-export const NO_INPUT_HASH = "unstamped";
+export { NO_INPUT_HASH, PIPELINE_RUN } from "./artifacts.js";
 
 /**
  * How long a draft has to be untouched before the sweep may reclaim it.

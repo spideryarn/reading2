@@ -79,6 +79,7 @@ import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
 import type { Block, StepName, Tree } from "../types.js";
 import { REVISION_COLUMNS, ownedSlug, requireSlug, slugIsTaken } from "./pg.js";
+import { NO_INPUT_HASH, PIPELINE_RUN } from "./artifacts.js";
 
 const logger = log("store");
 
@@ -777,6 +778,157 @@ export async function openOrBeginJobDraft(opts: {
  * step's hash the right one belongs to that step's owner; this function does not
  * stand in the way of it, and does not pretend to have done it.
  */
+/**
+ * This step has started, and here is the claim that says who is running it.
+ *
+ * The Postgres half of `ArtifactStore.beginStep`, and the first thing that ever
+ * writes `revision_step_runs.attempt_id`. On the filesystem the same fact is a
+ * `data/<slug>/steps/<step>.running` file; here it is a row whose `status` is
+ * `running` and whose `attempt_id` is the job's token.
+ *
+ * **It refuses unless the job is live *and* owns this draft.** Four conditions,
+ * and the fourth is the one that is easy to leave out: a token can be perfectly
+ * current and still belong to a job pointed at a different revision, and
+ * writing a step run into somebody else's draft is a fault nothing downstream
+ * could untangle. The row is locked `for update` so the check cannot go stale
+ * between here and the write, and the lock order — job before article — is the
+ * one `openOrBeginJobDraft` already establishes and must not be deviated from.
+ *
+ * **`NO_INPUT_HASH`, deliberately**, because a step that has not run yet has not
+ * been *made from* anything. The real hash arrives with `finishStepRun`. Writing
+ * a plausible-looking hash here would make a step that died mid-run look like
+ * one that completed against those blocks.
+ */
+export async function beginStepRun(
+  opts: {
+    revisionId: string;
+    stepName: StepName;
+    job: { id: string; attemptId: string };
+    implementationVersion?: string;
+  },
+  tx: Tx,
+): Promise<void> {
+  const { revisionId, stepName, job } = opts;
+  const [live] = await tx
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.id, job.id),
+        eq(jobs.attemptId, job.attemptId),
+        eq(jobs.status, "running"),
+        eq(jobs.draftRevisionId, revisionId),
+      ),
+    )
+    .for("update")
+    .limit(1);
+  if (!live) throw new NotTheLiveAttempt(job.id);
+
+  const values = {
+    revisionId,
+    stepName,
+    inputHash: NO_INPUT_HASH,
+    implementationVersion: opts.implementationVersion ?? PIPELINE_RUN,
+    status: "running" as const,
+    startedAt: new Date(),
+    finishedAt: null,
+    attemptId: job.attemptId,
+  };
+  await tx
+    .insert(revisionStepRuns)
+    .values(values)
+    .onConflictDoUpdate({
+      target: [revisionStepRuns.revisionId, revisionStepRuns.stepName],
+      set: values,
+    });
+}
+
+/**
+ * This step has ended, and only the attempt that started it may say so.
+ *
+ * One fenced `UPDATE`, which is what the filesystem adapter's own comment has
+ * been asking for since it was written. Two conditions carry the whole
+ * protocol, and they refuse different things:
+ *
+ * - **`attempt_id`** — somebody else's claim. A lapsed claimant whose lease was
+ *   swept still holds a token and would otherwise finish a step the new
+ *   claimant is in the middle of.
+ * - **`status = 'running'`** — a step that has already ended. Finishing twice is
+ *   not idempotent here: the second call would overwrite the first's stamp and
+ *   timestamps with a later run's.
+ *
+ * **A null `attempt_id` is refused too, and that falls out rather than being
+ * special-cased.** `attempt_id = $token` is never true of NULL in SQL, so a row
+ * written by the importer or by a CLI — neither of which has a claim — cannot be
+ * finished through this path. That is the rule `src/db/schema.ts` states for the
+ * column: a step run that cannot prove who wrote it cannot prove it was not
+ * somebody stale.
+ *
+ * `rowCount !== 1`, never `>= 1` and never ignored — zero rows here is the fence
+ * working, and it has to reach the caller as a failure. The same shape as
+ * `fenceJob` above, on purpose.
+ */
+export async function finishStepRun(
+  opts: {
+    revisionId: string;
+    stepName: StepName;
+    attemptId: string;
+    status: "done" | "error";
+    inputHash?: string;
+    implementationVersion?: string;
+    promptVersion?: string | null;
+    model?: string | null;
+  },
+  tx: Tx,
+): Promise<void> {
+  const { revisionId, stepName, attemptId } = opts;
+  const result = await tx
+    .update(revisionStepRuns)
+    .set({
+      status: opts.status,
+      finishedAt: new Date(),
+      /* Only where the caller has one. A step with no stamp — `fetch`,
+         `extract`, `blocks` — leaves `NO_INPUT_HASH` where `beginStepRun` put
+         it, rather than having a hash invented for it on the way out. */
+      ...(opts.inputHash === undefined ? {} : { inputHash: opts.inputHash }),
+      ...(opts.implementationVersion === undefined
+        ? {}
+        : { implementationVersion: opts.implementationVersion }),
+      ...(opts.promptVersion === undefined ? {} : { promptVersion: opts.promptVersion }),
+      ...(opts.model === undefined ? {} : { model: opts.model }),
+    })
+    .where(
+      and(
+        eq(revisionStepRuns.revisionId, revisionId),
+        eq(revisionStepRuns.stepName, stepName),
+        eq(revisionStepRuns.attemptId, attemptId),
+        eq(revisionStepRuns.status, "running"),
+      ),
+    );
+  if (result.rowCount !== 1) throw new StepRunNotHeld(revisionId, stepName);
+}
+
+/**
+ * Refused by `finishStepRun`: this attempt does not hold this step.
+ *
+ * Its own type rather than `NotTheLiveAttempt`, because the two are different
+ * failures with different repairs. `NotTheLiveAttempt` means the *job* has moved
+ * on; this means the step run is not in the state this caller believed — already
+ * finished, held by another attempt, held by nobody, or never begun — and the
+ * message deliberately does not guess which, since the fence cannot tell them
+ * apart in one statement and a confident wrong guess is worse than none.
+ */
+export class StepRunNotHeld extends Error {
+  readonly status = 409;
+  constructor(revisionId: string, stepName: StepName) {
+    super(
+      `The ${stepName} step of revision ${revisionId} is not held as running by this attempt — ` +
+        `it may have finished already, or been claimed by another.`,
+    );
+    this.name = "StepRunNotHeld";
+  }
+}
+
 export async function recordStepRun(
   input: {
     revisionId: string;
