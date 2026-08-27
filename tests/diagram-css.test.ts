@@ -21,7 +21,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DIAGRAMS, GIST_PX, LABEL_PX } from "../src/web/diagram.js";
+import { DIAGRAMS, GIST_PX, LABEL_PX, LINK_KINDS, UNLABELLED } from "../src/web/diagram.js";
 
 const CSS = readFileSync("src/web/styles.css", "utf8");
 
@@ -40,6 +40,18 @@ describe("the diagram's font sizes are declared in both files and match", () => 
   for (const kind of DIAGRAMS) {
     for (const depth of [0, 1, 2]) {
       const selector = `.diag-${kind} .diag-node.diag-d${depth} .diag-label`;
+      if (UNLABELLED.has(kind)) {
+        /* **Checked in the other direction, rather than skipped.** A kind that
+           writes nothing on a node has no font size to agree about — but "no
+           rule" is also what a forgotten rule looks like, so the exemption is
+           only honest if it *fails* when one of these grows a label. If that
+           ever happens, `LABEL_PX` has to become real for it and this set has
+           to lose a member. */
+        it(`${kind} depth ${depth} writes no label, and declares no size`, () => {
+          expect(fontSizeOf(selector), `\`${selector}\` exists, so ${kind} is not unlabelled`).toBeNull();
+        });
+        continue;
+      }
       it(`${kind} depth ${depth}`, () => {
         expect(fontSizeOf(selector), `no rule for \`${selector}\``).not.toBeNull();
         expect(fontSizeOf(selector)).toBe(LABEL_PX[kind]?.[depth]);
@@ -85,5 +97,82 @@ describe("the diagram's colours go through the palette rather than naming one", 
     for (const [, fallback] of BLOCK.matchAll(/var\(--cat-rgb,\s*var\((--[\w-]+)\)\s*\)/g)) {
       expect(fallback, `\`${fallback}\` is not an rgb triplet`).toMatch(/-rgb$/);
     }
+  });
+});
+
+/**
+ * **The five kinds of Force link, and the arrowhead.**
+ *
+ * Same class of failure as the font sizes above and the same reason a test has
+ * to read the CSS: the layout decides *what a line claims* and the stylesheet
+ * decides *what a claim looks like*, and when they disagree nothing happens.
+ * A kind with no rule is drawn in the base grey, indistinguishable from
+ * containment — five claims rendered as one texture, which is the whole thing
+ * this feature is trying not to be.
+ *
+ * GPT Sol's finding, 2026-08-27: the layout tests assert `l.kind`, and would
+ * pass with every one of these rules deleted.
+ */
+const MARKER = readFileSync("src/web/DiagramPanel.tsx", "utf8");
+
+describe("the Force picture's five kinds of line", () => {
+  it("gives every kind a rule of its own", () => {
+    /* A missing rule is a failure here rather than a silent pass — the same
+       rule the font-size block above works by. */
+    /* A word boundary after the kind, not a substring match: `.diag-link-anchor`
+       is a prefix of `.diag-link-anchorXX`, so `includes` was satisfied by a
+       renamed rule. Watched pass with the anchor rule renamed away. */
+    const missing = LINK_KINDS.filter(
+      (k) => !new RegExp(`\\.diag-force \\.diag-link-${k}[\\s,{]`).test(CSS),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  it("makes the semantic line dotted and nothing else", () => {
+    // The dash is not decoration: it is the drawing convention for "inferred",
+    // and it is what tells a reader which line cost money and can be wrong.
+    const dashed = LINK_KINDS.filter((k) => {
+      const rule = new RegExp(`\\.diag-force \\.diag-link-${k}\\s*\\{[^}]*\\}`, "s").exec(CSS);
+      return rule ? rule[0].includes("stroke-dasharray") : false;
+    });
+    expect(dashed).toEqual(["semantic"]);
+  });
+
+  it("draws the sequence chain thicker than every other kind", () => {
+    const width = (k: string) => {
+      const rule = new RegExp(`\\.diag-force \\.diag-link-${k}\\s*\\{[^}]*\\}`, "s").exec(CSS);
+      return Number(/stroke-width:\s*([\d.]+)/.exec(rule?.[0] ?? "")?.[1] ?? 0);
+    };
+    for (const k of LINK_KINDS) {
+      if (k === "sequence") continue;
+      expect(width("sequence"), `sequence vs ${k}`).toBeGreaterThan(width(k));
+    }
+  });
+
+  it("paints the arrowhead from the same token as the line it sits on", () => {
+    /* One token, shared, because a head that is a different colour from its
+       line reads as a stray mark. The alternative — SVG's `context-stroke` —
+       falls back to **black** where it is not understood, and a black arrowhead
+       on a near-black page is an arrow that is not there. */
+    const head = /\.diag-force \.diag-arrowhead\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
+    const line = /\.diag-force \.diag-link-sequence\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
+    const token = /var\((--[\w-]+)\)/.exec(head)?.[1];
+    expect(token, "the arrowhead should use a custom property").toBeTruthy();
+    expect(line).toContain(`var(${token})`);
+  });
+
+  it("puts the marker's tip at the end of the path, in fixed units", () => {
+    /* `arrowPath` trims the line to `r + HEAD_GAP` **because** the tip lands
+       exactly on the last point. That is only true when `refX` equals the
+       viewBox width and the units do not scale with the stroke — change either
+       in the JSX and the arithmetic in diagram-d3.ts quietly stops meaning what
+       its comment says. Two files, one geometry, nothing to see when they
+       disagree. */
+    const marker = /<marker[\s\S]*?>/.exec(MARKER)?.[0] ?? "";
+    const viewBox = /viewBox="0 0 (\d+) (\d+)"/.exec(marker);
+    const refX = /refX="(\d+)"/.exec(marker)?.[1];
+    expect(refX).toBe(viewBox?.[1]);
+    expect(marker).toContain('markerUnits="userSpaceOnUse"');
+    expect(marker).toContain('orient="auto"');
   });
 });

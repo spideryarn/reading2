@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The article as a weighted graph — src/web/graph.ts — and the three D3
  * pictures that need it (src/web/diagram-d3.ts).
@@ -324,9 +325,14 @@ describe("buildGraph", () => {
     const seq = g.edges.filter((e) => e.kind === "sequence");
     expect(parent.some((e) => e.source === "n2" && e.target === "n3")).toBe(true);
     expect(seq.some((e) => e.source === "n3" && e.target === "n4")).toBe(true);
-    // A sequence edge never crosses a part boundary — it is "next among my
-    // siblings", not "next in the article".
-    expect(seq.some((e) => e.source === "n4" && e.target === "n6")).toBe(false);
+    /* **This assertion was the other way round until 2026-08-27**, and it is
+       worth leaving the note. A sequence edge used to mean "next among my
+       siblings", so it stopped at every part boundary — and the join a reader
+       most needs, what follows the last section of part one, was the one the
+       graph did not have. Greg: *"between each consecutive pair"*. The chain now
+       runs through the whole article; tests/diagram-force-links.test.ts is where
+       it is tested properly. */
+    expect(seq.some((e) => e.source === "n4" && e.target === "n6")).toBe(true);
   });
 
   it("drops a closed part's sections from the graph entirely", () => {

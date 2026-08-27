@@ -1,0 +1,188 @@
+/**
+ * **The embeddings client, and what it refuses to believe.**
+ *
+ * Every check under test here guards a failure that produces a real number.
+ * That is the whole reason they exist rather than a comment saying the provider
+ * is well-behaved: a duplicated `index`, an out-of-range one, a short vector or
+ * a `null` that JSON coerced to zero all leave you with cosines that compute,
+ * sort and draw. Nothing throws, nothing looks wrong, and the picture is
+ * confidently about the wrong passages — docs/reusable/silent-success.md.
+ *
+ * The transport is faked. What is being tested is our reading of a response,
+ * not OpenRouter.
+ */
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { BATCH, cosine, dot, embedAll, embedBatch, normalise } from "../src/embeddings.js";
+
+type Datum = { index: number; embedding: number[] };
+
+/** Stand in for `fetch` with one canned 200. */
+function answers(data: Datum[]): void {
+  vi.stubGlobal("fetch", async () =>
+    new Response(JSON.stringify({ data, usage: { prompt_tokens: 3 } }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+}
+
+const call = (n: number) => embedBatch("m", Array.from({ length: n }, (_, i) => `t${i}`), "k", null);
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("embedBatch", () => {
+  it("puts the vectors back in the order asked for, not the order sent", () => {
+    /* **OpenRouter does not promise the order of `data[]`.** If it ever comes
+       back permuted and we trust the array, every vector is still a real
+       vector, every cosine is still a real number, and every passage is matched
+       against the wrong neighbour. Inherited from the eval this was lifted
+       from, and kept for the same reason. */
+    answers([
+      { index: 1, embedding: [0, 1] },
+      { index: 0, embedding: [1, 0] },
+    ]);
+    return expect(call(2)).resolves.toMatchObject({ vectors: [[1, 0], [0, 1]] });
+  });
+
+  it("refuses a response that names one index twice", async () => {
+    // Two answers for slot 0 and none for slot 1: without this check the second
+    // overwrites the first, slot 1 stays empty, and the "no vector at index"
+    // guard fires with a confusing message about the wrong thing.
+    answers([
+      { index: 0, embedding: [1, 0] },
+      { index: 0, embedding: [0, 1] },
+    ]);
+    await expect(call(2)).rejects.toThrow(/came back twice/);
+  });
+
+  it("refuses an index outside the range asked for", async () => {
+    answers([
+      { index: 0, embedding: [1, 0] },
+      { index: 7, embedding: [0, 1] },
+    ]);
+    await expect(call(2)).rejects.toThrow(/outside 0\.\.1/);
+  });
+
+  it("refuses a response whose vectors are not all the same length", async () => {
+    /* A short vector is the quietest failure of the lot: `cosine` compares it
+       against the first N components of its partner, which is a real number
+       between −1 and 1 and is not a similarity. */
+    answers([
+      { index: 0, embedding: [1, 0, 0] },
+      { index: 1, embedding: [0, 1] },
+    ]);
+    await expect(call(2)).rejects.toThrow(/dimensions/);
+  });
+
+  it("refuses a vector with a non-finite value in it", async () => {
+    answers([
+      { index: 0, embedding: [1, 0] },
+      { index: 1, embedding: [0, Number.NaN] },
+    ]);
+    await expect(call(2)).rejects.toThrow(/non-finite/);
+  });
+
+  it("refuses an empty vector", async () => {
+    answers([
+      { index: 0, embedding: [1, 0] },
+      { index: 1, embedding: [] },
+    ]);
+    await expect(call(2)).rejects.toThrow(/no vector/);
+  });
+
+  it("fails fast on the 404 that is an account setting, without retrying", async () => {
+    /* "No endpoints available matching your guardrail restrictions" is a 404
+       and reads exactly like a mistyped model id. It is the account's privacy
+       settings refusing every upstream, so retrying cannot help — and five
+       backoffs before the real message is a minute of waiting for a sentence
+       that was available immediately. */
+    let calls = 0;
+    vi.stubGlobal("fetch", async () => {
+      calls++;
+      return new Response("No endpoints available matching your guardrail restrictions", {
+        status: 404,
+      });
+    });
+    await expect(call(1)).rejects.toThrow(/account setting/);
+    expect(calls).toBe(1);
+  });
+
+  it("does not treat an ordinary 404 as that", async () => {
+    vi.stubGlobal("fetch", async () => new Response("model not found", { status: 404 }));
+    await expect(call(1)).rejects.toThrow(/404 model not found/);
+  });
+});
+
+describe("normalise and dot", () => {
+  it("agree with cosine, which is the point of having both", () => {
+    const a = [3, 4, 0];
+    const b = [0, 4, 3];
+    const [ua, ub] = [normalise(a), normalise(b)];
+    expect(ua && ub && dot(ua, ub)).toBeCloseTo(cosine(a, b));
+  });
+
+  it("gives back null for a vector with no direction, rather than NaN", () => {
+    /* A zero vector divided by its zero norm is a vector of NaN, and NaN
+       compares false against everything — so such a passage would not error,
+       it would sort wherever the sort happened to leave it. */
+    expect(normalise([0, 0, 0])).toBeNull();
+    expect(cosine([0, 0], [1, 1])).toBe(0);
+  });
+
+  it("is length one, so a dot product really is a cosine", () => {
+    const u = normalise([5, 12]);
+    let sum = 0;
+    for (const x of u ?? []) sum += x * x;
+    expect(sum).toBeCloseTo(1);
+  });
+});
+
+describe("embedAll, across more than one batch", () => {
+  /* ⟨Sol⟩ Every test above sends one batch, so the checks that only exist
+     *between* batches had nothing exercising them. An article of 97 passages is
+     two requests, and that is where a provider can change its mind. */
+
+  it("refuses a second batch that comes back a different width", async () => {
+    /* **Undetectable downstream.** `dot` used to walk the shorter vector, so
+       every comparison between a 1024-dimensional batch and a 1536-dimensional
+       one was a real number computed over the first 1024 components of
+       something that means something else. No error, no warning, wrong
+       picture. */
+    let call = 0;
+    vi.stubGlobal("fetch", async (_u: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { input: string[] };
+      const width = call++ === 0 ? 2 : 3;
+      const data = body.input.map((_t, i) => ({
+        index: i,
+        embedding: Array.from({ length: width }, () => 0.5),
+      }));
+      return new Response(JSON.stringify({ data, usage: {} }), { status: 200 });
+    });
+    const texts = Array.from({ length: BATCH + 1 }, (_, i) => `t${i}`);
+    await expect(embedAll(texts, { inputType: null, apiKey: "k" })).rejects.toThrow(
+      /3-dimensional, not 2/,
+    );
+  });
+
+  it("keeps every batch's vectors, in order", async () => {
+    vi.stubGlobal("fetch", async (_u: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { input: string[] };
+      const data = body.input.map((t, i) => ({ index: i, embedding: [Number(t.slice(1)), 0] }));
+      return new Response(JSON.stringify({ data, usage: {} }), { status: 200 });
+    });
+    const texts = Array.from({ length: BATCH + 5 }, (_, i) => `t${i}`);
+    const { vectors } = await embedAll(texts, { inputType: null, apiKey: "k" });
+    expect(vectors).toHaveLength(BATCH + 5);
+    // The seam between the two batches is where an off-by-one would show.
+    expect(vectors[BATCH - 1]?.[0]).toBe(BATCH - 1);
+    expect(vectors[BATCH]?.[0]).toBe(BATCH);
+  });
+
+  it("refuses to compare vectors of different lengths at all", () => {
+    // The last line of defence, below every check above.
+    expect(() => cosine([1, 2], [1, 2, 3])).toThrow(/dimensional/);
+    const a = normalise([1, 0]);
+    const b = normalise([1, 0, 0]);
+    expect(() => (a && b ? dot(a, b) : 0)).toThrow(/dimensional/);
+  });
+});
