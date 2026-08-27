@@ -1,0 +1,17 @@
+# Spideryarn is a private beta. None of it is meant to be listed yet.
+#
+# Why this file exists at all: Vercel puts `x-robots-tag: noindex` on the
+# generated *.vercel.app addresses automatically and does NOT put it on a custom
+# domain. So the day spideryarn.com moved to this project (2026-08-27) the app
+# quietly became crawlable, having never been so before. See
+# docs/project/deployment.md.
+#
+# Note the pairing with the X-Robots-Tag header in vercel.json, and the trap in
+# it: a crawler that obeys the Disallow below never fetches a page, so it never
+# sees that header. The two do not reinforce each other. Disallow stops the
+# crawl; the header is for whatever crawls anyway. If you ever need a URL
+# *removed* from an index rather than merely uncrawled, you have to delete the
+# Disallow so the crawler can get far enough to read the noindex.
+
+User-agent: *
+Disallow: /

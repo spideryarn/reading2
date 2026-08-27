@@ -103,6 +103,11 @@ There was **no downtime and no new certificate**. The existing Let's Encrypt cer
 (`notAfter Nov 16 2026`) kept working, because the domain never stopped pointing
 at Vercel's edge.
 
+**It did quietly cost the app its `noindex`**, which is a property of the address
+rather than of the project and so is not the kind of thing a move checklist asks
+about. That, and the `robots.txt` that answered `200 text/html`, are in
+[Who can reach it](#who-can-reach-it).
+
 ### Rollback
 
 The same call with the projects swapped, in about a minute. The old project is
@@ -264,9 +269,38 @@ Deployments" needs the **Advanced Deployment Protection** add-on — $150/month,
 
 So the options were: pay $150/month; stop deploying to production and use
 protected preview deploys only; or accept it. Greg, 2026-08-26, chose to accept
-it: there is no database attached yet, so there is nothing behind the URL to
-leak, and the responses carry `x-robots-tag: noindex`. **Do not treat this as
-private, and do not put real reader data behind it while it stands.**
+it: there was no database attached yet, so there was nothing behind the URL to
+leak, and the responses carry `x-robots-tag: noindex`.
+
+**Both halves of that reassurance have since expired, on consecutive days.** The
+database arrived on 2026-08-27, so there is now a real shelf behind the address —
+the beta gate below is what stands in front of it, not the absence of anything to
+steal. And the `noindex` is a property of the *address*, not of
+the app: Vercel stamps it on generated `.vercel.app` addresses and does not stamp
+it on a custom domain, so [the domain move](#the-domain) removed it without
+touching a line of code. Measured the same day:
+
+```
+spideryarn-reading2-greg-detre.vercel.app   x-robots-tag: noindex
+www.spideryarn.com                          (none)
+```
+
+There was no `robots.txt` to fall back on either, and the reason is the SPA
+catch-all: every path that is not a real file returns `index.html`, so
+`/robots.txt` answered `200 text/html`, which a crawler reads as *no such file*
+rather than as a rule. A path returning 200 is the worst way to be missing.
+
+Both are fixed. [`public/robots.txt`](../../public/robots.txt) is a real file, so
+Vercel's filesystem check answers it before the rewrite ever runs, and
+[`vercel.json`](../../vercel.json) adds `X-Robots-Tag: noindex, nofollow` to
+every response. **Read the header as the backstop, not as reinforcement** — a
+crawler that honours the `Disallow` never fetches a page and so never sees the
+header. They cover different crawlers rather than the same one twice, and the
+comment at the top of `robots.txt` says what to do if a URL ever needs
+*de-listing* rather than merely not crawling.
+
+**Still: do not treat this as private.** `robots.txt` is a request, the gate is
+the enforcement, and the shell of the app is served to anybody who asks.
 
 The real answer is [the beta gate](../plans/deploy-and-repo-move.md#the-beta-gate),
 which is what the custom domain needs anyway — application-level auth, which no
