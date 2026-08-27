@@ -591,6 +591,8 @@ function gatesAt(sha: string): void {
 
 interface MigrationPlan {
   url: string;
+  /** The role the deployed app connects as, checked after new tables appear. */
+  appRole: string;
   pending: JournalEntry[];
   appliedBefore: number;
 }
@@ -642,6 +644,10 @@ async function migrationPlan(sha: string): Promise<MigrationPlan | null> {
     return null;
   }
   info(`target ${withoutPassword(url)}`);
+
+  /* Derived rather than hardcoded: it is the role .env.prod hands to Vercel, and
+     two copies of one fact is how they come to disagree. */
+  const appRole = new URL(prod.DATABASE_URL).username.split(".")[0] ?? "spideryarn_app";
 
   const ssl = sslDecisionFor(url);
   if (ssl.mode !== "verified") {
@@ -699,9 +705,11 @@ async function migrationPlan(sha: string): Promise<MigrationPlan | null> {
       return null;
     }
 
+    await checkAppPrivileges(pool, appRole);
+
     if (state.pending.length === 0) {
       ok("nothing pending — the remote is in step with this commit");
-      return { url, pending: [], appliedBefore };
+      return { url, appRole, pending: [], appliedBefore };
     }
 
     info(`${state.pending.length} pending:`);
@@ -719,7 +727,7 @@ async function migrationPlan(sha: string): Promise<MigrationPlan | null> {
         say(`         ${DIM}${e.tag}: ${s} — the old code keeps serving until the new build is promoted${OFF}`);
     }
 
-    return { url, pending: state.pending, appliedBefore };
+    return { url, appRole, pending: state.pending, appliedBefore };
   } catch (err) {
     /* A throw here would take the whole run down with a raw stack and no
        verdict — which is what happened on the first real run. The deploy has
@@ -732,6 +740,49 @@ async function migrationPlan(sha: string): Promise<MigrationPlan | null> {
   } finally {
     await pool.end().catch(() => {});
   }
+}
+
+/**
+ * Can the role the app actually runs as still read every table?
+ *
+ * **A migration that adds a table can leave one the app cannot see, silently.**
+ * New objects are owned by whoever ran the migration, and `spideryarn_app` gets
+ * its access from an `ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA
+ * spideryarn` set up once at bootstrap — a rule scoped to **`postgres`
+ * specifically**. Migrations run as `postgres` today, so it holds; the day one
+ * runs as anything else, the tables it creates fall outside the rule and the app
+ * gets `permission denied for table X` on the next request that touches it.
+ * Nothing at boot checks, and nothing in this deploy would otherwise notice.
+ * docs/project/database.md § Roles.
+ *
+ * Asked as one query over **every** table in the schema rather than by parsing
+ * `create table` out of the pending SQL. Parsing would answer only for the
+ * migrations this run applied, and the failure is just as real when it arrives
+ * from a hand-run statement in the dashboard — which is how the roles were
+ * bootstrapped in the first place.
+ */
+async function checkAppPrivileges(pool: Pool, appRole: string): Promise<void> {
+  const unreadable = await pool.query(
+    `select c.relname
+       from pg_class c
+       join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'spideryarn'
+        and c.relkind = 'r'
+        and not has_table_privilege($1, c.oid, 'select')
+      order by c.relname`,
+    [appRole],
+  );
+  const names = (unreadable.rows as { relname: string }[]).map((r) => r.relname);
+  record(
+    `${appRole} can read every table in the schema`,
+    names.length === 0
+      ? []
+      : [
+          `${names.length} table(s) the running app cannot select from: ${names.join(", ")}`,
+          "New objects are owned by whoever migrated, and the default-privilege grant is scoped",
+          "FOR ROLE postgres. See docs/project/database.md § Roles.",
+        ],
+  );
 }
 
 /**
@@ -762,6 +813,8 @@ async function applyMigrations(plan: MigrationPlan): Promise<void> {
         ? []
         : [`the ledger moved by ${moved}, not ${plan.pending.length} — something else applied migrations too`],
     );
+    /* Again, because this is the moment a new table exists. */
+    await checkAppPrivileges(pool, plan.appRole);
   } finally {
     await pool.end();
   }
