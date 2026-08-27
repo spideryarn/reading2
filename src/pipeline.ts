@@ -1066,6 +1066,41 @@ export const STEPS: Record<StepName, PipelineStep> = {
       path.join(ctx.dir, "blocks.json"),
     ],
     produces: ["tree", "labels", "blocks"],
+    /**
+     * **Stage 3's blocks, not stage 4's copy of them** — the one step where
+     * `inputHashFor` is the wrong helper, and the reason is worth the lines.
+     *
+     * Every other stamped step consumes `data/<slug>/blocks.json`, so that is
+     * what `inputHashFor` reads. Stage 4's *input* is stage 3's output, and its
+     * copy of those blocks is one of its own products. Hashing the copy would
+     * be this step comparing its output against itself: it agrees by
+     * construction and can never report anything. So the question this asks is
+     * *was the tree built from the blocks stage 3 currently has*, which is
+     * exactly the thing that was unanswerable until 2026-08-27.
+     *
+     * **Only `inputHash`.** `labels.json` also carries a `version` and a
+     * `generator`, and comparing those would make every existing tree stale the
+     * next time the labels prompt moved — a real decision to take deliberately,
+     * not one to slip in beside a bug fix. `sameStamp` compares only the keys
+     * the expected stamp actually has.
+     *
+     * `null` is *we cannot tell*, which answers not-current: nothing records
+     * what such a tree was built from, and the alternative is serving a stale
+     * one for ever. Measured cost on this laptop when it landed: of nine
+     * articles, six unaffected, two already failing `has`, and one whose
+     * `labels.json` predates `sourceHash` and re-runs.
+     *
+     * Landed ahead of the Postgres artefact store on purpose. Without a stamp,
+     * that adapter would have to answer "is the toc current" with a rule
+     * private to storage — a third independently written copy beside
+     * `publishRevision` and `articleMetadata`, which is precisely the shape of
+     * docs/postmortems/toc-status-never-checked.md.
+     */
+    stamp: async (ctx, store) => {
+      const produced = await store.read(ctx.slug, "blocks", "blocks");
+      if (!produced?.blocks) return null;
+      return { inputHash: hashBlocks(produced.blocks) };
+    },
     async run(ctx) {
       const run = await generateToc({
         blocksPath: blocksPathFor(ctx),
