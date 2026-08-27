@@ -70,6 +70,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { loadEnvLocal } from "../src/env.js";
 import { CAPABLE_MODEL } from "../src/models.js";
+import { cosine, type EmbeddingUsage, type EmbedResult, embedAll } from "../src/embeddings.js";
 import type { Block } from "../src/types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -147,8 +148,6 @@ const DEFAULT_ARMS: Arm[] = [
   { id: "3-small", model: "openai/text-embedding-3-small", inputType: false },
 ];
 
-/** How many texts go in one embeddings request. The API caps at 2048; this is well under. */
-const BATCH = 96;
 
 /** How deep each model's result list goes. Everything below is measured at 3 and 5. */
 const TOP_K = 5;
@@ -335,148 +334,33 @@ async function loadCorpus(): Promise<{ passages: Passage[]; duplicates: number }
 
 // ---------------------------------------------------------------- embeddings
 
-interface EmbeddingUsage {
-  promptTokens: number;
-  /** OpenRouter's `cost_details.upstream_inference_cost`, in dollars. */
-  cost: number;
-}
-
 /**
- * One embeddings request.
+ * **The request client lives in [src/embeddings.ts](../src/embeddings.js).**
  *
- * **The response is re-sorted by `index` rather than trusted in order.**
- * OpenRouter does not promise the order of `data[]`, and the failure if it ever
- * comes back permuted is invisible: every vector is a real vector, every cosine
- * is a real number, and the eval reports one model as worse than it is. This is
- * the shape of bug docs/reusable/silent-success.md is about.
+ * It was written here first, and moved when the app grew a second caller (the
+ * Force diagram's dotted links — src/similar.ts). The parts worth keeping were
+ * never the request: they were the three failures underneath it, each of which
+ * is invisible if you get it wrong. A permuted `data[]`, a 404 that is an
+ * account setting rather than a bad model id, and a 429 that means "busy"
+ * rather than "no". Two copies of that could only ever diverge, and the copy
+ * that diverged would be the one nobody was running that week.
+ *
+ * What stays here is the eval's own shape: arms, and progress on stderr.
  */
-async function embedBatch(
-  model: string,
-  input: string[],
-  apiKey: string,
-  inputType: "query" | "document" | null,
-  attempt = 1,
-): Promise<{ vectors: number[][]; usage: EmbeddingUsage }> {
-  const res = await fetch("https://openrouter.ai/api/v1/embeddings", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify(inputType ? { model, input, input_type: inputType } : { model, input }),
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    /* 429 and 5xx are the provider being busy, not the request being wrong, and
-       they are common enough on a run of a few hundred blocks that failing on
-       one would make the eval unrunnable at exactly the wrong moment: half the
-       corpus embedded, money already spent. Back off and try again.
-
-       The 404 clause is not a catch-all and must not become one. OpenRouter
-       answers "No endpoints available matching your guardrail restrictions and
-       data policy" with a 404, and it means *no upstream is free right now* —
-       it fired mid-run on a model whose identical request had just succeeded,
-       and succeeded again on every batch size when retried by hand a minute
-       later. A real 404 (a model id that does not exist) does not carry that
-       string, so it still fails on the first attempt with the message intact. */
-    const noEndpoints = res.status === 404 && body.includes("No endpoints available");
-    const retryable = res.status === 429 || res.status >= 500;
-
-    /**
-     * "No endpoints available matching your guardrail restrictions and data
-     * policy" is a 404 and reads like a bad model id. It is neither: it is
-     * **this OpenRouter account's privacy settings** refusing every upstream
-     * that serves the model, and it is per-account, not per-key-holder.
-     *
-     * It cost an hour here, so the message says the whole thing. Both Voyage
-     * models 404 on the key exported in this shell and answer 200 on the key in
-     * `.env.local` — two different accounts, one of which has not opted in to
-     * whatever Voyage's endpoints require. `src/env.ts` deliberately lets an
-     * exported variable beat the file ("the file is the convenience, not the
-     * authority"), so the shell's key is the one in play and nothing says so.
-     *
-     * Retrying cannot help — it is a setting, not a queue — so this fails fast
-     * with instructions rather than backing off five times first.
-     */
-    if (noEndpoints) {
-      const key = apiKey.slice(0, 12);
-      throw new Error(
-        `embeddings ${model}: OpenRouter has no endpoint this account may use.\n` +
-          `This is an account setting, not a transient failure and not a bad model id.\n` +
-          `  key in use: ${key}… (${process.env.OPENROUTER_API_KEY === apiKey ? "exported in the shell — this BEATS .env.local, see src/env.ts" : "from .env.local"})\n` +
-          `  fix: allow this model's providers at https://openrouter.ai/settings/privacy,\n` +
-          `  or run with the other key — \`env -u OPENROUTER_API_KEY npm run eval:embeddings\`\n` +
-          `  falls through to .env.local.\n` +
-          `  raw: ${body}`,
-      );
-    }
-    if (retryable && attempt < 5) {
-      const waitMs = 2000 * 2 ** (attempt - 1);
-      process.stderr.write(`\n  ${model}: ${res.status}, retrying in ${waitMs}ms\n`);
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-      return embedBatch(model, input, apiKey, inputType, attempt + 1);
-    }
-    throw new Error(`embeddings ${model}: ${res.status} ${body}`);
-  }
-  const body = (await res.json()) as {
-    data: { index: number; embedding: number[] }[];
-    usage?: {
-      prompt_tokens?: number;
-      cost_details?: { upstream_inference_cost?: number };
-    };
-  };
-  if (body.data.length !== input.length) {
-    throw new Error(`embeddings ${model}: asked for ${input.length}, got ${body.data.length}`);
-  }
-  const vectors: number[][] = new Array<number[]>(input.length);
-  for (const d of body.data) vectors[d.index] = d.embedding;
-  for (const [i, v] of vectors.entries()) {
-    if (!v) throw new Error(`embeddings ${model}: no vector at index ${i}`);
-  }
-  return {
-    vectors,
-    usage: {
-      promptTokens: body.usage?.prompt_tokens ?? 0,
-      /* Not `usage.cost`: for a BYOK model that field is 0, because OpenRouter
-         charged nothing — the bill went to the user's own OpenAI account. The
-         real number is the upstream one. */
-      cost: body.usage?.cost_details?.upstream_inference_cost ?? 0,
-    },
-  };
-}
-
-async function embedAll(
+async function embedAllForArm(
   arm: Arm,
   texts: string[],
   apiKey: string,
   kind: "query" | "document",
-): Promise<{ vectors: number[][]; usage: EmbeddingUsage }> {
-  const inputType = arm.inputType ? kind : null;
-  const vectors: number[][] = [];
-  const usage: EmbeddingUsage = { promptTokens: 0, cost: 0 };
-  for (let i = 0; i < texts.length; i += BATCH) {
-    const slice = texts.slice(i, i + BATCH);
-    const got = await embedBatch(arm.model, slice, apiKey, inputType);
-    vectors.push(...got.vectors);
-    usage.promptTokens += got.usage.promptTokens;
-    usage.cost += got.usage.cost;
-    process.stderr.write(`  ${arm.id} ${kind}s: ${vectors.length}/${texts.length}\r`);
-  }
-  process.stderr.write(`  ${arm.id} ${kind}s: ${vectors.length}/${texts.length}\n`);
-  return { vectors, usage };
-}
-
-/** Proper cosine — see the header for why this is not a dot product. */
-function cosine(a: number[], b: number[]): number {
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i] ?? 0;
-    const y = b[i] ?? 0;
-    dot += x * y;
-    na += x * x;
-    nb += y * y;
-  }
-  const denom = Math.sqrt(na) * Math.sqrt(nb);
-  return denom === 0 ? 0 : dot / denom;
+): Promise<EmbedResult> {
+  return embedAll(texts, {
+    model: arm.model,
+    inputType: arm.inputType ? kind : null,
+    apiKey,
+    onProgress: (done, total) => {
+      process.stderr.write(`  ${arm.id} ${kind}s: ${done}/${total}${done === total ? "\n" : "\r"}`);
+    },
+  });
 }
 
 // ---------------------------------------------------------------- judging
@@ -967,13 +851,13 @@ interface Retrieval {
 
 /** One model's view of the corpus: embed everything, rank every query. */
 async function retrieve(arm: Arm, passages: Passage[], apiKey: string): Promise<Retrieval> {
-  const corpus = await embedAll(
+  const corpus = await embedAllForArm(
     arm,
     passages.map((p) => p.text),
     apiKey,
     "document",
   );
-  const queryVecs = await embedAll(
+  const queryVecs = await embedAllForArm(
     arm,
     QUERIES.map((q) => q.text),
     apiKey,
