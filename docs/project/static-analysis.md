@@ -153,7 +153,9 @@ matter until there is a deploy to make it matter.
   usable `typescript` it will not glob `.ts`. Not our problem while we do not use it; it is here
   because it is the thing you would hit first if you tried.
 - **`git ls-files` omits untracked files.** Any file list built that way silently misses new work,
-  which in this tree is most of it.
+  which in this tree is most of it. [counting-lines.md](counting-lines.md) takes that trade
+  deliberately — it counts from git so that `.gitignore` is the only exclusion list — and its
+  `--untracked` flag is the way out.
 - **A tool that reports findings and exits 0.** See the counted steps above.
 
 ## Sources
