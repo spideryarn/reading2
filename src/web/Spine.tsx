@@ -230,8 +230,57 @@ const READING_LINE = 0.35;
 /** Nothing to draw, and a stable identity so the memos below do not rerun. */
 const NO_MATCHES: Map<BlockId, BlockMatch> = new Map();
 
+/**
+ * What pressing a band should do: show what it is, or go there.
+ *
+ * **A three-line function with its own name and its own test, for the reason
+ * `stepBar` in scroll.ts has one** — it cannot be checked where it lives. The
+ * branch that matters only runs under a finger, and the browser harness is a
+ * desktop Chrome, so a broken one would look exactly like a working one.
+ *
+ * The rule: a mouse click or a keypress jumps, exactly as it always did. A
+ * **tap** on a band whose card is not already open *opens the card*, and only a
+ * second tap on that same band jumps. Reveal, then commit — because these bands
+ * are proportional and most of them are a few pixels tall, so tapping one blind
+ * is a coin flip and the card is the only thing that can say what you are about
+ * to press.
+ *
+ * **`touch` is a fact about this press, not about the device**, and that is the
+ * second version of this function. The first asked `(hover: none)`, which the
+ * Media Queries spec defines as a property of the UA's *primary* pointing
+ * device: a touchscreen laptop whose primary pointer is a mouse reports
+ * `hover: hover`, so a finger there would have jumped on the first tap, and a
+ * tablet with a mouse plugged in reports `hover: none`, so the mouse there
+ * would have needed two clicks. Both are hybrids, both are common, and
+ * `PointerEvent.pointerType` simply answers the question that was being asked.
+ * GPT Sol, 2026-08-27.
+ *
+ * Note it is `armed !== id` rather than `armed === null`: a finger moving from
+ * one band to another re-reveals rather than jumping, so the rail can be read
+ * by walking down it instead of firing at whatever it lands on.
+ */
+export function bandPress(
+  touch: boolean,
+  armed: string | null,
+  id: string,
+): "reveal" | "jump" {
+  return touch && armed !== id ? "reveal" : "jump";
+}
+
 export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props) {
   useRenderCount("Spine");
+  /**
+   * Which band's card a finger has opened, and `null` on a device with a
+   * pointer.
+   *
+   * **State on this component is not free** — performance.md is largely about
+   * how often this file re-renders during a scroll — so it is worth saying why
+   * this one is cheap: it changes on a *tap*, which is a deliberate act
+   * happening at most a few times a minute, and never on scroll, hover or
+   * resize. It is also dead weight on a mouse, where `coarse` is false and
+   * `armed` never leaves `null`.
+   */
+  const [armed, setArmed] = useState<{ id: string; byTouch: boolean } | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [viewportH, setViewportH] = useState(() => window.innerHeight);
   /* The you-are-here band. State, because it changes what is *drawn* — but set
@@ -491,11 +540,30 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
               key={`hit-${b.entry.node.id}`}
               placement="right"
               className="tip-band"
+              /* **Controlled at every width and on every device**, which is
+                 simpler than it first sounds: one owner of "which card is
+                 open", fed by whichever input is present. A mouse feeds it
+                 through hover, a keyboard through focus (`useFocus` is
+                 `visibleOnly`, so a tap does not count as focus and cannot
+                 open a card behind the reader's back), and a finger through the
+                 click handler below. Being controlled is also what turns off
+                 hover's synthesised touch events — see `mouseOnly` in
+                 Tooltip.tsx, without which the second tap could never land. */
+              open={armed?.id === b.entry.node.id}
+              onOpenChange={(v: boolean) =>
+                setArmed(v ? { id: b.entry.node.id, byTouch: false } : null)
+              }
               content={
                 <BandCard
                   band={b}
                   position={Math.round((b.top / docHeight) * 100)}
                   matches={bandCounts.get(b.entry.node.id) ?? 0}
+                  /* Only when a finger opened it. A mouse reader hovering the
+                     rail is one click from anywhere and does not need telling;
+                     saying "tap again" to somebody holding a mouse is noise. */
+                  showTapHint={
+                    armed?.id === b.entry.node.id && armed.byTouch
+                  }
                 />
               }
             >
@@ -513,7 +581,42 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
                    read. "Four matches here" is the whole reason somebody using
                    the rail during a search would press this one. */
                 aria-label={ariaFor(b, bandCounts.get(b.entry.node.id) ?? 0)}
-                onClick={() => onJump(b.entry.node.range[0])}
+                /* **On a touch device the first tap reads the band and the
+                   second one goes there.**
+
+                   Greg, 2026-08-27, on reading this on a phone — *"let's make
+                   the spine tappable (esp on mobile)"*. The rail is the only
+                   whole-article overview left once the gist columns go
+                   (layout.ts § gistsThatFit), and it was useless on a phone:
+                   everything it knows — which part a section belongs to, its
+                   gist, how far in it is, how many search matches are in it —
+                   lives in a hover card, and a finger cannot hover. So the rail
+                   was a decorative stripe that occasionally threw you somewhere.
+
+                   That is also why a tap could not simply keep jumping. These
+                   bands are proportional, so most of them are a few pixels
+                   tall; tapping one blind is a coin flip, and the card is the
+                   only thing that can tell you what you are about to press.
+                   Reveal, then commit.
+
+                   A mouse is untouched: `coarse` is false, the tooltip owns its
+                   own open state, and one click still jumps. */
+                onClick={(e) => {
+                  /* `pointerType` is "touch" for a finger, "mouse" for a
+                     click, and "" for a keypress — React's click carries the
+                     native PointerEvent. Optional-chained because a synthetic
+                     click (a test, an extension) may carry no pointer at all,
+                     and the safe reading of "no pointer" is "not a finger",
+                     which jumps. */
+                  const touch =
+                    (e.nativeEvent as PointerEvent).pointerType === "touch";
+                  if (bandPress(touch, armed?.id ?? null, b.entry.node.id) === "reveal") {
+                    setArmed({ id: b.entry.node.id, byTouch: true });
+                    return;
+                  }
+                  setArmed(null);
+                  onJump(b.entry.node.range[0]);
+                }}
               />
             </Tooltip>
           ))}
@@ -560,7 +663,8 @@ function BandCard({
   band,
   position,
   matches,
-}: { band: Band; position: number; matches: number }) {
+  showTapHint = false,
+}: { band: Band; position: number; matches: number; showTapHint?: boolean }) {
   const { node, words, children } = band.entry;
   return (
     <>
@@ -598,6 +702,13 @@ function BandCard({
         )}
         <span>{position}% in</span>
       </div>
+      {/* **Said out loud, because a tap that does nothing visible reads as a
+          broken control.** On a touch device the first tap opens this card and
+          does not move the article — which is the right behaviour on a rail of
+          two-pixel bands, and is indistinguishable from a dead button unless
+          the card says what the next tap will do. Never shown on a mouse, where
+          one click has always jumped and always will. */}
+      {showTapHint && <div className="tip-tap">Tap again to go here</div>}
     </>
   );
 }

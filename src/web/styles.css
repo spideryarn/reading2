@@ -101,8 +101,8 @@
    * one substitution rather than five judgement calls, and the next thing that
    * pins below the bar gets it right by using the obvious token.
    *
-   * It is `--bar-h` everywhere except a short viewport being scrolled down
-   * through, where § a short viewport switches it to `0px`. See
+   * It is `--bar-h` everywhere except a small device being scrolled down
+   * through, where § a small device switches it to `0px`. See
    * docs/plans/mobile-reading-view.md for why a landscape phone needed the 44px.
    *
    * **Deliberately a plain custom property, and deliberately not animated
@@ -320,32 +320,35 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 
 .controls {
   position: sticky;
-  /* Zero everywhere but a short viewport being scrolled down, where § a short
-     viewport switches `--bar-bottom` to `0px` and this becomes `-44px` — a
-     sticky element with a negative `top` sticks that far *above* the viewport,
-     which is exactly "get out of the way" and needs nothing else.
+  /* **The bar moves by `transform`; everything pinned under it moves by `top`.**
 
-     **`top` rather than `transform`, and the transform version is why this
-     comment is long.** Moving it by `translateY` is the textbook answer — it
-     only moves the paint, where animating a sticky element's `top` re-runs the
-     stickiness constraint every frame — and on this element it silently did
-     nothing: computed `transform` stayed `matrix(1,0,0,1,0,0)` even with the
-     declaration set *inline from the console*, against a control property set
-     the same way that read back fine. **Why is not established.** It is not the
-     cascade (inline beats every layer), and the obvious suspect — the
-     reduced-motion block in tailwind.css — touches only durations. Not chased
-     further, because every other thing that pins under this bar already moves
-     by `top`, so one mechanism for the whole group is better than two even if
-     the transform could be made to work. If you are tempted back to `transform`
-     here, reproduce the inline-console test first; and if transforms turn out
-     to be inert more widely than this one element, that is a much bigger
-     finding than this rule and belongs in a postmortem.
+     A transform only moves the paint, where animating a sticky element's own
+     `top` re-runs the stickiness constraint every frame. Everything below the
+     bar is either `position: fixed` (the spine, the band, the fade) or a sticky
+     element whose `top` is simply a different number (the table head), so `top`
+     is right for those and a transform is right for this one.
 
-     The trap the transform version would have had is still worth knowing, since
-     it is why scroll.ts changed: a moved bar still *measures* 44px tall, so
-     `stickyOffset()` had to stop reading its height. That is true of `top`
-     too — the height never changes either way. */
-  top: calc(var(--bar-bottom) - var(--bar-h));
+     Verified 2026-08-27 with transitions disabled: switching `--bar-bottom` to
+     `0px` gives `matrix(1, 0, 0, 1, 0, -44)` and a `getBoundingClientRect().top`
+     of -44, **with no scroll event at all** — which is the case that matters,
+     because the `:focus-within` rule in § a small device brings the bar back for
+     a keyboard reader who is not scrolling.
+
+     **Do not trust a browser measurement of this without turning the transition
+     off first.** An earlier version of this comment asserted that transforms
+     were inert on this element and could not be used, and a later one asserted
+     that a sticky element will not re-position until the next scroll. Both were
+     wrong, and both came from the same place: the measuring tab is never the
+     frontmost window, and **a CSS transition does not advance in a hidden tab**,
+     so `getComputedStyle` returns the value the property started from however
+     long you wait. Every reading looked stable and self-consistent. GPT Sol
+     flagged the first claim as under-evidenced before the second one was made.
+     docs/project/browser-testing.md § a hidden tab.
+
+     `getBoundingClientRect` includes transforms, so `stickyOffset()` in
+     scroll.ts reads a hidden bar's `bottom` as 0 and needs no special case. */
+  top: 0;
+  transform: translateY(calc(var(--bar-bottom) - var(--bar-h)));
   left: calc(var(--spine-w) + var(--mode-w));
   width: calc(100vw - var(--spine-w) - var(--mode-w));
   z-index: 40;
@@ -361,7 +364,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   background: var(--page);
   border-bottom: 1px solid var(--rule-strong);
   font-family: var(--font-ui);
-  transition: top 0.18s ease;
+  transition: transform 0.18s ease;
 }
 
 .controls-label {
@@ -3104,6 +3107,19 @@ td.text.has-hit[data-hues="8"] {
 }
 
 .chat-empty { padding: 1rem 0.9rem; color: var(--ink-faint); }
+/* The wait before the list. Same padding as `.chat-empty`, because it stands in
+   the same place and the panel must not jump when one replaces the other. The
+   min-height holds the row's space during the sub-600ms window when useSlow is
+   still deciding whether this wait is worth mentioning — see ChatListLoading. */
+.chat-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 1.2rem;
+  padding: 1rem 0.9rem;
+  font-size: 0.78rem;
+  color: var(--ink-faint);
+}
 .chat-empty p { margin: 0 0 0.5rem; }
 .chat-empty-hint { font-size: 0.82rem; line-height: 1.45; }
 .chat-new {
@@ -7089,41 +7105,26 @@ tr:hover .block-chat,
 }
 .diag-trail .diag-arrowhead { fill: rgb(var(--diag-chain) / 0.8); }
 
-/* **Dictation is not finished, and says so.** Warm rather than red, and small:
-   it is a caveat on a control that still works sometimes, not a failure that has
-   happened. Sits beside the microphone button so it is read before the press.
-   docs/research/microphone-library-options.md. */
-.prof-mic-wip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
+/* **The microphone's one promise, and it is invisible.**
+   Where the "unreliable" sticker used to be (removed 2026-08-27, along with the
+   bug it was about). The sentence — your voice is sent to be transcribed and is
+   not stored — is carried as the button's accessible description and as its
+   `title`, and takes no room on screen: it is a fact about how the control
+   works, not a warning about whether it does. docs/plans/dictation-two-pass.md. */
+.prof-mic-note {
   margin-left: auto;
-  color: var(--highlight-ink, var(--highlight));
-  font-family: var(--font-ui);
-  font-size: 0.68rem;
-  line-height: 1;
-  opacity: 0.85;
-  cursor: help;
 }
-.prof-mic-wip-word {
-  text-transform: lowercase;
-  letter-spacing: 0.01em;
+
+/* Turning the words into text. The microphone is off, so no orange — this is
+   work happening rather than a device being open, and it must not look like a
+   third listening state. */
+.prof-mic.busy {
+  color: var(--ink-faint);
+  border-color: var(--rule);
+  opacity: 1;
 }
-/* The same caveat again, under the strip, for the minute it is running in. */
-.prof-mic-wip-note {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.3rem;
-  margin: 0.25rem 0 0;
-  color: var(--highlight-ink, var(--highlight));
-  font-family: var(--font-ui);
-  font-size: 0.72rem;
-  line-height: 1.4;
-}
-.prof-mic-wip-note svg {
-  flex: none;
-  margin-top: 0.15em;
-}
+.prof-mic.busy:disabled { opacity: 1; cursor: progress; }
+.spin { animation: cmt-spin 0.9s linear infinite; }
 
 /* A microphone was chosen and could not be opened, so something else is in use.
    Warm rather than red: it is a fact worth knowing, not a failure — dictation is
@@ -7347,8 +7348,8 @@ tr:hover .block-chat,
   .reader:has(.mode-band) .masthead { display: none; }
 }
 
-/* --------------------------------------------------- § a short viewport ----
-   Landscape, where the scarce axis is the other one.
+/* ----------------------------------------------------- § a small device ----
+   Where a centimetre in *either* direction is worth having.
 
    Measured at 844 × 390: `.controls` 44 + `thead` 40 + `.dock` 40 = **124px, a
    third of the viewport**, permanently. Greg: *"the vertical screen estate was
@@ -7366,15 +7367,26 @@ tr:hover .block-chat,
       root element and re-renders nothing — see performance.md for why a React
       state here would have been the expensive way to do it.
 
-   Only on a short viewport. Portrait has the height to spare, and a bar that
-   moves is a bar you can lose track of; this fires exactly where the problem
-   was found. 620px rather than 500 so a landscape phone with browser chrome is
-   comfortably inside it, and no laptop ever is.
+   **Both orientations, at Greg's asking** — *"let's make portrait and landscape
+   consistent for small devices, because every centimetre of real estate in
+   either dimension is valuable"*, 2026-08-27. This first shipped as a
+   height-only rule on the argument that portrait has height to spare and a bar
+   that moves is a bar you can lose track of. That argument weighs a small risk
+   against a real 44px, and it was the wrong way round: a phone held either way
+   is a phone.
+
+   So the condition is a device that is small in *some* direction, and the
+   comma is doing that work — `(max-height: 620px), (max-width: 743px)` is an
+   OR. 620px so a landscape phone with browser chrome is comfortably inside it
+   and no laptop ever is; 743px is § a narrow window's own number, reused here
+   deliberately rather than picked again, so "small" means one thing in this
+   file. **`watchBarVisibility` in scroll.ts carries this whole string** and
+   attaches its listener only while it matches — change one and change both.
 
    The bar and everything pinned under it move together because they are all
    driven by `--bar-bottom` — see the token's own note in § tokens for the
    `@property` version of this that could not survive the build. */
-@media (max-height: 620px) {
+@media (max-height: 620px), (max-width: 743px) {
   :root[data-bars="hidden"] {
     --bar-bottom: 0px;
   }
@@ -7425,13 +7437,100 @@ tr:hover .block-chat,
    motion — it just arrives there rather than travelling. Hiding the chrome is
    the point; the 180ms slide is only how it is announced. */
 @media (prefers-reduced-motion: reduce) {
+  /* `.controls` animates `transform` and everything under it animates `top`
+     (see the `.controls` rule for why the two differ), so both have to be named
+     here or half the chrome would still slide. */
   .controls,
   thead th,
+  td.gist .sticky,
   .spine,
   .mode-band {
     transition: none;
   }
 }
+
+/* ------------------------------------------------- § the gutter reveals ----
+   **The block id beside a paragraph is shown when you are on that paragraph,
+   not always.** Greg, 2026-08-27: *"maybe we need to rethink the way we
+   currently always show the block-ids to the left of the blocks"* — and having
+   fixed the half of that which was about width (§ a narrow window hides them
+   outright), this is the half that was about noise. On a wide window the gutter
+   costs the reader nothing, because the prose is capped at a reading measure
+   anyway; what it costs is a column of grey machine text running down the side
+   of the article, permanently, next to every single paragraph.
+
+   So it joins the chat button that already lives in the same gutter and already
+   worked this way: **the gutter as a whole is revealed by being on the row.**
+   One affordance rather than two, and nothing new to learn.
+
+   `.block-ref.block-id` rather than `.block-id`, and that is load-bearing: the
+   `.block-ref` block further up this file sets `opacity: 0.5` and is declared
+   AFTER `.block-id`, so a single-class selector here would lose on source order
+   while looking perfectly correct. Two classes (0,2,0) wins wherever it sits.
+
+   Opacity rather than `display: none`, for the reason the chat button gives:
+   a hidden element is not focusable, so this would vanish for a keyboard reader
+   and every check done with a mouse would look fine. */
+.block-ref.block-id { opacity: 0; }
+tr:hover .block-ref.block-id { opacity: 0.6; }
+.block-ref.block-id:hover,
+.block-ref.block-id:focus-visible { opacity: 1; }
+
+/* Nothing to be on the row *with*. Faint but present, the same call and the
+   same reasoning as `.block-chat` above — on a touch device "reveal on hover"
+   means "never", and a reader who wants to quote a paragraph still needs to be
+   able to see which one it is. On a narrow window § a narrow window takes it
+   away entirely — and it wins because it sets `display`, which none of these
+   rules touch, rather than because of source order. (It is in fact declared
+   *earlier*; the first version of this note had the cascade backwards.
+   GPT Sol, 2026-08-27.) */
+@media (hover: none) {
+  .block-ref.block-id { opacity: 0.3; }
+}
+
+
+/* ------------------------------------------------------- § one axis only ----
+   **A finger drag scrolls the page down, or across, and never both at once.**
+
+   Greg, 2026-08-27: *"when I'm scrolling on a phone/tablet with my finger, it's
+   annoying if it sometimes scrolls diagonally. I think I'd either like it to
+   scroll vertically, or horizontally, but not diagonally."*
+
+   The biggest cause of that is already gone: before today the table was 720px
+   wide in a 390px window, so the page scrolled in both directions everywhere
+   and *every* drag was diagonal. `fitView` now fits the table to the window at
+   every width, so on a phone there is usually nothing to scroll sideways to.
+   This rule is what makes it a guarantee rather than a consequence.
+
+   **Why the prose cell and not the page.** `touch-action` is the only way to
+   constrain an axis without taking over scrolling entirely — the alternative is
+   `preventDefault` on a non-passive `touchmove` and moving the page ourselves,
+   which throws away momentum and rubber-banding, and is the scrolljacking
+   touch.md refuses on the reading column specifically. But `touch-action` is
+   read when the finger goes **down**, so it cannot lock to whichever axis the
+   gesture turns out to favour; it can only be decided per region, in advance.
+
+   So the axis is a property of what you put your finger on, which this view
+   already had a shape for (touch.md § what happens where):
+
+     the prose      → down only          (this rule)
+     a gist column  → across, or a step  ([data-swipe-step], § touch above)
+
+   That keeps sideways panning reachable when a manual `?cols=` overflows the
+   window, which is the one case left where there is anything out there — you
+   pan from a gist column rather than from the middle of a sentence. Nothing is
+   taken away that auto-fit ever needs.
+
+   Two declarations, not one, for the reason the swipe rules give: `pinch-zoom`
+   is a newer keyword, and a browser that does not know it drops the whole
+   declaration — so the first line is the floor and the second is the upgrade.
+   Getting this wrong disables pinch-to-zoom on the article, which is an
+   accessibility regression that no screenshot would show. */
+@media (any-pointer: coarse) {
+  td.text { touch-action: pan-y; }
+  td.text { touch-action: pan-y pinch-zoom; }
+}
+
 
 /* The table head, when the article is the only column there is.
    Set by TableView.tsx — read the comment there for why the condition is "no

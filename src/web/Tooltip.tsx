@@ -63,7 +63,7 @@ const DELAY = { open: 240, close: 90 } as const;
  */
 export const TooltipGroup = FloatingDelayGroup;
 
-interface Props {
+interface BaseProps {
   /** The panel's contents. Rendered only while open. */
   content: ReactNode;
   /** The trigger. A single element that can take a ref and event handlers. */
@@ -97,14 +97,43 @@ interface Props {
   className?: string;
 }
 
+/**
+ * Take the open state over, instead of letting hover and focus own it.
+ *
+ * **For a card that has to survive a tap**, which is the one thing hover cannot
+ * do: on a touch device there is nothing to hover with, so a card that only
+ * opens on hover does not exist at all. The spine needs a band's card to open on
+ * the first tap and stay up until the reader taps somewhere else (Spine.tsx),
+ * and that is a decision about what a tap *means* — it cannot be made inside
+ * this component, which does not know what its trigger does.
+ *
+ * **A union rather than two optional props**, so that supplying one without the
+ * other is a compile error rather than a tooltip that opens and never closes.
+ * An earlier version had a comment warning about exactly that and no way to
+ * enforce it; GPT Sol pointed out the type system can (2026-08-27).
+ *
+ * Being controlled also turns off hover's *touch* handling — see `mouseOnly`
+ * below, which is the difference between reveal-then-commit working and the
+ * card being torn down before the tap that was meant to commit it.
+ */
+type OpenState =
+  | { open?: undefined; onOpenChange?: undefined }
+  | { open: boolean; onOpenChange(open: boolean): void };
+
+type Props = BaseProps & OpenState;
+
 export function Tooltip({
   content,
   children,
   placement = "right",
   keepSide = false,
   className,
+  open: controlledOpen,
+  onOpenChange,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
   const arrowRef = useRef<SVGSVGElement>(null);
 
   const { refs, floatingStyles, context } = useFloating({
@@ -134,10 +163,32 @@ export function Tooltip({
   // own delay. A group always supplies an object, which is truthy.
   const { delay: groupDelay, isInstantPhase } = useDelayGroup(context);
 
+  const controlled = controlledOpen !== undefined;
+
   const interactions = useInteractions([
     useHover(context, {
       delay: groupDelay || DELAY,
       move: false,
+      /**
+       * **`useHover` handles touch as well as mouse by default, and on a
+       * controlled tooltip that silently breaks the thing being controlled.**
+       *
+       * A tap on a device with no hover still produces a synthesised
+       * `mouseenter` … `mouseleave` … `click`, in that order — `mouseleave`
+       * arrives *before* the click. So on the spine's second tap, hover closed
+       * the card and cleared `armed`, and the click that followed saw an
+       * unarmed band and re-revealed it: reveal-then-commit could never reach
+       * commit, and the rail would have been untappable on exactly the device
+       * it was built for. `bandPress`'s unit tests cannot see this, because the
+       * bug is in the event sequence rather than in the decision.
+       *
+       * Found by GPT Sol, 2026-08-27, reading the code against the Pointer
+       * Events spec — not by running it, which no harness here can do.
+       *
+       * Scoped to the controlled case so every other tooltip in the app keeps
+       * whatever touch behaviour it had.
+       */
+      mouseOnly: controlled,
       // Every card here is read, not clicked: the pointer never needs to
       // travel into one, and a panel that lingered while the pointer crossed
       // it would sit on top of the thing being pointed at. (A `safePolygon()`

@@ -61,11 +61,11 @@ export function stickyOffset(): number {
    * how tall the bar is.
    *
    * The height was right for as long as the bar could only ever be stuck at
-   * `top: 0`. On a short viewport it now slides out of the way while you read
-   * forwards (styles.css § a short viewport) — by going to a negative sticky
-   * `top`, which moves where it is drawn and **does not change what it
-   * measures**. (A `transform` would not have either; that was the first
-   * implementation.) So the old expression
+   * `top: 0`. On a small device it now slides out of the way while you read
+   * forwards (styles.css § a small device) — by `transform`, which moves where
+   * it is drawn and **does not change what it measures**. (`getBoundingClientRect`
+   * does include the transform, which is why reading `bottom` below works and
+   * reading `height` would not.) So the old expression
    * went on reporting a confident 44 for a bar that was entirely off screen, and
    * every deep link, every `?at=` reading and every arrow-key step would have
    * landed 44px too low — a wrong number from a function doing exactly what it
@@ -88,6 +88,23 @@ export function stickyOffset(): number {
   const covering = Math.max(0, Math.min(rect.height, rect.bottom));
   return covering + head.getBoundingClientRect().height;
 }
+
+/**
+ * **The one string this file and styles.css § a small device have to agree on.**
+ *
+ * A device that is small in *either* direction — Greg, 2026-08-27: *"every
+ * centimetre of real estate in either dimension is valuable"*. The comma is an
+ * OR. The stylesheet decides what a hidden bar looks like; this decides whether
+ * to spend a scroll listener finding out, so a laptop attaches nothing at all.
+ *
+ * Duplicated rather than derived, because CSS cannot read a TypeScript constant
+ * and a media query cannot be built at runtime without `matchMedia` string
+ * concatenation that is harder to read than the string itself. If you change one
+ * you must change the other; there is no test that can catch the drift, because
+ * the failure is "the bar never hides", which looks exactly like the feature
+ * being off.
+ */
+const SMALL_DEVICE = "(max-height: 620px), (max-width: 743px)";
 
 /** px of downward travel before the bar gives way. */
 export const BAR_HIDE_AFTER = 24;
@@ -173,7 +190,13 @@ export function stepBar(hidden: boolean, y: number, from: number): BarStep {
  * the duplicated string. An earlier version of this note claimed the decision
  * lived in one place and that this function knew nothing about viewport
  * heights; that stopped being true the moment the listener started coming and
- * going with the query. Keep the two `620px` in step.
+ * going with the query. Keep the two queries in step.
+ *
+ * Note "a laptop attaches nothing" is only true of a laptop with a *large*
+ * window: the width half of the query deliberately includes a narrow one, so a
+ * 700px browser window on a desktop gets the listener and the hiding bar.
+ * That is intended — the rule is about how much room there is, not about what
+ * kind of machine is providing it. GPT Sol, 2026-08-27.
  *
  * Returns its own teardown.
  */
@@ -184,10 +207,10 @@ export function watchBarVisibility(): () => void {
    * that installs a scroll listener on every laptop in exchange for nothing,
    * on a page whose scroll cost is documented at length in performance.md. So
    * the query is asked here as well, and the listener comes and goes with it.
-   * The string is duplicated from styles.css § a short viewport, which is the
+   * The string is duplicated from styles.css § a small device, which is the
    * ordinary cost of a breakpoint two languages have to agree on.
    */
-  const short = window.matchMedia("(max-height: 620px)");
+  const small = window.matchMedia(SMALL_DEVICE);
   let listening = false;
   let hidden = false;
   let from = window.scrollY;
@@ -221,8 +244,8 @@ export function watchBarVisibility(): () => void {
   };
 
   const sync = () => {
-    if (short.matches === listening) return;
-    listening = short.matches;
+    if (small.matches === listening) return;
+    listening = small.matches;
     if (listening) {
       from = window.scrollY;
       window.addEventListener("scroll", onScroll, { passive: true });
@@ -235,9 +258,9 @@ export function watchBarVisibility(): () => void {
   };
 
   sync();
-  short.addEventListener("change", sync);
+  small.addEventListener("change", sync);
   return () => {
-    short.removeEventListener("change", sync);
+    small.removeEventListener("change", sync);
     window.removeEventListener("scroll", onScroll);
     if (pending) cancelAnimationFrame(pending);
     show();

@@ -32,12 +32,28 @@ window listeners. The reasoning, the sources and the two mechanisms we rejected 
 | The spine, the bars, anywhere else | nothing of ours |
 | Outline mode, anywhere | nothing of ours — see [§ reading mode only](#reading-mode-only) |
 
-Sideways drags are always the browser's, wherever they start, so a table too wide for the window can
-still be panned by hand. A tap is still a tap: it jumps to the thing you tapped.
+Sideways drags are the browser's **except over the prose column**, which is `touch-action: pan-y` on
+any coarse pointer since 2026-08-27 — Greg had asked for a finger drag to go one way or the other
+and never diagonally, and `touch-action` is read when the finger goes down, so the axis has to be a
+property of the region rather than of the gesture. A table too wide for the window can still be
+panned by hand; you do it from a gist column rather than from the middle of a sentence. See
+[mobile-reading-view.md § One axis at a time](../plans/mobile-reading-view.md).
+
+A tap is still a tap almost everywhere: it jumps to the thing you tapped. **The spine is the one
+exception**, and deliberately — its bands are proportional, so most are a few pixels tall, and
+tapping one blind is a coin flip. There the first tap opens the band's card and the second one goes
+there (Spine.tsx § bandPress). That is also the only reason the rail is usable by finger at all:
+everything it knows lives in a hover card.
 
 ## Why the prose is untouched
 
 This is the load-bearing decision, and it came out of the research rather than out of caution.
+
+**"Untouched" means we never move it for you.** Since 2026-08-27 the prose column does carry
+`touch-action: pan-y`, which is a *constraint* on the browser's own scrolling rather than a
+substitute for it: momentum, rubber-banding and stopping on a line are all exactly as they were,
+and only the sideways axis is refused. Everything below still holds — no gesture of ours reads a
+drag over the prose, and nothing alters its rate or duration.
 
 NN/g's [Scrolljacking 101](https://www.nngroup.com/articles/scrolljacking-101/) found the most severe
 usability damage in one specific case: pages that altered the rate and duration of scrolling **while

@@ -74,6 +74,40 @@ Two habits that catch it:
   read both back. If the control works and yours does not, it is your property; if neither works, it
   is your method. That one call is what turned "the CSS is broken" into "the browser is stale".
 
+### A hidden tab does not animate, and half this app is animated
+
+The measuring tab is not the frontmost window, so `document.visibilityState` reads `hidden` — and
+in a hidden tab the browser stops running the animation frame loop. Two consequences bit hard on
+2026-08-27 and both produced *confident, self-consistent, wrong* readings:
+
+- **CSS transitions never advance.** `getComputedStyle` returns the value the property started from,
+  however long you wait, and `getBoundingClientRect` agrees with it. So an element with
+  `transition: transform 0.18s` reads as *not having moved* even when the rule that moves it is
+  correct — and setting the property by hand from the console reads the same way, which kills the
+  usual control. Two separate root causes were written down and committed off the back of this
+  before the pattern was spotted. **Turn transitions off before measuring anything that has one:**
+
+  ```js
+  const kill = document.createElement("style");
+  kill.textContent = "*,*::before,*::after{transition:none!important;animation:none!important}";
+  document.head.appendChild(kill);
+  // ... measure ...
+  kill.remove();
+  ```
+
+- **Anything debounced through `requestAnimationFrame` never runs.** The spine measures its bands in
+  a `useLayoutEffect` that defers to rAF, so **in the harness the spine renders as an empty rail**:
+  `document.querySelectorAll(".spine-hit").length === 0`, always, on a perfectly healthy page. It is
+  not a regression and no amount of waiting or scrolling fixes it. Anything you wanted to check about
+  the rail — its bands, its tooltips, its tap behaviour — cannot be checked here at all.
+
+Before diagnosing anything that moves, print the three facts together:
+
+```js
+({ visibility: document.visibilityState, hasFocus: document.hasFocus(),
+   rafRuns: await new Promise(r => { requestAnimationFrame(() => r(true)); setTimeout(() => r(false), 400); }) })
+```
+
 ### Work in your own tab
 
 Several agents drive this same browser. On 2026-08-26 a session's measurements were being

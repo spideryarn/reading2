@@ -12,6 +12,8 @@ import type { Article, Block, BlockId, GlossaryEntry } from "../types.js";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
+import { isAdmin } from "../admin.js";
+import { AdminHome, AdminUsersPage } from "./AdminPage.js";
 import { LandingPage } from "./LandingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
@@ -62,7 +64,9 @@ import {
   buildGeometry,
   buildOutline,
   buildSummaryTree,
+  columnHint,
   columnLabel,
+  columnPill,
 } from "./tree.js";
 import {
   atParam,
@@ -196,6 +200,24 @@ export function App() {
         <ProfilePage />
       </>
     );
+  /* **The admin pages, and the check here is not the gate.**
+
+     A reader who is not the administrator gets the shelf, exactly as they would
+     for `/nonsense` — router.ts has no 404 page by design, and an address you
+     are not allowed to use is an address that does not mean anything to you.
+     Nothing is being hidden by it: these components are in the bundle every
+     signed-in reader downloads, so the only refusal that counts is the server's
+     on `/api/admin/`, and it would refuse a hand-written `fetch` from this page
+     just the same. src/admin.ts § the two halves. */
+  if (route.kind === "admin") {
+    if (!isAdmin(user.id)) return <Library />;
+    return (
+      <>
+        <HomeLogo />
+        {route.page === "users" ? <AdminUsersPage /> : <AdminHome />}
+      </>
+    );
+  }
   /* Signed in, and asking for the sign-in page. There is nothing to show — the
      gate above already returned `SignInPage` for everyone who needs it — so
      this is somebody following a stale link, and the shelf is where they meant
@@ -464,7 +486,7 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
 
   /* The controls bar gets out of the way while you read forwards, on a viewport
      short enough for 44px to matter — scroll.ts § watchBarVisibility, and
-     styles.css § a short viewport for the half that decides whether it applies.
+     styles.css § a small device for the half that decides whether it applies.
 
      A second scroll listener rather than a branch inside the one above, and
      deliberately: that one exists to keep `?at=` in step with the reader and
@@ -1018,11 +1040,16 @@ function Reader({
    * The rail, on or off — Greg, 2026-08-26: "a button in the top bar to
    * show/hide the Spine (just as we can with L0, L1, etc)".
    *
-   * Rendered in **both** halves of the bar below, unlike the granularity pills.
-   * Those are removed in a mode because the columns they name are not there,
-   * and a control that looks live and does nothing is worse than no control.
-   * The spine is the opposite case: it is on screen in every mode, so the pill
-   * that hides it has to be too.
+   * **First in the bar, and outside the mode/contents split below**, since
+   * 2026-08-27 — Greg: move it "to the furthest-left (to mirror its column
+   * position)". The bar reads left to right in the order the things it names
+   * stand on screen, and the rail is left of every column, so its pill is left
+   * of every pill. Being outside the split is the same fact stated in code:
+   * every other control here belongs to one half or the other, and this one
+   * belongs to both. The granularity pills go in a mode because the columns
+   * they name are not there, and a control that looks live and does nothing is
+   * worse than no control; the spine is the opposite case, on screen in every
+   * mode, so the pill that hides it is too.
    *
    * `pressed` reads the resolved layout rather than the parameter, so the pill
    * says what is actually on screen — unpressed in outline mode, where nobody
@@ -1034,7 +1061,7 @@ function Reader({
       className={PILL}
       pressed={fit.spine !== "off"}
       onPressedChange={(on) => void setShowSpine(on)}
-      title="Show or hide the bird's-eye rail down the left"
+      title="Spine — show or hide the bird's-eye rail of the whole article down the left edge"
     >
       Spine
     </Toggle>
@@ -1064,6 +1091,10 @@ function Reader({
           column. */}
       <Masthead article={article} slug={slug} onRenamed={onRenamed} />
       <div className="controls">
+        {/* Leftmost, because the rail it names is leftmost — and before the
+            mode/contents split, because it is the one control that survives
+            both. See `spineToggle` above. */}
+        {spineToggle}
         {/* The granularity controls belong to the table-of-contents mode, so
             they go with it. Leaving them on screen in another mode would offer
             columns that are not there — a control that looks live, does
@@ -1082,7 +1113,6 @@ function Reader({
             >
               back to contents
             </button>
-            {spineToggle}
           </>
         ) : (
           <>
@@ -1093,9 +1123,9 @@ function Reader({
               className={PILL}
               pressed={shownGists.includes(d)}
               onPressedChange={() => toggle(d)}
-              title={`Show or hide the ${columnLabel(d, geometry.leafDepth, d === 0 && !!arcCells).toLowerCase()} column`}
+              title={columnHint(d, geometry.leafDepth, d === 0 && !!arcCells)}
             >
-              L{d}
+              {columnPill(d, geometry.leafDepth)}
             </Toggle>
           ))}
           {/* The paragraph outline, beside the prose rather than instead of it.
@@ -1106,9 +1136,9 @@ function Reader({
               className={PILL}
               pressed={leafOn}
               onPressedChange={() => toggle(geometry.leafDepth)}
-              title="One line per paragraph, alongside the full text"
+              title={columnHint(geometry.leafDepth, geometry.leafDepth)}
             >
-              L{geometry.leafDepth}
+              {columnPill(geometry.leafDepth, geometry.leafDepth)}
             </Toggle>
           )}
           <Toggle
@@ -1119,7 +1149,6 @@ function Reader({
           >
             Text
           </Toggle>
-          {spineToggle}
           {/* `fit` means nothing has been pinned down by hand, so it has to
               watch both parameters: a reader who has hidden the rail but left
               the columns alone is not on automatic, and would otherwise have no
@@ -1270,6 +1299,7 @@ function Reader({
       {!overlay && openComment && (
         <CommentDialog
           comment={openComment}
+          slug={slug}
           position={positionOf(ordered, note)}
           total={ordered.length}
           pending={othersPending}
@@ -1729,6 +1759,10 @@ function ChatBand({
   return (
     <ChatPanel
       slug={slug}
+      /* Not for display — the panel offers its "start a new one" box only once
+         this is true, because a conversation minted before the first fetch
+         lands is wiped by it. See the composer under `ThreadList`. */
+      loaded={loaded}
       threads={threads}
       threadId={thread}
       onThread={(id) => void setThread(id)}
@@ -1741,6 +1775,18 @@ function ChatBand({
         // conversation — so the URL can name it before the request lands.
         const id = send(thread, question, at, useProfile, (corrected) => void setThread(corrected));
         if (id !== thread) void setThread(id);
+      }}
+      /* The box under the list. `null` rather than `thread` is the whole
+         difference: it mints whatever `?thread=` still says, which on the list
+         is either nothing, a conversation the fetch has not brought yet, or one
+         that was closed and discarded. The nonce goes up for the same reason
+         `startNew` raises it — this *is* a new conversation being started, and
+         the reader who typed to start it should still have a caret when it
+         opens, in the composer that has just replaced the one they typed into. */
+      onSendNew={(question, useProfile) => {
+        const id = send(null, question, at, useProfile, (corrected) => void setThread(corrected));
+        void setThread(id);
+        setFocusNonce((n) => n + 1);
       }}
       onRename={rename}
       onDelete={(id) => {

@@ -198,6 +198,76 @@ the stylesheet, which is the only way it could have been found here.
   `interactive-widget=resizes-content` on the viewport meta, which changes how every page in the app
   reacts to a keyboard and is not worth making blind. Deferred to a real-device pass.
 
+## The second pass, after Greg read the questions
+
+Answers, 2026-08-27, and what each one turned into.
+
+### The spine is tappable, and no gist is stacked above the prose
+
+> *"Yes, let's make the spine tappable (esp on mobile). Let's avoid stacking vertically for now."*
+
+So the orientation problem gets fixed where it actually was. The rail was never the *wrong* answer
+to "where am I" — it was an answer nobody on a phone could hear, because everything it knows lives
+in a hover card. **The first tap opens the band's card; a second tap on that band goes there.**
+
+Reveal-then-commit rather than tap-to-jump, because the bands are proportional: most of them are a
+few pixels tall, so tapping one blind is a coin flip and the card is the only thing that can say
+what you are about to press. A finger moving to a *different* band re-reveals rather than jumping,
+so the rail can be read by walking down it. The card says `Tap again to go here`, because a tap that
+moves nothing and shows something is otherwise indistinguishable from a dead control.
+
+A mouse is untouched — one click still jumps, and the tooltip still owns its own open state.
+`Tooltip` grew an optional controlled-open pair to make this possible; passing neither prop leaves
+it exactly as it was.
+
+The decision itself is `bandPress` in Spine.tsx, four lines with its own test, for the reason
+`stepBar` has one: the rule only exists where `(hover: none)` matches, the harness is a desktop
+Chrome, and the branch that matters is unreachable there.
+
+### Block ids are revealed by the row, at every width
+
+> *"Use your judgment."*
+
+They now behave exactly like the chat button already sitting in the same gutter: **the gutter as a
+whole is revealed by being on the row.** One affordance rather than two. On a touch device, where
+"reveal on hover" means "never", they stay faint but present — and on a narrow window § a narrow
+window still removes them outright, because there the argument is width rather than noise.
+
+### Small in either direction is small
+
+> *"Let's make portrait and landscape consistent for small devices, because every centimetre of real
+> estate in either dimension is valuable."*
+
+The hiding controls bar was gated on `(max-height: 620px)` — landscape only — on the argument that
+portrait has height to spare and a bar that moves is a bar you can lose track of. That weighs a
+small risk against a real 44px and it was the wrong way round. The gate is now
+`(max-height: 620px), (max-width: 743px)`, which is an OR, and the 743 is § a narrow window's own
+number rather than a second one invented here. `scroll.ts` carries the same string and attaches its
+listener only while it matches.
+
+### One axis at a time
+
+> *"When I'm scrolling on a phone/tablet with my finger, it's annoying if it sometimes scrolls
+> diagonally. I think I'd either like it to scroll vertically, or horizontally, but not diagonally."*
+
+**Most of this was already fixed by the layout, and that is the honest headline.** Before today the
+table was 720px wide in a 390px window, so the page scrolled in both directions everywhere and
+*every* drag was diagonal. `fitView` now fits the table to the window at every width.
+
+What is added is the guarantee: `touch-action: pan-y` on the prose cell, on any coarse pointer.
+
+The reason it is the prose *cell* rather than the page is worth keeping, because it is the whole
+design space: **`touch-action` is read when the finger goes down**, so it cannot lock to whichever
+axis a gesture turns out to favour — it can only be decided per region, in advance. True per-gesture
+axis locking needs `preventDefault` on a non-passive `touchmove` and moving the page by hand, which
+throws away momentum and rubber-banding and is precisely the scrolljacking
+[touch.md § Why the prose is untouched](../project/touch.md#why-the-prose-is-untouched) refuses.
+
+So the axis becomes a property of what you put your finger on, which this view already had a shape
+for: the prose scrolls down, a gist column pans across or steps. Sideways panning stays reachable in
+the one case anything is still out there — a manual `?cols=` that overflows — you just pan from a
+gist column rather than from the middle of a sentence.
+
 ## Deliberately not done
 
 - **A separate mobile layout.** Every change here is a rule the desktop layout already contains,
@@ -209,16 +279,25 @@ the stylesheet, which is the only way it could have been found here.
 
 ## Open for Greg
 
-1. **Granularity zoom on a phone is a switch, not a scroll — is that enough?** Sol's view is that
-   dropping every gist column is "a useful emergency reflow, not an adequate mobile expression of
-   granularity zoom", and proposes stacking the current section's gist above its prose row. Two
-   coarse views are one tap away and both are full-screen (outline mode, and Summary mode), and the
-   whole-article gist is in the masthead — but Sol is right that **the spine is not part of that
-   answer on touch**: every name, gist and count it carries lives in a hover card a finger cannot
-   open. So a phone reader gets the rail's shape and jumps and none of its words. Worth deciding
-   deliberately.
-2. **Should the block-id gutter be conditional on a wide window too?** "Always show" is the part that
-   bothered you. The narrow case is fixed; the wide case costs nothing measurable, so it was left
-   alone. Say the word and it becomes hover-only everywhere.
-3. **Should the controls bar auto-hide in portrait as well?** Short-viewport only right now. Portrait
-   has the height to spare, and a bar that moves is a bar you can lose track of.
+All three of the first round's questions are answered above. What is left is what nobody has looked
+at yet:
+
+1. **None of this has been driven by a finger, and the spine could not be driven at all.** The
+   harness is a desktop Chrome, so `(any-pointer: coarse)` never matches — the axis lock and the
+   touch fallbacks for the block ids and the chat button are reasoned about and unit-tested and
+   **not once actually tapped**. Worse for the spine specifically: the measuring tab is never
+   frontmost, `requestAnimationFrame` does not run in a hidden tab, and the rail measures its bands
+   through rAF — so **the spine renders as an empty rail in the harness, always**, and its
+   tap-to-reveal has no way of being exercised here. `bandPress` is unit-tested and the event
+   plumbing around it is not. GPT Sol found one blocker in exactly that gap (a synthesised
+   `mouseleave` arriving before the `click` and disarming the band); there may be another.
+   An iPad pass would settle all of it in ten minutes.
+   [touch.md § What only a real iPad can tell us](../project/touch.md#what-only-a-real-ipad-can-tell-us)
+   is the standing list, and
+   [browser-testing.md § A hidden tab does not animate](../project/browser-testing.md#a-hidden-tab-does-not-animate-and-half-this-app-is-animated)
+   is what this cost.
+2. **The on-screen keyboard.** `dvh` does not cover it; `interactive-widget=resizes-content` would,
+   and changes how every page in the app reacts to a keyboard. Wants a device before it is decided.
+3. **Hit targets.** The dock's buttons are 35–40px tall against the usual 44px guidance, and the
+   spine's thinnest bands are a couple of pixels. The second is inherent to a proportional rail and
+   is what the tap-to-reveal is for; the first is a real call to make.
