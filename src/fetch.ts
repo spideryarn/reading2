@@ -1224,9 +1224,20 @@ async function main(): Promise<void> {
 
   const slug = slugFromUrl(url) || "article";
   const dir = process.argv[3] ?? path.join("data", slug);
-  const file = path.join(dir, doc.kind === "pdf" ? "raw.pdf" : "raw.html");
-  await mkdir(dir, { recursive: true });
-  await writeFile(file, doc.bytes);
+  /* **`writeRaw`, not a second copy of it.** This wrote `doc.bytes` by hand and
+     no manifest at all, which made `npm run fetch` and the pipeline produce
+     *different files at the same path*: undecoded bytes here against the
+     decoded string there, and `extract` reads that path with `"utf8"`, so a
+     page in any other encoding came out as mojibake one way and correctly the
+     other. The absent `raw.json` then took the content type, the encoding and
+     the hash with it.
+
+     Not a decision that was made and later regretted — `writeRaw` arrived on
+     2026-08-26 (b6e41b4) and this function was simply not moved onto it. There
+     is one writer of a raw document now, which is the only version of this that
+     stays true. */
+  const manifest = await writeRaw(dir, doc);
+  const file = path.join(dir, manifest.file);
 
   console.log(`Requested: ${doc.requestedUrl}`);
   if (doc.url !== doc.requestedUrl) {

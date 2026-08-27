@@ -306,6 +306,15 @@ a laptop with no container — as a configuration somebody chooses, not one they
 
 1. **`fetch` puts its bytes in the blob store**, at `canonicalKey(sha256, kind)` — the same call the
    PDF path already makes — and registers them in `raw_sources`.
+
+   > **One writer first, which landed 2026-08-27.** `npm run fetch` did not use `writeRaw`: it wrote
+   > `doc.bytes` by hand and no manifest, so the CLI and the pipeline produced *different files at
+   > the same path* — undecoded bytes against the decoded string, and `extract` reads that path as
+   > `"utf8"`, so a page in any other encoding came out as mojibake one way and correctly the other.
+   > Under this plan that divergence gets much worse than mojibake: the same page fetched two ways
+   > would hash differently and become **two objects**, which is the one thing content addressing is
+   > supposed to make impossible. `writeRaw` had simply never been adopted by the CLI (it arrived in
+   > `b6e41b4` and `main()` was left alone). There is one writer now.
 2. **`supabase/config.toml` adds `text/html`** to the `sources` bucket's MIME allowlist. Note the
    bucket must also be provisioned on the *remote* project, which config.toml does not do.
 3. **`raw_bytes` stops being written**; the reference becomes the `raw_sources` pair. The column is
