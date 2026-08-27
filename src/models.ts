@@ -568,16 +568,10 @@ export function resolveModel(task: Task): ResolvedModel {
   const wire = TASK_WIRE[task];
   const envVar = MODEL_ENV_VAR[task];
   const override = envVar ? process.env[envVar] : undefined;
-  if (override)
-    return { id: override, provider: GATEWAY, wire, source: "override" };
+  if (override) return { id: override, provider: GATEWAY, wire, source: "override" };
   /* One spelling now, for every task on either wire: OpenRouter's. The Skin
      wants `anthropic/claude-sonnet-5` exactly as chat/completions does. */
-  return {
-    id: openRouterIdForTier(TASK_TIER[task]),
-    provider: GATEWAY,
-    wire,
-    source: "default",
-  };
+  return { id: openRouterIdForTier(TASK_TIER[task]), provider: GATEWAY, wire, source: "default" };
 }
 
 /**
@@ -804,8 +798,5 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
 
 /** One stage's effort, with the whole-run environment override applied. */
 export function effortFor(stage: ArticleStage): Effort {
-  return (
-    (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ??
-    STAGE_EFFORT[stage]
-  );
+  return (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ?? STAGE_EFFORT[stage];
 }
