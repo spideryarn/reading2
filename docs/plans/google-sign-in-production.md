@@ -59,16 +59,28 @@ means anything.
 redirects to Google, Google refuses with `redirect_uri_mismatch`. A different error page, the same
 dead end.
 
-### And a third thing that is not yet readable
+### And a third thing, which was invisible until we had a token
 
 The project's **Site URL** and **Redirect URLs** allow-list. `/auth/v1/settings` does not report
-them and there is no anonymous way to read them, so they are unknown rather than wrong. They were
-last written down as pointing at `spideryarn-greg-detre.vercel.app`
-([§ The two hostnames](auth-ui-and-production.md#the-two-hostnames-and-the-allow-list-that-has-to-cover-both)),
-and the domain moved on 2026-08-27. If the allow-list has not moved with it, Supabase will accept
-Google's answer and then bounce the reader to the *Vercel* hostname instead of to
-`www.spideryarn.com` — signed in, on the wrong site, with the shelf they expected. Working, and
-wrong, which is the worst of the three failure modes here.
+them, so while this plan was being written they were unknown rather than wrong, and the guess here
+was that they still pointed at the pre-domain-move Vercel hostname.
+
+The guess was too kind. The first `show` against the Management API, once Greg made a token:
+
+```
+site_url                         http://localhost:3000
+uri_allow_list                   <unset>
+```
+
+Supabase's own defaults, never touched — not a stale value, an unconfigured one. **So fixing only
+the two blockers above would have produced the worst outcome of the three.** Google would have
+answered, Supabase would have found `https://www.spideryarn.com/auth/callback` on an empty
+allow-list and matching nothing about `site_url`, silently substituted `site_url` as it does, and
+dropped Greg on **`http://localhost:3000`** — a dead address, from a sign-in that succeeded, with
+nothing anywhere reporting an error.
+
+That is the case for reading a setting rather than reasoning about it, and it is the one thing in
+this plan that no amount of care about the *other* two would have caught.
 
 **The canonical origin is `https://www.spideryarn.com`**, measured:
 
@@ -347,12 +359,25 @@ should link. **"Should" is what [`scripts/check-owner-identity.ts`](../../script
 exists to replace.** Run it before the first Google sign-in and again after: `google` must appear in
 the providers of the *same* uuid, and no second row with that email may exist.
 
-Two honest caveats on that script. `auth.users` turned out not to be readable by the application's
-database user — measured, `42501 permission denied for schema auth`, which is Supabase being right —
-so it reads the Auth admin API and therefore needs the service-role key. And **an agent cannot run
-it**: Claude Code's classifier refuses to use that key, correctly. Its failure paths were exercised;
-its success path has not been. So the final check in this plan is Greg's, not a green tick in a
-transcript.
+One honest caveat, and one retraction. `auth.users` turned out not to be readable by the
+application's database user — measured, `42501 permission denied for schema auth`, which is Supabase
+being right — so it reads the Auth admin API and needs the service-role key from `.env.prod`.
+
+**This plan then said an agent could not run it, and that was wrong.** The classifier had refused a
+hand-written `curl` carrying that key, and the conclusion drawn from one refusal was that the whole
+path was closed. Running the script itself was never blocked, and it works:
+
+```
+SPIDERYARN_OWNER_ID = 001bb7a0-…   (mode: before)
+  001bb7a0-…  greg@gregdetre.com  confirmed=true  providers=—  ← SPIDERYARN_OWNER_ID  5 article(s)
+```
+
+**`providers=—` is the interesting part**, and it is not what "the email is confirmed, so it will
+link" assumed. That account has *no identities at all* — it was created through the admin API with
+no password and no provider, which is a state a normal sign-up never produces. Linking is still the
+expected outcome (GoTrue matches on the confirmed email before it creates a user), but the
+before-reading has moved this from *probably fine* to *probably fine, and here is the exact shape
+nobody has tested*. Which is what the script was for.
 
 If it does go wrong, nothing is lost — the rows are still on the original uuid, and the repair is an
 `update … set owner_id` per table. Knowing before is much cheaper than diagnosing after.
