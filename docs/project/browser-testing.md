@@ -135,6 +135,15 @@ is also the only way to check that its whole track steps 1:1.
 the page received (94, 283) — about 5–6% out. On the spine, a rail of stacked bands a few pixels
 tall, that is easily a whole band.
 
+**And the size of that gap is not a constant — treat it as unknown until you measure it.** On
+2026-08-27 the same listener trick found the tool's coordinates matching the *screenshot's* pixel
+dimensions (1062 × 1148) rather than the viewport's (700 × 757) — a factor of about 1.52, so a raw
+CSS-pixel coordinate missed its target by a third of the page rather than by 6%. Coordinates
+expressed in screenshot space landed correctly. Which means the ratio is whatever this session's
+screenshot scaling happens to be, and the only safe procedure is the one above: click by reference,
+and if you must use a coordinate, capture what the page actually received before believing anything
+downstream of it.
+
 The expensive version of this is not a mis-click, it is a **bug report for a bug that does not
 exist**, because somebody then goes looking for it. A session hovered a band at a literal
 coordinate, then called `document.elementFromPoint` at *that same literal coordinate*, and found the

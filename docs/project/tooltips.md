@@ -94,6 +94,18 @@ whichever mark the pointer is on, and the hover intent is a delegated `pointerov
 timers rather than `useHover` and `getReferenceProps`. Floating UI still does the hard half — flip,
 shift, and repositioning while the page scrolls.
 
+Since 2026-08-27 it has a third set of triggers and still one instance: the **links a chat answer
+writes into its prose**, plus the source list under it ([links.md § The links chat writes](links.md#the-links-chat-writes)).
+That cost one selector, which is the argument for the hook made twice. It also forced the selector to
+name its places — it had been a bare `a[href]` on the document, and so had been firing on the
+masthead, on citation chips and on this card's own buttons.
+
+It is also the only one a **finger** can open: a tap on a glossary mark reveals the card and a second
+tap commits, which is `bandPress`'s rule reached by a different route
+([touch.md](touch.md), [touch-glossary-card.md](../plans/touch-glossary-card.md)). The spine's
+tooltips get there through `Tooltip.tsx`'s `mouseOnly`; this one owns its own listeners, so the whole
+gesture lives in `useHoverCard.ts`.
+
 It is also the one tooltip here that **takes pointer events**, because its card carries a link out
 and a button in; every other one is `pointer-events: none` so that a panel can never land under the
 pointer and keep itself open. If a third customer ever has both properties — many triggers that are

@@ -39,11 +39,25 @@ property of the region rather than of the gesture. A table too wide for the wind
 panned by hand; you do it from a gist column rather than from the middle of a sentence. See
 [mobile-reading-view.md § One axis at a time](../plans/mobile-reading-view.md).
 
-A tap is still a tap almost everywhere: it jumps to the thing you tapped. **The spine is the one
-exception**, and deliberately — its bands are proportional, so most are a few pixels tall, and
-tapping one blind is a coin flip. There the first tap opens the band's card and the second one goes
-there (Spine.tsx § bandPress). That is also the only reason the rail is usable by finger at all:
-everything it knows lives in a hover card.
+A tap is still a tap almost everywhere: it jumps to the thing you tapped. **Two places reveal
+first and act second**, and both for the same reason: they carry a hover card, and a surface with
+no hover has to let the first press mean *show me* or the reader commits blind.
+
+- **The spine**, whose bands are proportional, so most are a few pixels tall and tapping one blind
+  is a coin flip. First tap opens the band's card, second goes there (Spine.tsx § bandPress). That
+  is also the only reason the rail is usable by finger at all: everything it knows lives in a card.
+- **A glossary term in the prose**, since 2026-08-27 — the dotted underlines
+  ([glossary.md](glossary.md)). First tap opens the hover card, second goes to glossary mode with
+  that term selected, which is what the card's **in the glossary** button does. Before this the
+  underline was a line with nothing behind it on an iPad, because the card was hover-only.
+  [touch-glossary-card.md](../plans/touch-glossary-card.md) has the design and the event sequence,
+  which is the whole of the difficulty; the short version is that it is decided at `pointerup`
+  rather than at `click`, because the `mouseup` that comes between them is where the prose reads a
+  selection and opens a chat thread, and a tap has to get past both.
+
+  **The words a tap armed are marked** (`mark.term[data-hover-tap]`), and **a scroll closes a card
+  a finger opened** — the panel follows its anchor for a pointer, which is right, but a finger is
+  not resting on the words and the card would ride to the edge of the screen and stay there.
 
 ## Why the prose is untouched
 

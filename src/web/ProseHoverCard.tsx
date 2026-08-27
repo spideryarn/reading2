@@ -128,7 +128,25 @@ export function ProseHoverCard({
   );
 
   const { shown, close, anchorProps, arrowRef, context } = useHoverCard<Hit>({
-    selector: "mark.term, a[href]",
+    /* **Named places, not `a[href]`.** The listener is delegated on the
+       document, so a bare `a[href]` meant *every* anchor on the page — the
+       masthead's "Library", the `read it here` button inside this very card,
+       the source list at the foot of an answer. A relative href does not parse,
+       so `describeLink` returned `{kind: "other"}` and the reader got a panel
+       saying `link` over `/library`. Nobody had reported it, which is what an
+       ignorable wart looks like; narrowing it was needed anyway to let chat's
+       links in, so it was done there. docs/plans/chat-web-links.md.
+
+       Three places earn a card, and they are the three where the reader is
+       deciding whether to follow an address somebody else chose: the article's
+       own hyperlinks, the links a chat answer writes into its prose
+       (`cited-link`, Cited.tsx), and the sources listed under an answer. */
+    selector: "mark.term, .prose a[href], a.cited-link, .chat-sources a[href]",
+    /* Both containers survive their own re-render, which is the whole
+       requirement — see `host`. A chat answer's `<p>` does not, so the
+       fallback would leave a card pinned to a detached node as an answer
+       streams. */
+    host: ".prose, .chat-turn",
     read,
     /* True here and false for a bare term, and the difference is not a
        preference: an `<a>` is a tab stop already, so a reader moving through
@@ -137,6 +155,36 @@ export function ProseHoverCard({
        A `<mark>` takes no focus, and making several hundred of them into tab
        stops would be worse than the gap it leaves. */
     focusable: true,
+    /* A finger opens the card on an underlined **term**, and on nothing else.
+       Every link in that selector already does something under a tap — it
+       navigates, or TableView jumps to the fragment — and replacing that with a
+       preview would take away a working affordance to give a slower one.
+
+       A term *inside* a link is the interesting case, and it goes to the term:
+       13% of this corpus's links have a glossary term as their link text, the
+       card carries both halves, and its foot still has "open in a new tab". So
+       the link goes from zero taps away to one, and what the author means by
+       the word goes from unreachable to zero. docs/plans/touch-glossary-card.md. */
+    tapSelector: "mark.term",
+    /* The second tap on the same words, which is what the foot's "in the
+       glossary" button does. Both, rather than the button alone: on a touch
+       screen the words are a far bigger target than a 10px-tall row of text,
+       and the reader should not have to hit the small one.
+
+       **Only when the mark carries exactly one term.** Where two overlap the
+       same phrase the card draws both, and it says why in as many words: which
+       matched the longer phrase is not a thing the mark records, so picking one
+       would be picking for the reader. A second tap cannot honour that and also
+       commit, so it does nothing and leaves the card open with its two named
+       buttons — the reader chooses, which is the same answer the card was
+       already giving. Raised by a GPT Sol review, 2026-08-27. */
+    onCommit: ({ data }) => {
+      const ids = data.termIds.filter((id) => byId.has(id));
+      const only = ids.length === 1 ? ids[0] : undefined;
+      if (!only) return;
+      close();
+      onOpenTerm(only);
+    },
   });
 
   /* Before the early return, because it is a hook. It is handed the *shown*

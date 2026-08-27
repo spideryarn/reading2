@@ -310,12 +310,20 @@ Three details worth knowing before changing it:
   none` so a spine tooltip can never land under the pointer and keep itself open. This card carries a
   link and a button, so it has `interactive` — and therefore a close delay long enough to cross the
   gap between the words and the card.
-- **Touch is excluded on purpose.** A tap fires `pointerover` and never fires the leaving event, so
-  on an iPad this would open a card that stays until something else is tapped — and the tap was
-  probably the start of a selection. See [touch.md](touch.md).
-- **The click stays inert.** Pressing a mark does what pressing prose has always done, which is
-  select it. The way to the full entry is the button in the card's foot, which opens the band on that
-  term.
+- **Touch has its own path, and it is not hover.** A tap fires `pointerover` and never fires the
+  leaving event, so letting the hover machine see a finger would open a card that stays until
+  something else is tapped. Since 2026-08-27 a finger gets the spine's rule instead: **the first tap
+  opens the card and the second goes to glossary mode**, decided from `pointerdown`/`pointerup`
+  rather than from a click, with the compatibility events that follow swallowed so a term inside a
+  link does not navigate. A card a finger opened closes on a scroll; one a pointer opened follows
+  the words as it always did. [touch.md](touch.md) and
+  [touch-glossary-card.md](../plans/touch-glossary-card.md).
+- **The mouse click stays inert.** Pressing a mark with a pointer does what pressing prose has
+  always done, which is select it. The way to the full entry is the button in the card's foot, which
+  opens the band on that term — and on a finger, tapping the words again.
+- **A mark carrying two terms commits to neither.** Where two entries overlap the same phrase the
+  card draws both, because which matched the longer phrase is not something the mark records. A
+  second tap there does nothing and leaves the reader the two named buttons.
 
 ## What we deliberately do not do
 
