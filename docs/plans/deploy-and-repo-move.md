@@ -10,12 +10,14 @@ Two jobs that people will want to do together and that are better done apart.
 >
 > — Greg, 2026-08-25
 
-**Job A is now half done — see [deployment.md](../project/deployment.md).** On 2026-08-26 the new
-Vercel project was created, the production API was built, and the app is live behind Vercel's login
-wall on a per-deployment URL. What is *not* done is the database (the Supabase project is still
-empty), the beta gate, and the domain — Greg deferred the domain deliberately: *"using a temporary
-url rather than the proper spideryarn.com domain — that's a later step"* (2026-08-26). Steps 1, 2 and
-8 of [§ The steps](#the-steps) are done; 3, 4, 5, 7 and 9 are not. Job B has not started.
+**Job A is done — see [deployment.md](../project/deployment.md).** The new Vercel project was created
+on 2026-08-26 and the production API built; on 2026-08-27 the database, the beta gate, the article
+import and the domain all landed, and **the app is live on `www.spideryarn.com`**. Greg had deferred
+the domain deliberately — *"using a temporary url rather than the proper spideryarn.com domain —
+that's a later step"* (2026-08-26) — and then took the step: *"Don't worry about old.spideryarn.com
+for now. Proceed."* (2026-08-27). Steps 1–5 and 7–9 of [§ The steps](#the-steps) are done. What is
+left is the kindness to the old app's users, [`old.spideryarn.com`](#the-old-app-does-not-have-to-die-the-same-day),
+which is the only piece needing a change at the registrar. Job B has not started.
 
 Four things in this plan turned out to be wrong or incomplete once it met the platform, and they are
 worth reading before trusting the rest of it — they are in
@@ -62,13 +64,23 @@ Supabase integrations. Last production deploy 2026-05-25, healthy.
 ### The domain
 
 - `spideryarn.com` → 307 → `www.spideryarn.com` (primary), plus `spideryarn-reading.vercel.app`.
-- DNS is at an **external registrar**, not Vercel nameservers: apex `A → 216.150.1.1`,
-  `www CNAME → 63e40ce30383a400.vercel-dns-016.com`.
+- DNS is at an **external registrar** (Namecheap), not Vercel nameservers: apex `A → 76.76.21.21`,
+  `www CNAME → cname.vercel-dns.com`.
+
+  Those are the values actually in the zone, checked with `dig` on 2026-08-27. This bullet
+  originally recorded `216.150.1.1` and `63e40ce30383a400.vercel-dns-016.com`, which are what the
+  **dashboard recommends**, not what is configured — an easy copy to make, since Vercel labels both
+  rows "DNS Change Recommended" and puts the new values in front of you. The change is genuinely
+  optional (`ipStatus: "optional-change"`) and has not been made.
 
 Worth stating plainly because it is the best news in this document: **moving the domain to a
 different Vercel project is a Vercel-side operation, not a DNS migration.** Detach from the old
 project, attach to the new one; the registrar's records keep pointing at Vercel's edge either way.
 Rollback is the same operation in reverse, in about a minute.
+
+**Done 2026-08-27, and it was exactly this cheap** — one API call, no registrar login, no downtime,
+no new certificate. The endpoint, the direction to point it in, and the `not_found` that means
+success are in [deployment.md § The domain](../project/deployment.md#the-domain).
 
 ### This codebase, honestly
 
@@ -251,8 +263,10 @@ directory.
 8. **Deploy to `.vercel.app` and actually read an article on it** before any domain moves. Deployed
    and checked in the browser; *reading an article* waits on step 7, because there is nothing on the
    shelf yet.
-9. **Move `spideryarn.com` and `www.spideryarn.com`** to the new project. Keep the old project
-   deployed and domainless as the rollback.
+9. ~~**Move `spideryarn.com` and `www.spideryarn.com`**~~ — done 2026-08-27. Both moved in a single
+   `POST /v1/projects/…/domains/…/move`, because the apex is a redirect at `www` and the endpoint
+   carries redirects along. The old project is deployed and domainless, which is the rollback.
+   [deployment.md § The domain](../project/deployment.md#the-domain).
 
 ### The old app does not have to die the same day
 

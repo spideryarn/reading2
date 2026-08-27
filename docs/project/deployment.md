@@ -11,23 +11,111 @@ break without saying so.
 > — Greg, 2026-08-26
 
 The plan behind this is [deploy-and-repo-move.md](../plans/deploy-and-repo-move.md),
-which is still the place for *why a new project* and for the domain move that has
-not happened. This file is what exists now.
+which is still the place for *why a new project*. **The domain move happened on
+2026-08-27** — see [The domain](#the-domain). This file is what exists now.
 
 ## Where it is
 
 | | |
 |---|---|
-| Vercel project | **`spideryarn-reading2`**, team `greg-detre` — a new project, [dashboard here](https://vercel.com/greg-detre/spideryarn-reading2). Created as `spideryarn` and renamed by Greg on 2026-08-26. `spideryarn-reading`, which serves spideryarn.com, is untouched |
+| Vercel project | **`spideryarn-reading2`**, team `greg-detre` — a new project, [dashboard here](https://vercel.com/greg-detre/spideryarn-reading2). Created as `spideryarn` and renamed by Greg on 2026-08-26. `spideryarn-reading` is the old app; since 2026-08-27 it has no custom domain and is the rollback |
 | Git | **connected** since 2026-08-26 to [`spideryarn/reading2`](version-control.md), production branch `main` — so a push to `main` deploys. `vercel deploy` from a working directory still works and is still useful; see [Deploying](#deploying) for why the two differ |
 | Region | `lhr1` (London), chosen to match the Supabase project in `eu-west-2`. The edge answers from wherever you are; the *function* runs in London, next to the database |
 | Node | 24.x. Greg, 2026-08-26: *"I'm happy to use Node 24 unless there's a good reason not to"* — there was one candidate reason and it turned out to be false, see [require(ESM)](#the-runtime-has-requireesm-turned-off) |
-| URL | a per-deployment `spideryarn-<hash>-greg-detre.vercel.app`, which asks for a login — **and `spideryarn-greg-detre.vercel.app`, which does not**. See [Who can reach it](#who-can-reach-it) |
+| URL | **`www.spideryarn.com`** since 2026-08-27, with the apex 307ing to it. Also a per-deployment `spideryarn-<hash>-greg-detre.vercel.app`, which asks for a login, and `spideryarn-greg-detre.vercel.app`, which does not. See [The domain](#the-domain) and [Who can reach it](#who-can-reach-it) |
 
 **`spideryarn.vercel.app` was removed and `spideryarn-greg-detre.vercel.app` was
 not**, which is why the app is currently readable by anybody who has that second
 address. Vercel generates *two* of these, and removing one of them looks exactly
 like removing the problem — see [Who can reach it](#who-can-reach-it).
+
+## The domain
+
+**`spideryarn.com` moved from `spideryarn-reading` to `spideryarn-reading2` on
+2026-08-27.** Greg: *"Don't worry about old.spideryarn.com for now. Proceed."*
+
+**The registrar was never touched, and that is the whole point.** The domain is
+registered at Namecheap, on Namecheap's own nameservers
+(`dns1`/`dns2.registrar-servers.com`), and its records point at Vercel's *shared*
+edge rather than at any project:
+
+```
+spideryarn.com       A      76.76.21.21
+www.spideryarn.com   CNAME  cname.vercel-dns.com
+```
+
+Which project answers is decided inside Vercel, by a domain→project mapping. So a
+move between two projects in one team is a Vercel-side operation and nothing else
+— no DNS edit, no propagation wait, no rollback window at the registrar. Vercel's
+own `GET /v6/domains/<domain>/config` says as much before you start, and it is the
+check worth running first:
+
+```
+configuredBy: A / CNAME     misconfigured: false
+acceptedChallenges: ["http-01"]
+ipStatus: "optional-change"
+```
+
+Two things fall out of that. `http-01` means verification happens over the edge,
+so **no `_vercel` TXT record is needed** and the domain arrives at the new project
+already `verified: true`. And `optional-change` is Vercel recommending its newer
+values (`216.150.1.1`, `63e40ce30383a400.vercel-dns-016.com`) while ranking the
+current ones second — the dashboard shows this as "DNS Change Recommended" on both
+rows, which looks like a problem and is not one. It is unrelated to the move and
+still not done.
+
+### How it was done
+
+Not through the dashboard, which has no button for this. The per-domain rows offer
+only Refresh and Edit; the account-level `~/domains` page has a **Move** item, and
+it is the wrong one — it transfers ownership to another *team*, and warns that
+project domains deliberately stay behind. The dashboard route is to add the domain
+to the new project and let it detach from the old one silently, with no warning
+shown before you submit.
+
+The API has a purpose-built endpoint instead, and it is atomic:
+
+```
+POST /v1/projects/<source-project>/domains/<domain>/move?teamId=…
+     {"projectId":"<target project id>"}
+```
+
+The path project is the one **losing** the domain; the body's `projectId` is
+documented as *"the unique target project identifier"*. Getting that backwards is
+easy and the error it gives you is `not_found`.
+
+**One call moved both names.** The endpoint also moves "all redirects pointed to
+that domain in the same project", and `spideryarn.com` was a redirect pointing at
+`www.spideryarn.com` — so moving `www` brought the apex along, redirect config
+intact. The second call, for the apex, then returned `not_found`, which reads
+exactly like a failure and was the opposite: there was nothing left at the source
+to move. **Check what each project holds before concluding anything from that
+error** — `GET /v9/projects/<project>/domains`.
+
+The CLI can do it too, `vercel domains add <domain> <project> --force` (*"Force a
+domain name for a project and remove it from an existing one"*). It was not used,
+because nothing in `--force` promises to carry the apex's redirect across. Note
+that `vercel domains move` is the team-transfer command, not this one, and that
+`vercel domains ls` prints **zero domains** here while the dashboard lists
+`spideryarn.com` perfectly well — do not read that as the domain being missing.
+
+There was **no downtime and no new certificate**. The existing Let's Encrypt cert
+(`notAfter Nov 16 2026`) kept working, because the domain never stopped pointing
+at Vercel's edge.
+
+### Rollback
+
+The same call with the projects swapped, in about a minute. The old project is
+kept deployed and domainless precisely so this stays true.
+
+### What happened to the old app
+
+`spideryarn-reading` still runs and still answers on
+`spideryarn-reading.vercel.app` — measured 200, not a login wall. It just has no
+memorable address any more. The plan's kindness for its few non-paying users was
+[`old.spideryarn.com`](../plans/deploy-and-repo-move.md), and **that one does need
+Namecheap**: a new `old` CNAME at the registrar, plus the domain added to the old
+project. Deferred by Greg, not forgotten.
 
 ## Deploying
 
@@ -182,7 +270,11 @@ private, and do not put real reader data behind it while it stands.**
 
 The real answer is [the beta gate](../plans/deploy-and-repo-move.md#the-beta-gate),
 which is what the custom domain needs anyway — application-level auth, which no
-plan tier can take away.
+plan tier can take away. **It is built**, in [`src/auth.ts`](../../src/auth.ts),
+and it is what made [the domain move](#the-domain) safe to do: `www.spideryarn.com`
+is a production domain, Pro cannot put SSO in front of one, and the gate does not
+care. An unauthenticated `/api/library` on the real domain returns
+`401 [auth-none]`.
 
 **The rename moved the address, and there are three of them now.** Measured
 2026-08-26, after the project became `spideryarn-reading2` and was connected to
@@ -412,8 +504,10 @@ reader is told about it is the only symptom most people will ever report.
    comments, 56 chat messages, and reads verified through the store seam over the
    transaction pooler. `ball-lightning` and `coolabah-memory` have no
    `blocks.json`/`tree.json` yet, so the importer correctly skipped them.
-5. **[The beta gate](../plans/deploy-and-repo-move.md#the-beta-gate)**, which is
-   what makes a stable URL possible and what the domain move needs.
+5. ~~**[The beta gate](../plans/deploy-and-repo-move.md#the-beta-gate)**~~ — built,
+   [`src/auth.ts`](../../src/auth.ts), enforcing on the live domain. It is what made
+   a stable URL possible, and [the domain move](#the-domain) followed it the same
+   day.
 
 ## It is up, and here is the reading of it
 
