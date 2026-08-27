@@ -164,12 +164,17 @@ one refuses an anonymous caller; Sol called that wishful, and it is —
    ┌──────────────────────────────────────────────────────────────────────┐
    │  index.html  →  boot.tsx  →  App.tsx                                 │
    │                                                                      │
-   │   useSession(): no user                    useSession(): a user      │
-   │            │                                          │              │
-   │            ▼                                          ▼              │
-   │   ask the public API                            the reading view     │
-   │     200 → the reader, public data sources                            │
-   │     404 → LandingPage  (exactly as today)                            │
+   │   no session                               a session                 │
+   │       │                                        │                     │
+   │       │                                        ▼                     │
+   │       │                                 ask the OWNED route          │
+   │       │                                   200 → the reading view     │
+   │       │                                   404 → not mine, so ↓       │
+   │       ▼                                        ▼                     │
+   │   ─────────────  ask the PUBLIC route  ─────────────                 │
+   │     200 → the reader, public data sources, read-only chrome          │
+   │     404 → no session: LandingPage (as today)                         │
+   │           a session:  "this document isn't shared"                   │
    └──────────────────────────────────────────────────────────────────────┘
             │                                                 │
             │  plain fetch(), no Authorization header         │  apiFetch(), bearer
@@ -221,8 +226,10 @@ that reaches for an owner blows up loudly instead of quietly succeeding as the w
 or a wrong method **terminates there**. It never falls through into the authenticated table. That
 fallthrough is the single most likely way this feature grows a hole.
 
-**The client uses a plain `fetch`, not `apiFetch`.** `apiFetch` attaches a bearer token and refreshes
-on 401. If the public path used it, the whole feature would be developed and tested by people who
+**The public routes ignore `Authorization` completely, and the client uses a plain `fetch`.** Same
+projection for everybody, signed in or not — which is what makes the signed-in-stranger case above
+fall out for free, and what lets a public response be cached one day without a `Vary`. `apiFetch`
+attaches a bearer token and refreshes on 401. If the public path used it, the whole feature would be developed and tested by people who
 were signed in, and the anonymous case — the only case that matters — would be exercised for the
 first time by a stranger. This is [silent-success.md](../reusable/silent-success.md) with a
 predictable ending. Sol found a second, nastier version of the same trap in the caching decision:
@@ -305,6 +312,9 @@ sentence nobody reads into a specific fact about the thing being shared. The rea
 
 ## What a public visitor gets, feature by feature
 
+**"Visitor" means anyone who does not own the document** — signed out, or signed in and reading
+somebody else's. They get the same thing, which is the point of the rule below the diagram.
+
 The rule Greg gave: *see what has been generated; be told plainly about what hasn't.* The second
 half is as much of the work as the first.
 
@@ -321,7 +331,7 @@ half is as much of the work as the first.
 | Keyboard, tooltips, touch, URL state | **yes** | All client-side. |
 | Search within the article | **no in stage 1** | `POST /api/search` spends. |
 | "Find similar" / projection | **no** | POSTs that embed. |
-| Chat | **no** | Costs money, and it is the strongest signup CTA we have. |
+| Chat | **no, and carved out by hand** | Costs money — and a conversation does not inherit a document's visibility just because it hangs off it. The predecessor wrote a checklist item to keep it out. |
 | Comments / explain-this-sentence | **no** | Both reader state and paid. |
 | Glossary term lookup | **no** | Paid, and it is the owner's. |
 | The original PDF (`/api/source`) | **no in stage 1** | Serving somebody's uploaded bytes to the world is a separate decision from serving the extracted text. Hide the link rather than 404 it. |
@@ -349,39 +359,115 @@ Three distinct sentences are needed and they must not be one sentence:
 
 ---
 
-## The original version had almost nothing on this
+## The original version shipped this, and it is not in `original-version/`
 
-Greg asked for `docs/project/original-version/` to be mined for prior thinking, on the principle in
-[CLAUDE.md](../../CLAUDE.md) that we should check before rebuilding something the previous version
-already solved. **It is not there.** Grepping all twenty of those files for *public*, *anonymous*,
-*logged-out*, *share*, *world-readable*, *unlisted* and *visibility* turns up nothing about letting
-a stranger read a document. Written down so the next person does not repeat the search.
+Greg asked for `docs/project/original-version/` to be mined for prior thinking. **Those twenty files
+say nothing about it** — grepping all of them for *public*, *anonymous*, *logged-out*, *share*,
+*world-readable* and *visibility* turns up one row, in [metadata-page.md](metadata-page.md)'s table
+of what the old Metadata tab held: *"Access & Sharing | public/private toggle, owner's email |
+**drop** — no accounts here."*
 
-The one trace of it in this repo is a row in [metadata-page.md](metadata-page.md)'s table of what
-the original's Metadata tab held:
+**The predecessor repo itself is a different story.** It is on disk at
+`/Users/greg/dev/spideryarn/reading`, it built this feature in June, and the write-ups are still
+there:
 
-| Their section | What was in it | Ours |
-|---|---|---|
-| Access & Sharing | public/private toggle, owner's email | **drop** — no accounts here |
+| | |
+|---|---|
+| `docs/planning/finished/250613a_remove_share_route_implement_public_document_access.md` | the feature |
+| `docs/planning/finished/250618a_database_rls_security_comprehensive_review.md` | the RLS review that hardened it |
+| `docs/planning/finished/250622b_improve_document_access_control.md` | the follow-up |
+| `components/tools/MetadataPanel.tsx:1207` | the toggle and its copy |
 
-So the original had a toggle and we know two things about it: it was public/private, and it sat
-beside the owner's email address. Nothing about what it actually did, whether it ever shipped, or
-what a logged-out visitor saw. It is a name for the card and no more than that.
+What it was: a per-document `is_public` boolean, toggled from the metadata panel, enforced by RLS on
+the *same* `/documents/[slug]` route. No share token, no second URL. The owner saw
+*"🌐 Anyone can access this document with the link"* against *"🔒 Only you can access this
+document"*. Five things it teaches, and each of them changes something above.
 
-There is **no prior art at all** on: keying an artefact by prompt variant (the original stored one
-of each, exactly as this one does), read-only UI modes, signup calls to action, or gating model
-calls behind auth. Everything in this plan is being invented here.
+**1. It reached Greg's cost rule first, and stated it better than this plan did.**
 
-One adjacent thing from that folder *is* worth carrying: `structure-panel.md` records why per-node
-open/closed state is deliberately **not** in the URL, while the depth cut-off is —
+> **Core Principle**: If a tool requires LLM calls, it should be blocked for anonymous users with a
+> "pro" badge and paywall redirect. If a tool only retrieves from the database (including
+> pre-generated AI content), it should work for anonymous users.
+>
+> — `250613a`, June 2025
 
-> node ids here are positional — a re-run of `npm run toc` renumbers them, so a shared link would
-> open a set of sections that are no longer the ones you opened. The depth is the stable half.
+That is Greg's 2026-08-27 paragraph, a year earlier, and it is the same line this plan draws. Worth
+knowing it is a settled position rather than a new one.
 
-That reasoning was about a shared link before there was any way to share one. It still holds, and it
-is the argument for why [block-ids.md](../project/block-ids.md)'s stable ids matter more once links
-leave the building: everything a URL carries has to survive a re-extraction on somebody else's
-machine, weeks later.
+**2. "A pro badge", not a hidden button.** Their UX section: *"Clear 'pro' badges on unavailable
+features"*, and the tool list is explicit — headings, summary, glossary, tweet thread, chat,
+semantic search, and ToC tooltip summaries *when generating new ones*. This is better than hiding a
+control and better than a generic banner: the reader sees the whole tool, marked. We already own the
+right visual convention for it — the dimmed row with a tooltip that says *not built yet* — and this
+is the same shape saying *not yours yet*.
+
+**3. Chat was carved out by hand, and they wrote a checklist item to make sure it stayed out.**
+
+> **Chat threads/messages**: NEVER visible for public documents — require authentication
+>
+> …
+>
+> **IMPORTANT**: Ensure NO public document exception for chat
+
+Two reasons, and only one of them is cost: a chat thread is a conversation, and conversations do not
+inherit a document's visibility just because they hang off it. Our tables are the same shape. It
+matches Greg's *"none of it — an opt-in later"* exactly.
+
+**4. The landmine, and it is the best argument in this document for the closed namespace.** The
+thing `250613a` existed to delete was a *second route to the same content*:
+
+> **Current Issue**: `/share` route bypasses all security and RLS policies, allowing access to any
+> document by slug regardless of `is_public` status.
+
+A second access path is how the hole got in, and the fix was **deleting the second path**, not
+patching it. The `/api/public/` namespace proposed here is a second access path. What keeps it from
+being that bug is that it has its own predicate, its own projections and its own closed table — and
+that it is the *only* one. If a third way to read an article ever appears, this is the paragraph to
+re-read.
+
+**5. Visibility does not cascade for free — it has to be threaded through everything hanging off the
+document.** Flipping it on `documents` was not enough. Enhancements needed their own migration
+(`20250618000002_update_document_enhancements_public_access.sql`) and **storage needed a third**
+(`20250618000004_update_storage_rls_public_documents.sql`). We have the same shape: `revision_blocks`,
+`block_identities`, `raw_sources` and `uploads` all hang off an article, and this plan's
+[§ What a public visitor gets](#what-a-public-visitor-gets-feature-by-feature) declines
+`/api/source` for stage 1 partly on that reasoning.
+
+**One correction to a claim above.** Their slugs were title-derived, so *"anyone with the link"*
+overstated it: a public document's address is guessable. Ours are derived too. That does not matter
+given Greg's decision — a marketing surface is meant to be reachable — but **the copy must not
+promise link-secrecy**, in the toggle or anywhere else. "Anyone with the link" is a description of
+who *may* read it, not a claim about who *can find* it.
+
+**No prior art at all on:** per-user or per-prompt-variant artefacts (theirs were per-document too,
+and their one multi-axis attempt — three lengths × three expertise levels — went unused and their
+own notes advise against reviving it as a per-artefact control); rate limits or quotas (gating was
+binary, authenticated or not); and any browse-or-discover page for public documents (there was
+none — link only).
+
+### The case this plan had missed
+
+Their UX section lists three situations, and the plan above had only thought about two:
+
+> **Authenticated User Experience**: … Read-only access to others' public documents with all
+> pre-generated content
+
+**A signed-in reader who follows a shared link gets a 404 today.** `ownedSlug()` matches on owner,
+so the friend Greg sends a link to — who happens to have an account — hits exactly the same wall as
+a stranger, and gets the worse experience for having signed up. That is not a rare edge: it is the
+likeliest first use of the feature.
+
+The fix is small and it falls out of the design already here, provided one rule holds: **the public
+routes ignore the `Authorization` header entirely and return the same projection to everybody.** Sol
+asked for that on caching grounds — *"Do not make one public URL return personalised responses"* —
+and it pays for itself twice. Then the client's rule is one sentence in both directions: *ask the
+owned route first if there is a session; on 404, ask the public route; on 404 again, say the
+document is not shared.* One extra request, only on the miss, and the reader gets the article rather
+than a wall.
+
+The read-only chrome is then keyed on **"is this mine"**, not on **"am I signed in"** — which is the
+right question anyway, and the one the signed-in-stranger case would otherwise have forced us to
+retrofit.
 
 ---
 
@@ -432,8 +518,12 @@ control.
 if (!user) return route.kind === "login" ? <SignInPage /> : <LandingPage />;
 ```
 
-It becomes: no user and a reading route ⇒ ask the public API. 200 renders the reader against public
-data sources; 404 renders `LandingPage`, exactly as now.
+It becomes a two-step, in both directions: with a session, ask the owned route and fall back to the
+public one on 404; with no session, ask the public route directly. A public 200 renders the reader
+against public data sources with read-only chrome. A public 404 renders `LandingPage` for a stranger,
+exactly as now, and *"this document isn't shared"* for somebody signed in — who has already proved
+they are a person, so there is nothing left to protect by showing them the pitch instead of the
+answer.
 
 **And this is bigger than a `readOnly` prop.** The first draft said "the real reading view with a
 read-only prop", and Sol went and read the reading view:
@@ -454,9 +544,17 @@ screenshot**: a signed-out browser must issue no request outside `/api/public/` 
 
 **The chrome.** A persistent bar — not a dismissible toast, since it is a statement about what this
 page is rather than a notification. It says three things: you are reading a shared document; the
-things you cannot do and why; sign up. Every disabled control routes to signup with its own reason
-attached, so the pitch is specific — *"Chat with this article — sign up"* rather than a generic
-banner the eye stops seeing.
+things you cannot do and why; sign up.
+
+**Mark the controls, do not hide them.** The predecessor's *"clear 'pro' badges on unavailable
+features"* is the better pattern and we already own the visual convention for it: the dimmed row
+with a tooltip that `Dock.tsx` and `Metadata.tsx` use for *not built yet*, saying *not yours yet*
+instead. A hidden button teaches a visitor nothing about what they would be signing up for. Each
+badge routes to signup carrying its own reason, so the pitch is specific — *"Chat with this article
+— sign up"* rather than a banner the eye stops seeing.
+
+**Keyed on "is this mine", not on "am I signed in".** A signed-in reader on somebody else's public
+document sees the same read-only chrome as a stranger.
 
 **Metadata gets an Access & Sharing card.** This is the original version's own section name, which
 [metadata-page.md](metadata-page.md) recorded and deliberately dropped — *"**drop** — no accounts
@@ -634,6 +732,7 @@ before it is believed. Two of the first draft's six were not implementable, and 
 | **`/api/health` is a named exception, not an oversight.** It is answered in `src/vercel.ts` before `handleApi` and already returns the environment owner's article count. Any "everything else refuses anonymous callers" claim is false until health is listed. | State it; assert the list has exactly two entries. |
 | **No public route spends money.** Not a static import test — `src/api.ts` imports `glossary.ts` and `summarise.ts`, which import the model machinery, so that test cannot pass. Instead: a public read module that does not import the writers, **plus a runtime gateway spy asserting zero calls** across the whole public surface. | Make a public handler call the gateway; the spy must fire. |
 | **Every public route rejects every non-GET method.** A sweep, not a spot check. | Add a POST handler in the public table; red. |
+| **A signed-in reader who does not own a public doc gets the article**, not a 404 and not a personalised response. Byte-identical to what a stranger gets. | Serve it through the owned path by mistake; the two responses must differ, and the test must catch it. |
 | **A private doc's public URL is 404.** | Flip the fixture to `public`, watch 200; flip back, watch 404. Both readings in one run. |
 | **The public DTO is an allowlist.** Assert the projection's output keys against an expected set, deep, including nested arrays. | Add `guidance` to the summary DTO; red. |
 | **`currentOwnerId()` throws on the public path.** | Call it in a public handler; the request must 500, not succeed as somebody. |
@@ -654,6 +753,9 @@ browser pass runs in a Sonnet subagent against [browser-testing.md](../project/b
 
 - **Not widening `ownedSlug()`.** A second predicate, in the same file, with the static guard
   tightened to name all three.
+- **Not a third way to read an article.** `/api/public/` is a second path and that is one more than
+  is comfortable — the predecessor's `/share` route was exactly this and it bypassed everything.
+  Two, both audited, and no more.
 - **Not impersonating the owner** on an anonymous request, however much handler code it would save.
 - **Not a share token in stage 1.** Visibility is a property of the document and the URL is the one
   the owner is already looking at. If unlisted-with-a-secret is wanted later it is an additional
