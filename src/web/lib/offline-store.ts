@@ -307,18 +307,35 @@ export async function forgetUser(userId: string): Promise<void> {
 /**
  * Remember who is signed in, so a cache read has a partition to look in.
  *
- * `localStorage` rather than the database above, because this has to answer
- * *synchronously* — it is read on the way into a request, and making every
- * request await IndexedDB to find out whose drawer to open would put a database
- * round-trip in front of the network.
+ * **Two places, and the memory is the one that matters.** `localStorage` is
+ * written so the partition survives a reload, but the module-level variable is
+ * what is actually read first — because `localStorage` is not always there. It
+ * is absent under Node (which now shadows jsdom's own and refuses to enable it
+ * without `--localstorage-file`), and in a Safari private window it exists and
+ * *throws on write*.
+ *
+ * Without the in-memory copy, either of those turns the whole cache off in
+ * total silence: nothing would be saved, nothing would be read back, no error
+ * would be raised, and the feature would simply not exist while looking exactly
+ * like a feature that did. Found by a test that polled for the write instead of
+ * sleeping past it. See docs/reusable/silent-success.md.
+ *
+ * The trade is explicit: where `localStorage` is unavailable the partition
+ * lasts as long as the page does, which covers the case this whole feature is
+ * for — a tab that stays open while the connection goes — and loses the one
+ * that needs a service worker anyway.
  */
+let remembered: string | null = null;
+
 export function rememberUser(userId: string | null): void {
+  remembered = userId;
   try {
     if (typeof localStorage === "undefined") return;
     if (userId) localStorage.setItem(USER_KEY, userId);
     else localStorage.removeItem(USER_KEY);
   } catch {
-    /* Private windows throw on write. The cache simply does not happen. */
+    /* A private window throws on write. The in-memory copy above still stands,
+       so the cache works for this page rather than not at all. */
   }
 }
 
@@ -331,6 +348,7 @@ export function rememberUser(userId: string | null): void {
  * *gate* is deliberately not built here.
  */
 export function lastKnownUser(): string | null {
+  if (remembered) return remembered;
   try {
     if (typeof localStorage === "undefined") return null;
     return localStorage.getItem(USER_KEY);

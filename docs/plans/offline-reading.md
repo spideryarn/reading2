@@ -312,7 +312,38 @@ itself rejects. A body that fails after its headers arrived leaves the previous 
 than replacing it with half a document — but it is not rescued. Buffering every cacheable response
 to fix that would change what `apiFetch` returns for every caller, which is not an 80/20.
 
-### Two bugs found by testing, both worth keeping
+### The cache did not work, and every test said it did
+
+Found on 2026-08-27 while writing `tests/offline-remount.test.tsx`, which mounts the real
+`useGlossaryTerms` against the real store and a real IndexedDB.
+
+**`lastKnownUser()` read only `localStorage`, and under Node there isn't one** — Node now shadows
+jsdom's own and refuses to enable it without `--localstorage-file`. So the id came back `null`,
+`saving()` declined every write, `readCached` declined every read, and **nothing was ever cached at
+all**. No error, no warning, no failing test.
+
+The reason no test caught it is worth more than the bug. The first version of the mount test waited
+one macrotask and then asserted the *terms* were right — and offline with an empty cache the terms
+come back empty, which is also what a working cache looks like before it has anything in it. Replacing
+that wait with a poll for the record itself (`waitForCached`, which throws if the write never lands)
+turned three green tests red immediately.
+
+The same hole is real in a browser, just narrower: a Safari private window has a `localStorage` that
+*throws on write*. So the fix is not "the tests need a `localStorage`" — the store now keeps the id
+**in memory as well**, and reads that first. Where `localStorage` is unavailable the partition lasts
+as long as the page does, which covers the case this whole feature is for and loses only the one that
+needs a service worker anyway.
+
+Three lessons, all of them the same lesson:
+
+- **A negative result is not evidence when the positive result looks identical.** Empty-because-broken
+  and empty-because-nothing-saved-yet are the same screen.
+- **Poll for the artefact, do not sleep past the race.** A `setTimeout` long enough to pass is also
+  long enough to hide the write never happening.
+- **Two storage systems means two ways to be switched off.** The bodies were in IndexedDB and the
+  key to them was in `localStorage`; losing the smaller one disabled the larger.
+
+### Two more bugs found by testing, both worth keeping
 
 **Three "does not save…" tests could not fail.** They asserted `writeCache` had not been called,
 immediately after an `await` — but the save is deliberately fire-and-forget, so it had not happened

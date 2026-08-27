@@ -222,7 +222,7 @@ async function stampFuture(key: string): Promise<void> {
 }
 
 describe("remembering who is signed in", () => {
-  it("round-trips an id and forgets it", () => {
+  it("round-trips an id through localStorage and forgets it", () => {
     const held = new Map<string, string>();
     vi.stubGlobal("localStorage", {
       getItem: (k: string) => held.get(k) ?? null,
@@ -231,17 +231,55 @@ describe("remembering who is signed in", () => {
     });
 
     rememberUser("ada");
+    expect(held.get("spideryarn.lastUser")).toBe("ada");
     expect(lastKnownUser()).toBe("ada");
+
     rememberUser(null);
     expect(lastKnownUser()).toBeNull();
     vi.unstubAllGlobals();
   });
 
-  it("says nobody, rather than throwing, where there is no localStorage", () => {
-    /* Node has none, and a Safari private window *throws on access* rather than
-       being absent — so this is the shape both failures take. A reader with no
-       storage must get an app that works and no saved copies. */
-    expect(lastKnownUser()).toBeNull();
+  /**
+   * **The cache must not switch itself off in silence.**
+   *
+   * `localStorage` is missing under Node — which now shadows jsdom's own and
+   * refuses to enable it without `--localstorage-file` — and in a Safari
+   * private window it exists and throws on write. Either way, a `lastKnownUser`
+   * that could only answer from `localStorage` would return `null`, every cache
+   * read and write would decline, and the whole feature would quietly not exist
+   * while looking exactly like a feature that did. That is precisely how it
+   * behaved until a test polled for the write instead of sleeping past it.
+   */
+  it("still knows the reader when localStorage is absent", () => {
+    vi.stubGlobal("localStorage", undefined);
+    rememberUser("ada");
+    expect(lastKnownUser()).toBe("ada");
+    rememberUser(null);
+    vi.unstubAllGlobals();
+  });
+
+  it("still knows the reader when localStorage throws", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+      removeItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+    });
     expect(() => rememberUser("ada")).not.toThrow();
+    expect(lastKnownUser()).toBe("ada");
+    rememberUser(null);
+    vi.unstubAllGlobals();
+  });
+
+  it("says nobody before anyone has signed in", () => {
+    vi.stubGlobal("localStorage", undefined);
+    rememberUser(null);
+    expect(lastKnownUser()).toBeNull();
+    vi.unstubAllGlobals();
   });
 });
