@@ -209,6 +209,40 @@ reset that is present, documented, and covers a minority of what it names. **The
 have caught it is one line in a console** — count the buttons whose computed `border-style` is
 neither `none` nor `solid` — and it is worth running after anything that touches this file.
 
+### The other half of the same hole: images
+
+Found 2026-08-27, when Greg said the screenshots on the landing page *"look warped somehow"*. They
+were: stretched vertically by about **1.95×**, every letter in them twice as tall as it should be.
+
+The same missing preflight, in a place nobody thought to look. `width` and `height` on an `<img>`
+are not merely hints about aspect ratio — the HTML spec maps them to CSS `width` and `height` as
+**presentational hints**. [`LandingPage.tsx`](../../src/web/LandingPage.tsx) sets both (deliberately,
+so the page does not jump as a large capture lands) and then sizes the image with `tw:w-full`. The
+utility overrode the width; nothing overrode the height. So a 1245×815 screenshot was drawn 640 CSS
+px wide and still 815 tall, and 1245/640 is exactly the 1.95 you can see.
+
+Three things kept it hidden, and all three are worth naming:
+
+- **The file was never wrong.** [`landing-assets.test.ts`](../../tests/landing-assets.test.ts) reads
+  the JPEG's own header and checks it is the shape the page reserves space for. It passed, because
+  it was true. The test is about the *asset*; the bug was in the *rule*.
+- **`.prose img` in [`styles.css`](../../src/web/styles.css) has carried `height: auto` all along**,
+  so every image inside an article was fine. Only chrome images were affected — a split that stops
+  anyone suspecting something global.
+- **The page around it looked perfect.** This reads as "the screenshots look odd", which sounds like
+  a capture problem, not a stylesheet one.
+
+The fix is preflight's own rule, `img, video { max-width: 100%; height: auto }`, in `@layer base`
+alongside the button reset — so an explicit height in `app` or a `tw:h-*` utility still wins. The
+`max-width` half comes with it: an image overflowing its column is the other face of the same
+surprise.
+
+Two general lessons. **A hand-written reset is a list of the cases you happened to think of**, and
+this one was written while looking at buttons — so widening it once for buttons did not widen it for
+anything else. And **an HTML attribute that also sets CSS is a rule you did not know you wrote**;
+`width`/`height` on an image are the common one, and the moment a utility sets only one of the pair,
+they stop being about aspect ratio and start being about size.
+
 ### Two hover languages, and the orange one won
 
 `--accent` is a raised dark grey **surface**, not the orange; both `tokens.css` and `styles.css`

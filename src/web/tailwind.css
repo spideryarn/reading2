@@ -275,3 +275,34 @@
     cursor: default;
   }
 }
+
+/* -------------------------------------------- and the other bit: images --
+   `img { height: auto }`, which is the rest of what preflight would have given
+   us and was missing for the same reason the button reset was too narrow: we
+   hand-wrote the bits shadcn needs, and shadcn does not render images.
+
+   **This is not cosmetic — it is why the landing page's screenshot was warped.**
+   `width` and `height` on an `<img>` are not only hints about aspect ratio: the
+   HTML spec maps them to CSS `width` and `height` *presentational hints*. On the
+   landing page (LandingPage.tsx) `tw:w-full` overrode the width and nothing
+   overrode the height, so a 1245×815 capture was drawn 640 CSS px wide and still
+   815 tall — stretched vertically by 1245/640 ≈ 1.95×. Every letter in it was
+   twice as tall as it should be, and the page itself looked completely fine, so
+   the bug reads as "the screenshots look odd" rather than as a CSS rule.
+
+   Nothing catches this from the outside. tests/landing-assets.test.ts checks the
+   file really is the shape the page claims, and it passes: the *file* was never
+   wrong. `.prose img` in styles.css has carried `height: auto` all along, so
+   images inside an article were fine and only chrome images were affected —
+   which is exactly the sort of split that stops anyone suspecting a global rule.
+
+   `max-width: 100%` comes with it, as in preflight: an image that overflows its
+   column is the other half of the same class of surprise. Both are in `base`, so
+   any explicit height in `app` or a `tw:h-*` utility still wins.  */
+@layer base {
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+}

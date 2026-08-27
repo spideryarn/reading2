@@ -34,6 +34,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const PAGE = path.join(ROOT, "src", "web", "LandingPage.tsx");
+const TAILWIND = path.join(ROOT, "src", "web", "tailwind.css");
 
 const source = readFileSync(PAGE, "utf8");
 
@@ -134,5 +135,38 @@ describe("the landing page's screenshots", () => {
        for a capture that came back a handful of pixels off, nowhere near
        enough for a shot taken at a different window size. */
     expect(width / height).toBeCloseTo(declaredRatio(), 1);
+  });
+});
+
+/**
+ * **The rule that stops those `width`/`height` attributes warping the picture.**
+ *
+ * Found 2026-08-27: Greg said the landing page's screenshot looked "warped
+ * somehow", and it was — stretched vertically by about 1.95x.
+ *
+ * `width` and `height` on an `<img>` are not only a note about aspect ratio.
+ * The HTML spec maps them to CSS `width` and `height` *presentational hints*.
+ * The page sizes its shots with `tw:w-full`, which overrides the width and
+ * leaves the height at the attribute's 815px — so a 1245x815 capture was drawn
+ * 640 CSS px wide and still 815 tall. Tailwind's preflight would have prevented
+ * it with `img { height: auto }`; this app hand-writes its preflight (see the
+ * foot of tailwind.css) and that rule was not in it.
+ *
+ * So the tests above and this one are two halves of one guarantee, and neither
+ * is much use alone: they say the *file* is the shape the page claims, and this
+ * says nothing in the page's own CSS will then draw it at a different one.
+ *
+ * A source check rather than a rendered one, which is honest about its limits:
+ * it cannot prove the cascade resolves the way we think. What it does prevent
+ * is somebody tidying tailwind.css, deleting a rule that looks like it belongs
+ * to nothing, and shipping a warped front door with every test green.
+ */
+describe("the global image reset", () => {
+  const css = readFileSync(TAILWIND, "utf8");
+
+  it("gives every img `height: auto`, so a width utility cannot stretch it", () => {
+    const block = /@layer base \{[^}]*\bimg\b[^{]*\{([^}]*)\}/.exec(css);
+    expect(block, "tailwind.css no longer resets `img` in @layer base").not.toBeNull();
+    expect(block?.[1]).toMatch(/height:\s*auto/);
   });
 });
