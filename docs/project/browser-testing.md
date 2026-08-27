@@ -184,14 +184,45 @@ events and `requestAnimationFrame` are both dispatched from that step. So in a h
 - `setTimeout` is clamped to a 1s minimum, so a 300ms debounce and a 16ms rAF shim both become one
   second, and a driver script with a dozen short sleeps blows through a CDP timeout.
 
-A screenshot does **not** count as making the tab visible — the extension can capture a hidden tab
-perfectly well, so you get a correct-looking picture of a page whose event loop is asleep. Check
-`document.visibilityState` before believing a negative result.
+A screenshot does **not** count as making the tab visible. Often the extension captures a hidden tab
+perfectly well, so you get a correct-looking picture of a page whose event loop is asleep — and
+sometimes you get the black rectangle described just below. Neither reading tells you the page is
+fine. Check `document.visibilityState` before believing a negative result, and before believing a
+positive one.
 
 What still works in a hidden tab, and is therefore what to test there: anything driven by a direct
 call rather than by the rendering step — a fresh page load, a reload, `history.back()`, and clicking a
 control. That is enough to cover URL→page restore, the legacy-hash rewrite, and the history
 semantics. Continuous scroll→URL needs a genuinely visible tab.
+
+#### An occluded window captures as solid black, and you cannot raise it
+
+The case above is a tab that is not frontmost *in its window*. This is the whole **window** being
+behind something else, and on macOS it produces the same `visibilityState: "hidden"` with a worse
+symptom: **every capture comes back a solid near-black rectangle at exactly the right dimensions.**
+The tool reports success. The image is the page's background colour, so on this app — which is dark
+by design — it looks far more like a page that failed to render than like a capture that failed.
+
+Found on 2026-08-27 while shooting the landing page ([auth.md](auth.md)). Three of four screenshots
+were lost to it, and the tell was one line: `document.elementFromPoint()` returned the *right*
+paragraph of the article at the coordinates the screenshot showed as empty. The DOM was fine; only
+the picture was black.
+
+**The expensive part is that an agent cannot fix it.** Nothing in the extension's API raises a
+window, and the obvious escapes do not work either:
+
+- `resize_window` succeeds, and changes `innerWidth`, without raising anything.
+- Creating a new tab, or a whole new tab group and window, does not bring it forward.
+- `open -a "Google Chrome"` raises *a* Chrome. If two instances are running — one is, whenever
+  somebody has a CDP-driven copy open — AppleScript and `open` may both reach the other one, and
+  `tell application "Google Chrome" to get URL of every tab` then lists tabs that are not the ones
+  the extension is driving. That mismatch is the quickest way to confirm which instance you are
+  talking to.
+
+So the rule is: **check `document.visibilityState` before a capture, not after a puzzling one**, and
+if it says `hidden`, ask the person to click the window rather than trying to solve it. It is one
+click for them and unsolvable for you. Related: the handshake stall further down, which is the other
+browser problem an agent cannot get itself out of.
 
 #### It can also stop a component ever drawing at all
 

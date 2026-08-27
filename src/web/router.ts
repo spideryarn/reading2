@@ -104,11 +104,14 @@ export type Route =
   /**
    * The sign-in screen at an address of its own — `/login`.
    *
-   * Mostly redundant: not being signed in already shows you that screen
-   * wherever you are, because who you are is not view state and so does not
-   * belong in the URL (url-state.md). It exists because a password-reset email
-   * has to land *somewhere*, and because "send me the login page" is a
-   * reasonable thing to be able to do. Nothing in the app links to it yet.
+   * **The one address that is not a statement about who you are.** Not being
+   * signed in shows you the landing page wherever you are (LandingPage.tsx,
+   * and the gate in App.tsx), because who you are is not view state and so
+   * does not belong in the URL (url-state.md). This route is the exception,
+   * and the reason is that it is a page somebody was *sent*: a password-reset
+   * email has to land somewhere, and "send me the login page" is a reasonable
+   * thing to be able to do. It gets the compact screen rather than the pitch —
+   * SignInPage.tsx. Nothing in the app links to it.
    */
   | { kind: "login" }
   /**

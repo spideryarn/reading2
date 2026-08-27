@@ -33,7 +33,7 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 | [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) | the browser client. One of them, module scope, `flowType: "pkce"` |
 | [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — the token goes on here, for all 31 call sites — and `leavingFetch` for `pagehide` |
 | [`src/web/useSession.ts`](../../src/web/useSession.ts) | who is signed in, as state |
-| [`src/web/LandingPage.tsx`](../../src/web/LandingPage.tsx) | **what being signed out looks like** — the pitch, four screenshots, and the buttons |
+| [`src/web/LandingPage.tsx`](../../src/web/LandingPage.tsx) | **what being signed out looks like** — the pitch, a screenshot of the reading view, and the buttons |
 | [`src/web/SignInControls.tsx`](../../src/web/SignInControls.tsx) | the Google button and the email form, and every line of auth logic in them. Two pages render it |
 | [`src/web/SignInPage.tsx`](../../src/web/SignInPage.tsx) | the compact screen at `/login`, for a password-reset landing |
 | [`src/web/AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where Google returns to, and why it reads the URL itself |
@@ -58,7 +58,7 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 ## The signed-out page is the landing page
 
 Since 2026-08-27, no session shows you [`LandingPage.tsx`](../../src/web/LandingPage.tsx) rather
-than a bare form: what the thing is, four screenshots of the reading view, and the sign-in buttons
+than a bare form: what the thing is, a screenshot of the reading view, and the sign-in buttons
 themselves. Greg asked for it and made both of the calls that shape it.
 
 **The buttons are on the page.** Not a Sign in link to `/login` — a landing page whose only control
@@ -82,9 +82,27 @@ Access is not open — see [§ Whose data is it](#whose-data-is-it); the alterna
 plainly is a Google button that works and then hands a stranger a reading tool somebody else is
 paying for.
 
-The screenshots live in `src/web/assets/` and are all of one article — *The Mythology of AI
+The screenshot lives in `src/web/assets/` and is of one article — *The Mythology of AI
 Consciousness*, which is on the public web with nothing sensitive in it. Imported through Vite
-rather than dropped in `public/`, so they are content-hashed and a redeploy cannot serve a stale one.
+rather than dropped in `public/`, so it is content-hashed and a redeploy cannot serve a stale one.
+
+**There is one and there were meant to be four**, and the missing three are worth recording because
+the cause was environmental rather than a decision. A glossary card, an explanation over a selected
+sentence and the force diagram were all going to be shown; partway through capturing them Chrome's
+window went `visibilityState: "hidden"`, which paints every screenshot solid black, and nothing
+reachable from an agent's side raises an occluded window — two Chrome instances were running and
+AppleScript addresses only the other one. This is a new entry on
+[browser-testing.md](browser-testing.md)'s list of ways the browser lies to you, and it is a
+particularly quiet one: the capture *succeeds*, at the right dimensions, and returns a black
+rectangle. Greg's call was one more attempt and then stop, so those three features are described in
+prose on the page instead of shown.
+
+Adding them later is small: capture at the same aspect ratio, drop the file in `assets/`, and reuse
+the `Shot` component that is already there. [`tests/landing-assets.test.ts`](../../tests/landing-assets.test.ts)
+checks the shape of whatever the page imports, which is what stops a shot taken at a different window
+size from making the page jump as it loads — and it is written against JPEG as well as PNG, because
+JPEG is what the capture tool produces and re-encoding one as a PNG quadruples the bytes without
+recovering anything.
 
 ## What auth is for here
 
