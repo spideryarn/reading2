@@ -165,11 +165,21 @@ file_size_limit = "50MiB"
 # `text/html` since 2026-08-27: stage 1 now stores fetched web pages here too,
 # not only uploaded PDFs. See docs/plans/raw-bytes-in-storage.md.
 #
-# Measured, and worth knowing before relying on it: this list does NOT stop a
-# service-role upload. With the bucket set to PDF-only, our own server stored
-# text/html, image/png and application/x-nonsense objects without complaint.
-# It is a guard on the browser's signed-grant path, not on ours — src/store/
-# blobs-supabase.ts has the numbers.
+# **Storage enforces this list against the service key too, and a comment here
+# said otherwise for a day.** It claimed a measurement — that a PDF-only bucket
+# had accepted text/html, image/png and application/x-nonsense from our own
+# server — and the storage container's request log covers its whole life and
+# contains none of those uploads. The probe's bytes went to data/_blobs/
+# instead, because blobStore() falls back to the filesystem without both env
+# vars and fsBlobs ignores contentType entirely. The real behaviour is a 415
+# InvalidMimeType, which is what the earlier probe in
+# docs/plans/pdf-upload-and-storage.md had already recorded correctly.
+#
+# **And declaring a bucket here does not change one that already exists.** The
+# local bucket was created by hand with curl twenty minutes before this block
+# was written, and no PUT or PATCH has ever reached it — so this line was
+# inert for seven hours and every HTML fetch threw. Both halves are written up
+# in docs/postmortems/the-config-file-is-not-the-bucket.md.
 allowed_mime_types = ["application/pdf", "text/html"]
 
 # Allow connections via S3 compatible clients

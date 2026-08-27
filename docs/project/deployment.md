@@ -639,6 +639,13 @@ Uploading a PDF (2026-08-27) puts bytes in Supabase Storage, in a bucket called 
 locally** — a remote project needs `supabase seed buckets --project-ref <ref>`, or the equivalent
 insert into `storage.buckets`.
 
+**And declaring it does not update one that already exists — anywhere, including locally.** Nothing
+in this repo applies the block below to a bucket that is already there, so editing it is not a
+change to any running system. Adding `text/html` on 2026-08-27 left the local bucket PDF-only for
+seven hours, during which every HTML fetch threw a 415 that nobody saw. Read
+[the-config-file-is-not-the-bucket.md](../postmortems/the-config-file-is-not-the-bucket.md) before
+changing a bucket setting, or before trusting one.
+
 > **It exists on the remote as of 2026-08-27**, and it did not until then: `GET /storage/v1/bucket`
 > on the production project returned `[]`, an empty list, on the day this paragraph had been warning
 > about it for hours. Created with the REST API rather than the CLI, which needs no access token and

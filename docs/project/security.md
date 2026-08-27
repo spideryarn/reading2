@@ -664,9 +664,13 @@ Three things bound it, and only the last is new:
   prerequisite of shipping uploads* rather than as a follow-on — Sol's finding, and the reason is
   exactly this section: an upload hands a stranger the parser directly. It is also the only thing
   here that bounds **spend** rather than storage.
-- **The bucket's own limits.** 50 MiB per object and a PDF-only MIME allowlist, enforced by Storage
-  at the moment of upload. A second line under our own checks, never a replacement: a bucket cannot
-  tell a PDF from a file named one.
+- **The bucket's own limits.** 50 MiB per object and a MIME allowlist, enforced by Storage at the
+  moment of upload — **including against the service key**, which a comment in `supabase/config.toml`
+  denied until 2026-08-28 on the strength of a measurement that never happened
+  ([the-config-file-is-not-the-bucket.md](../postmortems/the-config-file-is-not-the-bucket.md)). A
+  second line under our own checks, never a replacement: a bucket cannot tell a PDF from a file named
+  one. No longer PDF-only — stage 1 stores fetched web pages in the same bucket, so the list is
+  `application/pdf` and `text/html`.
 - **`%PDF-` over the bytes, and our SHA-256 against the browser's**, in `acquireUpload` before
   anything expensive runs. Both over *one* download, because reading the object twice is the one
   sequence content addressing does not cover.
