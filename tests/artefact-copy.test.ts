@@ -133,6 +133,21 @@ describe("copying an article between two artefact stores", () => {
     }
   });
 
+  it("leaves every copied step finished, not merely written", async () => {
+    /* A written artefact and a completed step are two different facts. The
+       filesystem is forgiving — `has` parses the files and says yes — but the
+       Postgres adapter cannot be, because carry-forward means a value can be
+       present without this step having produced it. So the copy runs
+       `beginStep`/`finishStep` around the write, and this is the assertion that
+       stops it quietly going back to `write` alone.
+
+       `interrupted` is the honest question here: it is true exactly when a step
+       began and never finished. */
+    for (const step of copied) {
+      expect(await destination.interrupted(SLUG, step), `${step} was left running`).toBe(false);
+    }
+  });
+
   it("keeps the raw manifest an object, not a string", async () => {
     /* `ArtifactMap["raw"]` said `string` until 2026-08-27 and nothing caught it,
        because nothing called `read`. This calls it. */

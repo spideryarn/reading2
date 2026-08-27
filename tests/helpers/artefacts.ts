@@ -87,7 +87,26 @@ export async function copyArtefacts(
   for (const step of STEP_ORDER) {
     const parts = await readParts(from, slug, step);
     if (Object.keys(parts).length === 0) continue;
+    /* **`beginStep` … `write` … `finishStep`, not `write` alone**, because a
+       written artefact and a *completed step* are two different facts and only
+       one of them is a file.
+
+       On the filesystem `write` alone very nearly passes for a copy: `has`
+       parses the artefacts and says yes. The Postgres adapter cannot be so
+       forgiving — carry-forward means a value can be present because the
+       previous revision had it, so completion is a `revision_step_runs` row
+       with `status = 'done'` and nothing else will do. A copy that skipped this
+       would land artefacts that store reports incomplete, and every suite built
+       on it would fail for a reason that has nothing to do with what it tests.
+
+       GPT Sol found this against the first version of this file, which called
+       `write` only; docs/plans/delete-the-importer-review-2-sol.md finding 2.
+       Running the same three calls in the same order as the runner is also the
+       point of the helper — a fixture that takes a shortcut through the seam is
+       a fixture that stops proving the seam works. */
+    const attempt = await to.beginStep(slug, step);
     await to.write(slug, step, parts, await stampOrEmpty(from, slug, step));
+    await to.finishStep(slug, step, attempt);
     copied.push(step);
   }
   return copied;

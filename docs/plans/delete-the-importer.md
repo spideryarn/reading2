@@ -29,9 +29,9 @@ useful kind of review.
 
 ## Where it stands, 2026-08-27
 
-Five commits, and none of them is the adapter yet. Two were live bugs found on the way, which is the
-pattern worth noticing: **every one of these came out of reading code near something else**, not out
-of the work item that was planned.
+Seven commits, and none of them is the adapter yet. Three were live bugs found on the way, which is
+the pattern worth noticing: **every one of those came out of reading code near something else**, not
+out of the work item that was planned.
 
 | | what | why it is here |
 |---|---|---|
@@ -40,9 +40,11 @@ of the work item that was planned.
 | `2a2cf7f` | The [postmortem](../postmortems/toc-status-never-checked.md) for the first one, which found the part I had not. | |
 | `5d8ed19` | **The importer's replacement, and a latent bug it exposed.** `tests/helpers/artefacts.ts` copies an article between two `ArtifactStore`s; calling `ArtifactStore.write` for the first time failed, because `writeAtomic` never created its directory. | § The replacement, and § What this has taught us. |
 | `9e28f8c` | **The adapter's shape, settled** by a second Sol round that returned NO-SHIP on two of my three answers. § The adapter's shape, settled. | |
+| `59e8e3a` | **C1 — `toc` gets a real stamp.** Stage 4 could not tell that stage 3 had run again. | § The build order for C. |
+| (with this) | **The copy helper completes its steps**, rather than only writing them — a third Sol round's finding 2. | § What the second review changed. |
 
-**Not started:** B2's remnant (`raw_filename`, and the adapter refusing a manifest with no
-`storedSha256`), B3, C, D, the demolition, E — in that order.
+**Not started:** C2 through C7, then B3, D, the demolition, E — in that order. B2's remnant has grown
+and now lives inside C6.
 
 **Nothing is at risk from the re-ingest.** All three eval PDFs are tracked in git and both upload
 fixtures are the same file as `evals/pdf/easy`. § What it does not delete has the table.
@@ -52,8 +54,9 @@ fixtures are the same file as `evals/pdf/easy`. § What it does not delete has t
 Written down because four of these are the same shape, and the fifth is the one that keeps this
 project honest.
 
-**1. A check that shares an assumption with the code proves nothing — including a check on a check.**
-Three times in two days:
+**1. A check proves nothing along any dimension it shares with the code it checks** — and that
+includes checks on checks. Not *nothing at all*: an assertion can be sound about one thing and blind
+about another, and the trap is assuming the sound half covers the blind one. Three times in two days:
 
 - The first version of `tests/artefact-copy.test.ts` compared `readParts(source)` against
   `readParts(destination)` — **the function under test on both sides of the equals**. Deleting a kind
@@ -72,20 +75,75 @@ constrained had no writer, so there was no case it could have been false about. 
 good"* is answered by an inline expression at each call site rather than one function both sites
 call, two answers can exist and nothing will say so.
 
-**3. The method with no caller is the one that does not work.** `ArtifactStore.write` had none, and
-failed on its first call because it never created its directory — every stage `mkdir`s for itself,
-and landing D deletes exactly those. `beginStep`, twenty lines further down, has always done it. The
-asymmetry *is* the bug: the method with a caller learned, the method without one did not.
+**3. An unexercised path is unproven.** `ArtifactStore.write` had no production caller and failed on
+its first call, because it never created its directory — every stage `mkdir`s for itself, and landing
+D deletes exactly those. `beginStep`, twenty lines further down, has always done it: the method with
+a caller learned, the method without one did not.
+
+*Narrowed after review.* The first version of this lesson said *"the method with no caller is the one
+that does not work"*, which one instance does not support. The defensible claim is the weaker and
+more useful one above — and it earns its place by predicting where to look next, not by explaining
+what already happened.
 
 **4. A fixture that has everything gives a skip-case nothing to run on.** `data/writes` has been
 through every stage, so *"a step with nothing is skipped"* had no case at all and passed against code
 that did the opposite. Any test about absence needs a fixture that is actually missing something.
 
-**5. Measure the library rather than reason about it.** I wrote down as a trap that
+**5. Where an ORM's behaviour is genuinely ambiguous, measure it.** I wrote down as a trap that
 `recordStepRun`'s upsert would clobber `attempt_id`. Sol said otherwise; a rolled-back transaction
 against the local database settled it in two minutes — the token survived while status and hash
-updated. Reading `set: values` and inferring was not evidence, and it had already reached a committed
-document.
+updated. The lesson is not "reading code is not evidence", which is too strong and would make every
+review worthless. It is that `set: values` has two plausible readings, and a claim resting on the
+one you happen to prefer had already reached a committed document.
+
+## What the second review changed
+
+[The third Sol round](delete-the-importer-review-2-sol.md) read this document *plus* the five commits
+and returned **NO-SHIP** with three criticals. Each was checked against the code before being
+accepted, and **one did not survive that check** — recorded here rather than quietly dropped,
+because the reason it failed is a fact about this codebase worth knowing.
+
+**Checked and narrowed: re-running `toc` does not orphan its consumers.** The finding was that C1
+adds a reason for `toc` to run that `cascadeForce` knows nothing about, leaving *"a new tree beside
+an old arc"*. The reasoning assumed downstream artefacts are keyed to the tree. **They are not.** A
+summary entry is keyed by a **block-id range** — `{"range": ["spya-hqt79k", "spya-zz20s6"], "depth":
+0, …}` in `data/writes/summary.json` — so a rebuilt tree over unchanged blocks orphans nothing. And
+where blocks *have* changed, `toc` rewrites `data/<slug>/blocks.json` as part of its own run, which
+is what `inputHashFor` reads, so every blocks-stamped consumer goes stale by itself.
+
+What is left of the finding is real but older than C1: **`arc` declares no stamp at all**, so it
+never re-runs on staleness whatever changes. That is a pre-existing gap, not one C1 opened, and it
+belongs on its own line rather than as a reason to hold C1.
+
+**Accepted, and fixed immediately:**
+
+- **The copy helper never completed a step.** It called `write` alone. On the filesystem that nearly
+  passes for a copy, because `has` parses the artefacts and says yes; the Postgres adapter cannot be
+  so forgiving, since carry-forward means a value can be present without this step having produced
+  it. `copyArtefacts` now runs `beginStep` → `write` → `finishStep`, which is also the runner's own
+  order — a fixture that shortcuts the seam stops proving the seam works.
+
+**Accepted, and folded into the landings below:**
+
+- **B2 is *not* "mostly built".** `RawManifest.bytes` is the length of what the network sent
+  (`doc.bytes.byteLength`, [`src/fetch.ts`](../../src/fetch.ts)), while `raw_sources.bytes` describes
+  the object at the *stored* hash — and for any non-UTF-8 page those differ, for exactly the reason
+  the two hashes do. The manifest computes `storedBytes` and then records only its hash. C6 must
+  carry the stored length too.
+- **`uploadId` is not durably "already on `jobs`".** Publication clears the job's draft link,
+  revisions carry no job id, and finished jobs can be deleted. So an uploaded revision's identity
+  cannot be reconstructed later, and § The raw provenance is wrong to lean on `jobs.upload_id`.
+  Either a revision-level column or an explicit dropping of that promise.
+- **Every checked-in manifest lacks `storedSha256`** — all seven. So C6's refusal would make C7 fail
+  the moment it lands. The fixtures have to be re-fetched first, which the re-ingest covers anyway;
+  it just has to happen *before* C7 rather than at the demolition.
+- **C4's stated test contradicts C4's stated definition** — see the landing.
+- **C2's red test would have stayed green.** See the landing, and note that this is lesson 1 catching
+  the plan's own mutation habit failing: the state I proposed to build already fails the *status*
+  half of the fence, so deleting the attempt half changes nothing.
+- **Importer rows are smoke data, not an oracle** for C3. The importer stores `extractedHtml: null`,
+  stamps every inferred step with the same fingerprint where `ideas` uses blocks-plus-tree, and has
+  no source reference. Agreeing with it would prove importer-plus-adapter behaviour, not correctness.
 
 ---
 
@@ -389,14 +447,24 @@ fields, and `NO_INPUT_HASH` must never be handed back as though it were a real r
 Seven commits, each green on its own, ordered so that the thing most likely to be wrong is proved
 earliest and nothing depends on an unproven piece.
 
-**C1. `toc` gets a real stamp.** Before the adapter, not after, and it is the piece that stops the
-adapter needing a private freshness rule — § the shape, above. `toc` declares no `stamp` today, so
-one goes on `STEPS.toc` in `src/pipeline.ts` hashing the **stage-3** `blocks` artefact rather than
-`toc`'s own copy. Landing it first means the filesystem adapter gets the benefit immediately, and the
-change is checkable against a store that already works.
+**C1. `toc` gets a real stamp — done, `59e8e3a`.** The piece that stops the adapter needing a
+freshness rule private to storage. `STEPS.toc` now stamps `{ inputHash }` over the **stage-3**
+`blocks` artefact rather than `toc`'s own copy of it, because stage 4 hashing the copy it made itself
+agrees by construction and can never report anything.
 
-*Red first:* re-run stage 3 so its blocks diverge from `data/<slug>/blocks.json`, and prove
-`stepIsDone("toc")` answers no. That case is undetectable today.
+Only `inputHash`: `labels.json` also carries a `version` and a `generator`, and comparing those would
+make every existing tree stale the next time the labels prompt moved — a decision to take
+deliberately, not beside a bug fix.
+
+*Watched red:* four tests, two of which fail with the stamp removed. Cost measured before landing —
+of nine articles, six unaffected, two already failing `has`, and `constitution` (whose `labels.json`
+predates `sourceHash`) newly not-current, which is the right answer.
+
+*One thing it does not do, and `arc` is why.* Re-running `toc` does not invalidate anything
+downstream. That turns out to be safe — summaries and the rest key on **block-id ranges**, not tree
+nodes, and `toc` rewrites the blocks copy the stamped consumers read — but `arc` declares no stamp at
+all and so never re-runs on staleness, whatever changes. Pre-existing, not opened by C1, and now
+written down; § What the second review changed.
 
 **C2. `beginStep` and `finishStep` as fenced statements.** Two new functions in
 `src/store/pg-revisions.ts` beside `recordStepRun` rather than inside it — `recordStepRun` stays for
@@ -405,14 +473,24 @@ the importer and for CLI runs, which have no attempt and never will. `beginStep`
 installing the attempt; `finishStep` is `UPDATE … WHERE revision_id = ? AND step_name = ? AND
 attempt_id = ? AND status = 'running'` requiring exactly one row.
 
-*Red first:* the mistake this work has made four times is testing a fence from the happy path. Build
-the state that needs it — a step-run that has ended and still carries its token — and watch
-`finishStep` refuse another attempt's token, with the `attempt_id` condition deleted.
+*Red first, and the obvious version of this test does not work.* Sol caught it in the plan: a
+step-run *that has ended* already fails the `status = 'running'` half of the fence, so deleting the
+`attempt_id` condition changes nothing and the test stays green. That is lesson 1 catching this
+document's own mutation habit. Two independent cases instead:
+
+- `status = 'running'` holding token **A**; finishing with token **B** must refuse — the attempt half.
+- `status = 'done'` holding token **A**; finishing with token **A** must refuse — the status half.
+
+Each watched red with *its own* condition deleted, not with the other's.
 
 **C3. The kind ↔ storage map, and the read half.** `src/store/artifacts-pg.ts` with `read` and
-`stampFor` only, over a `JobDraftRef` and a mandatory `Db | Tx`. Read-only is a real milestone: it
-can be checked against articles the *importer* put there, which is the last time that is possible and
-worth using.
+`stampFor` only, over a `JobDraftRef` and a mandatory `Db | Tx`.
+
+**Its oracle is explicit mapping fixtures, not importer-written rows** — the first draft had that
+wrong. Agreeing with the importer would prove importer-plus-adapter behaviour, and the importer is
+known to store `extractedHtml: null`, to stamp every inferred step with the same fingerprint where
+`ideas` uses blocks-plus-tree, and to hold no source reference. Importer rows stay as separate
+legacy-compatibility cases, which is a different and smaller claim.
 
 `stampFor` merges the run row with the artefact's own fields, preserving `profileHash: null` as the
 real value it is.
@@ -421,8 +499,12 @@ real value it is.
 reconstructs and passes the same shallow shape checks the filesystem decoder applies, **and** a
 `revision_step_runs` row exists with `status = 'done'`. No comparison against today's expected stamp.
 
-*Red first:* carry a revision forward so the block rows are present and belong to the *previous*
-generation, and prove `has(slug, "toc", ["blocks"])` answers no with the step-run check removed.
+*Red first, with the case corrected.* The first draft kept a test from an earlier definition and it
+contradicts this one: `beginDraftIn` carries block rows **and** a done `toc` run, so under
+presence-and-completion `has(slug, "toc", ["blocks"])` is **true**, and it is `stepIsDone` that
+answers no once C1's stamp is compared. Assert exactly that pair — `has` true, `stepIsDone` false —
+which is also what keeps freshness out of storage. Watched red by deleting the `status = 'done'`
+requirement over a revision whose run errored.
 
 **C5. `write`.** The whole atomic set in one statement per destination: the revision row's columns,
 then blocks as identities-upsert → unconditional delete → insert-if-any. Delete-all on empty is the
@@ -431,16 +513,40 @@ decision, and it gets its own test.
 *Red first:* start with carried blocks, write `{ blocks: [] }`, assert zero rows — then force the
 job fence to fail and assert the delete rolled back.
 
-**C6. `raw`, and the one column.** `raw_filename` on `article_revisions`, the `raw_sources` row, and
-the revision's reference pair. This is the first thing that ever writes them. The adapter **refuses**
-a manifest with no `storedSha256` rather than writing a null reference beside a done `fetch`.
+**C6. `raw`, the manifest's missing number, and the columns.** Bigger than the first draft said,
+because B2 is not "mostly built":
 
-One migration, generated in one sitting with `src/db/schema.ts` otherwise clean, the diff read line
-by line, and `tests/db-schema.test.ts` updated in the same commit.
+1. **`RawManifest` gains a stored byte count.** `bytes` is the length of what the network sent;
+   `raw_sources.bytes` describes the object at the *stored* hash, and for any non-UTF-8 page those
+   differ for exactly the reason the two hashes do. `writeRaw` already computes `storedBytes` and
+   records only its hash.
+2. **`raw_filename` on `article_revisions`**, classified `carry` in `REVISION_COLUMN_POLICY` — the
+   exhaustive check throws at module load otherwise, which is the schema forcing the decision.
+3. **The `raw_sources` row and the reference pair**, written for the first time by anything.
+4. **The refusal**: a manifest with no `storedSha256` is refused rather than written as a null
+   reference beside a done `fetch`.
 
-**C7. The three replacement suites.** `store-roundtrip` and `store-parity` swap `importArticle` for
-`copyArtefacts`; `chat-anchor` gets the standalone block-identity test in § The block identity test.
-Green here is the gate on deleting the importer, and nothing before this commit removes anything.
+**And the refusal has a scheduling consequence.** All seven checked-in manifests predate
+`storedSha256`, so turning it on breaks every fixture that has not been re-fetched. The re-ingest
+therefore happens **before C7**, not at the demolition.
+
+The migration itself is the small part: a nullable `ADD COLUMN` that does not interact with the
+existing CHECK or composite FK. Generated in one sitting with `src/db/schema.ts` otherwise clean, the
+diff read line by line, `tests/db-schema.test.ts` updated in the same commit.
+
+**C7. The three replacement suites**, and they need more than a swapped call. `copyArtefacts` moves
+what the *artefact store* owns, which is deliberately less than the importer moved. Each suite has to
+be given the rest explicitly:
+
+| what the copy does not carry | how C7 supplies it |
+|---|---|
+| reader state — comments, chat, searches, lookups, shelf | written through the live Postgres reader stores, which is how production gets it too |
+| the raw payload bytes, which `store-roundtrip` compares by name and length | the blob store, once C6 writes the reference |
+| a historical `createdAt` — library parity leans on the blocks file's mtime where `fetchedAt` is absent, and a draft minted today is not that | set explicitly in the fixture, and say so, rather than letting "today" pass for history |
+| an honest `extractedHtml` — stage 3 overwrote stage 2's file, so copying it puts post-stage-3 HTML in the stage-2 column, where the importer records the loss | record the loss the same way, or the round trip asserts a value neither store really has |
+
+`chat-anchor` gets the standalone block-identity test in § The block identity test. Green here is the
+gate on deleting the importer, and nothing before this commit removes anything.
 
 **What is deliberately *not* in C:** the coordinator that opens the transaction and calls
 `write` + `finishStep` + the job transition together. That is D's, and putting it here would mean
