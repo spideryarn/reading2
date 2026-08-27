@@ -102,10 +102,33 @@ Nothing goes in **Authorised JavaScript origins**. This is the server-side code 
 never talks to Google with our client id, Supabase does. Adding `www.spideryarn.com` there would be
 harmless and would also be cargo cult.
 
-**While you are on that page, look at the OAuth consent screen's publishing status** — *Testing* or
-*In production*. Nobody has, and it decides who can sign in: in *Testing*, only the accounts on its
-test-user list, which will refuse a stranger *and* would refuse Greg from a different Google account.
-Nothing in this repo can read it.
+**The consent screen is `Testing`, `External`, with no test users** — read off the page by Greg on
+2026-08-27, after two plans had asserted things about who could sign in without anybody looking.
+
+With no test users, **nobody can complete a Google sign-in, Greg included.** That is the last thing
+standing between the two settings above and a working button, and the fix is one click on that same
+page: add `greg@gregdetre.com` under **Test users**.
+
+**And then leave it in Testing.** Publishing is genuinely cheap — this client asks only for `email`,
+`profile` and `openid`, all non-sensitive, so *In production* needs no Google verification, no demo
+video and no privacy-policy review; it is a button and a warning dialog. The reason not to press it
+is the opposite of effort:
+
+> **Testing plus a test-user list is the beta allowlist this repo decided not to build**, enforced by
+> Google before a request ever reaches us.
+
+[auth.md § Still open](../project/auth.md#still-open) has said since the gate landed that nothing
+stops a stranger making an account and spending the model budget, and that a spend limit is the
+missing control. Publishing the consent screen is the moment that goes from theoretical to live.
+Staying in Testing costs one click per person and gives the protection back for free — and it is
+undone by a button on the day a spend limit exists.
+
+**One correction, because it was overstated in this session.** Google expires refresh tokens after
+seven days for apps in Testing, and that was passed to Greg as "sign-in will silently stop working
+next week". It will not. Those are *Google's* refresh tokens, which Supabase obtains at sign-in and
+this app never uses — nothing here calls a Google API on a reader's behalf. The session that keeps
+somebody signed in is Supabase's own, refreshed against Supabase. The seven days are real and they
+are not ours.
 
 Then, from a terminal:
 
@@ -336,7 +359,8 @@ If it does go wrong, nothing is lost — the rows are still on the original uuid
 
 ## The order, and why
 
-1. **Google Cloud Console** (Greg) — otherwise step 3 just moves the error one hop later.
+1. **Google Cloud Console** (Greg) — otherwise step 3 just moves the error one hop later. Two edits,
+   not one: the redirect URI (**done 2026-08-27**) and a test user (**outstanding**).
 2. `./scripts/check-google-redirect.sh https://alschkahzfagtppxspfq.supabase.co/auth/v1/callback` —
    read the control line first.
 3. `npx tsx scripts/check-owner-identity.ts` — the *before* reading of whose shelf is whose.

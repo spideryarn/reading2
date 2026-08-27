@@ -378,11 +378,15 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
 
 ## Still open
 
-- **Anyone with a Google account can still sign in** — probably. It depends on whether the OAuth
-  consent screen is *Published* or still in *Testing*, in which case only its listed test users can,
-  and **nobody has looked**. Sol pointed out on 2026-08-27 that this bullet had been asserted rather
-  than measured, and nothing in this repo can read that setting. Ownership is what stops them reading
-  your
+- **Anyone with a Google account can still sign in** — *once the consent screen is published, and it
+  deliberately is not.* Looked at on 2026-08-27 after Sol pointed out the claim had been asserted
+  rather than measured: it is **`Testing`, `External`**, which means only accounts on its test-user
+  list get through, and Google enforces that before a request reaches us. So there *is* an allowlist
+  after all — it is just not ours and not in this repo. Keeping it that way is the cheap stand-in for
+  the spend limit below, and publishing is a button on the day that limit exists (no verification is
+  needed: this client asks only for `email`, `profile` and `openid`). See
+  [google-sign-in-production.md](../plans/google-sign-in-production.md). Ownership is what stops a
+  reader who does get in from reading your
   library; nothing stops them making an account and spending your model budget on their own. A spend
   limit is the control for that, and it is the next bullet. If it turns out to be needed sooner,
   `isAllowed()` in [`src/auth.ts`](../../src/auth.ts) is the one line to change.
