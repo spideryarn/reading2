@@ -66,3 +66,52 @@ export const CALLBACK_PATH = "/auth/callback";
 export function callbackUrl(): string {
   return `${location.origin}${CALLBACK_PATH}`;
 }
+
+/**
+ * Is Google actually switched on for this project?
+ *
+ * **Written because it wasn't, and the reader saw the raw JSON.** On 2026-08-27
+ * Greg pressed Continue with Google on the live site and landed on
+ * `supabase.co` looking at
+ * `{"code":400,…,"msg":"Unsupported provider: provider is not enabled"}` —
+ * no page, no back, nothing of ours anywhere on screen. See
+ * docs/plans/google-sign-in-production.md.
+ *
+ * A `try`/`catch` around `signInWithOAuth` cannot help with that. It does not
+ * make a request: it builds an authorize URL and assigns `location`, so by the
+ * time the 400 exists our code has stopped running, on an origin that is not
+ * ours. The only place to catch it is *before* the navigation. GPT Sol's
+ * suggestion, reviewing the plan.
+ *
+ * ## It fails open, and that is the important line in this file
+ *
+ * The answer is `false` **only** when the project says so in as many words.
+ * Offline, blocked, slow, a shape we do not recognise — all `true`, and the
+ * sign-in proceeds exactly as it would have. A preflight that refuses when it
+ * cannot reach the network would turn a flaky connection into "you cannot sign
+ * in", which is a worse bug than the one it is guarding against and a much
+ * harder one to report.
+ *
+ * The 2.5-second deadline is the same thought. This runs between a click and a
+ * redirect, and a hung request must not be able to hold a reader on a button
+ * that appears to have done nothing.
+ *
+ * Not on first paint. One request per press of one button, on a page that is
+ * mostly a screenshot, rather than a request on every load of the landing page
+ * to guard against a misconfiguration that ought to be fixed instead.
+ */
+export async function googleSignInAvailable(): Promise<boolean> {
+  try {
+    const res = await fetch(`${required("VITE_SUPABASE_URL")}/auth/v1/settings`, {
+      headers: { apikey: required("VITE_SUPABASE_PUBLISHABLE_KEY") },
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!res.ok) return true;
+    const body: unknown = await res.json();
+    const external = (body as { external?: Record<string, unknown> } | null)?.external;
+    if (!external || typeof external !== "object") return true;
+    return external.google !== false;
+  } catch {
+    return true;
+  }
+}

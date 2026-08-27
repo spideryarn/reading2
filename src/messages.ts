@@ -259,6 +259,14 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      have come with a Retry button that cannot work. */
   "up-big": "blocked",
   "up-pdf": "blocked",
+  /* Signing in, `auth-`. Only one of the four is not `retry`, and that one is
+     the reason they are registered at all: a provider switched off on the
+     project is `ours`, so no interface offers a Retry that would do exactly the
+     same thing again. See AUTH_PROVIDER_OFF. */
+  "auth-provider": "ours",
+  "auth-denied": "retry",
+  "auth-oauth": "retry",
+  "auth-exchange": "retry",
   /* Both `blocked` rather than `retry`, changed 2026-08-27 when the acquisition
      step made the button real. `kind` answers "will another go at *this job*
      help", and for these two it will not: the step would read the same damaged
@@ -810,4 +818,97 @@ export function saidNothing(finishReason: string | null): ReaderFacingFailure {
     kind: "retry",
     message: "The AI service finished without saying anything at all. Asking again usually gets an answer. [ai-empty]",
   };
+}
+
+/* ── Signing in ────────────────────────────────────────────────────────────────
+ *
+ * The five sentences a reader can meet on the way in. They were inline in
+ * SignInControls.tsx and AuthCallback.tsx until 2026-08-27, when GPT Sol
+ * pointed out that docs/project/copy.md says every failure message lives here
+ * and registers its kind — and that the rule had been written for model calls
+ * and then quietly not applied to the one screen a reader meets *before* any
+ * model call exists.
+ *
+ * The `kind` is doing real work on this handful. The provider-off one is
+ * `ours` — nothing the reader does will help, and the sentence has to say so
+ * rather than invite a retry that cannot succeed, which is the mistake
+ * copy.md exists to stop.
+ */
+
+/**
+ * The provider is switched off on this Supabase project.
+ *
+ * Written the day the live site returned Supabase's own
+ * `{"msg":"Unsupported provider: provider is not enabled"}` as a bare page of
+ * JSON, because `signInWithOAuth` navigates rather than requests and there was
+ * nothing of ours left on screen. See `googleSignInAvailable` in
+ * src/web/lib/supabase.ts and docs/plans/google-sign-in-production.md.
+ *
+ * `ours`, not `retry`: pressing the button again will do exactly this again.
+ * The sentence has to hand the reader the door that *is* open.
+ */
+export const AUTH_PROVIDER_OFF: ReaderFacingFailure = {
+  kind: "ours",
+  message:
+    "Signing in with Google is not switched on for this site yet — nothing you did, and pressing it " +
+    "again will not help. Use an email address and password below instead. [auth-provider]",
+};
+
+/**
+ * The reader pressed cancel, or the provider declined. Not a failure of ours.
+ *
+ * `retry` rather than `blocked`, which is the opposite of how it first reads. A
+ * cancel is not a refusal that will repeat — the reader chose it, and choosing
+ * differently is the whole of the fix.
+ */
+export const AUTH_DENIED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "You cancelled, or the sign-in was declined. Nothing has changed — press the button again when " +
+    "you are ready. [auth-denied]",
+};
+
+/**
+ * The provider sent us back an error code.
+ *
+ * **Provider-neutral, which it was not until 2026-08-27.** Both branches said
+ * "Google", and `signUp` sends its confirmation link to the same callback — so
+ * an expired email confirmation told the reader that Google had refused
+ * something Google had never been asked. Sol found it reviewing a change two
+ * files away.
+ *
+ * The code is ours to show and is quotable in a bug report. `error_description`
+ * deliberately is not: it is the provider's own text, and copy.md's fourth rule
+ * is a privacy rule rather than a style one.
+ */
+export function authProviderRefused(code: string): ReaderFacingFailure {
+  return {
+    /* `retry`, because we do not know what the code means and the honest advice
+       is another go. `blocked` would put "this will fail identically" in front
+       of a reader whose session merely expired. */
+    kind: "retry",
+    message: `That sign-in was refused (${code}). Try again, or use an email address. [auth-oauth]`,
+  };
+}
+
+/**
+ * The one-time code did not exchange.
+ *
+ * The commonest real cause is a PKCE verifier that is not in this browser — the
+ * sign-in was started somewhere else, or storage was cleared in between — so
+ * the advice is the one thing that actually fixes it.
+ */
+export const AUTH_EXCHANGE_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That sign-in could not be completed. If you started it in another browser or window, start " +
+    "again in this one. [auth-exchange]",
+};
+
+/** A sign-up that needs its email confirming before it will work. Not an error. */
+export function authConfirmationSent(email: string): string {
+  return (
+    `Check ${email} for a confirmation link. The account will not work until you have clicked it. ` +
+    "[auth-confirm]"
+  );
 }

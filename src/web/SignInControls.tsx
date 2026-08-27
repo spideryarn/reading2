@@ -30,10 +30,11 @@
  */
 import { useState } from "react";
 
+import { AUTH_EXCHANGE_FAILED, AUTH_PROVIDER_OFF, authConfirmationSent } from "../messages.js";
 import { Button } from "./components/ui/button.js";
 import { GoogleMark } from "./GoogleMark.js";
 import { rememberReturn } from "./auth-return.js";
-import { callbackUrl, supabase } from "./lib/supabase.js";
+import { callbackUrl, googleSignInAvailable, supabase } from "./lib/supabase.js";
 
 type Mode = "choose" | "email";
 
@@ -51,20 +52,47 @@ export function SignInControls() {
   const withGoogle = async () => {
     setBusy(true);
     setError(null);
-    remember();
-    const { error: err } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      /* Always the bare callback, never the current page. The reason is in
-         main.tsx and it is a security one: any spelling that carries the
-         destination in the address can carry our `?code=` with it. */
-      options: { redirectTo: callbackUrl() },
-    });
-    if (err) {
+
+    /* Ask the project whether Google is on before handing the browser over.
+       `signInWithOAuth` navigates rather than requesting, so a provider that is
+       switched off shows the reader Supabase's own JSON on Supabase's own
+       origin and there is nothing of ours left on screen to say what happened —
+       which is exactly what the live site did on 2026-08-27. This fails open;
+       see googleSignInAvailable in lib/supabase.ts. */
+    if (!(await googleSignInAvailable())) {
       setBusy(false);
-      setError(err.message);
+      /* The message says "below", so make that true rather than leaving the
+         reader to find the link that opens the form. */
+      setMode("email");
+      setError(AUTH_PROVIDER_OFF.message);
+      return;
     }
-    /* No `setBusy(false)` on success — the page is navigating away, and turning
-       the button back on mid-redirect just invites a second click. */
+
+    remember();
+    /* `try`, because this can reject as well as return an error. The SDK writes
+       the PKCE verifier to storage and then assigns `location`, and a browser
+       with storage blocked throws rather than answering — which without this
+       is an unhandled rejection that leaves `busy` true for ever, so the button
+       is disabled and the reader has no way to try anything. Sol caught it
+       reviewing this file. */
+    try {
+      const { error: err } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        /* Always the bare callback, never the current page. The reason is in
+           main.tsx and it is a security one: any spelling that carries the
+           destination in the address can carry our `?code=` with it. */
+        options: { redirectTo: callbackUrl() },
+      });
+      if (err) {
+        setBusy(false);
+        setError(err.message);
+      }
+      /* No `setBusy(false)` on success — the page is navigating away, and
+         turning the button back on mid-redirect just invites a second click. */
+    } catch (thrown) {
+      setBusy(false);
+      setError(thrown instanceof Error ? thrown.message : AUTH_EXCHANGE_FAILED.message);
+    }
   };
 
   const withPassword = async (event: React.FormEvent) => {
@@ -98,10 +126,7 @@ export function SignInControls() {
 
   if (sent) {
     return (
-      <p className="tw:text-sm tw:text-muted-foreground">
-        Check <strong className="tw:text-foreground">{email}</strong> for a confirmation link. The
-        account will not work until you have clicked it. [auth-confirm]
-      </p>
+      <p className="tw:text-sm tw:text-muted-foreground">{authConfirmationSent(email)}</p>
     );
   }
 

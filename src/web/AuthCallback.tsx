@@ -36,6 +36,8 @@
  */
 import { useEffect, useState } from "react";
 
+import { AUTH_DENIED, AUTH_EXCHANGE_FAILED, authProviderRefused } from "../messages.js";
+
 import { takeReturn } from "./auth-return.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { CALLBACK_HREF, LIBRARY_HREF, navigate } from "./router.js";
@@ -68,13 +70,16 @@ const DEADLINE_MS = 10_000;
 function describe(params: URLSearchParams): string | null {
   const code = params.get("error_code") ?? params.get("error");
   if (!code) return null;
-  if (code === "access_denied") {
-    return "You cancelled, or Google declined the sign-in. Nothing has changed. [auth-denied]";
-  }
+  if (code === "access_denied") return AUTH_DENIED.message;
   /* Deliberately not `error_description`, which is the provider's text — see
      docs/project/copy.md: never repeat what the provider said. The code is
-     short, ours to show, and quotable in a bug report. */
-  return `Google refused the sign-in (${code}). Try again, or use an email address. [auth-oauth]`;
+     short, ours to show, and quotable in a bug report.
+
+     **And provider-neutral.** Both of these named Google until 2026-08-27, and
+     `signUp` sends its confirmation link to this same callback — so an expired
+     email confirmation told the reader Google had refused something Google was
+     never asked. GPT Sol found it. src/messages.ts holds both sentences now. */
+  return authProviderRefused(code).message;
 }
 
 export function AuthCallback() {
@@ -151,10 +156,7 @@ export function AuthCallback() {
           /* The commonest real cause is a PKCE verifier that is not in this
              browser — the reader started the sign-in somewhere else, or cleared
              their storage in between. */
-          setError(
-            "That sign-in could not be completed. If you started it in another browser or " +
-              "window, start again in this one. [auth-exchange]",
-          );
+          setError(AUTH_EXCHANGE_FAILED.message);
           takeReturn(CALLBACK_HREF);
           return;
         }

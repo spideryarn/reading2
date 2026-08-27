@@ -152,7 +152,9 @@ measured, the two scripts, the order, and the check that says whether it took.
 
 **Two things came out of it that are about this app rather than about a dashboard.**
 
-**A misconfigured provider now shows our own sentence, not somebody else's JSON.**
+**A misconfigured provider shows our own sentence, not somebody else's JSON** — from the deploy that
+carries this change onward. (The page of JSON is what the build that was live at the time did, and
+none of the settings above need a deploy, so the two halves land separately.)
 `googleSignInAvailable()` in [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) asks the
 project whether Google is on, **on the click** and not on first paint, before `signInWithOAuth`
 navigates. There is no other place to catch this: that call makes no request, it assigns
@@ -161,6 +163,13 @@ navigates. There is no other place to catch this: that call makes no request, it
 `false`, all proceed exactly as before. A preflight that refuses when it is merely confused does not
 prevent a bad error message, it prevents signing in, on a working site, for a reason the reader
 cannot see. Eight tests, five of them that one point.
+
+**All five sign-in sentences now live in [`src/messages.ts`](../../src/messages.ts)**, with a
+registered `kind`, which is what [copy.md](copy.md) has always said and what the auth screens had
+never done. Moving them was not tidying: the suite's own invariants rejected two on arrival, and it
+turned up a real bug — both of `AuthCallback.tsx`'s error sentences said *Google*, while `signUp`
+sends its email-confirmation link to the same callback, so an expired confirmation blamed a provider
+that had never been asked.
 
 **Whether the first Google sign-in gives Greg his own shelf is not obvious**, and it is the failure
 that would look most like data loss. Every row carries an `owner_id`, the existing articles belong to
@@ -332,7 +341,10 @@ specifically about Better Auth and open-source options. Short version of the ans
   back.
 - **It is the open-source option.** Supabase Auth is itself an open-source, self-hostable auth server.
   The open-source question turned out to be an argument for staying, not for leaving.
-- **It is ten lines.** `supabase.auth.getUser(token)`, then compare `.email`.
+- **It is ten lines.** That was the estimate, and it is the one bullet here written before the code.
+  What got built is `getClaims(token)` — local verification against the cached JWKS, no network call
+  — followed by four claim checks rather than an email comparison, because there is no allow-list to
+  compare against. Roughly the size promised, not the shape.
 
 The alternatives, what each would cost, and the traps — Lucia is dead, Vercel's password protection
 does not cover a production domain without a $150/month add-on — are all in
@@ -340,9 +352,18 @@ does not cover a production domain without a $150/month add-on — are all in
 
 ## The one test that has to exist
 
-Whatever gets built, assert that **a request with no session and a request with the wrong email are
-both refused**. Every realistic failure here is a fail-open bug: an empty env var read as "allow all",
-middleware not mounted on every route, a verify call that silently accepts an unsigned token. See
+**A request with no session is refused**, and the suite has to be able to *see* that fail — it was
+proved by commenting `requireUser` out, which turns [`tests/routes.test.ts`](../../tests/routes.test.ts)
+from 54 green to 2 red.
+
+This used to say "and a request with the wrong email", from the days of the one-email allowlist.
+There is no allowlist now ([§ The bit this page used to get wrong](#the-bit-this-page-used-to-get-wrong)),
+so the second half of the sentence describes a refusal that deliberately does not happen. What
+replaced it is [`tests/owner-isolation.test.ts`](../../tests/owner-isolation.test.ts): the question
+is no longer *who is allowed in* but *whose rows they see*.
+
+Every realistic failure here is a fail-open bug: an empty env var read as "allow all", middleware not
+mounted on every route, a verify call that silently accepts an unsigned token. See
 [silent-success.md](../reusable/silent-success.md) — this is that pattern with a security consequence.
 
 ## What is not done

@@ -492,10 +492,19 @@ What it does, in order:
    **publishable** key. Error, or no claims → **401**. Verification is local, against the cached
    JWKS, because both projects sign ES256 (measured above).
 3. **The claims are checked, not just the signature.** `sub` present and uuid-shaped;
-   `role === "authenticated"`; `aud` and `iss` the ones we expect; `is_anonymous !== true`. Any
-   miss → **401**. `getClaims` verifies the signature and the expiry and does not runtime-check any
-   of these, so "the signature checked out" is a strictly weaker statement than "this is one of our
-   users, signed in as a person".
+   `role === "authenticated"`; `is_anonymous !== true`; and an email. Any miss → **401**.
+   `getClaims` verifies the signature and the expiry and does not runtime-check any of these, so
+   "the signature checked out" is a strictly weaker statement than "this is one of our users, signed
+   in as a person".
+
+   **This list said `aud` and `iss` too, and `src/auth.ts` has never checked either.** GPT Sol
+   caught it on 2026-08-27, reviewing something else. The gap is small — verification is against
+   *this project's* JWKS, so a token issued by another project fails at the signature rather than at
+   `iss`, and a Supabase user token's `aud` is `authenticated`, which the `role` check already
+   insists on. It is nonetheless a security claim that was written down and not built, which is the
+   one kind of documentation error that gets believed, and adding the two lines is the obvious
+   tidying. Left as a note rather than done in passing, because the gate is the file where a
+   confident small edit is most expensive.
 
    > **An earlier version of this plan gave the wrong reason for the `sub` check**, and the reason
    > mattered. It said the publishable key is itself a validly signed JWT with no `sub`. It is not

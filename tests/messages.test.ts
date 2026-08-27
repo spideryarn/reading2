@@ -16,6 +16,7 @@ import {
   worthRetrying,
   type FailureKind,
   providerHttpFailure,
+  authProviderRefused,
   type ReaderFacingFailure,
   saidNothing,
   tookTooLong,
@@ -53,6 +54,7 @@ const FROM_FACTORIES: ReaderFacingFailure[] = [
   ...[400, 401, 402, 403, 404, 408, 409, 413, 418, 422, 429, 451, 500, 502, 503, 504, 599].map(
     providerHttpFailure,
   ),
+  authProviderRefused("server_error"),
   tookTooLong(60),
   wentQuiet(20),
   saidNothing(null),
