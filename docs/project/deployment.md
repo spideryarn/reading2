@@ -646,6 +646,11 @@ seven hours, during which every HTML fetch threw a 415 that nobody saw. Read
 [the-config-file-is-not-the-bucket.md](../postmortems/the-config-file-is-not-the-bucket.md) before
 changing a bucket setting, or before trusting one.
 
+**`npx tsx scripts/check-buckets.ts` is what says whether they still agree.** Read-only, one
+`GET /storage/v1/bucket`, non-zero when they differ, and pointing it at production is the intended
+use. It does not repair the drift: widening an allowlist is a security decision, not a side effect
+of running a check.
+
 > **It exists on the remote as of 2026-08-27**, and it did not until then: `GET /storage/v1/bucket`
 > on the production project returned `[]`, an empty list, on the day this paragraph had been warning
 > about it for hours. Created with the REST API rather than the CLI, which needs no access token and

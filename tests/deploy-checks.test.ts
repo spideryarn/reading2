@@ -9,10 +9,15 @@
  *
  * See scripts/deploy-checks.ts and docs/plans/deploy-pipeline.md.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   assetUrlsIn,
+  bucketDrift,
+  declaredBuckets,
   describeRedirect,
   findSecretsInBundle,
   judgeClientBuild,
@@ -25,7 +30,9 @@ import {
   rollbackAdvice,
   scanSql,
   stripSqlNoise,
+  type DeclaredBucket,
   type JournalEntry,
+  type RunningBucket,
   type VercelDeployment,
 } from "../scripts/deploy-checks.js";
 
@@ -553,5 +560,186 @@ describe("findSecretsInBundle, against the real thing", () => {
 
   it("ignores a prefix too short to be key material", () => {
     expect(findSecretsInBundle('"sb_secret_abc"')).toEqual([]);
+  });
+});
+
+describe("a bucket that has drifted from the file describing it", () => {
+  /* **This is the check that would have caught
+     docs/postmortems/the-config-file-is-not-the-bucket.md**, where
+     `supabase/config.toml` was edited to add `text/html`, the running bucket
+     kept saying `{application/pdf}`, and every HTML fetch threw a 415 for seven
+     hours. Nothing reconciles the file with a bucket that already exists — not
+     on the remote and not on a laptop.
+
+     Every case below is a *positive*: the function is seen to say yes. That is
+     the whole reason `bucketDrift` is pure and lives in this file
+     (docs/reusable/silent-success.md), and it is exactly what the bug was
+     missing — a check that had only ever been observed to say nothing. */
+
+  const SOURCES: DeclaredBucket = {
+    name: "sources",
+    public: false,
+    fileSizeLimit: 52_428_800,
+    allowedMimeTypes: ["application/pdf", "text/html"],
+  };
+  const running = (over: Partial<RunningBucket> = {}): RunningBucket[] => [
+    {
+      id: "sources",
+      public: false,
+      file_size_limit: 52_428_800,
+      allowed_mime_types: ["application/pdf", "text/html"],
+      ...over,
+    },
+  ];
+
+  it("says nothing when they agree", () => {
+    expect(bucketDrift([SOURCES], running())).toEqual([]);
+  });
+
+  it("does not mind the order of the mime list", () => {
+    /* A reordering is not a change, and reporting one would make the check cry
+       wolf — which is how a check gets deleted. */
+    expect(bucketDrift([SOURCES], running({ allowed_mime_types: ["text/html", "application/pdf"] })))
+      .toEqual([]);
+  });
+
+  it("catches the exact drift that broke every HTML fetch", () => {
+    const [problem] = bucketDrift([SOURCES], running({ allowed_mime_types: ["application/pdf"] }));
+    expect(problem).toContain("does not accept text/html");
+  });
+
+  it("catches a bucket that is wider than the file allows", () => {
+    const [problem] = bucketDrift(
+      [SOURCES],
+      running({ allowed_mime_types: ["application/pdf", "text/html", "image/png"] }),
+    );
+    expect(problem).toContain("accepts image/png, which the file does not allow");
+  });
+
+  it("catches a bucket enforcing nothing while the file says it enforces something", () => {
+    /* `null` means *anything goes*, and it is the state a hand-created bucket
+       most easily ends up in. */
+    const [problem] = bucketDrift([SOURCES], running({ allowed_mime_types: null }));
+    expect(problem).toContain("accepts any type");
+  });
+
+  it("catches a bucket that has never been created", () => {
+    const [problem] = bucketDrift([SOURCES], []);
+    expect(problem).toContain("does not exist");
+    expect(problem, "and says why declaring it was not enough").toContain(
+      "declaring it does not create it",
+    );
+  });
+
+  it("catches a private bucket that has gone public", () => {
+    expect(bucketDrift([SOURCES], running({ public: true }))[0]).toContain(
+      "is public and the file says private",
+    );
+  });
+
+  it("catches a size limit that has moved", () => {
+    expect(bucketDrift([SOURCES], running({ file_size_limit: 1024 }))[0]).toContain(
+      "allows 1024 and the file says 52428800",
+    );
+  });
+
+  it("treats a missing size limit as no limit, not as unknown", () => {
+    expect(bucketDrift([SOURCES], running({ file_size_limit: null }))[0]).toContain("any size");
+  });
+
+  it("ignores a bucket the file has no opinion about", () => {
+    /* A Supabase project carries buckets this repo did not put there, and a
+       check that complained about them would be a check nobody runs. */
+    const other: RunningBucket = {
+      id: "avatars",
+      public: true,
+      file_size_limit: null,
+      allowed_mime_types: null,
+    };
+    expect(bucketDrift([SOURCES], [...running(), other])).toEqual([]);
+  });
+
+  it("reports every bucket, not just the first that is wrong", () => {
+    const second: DeclaredBucket = { ...SOURCES, name: "elsewhere" };
+    expect(bucketDrift([SOURCES, second], running({ public: true }))).toHaveLength(2);
+  });
+});
+
+describe("reading the bucket blocks out of supabase/config.toml", () => {
+  /* **The fixture is the repository.** A parser tested only against strings it
+     was written from is a parser that agrees with its author; running it over
+     the real file means a change to the config's shape shows up here rather
+     than as a bucket check that quietly stops seeing a bucket. */
+  const CONFIG = readFileSync(
+    path.join(import.meta.dirname, "..", "supabase", "config.toml"),
+    "utf8",
+  );
+
+  it("finds the sources bucket exactly as the file declares it", () => {
+    const buckets = declaredBuckets(CONFIG);
+    expect(buckets.find((b) => b.name === "sources")).toEqual({
+      name: "sources",
+      public: false,
+      fileSizeLimit: 52_428_800,
+      allowedMimeTypes: ["application/pdf", "text/html"],
+    });
+  });
+
+  it("finds every bucket the file declares, and nothing else", () => {
+    /* If this number changes, somebody added a bucket — and the point of the
+       check is that a declared bucket is not a created one. */
+    const declared = declaredBuckets(CONFIG).map((b) => b.name);
+    expect(declared).toEqual([...new Set(declared)]);
+    expect(declared).toContain("sources");
+  });
+
+  it("ignores the commented-out example the file ships with", () => {
+    /* `# allowed_mime_types = ["image/png", "image/jpeg"]` sits in the template
+       section above. A parser that read commented lines would declare a bucket
+       nobody asked for. */
+    expect(declaredBuckets(CONFIG).some((b) => b.allowedMimeTypes?.includes("image/jpeg"))).toBe(
+      false,
+    );
+  });
+
+  it("reads a size in bytes, and in each unit", () => {
+    const of = (v: string) =>
+      declaredBuckets(`[storage.buckets.x]\nfile_size_limit = ${v}\n`)[0]?.fileSizeLimit;
+    expect(of('"50MiB"')).toBe(52_428_800);
+    expect(of('"1KiB"')).toBe(1024);
+    expect(of("1024")).toBe(1024);
+    expect(of('"1MB"')).toBe(1_000_000);
+  });
+
+  it("throws on a unit it does not know, rather than reporting no drift", () => {
+    /* The failure this whole check exists to stop is a check that says nothing
+       about a thing it could not read. */
+    expect(() =>
+      declaredBuckets('[storage.buckets.x]\nfile_size_limit = "50 furlongs"\n'),
+    ).toThrow(/cannot read the size/);
+  });
+
+  it("throws on a mime list it cannot read", () => {
+    expect(() => declaredBuckets("[storage.buckets.x]\nallowed_mime_types = [oops]\n")).toThrow(
+      /cannot read the list entry/,
+    );
+  });
+
+  it("defaults a bucket that declares nothing to private with no limits", () => {
+    expect(declaredBuckets("[storage.buckets.bare]\n")).toEqual([
+      { name: "bare", public: false, fileSizeLimit: null, allowedMimeTypes: null },
+    ]);
+  });
+
+  it("stops reading a bucket at the next section header", () => {
+    /* A key belonging to `[storage.s3_protocol]` must not be attributed to the
+       bucket above it — which is exactly what the real file has after
+       `[storage.buckets.sources]`. */
+    const parsed = declaredBuckets(
+      '[storage.buckets.a]\npublic = false\n\n[storage.s3_protocol]\npublic = true\n',
+    );
+    expect(parsed).toEqual([
+      { name: "a", public: false, fileSizeLimit: null, allowedMimeTypes: null },
+    ]);
   });
 });

@@ -153,6 +153,15 @@ not bumped by a plain `UPDATE`, so the row now reads `{application/pdf,text/html
 `updated_at` still equal to its 2026-08-26 `created_at`. Nothing in the database records that a human
 changed it.
 
+**Built, 2026-08-28.** `bucketDrift` and `declaredBuckets` in
+[`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts), called by
+[`scripts/check-buckets.ts`](../../scripts/check-buckets.ts). Both halves were watched saying yes:
+the pure function against a fixture for every kind of difference
+([`tests/deploy-checks.test.ts`](../../tests/deploy-checks.test.ts), including the exact
+`does not accept text/html` this bug was), and the script against the **real container put back into
+the broken state** — exit 1 on the drift, exit 0 once repaired. Two of the three callers below are
+still to come: `scripts/deploy.ts`, and provisioning.
+
 What removes the class is a **check that compares the declaration to the running bucket** and refuses
 when they differ — the shape [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) already
 uses and [`scripts/check-production-gate.sh`](../../scripts/check-production-gate.sh) already argues
@@ -169,6 +178,20 @@ for:
 3. And it should be the thing that *provisions* as well as compares, replacing the hand-written curl
    in [deployment.md](../project/deployment.md#the-sources-bucket-has-to-exist-on-the-remote-too), so
    "declared" and "created" stop being two separate acts a person has to remember to pair.
+
+**The check deliberately does not repair what it finds.** A bucket's allowlist is a real guard on the
+browser's signed-grant path, so widening one should be a decision somebody made rather than a side
+effect of running a check. Provisioning a bucket that does not exist is a different act from
+loosening one that does, and only the first belongs in step 3.
+
+**The TOML is parsed by hand**, which is worth saying because it looks like the wrong call. The only
+parser in `node_modules` is `smol-toml`, there transitively through `knip`, and importing a
+transitive dependency is a build that breaks when something upstream drops it. `declaredBuckets`
+therefore reads the four scalar keys itself and **throws on anything it does not understand** —
+because a parser that returns `null` for a line it could not read is a parser that reports "no drift"
+about a file it never saw, which is this bug with an extra step. Its fixture is the repository: the
+test parses the real `supabase/config.toml`, so a change to the file's shape fails a test rather than
+silently emptying the check.
 
 The declaration is worth keeping honest even though our own uploads should never depend on it: the
 allowlist is a real guard on the browser's signed-grant path, and a bucket that silently disagrees

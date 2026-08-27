@@ -605,3 +605,224 @@ export function rollbackAdvice(previous: string | null, scope: string): string[]
     `             vercel promote <deployment-url> --scope ${scope} --yes`,
   ];
 }
+
+/* ------------------------------------------------------------------ */
+/* Storage buckets                                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A bucket as `supabase/config.toml` declares it.
+ *
+ * `fileSizeLimit` in bytes, because that is what Storage reports and the config
+ * writes `"50MiB"` — the parsing belongs to whoever reads the file, not to the
+ * comparison.
+ */
+export interface DeclaredBucket {
+  name: string;
+  public: boolean;
+  fileSizeLimit: number | null;
+  allowedMimeTypes: readonly string[] | null;
+}
+
+/** A bucket as `GET /storage/v1/bucket` reports it. */
+export interface RunningBucket {
+  id: string;
+  public: boolean;
+  file_size_limit: number | null;
+  allowed_mime_types: readonly string[] | null;
+}
+
+/**
+ * Where the declaration and the running bucket disagree.
+ *
+ * ## Why this exists
+ *
+ * **Editing `supabase/config.toml` does not change a bucket that already
+ * exists** — not on the remote, and not on a laptop either. The CLI seeds a
+ * *missing* bucket; nothing in this repo ever reconciles one that is there. So
+ * the file and the running system are free to drift silently, and on 2026-08-27
+ * they did: `text/html` was added to the `sources` allowlist, the bucket kept
+ * saying `{application/pdf}`, and every HTML fetch threw a 415 for seven hours
+ * with nobody looking, because a comment beside the edit said the allowlist
+ * could not matter. Both halves are
+ * docs/postmortems/the-config-file-is-not-the-bucket.md.
+ *
+ * ## Pure, for the reason everything else in this file is pure
+ *
+ * It takes two lists and returns sentences. That is what lets it be **seen to
+ * say yes** against a fixture rather than only observed to say nothing against
+ * a healthy system — which is the difference between a check and a decoration
+ * (docs/reusable/silent-success.md). The bug above is precisely a check that
+ * had only ever been seen to pass.
+ *
+ * ## What counts as a difference
+ *
+ * - **The bucket is missing.** The loudest one, and the only one that is not a
+ *   drift: it has never been created.
+ * - **`public`**, exactly. There is no benign direction for this to differ in.
+ * - **`file_size_limit`**, exactly, and `null` on either side is a real value
+ *   meaning *no limit* rather than *unknown*.
+ * - **`allowed_mime_types` as a set**, because order is not meaningful and a
+ *   reordering is not a change. `null` means *anything goes* and is reported
+ *   against a declared list, since that is a bucket enforcing nothing while the
+ *   file says it enforces something.
+ *
+ * A bucket the running system has and the file does not declare is **not**
+ * reported: Supabase projects carry buckets this repo has no opinion about.
+ */
+export function bucketDrift(
+  declared: readonly DeclaredBucket[],
+  running: readonly RunningBucket[],
+): string[] {
+  const problems: string[] = [];
+  const byId = new Map(running.map((b) => [b.id, b]));
+
+  for (const want of declared) {
+    const have = byId.get(want.name);
+    if (!have) {
+      problems.push(
+        `bucket "${want.name}" is declared in supabase/config.toml and does not exist — ` +
+          `declaring it does not create it on a project that is already running`,
+      );
+      continue;
+    }
+    if (have.public !== want.public) {
+      problems.push(
+        `bucket "${want.name}" is ${have.public ? "public" : "private"} and the file says ` +
+          `${want.public ? "public" : "private"}`,
+      );
+    }
+    if ((have.file_size_limit ?? null) !== want.fileSizeLimit) {
+      problems.push(
+        `bucket "${want.name}" allows ${have.file_size_limit ?? "any size"} and the file says ` +
+          `${want.fileSizeLimit ?? "any size"}`,
+      );
+    }
+    const drift = mimeDrift(want.allowedMimeTypes, have.allowed_mime_types);
+    if (drift) problems.push(`bucket "${want.name}" ${drift}`);
+  }
+  return problems;
+}
+
+/** The mime halves compared as sets, or `null` when they agree. */
+function mimeDrift(
+  want: readonly string[] | null,
+  have: readonly string[] | null,
+): string | null {
+  if (want === null && have === null) return null;
+  if (want === null) {
+    return `restricts uploads to ${[...have!].sort().join(", ")} and the file restricts nothing`;
+  }
+  if (have === null) {
+    return `accepts any type and the file allows only ${[...want].sort().join(", ")}`;
+  }
+  const running = new Set(have);
+  const missing = want.filter((t) => !running.has(t));
+  const wanted = new Set(want);
+  const extra = have.filter((t) => !wanted.has(t));
+  if (!missing.length && !extra.length) return null;
+  const parts: string[] = [];
+  /* The missing half first, because it is the one that breaks an upload while
+     the file says it should work — which is the shape this check exists for. */
+  if (missing.length) parts.push(`does not accept ${missing.sort().join(", ")}`);
+  if (extra.length) parts.push(`accepts ${extra.sort().join(", ")}, which the file does not allow`);
+  return parts.join(", and ");
+}
+
+/**
+ * The `[storage.buckets.*]` blocks of `supabase/config.toml`, parsed.
+ *
+ * **A hand-written parser rather than a TOML library**, and the reason is not
+ * laziness: the only TOML parser in `node_modules` is `smol-toml`, which is
+ * there transitively through `knip`. Importing a transitive dependency is a
+ * build that breaks the day something upstream drops it, and adding a direct
+ * one for four scalar keys is a dependency for a comparison.
+ *
+ * So it reads exactly what those blocks contain and **throws on anything it
+ * does not understand** — an unknown size unit, a key it cannot parse. A
+ * parser that returns `null` for a line it failed on is a parser that reports
+ * "no drift" about a file it could not read, which is the failure this whole
+ * check exists to stop.
+ *
+ * Pure and exported so `tests/deploy-checks.test.ts` can run it against the
+ * real file: the fixture is the repository, so a change to the config's shape
+ * shows up as a failing test rather than as a check that quietly stops seeing
+ * a bucket.
+ */
+export function declaredBuckets(toml: string): DeclaredBucket[] {
+  const buckets: DeclaredBucket[] = [];
+  let current: Partial<DeclaredBucket> & { name?: string } = {};
+  const flush = () => {
+    if (current.name !== undefined) {
+      buckets.push({
+        name: current.name,
+        public: current.public ?? false,
+        fileSizeLimit: current.fileSizeLimit ?? null,
+        allowedMimeTypes: current.allowedMimeTypes ?? null,
+      });
+    }
+    current = {};
+  };
+
+  for (const raw of toml.split("\n")) {
+    const line = raw.trim();
+    if (line.startsWith("#") || line.length === 0) continue;
+
+    const header = /^\[([^\]]+)\]$/.exec(line);
+    if (header) {
+      flush();
+      const bucket = /^storage\.buckets\.(.+)$/.exec(header[1] ?? "");
+      if (bucket) current = { name: (bucket[1] ?? "").replace(/^"|"$/g, "") };
+      continue;
+    }
+    if (current.name === undefined) continue;
+
+    const pair = /^([A-Za-z_]+)\s*=\s*(.+?)\s*(?:#.*)?$/.exec(line);
+    if (!pair) continue;
+    const [, key, value] = pair as unknown as [string, string, string];
+    if (key === "public") current.public = value === "true";
+    else if (key === "file_size_limit") current.fileSizeLimit = sizeInBytes(value);
+    else if (key === "allowed_mime_types") current.allowedMimeTypes = stringList(value);
+  }
+  flush();
+  return buckets;
+}
+
+const UNITS: Record<string, number> = {
+  "": 1,
+  KB: 1000,
+  MB: 1000 ** 2,
+  GB: 1000 ** 3,
+  KIB: 1024,
+  MIB: 1024 ** 2,
+  GIB: 1024 ** 3,
+};
+
+/** `"50MiB"` → 52428800. Throws on a unit it does not know. */
+function sizeInBytes(value: string): number {
+  const text = value.trim().replace(/^"|"$/g, "");
+  const parsed = /^(\d+)\s*([A-Za-z]*)$/.exec(text);
+  const unit = UNITS[(parsed?.[2] ?? "").toUpperCase()];
+  if (!parsed || unit === undefined) {
+    throw new Error(
+      `supabase/config.toml: cannot read the size "${text}". Add its unit to UNITS in ` +
+        `scripts/deploy-checks.ts rather than letting the bucket check skip it.`,
+    );
+  }
+  return Number(parsed[1]) * unit;
+}
+
+/** `["a", "b"]` → `["a", "b"]`. Throws rather than returning a partial list. */
+function stringList(value: string): string[] {
+  const text = value.trim();
+  if (!text.startsWith("[") || !text.endsWith("]")) {
+    throw new Error(`supabase/config.toml: expected a list and found "${text}"`);
+  }
+  const inner = text.slice(1, -1).trim();
+  if (inner.length === 0) return [];
+  return inner.split(",").map((item) => {
+    const quoted = /^\s*"([^"]*)"\s*$/.exec(item);
+    if (!quoted) throw new Error(`supabase/config.toml: cannot read the list entry "${item}"`);
+    return quoted[1] as string;
+  });
+}
