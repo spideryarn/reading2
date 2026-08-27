@@ -72,7 +72,7 @@ import {
   type DiagramNode,
   type LinkKind,
   nodeAt,
-  stepRows,
+  stepStops,
 } from "./diagram.js";
 import { layoutDiagram } from "./diagrams.js";
 import { type ArticleGraph, buildGraph, wordsBefore } from "./graph.js";
@@ -521,6 +521,28 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
     );
   }, [root, kind, box, collapsed, words, graph, scatter, followsReader]);
 
+  /**
+   * **The picture actually on screen, which is not always the toggle that is
+   * pressed** — and everything the renderer branches on has to use this.
+   *
+   * `layoutDiagram` falls back to `layoutTree` whenever a picture's data has
+   * not arrived: Drift and Trail before the projection lands or after it fails,
+   * Force before the graph exists. The panel already derived `flat` and `ramp`
+   * from what is drawn; the **`kind` handed to the SVG and to `NodeShape` was
+   * not**, so the fallback came out as Tree geometry wearing Drift's
+   * stylesheet — `.diag-drift .diag-box { fill: transparent; stroke: none }`
+   * erased every row, the tree branch that draws the dot and the chevron never
+   * ran, and no `.diag-drift .diag-label` font size exists so the labels
+   * painted at the browser default. A picture that says "the picture below is
+   * the Tree instead" and then draws a broken one.
+   *
+   * Nothing throws and nothing logs — GPT Sol's finding on the built code,
+   * 2026-08-27, and it was live in the round before this one too, with `strata`
+   * where `tree` now is.
+   */
+  const drawnKind: DiagramKind =
+    (wantsPoints && !drawingPoints) || (kind === "force" && !graph) ? "tree" : kind;
+
   /* The node the reader is standing in — the deepest one drawn, which is the
      same rule the summary panel's follow mark uses. Computed from the LAID OUT
      nodes rather than from the tree, so a closed section's mark lands on the
@@ -550,16 +572,33 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
   const rovingId =
     roving !== null && nodes.some((n) => n.id === roving) ? roving : (nodes[0]?.id ?? null);
 
-  /** The ladder the ↑ / ↓ buttons walk — see `stepRows` in diagram.ts. */
-  const starts = useMemo(() => stepRows(layout?.nodes ?? []), [layout]);
+  /* The article's block → row index, which the step ladder needs to turn a
+     node's `blockId` into a position. One pass over an array already held, and
+     memoised on it, so it costs nothing per press. */
+  const rowOf = useMemo(() => new Map(blocks.map((b, i) => [b.id, i])), [blocks]);
+
+  /** The ladder the ↑ / ↓ buttons walk — see `stepStops` in diagram.ts. */
+  const stops = useMemo(() => stepStops(layout?.nodes ?? [], rowOf), [layout, rowOf]);
+  const starts = useMemo(() => stops.map((s) => s.row), [stops]);
 
   /* Where in that ladder the reader is standing, 1-based, for the readout
      between the two buttons. The same arithmetic the reading-position code
      uses, over rows rather than pixels. */
   const readerRow = atRow ?? starts[0] ?? 0;
   const rung = starts.length > 0 ? activeSectionIndex(starts, readerRow) + 1 : 0;
-  /** What one press moves by, in the reader's own words. */
-  const unit = drawingPoints ? "paragraph" : "section";
+  /**
+   * What one press moves by, in the reader's own words — **read off what is
+   * drawn rather than off which toggle is pressed.**
+   *
+   * "Section" was hardcoded for everything that was not a scatter, which is
+   * wrong twice: an article with no sub-sections, or one whose parts the reader
+   * has folded away, steps by **part** while the button still says section.
+   * A label that is confidently wrong about the unit is worse than no label,
+   * because the readout beside it is a count of exactly that unit. GPT Sol's
+   * finding, 2026-08-27.
+   */
+  const deepest = (layout?.nodes ?? []).reduce((d, n) => Math.max(d, n.depth), 0);
+  const unit = drawingPoints ? "paragraph" : deepest >= 2 ? "section" : "part";
 
   /**
    * One step through the article, and the picture follows because it is drawn
@@ -574,11 +613,14 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
   const stepTo = (dir: -1 | 1) => {
     const row = stepTarget(starts, readerRow, dir);
     if (row === null) return;
-    const id = nodeAt(nodes, row);
-    const node = nodes.find((n) => n.id === id);
-    if (!node) return;
-    setRoving(node.id);
-    onJump(node.blockId);
+    /* The stop carries its own block, rather than this asking `nodeAt` again.
+       Two lookups of the same fact is how they come to disagree — and on a
+       scatter they did: the ladder's row and the block that row jumps to are
+       different numbers there (diagram.ts § stepStops). */
+    const stop = stops.find((s) => s.row === row);
+    if (!stop) return;
+    setRoving(stop.id);
+    onJump(stop.blockId);
   };
   const canStep = (dir: -1 | 1) =>
     starts.length > 0 && stepTarget(starts, readerRow, dir) !== null;
@@ -702,12 +744,24 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      * section, at the same time as this steps it by a node. Two different
      * distances from one press. The `preventDefault()` at each call site is
      * what keynav now checks for; see its `defaultPrevented` guard.
+     *
+     * **It only jumps when the jump would go somewhere**, and that guard is
+     * not a micro-optimisation. Arrowing moves by *node*, which is what a tree
+     * widget must do — a reader has to be able to reach a part and its first
+     * section separately, and those two begin on the same block. `jumpTo`
+     * (App.tsx) **pushes a history entry**, so without this, three presses at
+     * the top of a tree cost three presses of Back and move the article
+     * nowhere. Found by GPT Sol in review of the built code, 2026-08-27.
+     *
+     * The buttons under the picture are the control that never does nothing:
+     * they step by distinct row rather than by node, which is exactly this
+     * problem solved the other way (diagram.ts § stepStops).
      */
     const follow = (d: number) => {
       const next = nodes[Math.min(nodes.length - 1, Math.max(0, i + d))];
       if (!next) return;
       rove(next.id);
-      onJump(next.blockId);
+      if (next.blockId !== node.blockId) onJump(next.blockId);
     };
     switch (e.key) {
       case "ArrowDown":
@@ -986,7 +1040,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           <div className="diag-measuring" aria-hidden="true" />
         ) : (
           <svg
-            className={`diag-svg diag-${kind}`}
+            className={`diag-svg diag-${drawnKind}`}
             width={layout.width}
             height={layout.height}
             viewBox={`0 0 ${layout.width} ${layout.height}`}
@@ -1009,8 +1063,8 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
             role={flat ? "listbox" : "tree"}
             aria-label={
               flat
-                ? `${KIND_UI[kind].label} view — one dot per paragraph, placed by what it is about`
-                : `${KIND_UI[kind].label} view of the article's structure`
+                ? `${KIND_UI[drawnKind].label} view — one dot per paragraph, placed by what it is about`
+                : `${KIND_UI[drawnKind].label} view of the article's structure`
             }
             onPointerLeave={() => setHover(null)}
             onFocus={() => setHasFocus(true)}
@@ -1076,7 +1130,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
               <NodeShape
                 key={n.id}
                 node={n}
-                kind={kind}
+                kind={drawnKind}
                 flat={flat}
                 ramp={ramp}
                 here={n.id === here}

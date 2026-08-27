@@ -610,25 +610,65 @@ export function layoutTree(root: SummaryNode, opts: DiagramOptions): DiagramLayo
 }
 
 /**
- * **The rows a picture can step between** — ascending, deduplicated, and what
- * the panel's ↑ / ↓ buttons walk.
+ * One rung of the step ladder: a row, and what pressing there jumps to.
  *
- * Rows rather than nodes, and that is the whole design of the step controls.
- * A layout's `nodes` are in *preorder*, so on a tree the root, part 1 and
- * section 1.1 all begin on the same row: stepping by node would press ↓ three
- * times and move the article nowhere, which reads as a broken button. Distinct
- * start rows make one press always one visible move — and they make the *unit*
- * come out right by itself, sections on the tree pictures and single paragraphs
- * on the two scatters, because those are the rows those pictures draw.
- *
- * Here rather than in the component so it can be tested: the failure it guards
- * against is a button that looks fine and does nothing, which is the shape
- * docs/reusable/silent-success.md is about.
+ * Both, because **the two are not always the same number** — see `stepStops`.
  */
-export function stepRows(nodes: readonly DiagramNode[]): number[] {
-  const seen = new Set<number>();
-  for (const n of nodes) seen.add(n.startRow);
-  return [...seen].sort((a, b) => a - b);
+export interface StepStop {
+  /** The row of the block this rung jumps to. What `stepTarget` steps between. */
+  row: number;
+  blockId: BlockId;
+  id: NodeId;
+}
+
+/**
+ * **The rungs a picture can step between** — ascending, one per distinct row,
+ * and what the panel's ↑ / ↓ buttons walk.
+ *
+ * Rows rather than nodes, and that is the first half of the design. A layout's
+ * `nodes` are in *preorder*, so on a tree the root, part 1 and section 1.1 all
+ * begin on the same row: stepping by node would press ↓ three times and move
+ * the article nowhere, which reads as a broken button. Distinct rows make one
+ * press always one visible move — and they make the *unit* come out right by
+ * itself, sections on the tree pictures and single paragraphs on the two
+ * scatters, because those are the rows those pictures draw.
+ *
+ * **The row is the row of `blockId`, not `startRow`, and that is the second
+ * half.** They agree on every tree picture, where a node's range begins at the
+ * block it jumps to. They do **not** agree on a scatter: a dot's range is
+ * stretched to tile the article so that a reader standing in a paragraph too
+ * short to embed still has a dot answering for them (scatter.ts § dots), so the
+ * first dot claims `startRow: 0` while its block may be the third paragraph.
+ * A ladder built from `startRow` therefore has a rung at row 0 whose jump lands
+ * at row 2 — and **Previous, from row 1, moves the reader down the page**.
+ * GPT Sol's finding on the built code, 2026-08-27.
+ *
+ * `rowOf` is the article's own block→row index, which the panel already holds.
+ * A node whose block is not in it (a stale layout mid-re-ingest) falls back to
+ * `startRow` rather than being dropped: a rung in slightly the wrong place is a
+ * smaller failure than a button that does nothing.
+ *
+ * Where two nodes share a row the **deepest** one wins, which is `nodeAt`'s
+ * rule and the same reason: the deepest node is the most specific thing the
+ * reader could mean, and the card should describe that rather than its parent.
+ *
+ * Here rather than in the component so it can be tested. The failure this
+ * guards against is a button that looks fine and goes the wrong way, which is
+ * the shape docs/reusable/silent-success.md is about.
+ */
+export function stepStops(
+  nodes: readonly DiagramNode[],
+  rowOf: ReadonlyMap<BlockId, number>,
+): StepStop[] {
+  const best = new Map<number, DiagramNode>();
+  for (const n of nodes) {
+    const row = rowOf.get(n.blockId) ?? n.startRow;
+    const held = best.get(row);
+    if (!held || n.depth > held.depth) best.set(row, n);
+  }
+  return [...best.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([row, n]) => ({ row, blockId: n.blockId, id: n.id }));
 }
 
 /**

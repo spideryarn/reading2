@@ -477,8 +477,8 @@ to each other and the cost of missing is going somewhere you did not mean to.
 Under the picture rather than over it, for the same reason the whole footer card
 is there.
 
-**They step by distinct start row, not by node**, and that is the one piece of
-design in them. `layout.nodes` is in preorder, so on a Tree the root, part 1 and
+**They step by distinct row, not by node**, and that is the one piece of design
+in them. `layout.nodes` is in preorder, so on a Tree the root, part 1 and
 section 1.1 all begin on the same row — stepping by node would press ↓ three
 times and move the article nowhere, which reads as a broken button. Rows make
 one press always one visible move, and they make the *unit* come out right by
@@ -488,6 +488,43 @@ because those are the rows those pictures draw. The readout between the buttons
 `keynav.ts` rather than a second copy, so ↑ here means what ↑ means everywhere:
 part-way into an item it goes to the top of the item you are in before it steps
 back, which is the track-skip rule from every music player.
+
+**And the row is the row of the block a rung *jumps to*, not the row its range
+starts on.** Those are the same number on the tree pictures and they are not on
+a scatter: a dot's range is stretched to tile the article, so a reader standing
+in a paragraph too short to embed still has a dot answering for them, and the
+first dot therefore claims row 0 while the block it jumps to may be the third
+paragraph. A ladder built from the range put a rung at row 0 whose press landed
+at row 2 — so **Previous, from row 1, moved the reader down the page**. GPT Sol
+found it in review of the built code; `stepStops` in
+[`diagram.ts`](../../src/web/diagram.ts) carries the row and the block together
+so the two cannot be looked up separately and disagree.
+
+**The arrows do not step by row**, because a tree widget has to be able to reach
+a part and its first section separately even though they start in the same
+place. What they do instead is decline to jump when the jump would go nowhere —
+`jumpTo` pushes a history entry, so without that guard three presses at the top
+of a Tree cost three presses of Back and move nothing. Same finding, same
+review.
+
+The readout's **unit is read off what is drawn**, not off which toggle is
+pressed. An article with no sub-sections, or one whose parts the reader has
+folded away, steps by *part* — and a label that is confidently wrong about the
+unit is worse than no label, because the number beside it is a count of exactly
+that unit.
+
+**Whatever a picture falls back to, it is drawn as that picture.** Drift and
+Trail have nothing to show until the projection lands, so `layoutDiagram` hands
+back the Tree — and the panel's SVG class and its per-node shape branch both
+have to come from *what was drawn* rather than from the chip that is lit. They
+did not, and the result was Tree geometry wearing Drift's stylesheet: every row
+erased by `.diag-drift .diag-box { fill: transparent }`, no dot, no chevron, and
+labels at the browser's default size because no `.diag-drift .diag-label` rule
+exists. The strip above it said the right thing the whole time. `drawnKind` in
+[`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx) is the fix, and it is the
+same value `flat` and `ramp` were already derived from — those two were right
+and the third was missed. GPT Sol, 2026-08-27, and it was live in the previous
+round too with `strata` where `tree` now is.
 
 **The picture scrolls to keep up.** `.diag-scroll` nudges the marked node into
 view when it goes out of it — keyed on the target rather than on scroll events,
@@ -835,6 +872,18 @@ each of those, which is a browser question rather than an arithmetic one.
   the article, so it is the one that could. Note the two axes are *not*
   identical — the spine measures rendered pixels and Drift counts rows — so hit
   positions would have to be recomputed rather than copied.
+- **A stale projection empties the picture rather than falling back.** The
+  fallback is chosen on how many points came back; `scatter.ts` then drops any
+  whose block ids the article no longer has. If a re-ingest lands between the
+  two, every point is dropped, the picture is an empty listbox and both step
+  buttons sit disabled around a dash. Needs a race to reach and has not been
+  seen; the fix is to choose the fallback on the points that *survive* the
+  join. GPT Sol, 2026-08-27.
+- **The containment line in Force is not really visible**, and was not before
+  this round either: `--rule` at 0.35 over `--page` measures **1.07:1**, which
+  is below where a stroke exists at all. Fixing it means making a line brighter
+  in the round that was asked to make lines fainter, so it is written down
+  rather than done. The bubbles' own positions carry most of what it says.
 - **Nothing here is to scale any more.** See
   [§ There were eight](#there-were-eight-and-four-were-cut). The spine still is.
 - **Collapse state is not in the URL.** Everything else about the view is

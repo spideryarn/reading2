@@ -183,6 +183,18 @@ elements to skip: **calling `preventDefault()` is already how a handler says "th
 and a list is the version that silently goes stale the next time some component grows arrow keys and
 nobody remembers to come back here.
 
+**The dock had already hit this and solved it locally.** `DockModes` in [`Dock.tsx`](../../src/web/Dock.tsx)
+calls `stopPropagation()` alongside its `preventDefault()`, with a comment saying in as many words
+that it is there to stop `keynav.ts` also stepping the article. That is the same bug, found earlier,
+fixed one component at a time — and it is the argument for putting the rule in `keynav` instead:
+every future widget with arrow keys would otherwise have to know that this listener exists and
+remember to shout past it. The dock's `stopPropagation()` is now redundant and is left alone; it is
+still correct, and it also stops the press reaching anything else.
+
+The audit behind the change: the only two places in this app that `preventDefault()` an ArrowUp or
+ArrowDown are the dock's mode switcher and the diagram's picture. Everything else that handles keys
+handles Enter and Escape.
+
 ### Rapid presses chain from the last target, not from the page
 
 Scrolling is animated ([`scroll.ts`](../../src/web/scroll.ts)), so a second press landing mid-flight

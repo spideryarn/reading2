@@ -21,6 +21,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, BlockId, Tree } from "../src/types.js";
+import type { DiagramKind } from "../src/web/diagram.js";
 import { DiagramPanel } from "../src/web/DiagramPanel.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
 
@@ -106,7 +107,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mount(kind: "force" | "tree" = "force") {
+function mount(kind: DiagramKind = "force") {
   const { root: tree, blocks } = article();
   act(() => {
     root.render(
@@ -132,6 +133,51 @@ function mount(kind: "force" | "tree" = "force") {
 /** The card's text, whitespace collapsed. */
 const cardText = () =>
   (host.querySelector(".diag-card")?.textContent ?? "").replace(/\s+/g, " ").trim();
+
+/**
+ * **What the fallback is dressed as.**
+ *
+ * Drift and Trail have nothing to draw until the projection lands, so
+ * `layoutDiagram` hands back `layoutTree` and the strip says "the picture below
+ * is the Tree instead". The panel then has to *render* it as a tree — the SVG's
+ * class picks the stylesheet and `NodeShape`'s branch picks the shapes, and
+ * both used to come from the toggle rather than from what was drawn.
+ *
+ * The result was Tree geometry wearing Drift's stylesheet:
+ * `.diag-drift .diag-box { fill: transparent; stroke: none }` erased every row,
+ * the branch that draws a tree's dot and chevron never ran, and no
+ * `.diag-drift .diag-label` font size exists so labels painted at the browser
+ * default. Nothing throws, nothing logs, and the sentence above it says the
+ * right thing while the picture under it is broken — GPT Sol's finding on the
+ * built code, 2026-08-27.
+ */
+describe("a picture drawn without its data", () => {
+  it("wears the stylesheet of the picture it fell back to", () => {
+    mount("drift");
+    const svg = host.querySelector("svg.diag-svg");
+    expect(svg, "the panel drew nothing at all").not.toBeNull();
+    expect(svg?.classList.contains("diag-tree")).toBe(true);
+    expect(svg?.classList.contains("diag-drift")).toBe(false);
+  });
+
+  it("draws the tree's own shapes, not a scatter's", () => {
+    /* The class alone is not enough: `NodeShape` branches on the same value,
+       and a row that is a `.diag-box` rather than a `.diag-row` has no fill
+       rule under `.diag-tree` either. */
+    mount("drift");
+    expect(host.querySelectorAll(".diag-node .diag-row").length).toBeGreaterThan(0);
+  });
+
+  it("is still a tree to a screen reader, not a list of paragraphs", () => {
+    // `role` and the `aria-label`'s name both come from what is drawn. Saying
+    // "one dot per paragraph" over a column of sections is the same bug told
+    // to somebody who cannot see the picture to know better.
+    mount("drift");
+    const svg = host.querySelector("svg.diag-svg");
+    expect(svg?.getAttribute("role")).toBe("tree");
+    expect(svg?.getAttribute("aria-label")).toContain("Tree");
+  });
+});
 
 describe("hovering a bubble", () => {
   it("draws the picture at all, before anything else is asserted", () => {

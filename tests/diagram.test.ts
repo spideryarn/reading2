@@ -35,7 +35,7 @@ import {
   LABEL_PX,
   MAX_DRAWN_DEPTH,
   layoutTree,
-  stepRows,
+  stepStops,
   nodeAt,
   walk,
   wrapText,
@@ -231,30 +231,68 @@ describe("layoutTree", () => {
   });
 });
 
-describe("stepRows", () => {
-  it("gives one rung per distinct start row, not one per node", () => {
+describe("stepStops", () => {
+  /* The fixture's blocks, so a node's `blockId` has a row to resolve to. Each
+     node's `blockId` is `spya-<id>a` (see `node` above), and these are the rows
+     the fixture puts them on. */
+  const rows = new Map<BlockId, number>(
+    (
+      [
+        ["root", 0],
+        ["a", 0],
+        ["a1", 0],
+        ["a2", 4],
+        ["b", 10],
+        ["b1", 10],
+        ["b2", 50],
+      ] as const
+    ).map(([id, row]) => [`spya-${id}a` as BlockId, row]),
+  );
+
+  it("gives one rung per distinct row, not one per node", () => {
     /* **The whole reason the step buttons walk rows.** `layoutTree` is
        preorder, so the root, part 1 and section 1.1 all begin on row 0 — a
        ladder built from nodes would spend its first three rungs going nowhere,
        and a button that moves nothing looks broken rather than correct. */
     const { nodes } = layoutTree(fixture(), OPTS);
-    expect(nodes.length).toBeGreaterThan(stepRows(nodes).length);
-    expect(stepRows(nodes)).toEqual([0, 4, 10, 50]);
+    const stops = stepStops(nodes, rows);
+    expect(nodes.length).toBeGreaterThan(stops.length);
+    expect(stops.map((s) => s.row)).toEqual([0, 4, 10, 50]);
   });
 
-  it("is ascending whatever order the picture drew in", () => {
-    /* Force settles its bubbles by physics and hands them back in graph order,
-       not in reading order. The ladder is a claim about the *article*, so it
-       cannot inherit whichever order a layout happened to build. */
-    const shuffled = [...layoutTree(fixture(), OPTS).nodes].reverse();
-    const rows = stepRows(shuffled);
-    expect(rows).toEqual([...rows].sort((a, b) => a - b));
+  it("keeps the deepest node where several share a row", () => {
+    // `nodeAt`'s rule: the deepest node is the most specific thing the reader
+    // could mean, and the card describes whatever this lands on.
+    const stops = stepStops(layoutTree(fixture(), OPTS).nodes, rows);
+    expect(stops[0]?.id).toBe("a1");
+  });
+
+  it("takes the row from the block a rung jumps to, not from its range", () => {
+    /* **The bug this replaced `stepRows` for.** A scatter dot's range is
+       stretched to tile the article, so the first dot claims `startRow: 0`
+       while the block it jumps to may be the third paragraph. A ladder built
+       from `startRow` puts a rung at row 0 whose jump lands at row 2 — and
+       Previous, from row 1, then moves the reader DOWN the page. GPT Sol's
+       finding, 2026-08-27. */
+    const tiled: DiagramNode[] = layoutTree(fixture(), OPTS)
+      .nodes.filter((n) => n.depth === 2)
+      .map((n) => ({ ...n, startRow: 0 }));
+    const stops = stepStops(tiled, rows);
+    expect(stops.map((s) => s.row)).toEqual([0, 4, 10, 50]);
+    expect(stops.map((s) => s.row)).not.toEqual([0]);
+  });
+
+  it("falls back to the range when a block is not in the article", () => {
+    // A layout left over from the moment before a re-ingest. A rung in
+    // slightly the wrong place beats a button that does nothing.
+    const { nodes } = layoutTree(fixture(), OPTS);
+    expect(stepStops(nodes, new Map()).map((s) => s.row)).toEqual([0, 4, 10, 50]);
   });
 
   it("is empty for a picture with nothing on it, rather than [0]", () => {
-    // The panel disables both buttons off `starts.length`, so a phantom rung
+    // The panel disables both buttons off `stops.length`, so a phantom rung
     // would leave a live button that steps to a node that is not there.
-    expect(stepRows([])).toEqual([]);
+    expect(stepStops([], rows)).toEqual([]);
   });
 });
 
@@ -291,6 +329,19 @@ describe("nodeAt", () => {
  * 288 and `MODE_IDEAL` is 400 (src/web/layout.ts), and the narrow end is where
  * a label runs out.
  */
+/**
+ * **This loop used to run over `DIAGRAMS` and it was testing one picture four
+ * times.** `layoutDiagram` is called with no graph and no scatter input, so
+ * Force, Drift and Trail all fall back to `layoutTree` — three green rows
+ * saying nothing about three layouts, and a name ("every picture") promising
+ * the opposite. GPT Sol's finding, 2026-08-27.
+ *
+ * The honest split: the tree picture is checked here, Force is checked against
+ * the same article in tests/diagram-graph.test.ts (which builds the graph), and
+ * the two scatters in tests/scatter.test.ts (which builds a projection). The
+ * `FALLS_BACK` case below is what pins the *fallback itself*, which is a real
+ * behaviour and was the only thing the old loop was actually exercising.
+ */
 describe("every picture, against the real example article", () => {
   const tree = JSON.parse(readFileSync("example/tree.json", "utf8")) as Tree;
   const raw = JSON.parse(readFileSync("example/blocks.json", "utf8")) as unknown;
@@ -304,7 +355,7 @@ describe("every picture, against the real example article", () => {
   const lineWidth = (n: DiagramNode, i: number, kind: DiagramKind) =>
     (n.lines[i]?.length ?? 0) * (i >= n.titleLines ? GIST_PX : (LABEL_PX[kind]?.[n.depth] ?? 12)) * 0.52;
 
-  for (const kind of DIAGRAMS) {
+  for (const kind of ["tree"] as const) {
     for (const width of [288, 320, 400]) {
       it(`${kind} at ${width}px stays inside the band and draws no impossible box`, () => {
         expect(real).not.toBeNull();
@@ -334,6 +385,23 @@ describe("every picture, against the real example article", () => {
     }
   }
 
+  it("hands every picture without its data a real one, and says which", () => {
+    /* The fallback, asserted as itself rather than as a side effect of a loop
+       that meant to test something else. What matters is that it is `tree` —
+       the panel derives the SVG's class and `NodeShape`'s branch from this, so
+       a fallback that returned some other shape would be drawn wearing the
+       wrong picture's stylesheet. */
+    expect(real).not.toBeNull();
+    if (!real) return;
+    const tree = layoutTree(real, { width: 320, height: 700, collapsed: NONE });
+    for (const kind of DIAGRAMS) {
+      const l = layoutDiagram(kind, real, { width: 320, height: 700, collapsed: NONE });
+      expect(l.nodes.map((n) => n.id), `${kind} without its data`).toEqual(
+        tree.nodes.map((n) => n.id),
+      );
+    }
+  });
+
   it("never draws deeper than MAX_DRAWN_DEPTH, whatever the tree holds", () => {
     /* The example tree goes to depth 3. The layouts assume 2 — `layoutTree`
        indents by depth and would run a fourth level off a 288px band, and the
@@ -344,9 +412,8 @@ describe("every picture, against the real example article", () => {
       MAX_DRAWN_DEPTH,
     );
     if (!real) return;
-    for (const kind of DIAGRAMS) {
-      const layout = layoutDiagram(kind, real, { width: 320, height: 700, collapsed: NONE });
-      for (const n of layout.nodes) expect(n.depth).toBeLessThanOrEqual(MAX_DRAWN_DEPTH);
+    for (const n of layoutTree(real, { width: 320, height: 700, collapsed: NONE }).nodes) {
+      expect(n.depth).toBeLessThanOrEqual(MAX_DRAWN_DEPTH);
     }
   });
 });
