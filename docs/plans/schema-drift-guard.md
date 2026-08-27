@@ -208,20 +208,37 @@ observes nothing whatever the handler does, and would have gone green on the day
 deleted. Checked by deleting both log calls and watching both tests go red, then restoring the file
 and confirming it byte-for-byte with `diff`.
 
-## Still to do — the part that actually prevents a bad deploy
+## Where the gate actually is
 
-**This guard currently finds drift after promotion, not before it.** Sol's first finding, and it
-stands:
+Sol's first finding was that this guard finds drift *after* promotion:
 
 > With the plan as written … only the next `/api/health` poll reports 503 and pages someone. A
 > reader can lose the race.
 
-`npm run db:check` has to run **in front of the build**, so that a failure leaves the previous
-deployment serving. That was deliberately not wired up here, because the natural home for it is
-[`scripts/deploy.ts`](../../scripts/deploy.ts) — which is another agent's uncommitted work in this
-tree, and editing it would clobber theirs. Two things are owed:
+That was written before [`scripts/deploy.ts`](../../scripts/deploy.ts) landed, and it reads worse
+than the truth now. `npm run deploy` closes most of it without a line of new code:
 
-1. `npm run db:check` in the deploy pipeline, after migrations and before `git push`, against the
-   **app-role** URL.
-2. Mandatory CI: start an empty database, apply all migrations, run `db:check`, and **fail rather
-   than skip** if the database was never reached — a skipped check protects nothing.
+- **Before the push**, `migrationPlan` compares `spideryarn_migrations.__drizzle_migrations` against
+  `drizzle/meta/_journal.json` under the *migrator* credential, and `applyMigrations` applies what is
+  pending. That is the cause of both 2026-08-27 outages, caught ahead of promotion.
+- **After it**, `judgeHealth` in [`scripts/deploy-checks.ts`](../../scripts/deploy-checks.ts) turns
+  **every** entry in the health response's `warnings` into a deploy failure. The schema block feeds
+  `warnings`, so drift fails the deploy by itself — nobody had to teach `judgeHealth` about it. The
+  script captured the previous production deployment before it changed anything, so the failure
+  arrives with the rollback command already written out.
+
+So the two checks are complementary, as the header of `schema-drift.ts` says: the ledger catches a
+migration that has not run, and the columns catch a hand-dropped column, a bad restore or a revoked
+grant, which no ledger comparison can see.
+
+**What is left is genuinely narrower.** A column-level failure that does *not* come from a pending
+migration is still found after the deployment is live rather than before it — and with a
+git-push-triggered deploy there is no pre-promotion window to put it in, so closing that properly
+means changing how deployment works, not adding a call. Not worth it for the residual case.
+
+Two things would still be worth having, neither urgent:
+
+1. `npm run db:check` against the **app-role** URL among the pre-push gates, which would catch the
+   residual case before promotion for the cost of one query.
+2. CI: start an empty database, apply all migrations, run `db:check`, and **fail rather than skip**
+   if the database was never reached. A skipped check protects nothing.
