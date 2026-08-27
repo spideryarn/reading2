@@ -40,6 +40,7 @@ import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Arc, ArcEntry, Block, Meta, Tree, TreeNode } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
+import { withLedger } from "./cli-ledger.js";
 
 const PROMPT_VERSION = "arc/2";
 
@@ -308,10 +309,7 @@ export async function generateArc(opts: {
       const report = opts.onProgress;
       let chars = 0;
       let last = 0;
-      /* `delta: string` spelled out because `MeteredCall.stream` is typed as
-         `ReturnType<…messages.stream>`, which instantiates that method's generic at
-         its constraint and loses `on`'s per-event listener types. */
-      call.stream.on("text", (delta: string) => {
+      call.onText((delta) => {
         chars += delta.length;
         const now = Date.now();
         if (now - last < 500) return;
@@ -402,4 +400,4 @@ async function main(): Promise<void> {
 const isMain =
   process.argv[1] !== undefined &&
   fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void main();
+if (isMain) void withLedger("cli", main);

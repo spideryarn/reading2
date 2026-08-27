@@ -44,6 +44,7 @@
 
 import { sql, type SQL } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   customType,
@@ -1108,33 +1109,142 @@ export const rawSources = spideryarn.table(
 /* ------------------------------------------------------------- ai calls -- */
 
 /**
- * One row per model call. Borrowed wholesale from the old app, which is the one
- * idea from it worth taking — see
- * docs/project/original-version/llm-plumbing.md. Their table was overkill for
- * their app; it is not overkill once there is a database anyway.
+ * **One row per model call — the ledger.** Written when a call finishes, by the
+ * sink in [`src/ai-spend.ts`](../ai-spend.ts), and never amended afterwards: a
+ * finished call is a fact about the past.
  *
- * `rawResponse` is why: in the old project `ai_calls` was 31 MB and dominated
- * the entire database. Worth keeping, worth pruning on a schedule, and worth
- * knowing about before it surprises someone.
+ * The shape is borrowed from the old app — see
+ * docs/project/original-version/llm-plumbing.md — with three of its columns
+ * deliberately not taken.
+ *
+ * - **`raw_response` is gone.** In the old project it was 31 MB over 306 rows
+ *   and dominated their entire database — and, worse here, it would hold model
+ *   output derived from the reader's article, their chat, or their dictated
+ *   voice. That turns a small financial ledger into the project's largest and
+ *   most sensitive store, kept alive by a pruner that can quietly stop. Every
+ *   row carries `generation_id` instead, which is the handle to ask OpenRouter
+ *   about the call afterwards. GPT Sol's call, 2026-08-28, reversing Greg's
+ *   earlier "always store, with pruning" — written up in
+ *   docs/plans/ai-cost-tracking.md rather than merely done.
+ * - **`cost_micros` is gone**, in favour of nano-dollars in a `bigint`. A single
+ *   query embedding costs about $0.0000006, which is **less than one
+ *   micro-dollar** and rounded to zero — the row read as free.
+ * - **No `attempt` column.** A retry is a separate call and gets its own row and
+ *   its own id; `run_id` is what groups the calls one piece of work made.
+ *
+ * ## `owner_id` is here, and src/owner.ts's rule says it should not be
+ *
+ * That file lists the tables that deliberately do not carry an owner, because
+ * each belongs to a row that does. Good rule, and this is its exception, for two
+ * reasons: `article_id` is `on delete set null`, so an article going away would
+ * strip a billing row of its person, permanently and without erroring; and not
+ * every call has an article at all — library search, and an ordinary chat with
+ * nothing open. `on delete restrict`, like every other owner FK here
+ * (drizzle/0001_auth_fks_and_guards.sql): deleting an account is already a thing
+ * this schema refuses to do quietly.
  */
-export const aiCalls = spideryarn.table("ai_calls", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
-  revisionId: uuid("revision_id").references(() => articleRevisions.id, { onDelete: "set null" }),
-  /** `toc`, `arc`, `tweets`, `glossary`, or `explain` for a reader's question. */
-  purpose: text("purpose").notNull(),
-  provider: text("provider").notNull(),
-  model: text("model").notNull(),
-  promptTokens: integer("prompt_tokens"),
-  completionTokens: integer("completion_tokens"),
-  /** Micro-dollars, so this stays an integer and never a drifting float. */
-  costMicros: integer("cost_micros"),
-  latencyMs: integer("latency_ms"),
-  finishReason: text("finish_reason"),
-  error: text("error"),
-  rawResponse: jsonb("raw_response"),
-  createdAt: createdAt(),
-});
+export const aiCalls = spideryarn.table(
+  "ai_calls",
+  {
+    /**
+     * **Minted before the request goes out**, not when it comes back — so a call
+     * that never returns still has a name. Hence no `defaultRandom()`: the
+     * value comes from the process that made the call.
+     */
+    id: uuid("id").primaryKey(),
+    /** Every call one collector saw, so a log line and its rows can be joined. */
+    runId: uuid("run_id").notNull(),
+    /** `x-generation-id` — the key to `GET /api/v1/generation?id=…` afterwards. */
+    generationId: text("generation_id"),
+    /** `request`, `job_step`, `cli` or `eval`. Eval spend is real and is not product spend. */
+    scopeKind: text("scope_kind").notNull(),
+    ownerId: uuid("owner_id").notNull(),
+    articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
+    /**
+     * The article as it was called at the time.
+     *
+     * Kept **beside** `article_id` rather than instead of it, because the id is
+     * `on delete set null` on purpose and the slug is the historical fact a
+     * later delete cannot revoke.
+     */
+    articleSlug: text("article_slug"),
+    /**
+     * Which ingest job, as text rather than a foreign key: finished jobs are
+     * trimmed on a retention sweep, and a billing row must not be deletable by
+     * housekeeping.
+     */
+    jobId: text("job_id"),
+    stepName: text("step_name"),
+    /**
+     * `messages`, `chat` or `embeddings`.
+     *
+     * **On the row because the two wires do not mean the same thing by "input
+     * tokens"** — the Messages shape reports cache reads and writes *outside*
+     * `input_tokens`, and the chat shape reports them inside `prompt_tokens`. A
+     * column summed across both without this is a number with no meaning.
+     */
+    wire: text("wire").notNull(),
+    /** Which job made the call: `toc`, `chat`, `embeddings`, … */
+    purpose: text("purpose").notNull(),
+    requestedModel: text("requested_model").notNull(),
+    /** Which model answered, when the response said. Not always the one asked for. */
+    answeredModel: text("answered_model"),
+    /** Which upstream answered: `"Anthropic"`, `"Google"`, … */
+    upstream: text("upstream"),
+    /** The first 12 hex of the key's SHA-256. Never the key. See src/ai-spend.ts. */
+    credentialFingerprint: text("credential_fingerprint"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    /** `ok`, `error` or `aborted`. A non-`ok` row's cost is a lower bound. */
+    outcome: text("outcome").notNull(),
+    /**
+     * **Credits OpenRouter deducted**, in nano-dollars — and the name says
+     * credits rather than cash on purpose. Their margin is a fee on *buying*
+     * credits, not a per-token markup, so a per-row x1.055 would invent a
+     * precision that can never match a bank statement.
+     */
+    /* **`bigint`, against this file's own two warnings about `int8`.** Those are
+       right — node-pg hands `int8` back as a *string* — and the reason it is
+       safe here is specific rather than general: `mode: "number"` makes Drizzle
+       map it back through `Number()` on the way out, where `uploads.bytes` and
+       `raw_sources.bytes` are read raw. `integer` is not an option either way:
+       nano-dollars overflow `int4` at $2.15. `tests/store-ai-calls.test.ts`
+       asserts a round-trip comes back a `number`, because "it should" is exactly
+       the assumption those two comments exist to distrust. */
+    creditsUsedNanos: bigint("credits_used_nanos", { mode: "number" }),
+    /** What the inference itself was worth. Under BYOK this is real and the above is 0. */
+    upstreamInferenceNanos: bigint("upstream_inference_nanos", { mode: "number" }),
+    isByok: boolean("is_byok"),
+    /**
+     * **`reported_`, because the two wires do not agree what an input token
+     * is.** The Messages shape reports cache reads and writes outside it; the
+     * chat shape reports them inside. Summed across both without reading `wire`
+     * it counts nothing in particular, and a column called `input_tokens` is an
+     * invitation to that sum.
+     */
+    reportedInputTokens: integer("reported_input_tokens"),
+    outputTokens: integer("output_tokens"),
+    cacheReadTokens: integer("cache_read_tokens"),
+    cacheWriteTokens: integer("cache_write_tokens"),
+    /** Priced at 1.25x and 2x input respectively, which is why one total will not do. */
+    cacheWrite5mTokens: integer("cache_write_5m_tokens"),
+    cacheWrite1hTokens: integer("cache_write_1h_tokens"),
+    /** Inside `output_tokens`, never added to it. */
+    reasoningTokens: integer("reasoning_tokens"),
+    /** Billed per search and invisible to token arithmetic. */
+    webSearches: integer("web_searches"),
+    serviceTier: text("service_tier"),
+    inferenceGeo: text("inference_geo"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    /** "What did this owner spend in August" — the query a spend limit would need. */
+    index("ai_calls_owner_started").on(t.ownerId, t.startedAt.desc()),
+    /** "What did this ingest cost", asked once per job at the end of it. */
+    index("ai_calls_job").on(t.jobId),
+  ],
+);
 
 /* ------------------------------------------------------------------ chat -- */
 

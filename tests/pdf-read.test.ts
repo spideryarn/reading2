@@ -10,7 +10,7 @@
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
 import { pass0 } from "../src/pdf.js";
 import { check } from "../src/pdf-score.js";
@@ -340,4 +340,76 @@ describe("the whole stage, with the model stubbed out", () => {
       }),
     ).rejects.toThrow(/missing from the transcription/);
   }, 30_000);
+});
+
+/* ============================================ the transport retry, for real ==
+   `openRouterReader` retries a request that never got an answer at all — a
+   dropped connection, not a bad answer — and each attempt is its own metered
+   call. Every other test in this file replaces the reader entirely, so none of
+   them exercises that: the claim in src/pdf-read.ts that a retry produces one
+   spend record per attempt was written down and never checked. GPT Sol asked
+   for this twice. */
+
+import { collectSpend } from "../src/ai-spend.js";
+import { openRouterReader } from "../src/pdf-read.js";
+
+/** A JSON body in the shape `openRouterJson` expects back. */
+function pdfAnswer(): Response {
+  return new Response(
+    JSON.stringify({
+      model: "openai/gpt-5.1",
+      usage: { prompt_tokens: 100, completion_tokens: 20, cost: 0.000_25 },
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({ records: [], notes: "" }),
+          },
+        },
+      ],
+    }),
+    { status: 200, headers: new Headers({ "x-generation-id": "gen-retry-test" }) },
+  );
+}
+
+describe("openRouterReader's transport retries", () => {
+  const savedKey = process.env.OPENROUTER_API_KEY;
+  const savedFetch = globalThis.fetch;
+  beforeEach(() => {
+    process.env.OPENROUTER_API_KEY = "sk-or-test-not-a-real-key";
+  });
+  afterEach(() => {
+    globalThis.fetch = savedFetch;
+    if (savedKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = savedKey;
+  });
+
+  it("records one call per attempt — an error, then an ok", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => {
+      calls += 1;
+      /* What actually happened to a five-chunk run: `TypeError: fetch failed`
+         with an HTTP/2 protocol error underneath, after the first chunk had
+         already been paid for. */
+      if (calls === 1) throw new TypeError("fetch failed");
+      return pdfAnswer();
+    }) as typeof globalThis.fetch;
+
+    const { report } = await collectSpend(async () => {
+      await openRouterReader("openai/gpt-5.1").read(
+        new Uint8Array([1, 2, 3]),
+        "read it",
+        undefined,
+      );
+    });
+
+    expect(calls).toBe(2);
+    /* **Two rows, not one.** A retry that succeeds has paid for one call and
+       possibly for two, and one record per attempt is the only shape that can
+       say which. A wrapper that retried inside a single meter would give one row
+       here, and the bill would be a third of the truth. */
+    expect(report.calls).toHaveLength(2);
+    expect(report.calls.map((c) => c.outcome)).toEqual(["error", "ok"]);
+    expect(report.calls[0]?.costNanos).toBeNull();
+    expect(report.calls[1]?.costNanos).toBe(250_000);
+  }, 20_000);
 });

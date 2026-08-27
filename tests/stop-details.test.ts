@@ -3,8 +3,8 @@
  * not end up.
  *
  * Anthropic answers a blocked request with `stop_reason: "refusal"` and a
- * `stop_details` object beside it. Six pipeline stages — arc, glossary, labels,
- * summarise, toc, tweets — see that object, and until 2026-08-26 every one of
+ * `stop_details` object beside it. Seven pipeline stages — arc, glossary, ideas,
+ * labels, summarise, toc, tweets — see that object, and until 2026-08-26 every one of
  * them threw `` `Model refused: ${JSON.stringify(message.stop_details)}` ``.
  * A thrown message is not a private thing: src/jobs.ts logs a failed step with
  * `errorFields`, which keeps `message` and `stack`, and copies the same string
@@ -94,11 +94,18 @@ const LEAK = {
   glossary: "ZQGLOSSDDD",
   summarise: "ZQSUMMEEEE",
   labels: "ZQLABELFFF",
+  ideas: "ZQIDEASHHH",
   control: "ZQCTRLGGGG",
 } as const;
 
-/** The six stages, in the order the child runs them. */
-const STAGES = ["toc", "arc", "tweets", "glossary", "summarise", "labels"] as const;
+/**
+ * The **seven** stages, in the order the child runs them.
+ *
+ * `ideas` was missing until 2026-08-28 and the file called itself six — so the
+ * one stage added after this harness was written was the one stage never checked
+ * for the leak the harness exists to catch. GPT Sol pointed it out twice.
+ */
+const STAGES = ["toc", "arc", "tweets", "glossary", "summarise", "ideas", "labels"] as const;
 
 /**
  * One line per stage, plus the control. Counted rather than guessed, so that a
@@ -195,8 +202,10 @@ beforeAll(async () => {
     const { generateTweets } = await import(${src("tweets.ts")});
     const { generateGlossary } = await import(${src("glossary.ts")});
     const { generateSummaries } = await import(${src("summarise.ts")});
+    const { generateIdeas } = await import(${src("ideas.ts")});
     const { generateLabels } = await import(${src("labels.ts")});
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const { collectSpend } = await import(${src("ai-spend.ts")});
 
     const fs = await import("node:fs/promises");
     const nodePath = await import("node:path");
@@ -209,7 +218,11 @@ beforeAll(async () => {
     const step = async (name, run) => {
       sentinel = LEAK[name];
       try {
-        await run();
+        /* Inside a spend collector, because src/jobs.ts runs every step inside
+           one — and a model call made outside one now says so on its own warn
+           line, which would be six extra lines here and a failed count. Opening
+           it makes the simulation truer as well as quieter. */
+        await collectSpend(() => run());
         jobs.info({ step: name }, "step did not fail: " + name);
       } catch (err) {
         jobs.error({ ...errorFields(err), step: name }, "step failed: " + name);
@@ -221,6 +234,7 @@ beforeAll(async () => {
     await step("tweets", () => generateTweets({ dir: DIR }));
     await step("glossary", () => generateGlossary({ dir: DIR }));
     await step("summarise", () => generateSummaries({ dir: DIR }));
+    await step("ideas", () => generateIdeas({ dir: DIR }));
     await step("labels", () => generateLabels({ tree, blocks, slug: "stop-details" }));
 
     /* The control: the code that was deleted, run against the same stream and

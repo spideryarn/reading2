@@ -331,3 +331,24 @@ const adminOnFiles: AdminStore = {
 
 export const adminStore: AdminStore =
   STORE === "postgres" ? guardDbStore("admin", pgAdminStore) : adminOnFiles;
+
+/* -------------------------------------------------------- the AI ledger -- */
+
+/**
+ * **Every model call this app has paid for**, in whichever store is live.
+ *
+ * Selected and guarded in [ai-calls.ts](ai-calls.ts) rather than here, because
+ * `src/jobs.ts` needs it too and cannot import this file without closing a
+ * cycle — the same reason `live.ts` is its own file. Re-exported so that a route
+ * does not have to know where it lives.
+ *
+ * The one thing worth saying that is not obvious from the line: **this is a
+ * genuine second implementation, not the fallback the header forbids.** Nothing
+ * catches a Postgres error and writes a file instead; the flag chooses at boot
+ * and the other adapter is never consulted. The alternative — always Postgres,
+ * warn and carry on when there is no `DATABASE_URL` — would have made the
+ * **default** configuration the one that records nothing, with a warn line that
+ * becomes background noise inside a week. GPT Sol's call, 2026-08-28; it
+ * reversed docs/plans/ai-cost-tracking.md's own recommendation.
+ */
+export { costStore } from "./ai-calls.js";

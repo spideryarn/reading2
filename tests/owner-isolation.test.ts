@@ -171,8 +171,16 @@ describe("whose id the store is handed", () => {
 describe("every article lookup names an owner", () => {
   /**
    * `eq(articles.slug, …)` finds anybody's article, because the slug column is
-   * globally unique. `ownedSlug()` in src/store/pg.ts is the only sanctioned
-   * spelling, and it is defined there — so that file is the only exemption.
+   * globally unique. `ownedSlug()` is the only sanctioned spelling.
+   *
+   * **Two files are exempt, and each for its own stated reason.**
+   * `owned-slug.ts` is where the predicate is *defined* — it moved there from
+   * `pg.ts` on 2026-08-28, because `pg.ts` imports `src/api.ts` and so put the
+   * whole read layer behind a one-line predicate, closing an import cycle for
+   * the AI ledger; `pg.ts` re-exports it, so no other caller changed. And
+   * `pg.ts` holds `slugIsTaken`, the one deliberately *unfiltered* lookup, which
+   * returns a boolean and lives there so that this rule can have no exemptions
+   * anywhere else.
    *
    * A grep rather than a type: there is no type that can distinguish "the right
    * `where`" from "a `where`", and the failure mode this guards is somebody
@@ -182,7 +190,7 @@ describe("every article lookup names an owner", () => {
     const dir = fileURLToPath(new URL("../src/store/", import.meta.url));
     const offenders: string[] = [];
     for (const name of await readdir(dir)) {
-      if (!name.endsWith(".ts") || name === "pg.ts") continue;
+      if (!name.endsWith(".ts") || name === "owned-slug.ts" || name === "pg.ts") continue;
       const source = await readFile(dir + name, "utf8");
       /* Comments are stripped first. Several of these files explain the rule in
          prose that quotes the forbidden expression, and a guard that fires on
@@ -195,10 +203,23 @@ describe("every article lookup names an owner", () => {
 
   /** And the predicate itself really does mention the owner. */
   it("and the predicate they all call filters on owner_id", async () => {
-    const source = await readFile(fileURLToPath(new URL("../src/store/pg.ts", import.meta.url)), "utf8");
+    const source = await readFile(
+      fileURLToPath(new URL("../src/store/owned-slug.ts", import.meta.url)),
+      "utf8",
+    );
     const body = /export function ownedSlug[\s\S]*?\n}/.exec(source)?.[0] ?? "";
     expect(body).toContain("articles.ownerId");
+    /* The owner may now be supplied — the AI ledger knows whose row it is
+       writing — but the *default* has to stay the ambient one, or a caller that
+       forgets the argument gets an unfiltered query. */
     expect(body).toContain("currentOwnerId()");
+    expect(body).toMatch(/ownerId \?\? currentOwnerId\(\)/);
+    /* And `pg.ts` still hands the same function out, so nothing has two. */
+    const pg = await readFile(
+      fileURLToPath(new URL("../src/store/pg.ts", import.meta.url)),
+      "utf8",
+    );
+    expect(pg).toContain('export { ownedSlug } from "./owned-slug.js"');
   });
 
   /**
@@ -306,6 +327,16 @@ when("one owner's article, asked for by another", { timeout: 20_000 }, () => {
       status: "published",
       title: "A private article",
       fetchedAt: new Date("2026-01-01T00:00:00.000Z"),
+      /* The library's scalars, which every published revision has: both writers
+         set them in the transaction that publishes. The shelf reads them since
+         2026-08-28, and a fixture without them sends `listArticles` down its
+         recompute-and-warn fallback — which would still pass this file's
+         assertions while making a different suite's statement count wrong. */
+      wordCount: 6,
+      blockCount: 1,
+      partCount: 0,
+      sectionCount: 0,
+      rootGist: "A private article nobody else may see.",
       // A tree and at least one block, or `listArticles` skips the row and the
       // positive control below would pass for the wrong reason.
       tree: {

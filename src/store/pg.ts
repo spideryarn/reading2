@@ -130,9 +130,14 @@ export function shelfFrom(article: typeof articles.$inferSelect): ShelfState {
  * one: "there is no such article" is all a stranger should learn about a slug
  * they do not own. A 403 would confirm it exists.
  */
-export function ownedSlug(slug: string) {
-  return and(eq(articles.slug, slug), eq(articles.ownerId, currentOwnerId()));
-}
+/* **Moved to a leaf, and re-exported from here so nothing else changed.**
+   `pg.ts` imports `src/api.ts`, so anything importing this file inherits the
+   whole read layer — which closed an import cycle the moment the AI ledger
+   needed the predicate. [owned-slug.ts](owned-slug.ts) imports the schema and
+   the owner and nothing else. It also takes an optional owner now, for a caller
+   that already knows whose row it is writing. */
+export { ownedSlug } from "./owned-slug.js";
+import { ownedSlug } from "./owned-slug.js";
 
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];

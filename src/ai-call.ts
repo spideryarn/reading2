@@ -54,7 +54,12 @@
  * job cannot be added without somebody deciding, and injected *after* the
  * caller's body so it cannot be overridden by accident.
  */
-import { type SpendRecord, beginSpend, recordSpend } from "./ai-spend.js";
+import {
+  type SpendRecord,
+  beginSpend,
+  keyFingerprint,
+  recordSpend,
+} from "./ai-spend.js";
 import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
 /* **A type-only import, and that is load-bearing rather than tidy.** A value
    import here closes a cycle: `models.ts` imports `EMBEDDING_MODEL` from
@@ -66,7 +71,7 @@ import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
    other order, which is a thing nothing in the app happens to do today and
    something the next file to import embeddings might. `import type` is erased,
    so it creates no edge at all. */
-import type { AiJob } from "./models.js";
+import type { AiJob, Wire } from "./models.js";
 import {
   type StreamChunk,
   type StreamEnd,
@@ -75,7 +80,13 @@ import {
 import { type Nanos, providerCostToNanos } from "./pricing.js";
 
 /** Where OpenRouter lives. One string, so nobody has a fifth copy of it. */
-export const OPENROUTER_BASE = "https://openrouter.ai/api";
+/* **Not exported, since 2026-08-28.** It was, and an exported base is the
+   easiest way past the scan that forbids naming an OpenRouter endpoint outside
+   this file: assemble the URL from the constant and the scan sees no endpoint.
+   The scan is a tripwire rather than a boundary — deliberately obfuscated string
+   assembly is not something a grep can catch — but leaving the pieces on the
+   table is not the same as accepting that. GPT Sol asked for it twice. */
+const OPENROUTER_BASE = "https://openrouter.ai/api";
 
 /** The two paths this app posts to. A union, so a seventh cannot be invented. */
 export type OpenRouterPath = "/v1/chat/completions" | "/v1/embeddings";
@@ -257,6 +268,8 @@ interface WireUsage {
     cache_write_tokens?: unknown;
   };
   cache_write_tokens?: unknown;
+  /** Thinking, on this wire's spelling. Inside `completion_tokens`, not additional. */
+  completion_tokens_details?: { reasoning_tokens?: unknown };
 }
 
 /**
@@ -279,10 +292,14 @@ class Meter {
   outputTokens: number | null = null;
   cacheReadTokens: number | null = null;
   cacheWriteTokens: number | null = null;
+  reasoningTokens: number | null = null;
+  upstream: string | null = null;
 
   constructor(
     private readonly job: AiJob,
     private readonly model: string,
+    private readonly wire: Wire,
+    private readonly credentialFingerprint: string,
   ) {
     /* Registered *before* the network call, so a request that never comes back
        leaves a trace. See `PendingCall` in ai-spend.ts. */
@@ -306,10 +323,18 @@ class Meter {
       num(u.prompt_tokens_details?.cache_write_tokens) ??
       num(u.cache_write_tokens) ??
       this.cacheWriteTokens;
+    this.reasoningTokens =
+      num(u.completion_tokens_details?.reasoning_tokens) ?? this.reasoningTokens;
   }
 
   sawModel(model: unknown): void {
     if (typeof model === "string" && model.length > 0) this.answeredBy = model;
+  }
+
+  /** Which upstream answered, when the frame says. The Messages wire gets this free. */
+  sawUpstream(provider: unknown): void {
+    if (typeof provider === "string" && provider.length > 0)
+      this.upstream = provider;
   }
 
   /**
@@ -326,17 +351,32 @@ class Meter {
     recordSpend(
       {
         job: this.job,
+        wire: this.wire,
         model: this.model,
         answeredBy: this.answeredBy,
         costNanos: this.costNanos,
         upstreamCostNanos: this.upstreamCostNanos,
         generationId: this.generationId,
-        upstream: null,
+        upstream: this.upstream,
+        credentialFingerprint: this.credentialFingerprint,
         isByok: this.isByok,
         inputTokens: this.inputTokens,
         outputTokens: this.outputTokens,
         cacheReadTokens: this.cacheReadTokens,
         cacheWriteTokens: this.cacheWriteTokens,
+        /* **Null rather than zero on this wire.** OpenAI's shape reports one
+           cache-write total and does not split it by TTL, so a `0` here would be
+           a claim that no one-hour write happened — which is a different thing
+           from not being told. The Messages wire fills these in. */
+        cacheWrite5mTokens: null,
+        cacheWrite1hTokens: null,
+        reasoningTokens: this.reasoningTokens,
+        /* Neither is reported on this wire: no caller here uses a server-side
+           web search, and `service_tier` and `inference_geo` are Anthropic's own
+           fields on the Messages shape. */
+        webSearches: null,
+        serviceTier: null,
+        inferenceGeo: null,
         ms: Date.now() - this.startedAt,
         outcome,
       },
@@ -463,12 +503,26 @@ function prepare(
   body: AiRequestBody,
   streaming: boolean,
   key0: string | undefined,
-): { key: string; payload: string; url: string } {
+): { key: string; payload: string; url: string; fingerprint: string } {
+  const key = apiKey(key0);
   return {
-    key: apiKey(key0),
+    key,
     payload: outgoing(job, body, streaming),
     url: `${OPENROUTER_BASE}${pathFor(job)}`,
+    /* Named, never carried. See `keyFingerprint` — the reconciliation is per
+       key, and `src/embeddings.ts` legitimately passes a different one. */
+    fingerprint: keyFingerprint(key),
   };
+}
+
+/**
+ * Which shape this job's request goes out in.
+ *
+ * Read off the routing table rather than kept as a second list, so a seventh job
+ * cannot be given a path and forget to be given a wire.
+ */
+function wireFor(job: ChatJob): Wire {
+  return routeFor(job).path === "/v1/embeddings" ? "embeddings" : "chat";
 }
 
 function send(
@@ -505,6 +559,25 @@ function send(
  */
 function generationIdOf(response: Response): string | null {
   return response.headers?.get("x-generation-id") ?? null;
+}
+
+/**
+ * **Did this error come from the abort, or merely arrive while one was set?**
+ *
+ * The two are not the same and the first version treated them as the same: any
+ * failure raised while `signal.aborted` was true got recorded as `"aborted"`,
+ * so a provider dying at the moment a reader pressed Stop went into the ledger
+ * as a cancel — and a cancel is the one outcome nobody investigates.
+ *
+ * Aborting rejects with the signal's own `reason`, so identity is the strong
+ * test; the name check covers an abort raised with no reason given.
+ * `stoppedByReader` in [`openrouter-stream.ts`](openrouter-stream.ts) makes the
+ * same distinction for the reader-facing message, and a GPT Sol review pointed
+ * out that the bill was still using the weaker question.
+ */
+function abortedBy(err: unknown, signal: AbortSignal | undefined): boolean {
+  if (!signal?.aborted) return false;
+  return err === signal.reason || (err as Error | undefined)?.name === "AbortError";
 }
 
 /**
@@ -555,7 +628,7 @@ export async function* openRouterStream(
 ): AsyncGenerator<StreamChunk> {
   /* Before the meter — see `prepare`: no attempt, no record. */
   const prepared = prepare(job, body, true, options.apiKey);
-  const meter = new Meter(job, body.model);
+  const meter = new Meter(job, body.model, wireFor(job), prepared.fingerprint);
   let outcome: SpendRecord["outcome"] = "ok";
   /**
    * Whether the loop below ran to its own end.
@@ -594,6 +667,7 @@ export async function* openRouterStream(
       },
     )) {
       meter.sawModel(chunk.model);
+      meter.sawUpstream(chunk.provider);
       /* **Every chunk that has one, not just the last.** The usage chunk is
          normally the final one and carries no choices — but "normally" is doing
          work in that sentence, and overwriting with each one costs nothing and
@@ -603,7 +677,7 @@ export async function* openRouterStream(
     }
     ranToEnd = true;
   } catch (err) {
-    outcome = options.signal.aborted ? "aborted" : "error";
+    outcome = abortedBy(err, options.signal) ? "aborted" : "error";
     throw err;
   } finally {
     if (outcome === "ok") {
@@ -662,7 +736,7 @@ export async function openRouterJson(
 ): Promise<JsonCall> {
   /* Before the meter — see `prepare`: no attempt, no record. */
   const prepared = prepare(job, body, false, options?.apiKey);
-  const meter = new Meter(job, body.model);
+  const meter = new Meter(job, body.model, wireFor(job), prepared.fingerprint);
   let outcome: SpendRecord["outcome"] = "ok";
   try {
     const response = await send(prepared, options?.signal);
@@ -684,9 +758,12 @@ export async function openRouterJson(
          which on this wire is an article, a reader's question, or their voice.
          See `providerSpokeNonsense` in openrouter-stream.ts. */
     }
-    const record = json as { usage?: unknown; model?: unknown } | null;
+    const record = json as
+      | { usage?: unknown; model?: unknown; provider?: unknown }
+      | null;
     if (record?.usage) meter.saw(record.usage);
     meter.sawModel(record?.model);
+    meter.sawUpstream(record?.provider);
     return {
       json,
       answeredBy: meter.answeredBy,
@@ -694,7 +771,7 @@ export async function openRouterJson(
     };
   } catch (err) {
     if (outcome === "ok")
-      outcome = options?.signal?.aborted === true ? "aborted" : "error";
+      outcome = abortedBy(err, options?.signal) ? "aborted" : "error";
     throw err;
   } finally {
     meter.finish(outcome);

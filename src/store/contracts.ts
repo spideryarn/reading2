@@ -39,8 +39,9 @@
  */
 
 import type { AdminUser } from "../admin.js";
+import type { AiCallRow } from "../ai-spend.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
-import type { NewComment } from "../comments.js";
+import type { AnswerPatch, NewComment } from "../comments.js";
 import type {
   Article,
   ArticleMetadata,
@@ -656,4 +657,56 @@ export interface AdminStore {
    * about the default order.
    */
   listUsersAcrossOwners(): Promise<AdminUser[]>;
+}
+
+/* -------------------------------------------------------- the AI ledger -- */
+
+/**
+ * What a read of the ledger came back with — the rows, **and how many lines it
+ * could not read**.
+ *
+ * Two fields rather than one because a total nobody can tell is short is worse
+ * than no total. A truncated JSONL tail or a row that will not parse has to
+ * reach the report rather than quietly reduce it.
+ */
+export interface LedgerRead {
+  rows: AiCallRow[];
+  unreadable: number;
+}
+
+/**
+ * **Every model call this app has paid for.** One row per call, written when the
+ * call finishes and never amended.
+ *
+ * A contract with two implementations for the reason
+ * [ai-calls-fs.ts](ai-calls-fs.ts) gives at length: the default configuration is
+ * `files`, and a cost tracker that records nothing in the default configuration
+ * is the worst property on offer. Neither adapter ever falls back to the other.
+ *
+ * The queries are deliberately thin — read a range, read one job — and every
+ * total is computed in TypeScript on the way out. **One implementation of the
+ * arithmetic**, rather than a `group by` in one store and a `reduce` in the
+ * other quietly disagreeing about what a BYOK call is worth. The table is small
+ * enough that this is not a performance question yet, and
+ * docs/plans/ai-cost-tracking.md says so out loud so the day it stops being true
+ * is a decision rather than a surprise.
+ */
+export interface CostStore {
+  /** Where the rows are, for `npm run cost` to print. A path, or the table's name. */
+  describe(): string;
+  /** Write one finished call. Called by the spend collector's sink, never directly. */
+  record(row: AiCallRow): Promise<void>;
+  /**
+   * Every call started in `[since, until)`. Both bounds optional, both ISO,
+   * **half-open** — so two adjacent months cannot both claim the same call.
+   */
+  read(since?: string, until?: string): Promise<LedgerRead>;
+  /**
+   * Every call made by one pipeline job, across all the advances that ran it —
+   * **and how much of the ledger could not be read while looking**, because a
+   * job total that is short must be able to say so.
+   */
+  forJob(jobId: string): Promise<LedgerRead>;
+  /** How big the ledger has got, in bytes, or `null` where that is not a question. */
+  size(): Promise<number | null>;
 }

@@ -361,6 +361,13 @@ export interface ToolCallDelta {
 
 export interface StreamChunk {
   model?: string;
+  /**
+   * Which upstream answered — OpenRouter puts it on every chunk of a chat
+   * completion, and it is not always the one the routing table asked for. A
+   * report that shows only the requested provider attributes the money to
+   * somebody who never ran the call.
+   */
+  provider?: string;
   error?: { message: string };
   usage?: Usage;
   choices?: {

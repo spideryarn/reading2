@@ -30,6 +30,8 @@
  * it is worth writing down.
  */
 import { spawnSync } from "node:child_process";
+import { readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -46,6 +48,7 @@ const AUDIO = `${"A".repeat(3000)}AA==`;
 const COST = 0.000123;
 
 let stdout = "";
+let ledger = "";
 let stderr = "";
 
 beforeAll(() => {
@@ -123,12 +126,19 @@ beforeAll(() => {
     await request({ audio: "not base64!" });
   })();`;
 
+  /* A path per run, removed below — so nothing accumulates and two runs cannot
+     read each other's rows. */
+  const ledgerPath = path.join(tmpdir(), `spya-ledger-${process.pid}-${Date.now()}.jsonl`);
   const env: NodeJS.ProcessEnv = { ...process.env };
   /* Neither the suite's LOG_LEVEL nor NODE_ENV=test may decide what this
      measures: "test" makes the logger silent, and every assertion below would
      then be satisfied by a child that printed nothing. */
   delete env.LOG_LEVEL;
   env.NODE_ENV = "development";
+  /* And the ledger goes somewhere disposable. `NODE_ENV=development` is what
+     makes the logger speak, and it is also what would send four fixture requests
+     into the developer's own `data/_ai-calls.jsonl` — src/store/ai-calls-fs.ts. */
+  env.SPIDERYARN_LEDGER = ledgerPath;
   /* The gateway refuses without a key, and that refusal would look exactly like
      the failure under test. Nothing is sent anywhere — `fetch` is replaced. */
   env.OPENROUTER_API_KEY = "test-key-not-a-real-one";
@@ -140,7 +150,54 @@ beforeAll(() => {
   });
   stdout = child.stdout ?? "";
   stderr = child.stderr ?? "";
+  ledger = readFileSync(ledgerPath, "utf8");
+  rmSync(ledgerPath, { force: true });
 }, 120_000);
+
+/** The rows the child's requests actually left behind. */
+function ledgerRows(): Record<string, unknown>[] {
+  return ledger
+    .split("\n")
+    .filter((l) => l.trim() !== "")
+    .map((l) => JSON.parse(l) as Record<string, unknown>);
+}
+
+describe("the ledger a request leaves behind", () => {
+  it("has a row per call, written before the request finished", () => {
+    /* **The end-to-end half.** Everything else in this file reads a log line,
+       which is a summary the same process wrote from memory. This reads a file
+       that a different process left on disk, so the sink, the attribution and
+       the write are all exercised rather than described.
+
+       **It does not prove the write was awaited**, and it was written claiming
+       to. Removing the `await` in `collectSpend` leaves this green: Node drains
+       pending I/O before exiting, so a floating append still lands. The thing
+       that would not land is a Vercel freeze, which a child process cannot
+       simulate. The ordering is pinned one level down, in
+       tests/ai-spend.test.ts, where a slow sink is checked to have finished
+       before `collectSpend` returned — and that one does go red. Found by
+       mutating the code and watching this test not notice. */
+    const rows = ledgerRows();
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => r.scopeKind === "request")).toBe(true);
+    expect(rows.every((r) => r.job === "dictation")).toBe(true);
+    expect(rows.every((r) => r.wire === "chat")).toBe(true);
+  });
+
+  it("names an owner on every row, because the column cannot be null", () => {
+    /* The collector opens *outside* the gate that fills the owner box, so the
+       owner has to be resolved when the call is recorded rather than when the
+       box was opened. If that ever regresses, these rows do not exist at all —
+       which is why the count above is asserted too. */
+    for (const r of ledgerRows()) expect(typeof r.ownerId).toBe("string");
+  });
+
+  it("gives the three requests three different run ids", () => {
+    /* One collector per request. If `handleApi` ever opened one per process,
+       every reader's spend would land under whoever's request came first. */
+    expect(new Set(ledgerRows().map((r) => r.runId)).size).toBe(3);
+  });
+});
 
 /** The child's `http` lines, in the order they were written. */
 function httpLines(): Record<string, unknown>[] {

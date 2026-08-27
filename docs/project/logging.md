@@ -205,8 +205,32 @@ two can be added up together:
 | `aiUnpriced` | how many of those calls came back with no cost at all. **Present only when it is not zero** |
 | `aiPending` | calls started and never recorded — always a bug. **Present only when it is not zero** |
 | `aiPendingJobs` | which jobs those were, because a bare count says something leaked without saying where |
+| `aiRunId` | the id every ledger row from this step or request carries, so the line and the rows can be joined |
+| `aiWriteFailures` | calls that happened and left **no row**. **Present only when it is not zero** |
 
 A line with none of these made no model call at all, which is most of them.
+
+**`aiRunId` is the join, and it exists because the fields above are a summary.** Since 2026-08-28
+each call is also a row — in `ai_calls` or in `data/_ai-calls.jsonl`
+([ai-gateway.md](ai-gateway.md)) — and the question a surprising `aiCost` provokes is *which calls*.
+Without an id on both sides, answering it means guessing at a timestamp range.
+
+**`aiWriteFailures` is the one anomaly the ledger itself cannot report**, because the evidence is
+the row that is not there. A failed insert is logged, counted here, and then invisible to every
+later `npm run cost`. It is not the same as `aiUnpriced`, which is a row that exists and does not
+know what it cost.
+
+**A third line carries a total, and it is a different kind of total.** `endJob` in
+[`src/jobs.ts`](../../src/jobs.ts) reports what the *whole ingest* cost, and it does not come from a
+collector at all — a job spans several `advanceJob` calls with no frame in common, so the number is
+queried back out of the ledger by `job_id`. Two fields exist on that line only:
+
+- **`aiCostStatus: "unavailable"`** — the ledger could not be read. The one thing this line must be
+  able to say, because a database that was down all afternoon and a job that spent nothing must not
+  print the same number.
+- **`aiCostStatus: "partial"`, with `aiUnreadable`** — some of the ledger would not parse, so the
+  total below it is short by that many calls. GPT Sol found the first version dropping that count
+  between the store and this line, which turned a short total into a confident one.
 
 **Several fields rather than one number, because a bare total cannot be checked.** `aiCalls` is the
 thing nobody can guess from outside — one step is often several calls, since `summarise` batches per
@@ -223,9 +247,15 @@ a zero is indistinguishable from a free call and understates a bill for as long 
 was forgotten: a call that finishes *after* its step or request has already reported. By definition
 that arrives after the line is written, so no field on it could ever be non-zero — a first draft
 added one and it was a counter nobody could read. It is counted process-wide by `lateCalls()`
-instead, beside `unscopedCalls()`, and `npm run cost` is where both belong.
+instead, beside `unscopedCalls()`, and each increment writes its own `warn` line — the counter alone
+lives in one process's memory where nobody reads it, and the line is the part that reaches a person.
 
-All four are omitted together when a step made no calls. Most steps in most jobs are cached or free,
+**`npm run cost` deliberately does not print either counter.** It is a different process and would
+start them both at zero, so the pair of noughts would be reassuring and mean nothing. What it asks
+instead is the question the rows can answer: how many reported no cost, and how much went on calls
+that failed.
+
+All of them are omitted together when a step made no calls. Most steps in most jobs are cached or free,
 and four zeroes on every line is noise that makes the lines that matter harder to find.
 
 **Logged from `jobs.ts`, which is the same rule as the section above** — log at the seam the queue

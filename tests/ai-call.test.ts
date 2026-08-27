@@ -20,7 +20,6 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AI_JOB_ROUTE,
-  OPENROUTER_BASE,
   ProviderRefused,
   openRouterJson,
   openRouterStream,
@@ -129,7 +128,9 @@ describe("the request that actually goes out", () => {
     const { sent } = await drain(() =>
       streamed(USAGE_CHUNK, "data: [DONE]\n\n"),
     );
-    expect(sent[0]?.url).toBe(`${OPENROUTER_BASE}/v1/chat/completions`);
+    /* The literal, not the constant it was built from: a test that asserts a
+       value against its own source asserts nothing. */
+    expect(sent[0]?.url).toBe("https://openrouter.ai/api/v1/chat/completions");
     expect(sent[0]?.body.provider).toEqual({
       order: ["anthropic"],
       require_parameters: true,
@@ -237,7 +238,9 @@ describe("the routing table", () => {
         }
       });
       expect(sent[0]?.body.provider, job).toEqual(AI_JOB_ROUTE[job].provider);
-      expect(sent[0]?.url, job).toBe(`${OPENROUTER_BASE}${AI_JOB_ROUTE[job].path}`);
+      /* Spelled out rather than read back off the table, so a wrong path in the
+         table fails here instead of agreeing with itself. */
+      expect(sent[0]?.url, job).toBe("https://openrouter.ai/api/v1/chat/completions");
     }
   });
 
@@ -474,6 +477,61 @@ describe("one record per call, however the call ends", () => {
       }
     });
     expect(report.calls).toHaveLength(1);
+    expect(report.calls[0]?.outcome).toBe("aborted");
+  });
+
+  it("does not call a provider failure a cancel merely because a signal fired", async () => {
+    /* **The distinction the ledger made expensive.** Any error raised while the
+       signal happened to be aborted used to be recorded as `"aborted"` — and a
+       provider dying at the moment a reader presses Stop is not far-fetched, a
+       stall on their side being exactly what makes somebody press it. A cancel
+       is the outcome nobody investigates, so the one event that could explain
+       what went wrong went into the bin marked "the reader did that".
+
+       Aborting rejects with the signal's own reason, so identity is the test.
+       Here the signal is aborted *and* the failure is something else. Raised by
+       a GPT Sol review of the code. */
+    const controller = new AbortController();
+    const { report } = await collectSpend(async () => {
+      stubTransport(() => {
+        controller.abort();
+        throw new Error("the upstream fell over");
+      });
+      await expect(
+        (async () => {
+          for await (const _ of openRouterStream(
+            "chat",
+            { model: "m", messages: [] },
+            { signal: controller.signal, onActivity: noop, end: end() },
+          ))
+            void _;
+        })(),
+      ).rejects.toThrow("the upstream fell over");
+    });
+    expect(report.calls).toHaveLength(1);
+    expect(report.calls[0]?.outcome).toBe("error");
+  });
+
+  it("still calls a real abort a cancel, which is the other half of that", async () => {
+    /* The rule has to keep working in the direction it was already right about,
+       or "never say aborted" would pass the test above. */
+    const controller = new AbortController();
+    const { report } = await collectSpend(async () => {
+      stubTransport(() => {
+        controller.abort();
+        throw controller.signal.reason;
+      });
+      await expect(
+        (async () => {
+          for await (const _ of openRouterStream(
+            "chat",
+            { model: "m", messages: [] },
+            { signal: controller.signal, onActivity: noop, end: end() },
+          ))
+            void _;
+        })(),
+      ).rejects.toThrow();
+    });
     expect(report.calls[0]?.outcome).toBe("aborted");
   });
 

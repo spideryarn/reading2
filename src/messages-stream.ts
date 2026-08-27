@@ -57,13 +57,20 @@
  * response proves anything.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import { type SpendRecord, beginSpend, recordSpend } from "./ai-spend.js";
+import {
+  type SpendRecord,
+  beginSpend,
+  keyFingerprint,
+  recordSpend,
+} from "./ai-spend.js";
 import { NOT_CONFIGURED } from "./messages.js";
 import { type Task, modelFor } from "./models.js";
 import { type Nanos, providerCostToNanos } from "./pricing.js";
 
 /** Where the Anthropic Messages protocol is served from. Not `api.anthropic.com`. */
-export const MESSAGES_BASE_URL = "https://openrouter.ai/api";
+/* Not exported — see `OPENROUTER_BASE` in ai-call.ts for the same reasoning:
+   an exported base is the way round the scan that forbids naming an endpoint. */
+const MESSAGES_BASE_URL = "https://openrouter.ai/api";
 
 /**
  * **Which upstream, and how hard we insist.**
@@ -193,6 +200,26 @@ export interface CallMeter {
    * shape hardened into a database column.
    */
   isByok: boolean | null;
+  /** Which key paid, by name and never by value. `keyFingerprint` in ai-spend.ts. */
+  credentialFingerprint: string | null;
+  /**
+   * **The pricing inputs, off the raw `message_delta` rather than off
+   * `finalMessage()`.**
+   *
+   * Not a stylistic choice: the SDK merges the delta's usage into the message it
+   * hands back and **drops the fields its own `Usage` type does not name** — the
+   * TTL split, the tier and the geography among them. Read from the message they
+   * are all `null`, which is the shape of a cost report that is quietly missing
+   * the reason its number moved. Found by driving a real canned stream through
+   * this file and watching `cacheWrite5mTokens` come back null with the number
+   * plainly in the fixture.
+   */
+  cacheWrite5mTokens: number | null;
+  cacheWrite1hTokens: number | null;
+  reasoningTokens: number | null;
+  webSearches: number | null;
+  serviceTier: string | null;
+  inferenceGeo: string | null;
 }
 
 /**
@@ -203,11 +230,14 @@ export interface CallMeter {
  * `message_delta`, and populated afterwards. **Read it after awaiting
  * `finalMessage()`**, never before.
  *
- * Exported separately from `streamMessage` so a caller that already holds a
- * stream — a test, or a stage doing something unusual — can meter it without
- * going through the wrapper.
+ * **Not exported, since 2026-08-28.** It used to be, "so a caller that already
+ * holds a stream can meter it without going through the wrapper" — which is a
+ * description of the bypass this seam exists to remove. A caller that holds a
+ * stream and a meter is a caller that can decide not to finish either, and once
+ * the numbers reach a database that is a bypass with a ledger behind it looking
+ * confident. GPT Sol asked for it to close before the schema hardened.
  */
-export function meterStream(stream: MessageStream): CallMeter {
+function meterStream(stream: MessageStream): CallMeter {
   const meter: CallMeter = {
     costNanos: null,
     costUsd: null,
@@ -215,6 +245,13 @@ export function meterStream(stream: MessageStream): CallMeter {
     generationId: null,
     upstream: null,
     isByok: null,
+    credentialFingerprint: null,
+    cacheWrite5mTokens: null,
+    cacheWrite1hTokens: null,
+    reasoningTokens: null,
+    webSearches: null,
+    serviceTier: null,
+    inferenceGeo: null,
   };
   stream.on("streamEvent", (event: { type: string }) => {
     /* Deliberately reading through a cast rather than the SDK's types. The
@@ -226,6 +263,14 @@ export function meterStream(stream: MessageStream): CallMeter {
         cost?: unknown;
         is_byok?: unknown;
         cost_details?: { upstream_inference_cost?: unknown };
+        cache_creation?: {
+          ephemeral_5m_input_tokens?: unknown;
+          ephemeral_1h_input_tokens?: unknown;
+        };
+        output_tokens_details?: { thinking_tokens?: unknown };
+        server_tool_use?: { web_search_requests?: unknown };
+        service_tier?: unknown;
+        inference_geo?: unknown;
       };
     };
     if (event.type === "message_start") {
@@ -243,6 +288,23 @@ export function meterStream(stream: MessageStream): CallMeter {
       }
       if (typeof raw.usage?.is_byok === "boolean")
         meter.isByok = raw.usage.is_byok;
+      const num = (v: unknown): number | null =>
+        typeof v === "number" && Number.isFinite(v) ? v : null;
+      const str = (v: unknown): string | null =>
+        typeof v === "string" && v.length > 0 ? v : null;
+      meter.cacheWrite5mTokens =
+        num(raw.usage?.cache_creation?.ephemeral_5m_input_tokens) ??
+        meter.cacheWrite5mTokens;
+      meter.cacheWrite1hTokens =
+        num(raw.usage?.cache_creation?.ephemeral_1h_input_tokens) ??
+        meter.cacheWrite1hTokens;
+      meter.reasoningTokens =
+        num(raw.usage?.output_tokens_details?.thinking_tokens) ??
+        meter.reasoningTokens;
+      meter.webSearches =
+        num(raw.usage?.server_tool_use?.web_search_requests) ?? meter.webSearches;
+      meter.serviceTier = str(raw.usage?.service_tier) ?? meter.serviceTier;
+      meter.inferenceGeo = str(raw.usage?.inference_geo) ?? meter.inferenceGeo;
     }
   });
   return meter;
@@ -291,52 +353,68 @@ export function wasRefused(message: Anthropic.Message): boolean {
  * nothing.
  */
 export type MessagesBody = Omit<Anthropic.MessageStreamParams, "model"> & {
-  provider?: typeof MESSAGES_PROVIDER;
   /**
-   * Optional, and normally omitted — `streamMessage` derives it from the task.
+   * **Both are this file's to set, and passing either is a compile error.**
    *
-   * **Left to the caller until a GPT Sol review pointed out what that allowed.**
-   * Each of the seven stages passed `CAPABLE_MODEL_OPENROUTER` itself, so a stage
-   * could be switched back to the unprefixed `CAPABLE_MODEL` — a 404 on every
-   * call — and `tests/models.test.ts` would stay green, because it only ever
-   * asked `modelFor()` what it *would* return, never what a stage actually sent.
-   * One source for the id closes that: `modelFor(task)` is now what goes on the
-   * wire, and the outgoing bodies are asserted.
+   * They were optional overrides until 2026-08-28, and each had its own way of
+   * being wrong quietly. A stage that passed its own `model` could be switched
+   * back to the unprefixed `CAPABLE_MODEL` — a 404 on every call — and
+   * `tests/models.test.ts` would stay green, because it only ever asked
+   * `modelFor()` what it *would* return, never what a stage actually sent. A
+   * stage that passed its own `provider` could drop the cache pin, which does
+   * not fail: it just costs several times more.
+   *
+   * Typed `never` rather than merely overwritten, so the mistake is caught where
+   * it is made. They are overwritten after the spread as well, because a body
+   * can be assembled at run time out of something the type system never saw.
    */
-  model?: Anthropic.MessageStreamParams["model"];
+  provider?: never;
+  model?: never;
 };
 
-/** What `streamMessage` hands back: the SDK's stream, and a `finalMessage` that keeps accounts. */
+/**
+ * What `streamMessage` hands back.
+ *
+ * **Three things, and deliberately not the stream.** A stage used to get the
+ * SDK's own `MessageStream`, which has its own `finalMessage()` on it — so the
+ * ordinary-looking `await call.stream.finalMessage()` was a working call that
+ * recorded nothing, and nothing counted it. That was fine while the numbers only
+ * reached a log line; with a ledger behind them it is a bypass that makes the
+ * ledger look complete. GPT Sol asked for it closed before the schema hardened.
+ */
 export interface MeteredCall {
-  /** The SDK's own stream. Subscribe to `"text"` for progress exactly as before. */
-  stream: MessageStream;
-  /** Populated by the time `finalMessage()` resolves; `null` before that. */
-  meter: CallMeter;
-  /** `stream.finalMessage()`, plus the spend record. Await this, not the stream's own. */
+  /** Progress, exactly as `stream.on("text", …)` gave it. */
+  onText: (listener: (delta: string) => void) => void;
+  /** `stream.finalMessage()`, plus the spend record. The only way to get the answer. */
   finalMessage: () => Promise<Anthropic.Message>;
+  /** Whether the stream ended because somebody aborted it. */
+  readonly aborted: () => boolean;
 }
 
 /**
  * Open a metered streamed call.
  *
- * The stage keeps everything it had — `stream.on("text", …)` for progress, the
- * `signal` for a reader hitting Stop — and swaps `stream.finalMessage()` for the
- * `finalMessage()` on the returned object.
+ * The stage keeps what it had, in a narrower shape: `onText` for progress and
+ * the `signal` for a reader hitting Stop, and `finalMessage()` for the answer.
  *
- * **That swap is the whole design.** Recording could have been left to each
+ * **That last one is the whole design.** Recording could have been left to each
  * stage, and then there would be seven places to forget it, and forgetting it
  * would produce a working article and an empty cost table. Here the ordinary way
  * to get the answer is the function that keeps the account.
  *
- * **But a stage that awaits `call.stream.finalMessage()` instead still works and
- * still records nothing, and nothing counts that.** An earlier version of this
- * paragraph claimed `unscopedCalls()` in [`src/ai-spend.ts`](ai-spend.ts) was the
- * backstop; it is not, and a GPT Sol review said so. That counter increments when
- * `recordSpend` runs with no collector open — bypassing this wrapper never calls
- * `recordSpend` at all, so it increments nothing. The two failures look identical
- * from the outside and only one of them is counted.
+ * **And until 2026-08-28 there was a second way.** The SDK's own stream was
+ * handed back, so `await call.stream.finalMessage()` worked and recorded
+ * nothing, and nothing counted it: `unscopedCalls()` increments when
+ * `recordSpend` runs with no collector open, and bypassing this wrapper never
+ * calls `recordSpend` at all. A test scanning `src/` was the only guard, which
+ * was a weaker guarantee than the other wire's and was written down as one.
  *
- * What actually guards it is a test:
+ * It is closed. The stream, the meter and `meterStream` are private; what comes
+ * back is three functions. GPT Sol asked for it before the numbers became
+ * database rows, on the grounds that a documented bypass under a ledger is a
+ * ledger that looks complete.
+ *
+ * The test is still there, and still worth having:
  * [`tests/messages-stream.test.ts`](../tests/messages-stream.test.ts) drives this
  * function against a stubbed transport and asserts that one finished call
  * produces exactly one `SpendRecord`. Delete the recording and it goes red.
@@ -352,15 +430,24 @@ export function streamMessage(
 ): MeteredCall {
   const client = messagesClient();
   const startedAt = Date.now();
-  const model = body.model ?? modelFor(task);
+  const model = modelFor(task);
   /* Registered before the stream opens, so a call that never comes back leaves a
      trace rather than simply not appearing. See `PendingCall` in ai-spend.ts. */
   const callId = beginSpend(task, model);
   const stream = client.messages.stream(
-    { provider: MESSAGES_PROVIDER, ...body, model } as Anthropic.MessageStreamParams,
+    /* **After the spread, not before it.** It was before until 2026-08-28, so a
+       body assembled at run time — out of something the type system never saw —
+       could carry its own `provider` and win. Nothing did; the test that proved
+       it possible was written the same hour, and it went red on the old order.
+       `model` was already after, which is why only one of the two was wrong. */
+    { ...body, provider: MESSAGES_PROVIDER, model } as Anthropic.MessageStreamParams,
     options,
   );
   const meter = meterStream(stream);
+  /* Off the client rather than out of the environment a second time: the key the
+     call actually went out with is the one the reconciliation has to ask about,
+     and a second read of `process.env` is a second chance to disagree. */
+  meter.credentialFingerprint = keyFingerprint(client.apiKey ?? "");
 
   /* **Memoised, because `finalMessage()` may be awaited more than once.** The
      SDK's own is idempotent — it resolves the same message every time — so a
@@ -403,8 +490,15 @@ export function streamMessage(
            *this stream* ended, where the external signal answers a different
            question and gets two cases wrong — `stream.abort()` with no signal
            reads as an error, and a provider failure racing a later signal abort
-           reads as a cancel. Both found by a GPT Sol review. */
-        const aborted = stream.aborted || options?.signal?.aborted === true;
+           reads as a cancel. Both found by a GPT Sol review.
+
+           **And then it OR-ed the signal back in anyway**, one line under the
+           paragraph explaining why that is wrong, which a second Sol review
+           caught. What is left is causal on both halves: either the stream says
+           it was aborted, or the error *is* the abort — the signal's own reason,
+           or an `AbortError` where none was given. "The signal happens to be
+           aborted now" is not one of the two. */
+        const aborted = stream.aborted || isAbort(err, options?.signal);
         record(
           task,
           model,
@@ -421,7 +515,24 @@ export function streamMessage(
     return settled;
   };
 
-  return { stream, meter, finalMessage };
+  return {
+    onText: (listener) => {
+      stream.on("text", listener);
+    },
+    finalMessage,
+    aborted: () => stream.aborted,
+  };
+}
+
+/**
+ * **Was this error the abort itself?** — the same question
+ * [`ai-call.ts`](ai-call.ts) asks, and for the same reason: a provider dying at
+ * the moment a reader presses Stop is not a cancel, and recording it as one puts
+ * it in the outcome nobody investigates.
+ */
+function isAbort(err: unknown, signal: AbortSignal | undefined): boolean {
+  if (!signal?.aborted) return false;
+  return err === signal.reason || (err as Error | undefined)?.name === "AbortError";
 }
 
 /** Turn a finished call into a `SpendRecord`. Absent numbers stay absent. */
@@ -439,17 +550,29 @@ function record(
   recordSpend(
     {
       job: task,
+      wire: "messages",
       model,
       answeredBy,
       costNanos: meter.costNanos,
       upstreamCostNanos: meter.upstreamCostNanos,
       generationId: meter.generationId,
       upstream: meter.upstream,
+      credentialFingerprint: meter.credentialFingerprint,
       isByok: meter.isByok,
       inputTokens: num(usage?.input_tokens),
       outputTokens: num(usage?.output_tokens),
       cacheReadTokens: num(usage?.cache_read_input_tokens),
       cacheWriteTokens: num(usage?.cache_creation_input_tokens),
+      cacheWrite5mTokens: meter.cacheWrite5mTokens,
+      cacheWrite1hTokens: meter.cacheWrite1hTokens,
+      /* Thinking is billed as output and is *inside* `output_tokens`, so this is
+         never added to anything — it is the answer to "did that call spend its
+         whole budget thinking", which is what a jump in the bill turns out to be
+         about more often than a price change. */
+      reasoningTokens: meter.reasoningTokens,
+      webSearches: meter.webSearches,
+      serviceTier: meter.serviceTier,
+      inferenceGeo: meter.inferenceGeo,
       ms: Date.now() - startedAt,
       outcome,
     },

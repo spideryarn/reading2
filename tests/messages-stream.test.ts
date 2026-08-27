@@ -17,25 +17,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { collectSpend, totalSpend } from "../src/ai-spend.js";
 import { CAPABLE_MODEL, modelFor } from "../src/models.js";
 import {
-  MESSAGES_BASE_URL,
   MESSAGES_PROVIDER,
   messagesClient,
-  meterStream,
   streamMessage,
   wasRefused,
 } from "../src/messages-stream.js";
-
-/**
- * The smallest thing `meterStream` accepts: it subscribes to `"streamEvent"`
- * and nothing else. `emit` plays events at it in order.
- */
-function fakeStream() {
-  const listeners: ((event: unknown) => void)[] = [];
-  return {
-    stream: { on: (name: string, cb: (event: unknown) => void) => { if (name === "streamEvent") listeners.push(cb); } },
-    emit: (event: unknown) => { for (const cb of listeners) cb(event); },
-  };
-}
 
 /* Captured from a live streamed call through https://openrouter.ai/api/v1/messages,
    2026-08-27. Trimmed only of the content blocks. */
@@ -71,63 +57,6 @@ const MESSAGE_DELTA = {
   },
 };
 
-/** `meterStream` types its argument as the SDK's stream; the fake is structurally enough. */
-// biome-ignore lint/suspicious/noExplicitAny: the fake implements only the one method under test
-const meter = (s: { on: (n: string, cb: (e: unknown) => void) => void }) => meterStream(s as any);
-
-describe("meterStream", () => {
-  it("takes the cost off the wire, where finalMessage() would have dropped it", () => {
-    const f = fakeStream();
-    const m = meter(f.stream);
-    f.emit(MESSAGE_START);
-    f.emit(MESSAGE_DELTA);
-    expect(m.costUsd).toBe(0.0215235);
-    /* Nano-dollars, per src/pricing.ts — an integer, so no float drift in a sum. */
-    expect(m.costNanos).toBe(21_523_500);
-  });
-
-  it("records which upstream answered, and the id to look the call up by later", () => {
-    const f = fakeStream();
-    const m = meter(f.stream);
-    f.emit(MESSAGE_START);
-    expect(m.upstream).toBe("Claude Platform on AWS");
-    expect(m.generationId).toBe("gen-1787844432-JKwGQebcNXfkCfTX5mUq");
-  });
-
-  /* ------------------------------------------------------------------ the point */
-
-  it("leaves cost NULL, not zero, when the field stops arriving", () => {
-    const f = fakeStream();
-    const m = meter(f.stream);
-    f.emit(MESSAGE_START);
-    const { cost: _dropped, ...usageWithoutCost } = MESSAGE_DELTA.usage;
-    f.emit({ ...MESSAGE_DELTA, usage: usageWithoutCost });
-
-    /* `null` is a thing a report can count and complain about. `0` is
-       indistinguishable from a free call, and would understate the bill for as
-       long as nobody happened to look. */
-    expect(m.costNanos).toBeNull();
-    expect(m.costUsd).toBeNull();
-    expect(m.costNanos).not.toBe(0);
-  });
-
-  it("refuses a cost that is not a finite number rather than coercing it", () => {
-    for (const bad of [null, "0.02", undefined, Number.NaN, -1]) {
-      const f = fakeStream();
-      const m = meter(f.stream);
-      f.emit({ ...MESSAGE_DELTA, usage: { ...MESSAGE_DELTA.usage, cost: bad } });
-      expect(m.costNanos, `cost: ${String(bad)}`).toBeNull();
-    }
-  });
-
-  it("is null before the delta arrives, so reading it early cannot look like a free call", () => {
-    const f = fakeStream();
-    const m = meter(f.stream);
-    f.emit(MESSAGE_START);
-    expect(m.costNanos).toBeNull();
-  });
-});
-
 describe("MESSAGES_PROVIDER", () => {
   /* These three are pinned because each one fails *silently* if it changes —
      see the header of src/messages-stream.ts. A diff that flips one should have
@@ -160,8 +89,10 @@ describe("messagesClient", () => {
   });
 
   it("points the Anthropic SDK at OpenRouter, not at api.anthropic.com", () => {
-    expect(messagesClient().baseURL).toBe(MESSAGES_BASE_URL);
-    expect(MESSAGES_BASE_URL).not.toContain("anthropic.com");
+    /* The literal, because the constant is private now — and because a test
+       comparing a value with its own source proves nothing either way. */
+    expect(messagesClient().baseURL).toBe("https://openrouter.ai/api");
+    expect(messagesClient().baseURL).not.toContain("anthropic.com");
   });
 
   it("sends the key as a bearer token, which is what OpenRouter reads", () => {
@@ -237,10 +168,23 @@ function stubTransport(body: string | { fail: true }) {
 }
 
 const A_BODY = {
-  model: "anthropic/claude-sonnet-5",
   max_tokens: 16,
   messages: [{ role: "user" as const, content: "irrelevant" }],
 };
+
+/** Drive one whole call and hand back the single row it recorded. */
+async function recordOne(usage: Record<string, unknown> = {}) {
+  const t = stubTransport(cannedStream(usage));
+  try {
+    const { report } = await collectSpend(async () => {
+      await streamMessage("toc", A_BODY).finalMessage();
+    });
+    expect(report.calls).toHaveLength(1);
+    return report.calls[0]!;
+  } finally {
+    t.restore();
+  }
+}
 
 describe("streamMessage — the recording lifecycle", () => {
   const savedKey = process.env.OPENROUTER_API_KEY;
@@ -316,22 +260,82 @@ describe("streamMessage — the recording lifecycle", () => {
     }
   });
 
-  it("lets a caller override the provider, so the injection is not a wall", async () => {
+  it("overrides a caller's provider and model rather than honouring them", async () => {
+    /* **This test used to assert the opposite** — that an override worked, "so
+       the injection is not a wall". A GPT Sol review pointed out what that
+       allowed once the numbers reached a ledger: a caller could drop the cache
+       pin, which does not fail, it just costs several times more, and could send
+       a model the row would then misattribute the money to.
+
+       Both fields are typed `never` now, so this is a cast rather than something
+       anybody could write by accident — and the cast is exactly the shape of a
+       body assembled at run time out of something the type system never saw,
+       which is what the overwrite-after-spread is for. */
     const t = stubTransport(cannedStream());
     try {
       await streamMessage("toc", {
         ...A_BODY,
-        /* The shape is `typeof MESSAGES_PROVIDER`, whose `order` is a readonly
-           tuple of literals — so an override has to be cast rather than merely
-           written. That the type is this tight is the point: it is what stops a
-           typo'd provider key compiling. */
-        provider: { order: ["something-else"], allow_fallbacks: false, require_parameters: true } as unknown as typeof MESSAGES_PROVIDER,
-      }).finalMessage();
-      const sentProvider = t.seenRequests[0]?.body.provider as { order?: string[] } | undefined;
-      expect(sentProvider?.order).toEqual(["something-else"]);
+        provider: { order: ["something-else"] },
+        model: "openai/gpt-4o",
+      } as unknown as typeof A_BODY).finalMessage();
+      const sent = t.seenRequests[0]?.body;
+      expect((sent?.provider as { order?: string[] })?.order).toEqual(["anthropic"]);
+      expect(sent?.model).toBe(modelFor("toc"));
     } finally {
       t.restore();
     }
+  });
+
+  /* ============================================ what came off the wire ====
+     These used to drive `meterStream` directly, which is private now — a caller
+     holding a meter is a caller that can decline to finish it, and that mattered
+     more once the numbers became rows. They assert the same facts through the
+     only door there is. */
+
+  it("takes the cost off the wire, where finalMessage() would have dropped it", async () => {
+    const row = await recordOne();
+    /* Nano-dollars, per src/pricing.ts — an integer, so no float drift in a sum. */
+    expect(row.costNanos).toBe(21_523_500);
+    expect(row.upstreamCostNanos).toBe(21_523_500);
+    expect(row.isByok).toBe(false);
+  });
+
+  it("leaves cost NULL, not zero, when the field stops arriving", async () => {
+    /* **The one assertion this file is really for.** A dropped `cost` produces a
+       perfectly good article, a perfectly good log line, and a cost column that
+       quietly reads as free. `null` is a thing a report can count and complain
+       about; `0` is indistinguishable from a free call. */
+    const row = await recordOne({ cost: undefined, cost_details: undefined });
+    expect(row.costNanos).toBeNull();
+    expect(row.costNanos).not.toBe(0);
+  });
+
+  it("refuses a cost that is not a finite number rather than coercing it", async () => {
+    for (const bad of [null, "0.02", Number.NaN, -1]) {
+      const row = await recordOne({ cost: bad, cost_details: undefined });
+      expect(row.costNanos, `cost: ${String(bad)}`).toBeNull();
+    }
+  });
+
+  it("keeps the pricing inputs a token count cannot supply", async () => {
+    /* Each of these changes what a call is *worth* rather than what it did: the
+       two cache TTLs are priced at 1.25x and 2x, batch is half price, and a US
+       geo is a documented 1.1x. A ledger without them can record the tokens
+       exactly and still be unable to say whether its own total is right. */
+    const row = await recordOne();
+    expect(row.cacheWrite5mTokens).toBe(8583);
+    expect(row.cacheWrite1hTokens).toBe(0);
+    expect(row.serviceTier).toBe("standard");
+    expect(row.reasoningTokens).toBe(0);
+    expect(row.wire).toBe("messages");
+  });
+
+  it("names the key that paid, and never carries it", async () => {
+    const row = await recordOne();
+    const { keyFingerprint } = await import("../src/ai-spend.js");
+    expect(row.credentialFingerprint).toBe(keyFingerprint("sk-or-test-not-a-real-key"));
+    expect(row.credentialFingerprint).not.toContain("sk-or");
+    expect(row.credentialFingerprint).toHaveLength(12);
   });
 
   it("records once, not twice, when finalMessage is awaited again", async () => {

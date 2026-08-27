@@ -19,6 +19,8 @@ import {
   beginSpend,
   collectSpend,
   collectingSpend,
+  currentSpend,
+  emptySpend,
   formatNanos,
   recordSpend,
   lateCalls,
@@ -40,10 +42,18 @@ function call(over: Partial<SpendRecord> = {}): SpendRecord {
     generationId: "gen-1787844432-JKwGQebcNXfkCfTX5mUq",
     upstream: "Anthropic",
     isByok: false,
+    credentialFingerprint: "abcdef012345",
+    wire: "messages",
     inputTokens: 13,
     outputTokens: 4,
     cacheReadTokens: 0,
     cacheWriteTokens: 8583,
+    cacheWrite5mTokens: 8583,
+    cacheWrite1hTokens: 0,
+    reasoningTokens: 0,
+    webSearches: null,
+    serviceTier: "standard",
+    inferenceGeo: null,
     ms: 1200,
     outcome: "ok",
     ...over,
@@ -107,8 +117,10 @@ describe("collectSpend", () => {
           recordSpend(call({ outcome: "error", costNanos: 4_200_000 }));
           throw new Error("stage blew up");
         },
-        (r) => {
-          seen.push(r);
+        {
+          onDone: (r) => {
+            seen.push(r);
+          },
         },
       ),
     ).rejects.toThrow("stage blew up");
@@ -127,8 +139,10 @@ describe("collectSpend", () => {
       async () => {
         recordSpend(call({ job: "arc" }));
       },
-      (r) => {
-        seen.push(r);
+      {
+        onDone: (r) => {
+          seen.push(r);
+        },
       },
     );
     expect(seen).toHaveLength(1);
@@ -274,7 +288,7 @@ describe("totalSpend", () => {
 
 describe("spendFields", () => {
   it("says nothing at all about a piece of work that called no model", () => {
-    expect(spendFields({ calls: [], pending: [] })).toEqual({});
+    expect(spendFields(emptySpend())).toEqual({});
   });
 
   it("still writes a line when a call went missing and none completed", () => {
@@ -283,8 +297,8 @@ describe("spendFields", () => {
        request ends in — so the one symptom was hidden by the guard written for
        the ordinary case. Raised by a GPT Sol review. */
     const fields = spendFields({
-      calls: [],
-      pending: [{ job: "chat", model: "m", startedAt: 0 }],
+      ...emptySpend(),
+      pending: [{ job: "chat", model: "m", startedAt: 0, rowId: "r1" }],
     });
     expect(fields.aiPending).toBe(1);
     expect(fields.aiPendingJobs).toBe("chat");
@@ -292,8 +306,9 @@ describe("spendFields", () => {
 
   it("names the two problems separately, because they are two problems", () => {
     const fields = spendFields({
+      ...emptySpend(),
       calls: [call({ costNanos: 100 }), call({ costNanos: null })],
-      pending: [{ job: "search", model: "m", startedAt: 0 }],
+      pending: [{ job: "search", model: "m", startedAt: 0, rowId: "r1" }],
     });
     expect(fields.aiCalls).toBe(2);
     expect(fields.aiUnpriced).toBe(1);
@@ -302,7 +317,7 @@ describe("spendFields", () => {
   });
 
   it("leaves the two out when there is nothing to say", () => {
-    const fields = spendFields({ calls: [call()], pending: [] });
+    const fields = spendFields({ ...emptySpend(), calls: [call()] });
     expect(fields).not.toHaveProperty("aiUnpriced");
     expect(fields).not.toHaveProperty("aiPending");
   });
@@ -313,4 +328,383 @@ describe("formatNanos", () => {
     expect(formatNanos(21_523_500)).toBe("$0.0215");
     expect(formatNanos(0)).toBe("$0.0000");
   });
+
+  it("does not round a real cost down to nothing", () => {
+    /* One query embedding is about $0.00000018 — which is the reason the column
+       counts in nano-dollars, and which four decimals would print as `$0.0000`.
+       Putting the lie back at the last step is worse than never having avoided
+       it, because by then there is a correct number in the database to disagree
+       with. Caught on a live probe. */
+    expect(formatNanos(180)).toBe("$0.00000018");
+    expect(formatNanos(180)).not.toBe("$0.0000");
+    /* And a real zero stays short: a free call and a very cheap one are
+       different things, and only one of them wants eight decimals. */
+    expect(formatNanos(0)).toBe("$0.0000");
+  });
 });
+
+/* ==================================================== the write to the ledger ==
+   Everything above tests what the collector *reports*. These test what it
+   *keeps*, which is a different question and the one a bill is made of. */
+
+import { environmentOwnerId, runAsOwner, runInRequest, setRequestOwner } from "../src/owner.js";
+import { type AiCallRow, withSpendAttribution } from "../src/ai-spend.js";
+
+/** Swapped in by the draining test; the ordinary sinks are inline. */
+let sinkGate: (row: AiCallRow) => Promise<void> = async () => undefined;
+
+/** Record one call inside a collector with a capturing sink, and hand back the rows. */
+async function rowsFrom(
+  options: Parameters<typeof collectSpend>[1] = {},
+  body: () => void = () => {
+    const id = beginSpend("toc", "anthropic/claude-sonnet-5");
+    recordSpend(call(), id);
+  },
+): Promise<AiCallRow[]> {
+  const rows: AiCallRow[] = [];
+  await collectSpend(
+    async () => {
+      body();
+    },
+    {
+      ...options,
+      sink: async (row) => {
+        rows.push(row);
+      },
+    },
+  );
+  return rows;
+}
+
+describe("the sink", () => {
+  it("gets one row per recorded call, with the collector's attribution on it", async () => {
+    const rows = await rowsFrom({
+      attribution: {
+        scopeKind: "job_step",
+        ownerId: "00000000-0000-4000-8000-00000000ac02",
+        articleSlug: "some-article",
+        jobId: "job-7",
+        stepName: "toc",
+      },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.scopeKind).toBe("job_step");
+    expect(rows[0]?.articleSlug).toBe("some-article");
+    expect(rows[0]?.jobId).toBe("job-7");
+    expect(rows[0]?.stepName).toBe("toc");
+    expect(rows[0]?.job).toBe("toc");
+    expect(rows[0]?.creditsUsedNanos).toBe(21_523_500);
+    /* Named `credits`, not `cost`. The rename is the decision — see
+       docs/plans/ai-cost-tracking.md Q5 — and a test that only checked the
+       number would let it drift back to a name that promises cash. */
+    expect("creditsUsedNanos" in (rows[0] ?? {})).toBe(true);
+  });
+
+  it("uses the id minted before the call, not one invented at the end", async () => {
+    /* The point of minting early is that a call which never returns still has a
+       name. Nothing asserts that directly — there is no row for it — so what is
+       checked is that the id on the row is the one `beginSpend` reserved. */
+    const rows: AiCallRow[] = [];
+    let pendingId: string | undefined;
+    await collectSpend(
+      async () => {
+        const id = beginSpend("toc", "anthropic/claude-sonnet-5");
+        pendingId = currentSpend()?.pending[0]?.rowId;
+        recordSpend(call(), id);
+      },
+      {
+        attribution: { scopeKind: "cli", ownerId: environmentOwnerId() },
+        sink: async (row) => {
+          rows.push(row);
+        },
+      },
+    );
+    expect(pendingId).toBeTruthy();
+    expect(rows[0]?.id).toBe(pendingId);
+  });
+
+  it("is awaited before collectSpend returns, because Vercel freezes the process", async () => {
+    /* **The failure this prevents is invisible on a laptop.** An un-awaited
+       insert finishes fine here and never runs on a serverless function, whose
+       instance can be frozen the moment the response goes out — so the rows
+       that go missing are exactly the request-path ones. */
+    let settled = false;
+    await collectSpend(
+      async () => {
+        const id = beginSpend("toc", "m");
+        recordSpend(call(), id);
+      },
+      {
+        attribution: { scopeKind: "request", ownerId: environmentOwnerId() },
+        sink: async () => {
+          await new Promise((r) => setTimeout(r, 20));
+          settled = true;
+        },
+      },
+    );
+    expect(settled).toBe(true);
+  });
+
+  it("does not let a failing sink fail the work — a metrics write is not the feature", async () => {
+    const { result } = await collectSpend(
+      async () => {
+        const id = beginSpend("toc", "m");
+        recordSpend(call(), id);
+        return "the answer";
+      },
+      {
+        attribution: { scopeKind: "cli", ownerId: environmentOwnerId() },
+        sink: async () => {
+          throw new Error("the database is on fire");
+        },
+      },
+    );
+    expect(result).toBe("the answer");
+  });
+
+  it("writes nothing for a call that finished after its collector reported", async () => {
+    /* A late call is already counted and logged. Writing it would be worse than
+       dropping it: the row would land under a run that had already reported a
+       total without it, so two records of the same work would disagree. */
+    const rows: AiCallRow[] = [];
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    /* **A continuation started inside the scope, not a callback invoked from
+       outside it.** That distinction is the test: a function called after
+       `collectSpend` returns runs with no scope at all and is counted as
+       *unscoped*, which is a different bug. `gate.then` captures the context, so
+       what arrives here is genuinely a call that finished late. */
+    let finishing: Promise<void> | undefined;
+    await collectSpend(
+      async () => {
+        const id = beginSpend("toc", "m");
+        finishing = gate.then(() => {
+          recordSpend(call(), id);
+        });
+      },
+      {
+        attribution: { scopeKind: "cli", ownerId: environmentOwnerId() },
+        sink: async (row) => {
+          rows.push(row);
+        },
+      },
+    );
+    release?.();
+    await finishing;
+    expect(rows).toEqual([]);
+    expect(lateCalls()).toBe(1);
+  });
+
+  it("writes no row when there is no owner to bill", async () => {
+    /* `owner_id` is `not null` and `on delete restrict`, so there is no honest
+       row for a call whose owner cannot be named. A request that reached a model
+       before it was authenticated is the shape that gets here. */
+    const rows: AiCallRow[] = [];
+    await runInRequest(() =>
+      collectSpend(
+        async () => {
+          const id = beginSpend("chat", "m");
+          recordSpend(call({ job: "chat" }), id);
+        },
+        {
+          attribution: { scopeKind: "request" },
+          sink: async (row) => {
+            rows.push(row);
+          },
+        },
+      ),
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it("takes the owner from the request when the collector opened before the gate ran", async () => {
+    /* `handleApi` opens the collector outside the gate, deliberately — so at
+       that instant nobody knows who is asking, and the owner has to be resolved
+       when the call is recorded rather than when the box was opened. */
+    const rows: AiCallRow[] = [];
+    const alice = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    await runInRequest(() =>
+      collectSpend(
+        async () => {
+          setRequestOwner(alice as ReturnType<typeof environmentOwnerId>);
+          const id = beginSpend("chat", "m");
+          recordSpend(call({ job: "chat" }), id);
+        },
+        {
+          attribution: { scopeKind: "request" },
+          sink: async (row) => {
+            rows.push(row);
+          },
+        },
+      ),
+    );
+    expect(rows[0]?.ownerId).toBe(alice);
+  });
+});
+
+describe("closing the box", () => {
+  it("does not accept a call that finishes while an earlier sink is still draining", async () => {
+    /* **The race a GPT Sol review drove directly.** The first version awaited
+       the writes and *then* set `closed`, which looks like the careful order and
+       is not: a call finishing during that wait was still accepted, appended a
+       new promise, and `Promise.allSettled` had already captured its iterable —
+       so `collectSpend` returned with that write unsettled, and on Vercel the
+       row disappears.
+
+       Closed first, the second call is a *late* one: no row, a warn line, and
+       `lateCalls()`. Which is the honest answer, because the report has already
+       been taken and a row written now would belong to a total published without
+       it. */
+    const rows: AiCallRow[] = [];
+    let releaseFirstSink: (() => void) | undefined;
+    let sinkAStarted: (() => void) | undefined;
+    const firstSinkStarted = new Promise<void>((r) => {
+      sinkAStarted = r;
+    });
+    let n = 0;
+    sinkGate = async (row) => {
+      n += 1;
+      if (n === 1) {
+        sinkAStarted?.();
+        await new Promise<void>((r) => {
+          releaseFirstSink = r;
+        });
+      }
+      rows.push(row);
+    };
+
+    /* The second call's finish is a *continuation started inside the scope*, so
+       it keeps the async context — a callback invoked from out here would have
+       no scope at all and be counted as unscoped, which is a different bug. */
+    let fireSecond: (() => void) | undefined;
+    const gate = new Promise<void>((r) => {
+      fireSecond = r;
+    });
+
+    const collecting = collectSpend(
+      async () => {
+        const idB = beginSpend("arc", "m");
+        void gate.then(() => {
+          recordSpend(call({ job: "arc" }), idB);
+        });
+        /* This one's sink blocks, so `collectSpend` is inside its drain when the
+           second call finishes. `fn` itself returns straight away. */
+        recordSpend(call(), beginSpend("toc", "m"));
+      },
+      {
+        attribution: { scopeKind: "cli", ownerId: environmentOwnerId() },
+        sink: (row) => sinkGate(row),
+      },
+    );
+
+    await firstSinkStarted;
+    fireSecond?.();
+    await new Promise((r) => setTimeout(r, 0));
+    releaseFirstSink?.();
+    await collecting;
+
+    /* One row, and the second call accounted for rather than lost. */
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.job).toBe("toc");
+    expect(lateCalls()).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("withSpendAttribution", () => {
+  it("adds the article without starting a second collector", async () => {
+    /* A nested `collectSpend` would hide these calls from the outer one, and the
+       request's own log line would then report a cost of zero for a request that
+       spent money. Same box, different view of it. */
+    const rows: AiCallRow[] = [];
+    const { report } = await collectSpend(
+      async () => {
+        await withSpendAttribution({ articleSlug: "on-writing" }, async () => {
+          const id = beginSpend("chat", "m");
+          recordSpend(call({ job: "chat" }), id);
+        });
+      },
+      {
+        attribution: { scopeKind: "request", ownerId: environmentOwnerId() },
+        sink: async (row) => {
+          rows.push(row);
+        },
+      },
+    );
+    expect(rows[0]?.articleSlug).toBe("on-writing");
+    expect(rows[0]?.scopeKind).toBe("request");
+    /* The outer report sees it too — which is the half a nested collector loses. */
+    expect(report.calls).toHaveLength(1);
+  });
+
+  it("does not leak the article to a sibling branch", async () => {
+    const rows: AiCallRow[] = [];
+    await collectSpend(
+      async () => {
+        await withSpendAttribution({ articleSlug: "one" }, async () => {
+          recordSpend(call({ job: "chat" }), beginSpend("chat", "m"));
+        });
+        recordSpend(call({ job: "dictation" }), beginSpend("dictation", "m"));
+      },
+      {
+        attribution: { scopeKind: "request", ownerId: environmentOwnerId() },
+        sink: async (row) => {
+          rows.push(row);
+        },
+      },
+    );
+    expect(rows.map((r) => r.articleSlug)).toEqual(["one", null]);
+  });
+
+  it("is a no-op outside a collector, like everything else here", async () => {
+    let ran = false;
+    withSpendAttribution({ articleSlug: "x" }, () => {
+      ran = true;
+    });
+    expect(ran).toBe(true);
+  });
+});
+
+describe("a run id", () => {
+  it("is on the report and on every row it produced, so the two can be joined", async () => {
+    const rows: AiCallRow[] = [];
+    const { report } = await collectSpend(
+      async () => {
+        recordSpend(call(), beginSpend("toc", "m"));
+        recordSpend(call({ job: "arc" }), beginSpend("arc", "m"));
+      },
+      {
+        attribution: { scopeKind: "cli", ownerId: environmentOwnerId() },
+        sink: async (row) => {
+          rows.push(row);
+        },
+      },
+    );
+    expect(report.runId).toBeTruthy();
+    expect(rows.map((r) => r.runId)).toEqual([report.runId, report.runId]);
+    expect(spendFields(report).aiRunId).toBe(report.runId);
+  });
+
+  it("is different for two pieces of work, so their rows do not merge", async () => {
+    const one = await rowsFrom({ attribution: { scopeKind: "cli", ownerId: environmentOwnerId() } });
+    const two = await rowsFrom({ attribution: { scopeKind: "cli", ownerId: environmentOwnerId() } });
+    expect(one[0]?.runId).not.toBe(two[0]?.runId);
+  });
+});
+
+describe("keyFingerprint", () => {
+  it("names a key without carrying it", async () => {
+    const { keyFingerprint } = await import("../src/ai-spend.js");
+    const fp = keyFingerprint("sk-or-v1-something-secret");
+    expect(fp).toHaveLength(12);
+    expect(fp).toMatch(/^[0-9a-f]{12}$/);
+    expect("sk-or-v1-something-secret").not.toContain(fp);
+    /* Two keys, two names — otherwise the per-key reconciliation is meaningless. */
+    expect(keyFingerprint("sk-or-v1-another")).not.toBe(fp);
+  });
+});
+
+/* `runAsOwner` is imported so a reader can see the pipeline's case is covered
+   by `attribution.ownerId` rather than by ambient state. */
+void runAsOwner;

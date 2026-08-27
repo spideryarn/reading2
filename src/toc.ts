@@ -40,6 +40,7 @@ import { generateLabels, mergeLabels } from "./labels.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
+import { withLedger } from "./cli-ledger.js";
 
 /* Bumped to 2 when the nav labels moved out to src/labels.ts: this prompt no
    longer asks for them, and a tree written by toc/1 is a different artefact. */
@@ -662,10 +663,7 @@ export async function generateToc(opts: {
       const report = opts.onProgress;
       let chars = 0;
       let last = 0;
-      /* `delta: string` spelled out because `MeteredCall.stream` is typed as
-         `ReturnType<…messages.stream>`, which instantiates that method's generic at
-         its constraint and loses `on`'s per-event listener types. */
-      call.stream.on("text", (delta: string) => {
+      call.onText((delta) => {
         chars += delta.length;
         // Throttled, because the model emits deltas far faster than anyone can
         // read them and every one of these is a write the poller may pick up.
@@ -828,4 +826,4 @@ async function main(): Promise<void> {
 const isMain =
   process.argv[1] !== undefined &&
   fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void main();
+if (isMain) void withLedger("cli", main);

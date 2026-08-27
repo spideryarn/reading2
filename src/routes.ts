@@ -113,7 +113,14 @@ import { describeAdminMiss, isAdmin } from "./admin.js";
 import { requireUser, type Verifier } from "./auth.js";
 import { UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
-import { collectSpend, currentSpend, spendFields } from "./ai-spend.js";
+import {
+  collectSpend,
+  currentSpend,
+  emptySpend,
+  spendFields,
+  withSpendAttribution,
+} from "./ai-spend.js";
+import { costStore } from "./store/ai-calls.js";
 import { stagingKey } from "./source.js";
 import { uploadGrants } from "./store/blobs.js";
 import { uploadProblem } from "./uploads.js";
@@ -2762,10 +2769,7 @@ function logRequest(
      opened. Read here rather than returned, because this line is written in
      `serveApi`'s own `finally` — inside the scope, before it closes. An ordinary
      request that called no model gets no extra fields at all. */
-  Object.assign(
-    fields,
-    spendFields(currentSpend() ?? { calls: [], pending: [] }),
-  );
+  Object.assign(fields, spendFields(currentSpend() ?? emptySpend()));
   if (status >= 500) line.error(fields, msg);
   else if (status >= 400) line.warn(fields, msg);
   else line.info(fields, msg);
@@ -2813,7 +2817,21 @@ export function handleApi(
      it already writes — see `logRequest`, which reads `currentSpend()` from
      inside the scope. */
   return runInRequest(
-    async () => (await collectSpend(() => serveApi(req, res, verify))).result,
+    async () =>
+      (
+        await collectSpend(() => serveApi(req, res, verify), {
+          /* **No owner here, and that is not an omission.** The gate that fills
+             the owner box runs *inside* `serveApi`, which is inside this
+             collector — so at this instant nobody knows who is asking. The sink
+             resolves it at record time, by which point the gate has long since
+             run. src/ai-spend.ts § `ownerFor`.
+
+             No article either: a route knows which one, and says so with
+             `withSpendAttribution`. */
+          attribution: { scopeKind: "request" },
+          sink: (row) => costStore.record(row),
+        })
+      ).result,
   );
 }
 
@@ -3136,7 +3154,13 @@ async function serveApi(
       return true;
     }
     if (lookup && req.method === "POST") {
-      send(res, 200, await lookUpTerm(slugPart(lookup, 1), slugPart(lookup, 2)));
+      send(
+        res,
+        200,
+        await withSpendAttribution({ articleSlug: slugPart(lookup, 1) }, () =>
+          lookUpTerm(slugPart(lookup, 1), slugPart(lookup, 2)),
+        ),
+      );
       return true;
     }
     /* Read only. There is no DELETE beside this one, unlike the glossary's:
@@ -3180,32 +3204,39 @@ async function serveApi(
     if (similar && req.method === "POST") {
       {
         const at = slugPart(similar, 1);
-        /* The whole article, because this needs the prose **and the tree** —
-           the tree so that two passages of one section cannot take a place in
-           the answer from two passages of different ones (src/similar.ts §
-           `sectionOfRow`). It is the same read every other artefact route
-           makes and the store caches nothing, so on a warm similarity cache
-           this load is the entire cost of the request. */
-        const loaded = await loadArticle(at);
-        try {
-          send(res, 200, await similarBlocks(at, loaded.blocks, loaded.tree));
-        } catch (err) {
-          /* **The provider's own words do not go to the browser.** The catch-all
-             below writes a thrown message straight into the 500 body, and what
-             `embedBatch` throws on a bad response is the upstream body verbatim
-             — which can carry account identifiers, model routing and whatever
-             else OpenRouter felt like saying. The real thing goes in the log,
-             where whoever runs the server can read it; the reader gets a
-             sentence. Same split docs/project/copy.md draws for every other
-             provider failure. */
-          log("model").error(
-            { slug: at, ...errorFields(err) },
-            "the embedding provider failed",
-          );
-          throw httpError(502, "Could not reach the embedding model. [emb1]");
-        }
+        /* This route pays for embeddings, so its rows carry the article like
+           chat's and explain's do. GPT Sol found both this and `projection`
+           writing owner-attributed rows with a null slug — which the report then
+           excludes from "by article" entirely, so an article's real cost would
+           have been understated by exactly the two features that embed it. */
+        return withSpendAttribution({ articleSlug: at }, async () => {
+          /* The whole article, because this needs the prose **and the tree** —
+             the tree so that two passages of one section cannot take a place in
+             the answer from two passages of different ones (src/similar.ts §
+             `sectionOfRow`). It is the same read every other artefact route
+             makes and the store caches nothing, so on a warm similarity cache
+             this load is the entire cost of the request. */
+          const loaded = await loadArticle(at);
+          try {
+            send(res, 200, await similarBlocks(at, loaded.blocks, loaded.tree));
+          } catch (err) {
+            /* **The provider's own words do not go to the browser.** The catch-all
+               below writes a thrown message straight into the 500 body, and what
+               `embedBatch` throws on a bad response is the upstream body verbatim
+               — which can carry account identifiers, model routing and whatever
+               else OpenRouter felt like saying. The real thing goes in the log,
+               where whoever runs the server can read it; the reader gets a
+               sentence. Same split docs/project/copy.md draws for every other
+               provider failure. */
+            log("model").error(
+              { slug: at, ...errorFields(err) },
+              "the embedding provider failed",
+            );
+            throw httpError(502, "Could not reach the embedding model. [emb1]");
+          }
+          return true;
+        });
       }
-      return true;
     }
     /**
      * **POST for the same reason `similar` is a POST**: the first call for an
@@ -3220,25 +3251,29 @@ async function serveApi(
     if (projection && req.method === "POST") {
       {
         const at = slugPart(projection, 1);
-        const loaded = await loadArticle(at);
-        try {
-          send(res, 200, await projectArticle(at, loaded.blocks));
-        } catch (err) {
-          /* **Only the provider's failures are reported as the provider's.**
-             Everything after the embedding call is our own arithmetic —
-             principal components, k-means — and rewriting a bug in it as "could
-             not reach the model" would send whoever is debugging to OpenRouter's
-             status page for a fault in this repo. So a non-provider error falls
-             through to the catch-all, which reports a 500 and logs a stack. GPT
-             Sol's finding, 2026-08-27. */
-          if (!isProviderFailure(err)) throw err;
-          // The provider's own words stay out of the browser — see `similar`
-          // above, which is the same split for the same reason.
-          log("model").error({ slug: at, ...errorFields(err) }, "the embedding provider failed");
-          throw httpError(502, "Could not place this article's paragraphs: the embedding model could not be reached. Everything else on the page is unaffected. [emb2]");
-        }
+        /* Same reason as `similar` above: this route pays for embeddings, so its
+           rows carry the article. */
+        return withSpendAttribution({ articleSlug: at }, async () => {
+          const loaded = await loadArticle(at);
+          try {
+            send(res, 200, await projectArticle(at, loaded.blocks));
+          } catch (err) {
+            /* **Only the provider's failures are reported as the provider's.**
+               Everything after the embedding call is our own arithmetic —
+               principal components, k-means — and rewriting a bug in it as "could
+               not reach the model" would send whoever is debugging to OpenRouter's
+               status page for a fault in this repo. So a non-provider error falls
+               through to the catch-all, which reports a 500 and logs a stack. GPT
+               Sol's finding, 2026-08-27. */
+            if (!isProviderFailure(err)) throw err;
+            // The provider's own words stay out of the browser — see `similar`
+            // above, which is the same split for the same reason.
+            log("model").error({ slug: at, ...errorFields(err) }, "the embedding provider failed");
+            throw httpError(502, "Could not place this article's paragraphs: the embedding model could not be reached. Everything else on the page is unaffected. [emb2]");
+          }
+          return true;
+        });
       }
-      return true;
     }
     if (comments && req.method === "GET") {
       const slug = slugPart(comments, 1);
@@ -3288,7 +3323,14 @@ async function serveApi(
          reads. A stream that fails *before* the headers go out throws, and the
          catch below answers it as ordinary JSON; after that, the failure is an
          `error` frame inside a 200, because the status line is long gone. */
-      await streamChat(slugPart(chat, 1), await readBody(req), res);
+      /* **The article goes on every row this request writes.** Without it,
+         "what has this piece cost me" would cover the ingest and none of the
+         questions asked about it afterwards — which is the half a reader
+         actually generates. src/ai-spend.ts § `withSpendAttribution`. */
+      const chatBody = await readBody(req);
+      await withSpendAttribution({ articleSlug: slugPart(chat, 1) }, () =>
+        streamChat(slugPart(chat, 1), chatBody, res),
+      );
       return true;
     }
     if (chatCancel && req.method === "POST") {
@@ -3332,7 +3374,10 @@ async function serveApi(
          `answer`, which writes its own headers and ends the response. It is
          still reached through `send` for its *failures*: validation throws
          before a header is written, so a bad request is an ordinary 400. */
-      await search(slugPart(searches, 1), await readBody(req), res);
+      const searchBody = await readBody(req);
+      await withSpendAttribution({ articleSlug: slugPart(searches, 1) }, () =>
+        search(slugPart(searches, 1), searchBody, res),
+      );
       return true;
     }
     if (oneRun && req.method === "PATCH") {

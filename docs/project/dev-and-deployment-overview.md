@@ -22,6 +22,7 @@ serves the client *and* the API as Vite middleware — and one Vercel project fe
 | `npm run build` | production bundle into `dist/` |
 | `npm run db:start` · `db:status` · `db:stop` · `db:reset` | the local Supabase stack in Docker. Engine first: `open -a OrbStack` |
 | `npm run db:migrate` · `db:generate` | apply `drizzle/`; regenerate after a schema edit. **Migrate after every reset** |
+| `npm run cost` | what the model calls have cost — this UTC month by default; `-- --month 2026-07`, `-- --all`, `-- --reconcile` |
 
 Secrets are one gitignored `.env.local`, and **it beats what your shell exported** — so
 `FOO=… npm run dev` does not do what it looks like. Copy `.env.example` and edit the file.
@@ -47,6 +48,8 @@ is the one worth knowing unprompted: a bad tree draws a *wrong article* rather t
 - **[deployment.md](deployment.md)** — Vercel: the domain move that never touched the registrar, the
   build that reports success and ships a function failing on every request, and who can reach the
   app today (more people than you would think).
+- **[ai-gateway.md](ai-gateway.md)** — every paid call goes through one of two seams, and each one
+  leaves a row behind. `npm run cost` is how you read them back.
 - **[logging.md](logging.md)** — why Pino, what the levels mean here, why path-based redaction makes
   the message string a rule, and why the CLI's `console.log` is not logging and is staying.
 

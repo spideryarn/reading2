@@ -14,6 +14,7 @@
     "check": "tsx scripts/check.ts",
     "deploy": "tsx scripts/deploy.ts",
     "count-lines": "tsx scripts/count-lines.ts",
+    "cost": "tsx scripts/ai-cost.ts",
     "fetch": "tsx src/fetch.ts",
     "extract": "tsx src/extract.ts",
     "pdf": "tsx src/pdf-read.ts",

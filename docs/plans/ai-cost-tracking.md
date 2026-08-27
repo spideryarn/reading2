@@ -982,7 +982,7 @@ the twelve wirings are not finished until both are done.
 > - **A total on every step's log line and every request's** — `aiCalls`, `aiCost`, and the three
 >   ways it can be wrong: `aiUnpriced`, `aiPending`, `aiPendingJobs`.
 >
-> **Not built:**
+> **Not built, as of that day:**
 >
 > - ❌ No database row, no `npm run cost`, no per-article number, no spend page.
 > - ❌ **No spend limit, and the collector is not one.** It is accounting: it says what a request
@@ -990,6 +990,49 @@ the twelve wirings are not finished until both are done.
 >   after, because final usage arrives when the money has already gone, and two simultaneous
 >   requests both pass a `SUM(cost)` check. GPT Sol's design review said so plainly and it is worth
 >   repeating here rather than discovering later.
+
+> **Status, 2026-08-28.** The row and the report exist. What a call costs now survives the process
+> it was made in.
+>
+> **Built the next day:**
+>
+> - **A row per call**, in whichever store is live: `ai_calls` under `postgres`
+>   ([migration 0021](../../drizzle/0021_ai_calls_ledger.sql)), `data/_ai-calls.jsonl` under `files`.
+>   Written by an **injected sink** — [`src/ai-spend.ts`](../../src/ai-spend.ts) still imports no
+>   store — one insert per finished call, **awaited before the collector closes**.
+> - **Attribution the gateways cannot know**: `runStep` supplies the owner, the job, the step and the
+>   article; article routes add their slug with `withSpendAttribution`, which overlays the collector
+>   already open rather than starting a second one.
+> - **A total for the whole job** on the line that ends it, queried from the ledger rather than
+>   accumulated — a job spans several `advanceJob` calls, so there is no frame that could carry one.
+> - **`npm run cost`** — [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts). Spend by day, job, model,
+>   article, owner and scope; the BYOK pocket separately; the unpriced count; what was spent on calls
+>   that failed; and `--reconcile`, which asks `GET /api/v1/key` what OpenRouter thinks the key has
+>   spent.
+> - **Four review findings that had to land before the schema hardened** — the Messages seam closed
+>   (no more `call.stream.finalMessage()`, `model` and `provider` typed `never`), aborts classified
+>   by cause rather than by coincidence, the `provider` injection moved *after* the body spread (it
+>   was before, and a body built at run time could override it), and `formatNanos` no longer printing
+>   `$0.0000` for money that was really spent.
+>
+> **Still not built:** the article's own number on its metadata page (phase 6), the spend page (phase
+> 7), and any cap. And **the evals still call models outside the two seams**, so their spend is not
+> in the ledger — see question 4.
+>
+> **A CLI stage run is in the ledger**, via one line at each stage's `isMain`
+> ([`src/cli-ledger.ts`](../../src/cli-ledger.ts)). That took two attempts and the second one is the
+> more interesting: the obvious wrapper closes an import cycle, because a stage reaching
+> `src/store/ai-calls.ts` reaches `store/pg.ts` → `api.ts` → `glossary.ts` → `arc.ts`, which is a
+> stage. `npm run cycles` is a gate, and biome counts a dynamic import as an edge too. It bit three
+> of the seven stages and not the other four, so the first version was deleted rather than shipped
+> half-working. The whole edge turned out to be **one symbol** — `ownedSlug`, four tokens of Drizzle
+> — and moving it to [`store/owned-slug.ts`](../../src/store/owned-slug.ts), re-exported from
+> `pg.ts`, removed it. GPT Sol's review said deleting the half version was right and calling the
+> phase complete was not.
+>
+> Proved live on 2026-08-28, both stores: one real embeddings call at **$0.00000018**, which is the
+> number micro-dollars would have rounded to zero and four decimal places did round to `$0.0000`
+> until it was caught.
 >
 > **What the migration deletes from the phases below**: the price table stops being the source of
 > truth and becomes the *check* on one; the Anthropic Admin Cost API reconciliation goes entirely
@@ -1086,13 +1129,28 @@ stripped first, since several files' *comments* warn about exactly those. It is 
 than the guarantee — the lifecycle is what makes metering unforgettable; this is what makes the
 lifecycle unavoidable.
 
-**Phase 4 — a total at the end of every run.** 🟡 **Half built.** Each *step* logs its own cost and
+**Phase 4 — a total at the end of every run.** ✅ **Built, 2026-08-28.** The job total was the
+missing half, and it could not be a running figure carried on the job: a job is not one process run —
+`advanceJob` runs some steps and returns, the browser calls it again — so there is no frame that
+spans one. A second ledger on the job row would have to be updated identically in both job stores and
+would be free to diverge after an ambiguous write. `endJob` asks the rows instead, which is what the
+rows are for, and prints `aiCostStatus: "unavailable"` rather than a zero when it cannot read them: a
+ledger that is down and a job that spent nothing must not look the same.
+
+*What follows was true the day before.*
+
+🟡 **Half built.** Each *step* logs its own cost and
 so does each *request* — `aiCalls`, `aiCostNanos`, `aiCost`, plus `aiUnpriced` and
 `aiPending`/`aiPendingJobs` when something went wrong — on success, failure and cancel
 ([logging.md § What a step cost, in money](../project/logging.md)). What does not exist is the *job*
 total: one line at the end saying what the whole ingest cost. Cheap, and unblocked now.
 
-**Phase 5 — `npm run cost`.** Spend by day, stage, model, article and owner; the cache-saving
+**Phase 5 — `npm run cost`.** ✅ **Built, 2026-08-28** —
+[`scripts/ai-cost.ts`](../../scripts/ai-cost.ts), and it does what the paragraph below asks for
+except the two things that turned out not to exist: there is no raw response to age, and no pruner to
+have stopped. `--reconcile` was run live against `GET /api/v1/key` the same day.
+
+*The original text, which is still the specification:* Spend by day, stage, model, article and owner; the cache-saving
 figure; the unpriced count; the aborted-spend line; the oldest surviving raw response and the
 pruner's last successful run. And it must print **both** floor-sweeping counters when they are not
 zero — `unscopedCalls()` for calls made with no collector open, `lateCalls()` for calls that
@@ -1302,7 +1360,100 @@ is here so the day it arrives is not the day somebody discovers the race. And **
 grep proving nothing writes `ai_calls` is evidence about the source, not about the live table, so
 the first migration checks the table is empty rather than assuming it.
 
+## What the third Sol review changed — the one that read the ledger
+
+It opened *CHANGES REQUIRED* and found four ways the ledger could be confidently short. Each is
+worth keeping written down, because three of the four were invisible from a working system.
+
+**A call finishing during the drain escaped the await.** `collectSpend` took its report, awaited
+`box.writes`, and only then set `closed` — which looks like the careful order. It is not: a call
+finishing during that wait was still accepted, appended a new promise, and `Promise.allSettled` had
+already captured its iterable. So the function returned with that write unsettled, and on Vercel the
+row disappears. Sol drove the path rather than reasoning about it. The box is closed *first* now, and
+such a call is a late one — no row, a warn line, `lateCalls()` — which is the honest answer, because
+the report has already been published without it.
+
+**Two paid routes had no article on their rows.** `similar` and `projection` both call embeddings and
+neither was inside `withSpendAttribution`, so their rows carried the right owner and a null slug —
+and the report filters null slugs out of "by article" entirely. Phase 6 would have understated an
+article's cost by exactly the two features that embed it.
+
+**The job total could not say it was short.** `forJob` dropped the `unreadable` count on the floor
+between the store and the log line, so a damaged ledger produced a confident partial total. It
+carries it now, as `aiCostStatus: "partial"`.
+
+**`--reconcile` compared unlike periods and treated failure as success.** It read OpenRouter's
+*all-time* figure against the report's *current-month* rows, so the gap jumped at every month
+boundary even against a perfect ledger — a difference that moves on its own is not a check. And a
+missing key, a 401 or a network failure each printed a line and exited zero. It reads
+`usage_monthly` against the current UTC month now, and a reconciliation that cannot run exits
+non-zero. There is still no stored per-key baseline, so the number to watch is whether the gap
+*moves*.
+
+Four smaller ones, each a zero or a green that meant nothing: the failed-call line printed
+`$0.0000` for a failed BYOK call that had cost real money upstream; `--month 2026-13` was accepted
+and normalised into an inverted range covering nothing; the JSONL reader counted only *unparseable*
+lines, so `{}` sailed through as a row and poisoned the next total with `NaN`; and the append was
+argued to be atomic on a pipe-buffer guarantee that is about pipes.
+
+It also closed the four things left over from the second review: `OPENROUTER_BASE` and
+`MESSAGES_BASE_URL` are private (an exported base is the way round the scan that forbids naming an
+endpoint); `openRouterReader`'s transport retry has an end-to-end test asserting **two** rows, an
+error then an ok; `ideas` is in the refusal harness, which had called itself six stages since the
+seventh was added; and `src/owner.ts` no longer lists `ai_calls` among the tables without an owner.
+
+## The decisions taken without Greg, 2026-08-28
+
+He asked for the work to be finished and for GPT Sol's input where it was needed, which is what
+these are. Each one had to be settled to write a column. **They are decisions, not guesses**, and
+each is here so it can be overruled cheaply rather than discovered later as a fact about the schema.
+
+**The raw response is not stored at all.** Greg had chosen *always store, with automatic pruning*,
+over the recommendation of failure-only. That choice was made before `generation_id` existed on
+every row — and the cheaper half of it, "keep the response so a call can be understood later", is now
+answered by asking OpenRouter about the id. What is left is the expensive half: a raw response for
+`toc`, `glossary` or `summarise` is model output derived from the reader's article, and a dictation
+response is their voice. Storing it turns a small financial ledger into the project's largest and
+most sensitive store, kept alive by a pruner that can quietly stop — the failure Greg himself named
+as his worry about the pruning option. So: **no column, no pruner, no window.** One correction to my
+own reasoning, from Sol: `GET /api/v1/generation` returns *metadata*, not content; content needs a
+management key and retention that is off by default. So this is a real loss of debuggability, small,
+and named rather than argued away.
+
+**"Cost" means credits, and the column says so: `credits_used_nanos`.** OpenRouter's margin is a fee
+on *buying* credits — about 5.5%, with a minimum, and different again for crypto and BYOK — not a
+per-token markup. Multiplying each row by 1.055 would invent a precision that could never match a
+bank statement. Cash belongs to a credit-purchase ledger that does not exist. `upstream_inference_nanos`
+stays beside it as the other pocket, which is the only honest way to read a BYOK call.
+
+**Evals count, and are marked.** `scope_kind` separates `request`, `job_step`, `cli` and `eval`, and
+`npm run cost` breaks down by it. But **`evals/` still calls models outside the two seams**, so
+"evals count" is not yet *true* — it is only possible. Written down here rather than implied by a
+column that reads empty.
+
+**UTC, half-open.** `[2026-08-01T00:00Z, 2026-09-01T00:00Z)`. OpenRouter's key limits reset at
+midnight UTC, so it is also the only boundary the reconciliation can share; and a range that is
+closed at both ends lets two adjacent months claim the same call.
+
+**A deleted user's history: `restrict`, following the existing rule.** Every owner FK in
+[`drizzle/0001_auth_fks_and_guards.sql`](../../drizzle/0001_auth_fks_and_guards.sql) is
+`ON DELETE RESTRICT`, and deleting an account is already something this schema refuses to do quietly.
+The day somebody wants to delete an account *and* keep its billing history, the answer is a
+billing-account row that outlives `auth.users`, not a weaker constraint here.
+
+**`files` mode gets a real ledger, not a warning.** The plan preferred *always Postgres, degrade to a
+warn line without a `DATABASE_URL`*. Sol rejected it and was right: the default store is `files`, so
+that would make the **default** configuration the untracked one, with a warn line that becomes
+background noise inside a week. It is an append-only JSONL file instead — not a fallback, since the
+flag picks one adapter at boot and the other is never consulted.
+
 ## Questions for Greg
+
+**Six of these were answered on 2026-08-28 without you**, because you asked for the work to be
+finished and every one of them had to be settled to write a column. What they were decided to is
+[in the section above](#the-decisions-taken-without-greg-2026-08-28), each with the failure of the
+option it rejected, so any of them can be overruled by saying so rather than by re-deriving it. What
+follows is the record of the question as it stood.
 
 **Nothing here blocks the next piece of work.** Phase 3 — metering the five reader-facing calls — is
 decided by your own stated goal (*"so we can define a spend limit per user"*) and needs no answer

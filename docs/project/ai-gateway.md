@@ -9,6 +9,9 @@ having happened with a cost of `null`, and counted as unpriced rather than as fr
 is the whole point and an earlier version of this sentence lost it by saying "every one of them
 records what it cost" — which is the claim a spend report would then be built on.
 
+Since 2026-08-28 "recorded" also means **kept** — a row per call, in Postgres or in a JSONL file, and
+`npm run cost` reads them back. See [what every call is written down as](#what-every-call-is-written-down-as).
+
 > Presumably we want to do this in a way that's reusable (i.e. whenever we make an AI call, we do it
 > in the same way, which takes care of cost-tracking etc)?
 >
@@ -77,12 +80,21 @@ The chat gateway makes **the request and its accounting a single indivisible ope
 `openRouterStream` is a *lazy async generator*, so nothing is sent until the first `next()`, and from
 then the same `finally` owns the call.
 
-**The Messages gateway is not that, and the difference is worth knowing.** It wraps the Anthropic
-SDK, so the call belongs to the SDK's stream object; `streamMessage` hands that object back, and a
-stage that awaited `call.stream.finalMessage()` instead of `call.finalMessage()` would work and
-record nothing. What guards it there is a test that scans `src/`, not the shape of the API. That is a
-weaker guarantee, honestly stated: the two seams are not equally hard to misuse. Early `break`, a throw, an abort, a
-missing `[DONE]`, a 429, a body that will not read — all of them cross it.
+Early `break`, a throw, an abort, a missing `[DONE]`, a 429, a body that will not read — all of them
+cross it.
+
+**The Messages gateway was not that until 2026-08-28.** It wraps the Anthropic SDK, so the call
+belongs to the SDK's stream object — and `streamMessage` used to hand that object back, so a stage
+that awaited `call.stream.finalMessage()` instead of `call.finalMessage()` worked and recorded
+nothing. What guarded it was a test that scans `src/`, not the shape of the API. That was written
+down here as "a weaker guarantee, honestly stated", and it stopped being good enough the day the
+numbers became database rows: a documented bypass under a ledger is a ledger that looks complete.
+
+So the seam is closed. `MeteredCall` is three things — `onText`, `finalMessage`, `aborted` — and the
+stream, the meter and `meterStream` are all private now. `model` and `provider` are typed `never`, so
+a stage cannot pass either; both are injected **after** the body spread, and the test that proved the
+spread order was wrong went red on the old code. GPT Sol asked for all of this before the schema
+hardened.
 
 The first draft handed the caller three things instead: open the call, parse the chunks, finish the
 meter. A GPT Sol review found the hole in about a page, and it is the hole every such design has:
@@ -167,10 +179,14 @@ AWS" every time. A prompt cache lives on the upstream that wrote it, so an unpin
 perfectly and never read a cache again — the bill roughly triples and nothing complains. Hence
 `MESSAGES_PROVIDER`, injected on every call rather than left to seven stages to remember.
 
-A caller *may* still pass its own — that is what makes the injection testable, and the tests use it —
-so "mandatory" overstates it. What is true is that forgetting it is impossible, which is the property
-that was actually wanted. On the chat wire `AI_JOB_ROUTE` is stricter: it is injected **after** the
-caller's body, so a `provider` in the body is overwritten rather than honoured.
+**A caller cannot pass its own, since 2026-08-28.** It could until then — "that is what makes the
+injection testable", said the paragraph that used to be here — and the test that proved it possible
+was the argument for closing it. `provider` and `model` are typed `never` on `MessagesBody`, and both
+are injected **after** the caller's body spread, so a body assembled at run time out of something the
+type system never saw is overwritten rather than honoured. That ordering was wrong here until a test
+went looking: `provider` was injected *before* the spread and a run-time body did win.
+
+`AI_JOB_ROUTE` on the chat wire has always worked that way, and now both do.
 
 **3. `require_parameters` defaults to `false`, while `allow_fallbacks` defaults to `true`.** So a
 fallback upstream that cannot honour `cache_control` or `thinking` may still be handed the request
@@ -239,6 +255,42 @@ purpose was to be able to see the bill.
 Same rule as [setup-dev.md § the third spelling](setup-dev.md): a provider prefix is an address, not
 a name.
 
+## What every call is written down as
+
+Since 2026-08-28 a finished call is not only reported, it is **kept**: one row in `ai_calls`
+(Postgres) or one line of `data/_ai-calls.jsonl` (`files` mode), written by an injected sink and
+awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) picks the
+adapter; `npm run cost` reads it back. The reasoning, the column list, and the four decisions taken
+in Greg's absence are in [ai-cost-tracking.md](../plans/ai-cost-tracking.md).
+
+Three properties of that write are load-bearing and none of them is obvious:
+
+- **The write is awaited, not fired and forgotten.** On Vercel a function can be frozen the moment
+  its response is sent, and an un-awaited promise then never runs — so the rows that would go missing
+  are exactly the request-path ones, which is the half a per-user total is made of.
+- **One insert per finished call, not one batch per scope.** A batch loses forty finished calls to
+  one mid-step crash; a write each loses only what was genuinely still in flight.
+- **A failing sink cannot fail the feature.** It logs and returns, and the count reaches the step or
+  request's own line as `aiWriteFailures`. The old app rethrew, which meant a Postgres hiccup could
+  take down a reader-facing feature — [logging.md](logging.md) quotes it as the thing not to copy.
+
+**A CLI stage run is in the ledger too**, via one line at each stage's `isMain`
+([`src/cli-ledger.ts`](../../src/cli-ledger.ts)) — so `npm run toc` is money that appears in
+`npm run cost`. `evals/` is not: it calls models outside both gateways, and the report says so on
+every run rather than being quietly partial.
+
+### Aborted is a cause, not a coincidence
+
+Both wires used to record *any* failure raised while a signal happened to be aborted as `"aborted"`.
+A provider dying at the moment a reader presses Stop is not far-fetched — a stall on their side is
+exactly what makes somebody press it — and `"aborted"` is the outcome nobody investigates, so the one
+event that could explain the failure went into the bin marked *the reader did that*.
+
+Both now ask whether the error **is** the abort: the signal's own `reason` by identity, or an
+`AbortError` where no reason was given. [`openrouter-stream.ts`](../../src/openrouter-stream.ts)'s
+`stoppedByReader` had been making the same distinction for the reader-facing message since before
+this; the bill was still using the weaker question.
+
 ## The one thing still open
 
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows
@@ -258,7 +310,11 @@ clause.
 - [`src/messages-stream.ts`](../../src/messages-stream.ts) — the Messages gateway, and the longest
   version of the reasoning above
 - [`src/ai-call.ts`](../../src/ai-call.ts) — the chat gateway, and `AI_JOB_ROUTE`
-- [`src/ai-spend.ts`](../../src/ai-spend.ts) — the ambient spend collector
+- [`src/ai-spend.ts`](../../src/ai-spend.ts) — the ambient spend collector, the row it builds, and
+  `withSpendAttribution`
+- [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) — which ledger is live, and the one place
+  the totals are computed
+- [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts) — `npm run cost`
 - [ai-cost-tracking.md](../plans/ai-cost-tracking.md) — the plan this came out of, including the
   three probes that changed its mind
 - [openrouter-as-sole-gateway.md](../research/openrouter-as-sole-gateway.md) — the research, with the

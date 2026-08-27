@@ -38,7 +38,13 @@
  * version of this apart.
  */
 import { createHash } from "node:crypto";
-import { type SpendReport, collectSpend, spendFields } from "./ai-spend.js";
+import {
+  type SpendReport,
+  collectSpend,
+  emptySpend,
+  formatNanos,
+  spendFields,
+} from "./ai-spend.js";
 import { mintId } from "./ids.js";
 /* The store the pipeline reads and writes through. Named for the role rather
    than imported under its own name, because the role is what changes: the
@@ -47,6 +53,7 @@ import { mintId } from "./ids.js";
    single line that picks Postgres instead. Deliberately not routed through
    src/store/index.ts — that file is the *reader's* store, and switching the
    pipeline over is a separate decision from switching reads over. */
+import { costStore, totalRows } from "./store/ai-calls.js";
 import { fsArtifacts as pipelineStore } from "./store/artifacts-fs.js";
 import { fsJobStore } from "./store/jobs-fs.js";
 import { pgJobStore } from "./store/pg-jobs.js";
@@ -331,7 +338,7 @@ async function runStep(
 
   /* Filled by `collectSpend`'s `onDone` below, which fires on both paths — so
      this is readable from the `catch` as well as from the success path. */
-  let spend: SpendReport = { calls: [], pending: [] };
+  let spend: SpendReport = emptySpend();
 
   try {
     /* Bracketing the run, not decorating it. A step that dies between two of
@@ -348,15 +355,31 @@ async function runStep(
        seven of them. `collectSpend` is ambient (src/ai-spend.ts), so the stages
        say nothing and this still gets the whole bill.
 
-       `onDone` rather than the resolved value, because it fires on the failure
-       path too: a step that threw had usually already paid for the call that
-       threw, and the retry after it pays again. */
-    const { result } = await collectSpend(
-      () => STEPS[step.name].run(ctx),
-      (report) => {
+       What it is told about the work is below rather than here. */
+    const { result } = await collectSpend(() => STEPS[step.name].run(ctx), {
+      /* **Everything the ledger cannot work out for itself.** A gateway sees a
+         model id and a body; this is the frame that knows whose article it is,
+         which job, and which step — so it says so once and every call inside
+         inherits it. `job.ownerId` rather than `currentOwnerId()`, because a job
+         outlives the request that made it and carries its owner deliberately
+         (src/owner.ts § `runAsOwner`). */
+      attribution: {
+        scopeKind: "job_step",
+        ownerId: job.ownerId,
+        articleSlug: job.slug,
+        jobId: job.id,
+        stepName: step.name,
+      },
+      /* An arrow rather than `costStore.record`, because the filesystem adapter's
+         methods call each other through `this`. */
+      sink: (row) => costStore.record(row),
+      /* `onDone` rather than the resolved value, because it fires on the failure
+         path too: a step that threw had usually already paid for the call that
+         threw, and the retry after it pays again. */
+      onDone: (report) => {
         spend = report;
       },
-    );
+    });
     step.detail = result;
     await assertProduced(STEPS[step.name], ctx, pipelineStore);
     /* **Before the abort check, not after.** A cancel here is about the job,
@@ -455,6 +478,55 @@ async function runStep(
  * process's memory, and a store cannot enumerate owners without reading every
  * row it has.
  */
+/**
+ * **What the whole ingest cost**, for the line that says the job is over.
+ *
+ * Asked of the ledger rather than accumulated on the job, and that is the
+ * decision worth writing down. A job is not one process run: `advanceJob` runs
+ * some steps and returns, and the browser calls it again, so there is no frame
+ * that spans a job and no total that could simply be carried. The two options
+ * were a running figure on the job row — which is a second ledger, kept in both
+ * job stores, free to diverge after an ambiguous write — or a query over the
+ * rows, which is what the rows are for. GPT Sol's call, 2026-08-28.
+ *
+ * **It reports zero calls, never a zero cost.** A ledger that cannot be read is
+ * a different thing from a job that spent nothing, and `aiCostStatus` is what
+ * separates them: without it, a database that was down all afternoon reports
+ * every ingest as free.
+ */
+async function jobSpend(job: Job, jlog: Log): Promise<Record<string, unknown>> {
+  let read: Awaited<ReturnType<typeof costStore.forJob>>;
+  try {
+    read = await costStore.forJob(job.id);
+  } catch (err) {
+    jlog.warn({ ...errorFields(err) }, "could not read what this job cost");
+    return { aiCostStatus: "unavailable" };
+  }
+  const { rows, unreadable } = read;
+  if (rows.length === 0) {
+    /* An unreadable ledger and a job that spent nothing must not look the same,
+       so a damaged ledger says so even when it has no rows to show for this
+       job. */
+    return unreadable > 0 ? { aiCostStatus: "partial", aiUnreadable: unreadable } : {};
+  }
+  const { credits, upstream, unpriced } = totalRows(rows);
+  return {
+    aiCalls: rows.length,
+    aiCostNanos: credits + upstream,
+    aiCost: formatNanos(credits + upstream),
+    /* Only when it is not zero, so an ordinary line stays short and an unusual
+       one says why. Each of these is a claim that the number above is wrong.  */
+    ...(upstream > 0 ? { aiUpstreamNanos: upstream } : {}),
+    ...(unpriced > 0 ? { aiUnpriced: unpriced } : {}),
+    /* **The total is short and this is the only place that can say so.** A
+       damaged line is a call that happened and cannot be read; a partial total
+       presented as a whole one is the failure this ledger exists to prevent.
+       GPT Sol raised it — the first version dropped `unreadable` on the floor
+       between the store and this line. */
+    ...(unreadable > 0 ? { aiCostStatus: "partial", aiUnreadable: unreadable } : {}),
+  };
+}
+
 async function endJob(
   job: Job,
   attempt: string,
@@ -463,7 +535,7 @@ async function endJob(
   startedMs: number,
 ): Promise<Job> {
   const after = await store.finish(job.id, attempt, ending);
-  const line = { ms: since(startedMs), status: ending.status };
+  const line = { ms: since(startedMs), status: ending.status, ...(await jobSpend(job, jlog)) };
   /* `warn` for a cancel, because the reader chose it and it is neither a fault
      nor a clean finish. An `error` outcome stays at `info` — the step that
      failed has already logged the stack at `error`, and repeating it would

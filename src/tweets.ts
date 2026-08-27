@@ -41,6 +41,7 @@ import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
+import { withLedger } from "./cli-ledger.js";
 
 export const PROMPT_VERSION = "tweets/2";
 
@@ -492,10 +493,7 @@ export async function generateTweets(opts: {
       const report = opts.onProgress;
       let chars = 0;
       let last = 0;
-      /* `delta: string` spelled out because `MeteredCall.stream` is typed as
-         `ReturnType<…messages.stream>`, which instantiates that method's generic at
-         its constraint and loses `on`'s per-event listener types. */
-      call.stream.on("text", (delta: string) => {
+      call.onText((delta) => {
         chars += delta.length;
         // Throttled: the model emits deltas far faster than anyone can read them,
         // and every one of these is a write the job poller may pick up.
@@ -599,4 +597,4 @@ async function main(): Promise<void> {
 const isMain =
   process.argv[1] !== undefined &&
   fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void main();
+if (isMain) void withLedger("cli", main);

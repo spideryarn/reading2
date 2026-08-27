@@ -90,6 +90,7 @@ import type {
   Tree,
   TreeNode,
 } from "./types.js";
+import { withLedger } from "./cli-ledger.js";
 
 export const PROMPT_VERSION = "summary/3";
 
@@ -1174,4 +1175,4 @@ async function main(): Promise<void> {
 const isMain =
   process.argv[1] !== undefined &&
   fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void main();
+if (isMain) void withLedger("cli", main);

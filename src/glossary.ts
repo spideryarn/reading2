@@ -63,6 +63,7 @@ import type {
   Meta,
   Tree,
 } from "./types.js";
+import { withLedger } from "./cli-ledger.js";
 
 /**
  * Bumped whenever the prompt changes in a way that changes what an entry *is*.
@@ -1211,10 +1212,7 @@ export async function generateGlossary(opts: {
       const verb = existing ? "more terms" : "terms";
       let chars = 0;
       let last = 0;
-      /* `delta: string` spelled out because `MeteredCall.stream` is typed as
-         `ReturnType<…messages.stream>`, which instantiates that method's generic at
-         its constraint and loses `on`'s per-event listener types. */
-      call.stream.on("text", (delta: string) => {
+      call.onText((delta) => {
         chars += delta.length;
         // Throttled: the model emits deltas far faster than anyone can read them,
         // and every one of these is a write the job poller may pick up.
@@ -1335,4 +1333,4 @@ async function main(): Promise<void> {
 const isMain =
   process.argv[1] !== undefined &&
   fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void main();
+if (isMain) void withLedger("cli", main);

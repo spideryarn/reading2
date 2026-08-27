@@ -3,11 +3,18 @@
  *
  * Every table that a **person** owns carries `owner_id uuid not null references
  * auth.users(id)`, decided before there was any auth to populate it —
- * docs/project/database.md. Not every table: six of the thirteen carry it, and
- * `article_revisions`, `revision_blocks`, `block_identities`,
- * `revision_step_runs`, `ai_calls`, `chat_messages` and `queue_state` do not —
- * each belongs to a row that does (an article, a revision, a thread), and
- * carrying the owner twice is a second copy to disagree with the first.
+ * docs/project/database.md. Not every table: `article_revisions`,
+ * `revision_blocks`, `block_identities`, `revision_step_runs`, `chat_messages`
+ * and `queue_state` do not — each belongs to a row that does (an article, a
+ * revision, a thread), and carrying the owner twice is a second copy to disagree
+ * with the first.
+ *
+ * **`ai_calls` was on that list and came off it on 2026-08-28**, which is worth
+ * saying rather than quietly editing. Good rule, wrong table, for two reasons:
+ * its `article_id` is `on delete set null`, so deleting an article would strip a
+ * billing row of its person permanently and without erroring; and not every
+ * call has an article at all — a library search, or an ordinary chat with
+ * nothing open. See `aiCalls` in src/db/schema.ts.
  *
  * This file is where the value comes from, and since 2026-08-27 there are two
  * answers rather than one: **inside an API request it is whoever signed in**,
