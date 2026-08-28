@@ -16,10 +16,13 @@
  *
  *  1. **Online.** The data came over the network.
  *  2. **Offline, nothing saved.** The panel remounts, refetches, and comes up
- *     empty — which is the bug. `useGlossaryTerms` swallows its own errors
- *     (deliberately: nobody is waiting on the underlines), so this failure is
- *     completely silent. No message, no console, just an article whose terms
- *     have quietly stopped being underlined.
+ *     empty — which is the bug. Since 2026-08-27 the read does at least *say*
+ *     so, in `status`, because the glossary panel renders that message
+ *     (`useGlossaryRead`, which replaced the error-swallowing `useGlossaryTerms`
+ *     when the two fetches were merged). But nothing renders it for the prose:
+ *     the underlines are an enhancement over the article, so what the reader
+ *     sees is still an article whose terms have quietly stopped being
+ *     underlined, and that is what this test is about.
  *  3. **Offline, saved.** The same remount, and the terms are back.
  *
  * Step 2 is the one that matters. Without it, step 3 proves nothing — a panel
@@ -50,7 +53,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   CALLBACK_PATH: "/auth/callback",
 }));
 
-const { useGlossaryTerms } = await import("../src/web/useGlossary.js");
+const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { readCached, rememberUser } = await import("../src/web/lib/offline-store.js");
 
 /** The reply a healthy server gives for this article's glossary. */
@@ -72,8 +75,8 @@ const jsonOk = (body: unknown) =>
 
 /** A tiny host for the hook, so the test can read what it produced. */
 function Terms({ slug, onTerms }: { slug: string; onTerms: (n: string[]) => void }) {
-  const { entries } = useGlossaryTerms(slug);
-  onTerms(entries.map((e) => e.name));
+  const { glossary } = useGlossaryRead(slug);
+  onTerms((glossary?.entries ?? []).map((e) => e.name));
   return null;
 }
 

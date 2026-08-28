@@ -286,10 +286,23 @@ opened. Four things follow, and three of them are the interesting part:
   page, like a heading; the explanation still arrives only when the reader points at something, and
   the thing that arrives is [the hover card](#the-hover-card).
 - **The list has to be fetched for every reader**, which is the cost `GlossaryBand` was built to
-  avoid. Half of it is avoided anyway: `useGlossaryTerms` in
-  [`useGlossary.ts`](../../src/web/useGlossary.ts) is one GET and no job poller, and the band still
-  owns everything with a job in it. While the band is open it holds the fresher list and pushes it
-  up, so there is one list and two ways of arriving at it.
+  avoid. Half of it is avoided anyway: `useGlossaryRead` in
+  [`useGlossary.ts`](../../src/web/useGlossary.ts) is **one opening GET** and no job poller, and the
+  band still owns everything with a job in it — which was always the expensive half.
+
+  For a day there were **two** GETs: this one, and the band fetching the same URL again from
+  `status: "loading"` when it opened. So the panel said *"Looking for a glossary…"* over a list
+  that was already on screen, underlined, in the prose behind it — and on the Postgres store that
+  second request read most of the article out of the database to compute one boolean. Since
+  2026-08-27 `Reader` owns the read and the band takes it as a prop.
+  [glossary-read-latency.md](../plans/glossary-read-latency.md) has the measurements.
+
+  The band still **revalidates** when it opens, behind the list already showing, and that is not
+  optional: `useJobs` treats its first poll as a baseline and does not announce a job that had
+  already finished, so a glossary written in another tab while the band was closed has nothing
+  else to bring it in. So the rule is not "fetch once" — it is that **`status` never goes back to
+  `loading` for an article it has already answered for**. Moving to a *different* article does
+  reset it, deliberately: that is a list nobody has yet.
 
 ### The hover card
 
