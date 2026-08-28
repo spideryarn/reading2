@@ -69,6 +69,7 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../src/db/schema.js";
+import { ADMIN_USER_ID } from "../src/admin.js";
 import { loadEnvLocal } from "../src/env.js";
 import { PATHS } from "../src/store/artifacts-fs.js";
 import {
@@ -107,7 +108,19 @@ import type { LabelsFile } from "../src/labels.js";
 loadEnvLocal();
 
 const SLUG = "test-artefacts-pg";
-const DEV_OWNER_ID = "f4d08b58-5573-4811-9887-e26c114fb324";
+
+/**
+ * The owner every row here hangs off — Greg's `auth.users` row in the local
+ * stack, which the migrations put there and no test owns.
+ *
+ * **Imported, not copied.** It is a foreign key, so it has to match a row that
+ * already exists; three test files each wrote the uuid out longhand, and the
+ * day the dev identity changes is the day all three point at nothing. It is
+ * also not a fixture id in the sense `tests/fixture-ids.test.ts` guards —
+ * `cleanUp` below deletes by slug and by article id, never by owner — so
+ * sharing it across files is safe in a way sharing an article id is not.
+ */
+const DEV_OWNER_ID = ADMIN_USER_ID;
 
 /* ------------------------------------------- the map, which needs no database -- */
 

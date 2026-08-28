@@ -43,44 +43,98 @@ const DIR = path.dirname(fileURLToPath(import.meta.url));
  */
 const DECLARED = /"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"/g;
 
-function claims(): { file: string; name: string; id: string }[] {
-  const out: { file: string; name: string; id: string }[] = [];
-  for (const file of readdirSync(DIR).filter((f) => f.endsWith(".test.ts"))) {
-    const source = readFileSync(path.join(DIR, file), "utf8");
-    for (const m of source.matchAll(DECLARED)) {
-      /* The name is for the failure message only — the id is the fact. Taken
-         from the nearest `const NAME =` before the match where there is one,
-         so a property-style id still reports something a reader can find. */
-      const before = source.slice(0, m.index ?? 0);
-      const name = before.match(/const\s+(\w+)\s*=\s*[^;]*$/)?.[1] ?? "inline";
-      out.push({ file, name, id: m[1] as string });
-    }
+interface Claim {
+  file: string;
+  name: string;
+  id: string;
+}
+
+/**
+ * Ids more than one file may hold, because **no row is ever inserted under
+ * them** — and a teardown can only take away a row that exists.
+ *
+ * That is the real distinction, and it is narrower than "several files use it".
+ * A shared *foreign key* does not belong here: three files pointed rows at
+ * Greg's `auth.users` row by writing his uuid out longhand, and the fix for
+ * that was to import `ADMIN_USER_ID` from `src/admin.ts`, which is both the
+ * single source of truth and, incidentally, no longer a literal for this guard
+ * to trip over. Reach for an entry below only when nothing in the suite creates
+ * the row at all.
+ *
+ * **Exact uuids, never a pattern.** Half the suite mints its fixture ids out of
+ * the same `00000000-0000-4000-8000-…` block — `tests/store-shelf-reads.test.ts`
+ * has twelve — so a rule shaped like "ids that look like nothing" would exempt
+ * most of what this guard exists to watch, while still passing its own control.
+ */
+const NOT_A_ROW: Record<string, string> = {
+  "00000000-0000-4000-8000-000000000000":
+    "the “no such row” sentinel. `tests/upload-records.test.ts` hands it to `claimUpload` in " +
+    "order to be told “unknown”, and `tests/store-artefacts-pg.test.ts` uses it as the job id " +
+    "of a fixture that deliberately has no job. Neither one inserts it.",
+};
+
+function parse(file: string, source: string): Claim[] {
+  const out: Claim[] = [];
+  for (const m of source.matchAll(DECLARED)) {
+    /* The name is for the failure message only — the id is the fact. Taken
+       from the nearest `const NAME =` before the match where there is one,
+       so a property-style id still reports something a reader can find. */
+    const before = source.slice(0, m.index ?? 0);
+    const name = before.match(/const\s+(\w+)\s*=\s*[^;]*$/)?.[1] ?? "inline";
+    out.push({ file, name, id: m[1] as string });
   }
   return out;
 }
 
+function claims(): Claim[] {
+  return readdirSync(DIR)
+    .filter((f) => f.endsWith(".test.ts"))
+    .flatMap((file) => parse(file, readFileSync(path.join(DIR, file), "utf8")));
+}
+
+/**
+ * The whole judgement, over claims rather than over the disk — so the test
+ * below can hand it a collision it made up and watch it fire.
+ */
+function collisions(found: Claim[]): string[] {
+  const byId = new Map<string, { file: string; name: string }[]>();
+  for (const c of found) {
+    const seen = byId.get(c.id) ?? [];
+    seen.push({ file: c.file, name: c.name });
+    byId.set(c.id, seen);
+  }
+
+  /* Two declarations in the SAME file are fine — a file may legitimately hold
+     an article and its second article. Only a uuid crossing a file boundary
+     is the hazard, because only then can the two run at once. */
+  return [...byId.entries()]
+    .filter(([id]) => !Object.hasOwn(NOT_A_ROW, id))
+    .filter(([, where]) => new Set(where.map((w) => w.file)).size > 1)
+    .map(([id, where]) => `${id} — ${where.map((w) => `${w.file}:${w.name}`).join(", ")}`);
+}
+
+/**
+ * A uuid for the controls below, **assembled rather than written out** — so
+ * that `DECLARED` cannot see it when it scans this very file.
+ *
+ * The first draft spelled one out, picking `1111…` as obviously invented, and
+ * the guard immediately reported it colliding with `READER` in
+ * `tests/upload-records.test.ts`. Which is the guard doing its job, on its own
+ * author, but a control that trips the assertion it is controlling is no use —
+ * and the next made-up constant would only have been luckier, not safer.
+ */
+const madeUp = (d: string) =>
+  `${d.repeat(8)}-${d.repeat(4)}-4${d.repeat(3)}-8${d.repeat(3)}-${d.repeat(12)}`;
+
 describe("fixture rows", () => {
   it("are not claimed by two test files at once", () => {
-    const byId = new Map<string, { file: string; name: string }[]>();
-    for (const c of claims()) {
-      const seen = byId.get(c.id) ?? [];
-      seen.push({ file: c.file, name: c.name });
-      byId.set(c.id, seen);
-    }
-
-    /* Two declarations in the SAME file are fine — a file may legitimately hold
-       an article and its second article. Only a uuid crossing a file boundary
-       is the hazard, because only then can the two run at once. */
-    const shared = [...byId.entries()]
-      .filter(([, where]) => new Set(where.map((w) => w.file)).size > 1)
-      .map(([id, where]) => `${id} — ${where.map((w) => `${w.file}:${w.name}`).join(", ")}`);
-
     expect(
-      shared,
+      collisions(claims()),
       "These uuids are declared in more than one test file. Vitest runs files in\n" +
         "parallel against one database, so whichever file tears down first deletes\n" +
         "the other's fixture and every test in it 404s — while passing when run\n" +
-        "alone. Give each file its own id.",
+        "alone. Give each file its own id — or, if nothing in the suite ever inserts a row\n" +
+        "under it, say so in NOT_A_ROW above and say why.",
     ).toEqual([]);
   });
 
@@ -92,5 +146,44 @@ describe("fixture rows", () => {
     const found = claims();
     expect(found.length, "found no fixture id declarations at all").toBeGreaterThan(4);
     expect(new Set(found.map((c) => c.file)).size, "only one file declares one").toBeGreaterThan(2);
+  });
+
+  it("still reports a collision that is not exempt", () => {
+    /* The second control, and the one NOT_A_ROW made necessary. An exemption
+       list is a blind spot by construction, so the thing worth pinning is its
+       width: these four cases differ from each other only in the id, and only
+       the exempt one is allowed through. Without this, widening the list by one
+       careless character — a prefix match, a `startsWith` — would go green. */
+    const a: Claim = { file: "a.test.ts", name: "ARTICLE_ID", id: madeUp("3") };
+    const b: Claim = { ...a, file: "b.test.ts" };
+    expect(collisions([a, b]), "a plain two-file collision went unreported").toHaveLength(1);
+
+    const exempt = Object.keys(NOT_A_ROW)[0] as string;
+    expect(collisions([{ ...a, id: exempt }, { ...b, id: exempt }])).toEqual([]);
+
+    const nearly = `${exempt.slice(0, -1)}1`;
+    expect(collisions([{ ...a, id: nearly }, { ...b, id: nearly }]), "the exemption is fuzzy").toHaveLength(1);
+
+    /* Twice in one file is still fine — that is not a collision, and a guard
+       that flagged it would train people to stop reading it. */
+    expect(collisions([a, { ...a, name: "SECOND_ID" }])).toEqual([]);
+  });
+
+  it("has no exemption that has stopped earning its place", () => {
+    /* Third control. An entry in NOT_A_ROW whose second user has gone away is
+       pure blind spot: it protects nothing (one file alone was never a
+       collision) and it silently forgives the next person who reaches for that
+       id as a real fixture. So it has to be deleted when it stops being needed,
+       which means something has to notice. */
+    const found = claims();
+    for (const id of Object.keys(NOT_A_ROW)) {
+      const files = new Set(found.filter((c) => c.id === id).map((c) => c.file));
+      expect(
+        files.size,
+        `${id} is exempted in NOT_A_ROW, but ${files.size} test file(s) declare it now. ` +
+          "One or none is not a collision, so the entry is buying nothing and is a standing " +
+          "blind spot. Delete it.",
+      ).toBeGreaterThan(1);
+    }
   });
 });

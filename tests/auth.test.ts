@@ -15,9 +15,22 @@
 import { describe, expect, it } from "vitest";
 import type { IncomingMessage } from "node:http";
 
+import { ADMIN_USER_ID } from "../src/admin.js";
 import { requireUser, type VerifyResult } from "../src/auth.js";
 
-const SUB = "f4d08b58-5573-4811-9887-e26c114fb324";
+/**
+ * Greg's real `sub`, imported rather than copied.
+ *
+ * Nothing here needs it to be *his* — `requireUser` never looks the id up, and
+ * these claims are ours to make up. It is his so that the fixture is the shape
+ * of a real token, and it comes from `src/admin.ts` because four places in the
+ * suite had written the same uuid out by hand and a changed dev identity would
+ * have left every one of them quietly describing somebody who is not there.
+ *
+ * Not a fixture row either way: no test creates this user and none deletes it.
+ * `tests/fixture-ids.test.ts`.
+ */
+const SUB = ADMIN_USER_ID;
 
 function req(authorization?: string): IncomingMessage {
   return { headers: authorization ? { authorization } : {} } as unknown as IncomingMessage;
