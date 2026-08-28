@@ -164,6 +164,10 @@ function reply(url: string, method: string): Response {
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: [] });
   if (url.startsWith("/api/glossary/")) return json({ status: "none", glossary: null });
+  /* The job list `useJobs` polls. An empty list rather than `{}` because the
+     hook reads `body.jobs` and the owner control below is about the *request*,
+     not about anything being in flight. */
+  if (url === "/api/jobs") return json({ jobs: [] });
   return json({});
 }
 
@@ -282,6 +286,26 @@ describe("a signed-out browser on a shared document", () => {
  * out, and the POST is the record-open.
  */
 describe("the same address, as the owner", () => {
+  /**
+   * **The control the acceptance criterion was written around**: `useJobs`
+   * polls `GET /api/jobs` for as long as its band is mounted, and it mounts
+   * inside `GlossaryBand`, `SummaryBand` and `IdeasBand`. So the sweep above,
+   * which opens every mode as a visitor and finds nothing outside
+   * `/api/public/`, is only worth anything if opening the *same* mode as the
+   * owner puts the poller in the trace. This is that half.
+   *
+   * It is a separate test from the one below because it needs a mode: the
+   * owner's default view is the table of contents, which mounts no band at
+   * all — so a control that only opened the default address would have proved
+   * the three hooks and said nothing whatever about `useJobs`.
+   */
+  it("polls the job list from a band the visitor cannot open", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    await open("?mode=glossary");
+
+    expect(trace.map((r) => r.url)).toContain("/api/jobs");
+  });
+
   it("mounts the private hooks and the record-open POST", async () => {
     session.user = { id: "owner-1", email: "greg@example.com" };
     await open();
