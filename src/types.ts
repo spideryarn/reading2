@@ -37,9 +37,24 @@ export interface Block {
   words: number;
   html: string;
   /**
-   * False for anything the ToC must not write a row about: images, rules, and
-   * pull-quotes that repeat body text verbatim. These still get ids — the ToC
-   * may want to *point* at a diagram — they just carry no gist.
+   * **The splitter's intrinsic fact: this block has independently describable
+   * prose.** False for images, rules, and pull-quotes that repeat body text
+   * verbatim. These still get ids — the ToC may want to *point* at a diagram —
+   * they just have nothing of their own to say.
+   *
+   * **It is no longer the answer to "does the ToC write a row about this".**
+   * That was true until footnotes arrived, and it stopped being true the moment
+   * a prose footnote became `gistable: true` and `isStructural: false`. Five
+   * different consumers were each reading this field and meaning something
+   * different by it, and the five disagreed — so the policy questions now have
+   * names, in src/block-policy.ts, which is this field's **only**
+   * policy-reading consumer. Read `block.gistable` to decide behaviour and you
+   * have put one of the five back in a Boolean.
+   *
+   * Why it is kept at all rather than derived from `kind`: `describeBlock` in
+   * src/blocks.ts can see that a pull-quote repeats the paragraph above it, and
+   * nothing downstream can reconstruct that.
+   * docs/plans/footnotes-stage345-upfront-sol.md, decision 3.
    */
   gistable: boolean;
   /** Why gistable is false, for debugging the splitter. */

@@ -40,6 +40,7 @@ import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
+import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import { withLedger } from "./cli-ledger.js";
 
@@ -445,7 +446,19 @@ export async function generateTweets(opts: {
      is to name what the prompt actually carried. */
   const profile = opts.profile ?? null;
 
-  const words = blocks.reduce((n, b) => n + b.words, 0);
+  /* **The argument, not the apparatus.** Applied here at the call site rather
+     than inside `articleText`/`articleWithIds`, and that is the whole care in
+     this line: the two builders look like the seam between automatic and asked
+     work and they are not — `ideas` is automatic and sends ids, while
+     `explain`, `search` and `converse` are *asked* and send ids too. Filtering
+     inside the builders would be right three times and would silently leave
+     `ideas` summarising the bibliography. src/block-policy.ts. */
+  const evidence = blocks.filter(isBodyEvidence);
+  /* The **body's** words, from the shared derivation. A thread's length is
+     chosen from how much argument there is; sizing it from a word count that
+     includes the endnotes, while the prompt above excludes them, is the same
+     braiding one layer down. src/block-policy.ts. */
+  const words = articleWordCounts(blocks).body;
   const posts = suggestedLength(words);
   const started = Date.now();
 
@@ -481,7 +494,7 @@ export async function generateTweets(opts: {
       system: [
         {
           type: "text" as const,
-          text: articleText(meta, blocks),
+          text: articleText(meta, evidence),
           ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
         },
         { type: "text" as const, text: SYSTEM },

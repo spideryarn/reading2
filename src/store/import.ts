@@ -493,7 +493,17 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
        published row in place is a migration tool's privilege — the files win —
        and it is the same reason cutover is a step rather than a flag flip. */
     const currentBlocks = await tx
-      .select({ id: revisionBlocks.blockId, text: revisionBlocks.text })
+      /* Four columns, not two — the third of the three narrow fingerprint
+         reads. `hashBlocks` folds in `role` and `treatment`
+         (src/source-hash.ts), so a two-column read here would compare a full
+         new hash against an old narrow one and mint a fresh revision on every
+         single import, for ever. */
+      .select({
+        id: revisionBlocks.blockId,
+        text: revisionBlocks.text,
+        role: revisionBlocks.role,
+        treatment: revisionBlocks.treatment,
+      })
       .from(revisionBlocks)
       .innerJoin(articles, eq(articles.currentRevisionId, revisionBlocks.revisionId))
       .where(eq(articles.id, articleId))

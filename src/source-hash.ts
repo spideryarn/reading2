@@ -43,11 +43,65 @@ import type { Block, Tree } from "./types.js";
  * src/store/pg.ts). A signature taking the whole `Block` is what let that
  * happen quietly: the narrow row would not typecheck, so the obvious fix was to
  * widen the query. docs/plans/glossary-read-latency.md.
+ *
+ * ## Four fields since 2026-08-28, and the last two are nullable on purpose
+ *
+ * `role` and `treatment` joined because **assigning a role changes no text and
+ * no range**. Without them, the day footnotes were classified, every summary,
+ * idea, glossary entry, tweet thread, vector set and similarity artefact
+ * computed *before* the split would have gone on reporting itself current —
+ * with the article's summary silently written over its own bibliography and
+ * every freshness check agreeing that nothing needed redoing. That is the
+ * finding no earlier review caught; docs/plans/footnotes.md § Reclassification
+ * must invalidate the caches.
+ *
+ * `null` as well as `undefined` because the filesystem store carries an absent
+ * field and Postgres carries a null column, and the two must hash identically —
+ * see the normalisation in `hashBlocks`.
+ *
+ * And `string`, not the two unions off `Block`. What is being fingerprinted is
+ * the *text* of the classification, and the narrow Postgres reads select a
+ * `text` column whose domain is enforced by a CHECK constraint and by
+ * `checkNoteFields` on import, not by this type. Narrowing here would buy a
+ * cast at each of those three call sites and nothing else — every `Block[]`
+ * still satisfies it, which is the property this whole type exists for.
  */
-export type BlockFingerprint = Pick<Block, "id" | "text">;
+export type BlockFingerprint = Pick<Block, "id" | "text"> & {
+  role?: string | null;
+  treatment?: string | null;
+};
 
+/**
+ * The corpus that predates roles hashes **byte for byte** as it did before.
+ *
+ * Not "omit the absent fields": this function is not JSON serialisation, it
+ * builds `id \t text` by hand, so there is nothing to omit *from* and a
+ * conditional field would still change the separators. It needs an explicit
+ * branch, which is GPT Sol's correction to the plan
+ * (docs/plans/footnotes-stage345-upfront-sol.md, decision 5).
+ *
+ * So: every block nullish on both axes ⇒ the legacy algorithm, unchanged, and
+ * today's whole corpus keeps its fingerprints rather than being mass-invalidated
+ * into re-running every paid stage. Any block carrying either ⇒ a versioned,
+ * framed representation of all four.
+ *
+ * **`\u0000` between fields and `\u0001` between blocks, not tab and newline.**
+ * The legacy form is ambiguous — a block whose text contains a tab is
+ * indistinguishable from a different split — and while that was tolerable for
+ * two fields it stops being so for four. The version prefix means the two forms
+ * can never collide either.
+ */
 export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
-  const canonical = blocks.map((b) => `${b.id}\t${b.text}`).join("\n");
+  /* `!= null` catches both spellings of absent in one test. Deliberately not
+     truthiness: an empty-string role is not a role, but it is also something no
+     writer produces, and reading it as "legacy" would put a role-bearing
+     article on the old branch. */
+  const classified = blocks.some((b) => b.role != null || b.treatment != null);
+  const canonical = classified
+    ? `spya-blocks/2\u0001${blocks
+        .map((b) => [b.id, b.text, b.role ?? "", b.treatment ?? ""].join("\u0000"))
+        .join("\u0001")}`
+    : blocks.map((b) => `${b.id}\t${b.text}`).join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }
 

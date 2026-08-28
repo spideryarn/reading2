@@ -39,6 +39,7 @@
  * `deriveLibraryTitle`.
  */
 
+import { articleWordCounts, type Treated } from "./block-policy.js";
 import type { Block, Tree } from "./types.js";
 
 /**
@@ -51,6 +52,22 @@ import type { Block, Tree } from "./types.js";
  * on docs/plans/library-read-latency.md, and the plan had it wrong.
  */
 export interface LibraryScalars {
+  /**
+   * **The body's words, not every block's** — since 2026-08-28.
+   *
+   * The number the card says out loud and the number
+   * src/reading-time.ts turns into "55 min". A bibliography is on the page and
+   * is not what a reader is deciding whether to start: gwern was being
+   * advertised at 73 minutes for an article whose argument is 55.
+   * `countsTowardReadingTime` in src/block-policy.ts is the rule; the split is
+   * `articleWordCounts`.
+   *
+   * **Articles published before roles existed keep the old number**, because
+   * this is stored at publish and their stored blocks carry no `treatment` —
+   * so recomputing over them would produce the identical figure. It corrects
+   * itself when the article is re-extracted and republished, and nothing
+   * cheaper can correct it. docs/plans/footnotes.md.
+   */
   wordCount: number;
   blockCount: number;
   partCount: number;
@@ -65,7 +82,7 @@ export interface LibraryScalars {
  * than read, so this stays pure.
  */
 export function deriveLibraryScalars(input: {
-  blocks: readonly Pick<Block, "words">[];
+  blocks: readonly (Pick<Block, "words"> & Treated)[];
   tree: Tree | null;
   excerpt?: string | null | undefined;
 }): LibraryScalars {
@@ -82,7 +99,7 @@ export function deriveLibraryScalars(input: {
   }
   const root = tree ? tree.nodes[tree.rootId] : undefined;
   return {
-    wordCount: blocks.reduce((n, b) => n + b.words, 0),
+    wordCount: articleWordCounts(blocks).body,
     blockCount: blocks.length,
     partCount,
     sectionCount,

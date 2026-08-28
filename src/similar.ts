@@ -44,6 +44,7 @@
  */
 import type { Block, SimilarPair, SimilarResponse, Tree } from "./types.js";
 import { dot, EMBEDDING_MODEL, embedAll, normalise } from "./embeddings.js";
+import { isEmbeddable } from "./block-policy.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
 import { log } from "./log.js";
 
@@ -169,8 +170,14 @@ function sectionOfRow(tree: Tree, blocks: readonly Block[]): (number | null)[] {
  * `MIN_WORDS` or to `gistable` handling would leave a cached answer that was
  * computed under the old rules looking perfectly current. The recipe is part of
  * the identity of the result, not just the prose.
+ *
+ * `v2` → `v3` on 2026-08-28, when eligibility moved from `gistable` to
+ * `isEmbeddable` and footnotes left the pool. `hashBlocks` now carries `role`
+ * and `treatment` (src/source-hash.ts), so the fingerprint *does* move for an
+ * article re-extracted with roles — but not for one whose blocks were stored
+ * before roles existed, which is exactly the corpus this bump is for.
  */
-const RECIPE = `v2:${EMBEDDING_MODEL}:${MIN_WORDS}:${MAX_BLOCKS}:${MAX_CHARS}:${POOL}:${ADJACENT}`;
+const RECIPE = `v3:${EMBEDDING_MODEL}:${MIN_WORDS}:${MAX_BLOCKS}:${MAX_CHARS}:${POOL}:${ADJACENT}`;
 
 /** `${slug}:${recipe}:${blocks}:${structure}` → the answer. */
 const CACHE = new Map<string, SimilarResponse>();
@@ -202,7 +209,11 @@ function embeddable(blocks: readonly Block[]): {
   const items: { row: number; block: Block }[] = [];
   let eligible = 0;
   for (const [row, block] of blocks.entries()) {
-    if (!block.gistable) continue;
+    /* `isEmbeddable`, and the `v3` on `RECIPE` above is the other half of this
+       edit rather than tidiness: this file's own comment says a change to
+       `gistable` handling would leave a cached answer computed under the old
+       rule looking perfectly current, because `hashBlocks` cannot see it. */
+    if (!isEmbeddable(block)) continue;
     if (block.words < MIN_WORDS) continue;
     /* **Counted past the ceiling rather than stopped at it.** ⟨Sol⟩ The
        constant's own comment promised the response would say how many were left

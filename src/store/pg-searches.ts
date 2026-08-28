@@ -138,7 +138,17 @@ function toRun(row: typeof searchRuns.$inferSelect): SearchRun {
  */
 async function sourceHashFor(articleId: string, db: Db | Tx = getDb()): Promise<string | undefined> {
   const rows = await db
-    .select({ id: revisionBlocks.blockId, text: revisionBlocks.text })
+    /* Four columns, not two. `hashBlocks` folds in `role` and `treatment`
+       (src/source-hash.ts) — assigning a role changes no text, so without them
+       a reclassified article would present every saved search as current
+       against prose it no longer matches. Two columns here would also compare a
+       full new hash against an old narrow one, on every read, for ever. */
+    .select({
+      id: revisionBlocks.blockId,
+      text: revisionBlocks.text,
+      role: revisionBlocks.role,
+      treatment: revisionBlocks.treatment,
+    })
     .from(revisionBlocks)
     .innerJoin(articles, eq(articles.currentRevisionId, revisionBlocks.revisionId))
     .where(eq(articles.id, articleId))

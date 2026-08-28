@@ -59,6 +59,7 @@
  */
 import type { Block, BlockId, SkipCounts } from "./types.js";
 import { EMBEDDING_MODEL, EmbeddingFailure, embedAll } from "./embeddings.js";
+import { isEmbeddable } from "./block-policy.js";
 import { hashBlocks } from "./source-hash.js";
 import { log } from "./log.js";
 
@@ -117,7 +118,7 @@ export const MAX_CHARS = 8000;
  * minimum, and yesterday's vectors are still perfectly good vectors of
  * something else. Bumping this string is how that miss happens on purpose.
  */
-const RECIPE = `${EMBEDDING_MODEL}/document/${MIN_WORDS}w/${MAX_CHARS}c`;
+const RECIPE = `${EMBEDDING_MODEL}/document/${MIN_WORDS}w/${MAX_CHARS}c/body`;
 
 /**
  * How much to keep, counted in **floats rather than articles**.
@@ -207,7 +208,12 @@ export function embeddable(blocks: readonly Block[]): {
        eligible. The reader is shown these numbers, and one of them is about
        their article while the other is about our wallet. GPT Sol's finding,
        2026-08-27. */
-    if (!block.gistable) {
+    /* `isEmbeddable`, not `gistable`: a footnote is prose and would embed
+       perfectly well, and that is the problem — a hundred endnotes in the pool
+       make every "related passage" answer about the bibliography. Counted as
+       `nonProse` because that is the bucket the reader is shown and a note is
+       not something our budget cost them. src/block-policy.ts. */
+    if (!isEmbeddable(block)) {
       skipped.nonProse++;
       continue;
     }

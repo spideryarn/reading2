@@ -605,8 +605,10 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
  * character hash and throw them away. On a 360-block article that is roughly
  * 370 KB and an 80–180ms jsdom parse to compute one boolean.
  *
- * `hashBlocks` reads `id` and `text` and nothing else (src/source-hash.ts), so
- * that is what this selects. **Aliased to `id`**, because the column is
+ * `hashBlocks` reads `id`, `text`, `role` and `treatment` and nothing else
+ * (src/source-hash.ts), so that is what this selects — the block HTML and the
+ * generated tsvector are what it exists to leave behind, and the two role
+ * columns are four bytes each. **Aliased to `id`**, because the column is
  * `block_id` and the two have to be spelled to agree — a mismatch here would
  * hash `undefined` for every block, which is a perfectly stable hash that
  * happens to be the same for every article.
@@ -644,7 +646,12 @@ export function blockHashQuery(
   revisionId: string,
 ) {
   return db
-    .select({ id: revisionBlocks.blockId, text: revisionBlocks.text })
+    .select({
+      id: revisionBlocks.blockId,
+      text: revisionBlocks.text,
+      role: revisionBlocks.role,
+      treatment: revisionBlocks.treatment,
+    })
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revisionId))
     .orderBy(asc(revisionBlocks.ordinal));
@@ -1042,11 +1049,22 @@ async function scalarsForShelf(
     out.set(
       revisionId,
       deriveLibraryScalars({
-        /* `deriveLibraryScalars` wants blocks, and it only reads `words` — so
-           this rebuilds the shape rather than summing in SQL, which would be a
-           second implementation of the thing this whole change exists to have
-           one of. */
-        blocks: (found?.words ?? []).map((words) => ({ words })),
+        /* `deriveLibraryScalars` wants blocks, and it reads `words` and
+           `treatment` — so this rebuilds the shape rather than summing in SQL,
+           which would be a second implementation of the thing this whole change
+           exists to have one of.
+
+           `words` **and** `treatment`, in one ordered aggregate. The shelf is
+           deliberately not a special case: `deriveLibraryScalars` now counts
+           only the body, so a shape carrying `words` alone would silently make
+           this fallback the one place on the shelf that still counts the
+           bibliography — and the two numbers would differ only for articles
+           whose scalars were missing, which is the rarest path and the last
+           anyone would look at. */
+        blocks: (found?.words ?? []).map((words, i) => ({
+          words,
+          treatment: (found?.treatments ?? [])[i] ?? null,
+        })),
         tree: (found?.tree ?? null) as Tree | null,
         excerpt,
       }),
@@ -1061,7 +1079,16 @@ async function scalarsForShelf(
  * Taking its builder, like the other queries here, so a test can read the SQL.
  * `array_agg` rather than a join, because a join would repeat a 37 KB tree once
  * per block row; and rather than `sum(words)`, because the sum belongs to
- * `deriveLibraryScalars` and nowhere else.
+ * `deriveLibraryScalars` and nowhere else. That last reason is what made
+ * `treatment` a second aggregate rather than a `where treatment is distinct
+ * from 'supplement'` inside the sum: the policy is
+ * `countsTowardReadingTime` in src/block-policy.ts, and a SQL predicate here
+ * would be a second copy of it that no test compares against the first.
+ *
+ * **The two arrays are read positionally, so both carry the same `order by`.**
+ * `array_agg` without one is in whatever order the planner likes, and two
+ * aggregates ordered independently would pair a block's words with another
+ * block's treatment — a mis-count that is stable, plausible, and invisible.
  */
 export function scalarInputsQuery(
   db: Pick<ReturnType<typeof getDb>, "select">,
@@ -1073,6 +1100,14 @@ export function scalarInputsQuery(
       tree: articleRevisions.tree,
       words: sql<number[]>`coalesce((
         select array_agg(${revisionBlocks.words} order by ${revisionBlocks.ordinal})
+        from ${revisionBlocks}
+        where ${revisionBlocks.revisionId} = ${articleRevisions.id}), '{}')`,
+      /* Typed as the union rather than as `string`, and the CHECK constraint
+         `revision_blocks_treatment` in src/db/schema.ts is what makes that a
+         statement rather than a hope — the column cannot hold anything else,
+         and `checkNoteFields` refuses an import that tries. */
+      treatments: sql<(Block["treatment"] | null)[]>`coalesce((
+        select array_agg(${revisionBlocks.treatment} order by ${revisionBlocks.ordinal})
         from ${revisionBlocks}
         where ${revisionBlocks.revisionId} = ${articleRevisions.id}), '{}')`,
     })

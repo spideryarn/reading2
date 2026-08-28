@@ -45,6 +45,7 @@
  * about. What it buys is worth being honest about: the edges are a *hint* about
  * shared subject matter, not a claim about argument structure.
  */
+import { isBody } from "../block-policy.js";
 import type { Block, BlockId, NodeId, SimilarPair } from "../types.js";
 
 import type { SummaryNode } from "./tree.js";
@@ -505,6 +506,7 @@ type AnchorPair = GraphEdge & { distance: number };
  */
 function collectAnchorLinks(
   doc: Document,
+  blocks: readonly Block[],
   nodes: readonly GraphNode[],
   rows: ReadonlyMap<string, number>,
   pairs: Map<string, AnchorPair>,
@@ -514,6 +516,15 @@ function collectAnchorLinks(
     /* `#` alone is a real thing in the wild and means "the top of this page",
        which is not a block. Same refusal internal-links.ts makes. */
     if (href.length < 2 || !href.startsWith("#")) continue;
+    /* **A footnote marker and its back-link are not cross-references**, and
+       excluding them here is the point of this pair of lines. `MAX_ANCHOR_EDGES`
+       below was written to cap exactly this starburst before footnotes existed
+       — forty lines converging on the endnotes bubble, all of them true and none
+       of them telling a reader anything they did not know. A cap turns that into
+       twelve arbitrary ones; it does not make them mean anything. Now that
+       stage 2 stamps the marker and the back-link, they can simply be refused.
+       src/notes.ts holds the attribute names. */
+    if (a.hasAttribute("data-spya-note-ref") || a.hasAttribute("data-spya-note-back")) continue;
     const row = rowOfElement(a);
     if (row === null) continue;
 
@@ -525,6 +536,13 @@ function collectAnchorLinks(
        and reading a missing lookup as row 0 would put a confident line on the
        first section of the article. */
     if (targetRow === undefined) continue;
+    /* The attribute check above is about *this* link; this is about where it
+       starts and lands. A hand-written "see note 4" in the prose, or a note
+       citing another note, is still apparatus pointing at apparatus — and a
+       page whose stamps did not survive would otherwise be back to relying on
+       the cap. Two clauses, because either one alone leaves a shape through.
+       `isBody` in src/block-policy.ts. */
+    if (!isBody(blocks[row] ?? {}) || !isBody(blocks[targetRow] ?? {})) continue;
     const from = nodeAtRow(nodes, row);
     const to = nodeAtRow(nodes, targetRow);
     if (!from || !to || from.id === to.id) continue;
@@ -557,12 +575,20 @@ function collectAnchorLinks(
  *
  * Two different worries behind one shape of constant.
  *
- * `MAX_ANCHOR_EDGES` is about **footnotes**. Nothing in this corpus has them
- * today (see the table in docs/plans/force-diagram-links.md — five internal
- * links across seven articles, all of them in the constitution), but a paper
- * with forty back-links from its endnotes to their markers would draw forty
- * lines converging on one bubble and call it structure. The cap is what stops
- * the honest case being buried by the pathological one.
+ * `MAX_ANCHOR_EDGES` is about **footnotes**. Nothing in this corpus had them
+ * when it was written (see the table in docs/plans/force-diagram-links.md — five
+ * internal links across seven articles, all of them in the constitution), but a
+ * paper with forty back-links from its endnotes to their markers would draw
+ * forty lines converging on one bubble and call it structure. The cap is what
+ * stops the honest case being buried by the pathological one.
+ *
+ * **Since 2026-08-28 it is no longer what stops that**, and it stays anyway.
+ * `collectAnchorLinks` now refuses note markers, back-links and anything
+ * starting or landing in the apparatus outright, which is the difference
+ * between excluding a thing and rationing it. The cap is back to being a
+ * general bound on how many lines a picture can carry, which is what a cap is
+ * good at — and it is the fallback if a shape we have not met gets past the
+ * exclusion.
  *
  * `MAX_SEMANTIC_EDGES` is about **the question being asked**. Greg wanted to
  * see what embeddings do to the shape of the picture, and a hairball answers
@@ -795,7 +821,7 @@ function anchorEdges(blocks: readonly Block[], nodes: readonly GraphNode[]): Gra
   /** One entry per pair of nodes, however many links join them. */
   const pairs = new Map<string, AnchorPair>();
 
-  if (doc) collectAnchorLinks(doc, nodes, rows, pairs);
+  if (doc) collectAnchorLinks(doc, blocks, nodes, rows, pairs);
 
   const ranked = [...pairs.values()].sort(
     (a, b) =>

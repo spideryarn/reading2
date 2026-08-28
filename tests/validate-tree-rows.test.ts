@@ -43,7 +43,12 @@ async function withTree(
 
   mutate(tree, blocks);
 
-  await writeFile(path.join(dir, "blocks.json"), blocksRaw);
+  /* The **mutated** blocks, not `blocksRaw`. It wrote the raw string until
+     2026-08-28, which was invisible while every case here bent only the tree —
+     and then a case that marks a block as a footnote passed by landing on a
+     caption that was already unlabellable. A fixture the mutation never
+     reached, agreeing with the assertion for its own reasons. */
+  await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks }));
   await writeFile(path.join(dir, "tree.json"), JSON.stringify(tree));
   return validate(dir);
 }
@@ -55,15 +60,48 @@ const leafFor = (tree: Tree, blockId: string): TreeNode =>
   leavesOf(tree).find((n) => n.range[0] === blockId)!;
 
 describe("rows may only anchor to blocks worth reading", () => {
-  it("rejects a navLabel on a block marked gistable:false", async () => {
+  it("rejects a navLabel on a block that cannot carry one", async () => {
     // spya-d2h6jh is the standalone "Credits" label. A sidebar row for it is
-    // the phantom-row failure that `gistable` exists to prevent.
+    // the phantom-row failure that `isStructural` exists to prevent.
     const { code, out } = await withTree((tree) => {
       leafFor(tree, "spya-d2h6jh").navLabel = "Credits for the images used throughout this piece";
     });
     expect(code).not.toBe(0);
-    expect(out).toMatch(/gistable:false/);
+    expect(out).toMatch(/isStructural:false/);
     expect(out).toMatch(/spya-d2h6jh/);
+  });
+
+  /**
+   * **And a footnote, which is `gistable: true`.**
+   *
+   * The other half of the same rule, and the half that could not be stated
+   * before roles existed. A note is real prose, so `gistable` says yes to it
+   * and the old check would have waved a sidebar row for every endnote
+   * straight through. `isStructural` is what refuses it, and this fixture is
+   * the only thing that can tell the two predicates apart.
+   */
+  it("rejects a navLabel on a footnote, which IS gistable", async () => {
+    const { code, out } = await withTree((tree, blocks) => {
+      /* A block the validator is otherwise happy to label — so the only thing
+         that can turn this red is the treatment. The last block of the fixture
+         is a caption and would have failed whatever we did to it. */
+      const note = blocks.find((b) => b.gistable && b.kind === "text")!;
+      note.role = "footnote";
+      note.treatment = "supplement";
+      leafFor(tree, note.id).navLabel = "The endnote about the images";
+    });
+    expect(code).not.toBe(0);
+    expect(out).toMatch(/isStructural:false/);
+  });
+
+  it("is happy with that same label while the block is body", async () => {
+    /* The control for the case above. Without it, "rejects a footnote's row"
+       passes on a validator that rejects that row for any reason at all. */
+    const { code } = await withTree((tree, blocks) => {
+      const body = blocks.find((b) => b.gistable && b.kind === "text")!;
+      leafFor(tree, body.id).navLabel = "The endnote about the images";
+    });
+    expect(code).toBe(0);
   });
 
   it("still requires the unlabelled block to have a leaf, so the partition holds", async () => {

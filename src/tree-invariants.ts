@@ -32,6 +32,7 @@
  *   npm run validate-tree -- example
  *   npm run validate-tree -- data/<slug>
  */
+import { isStructural } from "./block-policy.js";
 import type { Block, Tree, TreeNode } from "./types.js";
 
 /**
@@ -118,8 +119,8 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
 
   const wordsIn = (s: string) => s.trim().split(/\s+/).filter(Boolean).length;
 
-  /** Which blocks may never anchor a navigable row — see blocks.ts `gistable`. */
-  const gistable = new Map(blocks.map((b) => [b.id, b.gistable]));
+  /** Which blocks may never anchor a navigable row — `isStructural`, src/block-policy.ts. */
+  const structural = new Map(blocks.map((b) => [b.id, isStructural(b)]));
   const blockKind = new Map(blocks.map((b) => [b.id, b.kind]));
 
   const span = (n: TreeNode): [number, number] | null => {
@@ -180,18 +181,20 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
           `${node.id}: leaf carries a gist — leaves render verbatim text (granularity-zoom.md#node-shape)`,
         );
 
-      // Every block must be tiled by some leaf, media included — so a media block
-      // legitimately HAS a leaf. What it must never have is a navigable row: a
-      // sidebar entry captioning an image or a rule is the phantom-row failure
-      // that `gistable` exists to prevent.
+      /* Every block must be tiled by some leaf, media included — so a media
+         block legitimately HAS a leaf, and so does a footnote. What neither
+         must have is a navigable row: a sidebar entry captioning an image, or
+         one per endnote, is the phantom-row failure `isStructural` exists to
+         prevent. The tree's *shape* is unchanged by that predicate — only which
+         leaves carry a label. */
       const blockId = blocks[mySpan[0]]?.id;
-      if (blockId && gistable.get(blockId) === false && node.navLabel)
+      if (blockId && structural.get(blockId) === false && node.navLabel)
         fail(
           `${node.id}: carries a navLabel but anchors ${blockId} ` +
-            `(${blockKind.get(blockId)}, gistable:false) — leave it unlabelled`,
+            `(${blockKind.get(blockId)}, isStructural:false) — leave it unlabelled`,
         );
-      if (blockId && gistable.get(blockId) === true && !node.navLabel)
-        warn(`${node.id}: gistable leaf ${blockId} has no navLabel — it will be unreachable in the ToC`);
+      if (blockId && structural.get(blockId) === true && !node.navLabel)
+        warn(`${node.id}: labellable leaf ${blockId} has no navLabel — it will be unreachable in the ToC`);
 
       // Deep rows are long on purpose: a paragraph has no name of its own, and
       // its siblings are numerous and similar. See table-of-contents.md. A

@@ -41,6 +41,7 @@ import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { parseJsonFrom } from "./parse-json.js";
+import { isStructural } from "./block-policy.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
@@ -297,7 +298,7 @@ export function planBatches(
     if (allLeaves) {
       const own = children
         .map((c) => blocks[order.get(c.range[0]) ?? -1])
-        .filter((b): b is Block => !!b && b.gistable);
+        .filter((b): b is Block => !!b && isStructural(b));
       if (own.length > 0) {
         sets.push({ nodeId: id, crumb: here, ...(node.gist ? { gist: node.gist } : {}), blocks: own });
       }
@@ -388,7 +389,7 @@ export function oversizedSets(batches: Batch[], max = MAX_BATCH): SiblingSet[] {
  * callers pass rather than to remember to call it twice.
  */
 function assertCoversEveryBlock(batches: Batch[], blocks: Block[]): void {
-  const wanted = blocks.filter((b) => b.gistable).map((b) => b.id);
+  const wanted = blocks.filter((b) => isStructural(b)).map((b) => b.id);
   const got = batches.flatMap((b) => b.blocks.map((x) => x.id));
   const seen = new Set(got);
 
@@ -498,7 +499,12 @@ export function renderBatch(batch: Batch, blocks: Block[], outline: string): str
          all. Both are needed, and the test that caught the second mistake is the
          one that had been passing vacuously. */
       const outside = i < lo || i > hi;
-      const why = outside ? "CONTEXT" : block.gistable ? "OTHER-SECTION" : "NOT-GISTABLE";
+      /* `isStructural`, not `gistable`, and this is the same distinction the
+         paragraph above makes rather than a second one: what the marker has to
+         say is whether the block *could have been labelled at all*, and since
+         footnotes that is `isStructural`. A note announced as OTHER-SECTION
+         tells the model another batch will label it, which is false. */
+      const why = outside ? "CONTEXT" : isStructural(block) ? "OTHER-SECTION" : "NOT-GISTABLE";
       body.push(`[${why}] <${block.tag}>${kind}: ${block.text}`);
       continue;
     }
@@ -1022,11 +1028,12 @@ export function assertEveryBlockLabelled(
   labels: Record<string, string>,
   blocks: Block[],
 ): void {
-  const missing = blocks.filter((b) => b.gistable && !labels[b.id]);
+  const missing = blocks.filter((b) => isStructural(b) && !labels[b.id]);
   if (missing.length === 0) return;
+  const wanted = blocks.filter((b) => isStructural(b)).length;
   throw new Error(
-    `The nav labels cover ${blocks.filter((b) => b.gistable).length - missing.length} of ` +
-      `${blocks.filter((b) => b.gistable).length} paragraphs — ${missing.length} came back ` +
+    `The nav labels cover ${wanted - missing.length} of ` +
+      `${wanted} paragraphs — ${missing.length} came back ` +
       `without one (${missing.slice(0, 3).map((b) => b.id).join(", ")}). Every batch is checked ` +
       `against the exact set it was asked about, so this is a gap between the batches rather ` +
       `than inside one. Nothing has been written.`,
@@ -1598,7 +1605,7 @@ async function main(): Promise<void> {
      this command answers `[ai-not-set-up]` on a machine where the key is right
      there in `.env.local`. */
   loadEnvLocal();
-  console.log(`Labelling ${blocks.filter((b) => b.gistable).length} blocks with ${CAPABLE_MODEL}…`);
+  console.log(`Labelling ${blocks.filter((b) => isStructural(b)).length} blocks with ${CAPABLE_MODEL}…`);
   const run = await generateLabels({
     tree,
     blocks,

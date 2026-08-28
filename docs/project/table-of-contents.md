@@ -170,9 +170,10 @@ nodes that have a label, so an unlabelled leaf is tiled by the tree, rendered ve
 reading view, addressable by its id — and invisible in the ToC. Nothing is lost; nothing is
 duplicated.
 
-**Never labelled:** any block with `gistable: false` in `blocks.json`. Stage 3 decides this, not
-stage 4 ([architecture.md § What a block is](architecture.md#what-a-block-is)). In the test article
-that is 23 of 139 blocks:
+**Never labelled:** any block `isStructural` says no to — `src/block-policy.ts`, which is
+`gistable` **and** body. Stage 3 decides both halves, not stage 4
+([architecture.md § What a block is](architecture.md#what-a-block-is)). In the test article the
+`gistable` half is 23 of 139 blocks:
 
 - **Media** — figures, bare images, horizontal rules.
 - **Pull-quotes.** All 11 in the test article are word-for-word repeats of body sentences; giving
@@ -182,8 +183,15 @@ that is 23 of 139 blocks:
   real argument. The test article has five.
 - **Boilerplate labels** — a block whose entire text is `Credits`, `Sources`, `Notes`, `References`.
 
+**And the apparatus**, since footnotes: a block with `treatment: "supplement"` is prose, so
+`gistable` says yes to it and it was being bought a nav label like any other — 41 of gwern's 175 and
+121 of wikipedia's 335, a third of the labelling bill spent writing navigation for rows nobody
+navigates to. `isStructural` is what refuses them. The tree's **shape** is unchanged: every block
+still gets a leaf, notes included, and the supplement node that gives the apparatus one visible row
+of its own is a later stage. [footnotes.md](../plans/footnotes.md).
+
 `validate-tree.ts` turns this into a hard error: a leaf carrying a `navLabel` while anchoring a
-`gistable: false` block fails the tree.
+block `isStructural` refuses fails the tree.
 
 > [!NOTE]
 > Two of the five captions are substantial — `Figure 2` runs to 94 words and `Figure 4` to 36,

@@ -380,6 +380,55 @@ describe("anchor edges", () => {
     const onNotes = found.filter((e) => e.source === "s7" || e.target === "s7");
     expect(onNotes.length).toBeLessThanOrEqual(3);
   });
+
+  /**
+   * **And now the endnotes case is excluded rather than rationed.**
+   *
+   * `MAX_ANCHOR_EDGES` was written for exactly this shape before any article
+   * here had footnotes, and a cap turns forty meaningless lines into twelve
+   * meaningless lines. Since stage 2 stamps the marker and the back-link, and
+   * stage 3 marks the note's blocks as apparatus, they can simply be refused —
+   * docs/plans/footnotes.md § the list of ways this passes while broken.
+   */
+  it("draws no edge for a note marker, even one the cap would have allowed", () => {
+    const { root, blocks } = twoParts();
+    blocks[0] = block(
+      "b0",
+      `${FILLER[0]} see also`,
+      `<p>${FILLER[0]}<sup><a data-spya-note-ref="n-1" href="#${blocks[6]?.id}">7</a></sup></p>`,
+    );
+    expect(anchors(root, blocks)).toEqual([]);
+  });
+
+  it("draws no edge for a back-link out of the notes", () => {
+    const { root, blocks } = twoParts();
+    blocks[6] = block(
+      "b6",
+      FILLER[6] ?? "",
+      `<li>${FILLER[6]} <a data-spya-note-back="n-1" href="#${blocks[0]?.id}">↩</a></li>`,
+    );
+    expect(anchors(root, blocks)).toEqual([]);
+  });
+
+  it("draws no edge for a plain link that starts or lands in the apparatus", () => {
+    /* The second clause, and it needs its own case: a hand-written "see note 4"
+       carries none of stage 2's attributes, and a page whose stamps did not
+       survive would otherwise be back to relying on the cap. */
+    const { root, blocks } = twoParts();
+    blocks[6] = { ...blocks[6]!, role: "footnote", treatment: "supplement" };
+    blocks[0] = linking("b0", `#${blocks[6]?.id}`, "see note 4");
+    expect(anchors(root, blocks)).toEqual([]);
+  });
+
+  it("still draws the same link when neither end is apparatus", () => {
+    /* The control for all three above. Without it they pass on an
+       `anchorEdges` that returns nothing at all, which is the version that
+       would quietly delete the one kind of line in this picture somebody
+       meant. */
+    const { root, blocks } = twoParts();
+    blocks[0] = linking("b0", `#${blocks[6]?.id}`, "see note 4");
+    expect(anchors(root, blocks).map((e) => [e.source, e.target])).toEqual([["n3", "n7"]]);
+  });
 });
 
 // --------------------------------------------------------------- semantic

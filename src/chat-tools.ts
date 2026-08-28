@@ -54,6 +54,7 @@
 import { Readability } from "@mozilla/readability";
 import { JSDOM } from "jsdom";
 import type { Block, Meta, ToolRun } from "./types.js";
+import { isSearchable } from "./block-policy.js";
 import { FetchFailure, fetchDocument } from "./fetch.js";
 import { findPassages } from "./search.js";
 import { fold, parseQuery } from "./library-search.js";
@@ -532,9 +533,11 @@ export function searchArticleWords(
   const all: { blockId: string; text: string; rank: number; count: number }[] = [];
   let occurrences = 0;
   for (const block of blocks) {
-    // Headings and media carry no prose worth quoting back, exactly as in the
-    // library matcher. A hit on a two-word heading is noise.
-    if (!block.gistable) continue;
+    /* Headings and media carry no prose worth quoting back, exactly as in the
+       library matcher. A hit on a two-word heading is noise — and, exactly as
+       there, a footnote is not: `isSearchable` includes supplements on purpose
+       (src/block-policy.ts). */
+    if (!isSearchable(block)) continue;
     /* Folded before matching, so `godel` finds `Gödel` — the same courtesy the
        library box extends, and the reason `fold` is imported rather than a bare
        `toLowerCase`. Nothing here takes an offset in the folded text and uses it

@@ -25,6 +25,7 @@
  */
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { isSearchable } from "./block-policy.js";
 import { log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { loadShelf } from "./shelf.js";
@@ -57,12 +58,26 @@ const MIN_TERM = 2;
  * one is obviously simpler, quoted phrases are the only syntax it honours, and
  * the docs say so.
  */
-/* Exported, along with `fold` and `occurrences` below, for src/chat-tools.ts —
-   chat's `search_article_words` runs this same matcher over the one article the
-   reader has open. It imports them rather than reimplementing them, and that is
-   the point: a reader typing words into the library box and asking chat about
-   the same words must get the same notion of "matches", and the way to be sure
-   of that is not to have two notions. See docs/project/chat-tools.md. */
+/* Exported, along with `fold` below, for src/chat-tools.ts — chat's
+   `search_article_words` parses the reader's query with this exact function
+   rather than reimplementing it. That much must not fork: somebody typing words
+   into the library box and then asking chat about the same words has to be
+   asking the same *question*, and the way to be sure of that is not to have two
+   parsers.
+
+   **What the two do not share is the matching rule, and that is on purpose.**
+   This file counts with `occurrences` below, a substring scan. Chat counts with
+   `termPattern` from src/term-match.ts, which matches whole words. The reason is
+   written out at `searchArticleWords` in src/chat-tools.ts: chat's count goes to
+   a model as an exact figure, and a scan that finds "AI" inside "said" and
+   "fair" turns that figure into a lie a model has no way to doubt. A reader
+   reads the highlighted hit and judges it themselves.
+
+   Until 2026-08-28 this comment also listed `occurrences`, and said the two
+   sides must share the notion of "matches" too. Both halves were left over from
+   before the 2026-08-26 split, and both were believed — the stale sentence sent
+   a later reader looking for a wiring bug that was not there. See
+   docs/project/chat-tools.md. */
 export function parseQuery(query: string): { terms: string[]; phrases: string[] } {
   const phrases: string[] = [];
   // Pull out "quoted phrases" first, so their inner spaces don't become term
@@ -106,8 +121,14 @@ export function fold(s: string): string {
     .toLowerCase();
 }
 
-/** How many times `needle` appears in `hay`. Non-overlapping. */
-export function occurrences(hay: string, needle: string): number {
+/**
+ * How many times `needle` appears in `hay`. Non-overlapping.
+ *
+ * **Substring, so it counts `cat` inside `category`** — and not exported,
+ * because the only caller is `searchLibrary` below and the comment on
+ * `parseQuery` says why chat deliberately does not share it.
+ */
+function occurrences(hay: string, needle: string): number {
   let n = 0;
   for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + needle.length)) n++;
   return n;
@@ -212,9 +233,13 @@ export async function searchLibrary(
   const hits: LibraryHit[] = [];
   for (const article of articles) {
     for (const block of article.blocks) {
-      // Headings and media carry no prose worth a snippet, and a hit on a
-      // one-word heading is noise at the top of the list.
-      if (!block.gistable) continue;
+      /* Headings and media carry no prose worth a snippet, and a hit on a
+         one-word heading is noise at the top of the list.
+
+         Named rather than spelled `!block.gistable`, and the name is the point:
+         `isSearchable` is the one predicate of the five that **includes**
+         supplements, so a footnote stays findable. src/block-policy.ts. */
+      if (!isSearchable(block)) continue;
       const folded = fold(block.text);
 
       /* Every term must appear — this is an AND, and `parseQuery` says why it

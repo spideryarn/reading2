@@ -179,6 +179,52 @@ describe("searchArticleWords — the literal matcher", () => {
     expect(ids).not.toContain("spya-dddddd");
   });
 
+  /**
+   * **A footnote is quotable, and this is the only thing here that says so.**
+   *
+   * `isSearchable` (src/block-policy.ts) is the one predicate of the five that
+   * **includes** supplements — a note is often the best sentence in a piece —
+   * and the mistake it is exposed to is not a typo. It is the tidy-up: five
+   * names that look like five spellings of one formula, folded into
+   * `gistable && isBody`. Run as a mutation, that tidy-up reddened exactly two
+   * assertions, both about the *filesystem* library search, and **nothing
+   * here** — this suite exercised the predicate only through `gistable`, so a
+   * supplement never reached an assertion. Somebody editing this filter on its
+   * own had nothing to stop them, and the symptom would be chat quietly
+   * declining to quote a footnote back to a reader who asked about one.
+   *
+   * Its own fixture rather than the shared one above, so the occurrence counts
+   * in those tests keep saying what they say.
+   */
+  const withNote = [
+    block("spya-111111", "The argument turns on consciousness itself."),
+    block("spya-222222", "A note qualifying what consciousness meant to the author.", {
+      role: "footnote",
+      treatment: "supplement",
+      noteId: "note-1",
+    }),
+    block("spya-333333", "Consciousness", { kind: "heading", level: 2, gistable: false }),
+  ];
+
+  it("quotes a passage inside a footnote back to the reader", () => {
+    const ids = searchArticleWords(withNote, "consciousness").hits.map((h) => h.blockId);
+    expect(ids).toContain("spya-222222");
+  });
+
+  it("still refuses the heading in that same fixture", () => {
+    /* The negative control, and it has to be over **this** fixture rather than
+       the one above: without it the assertion before it passes on a filter that
+       has been removed altogether, which is the other way to make a footnote
+       searchable and the wrong one. */
+    const ids = searchArticleWords(withNote, "consciousness").hits.map((h) => h.blockId);
+    expect(ids).not.toContain("spya-333333");
+    /* And something came back, so this cannot pass on a filter that drops
+       everything. Deliberately **not** an assertion about the total: the
+       footnote is the case above, and a control that also counts it would
+       redden for the sibling's reason and make the two look like one. */
+    expect(ids).toContain("spya-111111");
+  });
+
   it("ANDs every term — all of them must be present", () => {
     expect(searchArticleWords(blocks, "consciousness computation").total).toBe(1);
     expect(searchArticleWords(blocks, "consciousness bicycle").total).toBe(0);

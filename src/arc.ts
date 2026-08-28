@@ -40,6 +40,7 @@ import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Arc, ArcEntry, Block, Meta, Tree, TreeNode } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
+import { isBodyEvidence } from "./block-policy.js";
 import { withLedger } from "./cli-ledger.js";
 
 const PROMPT_VERSION = "arc/2";
@@ -261,6 +262,14 @@ export async function generateArc(opts: {
   const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
     .then((raw) => JSON.parse(raw) as Meta)
     .catch(() => null);
+  /* **The argument, not the apparatus.** Applied here at the call site rather
+     than inside `articleText`/`articleWithIds`, and that is the whole care in
+     this line: the two builders look like the seam between automatic and asked
+     work and they are not — `ideas` is automatic and sends ids, while
+     `explain`, `search` and `converse` are *asked* and send ids too. Filtering
+     inside the builders would be right three times and would silently leave
+     `ideas` summarising the bibliography. src/block-policy.ts. */
+  const evidence = blocks.filter(isBodyEvidence);
   const parts = partsOf(tree);
   const started = Date.now();
 
@@ -297,7 +306,7 @@ export async function generateArc(opts: {
       system: [
         {
           type: "text" as const,
-          text: articleText(meta, blocks),
+          text: articleText(meta, evidence),
           ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
         },
         { type: "text" as const, text: SYSTEM },

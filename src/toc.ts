@@ -35,6 +35,7 @@ import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
+import { isStructural } from "./block-policy.js";
 import { isSpideryarnId } from "./ids.js";
 import { generateLabels, mergeLabels } from "./labels.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
@@ -262,7 +263,11 @@ export function checkCoverage(
   blocks: Block[],
 ): void {
   const known = new Set(blocks.map((b) => b.id));
-  const gistable = blocks.filter((b) => b.gistable);
+  /* `isStructural`, not `gistable`: since footnotes, the blocks a row is owed
+     for are the body's, and a ratio taken over a set that includes the
+     bibliography would report a third of gwern missing on a tree that is
+     complete. src/block-policy.ts. */
+  const structural = blocks.filter((b) => isStructural(b));
   /* Blocks, not leaf nodes. Counting nodes was a real bug: an overlap in the
      model's ranges grows two leaves for one paragraph while a gap elsewhere
      grows none, so the node count comes out right while the article comes out
@@ -295,12 +300,12 @@ export function checkCoverage(
     );
   }
 
-  if (gistable.length === 0) return;
-  const missing = gistable.filter((b) => !labelledBlocks.has(b.id));
-  const covered = (gistable.length - missing.length) / gistable.length;
+  if (structural.length === 0) return;
+  const missing = structural.filter((b) => !labelledBlocks.has(b.id));
+  const covered = (structural.length - missing.length) / structural.length;
   if (covered < COVERAGE_FLOOR) {
     throw new Error(
-      `The table of contents covers ${gistable.length - missing.length} of ${gistable.length} ` +
+      `The table of contents covers ${structural.length - missing.length} of ${structural.length} ` +
         `paragraphs — ${missing.length} have no row (${missing.slice(0, 3).map((b) => b.id).join(", ")}). ` +
         `Every nav label is asked for by number and every batch is checked against the exact set ` +
         `it was given, so this is not a model that stopped early. Look at planBatches in ` +
@@ -491,7 +496,10 @@ export function buildTree(
       // `blocks`, and the undefined case threw two lines up.
       const block = blocks[i]!;
       const leafId = nextId();
-      const label = block.gistable ? navLabels[block.id] : undefined;
+      /* Every block still gets a leaf — the tree tiles the article, notes
+         included. What `isStructural` decides is which leaves carry a
+         *navigable row*. src/block-policy.ts. */
+      const label = isStructural(block) ? navLabels[block.id] : undefined;
       nodes[leafId] = {
         id: leafId,
         depth: depth + 1,
@@ -542,7 +550,12 @@ export interface TocRun {
   /** Which model wrote it. `CAPABLE_MODEL` is private here, and the queue logs what a tree cost. */
   model: string;
   blocks: number;
-  gistable: number;
+  /**
+   * How many blocks are owed a navigable row — `isStructural`, which is
+   * `gistable` **and** body. It was `gistable` alone until footnotes; on a
+   * heavily cited piece the two differ by a third. src/block-policy.ts.
+   */
+  structural: number;
   labelled: number;
   internal: number;
   /**
@@ -628,7 +641,7 @@ export async function generateToc(opts: {
   );
   const slug = slugForBlocksPath(opts.blocksPath);
   const outDir = opts.outDir ?? path.join("data", slug);
-  const gistable = blocks.filter((b) => b.gistable).length;
+  const structural = blocks.filter((b) => isStructural(b)).length;
   const started = Date.now();
 
   /* Before the call, and before a minute of anyone's time is spent: an article
@@ -767,7 +780,7 @@ export async function generateToc(opts: {
     outDir,
     model: CAPABLE_MODEL,
     blocks: blocks.length,
-    gistable,
+    structural,
     labelled: Object.values(tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(tree.nodes).filter((n) => n.children.length > 0).length,
     labelBatches: labelRun.batches,
@@ -804,10 +817,10 @@ async function main(): Promise<void> {
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 
-  console.log(`\n${run.blocks} blocks (${run.gistable} gistable) → ${CAPABLE_MODEL}`);
+  console.log(`\n${run.blocks} blocks (${run.structural} to label) → ${CAPABLE_MODEL}`);
   console.log(`\nNodes:     ${Object.keys(run.tree.nodes).length} (${run.internal} internal)`);
   console.log(
-    `Labelled:  ${run.labelled} / ${run.gistable} gistable blocks, in ${run.labelCalls} call(s)` +
+    `Labelled:  ${run.labelled} / ${run.structural} blocks, in ${run.labelCalls} call(s)` +
       (run.labelsResumed > 0
         ? ` (${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`
         : ""),

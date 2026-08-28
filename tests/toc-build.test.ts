@@ -264,6 +264,31 @@ describe("checkCoverage", () => {
     expect(() => check(labelsFor(twenty.map((b) => b.id)))).not.toThrow();
   });
 
+  /**
+   * **The ratio is over `isStructural`, not over `gistable`.**
+   *
+   * A footnote is prose, so `gistable` says yes to it and it would sit in the
+   * denominator for ever — on gwern that is 41 blocks of a 175 that can never
+   * be labelled, which is a third of the article reported missing from a tree
+   * that is complete, and the stage refusing to write it.
+   */
+  it("does not count footnotes among the paragraphs owed a row", () => {
+    const withNotes = twenty.map((b, i) =>
+      i >= 15 ? { ...b, role: "footnote" as const, treatment: "supplement" as const } : b,
+    );
+    const bodyLabels = labelsFor(withNotes.slice(0, 15).map((b) => b.id));
+    expect(() => check(bodyLabels, withNotes)).not.toThrow();
+  });
+
+  it("still refuses a body paragraph with no row", () => {
+    // The control for the line above.
+    const withNotes = twenty.map((b, i) =>
+      i >= 15 ? { ...b, role: "footnote" as const, treatment: "supplement" as const } : b,
+    );
+    const short = labelsFor(withNotes.slice(0, 14).map((b) => b.id));
+    expect(() => check(short, withNotes)).toThrow(/have no row/);
+  });
+
   it("refuses even a single missing label, now that there is no honest way to skip one", () => {
     // This used to pass. The 95% floor existed because one model call wrote the
     // whole tree and was allowed to skip a trivial transition sentence — an

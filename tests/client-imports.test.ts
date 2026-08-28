@@ -42,6 +42,14 @@ const SHARED = new Set([
   "ids.js", // minting and validating block ids
   "urls.js", // the http(s) allowlist, used by the server and the panel
   "reading-time.js",
+  /* The five questions the machinery may ask about a block, and the word count
+     that states one of them as a number. On the list for the same reason
+     `reading-time.js` is, and next to it on purpose: the masthead over the
+     article you are reading and the card you decide from before you open it are
+     on opposite sides of the wire, and nothing would ever have told us the two
+     had drifted. It imports `types.js` and nothing else.
+     See src/block-policy.ts and docs/plans/footnotes.md. */
+  "block-policy.js",
   "ingest.js", // slug derivation, so the client can show the same one the server will mint
   "term-match.js", // where a glossary term appears in a block
   "quote-match.js",

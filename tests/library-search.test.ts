@@ -59,6 +59,43 @@ describe("searching the library", () => {
     expect(mine[0]?.text).toContain(RARE);
   });
 
+  /**
+   * **A footnote is findable, and that is the policy rather than an oversight.**
+   *
+   * `isSearchable` is the one of the five predicates in src/block-policy.ts
+   * that includes supplements — a note is often the best sentence in a piece —
+   * and it is the one an over-eager refactor breaks by making the five agree.
+   * The plan listed the Postgres half's hard-coded `gistable = true` as work to
+   * do, and it was wrong (GPT Sol's decision 4); this test is the point of that
+   * row. tests/block-policy.test.ts guards the SQL side.
+   */
+  it("still finds a passage inside a footnote", async () => {
+    const [note] = await makeArticle([`The ${RARE} appears only in an endnote.`]);
+    const file = path.join(DIR, "blocks.json");
+    const { blocks } = JSON.parse(await readFile(file, "utf8")) as { blocks: Block[] };
+    const target = blocks.find((b) => b.id === note)!;
+    target.role = "footnote";
+    target.treatment = "supplement";
+    target.noteId = "note-1";
+    await writeFile(file, JSON.stringify({ blocks }));
+
+    const { hits } = await searchLibrary(RARE, 10);
+    expect(hits.filter((h) => h.slug === SLUG).map((h) => h.blockId)).toContain(note);
+  });
+
+  it("still refuses a heading, so the predicate is not simply true", async () => {
+    // The negative sentinel beside it: `isSearchable` reads `gistable`, and a
+    // predicate that returned true for everything would pass the test above.
+    const [id] = await makeArticle([`A ${RARE} heading.`]);
+    const file = path.join(DIR, "blocks.json");
+    const { blocks } = JSON.parse(await readFile(file, "utf8")) as { blocks: Block[] };
+    blocks.find((b) => b.id === id)!.gistable = false;
+    await writeFile(file, JSON.stringify({ blocks }));
+
+    const { hits } = await searchLibrary(RARE, 10);
+    expect(hits.filter((h) => h.slug === SLUG).map((h) => h.blockId)).not.toContain(id);
+  });
+
   it("returns nothing for a query no article contains", async () => {
     await makeArticle([`The ${RARE} is a thing nobody has written about.`]);
     const { hits } = await searchLibrary("qwertyuiopasdfgh", 10);

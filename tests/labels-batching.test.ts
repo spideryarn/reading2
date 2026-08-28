@@ -199,6 +199,38 @@ describe("planBatches", () => {
     expect(seen.length).toBe(blocks.filter((b) => b.gistable).length);
   });
 
+  /**
+   * **And leaves footnotes out, which `gistable` cannot say.**
+   *
+   * A footnote is a paragraph of prose, so the splitter calls it `gistable:
+   * true` and it was being bought a nav label like any other — 41 of gwern's
+   * 175 and 121 of wikipedia's 335, a third of the labelling bill spent writing
+   * navigation for rows nobody navigates to. `isStructural` is what refuses
+   * them, and `assertCoversEveryBlock` inside `planBatches` throws if the two
+   * halves of this move apart, which is why they had to move together.
+   */
+  it("leaves footnotes out, and does not then complain that they are missing", () => {
+    const { tree, blocks } = fixture(10, 6);
+    for (const i of [7, 8, 9]) {
+      blocks[i]!.role = "footnote";
+      blocks[i]!.treatment = "supplement";
+    }
+    const seen = planBatches(tree, blocks).flatMap((b) => b.blocks.map((x) => x.id));
+    expect(seen).not.toContain(blocks[7]!.id);
+    expect(seen.length).toBe(blocks.length - 3);
+  });
+
+  it("still labels a body block that happens to sit beside them", () => {
+    /* The control. Without it the case above passes on a predicate that returns
+       false for everything, which would empty every batch and label nothing. */
+    const { tree, blocks } = fixture(10, 6);
+    blocks[7]!.role = "footnote";
+    blocks[7]!.treatment = "supplement";
+    const seen = planBatches(tree, blocks).flatMap((b) => b.blocks.map((x) => x.id));
+    expect(seen).toContain(blocks[6]!.id);
+    expect(seen).toContain(blocks[8]!.id);
+  });
+
   it("actually fills a batch to the cap it is given", () => {
     // This test used to assert `<= 30` against sets of 5 under a min of 20 — a
     // bound that could never bind, because the packing closed at the minimum
@@ -240,6 +272,17 @@ describe("planBatches", () => {
     const batches = planBatches(tree, blocks);
     expect(batches).toHaveLength(1);
     expect(batches[0]!.blocks).toHaveLength(8);
+  });
+
+  it("returns nothing when every block is apparatus", () => {
+    /* The whole-article version of the case above: a piece that is all
+       bibliography buys no labels at all rather than one empty call. */
+    const { tree, blocks } = fixture(3, 4);
+    for (const b of blocks) {
+      b.role = "footnote";
+      b.treatment = "supplement";
+    }
+    expect(planBatches(tree, blocks)).toHaveLength(0);
   });
 
   it("returns nothing rather than an empty call when there is nothing to label", () => {
@@ -727,6 +770,33 @@ describe("assertEveryBlockLabelled", () => {
   it("does not ask for a label on a non-gistable block", () => {
     expect(() => assertEveryBlockLabelled(complete, blocks)).not.toThrow();
     expect(complete[blocks[5]!.id]).toBeUndefined();
+  });
+
+  it("does not ask for a label on a footnote either", () => {
+    /* This one throws, so it had to move to `isStructural` in the same edit as
+       `planBatches` — a stage whose batches skip the notes and whose final
+       check still demands them stops on its own assertion. Same predicate,
+       same commit. */
+    const noted = blocks.map((b, i) =>
+      i >= 8 ? { ...b, role: "footnote" as const, treatment: "supplement" as const } : b,
+    );
+    const bodyOnly = Object.fromEntries(
+      Object.entries(complete).filter(([id]) => noted.slice(0, 8).some((b) => b.id === id)),
+    );
+    expect(() => assertEveryBlockLabelled(bodyOnly, noted)).not.toThrow();
+  });
+
+  it("still refuses a gap in the body when the notes are unlabelled", () => {
+    // The control: the relaxation above must not have turned the check off.
+    const noted = blocks.map((b, i) =>
+      i >= 8 ? { ...b, role: "footnote" as const, treatment: "supplement" as const } : b,
+    );
+    const missingOne = Object.fromEntries(
+      Object.entries(complete).filter(
+        ([id]) => id !== blocks[0]!.id && noted.slice(0, 8).some((b) => b.id === id),
+      ),
+    );
+    expect(() => assertEveryBlockLabelled(missingOne, noted)).toThrow(/came back without one/);
   });
 });
 

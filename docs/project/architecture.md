@@ -90,6 +90,15 @@ Not every block gets summarised. Images, rules, and pull-quotes that repeat body
 `gistable: false` — addressable, so the ToC can point at a diagram, but never the subject of a row
 of their own. See [block-ids.md § What gets an id](block-ids.md#what-gets-an-id).
 
+**`gistable` is not the policy, and since 2026-08-28 it does not pretend to be.** It is the
+splitter's intrinsic "this block has independently describable prose" fact, and nothing else.
+The five questions the rest of the pipeline actually asks — may this be searched, may an automatic
+model call read it, may it be embedded, may the ToC write a row about it, does it go on the clock —
+are named predicates in [`src/block-policy.ts`](../../src/block-policy.ts), which is `gistable`'s
+only policy-reading consumer. They are **not** five spellings of one formula: a footnote is
+searchable and is not on the clock, and a pull-quote is on the clock and gets no row.
+See [footnotes.md § `gistable: false` is not the switch](../plans/footnotes.md).
+
 Stage 3 also reads back the footnote stamps stage 2 left in the DOM and writes `role`, `treatment`
 and `noteId` onto the blocks inside the notes container — apparatus rather than argument, and which
 note each block belongs to, since **a note is a range of blocks and not one block**. Nothing reads

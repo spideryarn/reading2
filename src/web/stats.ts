@@ -10,10 +10,18 @@
  * or the tree is regenerated, and a stored copy would be a second truth that
  * quietly drifts from the first — see docs/project/architecture.md.
  */
+import { articleWordCounts } from "../block-policy.js";
 import { readingMinutes } from "../reading-time.js";
 import type { Article } from "../types.js";
 
 export interface Stats {
+  /**
+   * **The body's words.** The apparatus — footnotes, endnotes, bibliography —
+   * is on the page and is not part of what the masthead is promising, and the
+   * shelf card must say the same number. `articleWordCounts` in
+   * src/block-policy.ts is the one derivation both reach for; before it they
+   * each summed `b.words` and agreed by coincidence.
+   */
   words: number;
   minutes: number;
   blocks: number;
@@ -30,7 +38,7 @@ export interface Stats {
 }
 
 export function articleStats(article: Article): Stats {
-  const words = article.blocks.reduce((n, b) => n + b.words, 0);
+  const words = articleWordCounts(article.blocks).body;
   const byDepth = new Map<number, number>();
   let deepest = 0;
   for (const node of Object.values(article.tree.nodes)) {

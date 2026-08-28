@@ -29,14 +29,21 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { blockHashQuery, blocksQuery } from "../src/store/pg.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { sanitizeStoredBlocks } from "../src/sanitize.js";
+import type { Block } from "../src/types.js";
 
 const sql = blockHashQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
 const renderSql = blocksQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
 
 describe("the fingerprint read", () => {
-  it("asks for the two columns the hash is made of", () => {
+  it("asks for the four columns the hash is made of", () => {
     expect(sql).toContain('"block_id"');
     expect(sql).toContain('"text"');
+    /* `role` and `treatment` since 2026-08-28. Assigning a role changes no
+       text, so `hashBlocks` folds them in (src/source-hash.ts) — and a read
+       that still took two columns would compare a full new hash against an old
+       narrow one on every single read, for ever. */
+    expect(sql).toContain('"role"');
+    expect(sql).toContain('"treatment"');
   });
 
   it("does not ask for the block HTML", () => {
@@ -99,9 +106,42 @@ describe("the hash does not depend on the columns that were dropped", () => {
     expect(hashBlocks(cleaned)).toEqual(hashBlocks(full));
   });
 
-  it("is the same over two columns as over the whole block", () => {
+  it("is the same over the selected columns as over the whole block", () => {
     const narrow = full.map((b) => ({ id: b.id, text: b.text }));
     expect(hashBlocks(narrow)).toEqual(hashBlocks(full));
+  });
+
+  /**
+   * **And over an article that actually has roles**, which is the case that can
+   * fail. The fixture above carries none, so the parity above holds whatever
+   * the query selects and whatever `hashBlocks` reads — it is a true statement
+   * about today's corpus and says nothing about the change that introduced the
+   * two new columns. tests/source-hash-roles.test.ts holds the rest.
+   */
+  const roled: Block[] = [
+    // The key absent rather than undefined: `exactOptionalPropertyTypes` makes
+    // those different types, and absent is what the filesystem store writes.
+    { ...full[0]! },
+    { ...full[1]!, role: "footnote", treatment: "supplement" },
+  ];
+
+  it("is the same over the four columns as over a role-bearing block", () => {
+    /* `?? null` on purpose: this is the shape the query returns, and Postgres
+       spells an absent role `null` where the filesystem leaves the key out. */
+    const narrow = roled.map((b) => ({
+      id: b.id,
+      text: b.text,
+      role: b.role ?? null,
+      treatment: b.treatment ?? null,
+    }));
+    expect(hashBlocks(narrow)).toEqual(hashBlocks(roled));
+  });
+
+  it("is NOT the same if the read drops those columns", () => {
+    // The control for the line above: without it that assertion passes on a
+    // `hashBlocks` that ignores roles altogether.
+    const dropped = roled.map((b) => ({ id: b.id, text: b.text }));
+    expect(hashBlocks(dropped)).not.toEqual(hashBlocks(roled));
   });
 });
 

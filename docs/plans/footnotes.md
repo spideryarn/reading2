@@ -961,6 +961,85 @@ HEAD plus this stage's lines only, anchored on exact strings, parse-checked, and
 absence of every peer symbol; then committed through a private `GIT_INDEX_FILE` so the shared index
 was never touched.
 
+## Stage 3a-ii, as it actually landed — 2026-08-28
+
+[`src/block-policy.ts`](../../src/block-policy.ts) is the whole of it: five named predicates and
+one word count, importing a type and nothing else. `gistable` is unchanged and its doc comment now
+says what it is rather than what it decides ([`types.ts`](../../src/types.ts)).
+
+**The clock, measured through the real pipeline** (`output/clock3aii.mts` — canonicalise,
+Readability, sanitise, split, then `articleWordCounts`), and it reproduces the estimate above
+exactly:
+
+| fixture | today | as argument | apparatus |
+|---|---|---|---|
+| gwern | 16846 words · **73 min** | 12637 · **55 min** | 4209 words, 41 blocks |
+| wiki_transformer | 11436 · **50 min** | 8053 · **35 min** | 3383 words, 121 blocks |
+| acx_footnotes | 6415 · **28 min** | 5366 · **23 min** | 1049 words, 18 blocks |
+| tufte | 2198 · 10 min | 2141 · 9 min | 57 words, 5 blocks |
+| ar5iv, gutenberg, constitution | unchanged | unchanged | **0 — the controls** |
+
+**Where each predicate went**, and the two that are not the conjunction are the two worth checking:
+
+| predicate | call sites |
+|---|---|
+| `isSearchable` | `library-search.ts`, `chat-tools.ts` — and `pg-shelf.ts`'s SQL keeps its bare `gistable = true`, with a comment saying why |
+| `isBodyEvidence` | at the **call site** in `glossary.ts`, `arc.ts`, `tweets.ts`, `ideas.ts`; inside `summarise.ts`'s `textOf`; **not** in `explain.ts`, `search.ts`, `converse.ts` |
+| `isEmbeddable` | `article-vectors.ts`, `similar.ts` — both recipes bumped, since `hashBlocks` cannot see an eligibility change |
+| `isStructural` | `labels.ts` (batching, the batch marker, `assertEveryBlockLabelled`), `toc.ts` (`checkCoverage`, `buildTree`'s label, the run stat), `tree-invariants.ts` |
+| `countsTowardReadingTime` | through `articleWordCounts` in `library-scalars.ts`, `web/stats.ts`, `tweets.ts`, `ideas.ts`, `glossary.ts`, and `pg.ts`'s `scalarInputsQuery` |
+
+`scalarInputsQuery` gained a second ordered `array_agg` for `treatment` rather than a `sum(...)
+where`, so the shelf reaches the same derivation as everything else. Both aggregates carry the same
+`order by`; two ordered independently would pair one block's words with another's treatment, which
+is a mis-count that is stable, plausible and invisible.
+
+**The diagram excludes note edges rather than capping them.** `MAX_ANCHOR_EDGES` was written for
+exactly the endnote starburst before any article here had footnotes, and a cap turns forty
+meaningless lines into twelve meaningless lines. `collectAnchorLinks` now refuses an `<a>` carrying
+`data-spya-note-ref` or `data-spya-note-back`, **and** any link starting or landing in a supplement
+block — two clauses, because a hand-written "see note 4" carries neither attribute and a page whose
+stamps did not survive would be back to relying on the cap. The cap stays as a general bound.
+
+**`hashBlocks` got a branch, not an omission.** Every block nullish on both axes ⇒ the legacy
+`id \t text` algorithm byte for byte, pinned in the test against a hex string computed before any of
+this was written (`21189fa4eb0bceca` over `example/blocks.json`). Otherwise `spya-blocks/2` with
+`\u0000` between fields and `\u0001` between blocks. Postgres `null` and filesystem `undefined`
+normalise identically, and all three narrow fingerprint queries — `pg.ts`, `pg-searches.ts`,
+`import.ts` — now select four columns. `structureHash` is untouched; its supplement branch belongs
+with the node.
+
+### The stale cached word count: it heals on re-extraction, and nothing cheaper can fix it
+
+`article_revisions.word_count` is written at publish and the shelf prefers it when non-null, so
+every already-published article keeps its inflated number. **A recompute or a backfill migration
+would produce the identical figure**, because those revisions' stored blocks carry no `treatment` at
+all — they were extracted before stage 3a-i — and `countsTowardReadingTime` correctly reads an
+unclassified block as body. So there is nothing to recompute *from*. The number becomes true when
+the article is re-extracted and republished, which is also the only moment the underlying facts
+change. Said out loud in `LibraryScalars.wordCount`'s own doc comment so the next person does not go
+looking for a backfill.
+
+### Two mutations, and the interesting one is the small number
+
+| mutation | tests reddened |
+|---|---|
+| `isSearchable` inverted (`!gistable`) | **26**, across `block-policy`, `library-search`, `chat-tools`, `chat-library-exclusion` |
+| `isSearchable` made to agree with the other four (`gistable && body`) | **2** — and both are the tests written for exactly this |
+| `countsTowardReadingTime` always true | **8**, all in `block-policy.test.ts` |
+
+The middle row is the one worth keeping. It is not the crude inversion; it is *the refactor somebody
+will actually make* — five names looking like five spellings of one formula, tidied into one — and
+the entire defence against it is two assertions. That is thin on purpose rather than by accident:
+there is nowhere else in the codebase where "a footnote is searchable" is stated.
+
+The third row was **7** before a gap it exposed was closed. Nothing outside `block-policy.test.ts`
+moved, which meant the shelf card and the masthead — the two numbers a reader is actually shown —
+had no database-free test between them and a wrong figure; their own suites are Postgres-gated and
+skip themselves silently. A case pinning `deriveLibraryScalars().wordCount` and
+`articleStats().words` to the body, with a control that goes red if either returns zero, now lives
+beside the predicates.
+
 ## What this is deliberately not doing
 
 - **Parsing `(Smith, 2001)` into a link to its bibliography entry.** That is citation parsing, not

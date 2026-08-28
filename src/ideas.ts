@@ -59,6 +59,7 @@ import { findQuote } from "./quote-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
 import { articleWithIds } from "./article-prompt.js";
+import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { loadEnvLocal } from "./env.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import type {
@@ -763,7 +764,16 @@ export async function generateIdeas(opts: {
   const onDisk = await readIdeas(opts.dir);
   const inherit = onDisk && onDisk.sourceHash === sourceHash ? idsByName(onDisk) : null;
 
-  const words = blocks.reduce((n, b) => n + b.words, 0);
+  /* **The argument, not the apparatus.** Applied here at the call site rather
+     than inside `articleText`/`articleWithIds`, and that is the whole care in
+     this line: the two builders look like the seam between automatic and asked
+     work and they are not — `ideas` is automatic and sends ids, while
+     `explain`, `search` and `converse` are *asked* and send ids too. Filtering
+     inside the builders would be right three times and would silently leave
+     `ideas` summarising the bibliography. src/block-policy.ts. */
+  const evidence = blocks.filter(isBodyEvidence);
+  /* The **body's** words — see the note in src/tweets.ts. */
+  const words = articleWordCounts(blocks).body;
   const count = suggestedIdeas(words);
   const started = Date.now();
 
@@ -812,7 +822,7 @@ export async function generateIdeas(opts: {
                where that fact is recorded, because `sharesArticleCache` would
                otherwise group on effort alone and claim a share that cannot
                happen. */
-            text: articleWithIds(meta, blocks),
+            text: articleWithIds(meta, evidence),
             ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
           },
           { type: "text" as const, text: SYSTEM },
@@ -912,12 +922,15 @@ async function main(): Promise<void> {
      generator would be a no-op there and an import of `node:fs` into a code
      path that does not need one.
 
-     The other pipeline stages do NOT do this, and that is a real gap rather
-     than a convention: `npm run glossary -- data/x` from a shell with no
-     exported key fails with "this app has not been set up to talk to the AI
-     service", which reads like a missing credential rather than an unread
-     file. Worth fixing for all of them; done here because this is the stage
-     whose CLI is how its output gets judged. */
+     **That gap is closed, and this comment outlived it.** When it was written
+     the other pipeline stages did not do this, and running one from a shell
+     with no exported key failed with "this app has not been set up to talk to
+     the AI service" — a missing credential, apparently, rather than an unread
+     file. By 2026-08-28 six of the seven others had the call. The one left was
+     `src/pdf-read.ts`, which this comment did not name and which nobody would
+     have thought to look in. It has it now, and
+     `tests/paid-cli-ledger.test.ts` holds the rule for all eight, so the next
+     stage CLI cannot be copied without it. */
   loadEnvLocal();
   // Before the call, not after: this is the only thing on screen while the
   // model works, and printing it afterwards makes the command look hung.

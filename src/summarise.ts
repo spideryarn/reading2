@@ -77,6 +77,7 @@ import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
+import { isBodyEvidence } from "./block-policy.js";
 import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -453,6 +454,13 @@ function skeletonOf(tree: Tree): string {
  * The empty-text filter runs **before** the labels are attached, not after — an
  * image block would otherwise arrive as a bare id followed by nothing, which is
  * an id the model can cite for a paragraph that has no words in it.
+ *
+ * **And it has to say `isBodyEvidence` for itself.** This builds its text by
+ * slicing `blocks` over a range, not by calling `articleText` — so filtering at
+ * the four prompt call sites leaves this one reading the whole bibliography
+ * into the whole-article summary, whose range ends at the last note. The
+ * summary standing over a piece it half describes is the failure
+ * docs/plans/footnotes.md § `gistable: false` is not the switch names.
  */
 export function textOf(node: TreeNode, blocks: Block[], order: Map<BlockId, number>): string {
   const lo = order.get(node.range[0]);
@@ -460,7 +468,7 @@ export function textOf(node: TreeNode, blocks: Block[], order: Map<BlockId, numb
   if (lo === undefined || hi === undefined || lo > hi) return "";
   return blocks
     .slice(lo, hi + 1)
-    .filter((b) => b.text)
+    .filter((b) => b.text && isBodyEvidence(b))
     .map((b) => `${b.id}: ${b.text}`)
     .join("\n\n");
 }
