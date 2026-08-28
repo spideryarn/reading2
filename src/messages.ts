@@ -252,6 +252,12 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      glance — see `STORAGE_BUSY`. */
   "db-busy": "retry",
   "db-failed": "bug",
+  /* Reading something back out of this app's own API, `rd-`. Not a model call,
+     not the database as the reader meets it, and not a job — it is the *check*
+     that failed, behind a page that is still on screen. Its own prefix for the
+     reason `db-` and `up-` have theirs: four characters should tell whoever is
+     helping which part of the app the reader was in. See THREAD_RECHECK_FAILED. */
+  "rd-recheck": "retry",
   /* Uploading a file. `up-` for the same reason `db-` is not `ai-`: a reader
      quoting four characters should not have to explain which part of the app
      they were in. Two are `blocked` and two are `retry`, and the split is the
@@ -792,6 +798,54 @@ export const STORAGE_FAILED: ReaderFacingFailure = {
     "This app asked its database for something it would not do, so that did not go through. That is " +
     "a bug here rather than anything you did, and trying again will not help until somebody fixes " +
     "it. It has been recorded. [db-failed]",
+};
+
+/* ── Checking whether there is a newer one ────────────────────────────────── */
+
+/**
+ * **A re-read that failed behind something that is still on screen.**
+ *
+ * The thread page reads `GET /api/tweets/:slug` on mount, and again whenever a
+ * job that writes a thread finishes. This sentence is for the second one: it
+ * runs behind a page the reader is already looking at, so its failure must not
+ * take that page away — src/web/Tweets.tsx keeps what it has and says this
+ * beside it.
+ *
+ * It is here because the first version of that guard interpolated
+ * `(err as Error).message` into a sentence written inline in the component, and
+ * in the commonest case that message is the browser's own *"Failed to fetch"*.
+ * A raw exception is worse than the HTTP status docs/project/copy.md's first
+ * rule already rejects: a status at least describes something that happened to
+ * a request. The raw message now goes to the browser console, where whoever can
+ * act on it will see it — the same split src/web/lib/api.ts already makes for
+ * every failure it builds. Found by a GPT Sol review, 2026-08-28.
+ *
+ * ## It has to be true with no thread on screen as well as with one
+ *
+ * The reader can be looking at either. A 404 leaves the page saying nobody has
+ * written a thread yet, and *a job having just written one* is exactly when
+ * this re-read runs — so the absent thread is the claim most likely to be out
+ * of date, not the least. Hence "what is on this page" rather than "the posts
+ * below", which would describe an empty page in the case that matters most.
+ *
+ * ## A const, not a factory taking a noun
+ *
+ * The glossary, the summaries and the ideas all reload behind what is on
+ * screen, so `recheckFailed(noun)` is the obvious shape. It is the wrong one:
+ * two nouns are two different sentences sharing one code, and *that* is the one
+ * thing tests/messages.test.ts forbids outright — a code names a branch, and a
+ * code that names two is no use to whoever is being quoted it. A second surface
+ * that wants this wants its own sentence and its own code.
+ *
+ * `retry`, and not a close call. Nothing refused anything, nothing here is
+ * misconfigured, and reloading the page really is the fix.
+ */
+export const THREAD_RECHECK_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This app could not check whether there is a newer thread for this article, so what is on this " +
+    "page may not be the latest. Nothing has been changed or lost — reloading the page tries " +
+    "again. [rd-recheck]",
 };
 
 /** The overall deadline fired. `seconds` is that deadline, not elapsed time. */

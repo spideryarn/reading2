@@ -70,6 +70,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Copy, PenLine, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { THREAD_RECHECK_FAILED } from "../messages.js";
 import type { Article, Job, ThreadResponse, TweetThread } from "../types.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
@@ -99,12 +100,19 @@ type Loaded =
 export function Tweets({ slug, article }: { slug: string; article: Article }) {
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
   /**
-   * A read that failed **while a thread was already on screen**.
+   * A read that failed **while something was already on screen**.
    *
    * Separate from `loaded`, because the union cannot hold both a thread and a
-   * failure and the reader needs both: the posts are still the truth about the
-   * article, and the fact that we could not check for a newer set is worth a
-   * line rather than a silence. See the catch in `load`.
+   * failure and the reader needs both: what is on the page is still the best
+   * this app has, and the fact that we could not check for a newer version is
+   * worth a line rather than a silence. See the catch in `load`.
+   *
+   * **It holds a sentence from src/messages.ts, never the error.** It used to
+   * hold `(err as Error).message` and interpolate it into a line written here,
+   * which put *"Failed to fetch"* in front of somebody who came to read an
+   * article — docs/project/copy.md's first rule, and its rule about where these
+   * sentences live, both broken by one line. The raw message goes to the
+   * console instead. See `THREAD_RECHECK_FAILED`.
    */
   const [reloadError, setReloadError] = useState<string | null>(null);
   const slow = useSlow(loaded.status === "loading");
@@ -133,6 +141,14 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
       setReloadError(null);
     } catch (err) {
       const message = (err as Error).message;
+      /* **The raw message stops here.** lib/api.ts logs every failure it
+         *builds*, and the sentence it builds is safe to show — but the
+         commonest failure on this path is a `TypeError` out of `fetch` that it
+         never sees, and that one is the browser's own words. So it is written
+         to the console, once, and the reader is told something they can act on
+         instead. docs/project/logging.md describes the same split for the
+         server. */
+      console.error(`[tweets] could not read the thread for ${slug}`, err);
       /* **A failed reload must not take the thread away.** `load` is not only
          the opening read — `onFinished` below calls it again when a job
          finishes — and the posts render only in the `ready` branch, so
@@ -140,9 +156,15 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
          mid-thread with a message where the thread had been. Only the opening
          read has nothing to fall back on; the rest keep what they have and say
          so in `reloadError`. Same guard, same reason, as useGlossary.ts §
-         `fetchNow`. */
-      setLoaded((was) => (was.status === "loading" ? { status: "error", message } : was));
-      setReloadError(message);
+         `fetchNow`.
+         `error` is in the condition as well as `loading`, so a page that is
+         already showing a failure shows the *current* one: a second read can
+         fail for a different reason than the first, and the recheck line below
+         is deliberately hidden in this branch rather than said twice. */
+      setLoaded((was) =>
+        was.status === "loading" || was.status === "error" ? { status: "error", message } : was,
+      );
+      setReloadError(THREAD_RECHECK_FAILED.message);
     }
   }, [slug]);
 
@@ -284,13 +306,13 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
 
         {/* A reload failed behind something that is still on screen. Muted
             rather than destructive, and below the title rather than over the
-            thread: nothing the reader is looking at is wrong, we just could not
-            check whether there is a newer one. Not shown in the `error` branch
-            above, which is the same failure said once already. */}
+            thread: nothing the reader is looking at has been lost, we just
+            could not check whether there is a newer one. Not shown in the
+            `error` branch above, which is the same failure said once already.
+            The sentence is `THREAD_RECHECK_FAILED` and comes from
+            src/messages.ts — see the note on `reloadError`. */}
         {loaded.status !== "error" && reloadError && (
-          <p className="tw:mt-6 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-            Couldn't check for a newer thread — {reloadError}
-          </p>
+          <p className="tw:mt-6 tw:mb-0 tw:text-xs tw:text-muted-foreground">{reloadError}</p>
         )}
 
         {loaded.status === "none" && (
