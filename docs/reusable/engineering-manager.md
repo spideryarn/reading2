@@ -2,18 +2,33 @@
 
 Not project-specific. How to run a job that is too big for one sitting.
 
+## The plan doc
+
+Write the plan down **before the work starts**, in a file, not in your head or the chat. It says what
+the job is, what the stages are, and what done looks like for each one. It is the single thing that
+survives a lost context window, a new subagent, and a handover — and every brief you write is a
+quote from it.
+
+**Get it reviewed before you build anything.** A bad plan reviewed at the start costs an hour; found
+at the end it costs the stage. GPT Sol below.
+
+**Update it at the end of every stage, at the least** — what actually landed, what changed about the
+plan, what you now know that you didn't. A plan that stopped matching the code is worse than no
+plan, because the next agent will believe it. Update it mid-stage too whenever the ground moves.
+
 ## Stages
 
 Break the job into a **small number of stages**, each ending at a good stopping point — the tests
 green, the tree safe to commit and deploy. If the job were abandoned at the end of any stage, what
 landed would still make sense.
 
-**Commit at the end of each stage**, without being asked. In a shared tree, name your files on both
-commands — [git-commit-changes.md](git-commit-changes.md).
+**Commit at the end of each stage**, with the plan doc updated in the same commit, without being
+asked. In a shared tree, name your files on both commands —
+[git-commit-changes.md](git-commit-changes.md).
 
 ## GPT Sol
 
-- **At the very beginning**, for advice, while the shape is still soft.
+- **At the very beginning**, on the plan itself, while the shape is still soft.
 - **Whenever things get tricky** mid-stage — a design that isn't working, two plausible fixes.
 - **At the end of every stage, as an obligatory review.** Not optional, and not skippable because
   the stage felt small.
