@@ -76,10 +76,23 @@
  * (src/log.ts rule 3). A file name, a slug, a stage name. Never a URL, never a
  * title the model wrote, never anything out of the article.
  *
- * Read the string yourself and pass it in. This does not open files, so
- * `ENOENT` still arrives from `readFile` with its own `code` intact and the
+ * Read the string yourself and pass it in. `parseJsonFrom` does not open files,
+ * so `ENOENT` still arrives from `readFile` with its own `code` intact and the
  * callers that treat "absent" as an ordinary answer keep working unchanged.
+ * `readJsonOrNull` at the bottom is the single exception, and its docstring says
+ * why it is allowed to be one.
+ *
+ * ## The two helpers around it
+ *
+ * `stripFence` and `readJsonOrNull` live here rather than in the seven stages
+ * that used to each own a copy, because both are steps in the same one job —
+ * turning bytes we did not write into a value, without the bytes reaching a log.
+ * Splitting them across the callers is how eight versions of the same three
+ * lines, and five verbatim copies of the same fifteen-line explanation, came to
+ * exist.
  */
+
+import { readFile } from "node:fs/promises";
 
 /**
  * A file or a response that would not parse. Thrown by `parseJsonFrom`.
@@ -169,5 +182,82 @@ export function parseJsonFrom<T>(text: string, source: string): T {
   } catch (err) {
     if (!(err instanceof SyntaxError)) throw err;
     throw new MalformedJson(`${source} is not valid JSON: ${diagnose(text, err.message)}`);
+  }
+}
+
+/**
+ * Strip a stray code fence if the model wraps its JSON despite instructions.
+ *
+ * Every stage that asks a model for JSON needs this — arc, glossary, ideas,
+ * labels, search, summarise, toc and tweets all did, in two spellings that were
+ * checked against each other on eighteen awkward inputs (bare fence, `json`
+ * fence, CRLF, backticks inside a string, a missing close fence, prose before,
+ * prose after, no fence at all, and ten more) and agreed on every one. The
+ * divergence was accidental, so this is the one of them.
+ *
+ * It is deliberately blunt: an opening fence at the very start and a closing one
+ * at the very end, nothing in between examined. Prose before the object survives
+ * it untouched — `parseHits` in src/search.ts is the caller that then goes
+ * looking for the first `{` itself, and it is the only one that needs to.
+ *
+ * ## Why the result goes through `parseJsonFrom` and never through `JSON.parse`
+ *
+ * This is the paragraph that used to be copy-pasted into five stage files, and
+ * it is the reason both halves live here now.
+ *
+ * **Nothing in those stage files logs.** That is exactly what makes a bare
+ * `JSON.parse` there dangerous rather than obviously wrong. A step that throws
+ * is logged by src/jobs.ts with `errorFields`, which keeps `message` *and*
+ * `stack` — and V8's own parse error quotes the first characters of whatever it
+ * was handed. So a bare `JSON.parse` in a file that never calls the logger at
+ * all still writes part of the model's writing about the article into the log.
+ * An error is a value that travels, and where it is thrown is not where it is
+ * written down.
+ *
+ * **And `redact` cannot save you**, because it is path-based: it walks the
+ * fields of a log object by name, and the quotation is buried inside a string
+ * that is itself embedded in another string. It reaches neither the message nor
+ * the stack. src/labels.ts is where that was written down first.
+ *
+ * The history is the argument for one copy. src/toc.ts learned this the hard
+ * way; src/labels.ts was then written without it and a review caught it. Five
+ * files carrying the same fifteen lines is five chances for the sixth file to be
+ * written by someone who never read them.
+ */
+export function stripFence(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```$/, "")
+    .trim();
+}
+
+/**
+ * A JSON artefact on disk, or `null` if it is missing, truncated or not JSON.
+ *
+ * The one thing in this module that opens a file, and the one place in it where
+ * a bare `JSON.parse` is correct: **the error is discarded, not thrown**, so
+ * V8's quotation is never built into a message that anything logs. That is the
+ * whole justification, and it is load-bearing — if this is ever changed to
+ * rethrow, or to warn, it must switch to `parseJsonFrom` in the same edit, or it
+ * puts the leak this module exists to prevent straight back.
+ *
+ * "Missing" and "corrupt" deliberately give the same answer. Four stages
+ * (glossary, ideas, summarise, tweets) read an artefact they are about to
+ * regenerate anyway, and for them an unreadable file is worth exactly what an
+ * absent one is worth: nothing.
+ *
+ * **Not for callers who need to tell those apart**, and two in the tree do, so
+ * check before reaching for this. `readJson` in src/api.ts collects the
+ * unreadable paths so the shelf can say which article broke, and `readJson` in
+ * src/store/import.ts returns `undefined` for `ENOENT` only and lets a genuinely
+ * corrupt file throw. Folding either into this would turn a reported failure
+ * into a silent one — docs/reusable/silent-success.md.
+ */
+export async function readJsonOrNull<T>(file: string): Promise<T | null> {
+  try {
+    return JSON.parse(await readFile(file, "utf-8")) as T;
+  } catch {
+    return null;
   }
 }

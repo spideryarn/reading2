@@ -79,6 +79,7 @@ import {
 } from "./openrouter-stream.js";
 import { ProviderRefused, openRouterStream } from "./ai-call.js";
 import { hitExtractor } from "./search-hits-stream.js";
+import { stripFence } from "./parse-json.js";
 import {
   ANSWER_OVERFLOWED,
   ENDED_UNFINISHED,
@@ -414,7 +415,7 @@ export function validateHits(
  * closed — that is the cut-off case.
  */
 export function parseHits(text: string): unknown {
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const trimmed = stripFence(text);
   const from = trimmed.indexOf("{");
   if (from === -1) {
     throw new Error(PROVIDER_UNREADABLE.message, { cause: "no-object" });

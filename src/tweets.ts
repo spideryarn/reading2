@@ -38,7 +38,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
-import { parseJsonFrom } from "./parse-json.js";
+import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -109,14 +109,6 @@ export function isStale(thread: TweetThread, blocks: BlockFingerprint[]): boolea
   return thread.sourceHash !== hashBlocks(blocks);
 }
 
-async function readJson<T>(file: string): Promise<T | null> {
-  try {
-    return JSON.parse(await readFile(file, "utf-8")) as T;
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Is the thread on disk one we would write again today?
  *
@@ -139,11 +131,11 @@ async function readJson<T>(file: string): Promise<T | null> {
  * thread served for ever.
  */
 export async function threadIsCurrent(dir: string): Promise<boolean> {
-  const thread = await readJson<TweetThread>(path.join(dir, "tweets.json"));
+  const thread = await readJsonOrNull<TweetThread>(path.join(dir, "tweets.json"));
   if (!thread) return false;
   if (thread.version !== PROMPT_VERSION) return false;
   if (thread.generator !== CAPABLE_MODEL) return false;
-  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const blocksFile = await readJsonOrNull<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
   if (!blocksFile?.blocks) return false;
   return !isStale(thread, blocksFile.blocks);
 }
@@ -299,19 +291,15 @@ ${skeleton}`;
 }
 
 /**
- * Strip a stray code fence if the model wraps its JSON despite instructions.
+ * Read the model's answer, fence and all.
  *
- * The parse goes through src/parse-json.ts, and the reason is that **nothing in
- * this file logs**. A step that throws is logged by src/jobs.ts with
- * `errorFields`, which keeps `message` *and* `stack` — and V8's own parse error
- * quotes the first characters of whatever it was handed. So a plain
- * `JSON.parse` here writes part of the model's writing about the article into
- * the log, from a file that never calls the logger at all. An error is a value
- * that travels, and where it is thrown is not where it is written down.
+ * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` — src/parse-json.ts
+ * § `stripFence` has the reasoning, and the short version is that nothing in this
+ * file logs and that is not enough, because a thrown error is logged where it is
+ * caught and V8 quotes the input in it.
  */
 function parseJson(raw: string): { tweets: string[] } {
-  const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
-  return parseJsonFrom(text, "the tweet-thread response");
+  return parseJsonFrom(stripFence(raw), "the tweet-thread response");
 }
 
 /**

@@ -46,7 +46,7 @@ import { cp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { MalformedJson, parseJsonFrom } from "../src/parse-json.js";
+import { MalformedJson, parseJsonFrom, readJsonOrNull, stripFence } from "../src/parse-json.js";
 
 const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -298,3 +298,111 @@ function grab(run: () => unknown): MalformedJson {
   }
   throw new Error("expected a MalformedJson, but nothing was thrown");
 }
+
+/* -------------------------------------------------------------- stripFence --
+   Eight stage files each had their own fence-stripper, in two spellings:
+   `.replace(/```$/, "").trim()` and `.replace(/\s*```$/, "")`. Before unifying
+   them, both were run against every awkward input below and agreed on all of
+   them, so the divergence was accidental and this is a pure dedup.
+
+   The comparison is kept here rather than thrown away, because the claim it
+   supports ("no behaviour change") is the only thing standing between this and
+   a silent regression. `OLD_A` and `OLD_B` are the two spellings exactly as
+   they were in the tree; if a future edit to `stripFence` moves it away from
+   either, the tests below say so with the input that separated them. */
+
+const F = "```";
+const OLD_A = (raw: string) =>
+  raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
+const OLD_B = (raw: string) =>
+  raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+
+/** Every input the two spellings were compared on. */
+const AWKWARD: ReadonlyArray<readonly [string, string]> = [
+  ["a bare fence", `${F}\n{"a":1}\n${F}`],
+  ["a json fence", `${F}json\n{"a":1}\n${F}`],
+  ["an uppercase JSON fence", `${F}JSON\n{"a":1}\n${F}`],
+  ["CRLF line endings", `${F}json\r\n{"a":1}\r\n${F}`],
+  ["backticks inside a string", `${F}json\n{"a":"see ${F} here"}\n${F}`],
+  ["a missing close fence", `${F}json\n{"a":1}`],
+  ["prose before", `Here you go:\n${F}json\n{"a":1}\n${F}`],
+  ["prose after", `${F}json\n{"a":1}\n${F}\nHope that helps!`],
+  ["no fence at all", `{"a":1}`],
+  ["a fence with no newlines", `${F}json {"a":1} ${F}`],
+  ["trailing spaces after the close", `${F}json\n{"a":1}\n${F}   `],
+  ["a fourth backtick on the close", `${F}json\n{"a":1}\n${F}\``],
+  ["leading whitespace before the fence", `  \n ${F}json\n{"a":1}\n${F}`],
+  ["nothing at all", ""],
+  ["only a fence", F],
+  ["a fence around nothing", `${F}json\n\n${F}`],
+  ["an indented close fence", `${F}json\n{"a":1}\n  ${F}`],
+  ["a fence line inside a string", `${F}json\n{"a":"x\\n${F}\\ny"}\n${F}`],
+];
+
+describe("stripFence", () => {
+  it("agrees with both spellings it replaced, on every awkward input", () => {
+    for (const [name, input] of AWKWARD) {
+      expect(stripFence(input), `${name}: differs from the .trim() spelling`).toBe(OLD_A(input));
+      expect(stripFence(input), `${name}: differs from the \\s* spelling`).toBe(OLD_B(input));
+    }
+  });
+
+  it("the comparison above can actually fail", () => {
+    /* Without this the loop is a claim about a function compared with itself.
+       A stripper that only trims agrees with `stripFence` on "no fence at all"
+       and disagrees everywhere a fence exists — so if this ever stops throwing,
+       the loop above has stopped comparing anything.
+       docs/reusable/silent-success.md § Test the test. */
+    const onlyTrims = (raw: string) => raw.trim();
+    const fenced = AWKWARD.filter(([, input]) => input.includes(F) && input.trim() !== F);
+    expect(fenced.length).toBeGreaterThan(10);
+    for (const [name, input] of fenced) {
+      expect(onlyTrims(input), `${name} should have been changed by stripping`).not.toBe(
+        stripFence(input),
+      );
+    }
+  });
+
+  it("takes the fence off and leaves the JSON parseable", () => {
+    expect(JSON.parse(stripFence(`${F}json\n{"a":1}\n${F}`))).toEqual({ a: 1 });
+    expect(JSON.parse(stripFence(`{"a":1}`))).toEqual({ a: 1 });
+  });
+
+  it("leaves prose before the object alone, because parseHits needs it there", () => {
+    /* src/search.ts is the one caller that hunts for the first `{` itself, and
+       it can only do that if this has not already thrown the prose away. */
+    expect(stripFence(`Here you go:\n${F}json\n{"a":1}\n${F}`)).toContain("Here you go:");
+  });
+});
+
+/* ---------------------------------------------------------- readJsonOrNull -- */
+
+describe("readJsonOrNull", () => {
+  it("reads a JSON artefact", async () => {
+    const dir = path.join(STORE_DIR, "read-json-or-null");
+    await mkdir(dir, { recursive: true });
+    const file = path.join(dir, "ok.json");
+    await writeFile(file, JSON.stringify({ a: 1 }));
+    expect(await readJsonOrNull<{ a: number }>(file)).toEqual({ a: 1 });
+  });
+
+  it("answers null for missing and for corrupt alike", async () => {
+    const dir = path.join(STORE_DIR, "read-json-or-null");
+    await mkdir(dir, { recursive: true });
+    const corrupt = path.join(dir, "corrupt.json");
+    await writeFile(corrupt, '{"a": "ZQREADJSON');
+    expect(await readJsonOrNull(corrupt)).toBeNull();
+    expect(await readJsonOrNull(path.join(dir, "absent.json"))).toBeNull();
+  });
+
+  it("throws nothing, so V8's quotation of the file never reaches a log", async () => {
+    /* The whole justification for a bare `JSON.parse` living in this module.
+       The marker is what a corrupt artefact's first characters would be, and
+       the point is that nothing anywhere can be handed them. */
+    const dir = path.join(STORE_DIR, "read-json-or-null");
+    await mkdir(dir, { recursive: true });
+    const corrupt = path.join(dir, "quoted.json");
+    await writeFile(corrupt, "ZQREADJSONLEAK is not JSON at all");
+    await expect(readJsonOrNull(corrupt)).resolves.toBeNull();
+  });
+});

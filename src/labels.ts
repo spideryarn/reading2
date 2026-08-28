@@ -40,7 +40,7 @@ import { CAPABLE_MODEL } from "./models.js";
 import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { parseJsonFrom } from "./parse-json.js";
+import { parseJsonFrom, stripFence } from "./parse-json.js";
 import { isStructural } from "./block-policy.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
@@ -786,14 +786,12 @@ function describeShape(value: unknown): string {
  * It is simply not what gets stored.
  */
 export function parseLabels(raw: string, batch: Batch): Record<string, string> {
-  const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
-  /* `parseJsonFrom`, never bare `JSON.parse` — V8's parse error quotes the
-     first characters of what it was handed, src/jobs.ts logs a thrown error's
-     message *and* its stack, and `redact` is path-based so it reaches neither.
-     What lands here is a model's writing about the article, which is exactly
-     what docs/project/logging.md says never goes in a line. src/toc.ts learned
-     this; this file was written without it and a review caught it. */
-  const parsed = parseJsonFrom<{ labels?: unknown }>(text, "the nav labels");
+  /* `stripFence` then `parseJsonFrom`, never bare `JSON.parse`. The reasoning
+     that used to sit here — including that `redact` is path-based and so reaches
+     neither the message nor the stack, and that src/toc.ts learned this before
+     this file was written without it — is now in src/parse-json.ts §
+     `stripFence`, next to the code it is about. */
+  const parsed = parseJsonFrom<{ labels?: unknown }>(stripFence(raw), "the nav labels");
   if (!Array.isArray(parsed.labels)) {
     /* No sample of the text. The shape is the whole diagnosis, and a sample
        here would be the same leak by hand that `parseJsonFrom` just prevented. */
