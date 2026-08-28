@@ -1,0 +1,334 @@
+# The chat operation model — the build plan
+
+**Status:** planned and reviewed, 2026-08-28. Nothing built yet.
+
+The strategy and the evidence for it are in
+[chat-client-architecture.md](chat-client-architecture.md), which ends with steps 2–4 written down
+and not built. This is the build plan for them. Greg asked for it on 2026-08-28, straight after step
+1 landed, saying to run it as staged work with reviews
+([engineering-manager.md](../reusable/engineering-manager.md)).
+
+Read that document first. In one line: `src/web/useChat.ts` collected twelve concurrency bugs in
+three days, and GPT Sol's diagnosis was that
+
+> Every asynchronous action is an operation with its own identity, phase, intent, and exclusive
+> right to update a particular projection.
+>
+> — GPT Sol, 2026-08-28
+
+and that this file has no such thing, so ten different `await`s each decide for themselves whether
+they are still entitled to write, from four different vocabularies.
+
+**This plan was refused twice before it was fit to build**, and the shape of the work is different
+because of it.
+
+The first refusal — [chat-operation-model-sol.md](chat-operation-model-sol.md), "do not build yet" —
+had four blockers: turns are not the only operations, because rename and delete are asynchronous too;
+the stage that migrated turns without recovery was not deployable, because a live operation would go
+on projecting a pending row over the watcher's patch; the stop-before-`begin` window needs something
+that answers synchronously before the refs holding it can go; and the escape hatch is safe in exactly
+one stage. Four stages became three, and a controller replaced a `useReducer`.
+
+The second — [chat-operation-model-recheck-sol.md](chat-operation-model-recheck-sol.md) — endorsed
+the controller and the three stages and found four more things missing: registration and admission
+are different kinds of event and one gate cannot do both; `loaded` has to outlive the operation that
+answered it; a base updater cannot stand in for the tombstones; and an operation needs a defined way
+of *retiring*, not only of projecting, or two renames finishing out of order put the old title back.
+All four are written in below.
+
+## What we are building
+
+Three new modules under a new `src/web/chat/` directory. `useChat.ts` becomes a façade over them.
+
+- **`src/web/chat/model.ts`** — the state, the events, and the operation union. Types and small pure
+  helpers.
+- **`src/web/chat/reduce.ts`** — one pure function,
+  `reduce(state, event) => { state, commands }`, and **two kinds of event**, which is a distinction
+  the first two drafts of this plan did not make and could not work without.
+
+  An **input** is the reader doing something, or this code starting something: send, rename, delete,
+  load. It *registers* an operation, so it cannot be gated — the gate rejects anything whose
+  operation it cannot find, and a registration's operation does not exist yet by definition.
+
+  A **result** is the world answering: a frame, a response, a failure, a timeout. Every one of them
+  carries the `opId` of the operation it belongs to, and every one goes through one gate:
+
+  ```ts
+  const op = state.operations.get(event.opId);
+  if (!op || !accepts(op, event)) return { state, commands: [] };
+  ```
+
+  That gate is the point of the whole exercise. It is the one place an obsolete result is refused,
+  so it cannot be missing from a path — because there are no other paths. The types enforce the
+  split: a result event without an `opId` does not compile.
+
+- **`src/web/chat/controller.ts`** — holds the state, applies an event **synchronously**, runs the
+  commands the reducer asked for, and tells its subscribers.
+
+  **By the end of stage 2 it is the only thing that fetches, streams or sets a timer.** It is not
+  that in stage 1, and saying so matters: stage 1 leaves `run`, the watcher and the 409 repair
+  running in the hook, talking to the controller through the bridge described there. Sol caught the
+  first draft promising the end state as though it were the starting one.
+
+`ChatApi` — what the panel sees — does not change at any point. Neither does the server.
+
+### The state
+
+```ts
+interface ChatState {
+  slug: string;
+  /** What this tab believes, before anything in flight is laid over it. */
+  base: readonly ChatThread[];
+  /** Everything asynchronous that is happening, each under an id of its own. */
+  operations: ReadonlyMap<OpId, Operation>;
+  /** Conversations the reader deleted. Deletions win over every projection. */
+  tombstones: ReadonlySet<string>;
+  /**
+   * Where the one fetch that fills the list got to — and it outlives that
+   * fetch's operation, which is why it is a field rather than a lookup.
+   */
+  loadPhase: "loading" | "ready" | "failed";
+  error: string | null;
+}
+
+type Operation =
+  | LoadOperation      // the one fetch that fills the list
+  | RepairOperation    // one conversation, re-fetched because a 409 said the screen is wrong
+  | TurnOperation      // a send, a retry or an edit, and the stream it is reading
+  | RecoveryOperation  // a pending answer nobody is streaming, being looked for
+  | RenameOperation
+  | DeleteOperation;
+```
+
+**`loadPhase` is durable, and the operation is not.** An operation retires when it finishes; `loaded`
+and `loadFailed` have to stay answerable long after that, because the panel reads them on every
+render — "we have asked" is a fact about the past. Sol asked where that fact lives once the load
+operation is gone, and this is the answer.
+
+**The 409 repair is an operation of its own**, not a second use of the load's. Refusing the turn and
+registering the repair is **one transition**: they are the same decision — this conversation on
+screen is wrong, drop what made it wrong and go and ask. Split across two, there is a moment where
+neither is true, and the repair's answer then arrives with nothing to admit it.
+
+`threads` — the array the panel renders — is **derived**: take `base`, drop the tombstoned, and lay
+each operation over the conversation it belongs to. It is never assigned.
+
+**One map, holding every kind, and that is a correction.** The first version of this plan had
+`operations` hold turns alone, with the load's id kept beside it in a `load` field. Sol refused it,
+and the reason is that the gate above is then a lie: a load's result carries an `opId` the gate
+cannot find, so the load needs a second entitlement check somewhere else, which is precisely the
+shape that produced bugs 10 and 12. If a thing has an id and can come back late, it is in the map.
+
+**Rename and delete are operations too**, for the same reason and one more. They are asynchronous —
+they share [`write`](../../src/web/useChat.ts), whose `catch` writes `error` with no guard at all —
+so a rename that fails after the reader has moved on is bug 12 again, wearing a different hat. And a
+409 repair that refreshes a conversation can land over a rename still in flight, which is the
+snapshot-over-newer-projection class from the top of the list. Their *optimistic behaviour* does not
+change: today a failed rename or delete deliberately stays on screen, and it still will. The
+operation is there to admit the completion, not to roll it back.
+
+**`begin` and `discard` write `base` directly.** They are synchronous and local — starting an empty
+conversation touches no server, and discarding one is a filter. There is nothing to arrive late, so
+there is nothing to admit.
+
+### Why a projection, and not just a tidier list
+
+The concrete payoff is the 409 path, and it is worth stating because it is what tells the difference
+between this and a cosmetic refactor.
+
+An edit destroys: it rewrites a question and discards every turn under it. Today that is performed
+on screen, and if the server refuses, the only way back is to re-fetch the conversation and hope
+nothing else was happening in it — which is exactly the "a snapshot landed over an unrelated send"
+bug this file already carries three paragraphs about.
+
+As a projection, the discard is something the *operation* does when it is laid over `base`. Refusing
+it is dropping one entry from a map. The discarded turns come back because they never left, and any
+other conversation with a send running in it re-projects untouched. No fetch, no merge rule, no
+timing argument.
+
+### Why a controller rather than `useReducer`
+
+Because of one window. A stop pressed in the moment before the `begin` frame is remembered and sent
+as soon as there is an id to send it with — see `stopWanted`. Consuming that wish means reading the
+current state at the instant `begin` arrives, and **`dispatch` does not update a closure
+synchronously**: a reducer would tell us the answer on the next render, which is after the frame has
+been handled. Sol's third blocker. A controller applies the event and hands back the new state on the
+same line, which is what that window needs, and it is also what removes `onScreen` and `latest` —
+two refs that exist only to read current state from outside a render.
+
+React sees it through `useSyncExternalStore`. The controller keeps **one cached projection** and
+rebuilds it only when the state changes, because `getSnapshot` is called on every render and must
+return the same reference when nothing has moved.
+
+## The stages
+
+Three, each ending green and committable. If the work stopped after any one of them, what landed
+would still make sense.
+
+### Stage 1 — the machine, the load, and the two mutations
+
+`model.ts`, `reduce.ts` and `controller.ts` exist. `useChat` subscribes to the controller and
+projects. Migrated to real operations: the **load** (`load.succeeded` / `load.failed`, both carrying
+its `opId`), **rename** and **delete**. `begin` and `discard` write `base`. Tombstones move into
+state.
+
+Everything else — the whole of `run`, the watcher, the 409 repair — keeps working by dispatching a
+temporary `legacy.apply` event carrying a pure updater for `base`, and by reading current state
+straight off the controller, which is synchronous.
+
+**A base updater is not enough on its own, and that is the second thing Sol caught.** The tombstones
+are not in `base`: cancel adds one before its request leaves, a refused cancel takes it away again,
+and every late patch in the file consults the set. So the tombstones move into state in this stage
+with two explicit events of their own, and the code still living in the hook reads
+`controller.state.tombstones` where it reads `gone.current` today. That read is synchronous, which is
+the whole reason the controller is here.
+
+**`legacy.apply` exists in this stage and no other.** Sol was explicit about why: while there are no
+turn operations it merely relocates updaters that still carry their own guards, and the moment turn
+projection starts it becomes an opaque write to the base underneath a live operation. Neither an
+allowlist nor a slug check makes that safe, because a slug cannot tell two loads of one article apart
+— which is bug 10. So it carries a development-only assertion that no turn operation exists, and
+stage 2 deletes it.
+
+Gone by the end: `gone`, `latest`, `onScreen`.
+
+**Done looks like:** every existing chat test green; `reduce` has dependency-free tests, including
+one that watches a stale load's success *and* its failure be refused by the same gate; a test that a
+late rename failure cannot write `error` after the reader has moved on — which nothing pins today;
+and the reverse-order rename above.
+
+### Stage 2 — the turn, in one piece
+
+`send`, `retry` and `edit` each create a `TurnOperation`; every frame becomes an event carrying its
+id: `turn.began`, `turn.delta`, `turn.tool`, `turn.done`, `turn.failed`, `turn.disconnected`. The
+text and the tool runs accumulate **in the operation**, not in the row, which is where `drainTurn`
+already keeps them and for the same reason.
+
+**Recovery and the 409 come with it, and that is Sol's second blocker.** They cannot be a later
+stage: today a stalled stream leaves the answer `pending`, releases it, and lets the watcher adopt
+it — and if the turn is an operation while the watcher still patches `base`, the live operation goes
+on projecting its pending row over the patch, so the answer arrives and is invisible. The refused 409
+is the same shape: refreshing `base` does nothing while the refused edit is still projected over it.
+So `turn.disconnected` hands the answer to a `RecoveryOperation`, and the 409 drops the refused
+operation *and then* refreshes the conversation, in one transition.
+
+`turn.began` is one transition that swaps all three ids at once — thread, question and answer —
+rather than the two-of-three swap that shipped once and surfaced weeks later as "That message is not
+in this conversation."
+
+The writer of an answer row is an **operation**, not a row id, which is the thing a retry breaks by
+reusing the row.
+
+Stop and cancel keep their two sets in this stage, consumed where they are consumed now — but the
+controller's state is readable synchronously at that point, so the window stays closed.
+
+Gone by the end: `legacy.apply`, `owned`, `released`, `attempts`, `watched`, `running`, `showing`,
+`recovering` as stored state, and the four mutable variables inside `run`.
+
+**Done looks like:** every existing chat suite green **unchanged**, a browser pass confirming an
+answer still streams in, a stop still stops and a cancelled conversation still disappears, and four
+tests that must exist before this stage ships. Sol moved the first two here from stage 3, and the
+reason is exact: this stage rewrites `turn.began` and moves command delivery, which *is* the
+machinery that holds those two wishes. Testing them afterwards tests the replacement, not the
+change.
+
+- a stop pressed before `begin`, and a cancel pressed before `begin`, each producing exactly one
+  request carrying the server's thread id, answer id and attempt — **nothing in the repo covers
+  either today**, confirmed by grep;
+- a disconnected turn leaving exactly one recovery writer;
+- a 409 dropping the turn and gating the repair;
+- two operations in one conversation completing in reverse order.
+
+### Stage 3 — intent, and the invariants
+
+Stop and cancel stop being two sets of message ids and become one `intent` field on the turn
+operation that the type will not let hold both at once — which is today an invariant maintained by a
+comment.
+
+Gone by the end: `stopWanted`, `cancelWanted`. That is the last ref.
+
+**Done looks like:** the invariant tests Sol asked for, each permuting a small event sequence —
+
+- a stale or terminal operation can never change state;
+- every pending answer has exactly one writer or one recovery operation;
+- a tombstoned conversation cannot be projected back by any event;
+- stop and discard cannot coexist;
+- `turn.began` changes all three ids in one transition;
+- removing one of two live operations cannot announce that the other is gone;
+- success and failure are admitted by the same rule.
+
+The two early-intent tests are **not** here: they ship with stage 2, which is the stage that moves
+the machinery holding those wishes. This stage folds the two sets into one field and must leave them
+green.
+
+## Rules the code must follow
+
+- **The reducer is pure, and proved so.** It never mutates a `Map`, a `Set`, an operation, a message,
+  a tool array or the event it was handed. Ids and timestamps are minted outside it and arrive on the
+  event. Tests deep-freeze the input and run each transition twice, because React invokes an updater
+  twice under StrictMode and this file has been bitten by an impure updater before.
+- **Structural sharing.** A delta rebuilds one message in one thread. Projection cost must stay
+  comparable to today's, because a chat delta re-renders `ConversationBand`, and the article is
+  underneath it.
+- **Two operations in one conversation have a defined order** — creation order — and it is tested.
+  Testing only concurrent operations in *different* conversations would skip the hard case.
+- **And a defined way of retiring, which is not the same question.** Creation order says what to do
+  while both are live; it says nothing about what happens when the second one finishes first. Sol's
+  example, and it bites in stage 1: rename A, then rename B, and B comes back first. Commit B, retire
+  it, and A — still live, still older — projects again, so the reader watches the title they replaced
+  come back.
+
+  So an operation says what it **supersedes**, and a superseded operation stops projecting the moment
+  the newer one is registered. A rename supersedes the previous rename of that conversation; a delete
+  supersedes everything for it. A turn supersedes nothing, because two sends in one conversation are
+  two appends and both belong on screen. A superseded operation is still admitted when it answers —
+  its failure still has something to say — it simply has nothing left to draw. **Tested by completing
+  two renames in the reverse order.**
+
+### What the façade must still do, exactly as it does now
+
+The acceptance list, from Sol. Each of these is behaviour `ChatApi` has today and must keep:
+
+- `send` and `begin` return an id **synchronously**;
+- `onThreadId` fires when the server overrules the thread id;
+- the reader's question and the empty answer row appear before the request leaves;
+- a retry blanks the fields of the answer it replaces, carrying only `stance`;
+- a refused edit puts the discarded turns back;
+- a refused cancel puts the conversation back;
+- a failed rename or delete does **not** roll back, and says so in `error`;
+- `loaded` means "we have asked", not "it worked"; `loadFailed` is the difference.
+
+## How each stage is checked
+
+- **Watch the gate fail.** Every stage that claims the admission gate covers a path shows it: delete
+  the gate in a probe copy, watch the tests go red, put it back. A check never seen fail is not
+  evidence — [silent-success.md](../reusable/silent-success.md).
+- **No existing test is rewritten to make a stage pass.** The chat suites are the contract. If one
+  has to change, that is a finding, and it goes in this document with the reason.
+- `npm test` and `npm run typecheck` clean at the end of each stage.
+- **A browser pass on stage 2**, in a Sonnet subagent — a green suite is not evidence a reader can
+  watch an answer arrive ([browser-testing.md](../project/browser-testing.md)).
+- **GPT Sol reviews every stage after it is built**, not skippable because a stage felt small.
+
+## What this does not touch
+
+Carried over from [chat-client-architecture.md](chat-client-architecture.md), where the reasoning
+is: no state library; no stream sequence numbers; no version column on the chat list; no moving
+reconciliation to the server; no refactor of `ChatPanel.tsx`; and `useComments` and `useSearch` stay
+as they are until one of them needs this.
+
+Two more, specific to this plan:
+
+- **No shared controller above the mounted surfaces** — Sol's original step 4. One controller per
+  mount. Lifting it is what would let a conversation survive `ChatDialog` → `ConversationBand`, and
+  it is a separate decision with its own reasons, not a tidy-up that falls out of this.
+- **The other-tab resurrection stays open.** A slow response can still bring back a conversation
+  deleted in another tab. No client state machine can refuse a deletion it has never heard of, and
+  the fix is `BroadcastChannel` plus revalidate-on-visibility. Separate work.
+
+## Reference
+
+[chat-operation-model-inventory.md](chat-operation-model-inventory.md) — every write to `threads`,
+every ref with its read and write sites (marking the reads that happen after an `await`, which are
+the staleness checks), and what each chat test would catch. Built before stage 1 so that "all of
+them" can be checked rather than asserted.
