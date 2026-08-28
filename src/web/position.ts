@@ -30,7 +30,7 @@
  * *block* of the section, never the id of the node.
  */
 import type { Block, BlockId, NodeId } from "../types.js";
-import type { Geometry } from "./tree.js";
+import { navigableItems, type Geometry } from "./tree.js";
 
 export interface Section {
   /** Index into `blocks` of this section's first row. */
@@ -68,18 +68,22 @@ export function sectionDepth(geometry: Geometry): number {
 export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
   const column = geometry.cells[sectionDepth(geometry)] ?? [];
   const sections: Section[] = [];
-  let row = 0;
-  for (const cell of column) {
-    const block = blocks[row];
-    if (block) {
-      sections.push({
-        row,
-        blockId: block.id,
-        nodeId: cell.node.id,
-        title: cell.node.title,
-      });
-    }
-    row += cell.rowSpan;
+  /* `navigableItems`, not the raw cells. At the section depth the apparatus is
+     one leaf cell per endnote, each with an empty title, so a reader who stops
+     in the notes would have `?at=` stepping through forty nameless sections and
+     the panel naming none of them. Collapsed, the notes are one section called
+     "Notes" whose id is its first block — and that is the same item keynav
+     steps to and the fisheye marks current, which is the agreement this
+     projection exists to guarantee. src/web/tree.ts § navigableItems. */
+  for (const item of navigableItems(column, geometry.supplementOf)) {
+    const block = blocks[item.startRow];
+    if (!block) continue;
+    sections.push({
+      row: item.startRow,
+      blockId: block.id,
+      nodeId: item.node.id,
+      title: item.node.title,
+    });
   }
   return sections;
 }

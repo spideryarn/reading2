@@ -75,6 +75,7 @@ import {
   searchRuns,
 } from "../db/schema.js";
 import { isSpideryarnId } from "../ids.js";
+import { NOTE_ID_PATTERN } from "../notes.js";
 import { log } from "../log.js";
 import { currentOwnerId, type OwnerId } from "../owner.js";
 import { parseJsonFrom } from "../parse-json.js";
@@ -226,9 +227,67 @@ const TREATMENTS = new Set(["supplement"]);
  * violation naming `revision_blocks_role`, from inside a transaction, with no
  * block id in it. This is the guard; the constraint is the backstop.
  *
- * `noteId` has no closed set to check against, so what is checked is that it is
- * a string: the column is `text`, and a number or an object in that field is a
- * driver error at insert time rather than an explanation.
+ * ## Each field being legal is not the same as the block being coherent
+ *
+ * The first version checked the three fields **in isolation**, and GPT Sol's
+ * review of stage 3 found that the failure this function exists to prevent
+ * walked straight in through the door that left open. Two shapes, both of which
+ * every value passes on its own:
+ *
+ * - `role: "footnote"` with **no `treatment`**. Legal role, absent treatment,
+ *   and `isBody` reads an absent treatment as body — so the block declares
+ *   itself apparatus in the one column nothing reads and is summarised,
+ *   embedded, labelled and put on the clock as argument. Which is silent
+ *   reclassification, arriving as a *well-formed* import.
+ * - `noteId: "anything at all"`. Stage 2 mints ten hex digits and stage 3
+ *   refuses anything else (`noteFieldsFor` in src/blocks.ts gates on
+ *   `NOTE_ID_PATTERN`), so a value in any other shape did not come from this
+ *   pipeline. Stage 5 resolves a marker to a note by that id; an arbitrary
+ *   string there is a hover card resolving to nothing, or to the wrong note.
+ *
+ * So the cross-field rules are checked too. `NOTE_ID_PATTERN` is imported from
+ * src/notes.ts rather than restated, because two spellings of "what an id looks
+ * like" can only ever disagree — and the day they do, the minting half and the
+ * validating half each look correct.
+ *
+ * **`role: "appendix"` is deliberately allowed without a treatment.** An
+ * appendix may be real prose worth gisting, which is the case one closed set
+ * could not express and the reason there are two axes at all (`Block.role` in
+ * src/types.ts). The implication runs from `"footnote"` only, because that is
+ * the one role v1 assigns and the only one whose meaning is settled.
+ *
+ * **And `treatment: "supplement"` with no role stays legal**, which is the
+ * asymmetry to notice rather than tidy away: apparatus we cannot name the kind
+ * of is still apparatus, and every predicate already treats it correctly. It is
+ * the reverse direction — a claim of apparatus that the predicates read as body
+ * — that is unsafe.
+ *
+ * **A third rule was considered and left out**, and it is worth the paragraph
+ * because it looks like it belongs: `noteId` present ⇒ `treatment:
+ * "supplement"`. It has the same shape as the first rule — a block declaring
+ * membership of a note while every predicate reads it as argument — and
+ * `noteFieldsFor` cannot produce it, since the container check gates all three
+ * fields together. It is not enforced for two reasons found by trying it.
+ * First, it rejects the five-role fixture in tests/block-roles.test.ts, whose
+ * `appendix` block deliberately carries a `noteId` and no treatment; that fixture
+ * is arguably wrong, but it is not this function's place to decide so. Second,
+ * stage 5 has to resolve a marker to its note, and a `noteId` on the *marker's*
+ * block — which is body — is one of the shapes that could be reached for.
+ * Foreclosing it from the import validator, before the stage that needs it has
+ * been built, is the wrong order.
+ *
+ * ## Should a CHECK constraint back this?
+ *
+ * It could: all three are columns of one row, so
+ * `check (role <> 'footnote' or treatment = 'supplement')` is expressible, and
+ * the same is true of the `note_id` shape. **Not added here**, for two reasons.
+ * The first is scope: it needs a migration, and this stage is not applying one.
+ * The second is that a constraint is a *backstop* and this is the *guard* — the
+ * constraint would fail as a violation naming `revision_blocks_role`, inside a
+ * transaction, with no block id in it, which is the position the existing
+ * single-column CHECKs already occupy. The recommendation is that the pair ride
+ * along with the next migration this feature needs rather than becoming one of
+ * their own; recorded in docs/plans/footnotes.md.
  */
 export function checkNoteFields(slug: string, blocks: Block[]): void {
   for (const [index, b] of blocks.entries()) {
@@ -243,6 +302,22 @@ export function checkNoteFields(slug: string, blocks: Block[]): void {
     }
     if (b.noteId !== undefined && typeof b.noteId !== "string") {
       throw new Error(`${slug}: ${where} has a noteId that is not a string`);
+    }
+
+    /* The cross-field rules. `role` is checked against the closed set above, so
+       by here `"footnote"` means what it says. */
+    if (b.role === "footnote" && b.treatment !== "supplement") {
+      throw new Error(
+        `${slug}: ${where} is a footnote with treatment ${JSON.stringify(b.treatment)} — ` +
+          `a footnote is apparatus, and stored without treatment "supplement" every predicate ` +
+          `would read it as argument`,
+      );
+    }
+    if (b.noteId !== undefined && !NOTE_ID_PATTERN.test(b.noteId)) {
+      throw new Error(
+        `${slug}: ${where} has a noteId ${JSON.stringify(b.noteId)} that stage 2 could not have ` +
+          `minted (${NOTE_ID_PATTERN.source})`,
+      );
     }
   }
 }

@@ -100,6 +100,7 @@ interface Node {
   navLabel?: string;       // leaves only — a ToC row's text. Never rendered in the reading view.
   summary?: string;        // 2–4 sentences, shown on hover/expand, optional
   sourceHeading?: string;  // the author's own heading, if this node came from one
+  treatment?: "supplement";   // the apparatus — see below. Authored title, NO gist.
 }
 ```
 
@@ -128,6 +129,47 @@ Two consequences worth stating, because they are easy to get wrong:
   about the same subtopic, so three words do not. An entry needs only enough words to tell itself
   apart from its neighbours — and that demand rises as you descend. See
   [table-of-contents.md](table-of-contents.md) for the length rules.
+
+### The supplement node
+
+One node breaks the "every internal node carries a gist" rule, on purpose. Greg, 2026-08-28:
+
+> I feel there should be a way to see it in the structure of the doc (e.g. in the Spine, so that I
+> could jump to the Footnotes), but we don't necessarily need to summarise and include it in the
+> argument etc. Try and get the best of both worlds.
+
+So the footnotes get **one internal node covering the whole notes range, with an authored title —
+"Notes" — and no gist**, and ordinary one-block leaves beneath it:
+
+```
+root
+  ├── part 1   (gist: generated)
+  ├── part 2   (gist: generated)
+  └── Notes    ← treatment: "supplement". Authored title, NO generated gist.
+        ├── leaf: note block 1
+        └── …
+```
+
+The field is **`treatment`, not `role`**: on a block, `role` says what kind of content it is, and
+reusing the word here would make it mean structural exclusion as well.
+
+**The gist rule is stated in both directions** — an internal node must carry a gist *unless* it is a
+supplement, **and** a supplement must not carry one — because keyed on the absence of a gist alone,
+a pipeline bug that drops one becomes indistinguishable from a deliberate supplement. Never infer
+the role from a missing gist. The exception is paid for with six checks in
+[`tree-invariants.ts`](../../src/tree-invariants.ts), each with its own mutation test: a supplement
+must be a depth-one child of the root, cover exactly one contiguous range, contain only supplement
+blocks, contain every supplement block, have only leaves beneath it, and carry no gist while never
+being nested or the root.
+
+**The tree is built from the body alone and the node is appended afterwards**
+([`src/supplement.ts`](../../src/supplement.ts)), which is what makes it impossible for a part gist
+or the root gist to summarise a footnote: the structure model is never shown one. Everything that
+counts parts knows about it — `partsOf` in [`arc.ts`](../../src/arc.ts), the shelf's part and
+section counts, the arc's step marker ("3 / 7", never "3 / 9") — and the four things that navigate
+by column share one projection, `navigableItems` in [`web/tree.ts`](../../src/web/tree.ts), so that
+a reader standing mid-Notes is *in* the "Notes" item in the fisheye, in keyboard navigation, in the
+saved reading position and in the arc alike. See [footnotes.md](../plans/footnotes.md).
 
 ### Where the tree comes from
 

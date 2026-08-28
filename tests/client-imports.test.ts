@@ -50,6 +50,15 @@ const SHARED = new Set([
      had drifted. It imports `types.js` and nothing else.
      See src/block-policy.ts and docs/plans/footnotes.md. */
   "block-policy.js",
+  /* What a supplement node is, and which nodes sit under one. On the list for
+     the same reason `block-policy.js` is, and it imports that file and types
+     and nothing else: the tree is one structure and both sides read it, so the
+     spine's dimmed band, the arc's step marker, the fisheye's "Notes" and the
+     shelf card's part count are four answers that have to come from one
+     definition. The alternative is the client re-deriving "is this the
+     apparatus" from a missing gist, which is the inference this whole design
+     refuses to make. See src/supplement.ts. */
+  "supplement.js",
   "ingest.js", // slug derivation, so the client can show the same one the server will mint
   "term-match.js", // where a glossary term appears in a block
   "quote-match.js",

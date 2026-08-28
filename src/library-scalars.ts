@@ -40,6 +40,7 @@
  */
 
 import { articleWordCounts, type Treated } from "./block-policy.js";
+import { supplementIndex } from "./supplement.js";
 import type { Block, Tree } from "./types.js";
 
 /**
@@ -63,10 +64,11 @@ export interface LibraryScalars {
    * `articleWordCounts`.
    *
    * **Articles published before roles existed keep the old number**, because
-   * this is stored at publish and their stored blocks carry no `treatment` —
-   * so recomputing over them would produce the identical figure. It corrects
-   * itself when the article is re-extracted and republished, and nothing
-   * cheaper can correct it. docs/plans/footnotes.md.
+   * this is stored at publish and their stored block rows carry no `treatment`
+   * — so a backfill over the *rows* would produce the identical figure. A
+   * repair from `stamped_html` is possible and is deliberately not built: see
+   * docs/plans/footnotes.md § The stale cached word count for the option and
+   * why letting it heal on re-extraction was chosen instead.
    */
   wordCount: number;
   blockCount: number;
@@ -92,7 +94,14 @@ export function deriveLibraryScalars(input: {
   if (tree) {
     // One pass rather than two filters: the tree of a long article is thousands
     // of nodes, and this runs once per article per homepage load.
+    /* The apparatus is a depth-one child of the root and its leaves are at
+       depth two, so counting by depth alone would advertise gwern as having one
+       more part than it argues and forty-one more sections than it has. A card
+       that says "8 parts" about a seven-part piece is a small lie in the one
+       place a reader is deciding whether to start. src/supplement.ts. */
+    const supplement = supplementIndex(tree);
     for (const node of Object.values(tree.nodes)) {
+      if (supplement.has(node.id)) continue;
       if (node.depth === 1) partCount++;
       else if (node.depth === 2) sectionCount++;
     }

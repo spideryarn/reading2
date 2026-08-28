@@ -114,7 +114,7 @@ describe("stepTarget", () => {
 describe("navPlan", () => {
   const leaf = geometry.leafDepth;
   const ladder = (columns: number[], showText: boolean, hasArc = false) =>
-    navPlan(geometry.cells, columns, leaf, showText, hasArc).ladder;
+    navPlan(geometry, columns, showText, hasArc).ladder;
 
   it("is the columns on screen, coarsest first", () => {
     expect(ladder([1, 2], true)).toEqual([1, 2, leaf]);
@@ -136,10 +136,10 @@ describe("navPlan", () => {
   // What makes L0 a rung at all: it borrows the parts' boundaries, so ↑ / ↓
   // over the argument step part to part rather than doing nothing.
   it("steps the arc column by its parts", () => {
-    const plan = navPlan(geometry.cells, [0, 1], leaf, false, true);
+    const plan = navPlan(geometry, [0, 1], false, true);
     expect(plan.starts[0]).toEqual(itemStarts(geometry.cells[1] ?? []));
     // And without the arc it is the root: one item, nowhere to go.
-    expect(navPlan(geometry.cells, [0], leaf, false, false).starts[0]).toEqual([0]);
+    expect(navPlan(geometry, [0], false, false).starts[0]).toEqual([0]);
   });
 
   // Outline mode: the leaf column is in `columns` already, and the prose is off.
@@ -162,7 +162,7 @@ describe("navPlan", () => {
   // whether or not the Parts column survived the fit — so the rows are kept for
   // every level, not just the rungs.
   it("keeps rows for levels that are off the ladder", () => {
-    const plan = navPlan(geometry.cells, [], leaf, true, false);
+    const plan = navPlan(geometry, [], true, false);
     expect(plan.ladder).toEqual([leaf]);
     expect(plan.starts[1]).toEqual(itemStarts(geometry.cells[1] ?? []));
   });

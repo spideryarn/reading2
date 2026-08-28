@@ -25,14 +25,14 @@ const tree: Tree = JSON.parse(readFileSync("example/tree.json", "utf8"));
 const geometry = buildGeometry(tree, blocks);
 const blockAt = (row: number) => blocks[row]?.id;
 
-const parts = itemsFromCells(geometry.cells[1]!, blockAt).items;
-const sections = itemsFromCells(geometry.cells[2]!, blockAt).items;
+const parts = itemsFromCells(geometry.cells[1]!, blockAt, geometry.supplementOf).items;
+const sections = itemsFromCells(geometry.cells[2]!, blockAt, geometry.supplementOf).items;
 
 describe("itemsFromCells", () => {
   it("makes one item per cell, pointing at the cell's first block", () => {
     expect(parts.length).toBe(geometry.cells[1]!.length);
     expect(parts[0]!.blockId).toBe(blocks[0]!.id);
-    const { starts } = itemsFromCells(geometry.cells[2]!, blockAt);
+    const { starts } = itemsFromCells(geometry.cells[2]!, blockAt, geometry.supplementOf);
     expect(starts).toEqual(itemStarts(geometry.cells[2]!)); // balanced tree: no continuations
     for (const [i, s] of sections.entries()) expect(s.blockId).toBe(blocks[starts[i]!]!.id);
   });
@@ -111,7 +111,7 @@ describe("continuation cells", () => {
     { node: node("b2", 2, "P"), rowSpan: 1, continuation: false },
   ];
   const ids = ["r0", "r1", "r2", "r3", "r4", "r5"];
-  const { items, starts } = itemsFromCells(cells, (row) => ids[row]);
+  const { items, starts } = itemsFromCells(cells, (row) => ids[row], new Map());
 
   it("are not items, and the starts stay paired with the items that remain", () => {
     expect(items.map((i) => i.node.id)).toEqual(["b1", "b2"]);
@@ -138,7 +138,7 @@ describe("continuation cells", () => {
       { node: node("A", 1, "root"), rowSpan: 2, continuation: true },
       { node: node("b1", 2, "P"), rowSpan: 2, continuation: false },
     ];
-    const { starts: st, items: it2 } = itemsFromCells(leading, (row) => ids[row]);
+    const { starts: st, items: it2 } = itemsFromCells(leading, (row) => ids[row], new Map());
     expect(st).toEqual([2]);
     const cur = currentIndex(st, 0);
     expect(cur).toBe(-1);
