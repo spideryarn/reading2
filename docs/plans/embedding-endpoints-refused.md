@@ -57,16 +57,41 @@ allow.
 Greg chose to fix the production key rather than repoint production at the working one
 (2026-08-28), so the billing split stays. Four steps.
 
-**1. Find out whether the two keys are even the same login.** `GET /api/v1/key` reports a
-`creator_user_id`; the working key's is `user_30pWRuYjIsnNvxCbcv8aDVNqW0k`. If the production key
-reports the same one, this is a **per-key** policy and the fix is on that key's own row at
-<https://openrouter.ai/settings/keys>. If it reports a different one, it is a second account and the
-fix is on that account's <https://openrouter.ai/settings/privacy>. OpenRouter lets the policy be set
-at three levels — account, organisation, and individual key — and the most specific wins, so
-checking which one is doing the refusing comes first.
+**1. The key on Vercel is not the key you made for it.** This is the whole fix, and it took a
+read-only walk through the OpenRouter dashboard to see, because nothing on the server side could:
 
-**2. It is Zero Data Retention, and specifically the "Non-frontier" scope.** This was guessed at
-first and is now proven three ways, so nobody need go looking:
+| where | key | state |
+|---|---|---|
+| production logs (`key in use:`) | `sk-or-v1-225…` | 404s on Voyage, every request |
+| `.env.local` | `sk-or-v1-735…` | works; has billed `voyage-4` |
+| OpenRouter, "Spideryarn 2 prod 260826" | `sk-or-v1-031…` | **never used, $0.000**, created 2 days ago |
+| OpenRouter, "Greg Spideryarn experim" | `sk-or-v1-735…` | the working one |
+| OpenRouter, "ARC" | `sk-or-v1-d2f…` | last used 11 months ago |
+
+`greg@gregdetre.com` holds exactly three keys and **`sk-or-v1-225…` is not one of them.** A key
+named for production was created two days ago, `OPENROUTER_API_KEY` was set on Vercel two days ago,
+and the key has never been called. So the value that reached Vercel came from somewhere else — a
+different OpenRouter login. It is a live key (it authenticates; the failure is a routing 404, not a
+401), and that other account has a restriction this one does not.
+
+**The fix is therefore to put a key from `greg@gregdetre.com` on Vercel**, not to change any
+setting. That account has every restrictive toggle off, its single guardrail has nothing configured
+at all, and it has already paid for `voyage-4` embeddings — $0.05 of them, including the calls that
+verified this diagnosis. OpenRouter shows a key's secret only once at creation, so the existing
+prod key's value is probably unrecoverable: make a fresh one, name it for production, and paste
+that.
+
+**What the account looked like**, so nobody re-checks it: ZDR off for all five scopes (Non-frontier,
+Anthropic, OpenAI, Google, SpaceXAI); all four data-training toggles off; Allowed Providers and
+Ignored Providers both empty; one workspace, no organisation; one guardrail — "Workspace Guardrail",
+active, applying to all three keys — with Budget, Model & Provider Access, Prompt Injection and
+Sensitive Info Detection all *not configured*. All three keys show identical eligibility (494
+available / 2 partial / 17 unavailable) and none carries a per-key override. There is nothing here
+to turn off.
+
+**2. If you keep the other account instead, the setting to change is Zero Data Retention —
+specifically the "Non-frontier" scope.** Not needed if you follow step 1, but this is *why* that
+key fails, and it is proven three ways rather than guessed:
 
 - **The routing experiment.** Asking the *working* key to route under each restriction in turn, one
   request each: `zdr: true` is the only one that turns Voyage's 200 into a 404 —
@@ -95,8 +120,14 @@ first and is now proven three ways, so nobody need go looking:
   non-ZDR endpoints"* — and *"in your privacy settings, each model group has its own toggle"*.
   Voyage is Non-frontier.
 
-So the change is **the Non-frontier ZDR toggle alone**, at
-<https://openrouter.ai/settings/privacy>. The other four scopes keep their guarantee.
+So on whichever login owns `sk-or-v1-225…`, the change would be **the Non-frontier ZDR toggle
+alone**, at <https://openrouter.ai/settings/privacy>. The other four scopes keep their guarantee.
+
+The dashboard confirms the mechanism from the other side: OpenRouter's own model page for
+`voyageai/voyage-4` carries a warning triangle on its single provider reading **"Logs: this provider
+may retain prompts, but does not use them for training."** Retention without training is precisely
+the combination that fails ZDR and passes `data_collection: "deny"` — which is exactly what the two
+experiments above found, arrived at independently.
 
 **And it does not weaken the one that matters most.** Dictation — the reader's voice — sends
 `zdr: true` in the *request* (`AI_JOB_ROUTE` in [`src/ai-call.ts`](../../src/ai-call.ts)), so its

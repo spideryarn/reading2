@@ -78,6 +78,16 @@ principal-components arithmetic would be reported as an upstream outage. But it 
 **Immediate:** production has to use an account that may reach the model — see the plan. That is a
 dashboard field and it is not a code change.
 
+And the field is emptier than it looked. A read-only walk through the OpenRouter dashboard found
+that **the key on Vercel is not any of the three keys the account holds.** A key named "Spideryarn 2
+prod 260826" was created two days before this was found, `OPENROUTER_API_KEY` was set on Vercel the
+same day, and **that key has never been called — $0.000.** The value that actually reached Vercel
+belongs to a different OpenRouter login, one with a Zero Data Retention scope enabled that this
+account does not have. So the accident was not a policy decision at all: it was a paste. Which
+makes the missing check worse rather than better — the deployment held a credential nobody had ever
+asked to do anything, and *creating the right key and never deploying it* looks identical, from
+every dashboard and every health endpoint, to deploying it.
+
 **Long term, and landed 2026-08-28:**
 
 - `EmbeddingFailure` in [`src/embeddings.ts`](../../src/embeddings.ts) carries a `reason` —
