@@ -74,12 +74,18 @@ interface Props {
   /**
    * The article has been renamed — take this title.
    *
-   * Owned by `ArticlePage` in App.tsx, which holds the payload this masthead is
-   * drawing, so one write updates the heading, the tab and every other view of
-   * the same article at once. A masthead that kept the new title to itself
+   * Owned by `OwnedArticle` in App.tsx, which holds the payload this masthead
+   * is drawing, so one write updates the heading, the tab and every other view
+   * of the same article at once. A masthead that kept the new title to itself
    * would disagree with the metadata page one click away.
+   *
+   * **Absent for a visitor reading a shared document**, and its absence is what
+   * hides the pencil. A rename is a PATCH against a shelf row a visitor does
+   * not have, so the button could only ever fail, and a button that can only
+   * fail is worse than no button because pressing it is how you find out —
+   * the same rule Delete follows on the metadata page. 2026-08-28.
    */
-  onRenamed: (slug: string, title: string) => void;
+  onRenamed?: ((slug: string, title: string) => void) | undefined;
 }
 
 export function Masthead({ article, slug, onRenamed }: Props) {
@@ -87,8 +93,13 @@ export function Masthead({ article, slug, onRenamed }: Props) {
   /* The same rename the shelf offers, from the page you are actually reading —
      Greg, 2026-08-27. See TitleEditor.tsx for why the request lives in a hook
      rather than here, and why this site cannot say whether the title on screen
-     is the reader's own. */
-  const rename = useArticleRename(slug, onRenamed);
+     is the reader's own.
+
+     Called unconditionally with a no-op for a visitor, because a hook cannot be
+     skipped conditionally — and it costs nothing to mount: it holds three
+     pieces of state and fetches nothing until the pencil is pressed, which
+     `offer` below is what prevents. */
+  const rename = useArticleRename(slug, onRenamed ?? noRename);
   // The counts live in stats.ts now, because the drawer's About panel needs the
   // same arithmetic and two copies of it would drift.
   const stats = useMemo(() => articleStats(article), [article]);
@@ -135,6 +146,8 @@ export function Masthead({ article, slug, onRenamed }: Props) {
         <EditableTitle
           rename={rename}
           title={meta.title}
+          /* No pencil for a visitor — see `onRenamed` above. */
+          offer={onRenamed !== undefined}
           inputClassName="tw:font-prose tw:text-2xl tw:leading-snug"
         >
           <h1 className="tw:min-w-0 tw:flex-1">
@@ -198,3 +211,6 @@ export function Masthead({ article, slug, onRenamed }: Props) {
     </div>
   );
 }
+
+/** The rename a visitor's masthead reports to. Nothing can call it: `offer` is false. */
+function noRename(): void {}

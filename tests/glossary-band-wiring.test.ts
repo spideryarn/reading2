@@ -40,8 +40,15 @@ describe("the reading view's glossary wiring", () => {
 
   it("draws the prose's underlines from that same read", () => {
     /* Not from a second list pushed up out of the band, which is what the
-       `onEntries` prop did and what needed a `pushed` ref to make safe. */
-    expect(app).toMatch(/glossaryRead\.glossary\?\.entries/);
+       `onEntries` prop did and what needed a `pushed` ref to make safe.
+
+       The `?.` on `glossaryRead` arrived with the capability seam, 2026-08-28:
+       the read is mounted by `OwnedReader` and reaches `Reader` through
+       `capability`, so it is `null` for a visitor on a shared document, who has
+       no glossary and no endpoint to ask for one. Optional in the pattern, not
+       required, so this still fails if the local disappears altogether — which
+       is the regression it is about. docs/plans/public-read-only-access.md. */
+    expect(app).toMatch(/glossaryRead\??\.glossary\?\.entries/);
     /* The prop or the call, not the word — the comment in `GlossaryBand`
        explaining why the prop is gone would otherwise fail this. */
     expect(app).not.toMatch(/onEntries\s*[=(]/);

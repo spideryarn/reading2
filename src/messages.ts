@@ -912,3 +912,211 @@ export function authConfirmationSent(email: string): string {
     "[auth-confirm]"
   );
 }
+
+/* ── A shared document ─────────────────────────────────────────────────────────
+ *
+ * **None of these is a failure, and none of them carries a bracketed code.**
+ * Everything above this line is something that went wrong; everything below it
+ * is the app describing a boundary that is working exactly as intended. A
+ * `[code]` on one of these would be a support reference for a non-event, and
+ * `kindOfMessage` would then be asked to classify a sentence that has no kind —
+ * so they are plain strings, the shape `authConfirmationSent` above already
+ * uses. docs/project/copy.md's four rules still apply; only the code does not.
+ *
+ * They are here rather than beside the components for the reason copy.md gives
+ * for the rest of the file: **the sentences a reader sees live in one place.**
+ * These are the ones a stranger meets, which makes them the sentences most
+ * likely to be the only thing anybody ever reads of this app.
+ *
+ * The three distinct sentences below must not blur into one, and there is a
+ * worked example of what happens when they do. Unpublishing a Notion page makes
+ * every old link land on a plain *"page could not be found"* — never existed,
+ * was unshared, and you may not see it, all answered identically. The products
+ * that get it right name the cause: Loom says *"Due to the privacy settings for
+ * this video, it cannot be played here at this time"*, Google Docs pairs
+ * *"View only"* with *"Request edit access"*.
+ * docs/research/public-access-how-others-do-it.md.
+ *
+ * **"Visitor" means anyone who does not own the document** — signed out, or
+ * signed in and reading somebody else's. They get the same sentences, which is
+ * the point: the question is *is this mine*, never *am I signed in*.
+ * docs/plans/public-read-only-access.md.
+ */
+
+/**
+ * The label on the read-only bar. Two words, and they are Google Docs'.
+ *
+ * The one literal, persistent, non-dismissible read-only label the research
+ * found in the wild — everybody else communicates read-only-ness by what is
+ * *missing* from the chrome, which is no use at all to a stranger who has never
+ * seen the editable version and has no baseline to notice an absence.
+ *
+ * A label, not a call to action, and **not dismissible**: it is a statement
+ * about what this page is, not a notification about something that happened.
+ */
+export const VIEW_ONLY = "View only";
+
+/** What that label means, in the one sentence the bar has room for. */
+export const SHARED_WITH_YOU =
+  "Somebody shared this article with you. The whole piece is here to read, at every zoom level.";
+
+/**
+ * The ask, and it is to join rather than to unlock this page.
+ *
+ * The New York Times' own reported figure is that free registration lifted paid
+ * conversion by more than 40%, ahead of any change to the meter; Substack
+ * pitches the ongoing free thing rather than the one document. So the ask is
+ * *"make a free account"*, and every place it appears sits next to the specific
+ * thing the visitor has just found they could not do — never a banner the eye
+ * stops seeing.
+ */
+export const MAKE_AN_ACCOUNT = "Make a free account";
+
+/**
+ * **The artefact was never built.** The first of the three, and the only one
+ * with no precedent anywhere: none of the products researched has a pipeline
+ * that can simply not have run.
+ *
+ * Greg's rule, 2026-08-27: *see what has been generated; be told plainly about
+ * what hasn't.* This is the second half, and it is as much of the work as the
+ * first — a gap where a glossary would be teaches a visitor that the feature is
+ * broken.
+ *
+ * `noun` is a noun phrase with its article: `"a glossary"`, `"a summary"`.
+ */
+export function notBuiltYet(noun: string): string {
+  return `Nobody has built ${noun} for this piece yet.`;
+}
+
+/**
+ * **It exists, and a shared link does not carry it yet.** A fourth state, and
+ * it is temporary: slice 1b adds the public endpoints for glossary, summaries,
+ * ideas and tweets, and this sentence goes with the slice that makes it false.
+ *
+ * It is worth having rather than folding into `notBuiltYet`, which would be a
+ * lie about somebody's article, or into `signedInOnly`, which would promise
+ * that an account is the fix when the fix is us shipping the endpoint.
+ * `PublicMetadata.available` is the field that tells the two apart —
+ * src/public-types.ts.
+ */
+export function notOnSharedLinksYet(noun: string): string {
+  return `There is ${noun} for this piece, but a shared link does not carry it yet.`;
+}
+
+/**
+ * **It exists and it costs money.** Chat, search, review, asking about a
+ * passage: every one of them is a model call, and Greg's third decision is that
+ * a logged-out visitor causes none.
+ *
+ * Different from both of the above and it has to read as different: the feature
+ * is there, it works, and an account is genuinely the way to have it. That is
+ * what makes the sign-up line beside this one an honest offer rather than a
+ * toll booth.
+ *
+ * `feature` is capitalised, because it names a control the visitor just
+ * pressed: `"Chat"`, `"Search"`.
+ */
+export function signedInOnly(feature: string): string {
+  return `${feature} is for signed-in readers — it asks the model something, and a shared link spends nobody's money.`;
+}
+
+/**
+ * **It is somebody's, and it is not yours.** The comments, the conversations
+ * and the searches on a document belong to whoever added it.
+ *
+ * Greg's fifth decision, 2026-08-27: a public visitor sees *none* of the
+ * owner's annotations. "Share this along with my questions" is a separate,
+ * later, opt-in switch, so this sentence is about a boundary rather than about
+ * a missing feature.
+ */
+export function readersOwnWork(plural: string): string {
+  return `${plural} belong to whoever added this article. A shared link carries the piece, never anybody's notes about it.`;
+}
+
+/**
+ * **The document is not shared** — the 404, for somebody signed in.
+ *
+ * A stranger gets the landing page instead, exactly as they do at every other
+ * address they are not entitled to; a signed-in reader has already proved they
+ * are a person, so there is nothing left to protect by showing them the pitch
+ * rather than the answer.
+ *
+ * **It must not confirm that the document exists.** The rule already holds for
+ * signed-in readers — a slug you do not own is a 404, never a 403 — and it
+ * holds here for the same reason. Hence the conditional second sentence: it
+ * tells somebody who was sent a link what to do without telling somebody
+ * guessing slugs whether they guessed right.
+ */
+export const NOT_SHARED =
+  "This document isn't shared. If somebody sent you the link, ask them to turn sharing on for it.";
+
+/* ── Sharing a document, for the owner ─────────────────────────────────────── */
+
+/** The switch, off. */
+export const SHARING_OFF = "Only you can read this.";
+
+/** The switch, on. */
+export const SHARING_ON = "Anyone with the link can read this, without signing in.";
+
+/** What a visitor gets, in one line, on the card rather than behind a hover. */
+export const SHARING_WHAT_VISITORS_SEE =
+  "A visitor sees the article, its table of contents and every zoom level. They never see your " +
+  "comments, your conversations, your searches or your notes, and nothing they do costs a model call.";
+
+/**
+ * **The honest limit, and we are the only ones saying it.**
+ *
+ * Not one product researched tells either the owner or the visitor that
+ * unsharing cannot claw back a page a browser already has; every one of them
+ * describes revocation purely as the next request being refused. Saying it
+ * plainly is going further than the precedent, deliberately, and it is recorded
+ * as a decision rather than left to look like a default.
+ * docs/research/public-access-how-others-do-it.md.
+ */
+export const SHARING_CANNOT_UNRING =
+  "Turning this off refuses the next request. It cannot take back a page somebody's browser already " +
+  "has, or anything they copied out of it.";
+
+/** The confirmation, which no other product asks for. */
+export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
+
+/**
+ * Why we gate this and Notion, Figma and Readwise do not.
+ *
+ * They are all publishing **the owner's own document**. We are republishing
+ * **somebody else's article**, extracted from a page they wrote, so the rights
+ * question is ours and not theirs and the norm does not transfer.
+ * docs/plans/public-read-only-access.md § Rights.
+ */
+export function sharingConfirmBody(title: string): string {
+  return (
+    `This puts the whole extracted text of “${title}” where anyone with the link can read it, ` +
+    "without signing in."
+  );
+}
+
+/**
+ * The personalisation warning.
+ *
+ * **Deliberately general, and that is a gap rather than a choice.** The plan
+ * asks this to name which of *this document's* artefacts were generated against
+ * the reader's profile — we store `profileHash` on every one of them, so the
+ * fact exists. No owner endpoint exposes it: `ArticleMetadata` carries stages,
+ * timings and byte counts and nothing about profiles (src/types.ts). Naming a
+ * list we cannot compute would be worse than this sentence; adding the field is
+ * server work and belongs with slice 1b.
+ *
+ * What it does say is the part a general warning usually leaves out — that the
+ * leak is what a personalised artefact *left out*, not what it quotes.
+ * src/profile.ts forbids quoting the profile and carries a verbatim example of
+ * what not to do, but a prompt is not an enforcement mechanism and the terms a
+ * glossary skipped are inferable from the ones it kept.
+ */
+export const SHARING_PERSONALISED =
+  "Anything the pipeline wrote for this piece may have been shaped by your reader profile, and it " +
+  "goes out as it is. None of it quotes your profile — but what it chose to skip is still visible " +
+  "in what it kept.";
+
+/** The box the owner ticks, which the server refuses the request without. */
+export const SHARING_RIGHTS_CONFIRM =
+  "I have the right to share this article's text.";

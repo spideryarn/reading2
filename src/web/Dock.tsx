@@ -116,6 +116,8 @@ import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
+import { VisitorNotice } from "./PublicChrome.js";
+import { COMMENTS_GAP } from "./visitor.js";
 
 interface Props {
   /**
@@ -152,6 +154,20 @@ interface Props {
    * One object rather than four optional props, so the four cannot be passed
    * apart: they are meaningless individually.
    */
+  /**
+   * Mode buttons drawn dimmed, because this reader will meet a boundary in
+   * them — a visitor on somebody's shared document. Empty for the owner.
+   *
+   * **They stay pressable, and that is the design rather than an oversight.**
+   * The reason a mode is marked must not live only in a hover tooltip: NN/G's
+   * rule is that a tooltip may never be the only carrier of information a
+   * person needs, and a hover tooltip is unreachable by touch and by keyboard.
+   * So pressing a marked mode opens its band and the band carries the sentence
+   * in visible text — see `VisitorBand` in PublicChrome.tsx. The dimming and
+   * the tooltip line below are the supplement, never the message.
+   * docs/research/public-access-how-others-do-it.md § 2.
+   */
+  marked?: ReadonlySet<Mode> | undefined;
   drawer?: {
     /** Comments in reading order — App already sorts them, see comment-nav.ts. */
     comments: Comment[];
@@ -171,6 +187,27 @@ interface Props {
     onPanel(next: Panel | null): void;
     /** Open a question's dialog and bring its passage into view. */
     onOpenComment(id: string): void;
+    /** Never set on this arm — see the visitor arm below. */
+    visitor?: false;
+  } | {
+    /**
+     * The drawer a **visitor** gets: it opens, and what is in it is the
+     * sentence about whose comments these would be.
+     *
+     * A separate member of the union rather than five optional fields, so
+     * there is no `comments: []` for a later edit to read and no `loaded`
+     * for it to test. The five that are missing are missing because there is
+     * nothing to fetch — `useComments` is not mounted anywhere on a shared
+     * document. docs/plans/public-read-only-access.md.
+     *
+     * The alternative was passing no drawer at all, which degrades the
+     * Comments button to a link back to the page it is already on. A control
+     * that does nothing is exactly what marking-rather-than-hiding exists to
+     * avoid.
+     */
+    visitor: true;
+    panel: Panel | null;
+    onPanel(next: Panel | null): void;
   };
 }
 
@@ -310,10 +347,13 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
   },
 ];
 
-export function Dock({ slug, view, mode, onMode, drawer }: Props) {
+export function Dock({ slug, view, mode, onMode, marked, drawer }: Props) {
   const panel = drawer?.panel ?? null;
   const open = panel !== null;
-  const pending = drawer?.comments.filter((c) => c.status === "pending").length ?? 0;
+  /* Narrowed once, so the four reads below are the compiler checking one fact
+     rather than four independent tests that could drift apart. */
+  const own = drawer && drawer.visitor !== true ? drawer : null;
+  const pending = own?.comments.filter((c) => c.status === "pending").length ?? 0;
 
   /**
    * The view state the bar's links carry across, so leaving the article to look
@@ -399,12 +439,16 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
               became a page; if a second ever comes back, this is where it
               branches. */}
           <div className="dock-drawer-body">
-            <Questions
-              comments={drawer.comments}
-              loaded={drawer.loaded}
-              loadFailed={drawer.loadFailed}
-              onOpen={drawer.onOpenComment}
-            />
+            {own ? (
+              <Questions
+                comments={own.comments}
+                loaded={own.loaded}
+                loadFailed={own.loadFailed}
+                onOpen={own.onOpenComment}
+              />
+            ) : (
+              <VisitorNotice gap={COMMENTS_GAP} />
+            )}
           </div>
         </div>
       )}
@@ -426,7 +470,7 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
             See DockModes below. Off the reading view there is no band to switch,
             so the same five degrade to links back to it. */}
         {mode !== undefined && onMode ? (
-          <DockModes mode={mode} onMode={onMode} />
+          <DockModes mode={mode} onMode={onMode} marked={marked} />
         ) : (
           MODES_UI.map((m) => (
             <DockLink
@@ -435,6 +479,7 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
               current={false}
               icon={m.icon}
               label={m.label}
+              className={marked?.has(m.mode) ? MARKED : ""}
               title={`${m.blurb} — back in the article itself`}
             />
           ))
@@ -454,11 +499,19 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
             onPanel={drawer.onPanel}
             icon={MessageSquareText}
             label="Comments"
-            title="The passages you have marked on this article"
+            className={own ? "" : MARKED}
+            title={
+              own
+                ? "The passages you have marked on this article"
+                : "Comments belong to whoever added this article"
+            }
           >
-            {drawer.comments.length > 0 && (
+            {/* No count for a visitor — there is nothing to count, and a `0`
+                would read as "you have none" rather than "these are not
+                yours". */}
+            {own && own.comments.length > 0 && (
               <span className={`dock-count${pending ? " pending" : ""}`}>
-                {drawer.comments.length}
+                {own.comments.length}
               </span>
             )}
           </DockTab>
@@ -614,7 +667,27 @@ export function nextModeIndex(key: string, index: number, count: number): number
   return null;
 }
 
-function DockModes({ mode, onMode }: { mode: Mode; onMode(next: Mode): void }) {
+/**
+ * How a marked control is drawn.
+ *
+ * Desaturated and lower contrast, which is NN/G's own prescription for a
+ * control that is not fully available. **Not `aria-disabled`**, and that is not
+ * an oversight: the button really does respond to a press — it opens the band
+ * that explains itself — so announcing it as disabled would be a lie to exactly
+ * the reader who most needs the explanation, and would take it away from them
+ * at the same time.
+ */
+const MARKED = "tw:opacity-55";
+
+function DockModes({
+  mode,
+  onMode,
+  marked,
+}: {
+  mode: Mode;
+  onMode(next: Mode): void;
+  marked?: ReadonlySet<Mode> | undefined;
+}) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const current = MODES_UI.findIndex((m) => m.mode === mode);
   // Never -1: an unknown mode cannot reach here (params.ts parses one), but a
@@ -655,6 +728,11 @@ function DockModes({ mode, onMode }: { mode: Mode; onMode(next: Mode): void }) {
               <>
                 <div className="tip-soon-head">{m.label}</div>
                 <p>{m.blurb}</p>
+                {/* A supplement, never the message. The sentence that actually
+                    explains the boundary is in the band this button opens —
+                    see the `marked` prop above for why that distinction is
+                    load-bearing rather than fussy. */}
+                {marked?.has(m.mode) && <p>Not carried on a shared link — press for why.</p>}
               </>
             }
           >
@@ -665,7 +743,7 @@ function DockModes({ mode, onMode }: { mode: Mode; onMode(next: Mode): void }) {
               ref={(el) => {
                 refs.current[i] = el;
               }}
-              className={`dock-btn${m.mode === mode ? " on" : ""}`}
+              className={`dock-btn${m.mode === mode ? " on" : ""}${marked?.has(m.mode) ? ` ${MARKED}` : ""}`}
               aria-checked={m.mode === mode}
               /* Explicit, because the visible label is `display: none` at
                  narrow widths and an accessible name computed from the text
@@ -711,17 +789,20 @@ function DockLink({
   icon: Icon,
   label,
   title,
+  className = "",
 }: {
   href: string;
   current: boolean;
   icon: typeof Info;
   label: string;
   title: string;
+  /** Extra classes — today, `MARKED` for a mode a visitor cannot have. */
+  className?: string | undefined;
 }) {
   return (
     <Link
       href={href}
-      className={`dock-btn${current ? " on" : ""}`}
+      className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
       aria-current={current ? "page" : undefined}
       title={title}
       /* Explicit, for the reason DockModes gives: § a narrow window hides the
@@ -753,6 +834,7 @@ function DockTab({
   icon: Icon,
   label,
   title,
+  className = "",
   children,
 }: {
   panel: Panel;
@@ -761,13 +843,15 @@ function DockTab({
   icon: typeof Info;
   label: string;
   title: string;
+  /** Extra classes — today, `MARKED` for the drawer a visitor cannot fill. */
+  className?: string | undefined;
   children?: ReactNode;
 }) {
   const on = current === panel;
   return (
     <button
       type="button"
-      className={`dock-btn${on ? " on" : ""}`}
+      className={`dock-btn${on ? " on" : ""}${className ? ` ${className}` : ""}`}
       // This button opens a drawer, so `aria-expanded` is the honest
       // relationship — not `aria-pressed`, which would say these are toggles in
       // a set, and not a tab role, which would promise arrow-key traversal we

@@ -94,6 +94,15 @@ const SHARED = new Set([
   // the point: two spellings of "is this Greg" is one place for them to
   // disagree. See docs/project/admin.md.
   "admin.js",
+  /* What a stranger is served — the wire shapes of `/api/public/…`. On the list
+     for the reason the header of the file gives rather than for convenience: it
+     imports `types.js` and nothing else, and it is a `.ts` of nothing but
+     `interface` declarations, so it erases entirely at compile time.
+     The client needs it because the public reader and the public metadata page
+     are typed against exactly the shapes the server projects — the whole point
+     of an allowlist projection is lost if the browser re-declares its own idea
+     of what came back. See docs/plans/public-read-only-access.md § The payload. */
+  "public-types.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

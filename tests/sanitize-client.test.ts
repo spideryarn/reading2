@@ -178,21 +178,41 @@ describe("the ingress is wired up", () => {
   }
 
   /**
-   * The setter is named here, and the name is a liability this test has already
-   * been bitten by: it was `setArticle` until 2026-08-27, when `ArticlePage`
-   * started storing the slug beside the payload and it became `setLoaded`. The
-   * scan then found nothing and reported it — which is the whole reason for the
-   * `toBeGreaterThan(0)` line, and the reason it is worth keeping. A rename is
-   * the cheap failure; a scan that quietly matches nothing while the XSS path
-   * reopens is the expensive one.
+   * **The scan follows the doorway, not a setter's name** — and the name was a
+   * liability this test has now been bitten by twice. It was `setArticle` until
+   * 2026-08-27, when `ArticlePage` started storing the slug beside the payload
+   * and it became `setLoaded`; on 2026-08-28 the two-step for public reading
+   * arrived, the payload stopped being handed to the setter at all, and the
+   * scan found nothing again. Both times the `toBeGreaterThan(0)` line is what
+   * reported it, and that line is the whole reason this test is worth keeping —
+   * a rename is the cheap failure, and a scan that quietly matches nothing
+   * while the XSS path reopens is the expensive one.
+   *
+   * What it reads now is the property `resolveAccess` was split in two to have:
+   * **one call to `sanitizeArticle`, and every answer that carries an article
+   * carries that one value.** A second call would be a second doorway; an
+   * `article:` fed by anything other than the local that call produced would be
+   * a way past it.
    */
   it("every article that reaches state has been sanitised", () => {
-    const args = callArgs(APP, "setLoaded");
-    expect(args.length).toBeGreaterThan(0); // the scan itself must not silently find nothing
-    for (const arg of args) {
-      const clearing = arg.trim() === "null";
-      expect(clearing || arg.includes("sanitizeArticle("), `setLoaded(${arg})`).toBe(true);
-    }
+    const calls = callArgs(APP, "sanitizeArticle");
+    expect(calls.length).toBeGreaterThan(0); // the scan itself must not silently find nothing
+    /* Exactly one, which is what makes the rest of this checkable at all: two
+       doorways would need two proofs, and the second is the one nobody
+       writes. */
+    expect(calls).toHaveLength(1);
+
+    /* And its result is what the answers carry. Property shorthand (`article`
+       on its own, from `const article = sanitizeArticle(…)`) is the only form
+       allowed; `article: <anything>` is a second source and fails here. The
+       exception is the raw two-step below it, which is deliberately not
+       sanitised — it hands its payload to the doorway. */
+    const doorway = APP.slice(
+      APP.indexOf("async function resolveAccess"),
+      APP.indexOf("async function findArticle"),
+    );
+    expect(doorway).toContain("sanitizeArticle(");
+    expect(doorway).not.toMatch(/article:\s*(?!article\b)\S/);
   });
 
   it("the client never imports the jsdom-bound sanitiser", () => {

@@ -120,7 +120,19 @@ import { anchored, countByBlock, useChatAnchors } from "./useChatAnchors.js";
 import { PILL } from "./pill.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { loadPublicArticle, loadPublicMetadata } from "./public-api.js";
+import type { PublicArtefacts } from "../public-types.js";
+import { NO_COMMENTS, NO_TERMS, NO_THREADS, type ReaderCapability } from "./reader-capability.js";
+import { markedModes, TWEETS_GAP, visitorGap } from "./visitor.js";
+import { NotSharedPage, SharedNotice, ViewOnlyChip, VisitorBand } from "./PublicChrome.js";
+import { PublicMetadataPage, VisitorPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
+
+/**
+ * The owner's `marked` set: nothing is marked, and it is one object for the
+ * life of the module so the bar's props do not change identity every render.
+ */
+const EVERY_MODE_AVAILABLE: ReadonlySet<Mode> = new Set();
 
 
 
@@ -160,8 +172,21 @@ export function App() {
      `/login` is the exception, and the only one. It is a page somebody was
      *sent* — a password-reset email has to land somewhere — so it keeps the
      compact screen rather than being answered with the pitch. See
-     SignInPage.tsx. */
-  if (!user) return route.kind === "login" ? <SignInPage /> : <LandingPage />;
+     SignInPage.tsx.
+
+     **And `/read/<slug>` is the second exception, since 2026-08-28.** An owner
+     can mark a document world-readable, and from that moment a stranger at its
+     address is somebody who may be entitled to it. So the gate no longer
+     answers on the strength of "no session" alone: it asks. `ArticlePage`'s
+     two-step does the asking, and `not-shared` still lands here — a stranger
+     gets `LandingPage` exactly as they did before, which is why nothing above
+     this line had to learn about sharing.
+     docs/plans/public-read-only-access.md § The seam. */
+  if (!user) {
+    if (route.kind === "login") return <SignInPage />;
+    if (route.kind !== "read") return <LandingPage />;
+    return <ArticlePage slug={route.slug} view={route.view} signedIn={false} />;
+  }
 
   // The shelf is home, so it gets no way-home logo — a link to the page you are
   // already on is a dead control, and Library.tsx names the app in its own
@@ -230,12 +255,174 @@ export function App() {
     return null;
   }
 
-  return (
-    <>
-      <HomeLogo />
-      <ArticlePage slug={route.slug} view={route.view} />
-    </>
-  );
+  /* No `HomeLogo` here any more, and that is not a tidy-up. `ArticlePage` can
+     now end at `LandingPage` — a stranger following a link to a document that
+     is not shared — and the landing page draws the wordmark itself, so a logo
+     added by the caller would be a second one on top of it. The corner mark is
+     inside `ArticlePage` instead, on every branch that is not the landing
+     page. */
+  return <ArticlePage slug={route.slug} view={route.view} signedIn={true} />;
+}
+
+/**
+ * Which article this is, and **on what footing you are reading it**.
+ *
+ * Two answers rather than one, since 2026-08-28. Either the article is yours,
+ * or it is somebody's and they have shared it — and every difference between
+ * those two, from which endpoint is asked to which hooks are allowed to mount,
+ * hangs off the value this hook returns.
+ *
+ * `owned` and `public` both carry an `Article`, and that is deliberate: the
+ * reading view is one reading view. `PublicArticle` is structurally an
+ * `Article` with fields absent rather than a parallel shape
+ * (src/public-types.ts), so the prose, the tree, the spine and the zoom are
+ * drawn by exactly the same components from exactly the same props. What
+ * differs is what was *fetched*, not how it is drawn.
+ */
+type ArticleAccess =
+  | { kind: "loading" }
+  | { kind: "error"; message: string }
+  /** Not yours, and not shared. The two pages this ends at are in App above. */
+  | { kind: "not-shared" }
+  | { kind: "owned"; article: Article }
+  | {
+      kind: "public";
+      article: Article;
+      /**
+       * Which artefacts this piece has — `null` when that second request did
+       * not land.
+       *
+       * A separate field rather than folded into the article, because the two
+       * come from two endpoints and one may arrive without the other. What must
+       * not happen is a failed metadata fetch turning into *"nobody has built a
+       * glossary for this piece"*, which is a claim about somebody's article
+       * made out of a network failure. `visitorGap` in visitor.ts is where that
+       * distinction is enforced.
+       */
+      available: PublicArtefacts | null;
+    };
+
+const LOADING: ArticleAccess = { kind: "loading" };
+
+/**
+ * The two-step, in one hook.
+ *
+ * **With a session: ask the owned route, and fall back to the public one on a
+ * 404.** Without one: ask the public route directly. A 401 falls back too — a
+ * session that expired between page load and this request is a reader with no
+ * token, and the public route is the right one to ask.
+ *
+ * ## Why the public half is a bare `fetch`
+ *
+ * `apiFetch` attaches a bearer token and refreshes on a 401. If the public path
+ * used it, then the one case this whole feature exists for — a stranger with no
+ * account — would be exercised for the first time by a stranger, because every
+ * developer, test and demo would have a session in hand. It would look like it
+ * worked right up until it mattered. public-api.ts holds the plain `fetch`, and
+ * the server half is built the same way round: `servePublicApi` is handed
+ * `{res, path, method}` and never the request, so it cannot read a header even
+ * by accident. docs/reusable/silent-success.md.
+ *
+ * ## One `try`, and the metadata request outside it
+ *
+ * The article is the page. The artefact flags are a detail on top of it, so a
+ * metadata request that fails must not take the article down with it — it
+ * degrades to `null`, which `visitorGap` reads as *"not on shared links yet"*,
+ * which is unconditionally true in this slice whatever the flags would have
+ * said.
+ */
+function useArticleAccess(slug: string, signedIn: boolean): ArticleAccess {
+  /**
+   * The answer **and the slug it is the answer to**, together.
+   *
+   * The pair rather than the answer alone, for the reason a `loaded` pair used
+   * to sit here: clearing state happens in the effect below, and an effect runs
+   * after the render that scheduled it — so the first render after the slug
+   * changes still held the *previous* article, and the children are keyed on
+   * the new slug, so a freshly mounted `Reader` was handed the old article and
+   * drew it. Mostly invisible, because the fetch usually lands before anybody
+   * reads a paragraph; not invisible in the tab, where it produced titles like
+   * `<the article you just left> · Metadata`. GPT Sol found it, 2026-08-27.
+   */
+  const [answer, setAnswer] = useState<{ slug: string; access: ArticleAccess } | null>(null);
+
+  useEffect(() => {
+    // The slug is in the path, so it can change under us — via back/forward, or
+    // a pasted link. Guard the response so a slow first fetch can't overwrite a
+    // fast second one.
+    let live = true;
+    setAnswer(null);
+    void resolveAccess(slug, signedIn)
+      .then((access) => live && setAnswer({ slug, access }))
+      .catch((e: Error) => live && setAnswer({ slug, access: { kind: "error", message: e.message } }));
+    return () => {
+      live = false;
+    };
+  }, [slug, signedIn]);
+
+  return answer?.slug === slug ? answer.access : LOADING;
+}
+
+/**
+ * Which article this reader is entitled to, and on what footing.
+ *
+ * **Split in two so that `sanitizeArticle` is called exactly once.** The
+ * function below finds the payload and this one is the doorway every article
+ * comes through on its way into component state — one line, on both paths, with
+ * no branch that can grow a third. `tests/sanitize-client.test.ts` reads this
+ * file to check it, and the reason a source-level check is worth having is that
+ * the failure it guards against is silent: an unsanitised `block.html` renders
+ * perfectly.
+ *
+ * Stage 3 cleaned this HTML under *jsdom's* parser and we are about to hand it
+ * to *Chrome's*. It has to happen before anything reads `block.html` — both
+ * `renderedText` and `annotateHtml` parse it with `innerHTML` ahead of React.
+ * See src/web/sanitize.ts.
+ *
+ * **And it is not optional on the public path.** A public payload is the same
+ * extracted HTML through a different projection, so it reaches `innerHTML` by
+ * exactly the same route. The one thing worse than an unsanitised article is an
+ * unsanitised article on the one page we invite strangers to.
+ */
+async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAccess> {
+  const found = await findArticle(slug, signedIn);
+  if (found.kind === "not-shared") return found;
+  const article = sanitizeArticle(found.article);
+  return found.kind === "owned"
+    ? { kind: "owned", article }
+    : { kind: "public", article, available: found.available };
+}
+
+/** The two-step itself: the owned route, then the public one. Raw payloads. */
+async function findArticle(
+  slug: string,
+  signedIn: boolean,
+): Promise<
+  | { kind: "not-shared" }
+  | { kind: "owned"; article: Article }
+  | { kind: "public"; article: Article; available: PublicArtefacts | null }
+> {
+  if (signedIn) {
+    const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}`);
+    /* 404 is *not mine*; 401 is *no longer signed in*. Everything else,
+       `readJson` turns into a message — including a 500, which must not be
+       quietly retried against the public route and rendered as somebody else's
+       shared document. */
+    if (res.status !== 404 && res.status !== 401) {
+      return { kind: "owned", article: await readJson<Article>(res) };
+    }
+  }
+
+  const read = await loadPublicArticle(slug);
+  if (read.kind === "not-shared") return { kind: "not-shared" };
+
+  const available = await loadPublicMetadata(slug)
+    .then((m) => (m.kind === "ok" ? m.body.available : null))
+    /* Swallowed on purpose: the flags decide which of two true sentences a
+       visitor reads, and losing them is not worth losing the article for. */
+    .catch(() => null);
+
+  return { kind: "public", article: read.body, available };
 }
 
 /**
@@ -247,35 +434,128 @@ export function App() {
  * back is then free, rather than 150KB and a spinner each way. The remount that
  * *does* matter is keyed below, on the slug.
  *
- * Nothing here is `useState` except the article itself, which is derived from
- * the URL rather than part of it. Everything the reader can change lives in the
- * path or the query string — see params.js for why, and for which of these
- * changes push a history entry and which quietly replace one.
+ * **What it no longer holds is anything that only an owner may do.** The
+ * record-open POST and the rename overlay moved down into `OwnedArticle`, and
+ * the private hooks moved into `OwnedReader`, because "never mounted" is the
+ * only version of "a visitor does not do this" that survives contact with a
+ * network trace. A boolean prop cannot express it: a hook cannot be skipped
+ * conditionally inside one component, so the condition has to be a component
+ * boundary. GPT Sol, answer 8 on this plan's stage-1 input, 2026-08-28.
  */
-function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
-  useRenderCount("ArticlePage");
+function ArticlePage({
+  slug,
+  view,
+  signedIn,
+}: {
+  slug: string;
+  view: ArticleView;
   /**
-   * The article **and the slug it is the article for**, together.
+   * Whether there is a session — asked here and **nowhere below this line.**
    *
-   * The pair rather than the article alone, because `setLoaded(null)` happens
-   * in the effect below and an effect runs after the render that scheduled it.
-   * So the first render after the slug changes still held the *previous*
-   * article — and the children are keyed on the new slug, so a freshly mounted
-   * `Reader` or `Metadata` was handed the old article and drew it. Mostly
-   * invisible, because the fetch usually lands before anybody reads a
-   * paragraph; not invisible in the tab, where it produced titles like
-   * `<the article you just left> · Metadata`.
-   *
-   * GPT Sol found it reviewing this file's titles, 2026-08-27. The bug is older
-   * than the titles — they are just the first thing that showed it.
-   *
-   * Keeping the slug beside the payload makes the mismatch impossible to render
-   * rather than merely unlikely: `article` is `null` until what we have is what
-   * was asked for.
+   * Everything downstream keys on *is this mine* instead. A signed-in reader on
+   * somebody else's shared document sees exactly what a stranger sees, which is
+   * the rule the whole read-only chrome follows.
+   * docs/plans/public-read-only-access.md.
    */
-  const [loaded, setLoaded] = useState<{ slug: string; article: Article } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  signedIn: boolean;
+}) {
+  useRenderCount("ArticlePage");
+  const access = useArticleAccess(slug, signedIn);
+  const slow = useSlow(access.kind === "loading");
 
+  /**
+   * The tab, for the two states this component owns and no others.
+   *
+   * Once the article is here, each of the views sets its own title — Reader has
+   * the mode, Metadata and Tweets have their own names — and this must then get
+   * out of the way. Hence the empty string, which `useDocumentTitle` treats as
+   * "not mine to set": React runs a child's effects *before* its parent's, so a
+   * title computed here would otherwise land on top of the more specific one
+   * the child had just written.
+   *
+   * **`Loading…` waits for `slow`, the same threshold the line below waits
+   * for.** A tab that flickers through "Loading…" on every fast navigation is
+   * the tab equivalent of a spinner that flashes and vanishes, and it is worse
+   * than that here: the title is announced to a screen reader, so a flicker
+   * nobody sees is an interruption somebody hears. Until then the previous
+   * title stands, which is exactly what a browser does during a real page load.
+   */
+  useDocumentTitle(
+    access.kind === "error"
+      ? pageTitle({ kind: "error" })
+      : access.kind === "loading" && slow
+        ? pageTitle({ kind: "loading" })
+        : "",
+  );
+
+  /* **The one branch with no corner wordmark**, and the reason is that
+     `LandingPage` draws its own. Everything else on this page gets the corner
+     mark, because the reader may have arrived straight here from a pasted link
+     with no shelf behind them — and a visitor with no account especially so,
+     since the mark is the only thing on screen that says whose page this is. */
+  if (access.kind === "not-shared") return signedIn ? <NotSharedPage /> : <LandingPage />;
+
+  if (access.kind === "error")
+    return (
+      <>
+        <HomeLogo />
+        <pre className="error">{access.message}</pre>
+      </>
+    );
+
+  // Silent until the wait is worth mentioning (useSlow.ts owns the threshold),
+  // then a line naming what is being waited for rather than "Loading…".
+  if (access.kind === "loading")
+    return (
+      <>
+        <HomeLogo />
+        <div className="loading">{slow ? "Fetching the article and its summaries…" : ""}</div>
+      </>
+    );
+
+  /* Keyed on the slug so switching article remounts rather than trying to carry
+     one article's reading position — or one owner's rename, or one visitor's
+     artefact flags — into another's. NOT keyed on the view: switching view is
+     meant to keep the fetch, which is the whole reason it happens up here. */
+  return (
+    <>
+      <HomeLogo />
+      {access.kind === "owned" ? (
+        <OwnedArticle key={slug} slug={slug} article={access.article} view={view} />
+      ) : (
+        <VisitorArticle
+          key={slug}
+          slug={slug}
+          article={access.article}
+          available={access.available}
+          view={view}
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * **Your own article**, and everything that follows from it being yours.
+ *
+ * Three things live here rather than a level up, and all three are the same
+ * decision: they must not exist at all for a visitor, and the only reliable way
+ * to say "must not exist" in React is to put them behind a component boundary.
+ *
+ *  - the record-open POST, which a visitor has no shelf to be counted on;
+ *  - the rename overlay, whose PATCH a visitor would be refused;
+ *  - the owner's `Metadata` page, which mounts editing, deletion, the profile
+ *    boxes and the pipeline's own provenance.
+ */
+function OwnedArticle({
+  slug,
+  article: fetched,
+  view,
+}: {
+  slug: string;
+  article: Article;
+  view: ArticleView;
+}) {
   /**
    * The title the reader has just given this article, if they have.
    *
@@ -284,27 +564,25 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
    * extractor's meta either, it picks the reader's title over it at the moment
    * of answering. Two reasons it matters here.
    *
-   * One, `setLoaded` is guarded — everything that reaches it has been through
-   * `sanitizeArticle` (tests/sanitize-client.test.ts), and that guard is worth
-   * more than the convenience of editing state in place. A rename introduces no
-   * HTML and would have to be spelled as an exemption, and an exemption is how a
-   * guard stops meaning anything.
+   * One, the fetched payload has been through `sanitizeArticle`
+   * (tests/sanitize-client.test.ts), and that guard is worth more than the
+   * convenience of editing state in place. A rename introduces no HTML and
+   * would have to be spelled as an exemption, and an exemption is how a guard
+   * stops meaning anything.
    *
    * Two, the memo. `Reader` rebuilds the whole geometry from `article` by
    * identity, so a fresh object per render would rebuild the table on every
    * keystroke elsewhere in the page. Hence the `useMemo` below rather than a
    * spread in the render body.
    *
-   * Cleared with the payload when the slug changes, in the fetch effect — one
-   * article's title must not survive into another's.
+   * The slug travels beside the title, exactly as it did when this state lived
+   * one component up: the PATCH behind a rename resolves after the reader may
+   * have moved on. This component is keyed on the slug now, so the pair is
+   * belt-and-braces rather than the whole guard — and it is three lines to keep
+   * a rule that used to be load-bearing and would fail silently if the key ever
+   * moved. GPT Sol, 2026-08-27.
    */
   const [renamed, setRenamed] = useState<{ slug: string; title: string } | null>(null);
-  const fetched = loaded?.slug === slug ? loaded.article : null;
-  /* The slug beside the title, exactly as `loaded` carries one and for the same
-     reason: the PATCH behind a rename resolves after the reader may have moved
-     on, and the components that started it unmount with the article while this
-     one does not. Keeping the pair makes one article's title impossible to draw
-     over another's rather than merely unlikely. GPT Sol, 2026-08-27. */
   const title = renamed?.slug === slug ? renamed.title : null;
   const article = useMemo(
     () =>
@@ -312,35 +590,13 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
          extractor's title, and `Meta.title` may be the empty string. Read as
          truthy that would silently fall through to `fetched`, which is still
          carrying the override that was just cleared. */
-      fetched && title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched,
+      title !== null ? { ...fetched, meta: { ...fetched.meta, title } } : fetched,
     [fetched, title],
   );
   const renameTo = useCallback(
     (forSlug: string, next: string) => setRenamed({ slug: forSlug, title: next }),
     [],
   );
-
-  useEffect(() => {
-    // The slug is in the path now, so it can change under us — via back/forward,
-    // or a pasted link. Guard the response so a slow first fetch can't overwrite
-    // a fast second one.
-    let live = true;
-    setLoaded(null);
-    setRenamed(null);
-    setError(null);
-    apiFetch(`/api/article/${encodeURIComponent(slug)}`)
-      .then((r) => readJson<Article>(r))
-      // Sanitised here, at the doorway, and nowhere later. This is the pass that
-      // guards the render: stage 3 cleaned this HTML under *jsdom's* parser and
-      // we are about to hand it to *Chrome's*. It must happen before anything
-      // reads `block.html` — both renderedText and annotateHtml parse it with
-      // innerHTML ahead of React. See src/web/sanitize.ts.
-      .then((a) => live && setLoaded({ slug, article: sanitizeArticle(a) }))
-      .catch((e: Error) => live && setError(e.message));
-    return () => {
-      live = false;
-    };
-  }, [slug]);
 
   /**
    * One more open, for the shelf's tooltip to count.
@@ -350,9 +606,10 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
    * anybody deciding to — and the shelf itself does not fetch article payloads,
    * so counting on the server would count a different thing anyway.
    *
-   * Its own effect, keyed on the slug alone, so it fires once per article
-   * opened rather than once per render. Fire-and-forget: a failed count is not
-   * worth a message to a reader who came here to read, and the server logs it.
+   * **And not from a visitor at all**, which is why it is in this component
+   * rather than in `ArticlePage`. There is no shelf row to count against, the
+   * POST would be refused, and the acceptance test for public reading is that a
+   * signed-out browser issues no POST whatever.
    *
    * **The ref is not belt-and-braces; without it the number is simply wrong.**
    * `<StrictMode>` is on (main.tsx), and in development React deliberately runs
@@ -374,43 +631,90 @@ function ArticlePage({ slug, view }: { slug: string; view: ArticleView }) {
     );
   }, [slug]);
 
-  const slow = useSlow(!article && !error);
-
-  /**
-   * The tab, for the two states this component owns and no others.
-   *
-   * Once the article is here, each of the three views sets its own title —
-   * Reader has the mode, Metadata and Tweets have their own names — and this
-   * must then get out of the way. Hence the empty string, which
-   * `useDocumentTitle` treats as "not mine to set": React runs a child's
-   * effects *before* its parent's, so a title computed here would otherwise
-   * land on top of the more specific one the child had just written.
-   *
-   * **`Loading…` waits for `slow`, the same threshold the line below waits
-   * for.** A tab that flickers through "Loading…" on every fast navigation is
-   * the tab equivalent of a spinner that flashes and vanishes, and it is worse
-   * than that here: the title is announced to a screen reader, so a flicker
-   * nobody sees is an interruption somebody hears. Until then the previous
-   * title stands, which is exactly what a browser does during a real page
-   * load.
-   */
-  useDocumentTitle(
-    error ? pageTitle({ kind: "error" }) : !article && slow ? pageTitle({ kind: "loading" }) : "",
-  );
-
-  if (error) return <pre className="error">{error}</pre>;
-  // Silent until the wait is worth mentioning (useSlow.ts owns the threshold),
-  // then a line naming what is being waited for rather than "Loading…".
-  if (!article)
-    return <div className="loading">{slow ? "Fetching the article and its summaries…" : ""}</div>;
-  // Keyed on the slug so switching article remounts rather than trying to carry
-  // one article's reading position into another's blocks. NOT keyed on the
-  // view: switching view is meant to keep the fetch, which is the whole reason
-  // it happens up here.
   if (view === "metadata")
-    return <Metadata key={slug} slug={slug} article={article} onRenamed={renameTo} />;
-  if (view === "tweets") return <Tweets key={slug} slug={slug} article={article} />;
-  return <Reader key={slug} slug={slug} article={article} onRenamed={renameTo} />;
+    return <Metadata slug={slug} article={article} onRenamed={renameTo} />;
+  if (view === "tweets") return <Tweets slug={slug} article={article} />;
+  return <OwnedReader slug={slug} article={article} onRenamed={renameTo} />;
+}
+
+/**
+ * **Where the private hooks are mounted, and the only place they are.**
+ *
+ * `useComments`, `useChatAnchors` and `useGlossaryRead` each fetch on mount
+ * against an authenticated endpoint. A `readOnly` prop on `Reader` could not
+ * have kept them out — React forbids calling a hook conditionally — so the
+ * condition is this component existing, which is the point of the capability
+ * seam. Sol's answer 8 predicted this would be the expensive part of the client
+ * work and it was right.
+ *
+ * The three results are handed down as one object rather than nine props so
+ * that the visitor case is a *different member of a union* rather than nine
+ * absent values, and `Reader` reads them through one `capability.kind === "owner"`
+ * test. reader-capability.ts.
+ */
+function OwnedReader({
+  slug,
+  article,
+  onRenamed,
+}: {
+  slug: string;
+  article: Article;
+  onRenamed: (slug: string, title: string) => void;
+}) {
+  const comments = useComments(slug);
+  const chatAnchors = useChatAnchors(slug);
+  /**
+   * **One read, shared with the band.** `useGlossaryRead` is the opening fetch
+   * — the list and the three facts about whether it still describes the article
+   * and the reader — and `GlossaryBand` layers the job poller and the verbs on
+   * top of it rather than starting from `loading` of its own. Until 2026-08-27
+   * it fetched the same URL again, so the panel said "Looking for a glossary…"
+   * while the list it wanted was already on screen, underlined, in the prose
+   * behind it. docs/plans/glossary-read-latency.md.
+   *
+   * The band does still *revalidate* when it opens — see `useGlossaryRead` for
+   * why it has to — but behind the list, never in front of it.
+   *
+   * `GlossaryBand` still exists for the reason it always did, which was never
+   * the opening fetch: `useJobs` polls for ever, and a reader who never opens
+   * the band should not pay for a poller.
+   */
+  const glossary = useGlossaryRead(slug);
+
+  return (
+    <Reader
+      slug={slug}
+      article={article}
+      capability={{ kind: "owner", comments, chatAnchors, glossary }}
+      onRenamed={onRenamed}
+    />
+  );
+}
+
+/**
+ * **Somebody else's article, shared.** Signed out, or signed in and not the
+ * owner — the same page either way, because the question is *is this mine*.
+ *
+ * Note which components are reachable from here: `Reader`, and two small pages
+ * written for this case. `Metadata` and `Tweets` are not among them, and that
+ * is the seam rather than an omission — between them they mount the profile
+ * boxes, the delete button, the provenance fetch and `useJobs`.
+ */
+function VisitorArticle({
+  slug,
+  article,
+  available,
+  view,
+}: {
+  slug: string;
+  article: Article;
+  available: PublicArtefacts | null;
+  view: ArticleView;
+}) {
+  if (view === "metadata")
+    return <PublicMetadataPage slug={slug} article={article} available={available} />;
+  if (view === "tweets") return <VisitorPage slug={slug} article={article} view="tweets" gap={TWEETS_GAP} />;
+  return <Reader slug={slug} article={article} capability={{ kind: "visitor", available }} />;
 }
 
 /** The window width, as state, because the whole layout is computed from it. */
@@ -530,17 +834,47 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
   return { at, jumpTo };
 }
 
+/**
+ * The reading view — **one reading view, for the owner and for a visitor.**
+ *
+ * That was the goal from the first draft of the plan and it has not changed:
+ * the prose, the tree, the spine, the granularity zoom and the keyboard are the
+ * product, they cost nothing to serve, and a stranger gets all of them. What
+ * differs is the `capability` prop, and the difference is not cosmetic — the
+ * hooks a visitor must not mount are not mounted anywhere below this line,
+ * because they were never called. They live in `OwnedReader`, one component up.
+ * reader-capability.ts says why a boolean could not have done it.
+ */
 function Reader({
   slug,
   article,
+  capability,
   onRenamed,
 }: {
   slug: string;
   article: Article;
-  /** Passed straight through to the masthead’s pencil — see Masthead.tsx. */
-  onRenamed: (slug: string, title: string) => void;
+  /** Whether this article is yours, and what comes with it. reader-capability.ts. */
+  capability: ReaderCapability;
+  /**
+   * Passed straight through to the masthead’s pencil — see Masthead.tsx.
+   *
+   * Absent for a visitor, and the masthead reads that absence as *do not offer
+   * the pencil*. A rename is a PATCH against a shelf row a visitor does not
+   * have, so the button could only ever fail, and a button that can only fail is
+   * worse than no button because pressing it is how you find out.
+   */
+  onRenamed?: ((slug: string, title: string) => void) | undefined;
 }) {
   useRenderCount("Reader");
+  /**
+   * The owner's half of the capability, or `null`.
+   *
+   * Narrowed once, here, so that every `owner ? … : …` below is the compiler
+   * checking the same fact rather than eight independent comparisons that could
+   * drift apart. The visitor's `available` is read the same way.
+   */
+  const owner = capability.kind === "owner" ? capability : null;
+  const available = capability.kind === "visitor" ? capability.available : null;
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -600,6 +934,23 @@ function Reader({
   const inMode = mode !== "toc";
 
   /**
+   * What stands between a visitor and the mode they have opened, if anything.
+   *
+   * `null` for the owner and `null` for `toc`, which is the mode the whole
+   * feature is about: the table of contents, the granularity zoom and the spine
+   * are drawn from the tree in the payload the visitor already holds, so they
+   * cost nothing and a stranger gets all of them. visitor.ts.
+   */
+  const gap = owner ? null : visitorGap(mode, available);
+  /* The dimmed buttons in the bottom bar. Memoised because it builds a Set and
+     `Dock` takes it by identity; empty for the owner, which is the same object
+     every render. */
+  const marked = useMemo(
+    () => (owner ? EVERY_MODE_AVAILABLE : markedModes(available)),
+    [owner, available],
+  );
+
+  /**
    * An absent `cols` means "whatever fits", not "all of them". All of them is
    * 70rem of table, so on any laptop the obvious default buries a column
    * permanently under the pinned prose. The arithmetic lives in layout.ts, where
@@ -654,20 +1005,15 @@ function Reader({
    *
    * Note what is *not* here — no column, no change to `fit`, nothing threaded
    * through the layout arithmetic. That was the point of choosing a dialog.
+   *
+   * **Nothing here is fetched for a visitor.** `useComments` is mounted by
+   * `OwnedReader`; what arrives here is its result, or the module-level empty
+   * list — which is a constant rather than a fresh `[]` because half a dozen
+   * memos below key on it by identity. reader-capability.ts.
    */
   const [note, setNote] = useQueryState("note", noteParam);
-  const {
-    comments,
-    loaded: commentsLoaded,
-    loadFailed: commentsLoadFailed,
-    create: createComment,
-    edit: editComment,
-    noteThread,
-    retry,
-    deepen,
-    remove,
-    error: commentError,
-  } = useComments(slug);
+  const comments = owner?.comments.comments ?? NO_COMMENTS;
+  const commentError = owner?.comments.error ?? null;
 
   /**
    * The floating chat, and the passage it is about.
@@ -698,7 +1044,12 @@ function Reader({
   const [annotating, setAnnotating] = useState<
     { blockId: BlockId; quote: string; start: number } | null
   >(null);
-  const chatAnchors = useChatAnchors(slug);
+  /* `useChatAnchors` is mounted by `OwnedReader` too. A visitor gets the empty
+     list, so no mark is drawn and `overlay` below can never resolve to a
+     conversation — but the dialog is also gated on `owner` explicitly, because
+     "the list happens to be empty" is a much weaker guarantee than "the branch
+     does not exist". */
+  const chatSummaries = owner?.chatAnchors.summaries ?? NO_THREADS;
 
   /* Memoised, and this is a performance fix rather than tidiness. Both of these
      build a fresh array and a fresh Map, so calling them inline in the JSX
@@ -711,11 +1062,8 @@ function Reader({
      Keyed on `summaries`, which is the only input either one reads, so the work
      now happens when a conversation is added, renamed or deleted and at no
      other time. Found by a GPT Sol review, 2026-08-27. */
-  const chats = useMemo(() => anchored(chatAnchors.summaries), [chatAnchors.summaries]);
-  const chatCounts = useMemo(
-    () => countByBlock(chatAnchors.summaries),
-    [chatAnchors.summaries],
-  );
+  const chats = useMemo(() => anchored(chatSummaries), [chatSummaries]);
+  const chatCounts = useMemo(() => countByBlock(chatSummaries), [chatSummaries]);
 
   /**
    * What is in the floating slot, decided in one place.
@@ -729,7 +1077,12 @@ function Reader({
    * leaving the mode brings the panel back where the reader left it.
    */
   const overlay: ChatTarget | null =
-    mode === "chat" || mode === "review"
+    /* **`!owner` first, and it is not redundant.** A visitor's `chatDraft` is
+       never set and their summary list is empty, so both arms below already
+       resolve to `null` — but that is an argument from two other pieces of
+       state staying empty, and this is an argument from the branch not
+       existing. The floating chat dialog fetches a conversation on mount. */
+    !owner || mode === "chat" || mode === "review"
       ? null
       : (chatDraft ??
         /* **Only a chat may be opened here, and that is not a tidy-up.**
@@ -748,7 +1101,7 @@ function Reader({
            load, and a missing thread sat on "Starting…" forever. Asking for
            `=== "chat"` means the overlay opens only for a thread we can see is
            one. GPT Sol's review of the built code, finding 3. */
-        (thread && chatAnchors.summaries.find((t) => t.id === thread)?.kind === "chat"
+        (thread && chatSummaries.find((t) => t.id === thread)?.kind === "chat"
           ? { kind: "thread" as const, threadId: thread }
           : null));
 
@@ -780,8 +1133,8 @@ function Reader({
    * the opening fetch: `useJobs` polls for ever, and a reader who never opens
    * the band should not pay for a poller.
    */
-  const glossaryRead = useGlossaryRead(slug);
-  const terms = glossaryRead.glossary?.entries ?? [];
+  const glossaryRead = owner?.glossary ?? null;
+  const terms = glossaryRead?.glossary?.entries ?? NO_TERMS;
 
   /**
    * The glossary term the reader has *pressed* in the panel, of the many now
@@ -1147,10 +1500,20 @@ function Reader({
           constant is the word that decides it belongs here and not in a
           column. */}
       <Masthead article={article} slug={slug} onRenamed={onRenamed} />
+      {/* The statement, where a visitor's eye already is on arrival. The
+          *persistent* half of it is the chip in the bar below, which is sticky;
+          this is the sentence and the ask, which belong with the title. Not
+          dismissible: it is what this page is, not a notification.
+          PublicChrome.tsx. */}
+      {!owner && <SharedNotice />}
       <div className="controls">
-        {/* Leftmost, because the rail it names is leftmost — and before the
-            mode/contents split, because it is the one control that survives
-            both. See `spineToggle` above. */}
+        {/* First of all, before even the spine: what footing you are reading
+            on outranks every control that follows, and this bar is the one
+            piece of chrome that is on screen at every scroll position. */}
+        {!owner && <ViewOnlyChip />}
+        {/* Leftmost of the controls, because the rail it names is leftmost —
+            and before the mode/contents split, because it is the one control
+            that survives both. See `spineToggle` above. */}
         {spineToggle}
         {/* The granularity controls belong to the table-of-contents mode, so
             they go with it. Leaving them on screen in another mode would offer
@@ -1290,7 +1653,13 @@ function Reader({
              an anchor can be, and the one that draws no mark in the prose. The
              paragraph's opening words go into the composer so the reader can see
              which one they pressed; a six-character id is not something you can
-             check you clicked correctly. */
+             check you clicked correctly.
+
+             A visitor's press does nothing: opening a conversation costs a
+             model call, and the sentence saying so is one press away in the
+             Chat band rather than fired at them as a dialog they did not ask
+             for. */
+          if (!owner) return;
           void setNote(null);
           void setThread(null);
           setChatDraft({
@@ -1306,6 +1675,13 @@ function Reader({
         hitStrength={hitStrength}
         onSelect={(anchor) => {
           if (!anchor) return;
+          /* **The one control a visitor meets by accident**, since selecting
+             prose is something people do while reading rather than a button
+             they chose to press. So it is silent: they keep their selection and
+             the page does not grow a box about an account. The ask lives where
+             they went looking for something — the marked modes and the notice
+             under the title. */
+          if (!owner) return;
           /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
              call the reader had not asked for; then it opened an ask box; since
              2026-08-28 it opens a *comment* box, where saving is free and the
@@ -1324,7 +1700,7 @@ function Reader({
         }}
         onOpenComment={(id) => void setNote(id)}
       />
-      {annotating && (
+      {owner && annotating && (
         <AnnotateDialog
           anchor={annotating}
           onCancel={() => setAnnotating(null)}
@@ -1336,7 +1712,7 @@ function Reader({
                before sending, their words are already on disk. The reverse
                order — open the chat, save afterwards — loses the comment for
                exactly the reader who typed the most into it. */
-            void createComment({
+            void owner.comments.create({
               id,
               blockId: anchor.blockId,
               quote: anchor.quote,
@@ -1364,7 +1740,11 @@ function Reader({
           }}
         />
       )}
-      {overlay && (
+      {/* `owner &&` as well as `overlay &&`, and the compiler wants it for the
+          same reason the comment on `overlay` above gives: the narrowing has to
+          be visible at the branch, not inferred from two other pieces of state
+          being empty. */}
+      {owner && overlay && (
         <ChatDialog
           slug={slug}
           target={overlay}
@@ -1388,7 +1768,7 @@ function Reader({
                server's correction if the id we guessed was overruled, and the
                last word wins. */
             const from = chatDraft?.kind === "draft" ? chatDraft.sourceCommentId : undefined;
-            if (from) noteThread(from, id);
+            if (from) owner.comments.noteThread(from, id);
             setChatDraft(null);
             void setThread(id);
           }}
@@ -1398,11 +1778,11 @@ function Reader({
             setChatDraft(null);
             void setMode("chat");
           }}
-          onCreated={chatAnchors.add}
-          onDropped={chatAnchors.drop}
+          onCreated={owner.chatAnchors.add}
+          onDropped={owner.chatAnchors.drop}
         />
       )}
-      {!overlay && openComment && (
+      {owner && !overlay && openComment && (
         <CommentDialog
           comment={openComment}
           position={positionOf(ordered, note)}
@@ -1413,9 +1793,9 @@ function Reader({
           onPrev={() => goToComment(stepComment(ordered, note, -1))}
           onNext={() => goToComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
-          onRetry={() => retry(openComment.id)}
-          onDeepen={() => deepen(openComment.id)}
-          onEdit={(body) => void editComment(openComment.id, body)}
+          onRetry={() => owner.comments.retry(openComment.id)}
+          onDeepen={() => owner.comments.deepen(openComment.id)}
+          onEdit={(body) => void owner.comments.edit(openComment.id, body)}
           /* **Offered only when the conversation is really there.** The link on
              a comment is advisory — a reader can delete the chat and keep the
              note — so the summary list, not the stored id, decides whether
@@ -1423,7 +1803,7 @@ function Reader({
              "that conversation no longer exists" would be worse than passing
              none. */
           onOpenThread={
-            openComment.threadId && chatAnchors.summaries.some((c) => c.id === openComment.threadId)
+            openComment.threadId && chatSummaries.some((c) => c.id === openComment.threadId)
               ? () => {
                   const id = openComment.threadId;
                   if (!id) return;
@@ -1466,7 +1846,7 @@ function Reader({
             // Step to the neighbour rather than closing outright: deleting one
             // of five is a tidy-up, not a reason to lose the panel.
             const next = stepComment(ordered, note, 1) ?? stepComment(ordered, note, -1);
-            remove(openComment.id);
+            owner.comments.remove(openComment.id);
             void setNote(next);
           }}
         />
@@ -1493,7 +1873,19 @@ function Reader({
       {/* One component, mounted by two modes, keyed so that switching between
           them starts clean rather than carrying the other's open conversation,
           focus nonce and stance across. See ConversationBand. */}
-      {(mode === "chat" || mode === "review") && (
+      {/* **A visitor gets one band and it is a sentence.** Not a dimmed button
+          that answers a press with nothing, and not a tooltip — NN/G's rule is
+          that a tooltip may never be the only place needed information lives,
+          and a hover tooltip is out of reach of touch and keyboard entirely.
+          So the marked mode still opens its band, in the same slot at the same
+          width, and the band says which of the four boundaries this is.
+          PublicChrome.tsx, visitor.ts.
+
+          Placed above the real bands rather than woven into each of their
+          conditions, so that a mode added later cannot arrive without one:
+          `visitorGap` answers for every member of `Mode` and fails closed. */}
+      {!owner && gap && <VisitorBand gap={gap} />}
+      {owner && (mode === "chat" || mode === "review") && (
         <ConversationBand
           key={mode}
           slug={slug}
@@ -1503,7 +1895,11 @@ function Reader({
           onMode={setMode}
         />
       )}
-      {mode === "glossary" && (
+      {/* `glossaryRead &&` rather than `owner &&`, and it is the same test: the
+          read is non-null exactly when the article is yours. Written this way
+          because it is also the narrowing the band needs — a band with no read
+          to hand it has nothing to draw. */}
+      {glossaryRead && mode === "glossary" && (
         <GlossaryBand
           slug={slug}
           read={glossaryRead}
@@ -1511,11 +1907,13 @@ function Reader({
           onSelected={setTerm}
         />
       )}
-      {mode === "summary" && (
+      {owner && mode === "summary" && (
         <SummaryBand slug={slug} article={article} onJump={jumpTo} />
       )}
-      {mode === "diagram" && <DiagramBand slug={slug} article={article} onJump={jumpTo} />}
-      {mode === "ideas" && (
+      {owner && mode === "diagram" && (
+        <DiagramBand slug={slug} article={article} onJump={jumpTo} />
+      )}
+      {owner && mode === "ideas" && (
         <IdeasBand
           slug={slug}
           blocks={article.blocks}
@@ -1525,7 +1923,7 @@ function Reader({
           onOpenKey={setOpenOccurrence}
         />
       )}
-      {mode === "search" && (
+      {owner && mode === "search" && (
         <SearchBand
           slug={slug}
           blocks={article.blocks}
@@ -1585,20 +1983,34 @@ function Reader({
             void setShowSpine(null);
           }
         }}
-        drawer={{
-          comments: ordered,
-          loaded: commentsLoaded,
-          loadFailed: commentsLoadFailed,
-          panel,
-          onPanel: (next) => void setPanel(next),
-          onOpenComment: (id) => {
-            // Close the drawer on the way through: the dialog it opens would
-            // otherwise be underneath the dim, which looks exactly like nothing
-            // happening.
-            void setPanel(null);
-            goToComment(id);
-          },
-        }}
+        /* Which mode buttons are drawn dimmed. Empty for the owner, so the bar
+           is exactly what it was; derived from `MODES` for a visitor, so a mode
+           added later is marked whether or not whoever adds it remembers.
+           visitor.ts § markedModes. */
+        marked={marked}
+        drawer={
+          owner
+            ? {
+                comments: ordered,
+                loaded: owner.comments.loaded,
+                loadFailed: owner.comments.loadFailed,
+                panel,
+                onPanel: (next) => void setPanel(next),
+                onOpenComment: (id) => {
+                  // Close the drawer on the way through: the dialog it opens
+                  // would otherwise be underneath the dim, which looks exactly
+                  // like nothing happening.
+                  void setPanel(null);
+                  goToComment(id);
+                },
+              }
+            : /* The drawer still opens, and what is in it is the sentence about
+                 whose comments these would be. The alternative — no drawer, so
+                 the Comments button becomes a link back to the page it is
+                 already on — is a control that does nothing, which is the thing
+                 the marked-not-hidden rule exists to avoid. */
+              { visitor: true, panel, onPanel: (next) => void setPanel(next) }
+        }
       />
     </div>
   );

@@ -183,6 +183,7 @@ import { timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { AccessSharing } from "./AccessSharing.js";
 import { ProfileBox } from "./ProfileBox.js";
 
 /**
@@ -394,6 +395,21 @@ export function Metadata({
    * same three terms written out again.
    */
   const showingFixture = provenance?.dir === "example" && slug !== "example";
+  /**
+   * Whether to offer the controls that write to this article's shelf row.
+   *
+   * Two conditions, and both are the same rule: there has to *be* a row, and we
+   * have to know there is. `provenance` is null both before the request lands
+   * and after it fails, so `showingFixture` is false in a state that is really
+   * "not yet told" — and the controls behind it (the pencil, the sharing
+   * switch) all end in a request that would 404 against an address with no row.
+   * A control that can only fail is worse than no control, because pressing it
+   * is how you find out. GPT Sol drew the line for the pencil, 2026-08-27; the
+   * sharing switch joined it on 2026-08-28.
+   *
+   * One derivation rather than the same two terms written out at each site.
+   */
+  const hasShelfRow = provenance !== null && !showingFixture;
   const facts = [meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
 
   /**
@@ -455,7 +471,7 @@ export function Metadata({
              pressing it PATCHes a row that does not exist. Withheld until the
              answer is in, which is the same standard Delete holds itself to a
              few sections down. GPT Sol, 2026-08-27. */
-          offer={provenance !== null && !showingFixture}
+          offer={hasShelfRow}
           inputClassName="tw:font-prose tw:text-2xl tw:leading-snug"
         >
           <h1 className="tw:m-0 tw:min-w-0 tw:flex-1 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
@@ -733,7 +749,22 @@ export function Metadata({
           </div>
         </Section>
 
-        {/* --------------------------------------------- 6. not built yet --
+        {/* ------------------------------------------ 6. access & sharing --
+            Between "your reading" and the two lists that are about the app
+            rather than about this article: it is a decision about *this*
+            document, so it belongs with the other things the owner sets here,
+            and it is above Delete for the same reason Delete is last — nothing
+            destructive sits above something somebody came here to read.
+
+            **Not offered on the fixture.** That address has no row of its own
+            (`showingFixture` above), so the `PUT` behind the switch would 404,
+            and a control that can only fail is worse than no control because
+            pressing it is how you find out. The same rule Delete follows, and
+            withheld until `provenance` has landed for the same reason: `null`
+            is "not yet told" as much as it is "not the fixture". */}
+        <SharingSection slug={slug} title={meta.title} offer={hasShelfRow} />
+
+        {/* --------------------------------------------- 7. not built yet --
             Dimmed rows rather than absence, because absence is indistinguishable
             from an oversight. Same tooltip convention as the bar's placeholder
             buttons (Dock.tsx): what the thing would be, and what the previous
@@ -778,7 +809,7 @@ export function Metadata({
           </TooltipGroup>
         </Section>
 
-        {/* ------------------------------------------------ 7. deleting it --
+        {/* ------------------------------------------------ 8. deleting it --
             Last on the page, and last on purpose: a destructive control belongs
             past everything somebody might have come here to read, not beside
             it. Under "not built yet" rather than over it for the same reason —
@@ -812,6 +843,32 @@ export function Metadata({
  * the failed request had no way to establish. Found by a cross-model review,
  * 2026-08-27.
  */
+/**
+ * The sharing switch, and the decision about whether to offer it at all.
+ *
+ * A component rather than a `{hasShelfRow && …}` in the page body, because the
+ * body is one long return and each conditional in it costs against a complexity
+ * budget this file is already at the edge of. Moving the test in here is free
+ * and it keeps the section's heading and its content together.
+ */
+function SharingSection({
+  slug,
+  title,
+  offer,
+}: {
+  slug: string;
+  title: string;
+  /** There is a shelf row and we know it — `hasShelfRow` in `Metadata`. */
+  offer: boolean;
+}) {
+  if (!offer) return null;
+  return (
+    <Section label="Access & sharing">
+      <AccessSharing slug={slug} title={title} />
+    </Section>
+  );
+}
+
 function AboutYou({ profile, failed }: { profile: string | null; failed: boolean }) {
   return (
     <p className="tw:mt-1 tw:mb-0 tw:font-prose tw:text-sm tw:text-muted-foreground">
