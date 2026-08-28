@@ -1,0 +1,17 @@
+1. **Blocker — raw source data is deliberately lost.** [store-roundtrip.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/store-roundtrip.test.ts:506) expects a bare raw document to disappear. `noema` has a real 176,736-byte `raw.html`; this contradicts the suite’s “loses nothing” contract and the rollback requirement. C6 owes a backfill that creates a marked reconstructed manifest and stores the existing bytes. The plan’s “nothing is at risk” claim is false: [delete-the-importer.md](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/plans/delete-the-importer.md:405) calls `noema` “nothing to lose,” despite its raw document.
+
+2. **High — `store-roundtrip` never establishes a clean load.** Its setup loads directly over the current revision without wiping or asserting `basedOn === null`: [store-roundtrip.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/store-roundtrip.test.ts:299). A previous importer revision can carry omitted artefacts and fetch columns into the result. The advisory lock prevents overlap but not contamination or test-order dependence. Its own documentation falsely says both suites delete revisions: [corpus-lock.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/helpers/corpus-lock.ts:6).
+
+3. **High — the comments seeder does not reproduce the importer’s identity writes.** [seed-reader-state.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/helpers/seed-reader-state.ts:139) deletes comments and inserts them without first minting identities for their block IDs. `db:import` mints the union of comment and chat anchors. A valid comment anchored to a paragraph absent from the current revision will fail its FK; because this is not transactional, the prior comments have already been deleted. Preserved `block_identities` make current parity runs hide this omission.
+
+   The remaining row payloads match field-for-field, including chat `tools`, `stopped`, `editedAt`, `stance`, search `sourceHash`, and `colour`. Shelf seeding additionally handles `purpose`, which the importer itself omitted.
+
+4. **Medium — the `addedAt` exemption is under-asserted for no-manifest articles.** [store-parity.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/store-parity.test.ts:628) accepts any Postgres timestamp older than one minute. A stale `articles.created_at` therefore passes after `addedAt` was removed from deep comparison. Compare exactly against `meta.fetchedAt`, or `blocks.json` mtime when absent. The test name “dates every card from the file” is stronger than the code.
+
+5. **Low — the library-order assertion knowingly tests a non-invariant.** [store-parity.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/store-parity.test.ts:710) says both stores may correctly order articles differently, then requires equality. Assert that each result is ordered by its own `addedAt`, with the intended tie-break, instead.
+
+6. **Low — the dynamic exclusion also accepts a missing `labels.json`.** [store-roundtrip.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/store-roundtrip.test.ts:280) and its guard treat a missing file exactly like a legacy unstamped file. Thus accidental deletion is reported as “predates sourceHash.” Assert that the file exists before asserting the missing field.
+
+I did not rerun the database-mutating suites in the shared workspace; these findings follow directly from the scoped code and supplied evidence.
+
+**STOP**

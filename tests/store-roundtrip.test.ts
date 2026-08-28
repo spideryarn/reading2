@@ -22,18 +22,25 @@
  * Skips loudly when there is no database — see tests/db-schema.test.ts.
  */
 
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { closeDb } from "../src/db/client.js";
+import { and, eq } from "drizzle-orm";
+
+import { closeDb, getDb } from "../src/db/client.js";
+import { articles } from "../src/db/schema.js";
+import { currentOwnerId } from "../src/owner.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { SANITIZER_VERSION } from "../src/sanitize-policy.js";
 import { exportArticle, rawFileName } from "../src/store/export.js";
 import { sniffKind } from "../src/fetch.js";
-import { importArticle } from "../src/store/import.js";
+import { releaseCorpusLock, takeCorpusLock } from "./helpers/corpus-lock.js";
+import { forgetRevisions } from "./helpers/forget-revisions.js";
+import { loadArticleIntoPg } from "./helpers/load-article.js";
+import { seedReaderStateFromFiles } from "./helpers/seed-reader-state.js";
 
 loadEnvLocal();
 
@@ -118,6 +125,30 @@ function canonical(artefact: string, value: unknown): unknown {
     return rest;
   }
 
+  /* **`meta.json`'s two stage-1 fields, which a round trip through Postgres
+     does not preserve and cannot.**
+
+     `url` and `fetchedAt` are what stage 1 recorded, and `article_revisions`
+     takes them from `raw.json`. `meta.json` has its own copies: `src/extract.ts`
+     writes `fetchedAt: new Date()` on every run, so the filesystem's number is
+     when *extraction* last happened, and the two are minutes apart across most
+     of `data/`. An export therefore writes the fetch time where the original
+     said the extraction time — and for an article with no manifest at all it
+     writes neither, because there was no stage 1 to have recorded them.
+
+     `db:import` hid this by writing `meta.fetchedAt` into
+     `article_revisions.fetched_at`, which is the column `META_COLUMNS`
+     deliberately does not let `extract` touch (src/store/artifacts-pg.ts).
+
+     Dropped from both sides so the comparison stays about the extraction, and
+     asserted positively by "exports the fetch time and the final URL from the
+     manifest" below — which is the half a normalisation like this would
+     otherwise quietly delete. */
+  if (artefact === "meta.json" && value && typeof value === "object") {
+    const { fetchedAt: _fetchedAt, url: _url, ...rest } = value as Record<string, unknown>;
+    return rest;
+  }
+
   const key = { "comments.json": "comments", "searches.json": "runs", "chat.json": "threads" }[
     artefact
   ];
@@ -187,6 +218,8 @@ async function readJsonIfPresent(file: string): Promise<unknown | undefined> {
 
 let reachable = false;
 let slugs: readonly string[] = [];
+/** Articles in `data/` the publication gate refuses — see the scan below. */
+const unpublishable: string[] = [];
 
 if (process.env.DATABASE_URL) {
   const { Pool } = await import("pg");
@@ -233,7 +266,35 @@ if (process.env.DATABASE_URL) {
       const files: string[] = await readdir(path.join(ROOT, "data", entry.name)).catch(
         () => [] as string[],
       );
-      if (files.includes("blocks.json") && files.includes("tree.json")) found.push(entry.name);
+      if (!files.includes("blocks.json") || !files.includes("tree.json")) continue;
+      /* **An article that cannot be published cannot be exported**, and there is
+         one in `data/`. `labels.json` is stage 4's output, and one written
+         before it recorded a `sourceHash` gives the publication gate nothing to
+         check the ToC against — so `publishRevision` refuses, correctly, and
+         `exportArticle` then finds no current revision. `db:import` never met
+         this because it wrote `hashBlocks(blocks)` into every step row whether
+         or not the artefact could support the claim.
+
+         Excluded by asking the question rather than by naming `constitution`,
+         so a regenerated fixture rejoins the corpus on its own. What was
+         excluded, and why, is asserted below. */
+      /* **A missing `labels.json` is a different fact from a legacy one**, and
+         collapsing them would report an accidental deletion as "predates
+         sourceHash". An article with a tree and no labels file is broken and
+         should fail loudly rather than be quietly dropped from the corpus, so
+         it stays in and whatever reads it says so. GPT Sol, 2026-08-28. */
+      if (!files.includes("labels.json")) {
+        found.push(entry.name);
+        continue;
+      }
+      const labels = (await readJsonIfPresent(
+        path.join(ROOT, "data", entry.name, "labels.json"),
+      )) as { sourceHash?: string } | undefined;
+      if (!labels?.sourceHash) {
+        unpublishable.push(entry.name);
+        continue;
+      }
+      found.push(entry.name);
     }
     slugs = found;
   }
@@ -245,24 +306,80 @@ let out = "";
 
 when("a round trip through Postgres", () => {
   beforeAll(async () => {
+    /* This suite loads every real article in `data/`, and so does
+       tests/store-parity.test.ts. One at a time — see the helper for the
+       interleaving that made parity fail on a green codebase. */
+    await takeCorpusLock();
+    /* **From nothing, the same as parity, and for the same reason.** Loading
+       over a published revision means `beginDraftIn` carries its columns,
+       blocks and step rows into the draft — so an artefact this path never
+       wrote can be exported and compared and match, because it came from
+       whatever loaded the article last time. The result was a round trip that
+       looked complete and was measuring `db:import`. GPT Sol, 2026-08-28: the
+       advisory lock stops two suites overlapping, and does nothing at all about
+       contamination. */
+    await forgetRevisions(slugs);
     out = await mkdtemp(path.join(tmpdir(), "spideryarn-rollback-"));
     for (const slug of slugs) {
-      await importArticle(slug);
+      /* **The artefact half goes through the production write path**, and the
+         reader's own state is seeded beside it. `db:import` did both in one
+         call and is being deleted (docs/plans/delete-the-importer.md § C7);
+         `ArtifactStore` owns artefacts and deliberately owns nothing a reader
+         made, so the round trip's two claims are now made by two things.
+
+         `createdAt` mirrors the filesystem's own rule for when an article
+         arrived — `meta.fetchedAt` where stage 2 recorded one, the blocks
+         file's mtime otherwise — because a draft minted today would date every
+         exported directory today. */
+      const meta = (await readJsonIfPresent(
+        path.join(ROOT, "data", slug, "meta.json"),
+      )) as { fetchedAt?: string } | undefined;
+      const mtime = (await stat(path.join(ROOT, "data", slug, "blocks.json"))).mtime;
+      const loaded = await loadArticleIntoPg(slug, {
+        createdAt: meta?.fetchedAt ? new Date(meta.fetchedAt) : mtime,
+      });
+      /* Asserted here rather than in a test of its own, because everything
+         below depends on it and a `beforeAll` that carried an article forward
+         should stop the suite rather than colour eighty assertions. */
+      if (loaded.basedOn !== null) {
+        throw new Error(
+          `${slug} was loaded on top of revision ${loaded.basedOn} — the round trip would be ` +
+            "measuring whatever published that one. Something wrote it between the wipe above " +
+            "and here; the corpus lock is meant to prevent exactly that.",
+        );
+      }
+      await seedReaderStateFromFiles(slug);
       await exportArticle(slug, {
         dataRoot: path.join(out, "data"),
         // Inside the temp directory, explicitly. See ExportTarget.
         outputRoot: path.join(out, "output"),
       });
     }
-  }, 120_000);
+  }, 300_000);
 
   afterAll(async () => {
     if (out) await rm(out, { recursive: true, force: true });
+    await releaseCorpusLock();
     await closeDb();
   });
 
   it("has something to round-trip", () => {
     expect(slugs.length).toBeGreaterThan(0);
+  });
+
+  it("excluded only articles whose labels file predates sourceHash", async () => {
+    /* The exclusion above is a filter, and a filter nobody checks is how a
+       corpus quietly empties. Each excluded article has to have the one defect
+       that justifies it. */
+    for (const slug of unpublishable) {
+      const labels = (await readJsonIfPresent(path.join(ROOT, "data", slug, "labels.json"))) as
+        | { sourceHash?: string }
+        | undefined;
+      // The file must EXIST and lack the field. A deleted labels file is a
+      // broken article, not a legacy one, and must not be excluded quietly.
+      expect(labels, `${slug} was excluded but has no labels.json at all`).toBeDefined();
+      expect(labels?.sourceHash, `${slug} was excluded but its labels file is stamped`).toBeUndefined();
+    }
   });
 
   /**
@@ -304,6 +421,65 @@ when("a round trip through Postgres", () => {
     expect(stances).toBeGreaterThan(0);
   });
 
+  /**
+   * **The reader's own "why you're reading this one", which nothing in `data/`
+   * has — so nothing caught it going missing.**
+   *
+   * `ShelfState.purpose` is the per-article half of the reader profile
+   * (docs/plans/reader-profile.md) and lives on `articles.purpose`, deliberately
+   * off the revision so a re-extraction cannot undo it. `db:export` wrote four
+   * of the five shelf columns and not that one, and decided *whether to write
+   * the file at all* from the same four — so an article whose only shelf state
+   * is a purpose exported no `shelf.json`, and one with other state exported a
+   * file with the purpose quietly missing.
+   *
+   * It has no fixture because no `shelf.json` in `data/` carries one, which is
+   * exactly why the round trip above cannot see it: every assertion in this file
+   * compares against the corpus, and the corpus is silent about this field.
+   * `db:import` did not import it either — that one goes with the importer.
+   *
+   * Both halves are checked here: the file is written for an article with
+   * nothing else on its card, and the value comes back.
+   */
+  it("exports the reader's purpose, and writes a shelf file for it alone", async () => {
+    const slug = slugs[0];
+    if (!slug) throw new Error("no article to test with");
+    const db = getDb();
+    const mine = and(eq(articles.ownerId, currentOwnerId()), eq(articles.slug, slug));
+    const purpose = "because I keep arguing about it and losing";
+    const [before] = await db
+      .select({
+        archivedAt: articles.archivedAt,
+        titleOverride: articles.titleOverride,
+        opens: articles.opens,
+        lastOpenedAt: articles.lastOpenedAt,
+        purpose: articles.purpose,
+      })
+      .from(articles)
+      .where(mine);
+    if (!before) throw new Error(`${slug} is not in Postgres`);
+
+    const dir = await mkdtemp(path.join(tmpdir(), "spideryarn-purpose-"));
+    try {
+      /* Nothing on the card but the purpose — the case that decided whether a
+         file was written at all. */
+      await db
+        .update(articles)
+        .set({ archivedAt: null, titleOverride: null, opens: 0, lastOpenedAt: null, purpose })
+        .where(mine);
+      await exportArticle(slug, {
+        dataRoot: path.join(dir, "data"),
+        outputRoot: path.join(dir, "output"),
+      });
+      const shelf = await readJsonIfPresent(path.join(dir, "data", slug, "shelf.json"));
+      expect(shelf, "no shelf.json was written for an article whose only state is a purpose").toBeDefined();
+      expect(shelf).toMatchObject({ purpose });
+    } finally {
+      await db.update(articles).set(before).where(mine);
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   describe.each(slugs)("%s", (slug) => {
     it.each(ARTEFACTS)("preserves %s exactly", async (artefact) => {
       const original = await readJsonIfPresent(path.join(ROOT, "data", slug, artefact));
@@ -341,12 +517,52 @@ when("a round trip through Postgres", () => {
      *
      * Bytes, not JSON, so this cannot join `it.each(ARTEFACTS)`.
      */
+    it("exports the fetch time and the final URL from the manifest", async () => {
+      /* The price of dropping those two keys above. Whatever the export writes
+         has to be traceable to `raw.json`, and an article with no manifest has
+         to come back with neither rather than with something invented. */
+      const manifest = (await readJsonIfPresent(path.join(ROOT, "data", slug, "raw.json"))) as
+        | { url?: string; fetchedAt: string }
+        | undefined;
+      const returned = (await readJsonIfPresent(path.join(out, "data", slug, "meta.json"))) as
+        | { url?: string; fetchedAt?: string }
+        | undefined;
+
+      expect(returned).toBeDefined();
+      expect(returned?.fetchedAt).toBe(manifest?.fetchedAt);
+      expect(returned?.url).toBe(manifest?.url);
+    });
+
     it("preserves the raw document under its own name", async () => {
       const original = await readRawIfPresent(path.join(ROOT, "data", slug));
       const returned = await readRawIfPresent(path.join(out, "data", slug));
 
       if (original === undefined) {
         expect(returned).toBeUndefined();
+        return;
+      }
+
+      /* **A document with no manifest beside it does not survive the round
+         trip, and saying so is the point.**
+
+         The `raw` step's artefact *is* the manifest: `raw.json` names the object
+         in the bucket by `storedSha256`, and that reference is what the
+         revision stores. An article with a bare `raw.html` and no `raw.json` —
+         `noema-mythology-of-conscious-ai` is one, hand-assembled before
+         manifests — therefore copies no `fetch` step at all, and the export has
+         no object to write.
+
+         `db:import` read the bare file into `article_revisions.raw_bytes`, and
+         C6 dropped that column, so this is a loss the migration makes rather
+         than one it found. It is confined to legacy filesystem data: no path
+         today writes a raw document without a manifest, and the two acquisition
+         paths in src/pipeline.ts both call `storeRawSource` before writing one.
+
+         Asserted rather than skipped, so the day something starts exporting it
+         this goes red and somebody has to decide what happened. */
+      const manifest = await readJsonIfPresent(path.join(ROOT, "data", slug, "raw.json"));
+      if (manifest === undefined) {
+        expect(returned, `${slug} has no raw.json, so nothing names its document`).toBeUndefined();
         return;
       }
 

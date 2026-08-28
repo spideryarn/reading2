@@ -20,17 +20,67 @@
  * distinction is checked by `toStrictEqual` and by explicit `in` assertions,
  * not by this.
  *
- * **These import into the local database as part of the run.** That is
- * deliberate: a parity test that needed someone to have run the importer first
- * would silently pass on stale rows, comparing today's files against last
- * week's import. The importer is idempotent, so this is cheap.
+ * ## The corpus is loaded through the real write path, from nothing
+ *
+ * This used to call `importArticle`, and `db:import` is being deleted
+ * (docs/plans/delete-the-importer.md § C7). The replacement is not a smaller
+ * importer: `loadArticleIntoPg` drives the *production* seam — `storeRawSource`,
+ * a fenced `jobs` row, `openOrBeginJobDraft`, `beginStep`/`write`/`finishStep`
+ * per step, then `publishRevision` with its guards run rather than routed
+ * around. What used to be "the importer and the pipeline agree with each other"
+ * is now "the pipeline's own write path and the filesystem agree".
+ *
+ * **And every revision is deleted first, which is not tidiness — it is the
+ * whole claim.** `beginDraftIn` carries a published revision's columns, blocks
+ * and step-run rows forward into the new draft, so an article some earlier run
+ * put in Postgres reads back *perfectly* through columns this path never wrote.
+ * The first sweep of this corpus reported `noema` byte-identical when it could
+ * not have been: it has no `raw.json`, nothing writes `final_url`, and the
+ * matching value was last week's import showing through. Every load below
+ * therefore asserts `basedOn === null` — a load that carried is not a load.
+ * GPT Sol, 2026-08-28.
+ *
+ * **The revisions, and not the article.** `basedOn` is `articles
+ * .current_revision_id`, so clearing the pointer and the revisions behind it is
+ * all the claim needs — and it leaves the article row, its block identities and
+ * everything anchored to them alone. Deleting the article instead cascades
+ * through comments, chat, searches and identities, and does it while other test
+ * files are running against the same database: vitest runs files concurrently,
+ * and an article that vanishes for two seconds fails whoever was reading it for
+ * a reason that has nothing to do with them. Scoped to `currentOwnerId()`, so a
+ * mis-set `DATABASE_URL` pointing at somebody else's articles takes nothing.
+ *
+ * ## What the two stores genuinely disagree about, and why it is not a bug
+ *
+ * Three differences survive a clean load, all of them real and all of them
+ * asserted positively rather than normalised away:
+ *
+ * 1. **`fetchedAt` is stage 1's clock in Postgres and stage 2's on disk.**
+ *    `src/extract.ts` writes `new Date().toISOString()` into `meta.json` every
+ *    time it runs, so the filesystem's "fetched at" is really "extracted at".
+ *    Postgres takes the column from `raw.json`, which is when the document was
+ *    actually fetched. Postgres is right — see the note on `META_COLUMNS` in
+ *    src/store/artifacts-pg.ts, which is why `extract` is not allowed to write
+ *    that column. The importer papered over it by writing `meta.fetchedAt` into
+ *    `article_revisions.fetched_at`, which is how this went unnoticed.
+ * 2. **An article with no `raw.json` has no `url` and no `fetchedAt` in
+ *    Postgres.** Those are stage 1's facts; with no stage 1 there is nothing to
+ *    write them from, and `meta.json` having copies of them is stage 2 having
+ *    copied what it was handed. `noema-mythology-of-conscious-ai` is that
+ *    article and it gets its own test.
+ * 3. **A comment anchored to something that is not a block id is counted by the
+ *    files and cannot exist in Postgres** — see the note in the library test.
+ *
+ * `constitution` is a fourth thing, and it is not a disagreement at all: it
+ * refuses to publish, correctly, because its `labels.json` predates
+ * `sourceHash`. It is out of the corpus with a test of its own.
  *
  * Skips loudly when there is no database, for the reason
  * tests/db-schema.test.ts explains at length: a skipped test protects nothing,
  * so the run must say "skipped" rather than "passed".
  */
 
-import { readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -46,13 +96,31 @@ import { loadShelf } from "../src/shelf.js";
 import { fsArticleReader, fsCommentStore, fsLibrarySearch, fsSearchStore } from "../src/store/fs.js";
 import { pgLibrarySearch } from "../src/store/pg-shelf.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
-import { importArticle } from "../src/store/import.js";
 import { pgArticleReader } from "../src/store/pg.js";
-import type { LibraryEntry } from "../src/types.js";
+import type { Article, LibraryEntry, Meta } from "../src/types.js";
+import { releaseCorpusLock, takeCorpusLock } from "./helpers/corpus-lock.js";
+import { forgetRevisions } from "./helpers/forget-revisions.js";
+import { type LoadedArticle, loadArticleIntoPg } from "./helpers/load-article.js";
+import { seedCommentsFromFiles, seedShelfFromFiles } from "./helpers/seed-reader-state.js";
 
 loadEnvLocal();
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+
+/**
+ * The article that cannot be published, and is in `data/` on purpose.
+ *
+ * Its `labels.json` was written before stage 4 recorded a `sourceHash`, so the
+ * publication gate has nothing to check the ToC against and refuses. That is
+ * the correct answer to real legacy data, and the importer never met it because
+ * it stamped every step row `done` with a hash it computed itself. Kept out of
+ * the corpus below and given its own test, so the corpus can assert unqualified
+ * equality. GPT Sol's decision 1, 2026-08-28.
+ */
+const LEGACY_SLUG = "constitution";
+
+/** The article with no stage 1, and therefore no `url` and no `fetchedAt`. */
+const NO_FETCH_SLUG = "noema-mythology-of-conscious-ai";
 
 /** Thrown to roll a transaction back once its assertions have run. */
 class RollBack extends Error {}
@@ -60,6 +128,16 @@ class RollBack extends Error {}
 /** The wire form: what the client actually receives. */
 function wire<T>(value: T): unknown {
   return JSON.parse(JSON.stringify(value));
+}
+
+/** One of an article's JSON files, or `null` when it has none. */
+async function readArticleJson<T>(slug: string, file: string): Promise<T | null> {
+  try {
+    return JSON.parse(await readFile(path.join(ROOT, "data", slug, file), "utf8")) as T;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw err;
+  }
 }
 
 /**
@@ -83,7 +161,7 @@ function wire<T>(value: T): unknown {
  * module load and once before importing. It never was. GPT Sol caught it in
  * review, 2026-08-26.)
  */
-async function importableSlugs(): Promise<string[]> {
+async function completeArticles(): Promise<string[]> {
   const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
   const slugs: string[] = [];
   for (const entry of entries) {
@@ -110,6 +188,9 @@ async function importableSlugs(): Promise<string[]> {
  * reports "skipped" rather than a green tick for having checked nothing.
  */
 let reachable = false;
+/** Everything on disk, the legacy article included. */
+let onDiskSlugs: readonly string[] = [];
+/** The publishable corpus: everything except the legacy article. */
 let slugs: readonly string[] = [];
 
 if (process.env.DATABASE_URL) {
@@ -143,32 +224,94 @@ if (process.env.DATABASE_URL) {
   if (!reachable) {
     console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
   }
-  if (reachable) slugs = await importableSlugs();
+  if (reachable) {
+    onDiskSlugs = await completeArticles();
+    slugs = onDiskSlugs.filter((slug) => slug !== LEGACY_SLUG);
+  }
 }
 
 const when = reachable ? describe : describe.skip;
 
 afterAll(async () => {
+  await releaseCorpusLock();
   await closeDb();
 });
 
 when("the filesystem and Postgres stores agree", () => {
+  /** What each load reported, so the tests can assert on it rather than assume. */
+  const loaded = new Map<string, LoadedArticle>();
+
   beforeAll(async () => {
-    for (const slug of slugs) await importArticle(slug);
-  }, 60_000);
+    /* Blocks until no other suite is loading the corpus — see the helper. */
+    await takeCorpusLock();
+
+    await forgetRevisions([...onDiskSlugs]);
+    for (const slug of slugs) {
+      /* **The fixture supplies the history the real path gets from a clock.**
+         On an ingest, `articles.created_at` is `now()` and that is honestly
+         when the article arrived. A fixture loaded today has to say when it
+         arrived *then*, or every card would be dated today and the library
+         order would be the order this loop happens to run in.
+
+         The rule mirrors the filesystem's own: `src/api.ts` takes `addedAt`
+         from `meta.fetchedAt` where stage 2 recorded one and the mtime of
+         `blocks.json` otherwise — the noema article's `meta.json` says so in
+         its own `note`, having been hand-written without one. */
+      const meta = await readArticleJson<{ fetchedAt?: string }>(slug, "meta.json");
+      const mtime = (await stat(path.join(ROOT, "data", slug, "blocks.json"))).mtime;
+      const result = await loadArticleIntoPg(slug, {
+        createdAt: meta?.fetchedAt ? new Date(meta.fetchedAt) : mtime,
+      });
+      loaded.set(slug, result);
+      /* Reader state does not come through the artefact seam and must not be
+         made to — see tests/helpers/seed-reader-state.ts. Without it every
+         archived article would be on the Postgres shelf and off the filesystem
+         one, and every comment count would be zero. */
+      await seedShelfFromFiles(slug);
+      await seedCommentsFromFiles(slug);
+    }
+  }, 300_000);
 
   it("has something to compare", () => {
     // A parity suite over zero articles passes perfectly and proves nothing.
     expect(slugs.length).toBeGreaterThan(0);
   });
 
+  it("built every article from nothing, rather than carrying one forward", () => {
+    /* The load's own report, asserted rather than assumed. `basedOn` non-null
+       means the draft inherited a published revision's columns, blocks and step
+       rows — and then every comparison below would be measuring whatever put
+       that revision there, not this write path. An empty `copied` would mean the
+       filesystem store had nothing and the article in Postgres is entirely
+       inherited. */
+    for (const slug of slugs) {
+      const result = loaded.get(slug);
+      expect(result, `${slug} was never loaded`).toBeDefined();
+      expect(result?.basedOn, `${slug} carried a previous revision forward`).toBeNull();
+      expect(result?.published, `${slug} did not publish`).toBe(true);
+      expect(result?.copied.length, `${slug} copied no steps`).toBeGreaterThan(0);
+    }
+  });
+
   describe.each(slugs)("%s", (slug) => {
+    /**
+     * `meta` without the two fields stage 1 owns and stage 2 merely copied.
+     *
+     * Both are compared, per slug, in the test below this one — as equalities
+     * against the file each store actually reads, not as an exemption that
+     * asserts nothing.
+     */
+    function comparable(article: Article): Omit<Article, "meta"> & { meta: Omit<Meta, "url" | "fetchedAt"> } {
+      const { url: _url, fetchedAt: _fetchedAt, ...meta } = article.meta;
+      return { ...article, meta };
+    }
+
     it("returns an identical Article", async () => {
       const [fromFiles, fromPg] = await Promise.all([
         fsArticleReader.loadArticle(slug),
         pgArticleReader.loadArticle(slug),
       ]);
-      expect(wire(fromPg)).toEqual(wire(fromFiles));
+      expect(wire(comparable(fromPg))).toEqual(wire(comparable(fromFiles)));
       /* And again WITHOUT serialising, because the two assertions catch
          different things. `toStrictEqual` is the only one that separates
          `{ byline: undefined }` from `{}` — `JSON.stringify` deletes the key
@@ -177,7 +320,30 @@ when("the filesystem and Postgres stores agree", () => {
          conditionally so that a null column becomes an absent property rather
          than an explicit `undefined` one, and nothing was checking that it
          had. Added after GPT Sol's review, 2026-08-26. */
-      expect(fromPg).toStrictEqual(fromFiles);
+      expect(comparable(fromPg)).toStrictEqual(comparable(fromFiles));
+    });
+
+    it("takes url and fetchedAt from stage 1 in Postgres and from stage 2 on disk", async () => {
+      /* **The price of the exemption above, and it is paid in both directions.**
+         Dropping two fields from a comparison is only honest if something else
+         says where each store's copy came from. Postgres reads the columns
+         `fetch` wrote, so its answers must equal `raw.json`; the filesystem
+         reads `meta.json`, so its answers must equal that. An article with no
+         `raw.json` has nothing to have written them, and Postgres correctly has
+         neither — which is the whole of the noema case, asserted here for every
+         article rather than only for that one. */
+      const [fromFiles, fromPg] = await Promise.all([
+        fsArticleReader.loadArticle(slug),
+        pgArticleReader.loadArticle(slug),
+      ]);
+      const raw = await readArticleJson<{ url?: string; fetchedAt: string }>(slug, "raw.json");
+      const meta = await readArticleJson<{ url?: string; fetchedAt?: string }>(slug, "meta.json");
+
+      expect(fromFiles.meta.url).toBe(meta?.url);
+      expect(fromFiles.meta.fetchedAt).toBe(meta?.fetchedAt);
+
+      expect(fromPg.meta.url).toBe(raw?.url);
+      expect(fromPg.meta.fetchedAt).toBe(raw?.fetchedAt);
     });
 
     it("returns the blocks in the same order, by id", async () => {
@@ -233,6 +399,104 @@ when("the filesystem and Postgres stores agree", () => {
     }
   });
 
+  it("has at least one article whose two clocks really differ", async () => {
+    /* **So the exemption cannot quietly become dead normalization.** If every
+       fixture happened to have `raw.json.fetchedAt === meta.json.fetchedAt` —
+       and `writes` does, which is how tempting this is — then dropping the
+       field from the comparison would be free, and the day the two stores
+       started disagreeing about something real in that field nothing here would
+       notice. GPT Sol asked for this by name, 2026-08-28. */
+    const differing: string[] = [];
+    for (const slug of slugs) {
+      const raw = await readArticleJson<{ fetchedAt: string }>(slug, "raw.json");
+      const meta = await readArticleJson<{ fetchedAt?: string }>(slug, "meta.json");
+      if (raw && meta?.fetchedAt && raw.fetchedAt !== meta.fetchedAt) differing.push(slug);
+    }
+    expect(differing.length, "every fixture's fetch and extract times agree — the two-clock exemption is checking nothing").toBeGreaterThan(0);
+  });
+
+  describe(`${LEGACY_SLUG} — legacy data the gate refuses`, () => {
+    /**
+     * **This article is not broken and neither is the gate.**
+     *
+     * `data/constitution/labels.json` was written before stage 4 recorded the
+     * `sourceHash` of the blocks it labelled. `publishRevision` requires the
+     * `toc` step's `input_hash` to equal `hashBlocks` of the revision's blocks
+     * (`reasonsNotToPublish`, src/store/pg-revisions.ts), and an unstamped
+     * labels file gives it nothing to compare — so it refuses, which is the
+     * right answer to a table of contents that might describe different text.
+     *
+     * `db:import` never met this, because it wrote `hashBlocks(blocks)` into
+     * every step row it created, including ones it had inferred from a file
+     * being on disk. So the importer manufactured the very provenance the gate
+     * exists to check.
+     *
+     * **If somebody regenerates the fixture, this test goes red — and the fix
+     * is to retire the case, not to restore the stale file.** Move the slug
+     * into the corpus above and delete this block.
+     */
+    it("has a labels file with no sourceHash", async () => {
+      const labels = await readArticleJson<{ sourceHash?: string }>(LEGACY_SLUG, "labels.json");
+      expect(labels, `data/${LEGACY_SLUG}/labels.json is missing`).not.toBeNull();
+      expect(labels?.sourceHash).toBeUndefined();
+    });
+
+    it("copies its steps and is then refused publication, saying why", async () => {
+      await forgetRevisions([LEGACY_SLUG]);
+      const result = await loadArticleIntoPg(LEGACY_SLUG, { publish: "try" });
+
+      // The copy worked: this is not "nothing happened".
+      expect(result.basedOn).toBeNull();
+      expect(result.copied).toContain("toc");
+      // And then the gate said no, for the one reason it should have.
+      expect(result.published).toBe(false);
+      expect(result.refusedBecause.join(" | ")).toMatch(/toc ran against unstamped/);
+    });
+
+    it("is therefore not an article either store will serve", async () => {
+      /* Both refuse, and both with a 404. The filesystem serves it — it has
+         blocks and a tree on disk and knows nothing about publication — so the
+         claim here is only about Postgres, and it is the honest one: a revision
+         that never published is not an article. */
+      await expect(pgArticleReader.loadArticle(LEGACY_SLUG)).rejects.toMatchObject({
+        status: 404,
+      });
+    });
+  });
+
+  describe(`${NO_FETCH_SLUG} — an article with no stage 1`, () => {
+    /**
+     * **The one article whose `meta` legitimately loses two fields.**
+     *
+     * It has no `raw.json`: it was hand-assembled, and `meta.json` says so in
+     * its own `note`. `url` and `fetchedAt` are stage 1's facts, written to the
+     * columns by the `fetch` step, and with no fetch step there is nothing to
+     * write them from. `meta.json` still carries both because stage 2 copies
+     * what it is handed — but Postgres does not let `extract` write those
+     * columns, deliberately (src/store/artifacts-pg.ts § `META_COLUMNS`).
+     *
+     * **This is the case that proved the corpus had to be wiped.** On a
+     * database that had been imported into, this article compared byte-identical
+     * — the values were the previous import's, carried into the draft by
+     * `beginDraftIn` and never written by anything on this path.
+     */
+    it("copies no fetch step", () => {
+      expect(loaded.get(NO_FETCH_SLUG)?.copied).not.toContain("fetch");
+    });
+
+    it("keeps url and fetchedAt on disk and has neither in Postgres", async () => {
+      const [fromFiles, fromPg] = await Promise.all([
+        fsArticleReader.loadArticle(NO_FETCH_SLUG),
+        pgArticleReader.loadArticle(NO_FETCH_SLUG),
+      ]);
+      expect(fromFiles.meta.url).toMatch(/^https:\/\//);
+      expect(fromFiles.meta.fetchedAt).toMatch(/^\d{4}-/);
+      // Absent, not `undefined` and not `null`: the key is not there at all.
+      expect("url" in fromPg.meta).toBe(false);
+      expect("fetchedAt" in fromPg.meta).toBe(false);
+    });
+  });
+
   it("lists the same articles, with the same derived counts", async () => {
     const [fromFiles, fromPg] = await Promise.all([
       fsArticleReader.listArticles(),
@@ -241,7 +505,7 @@ when("the filesystem and Postgres stores agree", () => {
 
     /* The committed `example/` fixture is the ONE known difference, and it is
        an open question rather than a bug: src/api.ts appends it to the shelf
-       explicitly, and it does not live under `data/`, so nothing imported it.
+       explicitly, and it does not live under `data/`, so nothing loaded it.
        See docs/plans/postgres-migration.md open question 8. Asserting that it
        is the *only* difference is what stops this exclusion quietly growing to
        cover a real one. */
@@ -252,7 +516,7 @@ when("the filesystem and Postgres stores agree", () => {
        and went red the afternoon the fixture stopped being listed. So the
        assertion is the invariant rather than the count: any fixture the
        filesystem store shows can only be `example`, and Postgres shows none,
-       because nothing imported `example/` and it does not live under `data/`.
+       because nothing loaded `example/` and it does not live under `data/`.
        A second fixture appearing from anywhere still fails this. */
     expect(fixtures.filter((slug) => slug !== "example")).toEqual([]);
     expect(fromPg.some((e) => e.fixture)).toBe(false);
@@ -262,46 +526,106 @@ when("the filesystem and Postgres stores agree", () => {
 
     /* **An article whose directory has been deleted is out of scope here.**
 
-       `importArticle` imports one article and has no way to notice that a
-       DIFFERENT one has gone: nothing prunes, so a `data/<slug>/` removed after
-       an import leaves a row behind, with a current revision, and the Postgres
-       library goes on listing an article the filesystem no longer has. It is a
-       real gap — `npm run db:import` does not make Postgres match `data/` —
-       and it is written up in docs/plans/postgres-storage-implementation.md
-       rather than papered over.
-
-       It is not, however, a parity failure, and letting it read as one cost an
-       afternoon: `labels-checkpoint-check` was left in the database by somebody
-       else's checkpoint run, and this test failed in full runs and passed alone
-       for a reason that had nothing to do with either store. So the comparison
-       is scoped to articles that exist on disk right now. An extra article that
+       Nothing prunes: a `data/<slug>/` removed after a load leaves a row
+       behind, with a current revision, and the Postgres library goes on listing
+       an article the filesystem no longer has. It is a real gap — written up in
+       docs/plans/postgres-storage-implementation.md rather than papered over —
+       and it is not a parity failure. Letting it read as one cost an afternoon:
+       `labels-checkpoint-check` was left in the database by somebody else's
+       checkpoint run, and this test failed in full runs and passed alone for a
+       reason that had nothing to do with either store. So the comparison is
+       scoped to articles that exist on disk right now. An extra article that
        DOES have a directory still fails, which is the property worth keeping. */
-    const onDisk = new Set(await importableSlugs());
+    const onDisk = new Set(await completeArticles());
     const present = (entries: LibraryEntry[]) => entries.filter((e) => onDisk.has(e.slug));
 
     /* **A comment whose anchor is not a block id is counted by the files and
        cannot exist in Postgres.**
 
-       `block_identities` has a format check; `comments.json` has none, and
-       something wrote a comment on `data/writes` anchored to `zzzz00`. The
-       importer skips it and says so (src/store/import.ts), so the filesystem
-       count is one higher. That is a permitted difference and it is the ONLY
-       permitted one, so it is subtracted here by the same rule the importer
-       applies rather than by a hardcoded number — the day the corrupt row is
-       deleted, this becomes a no-op instead of becoming wrong. */
+       `block_identities` has a format check and `comments_identity_fk` points
+       at it; `comments.json` has none, and something wrote a comment on
+       `data/writes` anchored to `zzzz00`. The seeder drops it by that rule
+       (tests/helpers/seed-reader-state.ts), so the filesystem count is one
+       higher. That is a permitted difference and it is the ONLY permitted one,
+       so it is subtracted here by the same rule rather than by a hardcoded
+       number — the day the corrupt row is deleted, this becomes a no-op instead
+       of becoming wrong. */
     const skipped = new Map<string, number>();
     for (const slug of onDisk) {
       const bad = (await fsCommentStore.load(slug)).filter((c) => !isSpideryarnId(c.blockId));
       if (bad.length) skipped.set(slug, bad.length);
     }
+
+    /* **`addedAt` is the two clocks again**, so it comes out of the comparison
+       here for the same reason `meta.fetchedAt` does above, and is asserted
+       positively in the test below. Postgres reads
+       `coalesce(article_revisions.fetched_at, articles.created_at)`; the
+       filesystem reads `meta.fetchedAt ?? mtime(blocks.json)`. The first is
+       when the document was fetched and the second is when it was last
+       extracted, and they are minutes apart across most of this corpus. */
+    const comparable = (entries: LibraryEntry[]) =>
+      entries.map((e) => {
+        const { addedAt: _addedAt, url: _url, ...rest } = e;
+        return rest;
+      });
+
+    /* **Subtracted from the filesystem side ONLY**, because it is the only side
+       that counted it. Applying it to both is a normalisation that cancels out
+       and asserts nothing — the first version of this rewrite did exactly that,
+       and the resulting red said `9` where it should have said `10`. */
     const anchored = (entries: LibraryEntry[]) =>
       entries.map((e) =>
         skipped.has(e.slug) ? { ...e, comments: e.comments - (skipped.get(e.slug) ?? 0) } : e,
       );
 
-    expect(wire(bySlug(present(realOnly(fromPg))))).toEqual(
-      wire(bySlug(anchored(present(realOnly(fromFiles))))),
+    expect(wire(comparable(bySlug(present(realOnly(fromPg)))))).toEqual(
+      wire(comparable(anchored(bySlug(present(realOnly(fromFiles)))))),
     );
+  });
+
+  it("dates every card from the file the store actually reads", async () => {
+    /* The price of dropping `addedAt` and `url` from the comparison above.
+       Whatever each store puts on the card has to be traceable to a file, and
+       the two files disagree — which is the finding, not a fault. */
+    const [fromFiles, fromPg] = await Promise.all([
+      fsArticleReader.listArticles(),
+      pgArticleReader.listArticles(),
+    ]);
+    const onDisk = new Set(slugs);
+
+    for (const entry of fromFiles.filter((e) => onDisk.has(e.slug))) {
+      const meta = await readArticleJson<{ url?: string; fetchedAt?: string }>(
+        entry.slug,
+        "meta.json",
+      );
+      expect(entry.url, entry.slug).toBe(meta?.url);
+      if (meta?.fetchedAt) expect(entry.addedAt, entry.slug).toBe(meta.fetchedAt);
+    }
+
+    for (const entry of fromPg.filter((e) => onDisk.has(e.slug))) {
+      const raw = await readArticleJson<{ url?: string; fetchedAt: string }>(
+        entry.slug,
+        "raw.json",
+      );
+      expect(entry.url, entry.slug).toBe(raw?.url);
+      /* With a `raw.json`, the fetch time is the date on the card.
+
+         Without one the column is null and the card falls back to
+         `articles.created_at` — which this suite set, from the filesystem's own
+         rule. So it is checked against that rule rather than against the clock:
+         an earlier version asserted only "older than a minute ago", which a
+         stale `created_at` from any previous run passes, and the test's name
+         claimed more than that. GPT Sol, 2026-08-28. */
+      if (raw) {
+        expect(entry.addedAt, entry.slug).toBe(raw.fetchedAt);
+      } else {
+        const meta = await readArticleJson<{ fetchedAt?: string }>(entry.slug, "meta.json");
+        const expected =
+          meta?.fetchedAt ??
+          (await stat(path.join(ROOT, "data", entry.slug, "blocks.json"))).mtime.toISOString();
+        expect(entry.addedAt, entry.slug).toBe(expected);
+      }
+    }
   });
 
   it("sorts an article with no fetchedAt by its createdAt, not to the top", async () => {
@@ -370,24 +694,46 @@ when("the filesystem and Postgres stores agree", () => {
     expect(order).toEqual(["order-newest", "order-middle", "order-oldest"]);
   });
 
-  it("orders the library the same way", async () => {
-    // Order is a separate assertion from content because `addedAt` falls back
-    // to the mtime of blocks.json when meta.json has no `fetchedAt` — the noema
-    // article's meta.json says so in its own note. The importer seeds the
-    // revision's created_at from that same mtime so the fallback lands on the
-    // identical value; without that the shelf silently reorders on import.
+  it("lists the same articles, each ordered by its own idea of when they arrived", async () => {
+    /* **Not "the same order", which is not an invariant and this test used to
+       demand.**
+     *
+       The two stores compute `addedAt` from different clocks — Postgres from
+       when the document was fetched, the filesystem from when it was last
+       extracted (see the note on `addedAt` above). Over this corpus they happen
+       to agree, but two articles fetched and extracted across each other's
+       boundary would order differently and **both stores would be right**. A
+       test that can go red for a non-bug teaches whoever meets it to distrust
+       it. GPT Sol, 2026-08-28.
+
+       What is true of both, always: the same articles, each list newest first
+       by whatever that store thinks "newest" means. Neither store specifies a
+       tie-break — `src/api.ts` sorts stably and Postgres has no secondary key —
+       so ties are compared as ties rather than as an order. A store sorting by
+       the wrong column, which is what the old assertion caught in August, still
+       fails this on the first pair. */
     const [fromFiles, fromPg] = await Promise.all([
       fsArticleReader.listArticles(),
       pgArticleReader.listArticles(),
     ]);
-    /* Scoped to what is on disk, for the reason spelled out in the test above:
-       an orphaned row from a deleted directory is a gap in the importer, not a
-       disagreement between the stores. Order is still compared across every
-       article both of them do have. */
-    const onDisk = new Set(await importableSlugs());
-    expect(fromPg.map((e) => e.slug).filter((slug) => onDisk.has(slug))).toEqual(
-      fromFiles.filter((e) => !e.fixture && onDisk.has(e.slug)).map((e) => e.slug),
-    );
+    const onDisk = new Set(await completeArticles());
+    const mine = (entries: LibraryEntry[]) =>
+      entries.filter((e) => !e.fixture && onDisk.has(e.slug));
+
+    // Same articles. Sorted by slug, because the ORDER is the next assertion
+    // and comparing both at once reports either failure as the other.
+    const slugsOf = (entries: LibraryEntry[]) => mine(entries).map((e) => e.slug).sort();
+    expect(slugsOf(fromPg)).toEqual(slugsOf(fromFiles));
+
+    for (const [name, entries] of [
+      ["the filesystem store", fromFiles],
+      ["Postgres", fromPg],
+    ] as const) {
+      const dates = mine(entries).map((e) => e.addedAt);
+      // Its own list, newest first. `toEqual` rather than a loop of comparisons
+      // so the failure prints the order it actually got.
+      expect(dates, `${name} is not newest-first`).toEqual([...dates].sort().reverse());
+    }
   });
 
   /**

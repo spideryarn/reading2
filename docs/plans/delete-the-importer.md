@@ -413,10 +413,31 @@ corpus is recoverable, which is a better answer than the question expected:
 | `source`, `source-2` | uploads, both 144,779 bytes | the same file as `evals/pdf/easy` — tracked in git |
 | `revistes-ub-30977` | `revistes.ub.edu/…/30977` | the web |
 | `writes` | `paulgraham.com/writes.html` | the web |
-| `constitution`, `example`, `noema-mythology-of-conscious-ai` | no `raw.json` at all | nothing to lose |
+| `constitution`, `example` | no `raw.json`, no raw file | nothing to lose |
+| `noema-mythology-of-conscious-ai` | a bare `raw.html`, **176,736 bytes**, and no manifest | ⚠ see below |
 
 Greg offered the `much-harder` PDF as the one file he still had. All three are in the repository, so
 the re-ingest is three local paths and two URLs.
+
+> **The `noema` row said "nothing to lose" and was wrong.** GPT Sol found it reviewing C7,
+> 2026-08-28. The article has a real 176,736-byte `raw.html` on disk and no `raw.json` beside it —
+> hand-assembled before manifests existed. The `raw` step's artefact **is** the manifest, so nothing
+> copies the document, nothing writes a source reference, and `db:export` has no object to write.
+> `db:import` read the bare file straight into `article_revisions.raw_bytes`, and C6 dropped that
+> column. So this is a loss the migration *makes*, not one it found, and it is currently asserted as
+> expected behaviour by `tests/store-roundtrip.test.ts`.
+>
+> **Not backfilled here, and the reason is the one Sol gave against option (c) last time: a manifest
+> is provenance, and this one would have to invent a `fetchedAt`.** `storedSha256` and `bytes` can be
+> computed from the file; when it was fetched cannot be recovered from anything, and `meta.fetchedAt`
+> is stage 2's clock (see the two-clock note below), so copying it in would put a fabricated fetch
+> time in the one field the shelf sorts on.
+>
+> **The class is closed going forward** — both acquisition paths in `src/pipeline.ts` call
+> `storeRawSource` and write a manifest — so this is one legacy dev fixture, not a live risk.
+> **Greg's call**, and the options are: re-fetch the URL (`meta.json` has it), accept the loss and
+> drop the file, or write a manifest marked `backfilled` with an explicitly null fetch time, which
+> would need `RawManifest.fetchedAt` to become optional.
 
 ## What it costs
 
@@ -945,6 +966,155 @@ The manifest gains `storedSha256`, `storedBytes` and `filename`, and takes `byte
 is built on the real loader for that reason: a hand-built row would prove the export reads two
 columns, not that what the adapter writes and what the export reads are the same thing. Both refusals
 were watched to fire by deleting each guard in turn.
+
+#### C7 — the three suites, on the real write path
+
+The swap was one line; everything else the suite needed was the four things `copyArtefacts`
+deliberately does not carry. What it took, and what it found:
+
+**The rows have to be forgotten first, and it is the whole claim rather than hygiene.** `basedOn` is
+`articles.current_revision_id`, so the suite nulls the pointer and deletes every revision behind it
+before each load, then asserts `basedOn === null` for all six articles. Without that the comparison
+is measuring whatever put the last revision there. Watched to fail: with the wipe removed, *"built
+every article from nothing, rather than carrying one forward"* goes red on the first run and nothing
+else does.
+
+**Revisions and not the article**, which is a change from the first version. Deleting the article row
+cascades through comments, chat, searches and block identities — and vitest runs test files
+concurrently, so an article that vanishes for two seconds fails whoever else was reading it for a
+reason that has nothing to do with them. (I proved that on myself: two of these mutation runs
+overlapped a foreground run of the same file and produced fourteen failures that meant nothing.)
+
+**Reader state is seeded, by something that says it is a seeder.**
+[`tests/helpers/seed-reader-state.ts`](../../tests/helpers/seed-reader-state.ts) writes the shelf
+columns and the comments rows straight from the files. Through the live stores is not achievable and
+pretending otherwise would seed *different* state: `pgShelfStore.patch` cannot set `opens` to 874 or
+archive with last week's date, and `pgCommentStore.create` makes a current unanswered comment when
+half the corpus's are answered. `loadArticleIntoPg` must never call it — Sol's ruling, and the reason
+is that a loader which can also restore reader state is the importer growing back one field at a
+time. Watched to fail: with both seeders removed, seven tests go red — every archived article is back
+on the Postgres shelf and every comment count is zero.
+
+**The exemptions, and what each one is paid for with.** Three differences survive a clean load. Each
+is asserted positively in both directions rather than normalised away:
+
+| what differs | Postgres | the filesystem |
+|---|---|---|
+| `meta.fetchedAt`, and `addedAt` on the card | `raw.json`'s `fetchedAt` — when the document was fetched | `meta.json`'s, which `src/extract.ts` stamps with **its own clock** on every run |
+| `meta.url` on an article with no `raw.json` | absent: stage 1's fact, and there was no stage 1 | present, because stage 2 copies what it was handed |
+| one comment on `writes` anchored to `zzzz00` | impossible — `comments_identity_fk` | counted |
+
+Measured, not assumed: four of the six articles have fetch and extract times minutes apart, and
+`writes` has them identical to the millisecond. That last one is why the suite also asserts *at least
+one* fixture genuinely differs — an exemption every fixture happens to satisfy trivially is dead
+normalisation, and Sol asked for the guard by name.
+
+**Postgres is the one that is right here.** The filesystem's "fetched at" is really "extracted at",
+so re-extracting an article silently moves it to the top of the library. `META_COLUMNS` already
+refuses to let `extract` write that column; the importer papered over the difference by writing
+`meta.fetchedAt` into `article_revisions.fetched_at`, which is how a permanent divergence stayed
+invisible for the whole migration.
+
+**And `constitution` moved out of the corpus into a test of its own**, per Sol's decision 1: assert
+its `labels.json` has no `sourceHash`, that the copy really moved `toc`, that publication is refused,
+and that the refusal names the unstamped ToC. If somebody regenerates the fixture it goes red, and
+the fix is to retire the case rather than restore the stale file.
+
+One bug in the rewrite, found by the suite itself: the first version subtracted the unanchored comment
+from **both** sides of the library comparison, which cancels out and asserts nothing. The red said
+`9` where it should have said `10`.
+
+#### The other two suites, and what the swap cost
+
+`store-roundtrip` and `chat-anchor` came off `importArticle` in the same commit, and they had to:
+`importArticle` derives its article id from the slug, while `beginDraftIn` mints a random one — so the
+moment parity's articles existed with minted ids, every `importArticle` call for the same slug hit
+`articles_slug_unique`. There is no half-migrated state to stop in.
+
+**`store-roundtrip`** is Sol's split in practice: the artefact half goes through `loadArticleIntoPg`,
+and the reader's own state — chat, comments, searches, lookups, the shelf — is seeded beside it by
+something that says it is a seeder. It found the same two-clock divergence in a sharper place: **a
+round trip through Postgres rewrites `meta.fetchedAt`** from the extraction time to the fetch time.
+That is `db:export` telling the truth, but it is a rollback tool, so it is worth knowing that a
+restored directory is not byte-identical to the one you started with.
+
+It also found a real loss, and this one the migration is making rather than finding:
+
+> **An article with a raw document but no `raw.json` beside it does not survive the round trip.**
+
+The `raw` step's artefact *is* the manifest — it names the object in the bucket by `storedSha256`,
+and that reference is what the revision stores. `noema-mythology-of-conscious-ai` has a bare
+`raw.html` and no manifest, so no `fetch` step is copied and the export has nothing to write.
+`db:import` read the bare file into `article_revisions.raw_bytes`, and C6 dropped that column.
+Confined to legacy filesystem data — both acquisition paths in `src/pipeline.ts` call
+`storeRawSource` before writing a manifest — and now asserted rather than skipped, so the day
+something starts exporting it, somebody has to decide what happened.
+
+And it stopped naming `constitution`: the scan excludes any article whose `labels.json` has no
+`sourceHash`, and a test asserts each exclusion really has that defect. A regenerated fixture rejoins
+the corpus on its own.
+
+**`chat-anchor`** clones the smallest article in `data/` into a scratch slug, and the clone was
+incomplete in a way `db:import` tolerated and `copyArtefacts` does not. Three fixes, each of which is
+the same fix:
+
+- `output/<slug>.html` and `output/<slug>.blocks.json` have to be copied too. They are the second
+  product of `extract` and the only product of `blocks`, and a step is copied whole or refused.
+- The `slug` field inside every copied JSON has to be rewritten, or the filesystem store decodes the
+  clone as an article that is not there.
+- The source article has to be one that can actually publish, which `constitution` — the smallest —
+  cannot.
+
+Its `if (!source) return` became a throw at the same time. The selector now asks for four things
+rather than two, so "nothing qualifies" became much more likely at exactly the moment it became much
+less obvious, and a `return` reads as a pass. The mutation its own header documents still produces
+the same red, now against the seeder rather than against the importer.
+
+**One suite at a time may load the corpus.** Both suites wipe and reload the same articles, vitest
+runs files concurrently, and two processes can run them at once. Parity wipes, roundtrip publishes,
+parity loads and finds `basedOn` pointing at roundtrip's revision — the carry-forward assertion
+fires, correctly, and says nothing useful.
+[`tests/helpers/corpus-lock.ts`](../../tests/helpers/corpus-lock.ts) is a Postgres advisory lock on a
+connection of its own; `jobs_only_one_running` already stops two *loads* overlapping, but the window
+that matters is between one suite's wipe and its assertions. Proved by holding the lock in a separate
+process for thirty seconds and watching the suite wait rather than fail.
+
+#### What the review of the three suites changed — [c7-suites-sol.md](c7-suites-sol.md)
+
+**STOP**, with six findings, and three of them were things a green suite was hiding. That is the
+second review in a row where the *helper* was the thing worth attacking.
+
+| finding | what was wrong | why nothing caught it |
+|---|---|---|
+| **the comments seeder minted no identities** | `comments_identity_fk` points at `block_identities`, and a comment may name a block this revision no longer has — the whole point of ids. Writing the blocks mints identities for the blocks that are *in* the revision, which is a different set. The insert would fail on the FK **after** the delete, leaving the article with no comments at all | every `comments.json` in `data/` anchors to blocks that are still there — *and* identities are never deleted, so every fixture's anchors already had one from an earlier `db:import`. The same carry-forward, for the third time |
+| **`store-roundtrip` never loaded from nothing** | it loaded over the current revision, so a previous importer revision could carry artefacts and fetch columns into the export. The corpus lock stops two suites overlapping and does nothing about contamination | the export looked complete because it was completed by whatever ran last |
+| **the `addedAt` exemption was under-asserted** | for an article with no manifest it asserted only "older than a minute ago", which any stale `articles.created_at` passes. The test's name claimed more than the code | it is the half of an exemption that is supposed to pay for the other half |
+| **`noema`'s raw document really is lost** | see the ⚠ above — the plan said "nothing to lose" about an article with a real 176,736-byte `raw.html` | nobody had looked at the directory, only at whether it had a `raw.json` |
+| **the library-order test asserted a non-invariant** | it required the two orders to be equal while its own comment explained they are computed from different clocks and may legitimately differ | it happens to hold over this corpus |
+| **a missing `labels.json` read as a legacy one** | an accidentally deleted file was reported as "predates sourceHash" and quietly dropped from the corpus | there is no article with a deleted labels file |
+
+Everything except the raw-document loss is fixed. The identity gap got a suite of its own —
+[`tests/helpers-seed-reader-state.test.ts`](../../tests/helpers-seed-reader-state.test.ts), with a
+fixture built to carry the awkward comment, on a slug the database has never seen — and both of its
+tests go red with the minting removed. The `store-roundtrip` wipe throws out of `beforeAll` naming
+the revision it was loaded on top of, watched by deleting the wipe.
+
+`forgetRevisions` is now shared rather than copied, and the order test asserts what is actually true
+of both stores: the same articles, each list newest first by its own `addedAt`, ties compared as ties.
+
+#### And one bug found by doing the review's homework
+
+Sol's sixth question was *"does the seeder write the same rows `db:import` did?"*. Checking that field
+by field found the answer was **yes except for one, and the exception is a bug in the exporter**:
+`db:export` never wrote `shelf.purpose` — the reader's own *"why you're reading this one"* — and
+decided whether to write `shelf.json` **at all** from a hand-written copy of the object's other four
+keys. So an article whose only shelf state was a purpose exported no shelf file.
+
+This is the rollback tool, so the loss was permanent, and no test could see it: every assertion in
+`store-roundtrip` compares against `data/`, and no `shelf.json` in `data/` has a purpose.
+[The postmortem](../postmortems/export-never-wrote-the-readers-purpose.md) has the root cause — a
+condition written as a second list beside the data it describes — and what would have caught the
+class.
 
 **What is deliberately *not* in C:** the coordinator that opens the transaction and calls
 `write` + `finishStep` + the job transition together. That is D's, and putting it here would mean

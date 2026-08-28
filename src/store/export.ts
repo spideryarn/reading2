@@ -424,11 +424,25 @@ export async function exportArticle(
     written.push(path.join(target.outputRoot, `${slug}.html`));
   }
 
-  /* shelf.json — what the reader did to the card, from the four columns on
+  /* shelf.json — what the reader did to the card, from the five columns on
      `articles` rather than on the revision. Written only when there is
      something to say: an untouched article has no shelf file, and inventing an
      empty one would mean every round trip added a file the app never wrote —
-     which the round-trip test checks for, and rightly. */
+     which the round-trip test checks for, and rightly.
+
+     **`purpose` was missing from both halves of this until 2026-08-28**, and it
+     is the reader's own words — "why you're reading this one", the per-article
+     half of docs/plans/reader-profile.md. It was absent from the object, so an
+     article with other shelf state exported a file with the purpose quietly
+     gone; and absent from the condition, so an article whose *only* state was a
+     purpose exported no shelf file at all. Nothing caught it because no
+     `shelf.json` in `data/` carries one, and every assertion in
+     tests/store-roundtrip.test.ts compares against that corpus. This is the
+     rollback tool, so the loss was permanent.
+
+     The condition is now "any of the five", written from the same object rather
+     than as a second list that can fall behind it. `opens` is excluded from the
+     `some` because it is always present and `0` is not something to say. */
   const shelf = compact({
     archivedAt: article.archivedAt?.toISOString() ?? null,
     title: article.titleOverride,
@@ -437,8 +451,9 @@ export async function exportArticle(
     // filesystem store writes `0`.
     opens: article.opens,
     lastOpenedAt: article.lastOpenedAt?.toISOString() ?? null,
+    purpose: article.purpose,
   });
-  if (article.archivedAt || article.titleOverride || article.opens > 0) {
+  if (article.opens > 0 || Object.keys(shelf).some((key) => key !== "opens")) {
     await put("shelf.json", shelf);
   }
 

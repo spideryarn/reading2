@@ -19,7 +19,7 @@
  *
  *  - move `withTurn`'s anchor spread from the new-thread branch onto the
  *    returned thread, and both "does not re-anchor" tests fail;
- *  - drop the `blockIdentities` insert from `importArticle`, and "survives an
+ *  - drop the `blockIdentities` insert from the chat seeder, and "survives an
  *    export and an import" fails on the foreign key, taking the whole
  *    transaction with it.
  *
@@ -32,7 +32,7 @@
  * spread rather than the conflict clause it looks like it is guarding.
  */
 
-import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -45,7 +45,8 @@ import { articles, blockIdentities, chatThreads } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import { exportArticle } from "../src/store/export.js";
-import { importArticle } from "../src/store/import.js";
+import { loadArticleIntoPg } from "./helpers/load-article.js";
+import { seedChatFromFiles } from "./helpers/seed-reader-state.js";
 import { pgChatStore } from "../src/store/pg-chat.js";
 import type { ChatAnchor, ChatThread } from "../src/types.js";
 
@@ -65,24 +66,60 @@ const SELECTION: ChatAnchor = { blockId: BLOCK, quote: "qualia realism", start: 
 const WHOLE_BLOCK: ChatAnchor = { blockId: BLOCK };
 
 /**
- * The smallest article in `data/` that `importArticle` will accept.
+ * The smallest article in `data/` that the fixture loader will accept.
  *
  * Smallest so the copy is cheap; real so the import does not fail on something
  * unrelated to what is being tested. `_`-prefixed is the queue's, `test-`-
  * prefixed is another test's scratch directory.
  */
-async function smallestImportableArticle(): Promise<string | null> {
+async function smallestLoadableArticle(): Promise<string | null> {
   const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
   const found: { slug: string; size: number }[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith("test-")) continue;
     const files = await readdir(path.join(ROOT, "data", entry.name)).catch(() => [] as string[]);
     if (!files.includes("blocks.json") || !files.includes("tree.json")) continue;
+    /* **Three more conditions than "it has blocks", and each one is a way the
+       copy below fails for a reason that is nothing to do with anchors.**
+
+       `output/<slug>.html` is the other half of the `extract` step, and
+       `copyArtefacts` refuses a step whose products are only half present. A
+       `labels.json` with no `sourceHash` predates stage 4 recording one, and
+       the publication gate correctly refuses such an article — `constitution`
+       is that article, and it is the smallest one here. `db:import` accepted
+       both, which is what made them invisible. */
+    const outputs = await Promise.all(
+      outputPairs(entry.name, entry.name).map(([file]) => stat(file).catch(() => null)),
+    );
+    if (outputs.some((found) => !found)) continue;
+    if (!files.includes("labels.json")) continue;
+    const labels = JSON.parse(
+      await readFile(path.join(ROOT, "data", entry.name, "labels.json"), "utf8"),
+    ) as { sourceHash?: string };
+    if (!labels.sourceHash) continue;
+
     const blocks = await readFile(path.join(ROOT, "data", entry.name, "blocks.json"), "utf8");
     found.push({ slug: entry.name, size: blocks.length });
   }
   found.sort((a, b) => a.size - b.size);
   return found[0]?.slug ?? null;
+}
+
+/**
+ * The two files stage 2 and stage 3 leave in `output/`, renamed for a clone.
+ *
+ * `extract` produces `meta` and `extractedHtml`; `blocks` produces `blocks`.
+ * The filesystem store keeps the second of each in `output/` rather than in the
+ * article's own directory, so copying `data/<slug>/` alone leaves both steps
+ * half-present — and `copyArtefacts` refuses a half-step outright rather than
+ * recording one that did not finish. `db:import` read whichever of them
+ * happened to be there, which is why this never came up before.
+ */
+function outputPairs(source: string, slug: string): [string, string][] {
+  return [".html", ".blocks.json"].map((ext) => [
+    path.join(ROOT, "output", `${source}${ext}`),
+    path.join(ROOT, "output", `${slug}${ext}`),
+  ]);
 }
 
 /** A clock the test drives, one second per call. */
@@ -292,15 +329,49 @@ when("the anchor, stored", () => {
    * quietly goes missing.
    */
   it("survives an export and an import, for a block this revision no longer has", async () => {
-    const source = await smallestImportableArticle();
-    if (!source) return; // nothing to copy; the suite has bigger problems
+    /* **Loud, not a silent return.** This used to `return` when nothing in
+       `data/` was copyable, which reads as a pass. The selector now asks for
+       four things rather than two — see its own note — so "nothing qualifies"
+       became a great deal more likely at exactly the moment it became a great
+       deal less obvious. */
+    const source = await smallestLoadableArticle();
+    if (!source) {
+      throw new Error(
+        "no article in data/ can be cloned for this test: it needs blocks.json, tree.json, " +
+          "a labels.json with a sourceHash, and both output/<slug>.html and " +
+          "output/<slug>.blocks.json. Run the pipeline over something.",
+      );
+    }
 
     const slug = "test-anchor-roundtrip";
     const dir = path.join(ROOT, "data", slug);
+    const outputs = outputPairs(source, slug).map(([, to]) => to);
     const out = await mkdtemp(path.join(tmpdir(), "spideryarn-anchor-"));
     try {
       await rm(dir, { recursive: true, force: true });
       await cp(path.join(ROOT, "data", source), dir, { recursive: true });
+      /* **The article's own name, rewritten inside every file it appears in.**
+         The filesystem artefact store decodes `meta.json` by checking the
+         `slug` field matches the directory, so a straight copy reads back as an
+         article that is not there — and `copyArtefacts` then finds nothing to
+         copy and the load refuses. */
+      for (const name of await readdir(dir)) {
+        if (!name.endsWith(".json")) continue;
+        const at = path.join(dir, name);
+        const text = await readFile(at, "utf8");
+        await writeFile(at, text.replaceAll(`"${source}"`, `"${slug}"`));
+      }
+      /* `extract` produces `meta` AND `extractedHtml`, and the filesystem store
+         keeps the second one in `output/<slug>.html`. Copying only `data/`
+         leaves the step half-present, and `copyArtefacts` refuses a half-step
+         outright rather than recording one that did not finish. `db:import`
+         read the file if it happened to be there and imported the article
+         without it if it was not, which is the difference this whole exercise
+         is about. */
+      for (const [from, to] of outputPairs(source, slug)) {
+        const text = await readFile(from, "utf8");
+        await writeFile(to, text.replaceAll(`"${source}"`, `"${slug}"`));
+      }
       await writeFile(
         path.join(dir, "chat.json"),
         `${JSON.stringify(
@@ -336,7 +407,13 @@ when("the anchor, stored", () => {
         )}\n`,
       );
 
-      await importArticle(slug);
+      /* The artefacts through the production write path, the conversation
+         seeded beside them — `db:import` did both and is being deleted
+         (docs/plans/delete-the-importer.md § C7). Only the chat is needed here:
+         seeding state this test never looks at would be slower and no more
+         honest. */
+      await loadArticleIntoPg(slug);
+      await seedChatFromFiles(slug);
       await exportArticle(slug, {
         dataRoot: path.join(out, "data"),
         outputRoot: path.join(out, "output"),
@@ -349,6 +426,7 @@ when("the anchor, stored", () => {
     } finally {
       await rm(out, { recursive: true, force: true });
       await rm(dir, { recursive: true, force: true });
+      for (const file of outputs) await rm(file, { force: true });
       const db = getDb();
       const rows = await db.select({ id: articles.id }).from(articles).where(eq(articles.slug, slug));
       for (const row of rows) await db.delete(articles).where(eq(articles.id, row.id));
