@@ -86,6 +86,24 @@ export interface SpendRecord {
    * see also `isByok`, which says which case a zero is.
    */
   upstreamCostNanos: Nanos | null;
+  /**
+   * **Which bill this call lands on.** `"openrouter"` for anything through
+   * either gateway; `"anthropic"` for a declared bypass that talks to Anthropic
+   * directly. Two accounts spend money in this repo and only one of them can be
+   * reconciled, so the row has to say which.
+   */
+  providerAccount: ProviderAccount;
+  /**
+   * **Our own arithmetic**, for a call nobody can be asked about.
+   *
+   * Never set at the same time as `costNanos`: OpenRouter's figure is settled
+   * and ours is an estimate, and a row that carried both would invite somebody
+   * to pick. Only the declared bypasses fill this, from
+   * [`priceAnthropicCall`](pricing.ts).
+   */
+  computedCostNanos: Nanos | null;
+  /** `checked/effective-from` of the price row that did it. Null unless computed. */
+  priceVersion: string | null;
   /** `x-generation-id` — the key to `GET /api/v1/generation?id=…` later. */
   generationId: string | null;
   /** Which upstream answered: `"Anthropic"`, `"Claude Platform on AWS"`, … */
@@ -182,6 +200,49 @@ export interface PendingCall {
  * on. `npm run cost` shows product spend and eval spend apart.
  */
 export type ScopeKind = "request" | "job_step" | "cli" | "eval";
+
+/**
+ * **Which of the two bills a call lands on.**
+ *
+ * Everything the app itself does is `"openrouter"` — that is what "one seam per
+ * wire" bought. `"anthropic"` exists for the three declared bypasses under
+ * [`evals/declared-spend.ts`](../evals/declared-spend.ts), which talk to
+ * Anthropic directly because comparing transports is the thing they measure.
+ *
+ * On the row because `npm run cost --reconcile` reads OpenRouter's key and
+ * nothing reads Anthropic's. Without this column the difference between our
+ * total and theirs would be permanently non-zero for a reason nobody could
+ * name, and a check that is always wrong is a check nobody runs.
+ */
+export type ProviderAccount = "openrouter" | "anthropic";
+
+/**
+ * **Where a row's dollar figure came from.**
+ *
+ * `"provider"` — OpenRouter's own `usage.cost`, settled and reconcilable.
+ * `"computed"` — our arithmetic over `ANTHROPIC_PRICES`, for a call that went
+ * somewhere with nobody to ask. `"none"` — neither; the total is short by an
+ * unknown amount and says so.
+ *
+ * The distinction is not pedantry. A price table drifts silently: the day
+ * Anthropic changes a rate, every `computed` row after it is wrong and nothing
+ * fails. Labelling them is what lets the report say which part of its own total
+ * it stands behind.
+ */
+export type CostSource = "provider" | "computed" | "none";
+
+/**
+ * Which of the three a record is — derived, never passed.
+ *
+ * A BYOK call reports `cost: 0`, and that zero is an answer rather than an
+ * absence, so `provider` is decided by "did OpenRouter say anything" and not by
+ * "is the number non-zero".
+ */
+function costSourceOf(record: SpendRecord): CostSource {
+  if (record.costNanos !== null) return "provider";
+  if (record.computedCostNanos !== null) return "computed";
+  return "none";
+}
 
 /**
  * Who and what a call should be billed to, supplied by whoever opened the
@@ -281,6 +342,20 @@ export interface AiCallRow {
   creditsUsedNanos: Nanos | null;
   upstreamInferenceNanos: Nanos | null;
   isByok: boolean | null;
+  /** `openrouter` or `anthropic` — which of the two bills this lands on. */
+  providerAccount: ProviderAccount;
+  /**
+   * **Where the dollar figure came from**, so a total can say how much of
+   * itself was measured and how much was worked out.
+   *
+   * Derived from the two nanos fields rather than passed in, because there are
+   * exactly two sources and a third field free to disagree with them is a
+   * third thing that can be wrong. `provider` wins when OpenRouter answered at
+   * all — including the BYOK zero, which is a real answer and not an absence.
+   */
+  costSource: CostSource;
+  computedCostNanos: Nanos | null;
+  priceVersion: string | null;
   /**
    * **`reported`, because the two wires do not mean the same thing by it.**
    *
@@ -684,6 +759,10 @@ function write(
     creditsUsedNanos: record.costNanos,
     upstreamInferenceNanos: record.upstreamCostNanos,
     isByok: record.isByok,
+    providerAccount: record.providerAccount,
+    costSource: costSourceOf(record),
+    computedCostNanos: record.computedCostNanos,
+    priceVersion: record.priceVersion,
     reportedInputTokens: record.inputTokens,
     outputTokens: record.outputTokens,
     cacheReadTokens: record.cacheReadTokens,

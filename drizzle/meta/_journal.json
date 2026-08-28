@@ -162,6 +162,13 @@
       "when": 1787867857885,
       "tag": "0022_raw_provenance_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787867857886,
+      "tag": "0023_ai_calls_cost_provenance",
+      "breakpoints": true
     }
   ]
 }

@@ -155,6 +155,9 @@ export const AI_JOB_ROUTE: Record<
     provider: { require_parameters: true, allow_fallbacks: false },
   },
   embeddings: { path: "/v1/embeddings", provider: {} },
+  /* **Pins nothing, on purpose.** An eval that pinned an upstream would be
+     measuring the pin as much as the model, and none of them wants that. */
+  eval: { path: "/v1/chat/completions", provider: {} },
 };
 
 /**
@@ -356,6 +359,12 @@ class Meter {
         answeredBy: this.answeredBy,
         costNanos: this.costNanos,
         upstreamCostNanos: this.upstreamCostNanos,
+        /* Hard-coded rather than a field: this file only ever posts to
+           OpenRouter, and a variable here would be a place for that to stop
+           being true without anything saying so. */
+        providerAccount: "openrouter",
+        computedCostNanos: null,
+        priceVersion: null,
         generationId: this.generationId,
         upstream: this.upstream,
         credentialFingerprint: this.credentialFingerprint,
