@@ -33,6 +33,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { contentWords } from "../src/labels.js";
 import type { Arc, Block, Glossary } from "../src/types.js";
+import { isMain } from "../src/is-main.js";
 
 /** How much of a passage's own vocabulary survived into the text written about it. */
 function retention(written: string, source: string): number {
@@ -196,9 +197,7 @@ async function main(): Promise<void> {
   );
 }
 
-const invokedDirectly =
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+const invokedDirectly = isMain(import.meta.url);
 
 if (invokedDirectly) {
   main().catch((err) => {

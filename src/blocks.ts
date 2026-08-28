@@ -13,8 +13,8 @@
 import { JSDOM } from "jsdom";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
+import { isMain } from "./is-main.js";
 /* The three strings stage 2 stamped into the DOM, from the file that writes
    them. See noteFieldsFor. */
 import { CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN } from "./notes.js";
@@ -1234,11 +1234,4 @@ async function main() {
   console.log(`Blocks:    ${path.resolve(outJson)}`);
 }
 
-/* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`
-   also matches when a *different* entry file with the same basename imports this
-   module — `scripts/arc.ts` importing `src/arc.ts` would run the CLI as a side
-   effect of the import, which is the one thing this guard exists to prevent. */
-const isMain =
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void main();
+if (isMain(import.meta.url)) void main();

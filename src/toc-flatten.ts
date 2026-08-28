@@ -12,7 +12,7 @@
  */
 
 import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { isMain } from "./is-main.js";
 import type { Tree, TreeNode } from "./types.js";
 
 export interface TocRow {
@@ -89,5 +89,7 @@ async function main(): Promise<void> {
   console.log(`\n${rows.length} rows`);
 }
 
-const isMain = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
-if (isMain) void main();
+/* Was `import.meta.url.endsWith(path.basename(process.argv[1]))` — see the note
+   on the same line in src/fetch.ts, and tests/is-main.test.ts for the inputs
+   that spelling gets wrong in both directions. */
+if (isMain(import.meta.url)) void main();

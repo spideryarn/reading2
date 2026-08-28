@@ -50,9 +50,8 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { PDFDocument } from "pdf-lib";
-import { withLedger } from "./cli-ledger.js";
+import { stageCli } from "./cli-ledger.js";
 import { loadEnvLocal } from "./env.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
@@ -1362,14 +1361,12 @@ async function main() {
 
 }
 
-const isMain =
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-/* **`withLedger`, not a bare `main()`.** Every chunk here is a paid
+/* **`stageCli`, not a bare `main()`.** Every chunk here is a paid
    `openRouterJson` call, and without the collector open the money lands nowhere:
    not in `npm run cost`, and counted as unscoped by `unscopedCalls()` in
    src/ai-spend.ts. `npm run pdf` and `npm run labels` were the two stage CLIs
-   missing this; tests/paid-cli-ledger.test.ts is what stops a third appearing.
-   Awaited rather than `void`ed, so flushing the ledger and any failure in it stay
-   part of the command finishing. */
-if (isMain) await withLedger("cli", main);
+   missing this, both because the tail was copied without it — which is the whole
+   argument for the tail being one call. tests/paid-cli-ledger.test.ts is what
+   stops a third appearing. Awaited rather than `void`ed, so flushing the ledger
+   and any failure in it stay part of the command finishing. */
+await stageCli(import.meta.url, main);

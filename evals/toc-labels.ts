@@ -17,6 +17,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { Block, Tree } from "../src/types.js";
 import { contentWords, type LabelsFile } from "../src/labels.js";
+import { isMain } from "../src/is-main.js";
 
 /* `contentWords` comes from the stage itself rather than being defined again
    here. src/labels.ts uses it to *refuse* a batch whose labels match the
@@ -397,6 +398,6 @@ async function main(): Promise<void> {
   console.log(`\nWrote ${path.relative(process.cwd(), out)}`);
 }
 
-if (path.resolve(process.argv[1] ?? "") === path.resolve(import.meta.filename)) {
+if (isMain(import.meta.url)) {
   await main();
 }

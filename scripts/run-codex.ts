@@ -42,6 +42,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
+import { isMain } from '../src/is-main.js';
 
 /** Frontier tier. `gpt-5.6-terra` is the everyday middle, `gpt-5.6-luna` the cheap/fast one. */
 const DEFAULT_MODEL = 'gpt-5.6-sol';
@@ -745,6 +746,6 @@ async function main(): Promise<void> {
 }
 
 // Only run when executed directly, so the exported helpers can be imported and tested.
-if (process.argv[1] && import.meta.url === `file://${resolve(process.argv[1])}`) {
+if (isMain(import.meta.url)) {
   main().catch((e) => fail((e as Error).message));
 }

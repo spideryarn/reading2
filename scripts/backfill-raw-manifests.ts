@@ -56,6 +56,7 @@ import { sniffKind } from "../src/fetch.js";
 import type { RawManifest } from "../src/fetch.js";
 import { blobStore, storeRawSource } from "../src/store/blobs.js";
 import { canonicalKey } from "../src/source.js";
+import { isMain } from "../src/is-main.js";
 
 loadEnvLocal();
 
@@ -286,8 +287,9 @@ async function main(): Promise<void> {
  * vitest it began and the process exited before it finished, so it left no
  * output and looked like nothing had happened.
  *
- * Same guard as src/fetch.ts and src/blocks.ts use, and the same reasoning:
- * importing a module must not also run it.
+ * The guard used to be `import.meta.url.endsWith(path.basename(process.argv[1]))`,
+ * which answers yes to any *other* entry file of the same name and no to a path
+ * with a space in it — one `src/is-main.ts` now, and tests/is-main.test.ts holds
+ * the failing input for each.
  */
-const isMain = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
-if (isMain) void main();
+if (isMain(import.meta.url)) void main();

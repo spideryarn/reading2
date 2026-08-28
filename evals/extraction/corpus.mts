@@ -46,6 +46,7 @@ import { JSDOM, VirtualConsole } from "jsdom";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
+import { isMain } from "../../src/is-main.js";
 
 /**
  * The corpus, chosen to fill the failure-mode slots in the plan's table rather
@@ -359,7 +360,4 @@ async function main(): Promise<void> {
    corpus first. Nothing failed and nothing looked wrong — it just did several
    seconds of Readability before printing a hash table. Exactly the accident
    src/extract.ts and src/blocks.ts both carry a note about. */
-const isMain =
-  process.argv[1] !== undefined &&
-  new URL(import.meta.url).pathname === path.resolve(process.argv[1]);
-if (isMain) void main();
+if (isMain(import.meta.url)) void main();

@@ -75,6 +75,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadEnvLocal } from "../src/env.js";
+import { isMain } from "../src/is-main.js";
 
 loadEnvLocal();
 
@@ -376,6 +377,6 @@ async function main(): Promise<void> {
 /* Only when run, never when imported — tests/supabase-auth-config.test.ts imports
    `refFromUrl` from here, and a bare `await main()` would make that a live call
    to the Management API. Same guard as scripts/run-codex.ts. */
-if (process.argv[1] && import.meta.url === `file://${path.resolve(process.argv[1])}`) {
+if (isMain(import.meta.url)) {
   await main();
 }

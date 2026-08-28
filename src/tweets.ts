@@ -28,7 +28,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { partsOf } from "./arc.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -42,7 +41,7 @@ import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
-import { withLedger } from "./cli-ledger.js";
+import { stageCli } from "./cli-ledger.js";
 
 export const PROMPT_VERSION = "tweets/2";
 
@@ -590,12 +589,8 @@ async function main(): Promise<void> {
   });
 }
 
-/* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`
-   also matches when a *different* entry file with the same basename imports this
-   module — `scripts/tweets.ts` importing `src/tweets.ts` would run the CLI as a
-   side effect of the import, which is the one thing this guard exists to
-   prevent. */
-const isMain =
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void withLedger("cli", main);
+/* **`stageCli`, which is the guard and the ledger together.** Awaited rather
+   than `void`ed: flushing the ledger, and any failure in it, are part of the
+   command finishing rather than something the process might exit before doing.
+   src/cli-ledger.ts says what the one line replaces and why it is one line. */
+await stageCli(import.meta.url, main);

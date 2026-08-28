@@ -33,6 +33,7 @@ import { findPassages } from "../src/search.js";
 import { converse } from "../src/converse.js";
 import { withLedger } from "../src/cli-ledger.js";
 import type { Block, ChatMessage, Meta } from "../src/types.js";
+import { isMain } from "../src/is-main.js";
 
 /**
  * What Sonnet 5 costs, per million tokens, as of 2026-08-26.
@@ -335,9 +336,7 @@ async function main(): Promise<void> {
   );
 }
 
-const invokedDirectly =
-  process.argv[1] !== undefined &&
-  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
+const invokedDirectly = isMain(import.meta.url);
 
 if (invokedDirectly) {
   /* See the note at the foot of evals/review-stances.ts. */

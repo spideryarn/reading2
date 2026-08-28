@@ -24,9 +24,9 @@ import { JSDOM, VirtualConsole } from "jsdom";
 import { Readability } from "@mozilla/readability";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { fetchHtml } from "./fetch.js";
 import { slugFromUrl } from "./ingest.js";
+import { isMain } from "./is-main.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
 import { sanitizeHtml } from "./sanitize.js";
 import type { Meta } from "./types.js";
@@ -350,11 +350,4 @@ async function main(): Promise<void> {
   console.log(`            ${path.resolve("data", result.slug, "meta.json")}`);
 }
 
-/* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`
-   also matches when a *different* entry file with the same basename imports this
-   module — `scripts/arc.ts` importing `src/arc.ts` would run the CLI as a side
-   effect of the import, which is the one thing this guard exists to prevent. */
-const isMain =
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void main();
+if (isMain(import.meta.url)) void main();

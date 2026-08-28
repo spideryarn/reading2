@@ -40,6 +40,7 @@ import path from "node:path";
 import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import sniffHTMLEncoding from "html-encoding-sniffer";
 import { slugFromUrl } from "./ingest.js";
+import { isMain } from "./is-main.js";
 import { storeRawSource } from "./store/blobs.js";
 
 /* ------------------------------------------------------------------ *
@@ -1311,5 +1312,10 @@ async function main(): Promise<void> {
   }
 }
 
-const isMain = process.argv[1] && import.meta.url.endsWith(path.basename(process.argv[1]));
-if (isMain) void main();
+/* This guard used to be `import.meta.url.endsWith(path.basename(process.argv[1]))`,
+   which six other files' comments called wrong and which nothing had ever run
+   against a case that showed it: it ran this CLI as a side effect of importing
+   the module whenever any *other* `fetch.ts` was the entry file, and it never
+   fired at all from a directory with a space in its name. tests/is-main.test.ts
+   holds the failing input for each. */
+if (isMain(import.meta.url)) void main();

@@ -36,6 +36,7 @@ import type { AiCallRow } from "../src/ai-spend.js";
 import { loadEnvLocal } from "../src/env.js";
 import { costStore, totalRows } from "../src/store/ai-calls.js";
 import { DECLARATIONS } from "../src/spend-declarations.js";
+import { isMain } from "../src/is-main.js";
 
 interface Args {
   since?: string;
@@ -382,7 +383,4 @@ async function main(): Promise<void> {
   else console.log("\n(--reconcile asks OpenRouter what it thinks this key has spent.)");
 }
 
-const isMain =
-  process.argv[1] !== undefined &&
-  import.meta.url === `file://${process.argv[1]}`;
-if (isMain) void main();
+if (isMain(import.meta.url)) void main();

@@ -51,6 +51,7 @@
  * that and then measures.
  */
 import { loadEnvLocal } from "../src/env.js";
+import { isMain } from "../src/is-main.js";
 
 loadEnvLocal();
 
@@ -134,7 +135,7 @@ export async function localMagicLink(redirectTo: string): Promise<LocalLink> {
   return { actionLink: link.action_link, hashedToken: link.hashed_token };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   localMagicLink(flag("redirect", "http://localhost:5273/")).then(
     (link) => console.log(link.actionLink),
     (err: Error) => {

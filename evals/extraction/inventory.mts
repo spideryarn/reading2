@@ -35,6 +35,7 @@ import { unhideCollapsedSections } from "../../src/extract.js";
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { isMain } from "../../src/is-main.js";
 
 /**
  * Words per shingle, and the two thresholds a block is judged by.
@@ -627,4 +628,4 @@ async function main(): Promise<void> {
   }
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]).endsWith("inventory.mts")) void main();
+if (isMain(import.meta.url)) void main();

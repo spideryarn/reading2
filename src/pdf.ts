@@ -25,7 +25,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { isMain } from "./is-main.js";
 /**
  * **pdf.js is loaded on demand, and that is not a performance tweak.**
  *
@@ -442,9 +442,4 @@ async function main() {
   for (const line of furniture) console.log(`             ${line.slice(0, 90)}`);
 }
 
-/* Resolved paths, not a suffix match — see the same guard in src/blocks.ts for
-   why `endsWith` runs the CLI as a side effect of an unrelated import. */
-const isMain =
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void main();
+if (isMain(import.meta.url)) void main();
