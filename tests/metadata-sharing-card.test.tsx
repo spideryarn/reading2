@@ -84,6 +84,8 @@ const ARTICLE: Article = {
 
 /** What `GET /api/metadata/:slug` answers. Posed by each test. */
 let sharing: ArticleSharing | undefined;
+/** Whether that request fails outright. The page's `provenance` then stays null. */
+let metadataFails = false;
 
 function metadata(): ArticleMetadata {
   return {
@@ -107,9 +109,15 @@ let root: Root;
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   sharing = undefined;
+  metadataFails = false;
   vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith("/api/metadata/")) {
+      if (metadataFails) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ error: "the database went away" }), { status: 500 }),
+        );
+      }
       return Promise.resolve(
         new Response(JSON.stringify(metadata()), {
           status: 200,
@@ -190,5 +198,27 @@ describe("the sharing card, on the page that owns it", () => {
 
     expect(host.textContent).toContain("could not check");
     expect(host.textContent).not.toContain("Only you can read this");
+  });
+
+  /**
+   * **A failed metadata fetch used to remove the section altogether.**
+   *
+   * `hasShelfRow` is `provenance !== null && !showingFixture`, and a failure
+   * leaves `provenance` null — so the owner looking for the sharing switch
+   * found no switch and nothing saying why. The card has an honest state for
+   * exactly this and it was being skipped over. GPT Sol, 2026-08-28.
+   *
+   * The section is hidden now only for a *known* fixture, which is the one case
+   * where the controls really would 404.
+   */
+  it("shows the card saying it does not know, rather than hiding it", async () => {
+    metadataFails = true;
+
+    await open();
+
+    expect(host.textContent).toContain("Access & sharing");
+    expect(host.textContent).toContain("could not check");
+    // And no switch is offered, because we have no idea what it would toggle.
+    expect(host.textContent).not.toContain("Share with anyone");
   });
 });

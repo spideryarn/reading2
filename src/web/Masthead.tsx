@@ -45,9 +45,9 @@
  * the horizontal axis, so it stays put when the table scrolls sideways). What
  * stays with you as you read is the spine and the arc column, not this.
  */
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
-import type { Article } from "../types.js";
+import type { Article, Meta } from "../types.js";
 import { Link } from "./Link.js";
 import { SourceLink } from "./SourceLink.js";
 import { LIBRARY_HREF } from "./router.js";
@@ -95,15 +95,29 @@ export function Masthead({ article, slug, onRenamed }: Props) {
      rather than here, and why this site cannot say whether the title on screen
      is the reader's own.
 
-     Called unconditionally with a no-op for a visitor, because a hook cannot be
-     skipped conditionally — and it costs nothing to mount: it holds three
-     pieces of state and fetches nothing until the pencil is pressed, which
-     `offer` below is what prevents. */
-  const rename = useArticleRename(slug, onRenamed ?? noRename);
+     **Mounted only for an owner, since 2026-08-28.** It used to be called
+     unconditionally with a no-op and `offer={false}` under it — which worked,
+     and was a convention rather than a seam: the hook holding an authenticated
+     `PATCH` was one careless `offer` away from being reachable by somebody who
+     could not use it. GPT Sol asked for the boundary and it costs one
+     component. reader-capability.ts says why a boolean cannot do this job. */
   // The counts live in stats.ts now, because the drawer's About panel needs the
   // same arithmetic and two copies of it would drift.
   const stats = useMemo(() => articleStats(article), [article]);
   const root = tree.nodes[tree.rootId];
+
+  /** The heading itself, which is the same either way. */
+  const heading = (
+    <h1 className="tw:min-w-0 tw:flex-1">
+      {meta.url ? (
+        <a href={meta.url} target="_blank" rel="noreferrer noopener">
+          {meta.title}
+        </a>
+      ) : (
+        meta.title
+      )}
+    </h1>
+  );
 
   // Only the parts of the facts line this article actually has. Joining a
   // filtered list beats a chain of `&&`s that can leave a stranded separator.
@@ -143,23 +157,14 @@ export function Masthead({ article, slug, onRenamed }: Props) {
         {/* The title, and the pencil beside it — TitleEditor.tsx owns where the
             pencil hides, what replaces the heading, and what a failed write
             says, because the metadata page needs all three the same way. */}
-        <EditableTitle
-          rename={rename}
-          title={meta.title}
-          /* No pencil for a visitor — see `onRenamed` above. */
-          offer={onRenamed !== undefined}
-          inputClassName="tw:font-prose tw:text-2xl tw:leading-snug"
-        >
-          <h1 className="tw:min-w-0 tw:flex-1">
-            {meta.url ? (
-              <a href={meta.url} target="_blank" rel="noreferrer noopener">
-                {meta.title}
-              </a>
-            ) : (
-              meta.title
-            )}
-          </h1>
-        </EditableTitle>
+        {onRenamed ? (
+          <RenameableTitle slug={slug} meta={meta} onRenamed={onRenamed}>
+            {heading}
+          </RenameableTitle>
+        ) : (
+          /* A visitor's title, with no rename hook mounted anywhere near it. */
+          <div className="tw:flex tw:min-w-0 tw:items-baseline tw:gap-2">{heading}</div>
+        )}
 
         <p className="facts">
           {facts.map((f, i) => (
@@ -212,5 +217,44 @@ export function Masthead({ article, slug, onRenamed }: Props) {
   );
 }
 
-/** The rename a visitor's masthead reports to. Nothing can call it: `offer` is false. */
-function noRename(): void {}
+/**
+ * **The title, with the pencil — and the hook behind it, mounted only here.**
+ *
+ * `useArticleRename` holds an authenticated `PATCH /api/library/:slug`. It used
+ * to be called unconditionally in `Masthead`, with a no-op callback and
+ * `offer={false}` under it. That worked, and GPT Sol was right to call it a
+ * convention rather than a seam: nothing structural stopped the trigger being
+ * reachable, only a boolean somebody could flip while thinking about something
+ * else.
+ *
+ * A hook cannot be skipped conditionally, so the condition is this component
+ * existing — the same construction `OwnedReader` uses for comments, chat and
+ * the glossary read, and `WithLinkFacts` for the hover lookups.
+ * reader-capability.ts.
+ *
+ * TitleEditor.tsx owns where the pencil hides, what replaces the heading, and
+ * what a failed write says, because the metadata page needs all three the same
+ * way.
+ */
+function RenameableTitle({
+  slug,
+  meta,
+  onRenamed,
+  children,
+}: {
+  slug: string;
+  meta: Meta;
+  onRenamed: (slug: string, title: string) => void;
+  children: ReactNode;
+}) {
+  const rename = useArticleRename(slug, onRenamed);
+  return (
+    <EditableTitle
+      rename={rename}
+      title={meta.title}
+      inputClassName="tw:font-prose tw:text-2xl tw:leading-snug"
+    >
+      {children}
+    </EditableTitle>
+  );
+}

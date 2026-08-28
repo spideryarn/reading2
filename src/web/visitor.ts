@@ -25,7 +25,13 @@
  * reader sees. This file decides *which*.
  */
 import type { PublicArtefacts } from "../public-types.js";
-import { notBuiltYet, notOnSharedLinksYet, readersOwnWork, signedInOnly } from "../messages.js";
+import {
+  availabilityUnknown,
+  notBuiltYet,
+  notOnSharedLinksYet,
+  ownersOnly,
+  readersOwnWork,
+} from "../messages.js";
 import { MODES, type Mode } from "./params.js";
 
 /**
@@ -36,14 +42,43 @@ import { MODES, type Mode } from "./params.js";
  * one by nothing at all, because it is a boundary rather than a gap.
  */
 export type VisitorGap =
-  /** The pipeline never ran for this piece. Nobody's fault; an account is how you get one. */
+  /** The pipeline never ran for this piece. Nobody's fault. */
   | { kind: "not-built"; noun: string }
   /** It exists, and slice 1b has not shipped the public endpoint that would carry it. */
   | { kind: "not-yet-public"; noun: string }
-  /** It works, it costs a model call, and an account is genuinely the way to have it. */
-  | { kind: "signed-in-only"; feature: string }
+  /**
+   * **We could not find out whether it exists.** The metadata request did not
+   * land, so the flags are absent.
+   *
+   * The fifth member, added 2026-08-28, and it exists because a `null` used to
+   * fall through to `not-yet-public` — whose sentence begins *"There is"*. A
+   * network failure was rendered as a claim about somebody's article.
+   *
+   * It must not swallow `not-yet-public` either: one says the piece has the
+   * thing and this one declines to, which is the whole difference between them.
+   */
+  | { kind: "availability-unknown"; noun: string }
+  /** It works, it costs a model call, and it is the owner's. */
+  | { kind: "owners-only"; feature: string }
   /** It is the owner's own annotation, and sharing an article does not share it. */
   | { kind: "readers-own"; plural: string };
+
+/**
+ * The three answers about an artefact, chosen by what the flags say.
+ *
+ * One function because three call sites need it — the two artefact modes, and
+ * the tweets *page*, which had a hardcoded `not-yet-public` constant and so
+ * claimed a thread existed even when the wire said `tweets: false`. GPT Sol,
+ * 2026-08-28.
+ */
+function artefactGap(
+  noun: string,
+  has: keyof PublicArtefacts,
+  available: PublicArtefacts | null,
+): VisitorGap {
+  if (available === null) return { kind: "availability-unknown", noun };
+  return available[has] ? { kind: "not-yet-public", noun } : { kind: "not-built", noun };
+}
 
 /** The noun phrase each artefact mode is called in a sentence, article included. */
 const ARTEFACT: Partial<Record<Mode, { noun: string; has: keyof PublicArtefacts }>> = {
@@ -92,24 +127,32 @@ export function visitorGap(mode: Mode, available: PublicArtefacts | null): Visit
   if (mode === "toc") return null;
 
   const costs = COSTS[mode];
-  if (costs) return { kind: "signed-in-only", feature: costs };
+  if (costs) return { kind: "owners-only", feature: costs };
 
   const artefact = ARTEFACT[mode];
-  if (artefact) {
-    if (available && !available[artefact.has]) return { kind: "not-built", noun: artefact.noun };
-    return { kind: "not-yet-public", noun: artefact.noun };
-  }
+  if (artefact) return artefactGap(artefact.noun, artefact.has, available);
 
   /* Not reachable today — `Mode` is closed and every member is in one of the
      tables above. It is here rather than as a non-null assertion because a mode
      added later must fail closed: a visitor sees a boundary they can read
      rather than a band that renders nothing. */
-  return { kind: "signed-in-only", feature: mode };
+  return { kind: "owners-only", feature: mode };
 }
 
 /** The same question for the two things that are not modes. */
 export const COMMENTS_GAP: VisitorGap = { kind: "readers-own", plural: "Comments" };
-export const TWEETS_GAP: VisitorGap = { kind: "not-yet-public", noun: "a tweet thread" };
+
+/**
+ * The tweets page, **derived rather than assumed.**
+ *
+ * It was a constant asserting `not-yet-public`, so `/read/:slug/tweets` told a
+ * visitor *"There is a tweet thread for this piece"* on an article whose wire
+ * response said `tweets: false`. A sentence about somebody's article, made up
+ * by a client that had been told otherwise. GPT Sol, 2026-08-28.
+ */
+export function tweetsGap(available: PublicArtefacts | null): VisitorGap {
+  return artefactGap("a tweet thread", "tweets", available);
+}
 
 /**
  * Which mode buttons in the bottom bar are drawn dimmed, **and the sentence
@@ -148,8 +191,10 @@ export function visitorSentence(gap: VisitorGap): string {
       return notBuiltYet(gap.noun);
     case "not-yet-public":
       return notOnSharedLinksYet(gap.noun);
-    case "signed-in-only":
-      return signedInOnly(gap.feature);
+    case "availability-unknown":
+      return availabilityUnknown(gap.noun);
+    case "owners-only":
+      return ownersOnly(gap.feature);
     case "readers-own":
       return readersOwnWork(gap.plural);
   }
@@ -171,7 +216,11 @@ export function visitorSentence(gap: VisitorGap): string {
 const FIXED_BY_AN_ACCOUNT: Record<VisitorGap["kind"], boolean> = {
   "not-built": true,
   "not-yet-public": false,
-  "signed-in-only": true,
+  /* Same as `not-yet-public`, and for a stronger reason: we do not even know
+     whether there is anything to carry, so an offer would be a guess wrapped in
+     a promise. */
+  "availability-unknown": false,
+  "owners-only": true,
   "readers-own": false,
 };
 

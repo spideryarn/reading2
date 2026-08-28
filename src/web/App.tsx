@@ -123,7 +123,7 @@ import { apiFetch, readJson } from "./lib/api.js";
 import { loadPublicArticle, loadPublicMetadata } from "./public-api.js";
 import type { PublicArtefacts } from "../public-types.js";
 import { NO_COMMENTS, NO_TERMS, NO_THREADS, type ReaderCapability } from "./reader-capability.js";
-import { markedModes, TWEETS_GAP, visitorGap } from "./visitor.js";
+import { markedModes, tweetsGap, visitorGap } from "./visitor.js";
 import { NotSharedPage, SharedNotice, ViewOnlyChip, VisitorBand } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
@@ -771,7 +771,10 @@ function VisitorArticle({
         slug={slug}
         article={article}
         view="tweets"
-        gap={TWEETS_GAP}
+        /* Derived from the wire's own flag, not a constant. It asserted "there
+           is a tweet thread for this piece" on articles whose response said
+           there was not. visitor.ts § tweetsGap. */
+        gap={tweetsGap(available)}
         signedIn={signedIn}
       />
     );

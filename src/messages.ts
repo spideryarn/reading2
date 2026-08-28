@@ -1127,20 +1127,48 @@ export function notOnSharedLinksYet(noun: string): string {
 }
 
 /**
- * **It exists and it costs money.** Chat, search, review, asking about a
- * passage: every one of them is a model call, and Greg's third decision is that
- * a logged-out visitor causes none.
+ * **We could not find out whether it exists**, and the sentence above must not
+ * be used for it.
  *
- * Different from both of the above and it has to read as different: the feature
- * is there, it works, and an account is genuinely the way to have it. That is
- * what makes the sign-up line beside this one an honest offer rather than a
- * toll booth.
+ * `available` is `null` when `GET /api/public/metadata/:slug` did not land, and
+ * until 2026-08-28 that fell through to `notOnSharedLinksYet` — whose first two
+ * words are *"There is"*. A network failure was being rendered as a claim about
+ * somebody's article. GPT Sol found it reviewing the client half.
+ *
+ * So this says only the half we know. *A shared link does not carry a glossary
+ * yet* is unconditionally true in this slice whatever the flags would have
+ * said, and it asserts nothing about whether one was ever written.
+ *
+ * **Deliberately close to `notOnSharedLinksYet` and deliberately not the same.**
+ * The two differ by exactly the claim that separates them — one says the piece
+ * has the thing, the other declines to. A reader who saw both would notice; a
+ * reader who saw one cannot be misled by it.
+ */
+export function availabilityUnknown(noun: string): string {
+  return `A shared link does not carry ${noun} yet.`;
+}
+
+/**
+ * **It exists, it costs money, and it belongs to somebody.** Chat, search,
+ * review, asking about a passage: every one is a model call, and Greg's third
+ * decision is that a logged-out visitor causes none.
+ *
+ * ## It said "for signed-in readers" and that was wrong for half its audience
+ *
+ * A visitor is *anyone who does not own the document* — signed out, or signed
+ * in and reading somebody else's. Telling the second kind that a feature is
+ * "for signed-in readers" tells them to do a thing they have already done, and
+ * signing in leaves them on exactly this page. GPT Sol, 2026-08-28.
+ *
+ * So the wording is **ownership-neutral**: it names whose the feature is rather
+ * than what the reader is missing, which is true for both kinds of visitor and
+ * stays true when stage 3 lets a second reader hold the same article.
  *
  * `feature` is capitalised, because it names a control the visitor just
  * pressed: `"Chat"`, `"Search"`.
  */
-export function signedInOnly(feature: string): string {
-  return `${feature} is for signed-in readers — it asks the model something, and a shared link spends nobody's money.`;
+export function ownersOnly(feature: string): string {
+  return `${feature} is for whoever added this article — asking costs a model call, and a shared link spends nobody's money.`;
 }
 
 /**

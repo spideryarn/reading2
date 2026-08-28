@@ -766,7 +766,14 @@ export function Metadata({
         <SharingSection
           slug={slug}
           title={meta.title}
-          offer={hasShelfRow}
+          /* **Not `hasShelfRow`**, which is false while the fetch is out and
+             false for ever if it fails — so a failed metadata check removed the
+             whole section rather than showing its "we could not check" state.
+             An owner looking for the sharing switch found no sharing switch and
+             nothing saying why. GPT Sol, 2026-08-28.
+             Hidden only for a *known* fixture, which is the one case where the
+             controls really would 404. */
+          offer={!showingFixture}
           sharing={provenance?.sharing}
         />
 

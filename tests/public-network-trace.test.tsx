@@ -263,9 +263,9 @@ async function remount(): Promise<void> {
   root = createRoot(host);
 }
 
-/** The whole app, at a shared article's address. */
-async function open(search = ""): Promise<void> {
-  history.replaceState(null, "", `/read/${SLUG}${search}`);
+/** The whole app, at a shared article's address. `path` selects the view. */
+async function open(search = "", path = ""): Promise<void> {
+  history.replaceState(null, "", `/read/${SLUG}${path}${search}`);
   await act(async () => {
     root.render(createElement(NuqsAdapter, null, createElement(App, null)));
   });
@@ -350,7 +350,7 @@ describe("a signed-out browser on a shared document", () => {
    */
   it("does not offer an account to a reader who has one", async () => {
     await open("?mode=chat");
-    expect(host.textContent).toContain("Chat is for signed-in readers");
+    expect(host.textContent).toContain("Chat is for whoever added this article");
     expect(host.textContent).toContain("Make a free account");
 
     await remount();
@@ -363,7 +363,11 @@ describe("a signed-out browser on a shared document", () => {
     await open("?mode=chat");
 
     expect(host.textContent).toContain("View only");
-    expect(host.textContent).toContain("Chat is for signed-in readers");
+    /* **The reason is ownership-neutral**, so it stays true for this reader.
+       It said "Chat is for signed-in readers" until 2026-08-28, which told
+       somebody already signed in to do the thing they had done — and signing in
+       leaves them on this very page. GPT Sol. */
+    expect(host.textContent).toContain("Chat is for whoever added this article");
     expect(host.textContent).not.toContain("Make a free account");
   });
 
@@ -427,6 +431,38 @@ describe("a signed-out browser on a shared document", () => {
     /* And the card really did open — the last guard against this test going
        green by doing nothing. */
     expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
+  /**
+   * **The other two views, which the sweep never opened.**
+   *
+   * Every request assertion in this file was made at `/read/:slug` with query
+   * modes, so `/metadata` and `/tweets` — two of the three addresses a visitor
+   * can reach — were untested for requests *and* for copy. GPT Sol, 2026-08-28.
+   */
+  it("stays inside the public namespace on the metadata and tweets pages", async () => {
+    for (const view of ["/metadata", "/tweets"]) {
+      await remount();
+      await open("", view);
+      expect(outsidePublic(), view).toEqual([]);
+      expect(trace.filter((r) => r.method !== "GET"), view).toEqual([]);
+    }
+  });
+
+  /**
+   * **The tweets page reads the flag rather than asserting one.**
+   *
+   * `TWEETS_GAP` was a constant saying `not-yet-public`, so this page told a
+   * visitor *"There is a tweet thread for this piece"* about an article whose
+   * own response said `tweets: false`. The unit test for `tweetsGap` cannot see
+   * that, because the constant was in the *caller* — which is why breaking the
+   * call site left `visitor-gaps` entirely green.
+   */
+  it("does not claim a tweet thread that the wire says is not there", async () => {
+    await open("", "/tweets");
+
+    expect(host.textContent).toContain("Nobody has built a tweet thread for this piece yet");
+    expect(host.textContent).not.toContain("There is a tweet thread");
   });
 
   it("opens the comments drawer without asking for anybody's comments", async () => {

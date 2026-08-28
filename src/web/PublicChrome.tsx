@@ -84,9 +84,11 @@ export function SharedNotice({ signedIn }: { signedIn: boolean }) {
   return (
     <div className="tw:mx-auto tw:mb-4 tw:max-w-3xl tw:rounded-md tw:border tw:border-rule tw:bg-surface-raised tw:px-4 tw:py-3 tw:font-sans tw:text-sm tw:text-ink-faint">
       <p className="tw:m-0">{SHARED_WITH_YOU}</p>
-      {!signedIn && (
-        <SignUp reason="to ask this article questions, build a glossary for it, and keep it on your own shelf" />
-      )}
+      {/* **What an account actually gets them**, and it is not this article.
+          The offer used to promise chat, a glossary and a shelf entry *for this
+          piece* — none of which an account provides until stage 3 lets a second
+          reader hold the same document. GPT Sol, 2026-08-28. */}
+      {!signedIn && <SignUp reason="to read your own articles this way" />}
     </div>
   );
 }
@@ -104,7 +106,7 @@ export function VisitorBand({ gap, signedIn }: { gap: VisitorGap; signedIn: bool
     <aside className="mode-band" aria-label="Not available on a shared link">
       <div className="tw:flex tw:flex-1 tw:flex-col tw:justify-center tw:gap-3 tw:px-4 tw:py-6 tw:text-sm tw:text-ink-faint">
         <p className="tw:m-0 tw:text-ink">{visitorSentence(gap)}</p>
-        {offerAnAccount(gap, signedIn) && <SignUp reason="to have it here" />}
+        {offerAnAccount(gap, signedIn) && <SignUp reason="to read your own articles this way" />}
       </div>
     </aside>
   );
@@ -118,7 +120,7 @@ export function VisitorNotice({ gap, signedIn }: { gap: VisitorGap; signedIn: bo
   return (
     <div className="tw:flex tw:flex-col tw:gap-3 tw:px-1 tw:py-4 tw:font-sans tw:text-sm tw:text-ink-faint">
       <p className="tw:m-0 tw:text-ink">{visitorSentence(gap)}</p>
-      {offerAnAccount(gap, signedIn) && <SignUp reason="to have it here" />}
+      {offerAnAccount(gap, signedIn) && <SignUp reason="to read your own articles this way" />}
     </div>
   );
 }

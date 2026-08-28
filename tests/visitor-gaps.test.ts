@@ -27,7 +27,7 @@ import {
   anAccountWouldHelp,
   COMMENTS_GAP,
   markedModes,
-  TWEETS_GAP,
+  tweetsGap,
   visitorGap,
   visitorSentence,
   type VisitorGap,
@@ -78,19 +78,51 @@ describe("what a visitor is told, mode by mode", () => {
    */
   it("does not turn a failed metadata fetch into 'nobody built one'", () => {
     for (const mode of ["glossary", "summary", "ideas"] as const) {
-      expect(visitorGap(mode, null)?.kind).toBe("not-yet-public");
+      expect(visitorGap(mode, null)?.kind).toBe("availability-unknown");
     }
   });
 
-  it("names the modes that spend as signed-in-only, whatever the flags say", () => {
+  /**
+   * **And the fifth state must not swallow the fourth.**
+   *
+   * `availability-unknown` was `not-yet-public` until 2026-08-28, whose
+   * sentence begins *"There is"* — so a network failure was rendered as a claim
+   * about somebody's article. Folding them back together would be the same bug
+   * under a new name, so this compares the two **sentences** rather than
+   * counting kinds: a union can grow a member that says nothing new.
+   */
+  it("says a different thing when it does not know than when it does", () => {
+    const known = visitorSentence(visitorGap("glossary", EVERYTHING_BUILT) as VisitorGap);
+    const unsure = visitorSentence(visitorGap("glossary", null) as VisitorGap);
+
+    expect(known).not.toBe(unsure);
+    // The one that knows may claim the piece has it; the one that does not, may not.
+    expect(known).toContain("There is");
+    expect(unsure).not.toContain("There is");
+  });
+
+  it("names the modes that spend as the owner's, whatever the flags say", () => {
     for (const mode of ["chat", "search", "review", "diagram"] as const) {
       for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT, null]) {
         expect(visitorGap(mode, flags)).toEqual({
-          kind: "signed-in-only",
+          kind: "owners-only",
           feature: expect.any(String),
         });
       }
     }
+  });
+
+  /**
+   * **The tweets page derives its gap rather than asserting one.**
+   *
+   * It was a constant saying `not-yet-public`, so `/read/:slug/tweets` told a
+   * visitor *"There is a tweet thread for this piece"* about an article whose
+   * own wire response said `tweets: false`. GPT Sol, 2026-08-28.
+   */
+  it("asks the flags about the tweet thread too", () => {
+    expect(tweetsGap(NOTHING_BUILT).kind).toBe("not-built");
+    expect(tweetsGap(EVERYTHING_BUILT).kind).toBe("not-yet-public");
+    expect(tweetsGap(null).kind).toBe("availability-unknown");
   });
 
   /**
@@ -125,20 +157,27 @@ describe("the sentences themselves", () => {
   const ALL: VisitorGap[] = [
     visitorGap("glossary", NOTHING_BUILT) as VisitorGap,
     visitorGap("glossary", EVERYTHING_BUILT) as VisitorGap,
+    visitorGap("glossary", null) as VisitorGap,
     visitorGap("chat", null) as VisitorGap,
     COMMENTS_GAP,
-    TWEETS_GAP,
   ];
 
   it("covers every kind the union has", () => {
     expect(new Set(ALL.map((g) => g.kind))).toEqual(
-      new Set(["not-built", "not-yet-public", "signed-in-only", "readers-own"]),
+      new Set([
+        "not-built",
+        "not-yet-public",
+        "availability-unknown",
+        "owners-only",
+        "readers-own",
+      ]),
     );
   });
 
   it("says something different for each kind", () => {
-    /* By kind rather than by member, because `TWEETS_GAP` and a not-yet-public
-       glossary are deliberately the same sentence about different nouns. */
+    /* By kind rather than by member, because a not-yet-public tweet thread and
+       a not-yet-public glossary are deliberately the same sentence about
+       different nouns. */
     const byKind = new Map(ALL.map((g) => [g.kind, visitorSentence(g)]));
     expect(new Set(byKind.values()).size).toBe(byKind.size);
     for (const sentence of byKind.values()) {
@@ -163,6 +202,8 @@ describe("the sentences themselves", () => {
     expect(anAccountWouldHelp(visitorGap("glossary", NOTHING_BUILT) as VisitorGap)).toBe(true);
     expect(anAccountWouldHelp(visitorGap("chat", null) as VisitorGap)).toBe(true);
     expect(anAccountWouldHelp(visitorGap("glossary", EVERYTHING_BUILT) as VisitorGap)).toBe(false);
+    /* And least of all where we do not know there is anything to offer. */
+    expect(anAccountWouldHelp(visitorGap("glossary", null) as VisitorGap)).toBe(false);
     expect(anAccountWouldHelp(COMMENTS_GAP)).toBe(false);
   });
 });

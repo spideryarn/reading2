@@ -384,3 +384,43 @@ describe("renaming from the metadata page", () => {
     expect(find("h1").textContent).toBe("The Barn Owl");
   });
 });
+
+/**
+ * **That the rename hook is mounted only for an owner.**
+ *
+ * `useArticleRename` holds an authenticated `PATCH /api/library/:slug`. Until
+ * 2026-08-28 `Masthead` called it unconditionally — for visitors too — with a
+ * no-op callback and `offer={false}` under it. Nothing structural stopped the
+ * trigger being reachable; only a boolean somebody could flip while thinking
+ * about something else. GPT Sol called it a convention rather than a seam.
+ *
+ * A source-level assertion, and labelled honestly as one, exactly like
+ * `tests/glossary-band-wiring.test.ts`: the hook makes no request on mount, so
+ * the network trace cannot see it, and the property that matters is *where the
+ * call is written*. It reads text and cannot tell a call in dead code from one
+ * that runs — but it catches the specific regression, which is the hook
+ * climbing back up into the shared component.
+ */
+describe("the masthead's rename seam", () => {
+  it("calls useArticleRename once, inside the owner-only component", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const path = await import("node:path");
+    const src = await readFile(
+      path.resolve(import.meta.dirname, "..", "src/web/Masthead.tsx"),
+      "utf8",
+    );
+
+    expect(src.match(/useArticleRename\(/g) ?? []).toHaveLength(1);
+
+    /* And it is inside `RenameableTitle`, which `Masthead` renders only when it
+       was given an `onRenamed` — i.e. only for the owner. Sliced from that
+       function's declaration to the end of the file, which is where it sits. */
+    const owned = src.slice(src.indexOf("function RenameableTitle("));
+    expect(owned).toContain("useArticleRename(");
+
+    /* The no-op that used to stand in for a visitor's callback is gone with the
+       arrangement that needed it. Its survival would mean the unconditional
+       call had come back. */
+    expect(src).not.toContain("noRename");
+  });
+});
