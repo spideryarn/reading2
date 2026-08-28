@@ -99,11 +99,15 @@ clear-cut, ask at the end about anything that is not. Tier 1 from there.
 | **1.8** the Sentry packages | `91680a1` — `@sentry/node-core` and `@sentry/core` declared, `@sentry/node` dropped, thirteen packages out of the lockfile. `@babel/types` and `@tanstack/table-core` swept up with them; knip's "Unlisted dependencies" is now empty. |
 | **1.7** the stale comment | In the tree, under **a peer's** commit `01b55b2` — they were in `src/library-search.ts` for the block-policy work and their `git add` took my hunks with it. Nothing lost; see the note in 1.7. |
 | **1.10** `.env.local`, unread | `c5ac05a` — `src/pdf-read.ts` spent without ever reading it; the gate that already knows which CLIs spend now holds the rule for all eight. Found by checking 1.5's claim about a stale comment. |
+| **1.3** the readiness probe | `2a43831` — one `pgReady`, 32 suites, and the discovery that the "loud skip" they were built around had been silent under `npm test` all along, because vitest swallows a module-load `console.warn` from a file whose tests then skip. |
+| **1.4** `fetchOk` | `2765523` — six sites into `src/web/lib/api.ts`, not a new module; eleven others left alone with reasons. The missing piece was a test on the error path, and its control shows 207 existing tests pass against the break. |
+| **1.1 + 1.2** the JSON helpers | `5794e2a` — `stripFence` and `readJsonOrNull` in `src/parse-json.ts`, with the merged fifteen-line reasoning and `labels.ts`'s extra paragraph about `redact` being path-based. Four call sites in; five are held, tangled with a peer's supplement work. |
 | **1.5** ten exports, two false comments | `e65d754` — five status types, `spineWidth`, `GUTTER_PX`; the "can move without unmounting" claim rewritten in `useSimilar` and `useProjection`, guards kept. |
 | **1.6** dead code knip cannot see | `0a4e0db` — `editTurn` and the stale `JobStore`, plus **nine** citations of `editTurn` rather than the two the plan counted. `preview-colour.tsx` refused; see 1.6. |
 | **1.9** the origins list | `0e75064` — `ownOrigins()` reads `VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_URL`, so nobody has to set anything. Two red-first tests; `.env.example` and `security.md` say what the gap was. |
 
-**Not done, and deliberately so:** 0.4 (the three streaming tests) and all of Tier 2.
+**Tier 1 is done.** 0.4 (the three streaming tests) and all of Tier 2 are not, and Tier 2 was never
+in the clear-cut half.
 
 ### What the code review changed, and it earned its keep
 
@@ -389,6 +393,17 @@ cannot escape), so wave 1's §1.3 privacy sweep is intact and this changes nothi
 
 `src/parse-json.ts` is the right home — wave 1's Rule 2, and its 60-line header already owns the
 invariant.
+
+**Done, `5794e2a`, and the experiment was re-run rather than cited.** Eighteen inputs in the test,
+twenty-one checked here including `search.ts`'s exact spelling — the one with no trailing `.trim()`,
+which the plan had not distinguished. Zero disagreements. `tests/parse-json.test.ts` keeps both old
+spellings and the whole input list, plus a control proving the comparison can fail: a stripper that
+only trims agrees on "no fence at all" and disagrees everywhere a fence exists.
+
+**Five call sites are held back**, not skipped: `arc.ts`, `toc.ts`, `summarise.ts`, `glossary.ts`
+and `ideas.ts` picked up a peer's supplement work — `splitBlocks`, `appendSupplement`,
+`isSupplementNode`, `previousGlossaryFrom` — while this was being written, and one of their new
+functions already calls `readJsonOrNull`. Good for the code, awkward for the commit.
 
 **Effort** S · **Value** medium · **Risk** very low.
 
