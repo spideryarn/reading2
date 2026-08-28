@@ -171,10 +171,17 @@ when("the filesystem and Postgres stores agree about the reader's state", () => 
     const db = getDb();
     await db.delete(articles).where(eq(articles.slug, SLUG));
     await db.insert(articles).values({ id: ARTICLE_ID, ownerId: currentOwnerId(), slug: SLUG });
+    /* No `ownerId` here, and it is not an omission. `article_revisions` has no
+       owner column — ownership lives on `articles` (src/db/schema.ts), and a
+       revision is reached through its article. This fixture used to pass one
+       anyway; Drizzle builds its SQL from the table's columns, so the key went
+       nowhere and the test went green having claimed an owner it never set.
+       The only thing that ever noticed was tsc, and only obliquely: the excess
+       property made the call fall back to the array overload, which is why the
+       error read "No overload matches this call". */
     await db.insert(articleRevisions).values({
       id: REVISION_ID,
       articleId: ARTICLE_ID,
-      ownerId: currentOwnerId(),
       status: "published",
     });
     /* The ids exist as identities first — `revision_blocks` has a foreign key
