@@ -820,6 +820,217 @@ publish an index of them.
 **Also stage 1:** an explicit `Referrer-Policy`. The public slug is not a secret, but the page URL
 carries reading state, and the original source URL can carry query data of its own.
 
+### Slice 1b — the rest of what the owner already has
+
+*Planned 2026-08-28, after 1a shipped. A visitor gets the glossary, the summaries, the ideas and the
+tweet thread — the four artefacts the owner has and a shared link currently withholds.*
+
+Today a visitor reads the prose, the tree, the spine, the table of contents and the granularity zoom,
+and the arc rides along inside the article payload. Everything else is **marked** — dimmed but
+pressable, opening a band that says why. One of the four sentences it can say is `not-yet-public`,
+whose comment in [`visitor.ts`](../../src/web/visitor.ts) reads *"It exists, and slice 1b has not
+shipped the public endpoint that would carry it."* **This slice is what deletes that sentence.**
+
+#### Three decisions Greg made on 2026-08-28, and the design GPT Sol gave that two of them overruled
+
+Sol's design input for this slice is in
+[public-read-only-stage1b-input-sol.md](public-read-only-stage1b-input-sol.md). It is careful and
+most of it is adopted. Two of its central recommendations were put to Greg as tradeoffs and he took
+the simpler side of both, which is recorded here rather than in a commit message because
+[CLAUDE.md](../../CLAUDE.md) asks for exactly this — the decisions that went **against** the
+recommendation written down at the time.
+
+| Question | Sol's answer | Greg's decision |
+|---|---|---|
+| How many new endpoints? | **Four** — `/api/public/glossary/:slug` and three siblings, so opening Summary never downloads a glossary | **None.** The four artefacts are four JSONB columns on the same `article_revisions` row the article read already fetches. They become four optional keys on the existing `GET /api/public/article/:slug` response. |
+| Tell a visitor an artefact was written for somebody's reading profile? | **Yes** — a `personalised: boolean`, rendered as one line | **Not now.** One field and one sentence, addable any time. Nothing is lost by waiting. |
+| Say who shared it? | not asked | **Not now, and recorded as a later stage** — see [§ Attribution](#attribution-is-open-again-and-it-is-not-a-display-change) below. |
+
+**What "no new endpoints" removes, which is the point of it.** Sol's four-endpoint design needed a
+tagged wire result (`{status: "ready" | "not-generated"}`), a four-state client type
+(`PublicArtefactRead<T>` — loading, ready, not-generated, unavailable), four route-inventory entries,
+four projections, four public reader methods, four client hooks, and twelve wire states to test.
+Folding them into the payload the page already has removes **all** of it: an artefact that exists is a
+key that is present, and one that does not is a key that is absent. There is no second request to be
+in flight, to fail, or to disagree with the first.
+
+The cost Greg accepted is that the reading page's first payload gets bigger. That is measured rather
+than assumed, and the measurement corrected which artefact the cost is in — see
+[§ What the payload actually costs](#what-the-payload-actually-costs).
+
+**And it makes the slice one piece of work rather than three.** Sol proposed four independently
+deployable vertical slices, summary first as the pattern-setter and glossary second because it
+carries the hazard. That ordering was right for four endpoints and is moot without them: there is one
+projection to write, four times, into one response.
+
+#### `stale` and `outdated` do not cross, and that is mine rather than Greg's or Sol's
+
+Sol's DTOs keep both, and then three sections later list *"freshness imports"* as the single most
+likely thing to bite. Both readings are correct and they do not sit together. `stale` is computed by
+`glossaryIsStale`, `summariesStale`, `tweetsStale` and `ideasAreStale`, and
+[`pg.ts`](../../src/store/pg.ts) imports all four **from the writer modules** —
+
+```ts
+import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";   // pg.ts:44
+import { isStale as summariesStale } from "../summarise.js";                   // pg.ts:58
+import { isStale as tweetsStale } from "../tweets.js";                         // pg.ts:59
+```
+
+— which are exactly the modules [`tests/public-imports.test.ts`](../../tests/public-imports.test.ts)
+forbids the public graph from reaching, because they pull in the model machinery. Carrying `stale`
+publicly therefore means extracting four `isStale` functions and two version constants into
+import-free leaves, across four writer modules, in a tree several agents are editing.
+
+Not paying that here, for three reasons, in increasing order of how much they matter:
+
+1. It removes Sol's own top-listed hazard outright rather than defending against it.
+2. Ideas' freshness check also needs the revision's `tree`, so dropping it drops a read as well.
+3. **A visitor cannot act on it.** `stale` and `outdated` both mean *the owner might want to
+   regenerate this*, and the owner is the only person who can. It is a control surface rendered for
+   somebody with no control.
+
+If we later decide a visitor should be told *this summary may not describe the prose you are reading*
+— which is the honest half of `stale` and is a real thing — it comes back as a deliberate decision
+with its own sentence, not as a field inherited because the owner's response had one.
+
+#### What lands
+
+**Server.** Four allowlist DTO functions in [`src/public/dto.ts`](../../src/public/dto.ts), built the
+way `publicArc` and `publicTree` already are — **constructed field by field, never filtered** — four
+more columns in the public reader's `select`, and four optional keys on `PublicArticle`. No new
+route, no new file, no change to [`route-names.ts`](../../src/public/route-names.ts).
+
+The allowlists are Sol's, checked against the real types, minus the provenance it agreed to drop and
+minus the freshness fields above:
+
+| Artefact | What crosses | What must not |
+|---|---|---|
+| `glossary` | `entries[]`: `id`, `name`, `kind`, `aliases`, `senseHere?`, `background?`, `gloss?`, `detail?`, `url?`, `difficulty?`, `centrality?`, `fromOutside?`, `blocks` | `version`, `generator`, `slug`, `sourceHash`, `profileHash`, `passes`, `generatedAt`, `elapsedMs`, and **every `entry.lookup`** |
+| `summary` | `entries[]`: `range`, `depth`, `short?`, `long?`; plus `missing` | the same six, and **`guidance`** |
+| `ideas` | `ideas[]`: `id`, `name`, `provenance`, `statement`, `whyYouNeedIt?`, `analogy?`, `occurrences[]` (`blockId`, `quote`, `reasoning`, `start?`) | the same six |
+| `tweets` | `limit`; `tweets[]`: `text`, `chars` | the same six |
+
+Three of those need saying out loud because a reviewer will ask:
+
+- **Entry ids cross.** `?term=` links, prose-to-entry selection and entry-to-block navigation all
+  need a stable identity, and the client would otherwise invent an unstable one. Carrying an id does
+  **not** carry its lookup: `glossary_lookups` stays unreachable, and the four-table guard is what
+  makes that a fact rather than an intention.
+- **The three superseded glossary fields — `gloss`, `detail`, `fromOutside` — stay**, because older
+  stored artefacts still have them and the client still renders them.
+- **`missing` crosses** on summaries. It is the reader's only sign that an apparently complete
+  summary is partial, and withholding it would make a gap look like a whole.
+
+**The one thing that cannot be fixed by a projection, restated.** Summary text is *derived* from
+`guidance`. Dropping the field stops direct disclosure; it cannot make the prose neutral, because a
+model may follow or even echo the steer. That is Greg's settled stage-1 position — publish the
+artefact the owner has — and it is [§ The leak that no projection
+fixes](#the-leak-that-no-projection-fixes), not a new problem. Stage 4 is the real answer.
+
+**Client.** The bands stop being owner-only. What makes this small is that **there is no fetch to
+add**: the artefacts arrive in the payload `VisitorArticle` already holds, so the visitor arm of
+[`ReaderCapability`](../../src/web/reader-capability.ts) gains data rather than a loader, and the
+four-state read union Sol specified is never needed.
+
+The seam stays what 1a established and what Sol restated: **a hook cannot be called conditionally**,
+so ownership is decided at a component boundary. But only the *hooks* need two components. One
+presentational band per mode, with its data injected, is the version with fewer parts touching each
+other — and it is what keeps the owner's band and the visitor's band from drifting into two designs
+for one thing, which is the failure the browser pass caught in a drawer heading.
+
+**And `not-yet-public` is deleted in the same slice** — the union member, its sentence in
+`src/messages.ts`, its `FIXED_BY_AN_ACCOUNT` entry and its rendering branch. Every remaining cause is
+one of the other four: `arc` is already public, `diagram` and Search and Chat and Review are
+`owners-only`, comments are `readers-own`, a missing artefact is `not-built`, and a failed read is
+`availability-unknown`. Nothing is left for it to describe, and a union member with no cause is a
+sentence waiting to be shown by mistake.
+
+`tests/visitor-gaps.test.ts` deliberately does not assert the union's member count — a union can grow
+a member that says nothing new — so it asserts **policy** instead: a known-true artefact returns
+`null`, a known-false one returns `not-built`, an unknown one returns `availability-unknown`, a cost
+mode always returns `owners-only`, and `markedModes()` excludes what a visitor can now have.
+
+#### Attribution is open again, and it is not a display change
+
+Greg's sixth decision was *the public page says nothing about the owner*. On 2026-08-28 he reopened
+it as a **future** stage rather than this one:
+
+> Maybe we might want to show who the owner is in future.
+>
+> — Greg, 2026-08-28
+
+Nothing in this slice changes, and nothing built here blocks it. What it would cost, written down now
+so the next person does not rediscover it:
+
+- **We have no public name for anybody.** Readers are identified by email. Showing an owner means a
+  display-name field on the profile first, and a decision about what a visitor sees for somebody who
+  has not set one.
+- **Opt-in per document, or per account?** Sharing an article and putting your name on it are two
+  consents, and the research says so: no product surveyed puts an owner's identity in front of an
+  anonymous viewer by design except Google Docs, where the document *is* the owner's own file.
+- **It does not go in the public payload until something renders it.** Carrying an owner id or name
+  ahead of a consumer is the leak the DTO rules exist to prevent — *a field nobody displays is a
+  field nobody checks* — and the plan already names a public query that selects an `articles` row
+  wholesale as the danger. Cheaper to add when there is a byline to fill.
+
+#### What the payload actually costs
+
+Measured on 2026-08-28 rather than argued, against the filesystem store in `data/`, which still holds
+real articles from before the Postgres move. Raw JSON bytes on disk — so **before** the DTO strips
+provenance and before gzip, both of which only help.
+
+| Article | `blocks` + `tree`, shipped today | the four artefacts | new total | increase |
+|---|---|---|---|---|
+| `noema-mythology-of-conscious-ai` — the only one with all four | 204 KB | +67 KB | 271 KB | **+33%** |
+| `constitution` — the largest | 483 KB | +21 KB | 504 KB | +4% |
+| `writes` — a small one | 22 KB | +19 KB | 41 KB | +87% |
+
+**The glossary is not the expensive one, and the tradeoff was put to Greg saying it was.** A glossary
+runs 2.5–12 KB. **Summaries are the biggest addition at 37 KB**, because they carry a short *and* a
+long text at every depth of the tree, and there are many nodes. The decision does not change — a
+third larger, worst case, on a payload already dominated by `blocks`, which we ship either way — but
+the reason given for the cost was the wrong reason and is corrected here.
+
+The percentage is largest on the *smallest* article, which is the right way round: +87% of 22 KB is
+19 KB, and the articles where a third matters are the ones where a third is 67 KB.
+
+#### The second request disappears, and two sentences with it
+
+`findArticle` in [`App.tsx`](../../src/web/App.tsx) makes **two** requests for a visitor today:
+
+```ts
+const read = await loadPublicArticle(slug);
+if (read.kind === "not-shared") return { kind: "not-shared" };
+
+const available = await loadPublicMetadata(slug)          // ← the second one
+  .then((m) => (m.kind === "ok" ? m.body.available : null))
+  .catch(() => null);
+```
+
+The second exists for one reason: the `available` flags decide which of two true sentences a marked
+mode shows. **Once the artefacts are in the payload, the payload answers that** — an artefact that
+exists is a key that is present. So the request goes, and its swallowed `catch` goes with it.
+
+And that kills a second union member. `availability-unknown` was added on 2026-08-28 because a failed
+metadata fetch was being rendered as a claim about somebody's article — *"There is…"* — which is the
+right fix for the code as it stood. With no second fetch there is no failure to represent: either the
+article payload arrived, and we know exactly what it holds, or it did not, and the reader never
+reaches a mode because the page renders *this document isn't shared* instead.
+
+So `visitorGap` loses **two** of its five members in this slice — `not-yet-public` because every
+artefact is now public, and `availability-unknown` because the question it hedged can no longer fail.
+What remains is `not-built`, `owners-only` and `readers-own`, and those three are causes rather than
+uncertainties.
+
+**Deleting a defensive state deserves more suspicion than adding one**, so the reasoning above is the
+thing to attack in review, not the diff. The claim being made is narrow and checkable: *there is no
+path on which a visitor is rendering a mode and does not know whether its artefact exists.*
+
+**`GET /api/public/metadata/:slug` stays.** The client stops calling it; the endpoint is not deleted.
+It is tested, it is in the route inventory, and it is the honest small answer to *what does this
+article have* for any later consumer — stage 2's link-preview function among them. Removing a working
+public endpoint to save nothing is churn, and the win here was never the route: it was the request.
+
 ### Stage 2 — the link looks like something
 
 *Where the marketing value actually lives, and larger than the first draft said.*
@@ -1112,11 +1323,15 @@ built one* apart from *we do not carry it on a shared link yet*, and collapsing 
 libel somebody's article or promise that an account fixes something only slice 1b can. The sign-up
 line is withheld on the second, for the same reason.
 
-**Two gaps, both server-side, both for 1b.** The confirmation dialog cannot *name* which artefacts
-were personalised: `profileHash` is stored on every one of them and no owner endpoint exposes it
-(`ArticleMetadata` is stages, timings and byte counts). And there is no way to *read* an article's
-visibility — the sharing card asks `GET /api/public/metadata/:slug` anonymously, which is the only
-non-mutating question available and is also the honest one, but it cannot see `public_at`.
+**Two gaps were recorded here as 1b's work, and both were closed the same day** — this paragraph
+said the confirmation dialog could not *name* which artefacts were personalised, and that nothing
+let an owner *read* their own article's visibility. Both were fixed in `c2854f5` at 13:34, and this
+sentence was written down as outstanding afterwards. `ArticleMetadata.sharing` now carries `visibility`,
+`publicAt` and `personalised: StepName[]`, computed from non-null `profileHash` on the four
+artefacts that can carry one, and listing only artefacts that actually exist. The stale version
+survived one commit and is recorded here rather than quietly deleted, because **a plan that lists
+work already done is worse than one that lists nothing**: the next agent believes it and builds it
+twice.
 
 **Diagram is marked whole**, though its default picture is free and drawn from the tree already on
 the page: `DiagramPanel` mounts `useSimilar` and `useProjection` for its other two, both POSTs that
