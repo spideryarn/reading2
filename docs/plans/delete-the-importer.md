@@ -633,7 +633,10 @@ Two more things the inventory turned up:
   and undecided. B3 should say out loud which it is rather than inheriting the silence.
 - **Moving to a row fixes a corruption class for free**, because a row cannot be half-written. That
   is a side benefit of the migration and not its purpose, but it is the second time this plan has
-  found the destination better than the origin.
+  found the destination better than the origin. The filesystem version of that bug was live and is
+  now fixed on its own —
+  [pdf-chunk-cache-corrupt-entry.md](../postmortems/pdf-chunk-cache-corrupt-entry.md), where a
+  killed process left an entry that made one article permanently unreadable.
 - **`tweets` decides it is done by reading its own output.** `isDone: (ctx) => threadIsCurrent(ctx.dir)`
   compares a `sourceHash` stored in `tweets.json` ([`src/pipeline.ts:1206`](../../src/pipeline.ts),
   [`src/tweets.ts:140`](../../src/tweets.ts)). That is not a checkpoint and does not belong in B3 —
