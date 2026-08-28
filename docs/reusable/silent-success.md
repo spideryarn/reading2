@@ -186,6 +186,17 @@ evidence. So: make a red-first that did not actually mutate report **"NO-OP"** r
 run, and check the anchor on every scripted replacement, not only the ones inside controls. A partial
 edit is the same failure wearing different clothes — some of it applied, so nothing looks skipped.
 
+**And a control can go red for the wrong reason, which the NO-OP guard cannot catch.** Same
+afternoon: two mutations were written with `\n` passed through a shell argument, so the files got a
+literal backslash-n and the suite went red on a **syntax error** rather than on the guard under test.
+Both read as successful red-firsts if you look only at the exit code.
+
+> Red for the wrong reason is the same class of useless as green for the wrong reason.
+
+The NO-OP guard catches a mutation that never applied. It cannot catch one that applied and broke
+something else first. **Read the failure message and check it names the thing you meant to break** —
+that is the only step that separates the two, and it costs one line of output.
+
 ## Spotting the family
 
 You are probably in it when:
