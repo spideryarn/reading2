@@ -298,26 +298,41 @@ Nothing points at a rule today (it's `gistable: false`, so no ToC row), but a tr
 one goes stale. `tests/blocks.test.ts` asserts the current behaviour so that fixing it is a
 deliberate act rather than an accident. See [block-ids.md](block-ids.md).
 
-## A suite that cannot run, and the reason you cannot see
+## A suite that cannot run, and how to make it say so
 
-A Postgres suite that finds the database behind the code should say so. Ours can only half say it,
-and the half that fails is the half most people would meet.
+A Postgres suite that finds the database behind the code should say so out loud. Getting that to
+work took three attempts and two wrong conclusions, so the answer is written here rather than
+rediscovered.
 
-`tests/blocks-baseline.test.ts` skips its four Postgres cases when
-`spideryarn.revision_blocks` lacks a column that `src/store/artifacts-pg.ts` selects — an unapplied
-migration. The reason is written into a test name, so `--reporter=verbose` prints it beside the four
-that did not run, along with the command to fix it.
+**Use `process.stderr.write`.** It bypasses vitest's console interception and prints under the
+default reporter — the one `npm test` uses. `tests/blocks-baseline.test.ts` warns that way when
+`spideryarn.revision_blocks` lacks a column `src/store/artifacts-pg.ts` selects, and names the
+migration and the command to fix it.
 
-**Under the default reporter it is invisible.** Vitest 4's default prints counts and nothing else:
-not passing test names, and not `console.warn` — from collection *or* from inside a test body. Both
-were measured rather than assumed, by grepping a default run for the message and getting zero. So
-`npm test` shows `4 skipped` with no cause.
+**Everything else that looks like it should work does not.** All six were measured, by grepping a
+default run for the message:
 
-The alternative is to fail instead of skip, and that is worse: it reddens the suite for everyone
-without a local Postgres, and a missing database is a fact about a laptop rather than a defect in the
-code. So this is a limit rather than a bug, and it is written down because a silent skip is exactly
-the shape [silent-success.md](../reusable/silent-success.md) is about — the difference here being
-that the count *does* change, so something is visibly not happening, and only the why is missing.
+| mechanism | printed by the default reporter |
+|---|---|
+| `it.skip("reason in the name")` | no |
+| `it.todo("reason in the name")` | no |
+| `console.warn` at module level | no |
+| `console.warn` inside a passing test | no |
+| `ctx.annotate(msg, "warning")` | no |
+| **`process.stderr.write`** | **yes** |
 
-**If you see a skipped Postgres case, re-run that file with `--reporter=verbose` before believing
-anything about it.**
+**The rule behind that table**, which is the part worth carrying: it is not that collection-time
+output is swallowed. **Vitest 4.1.11's default reporter swallows intercepted `console` output from
+anything that is not failing, wherever it happens.** The interception is the mechanism, not the
+timing. That is why moving a warning into a test body does not help, and why putting the reason in a
+test name does not either — the default reporter prints no passing test names at all.
+
+**Failing instead of skipping is the wrong fix.** It reddens the suite for everyone without a local
+Postgres, and a missing database is a fact about a laptop rather than a defect in the code.
+
+**Most of the Postgres suites here still skip in silence**, because they warn with `console.warn` —
+`tests/store-artefacts-pg.test.ts` is the pattern the others copied. So a `skipped` count today
+usually comes with no reason at all. Until they move over: **if you see a skipped Postgres case,
+re-run that file with `--reporter=verbose` before believing anything about it.** A silent skip is
+[silent-success.md](../reusable/silent-success.md) in its quietest form — the count does change, so
+something is visibly not happening, and only the *why* is missing.
