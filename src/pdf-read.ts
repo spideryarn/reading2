@@ -48,12 +48,13 @@
  */
 
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PDFDocument } from "pdf-lib";
 import { withLedger } from "./cli-ledger.js";
 import { stageFailure } from "./job-failure.js";
+import { log } from "./log.js";
 import { PDF_READER_MODEL } from "./models.js";
 import {
   baselineFor,
@@ -658,7 +659,9 @@ ${parts.join("\n")}
 
 /**
  * What the stage hands back — **including everything the run cost**, because
- * this stage does not log.
+ * this stage does not log what it did. (It writes one kind of line and one
+ * only: a cache entry it had to throw away, in `readCachedChunk`, which is
+ * about a *previous* run dying rather than about this one.)
  *
  * Not an oversight: src/pipeline.ts logs one line per step, from the seam it
  * already owns, so that "what did this article cost?" has a single answer
@@ -711,6 +714,78 @@ export interface PdfExtractOptions {
    */
   onProgress?: (done: number, total: number, pages: number[], result: Check) => void;
   signal?: AbortSignal;
+}
+
+/**
+ * Read one cached chunk, or nothing at all — and **a damaged entry is nothing,
+ * not an error.**
+ *
+ * The twin of `readJsonIfPresent` in src/labels.ts, which had this right from
+ * the start: a checkpoint that is missing, unreadable or not JSON is worth the
+ * same as one that is stale, and the alternative to reusing it is a run that
+ * costs money, not a run that cannot happen. This one did not, and the
+ * difference between the two is a permanent trap. `writeFile` truncates before
+ * it writes, so a process killed mid-write leaves a file that exists and does
+ * not parse; the key is a hash of things that do not change between runs, so
+ * every later attempt computed the same key, found the same broken file, and
+ * threw the same `SyntaxError` out of the whole extract step. Nothing here ever
+ * deletes these files, so Retry could not clear it and the message never said
+ * which file to delete. docs/postmortems/pdf-chunk-cache-corrupt-entry.md.
+ *
+ * **A miss re-buys a vision-model call**, so this is deliberately the most
+ * tolerant test that still means anything: parses, and has the `records` array
+ * every reading has. Nothing about the records themselves — they go through
+ * `checkChunk` next, which is the real gate and is stricter than anything a
+ * shape test here could be.
+ *
+ * It says so in the log, because an entry that had to be discarded is the only
+ * surviving trace that a run was killed halfway through writing it. This file
+ * otherwise does not log — src/pipeline.ts owns the one line per step — but
+ * that line is about what the step cost, and it cannot mention something only
+ * this loop can see.
+ */
+async function readCachedChunk(
+  file: string,
+  about: { slug: string; chunk: string; pages: number[] },
+): Promise<ChunkReading | null> {
+  const text = await readFile(file, "utf-8").catch(() => null);
+  if (text === null) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    log("pipeline").warn(
+      { ...about, bytes: text.length },
+      "discarded an unreadable pdf chunk cache entry; re-reading those pages",
+    );
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as ChunkReading).records)) {
+    log("pipeline").warn(
+      { ...about, bytes: text.length },
+      "discarded a pdf chunk cache entry that is not a reading; re-reading those pages",
+    );
+    return null;
+  }
+  return parsed as ChunkReading;
+}
+
+/**
+ * Write JSON so that it is either wholly there or not there at all.
+ *
+ * The same four lines as `writeAtomic` in src/toc.ts and src/labels.ts, and
+ * duplicated for the reason given there: sharing them would mean a third module
+ * for four lines, and two copies cannot drift in a way that matters — either a
+ * write is atomic or it is not.
+ *
+ * It matters more here than it does there. A half-written `tree.json` is one
+ * step's output and the step runs again; a half-written chunk is a paid model
+ * call that nothing will re-buy, sitting under a key that never changes.
+ */
+async function writeAtomic(file: string, value: unknown): Promise<void> {
+  const tmp = `${file}.${process.pid}.tmp`;
+  await writeFile(tmp, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+  await rename(tmp, file);
 }
 
 /**
@@ -809,9 +884,13 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
      */
     let reading: ChunkReading;
     let result: Check;
-    const cached = await readFile(cacheFile, "utf-8").catch(() => null);
+    const cached = await readCachedChunk(cacheFile, {
+      slug: opts.slug,
+      chunk: key,
+      pages: chunk.pages,
+    });
     if (cached) {
-      reading = JSON.parse(cached) as ChunkReading;
+      reading = cached;
       result = checkChunk(reading, chunk, pass, seen);
     } else {
       for (let attempt = 1; ; attempt++) {
@@ -846,7 +925,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
       /* Only a reading that passed is cached. A failed one is not worth
          replaying, and caching it would make the retry above read back the
          answer it is retrying. */
-      if (result.ok) await writeFile(cacheFile, JSON.stringify(reading, null, 2), "utf-8");
+      if (result.ok) await writeAtomic(cacheFile, reading);
     }
 
     const emitted = withoutRepeats(

@@ -7,10 +7,10 @@
  * transcription that loses a page fails in this file, at no cost, rather than
  * in production at the price of a full transcription.
  */
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pass0, PdfRecord } from "../src/pdf.js";
 import { pass0 } from "../src/pdf.js";
 import { check } from "../src/pdf-score.js";
@@ -26,6 +26,38 @@ import {
 } from "../src/pdf-read.js";
 
 const EASY = new URL("../evals/pdf/easy/source.pdf", import.meta.url);
+
+/**
+ * Every warning the stage wrote, because the one thing it logs is a cache entry
+ * it had to throw away — and a discard nobody can see is how the crash that
+ * caused it stays invisible.
+ *
+ * The logger is `silent` under vitest by construction (src/log.ts § level), so
+ * replacing the module is the only way to read what it was asked to write.
+ */
+const warnings = vi.hoisted(
+  () => [] as { fields: Record<string, unknown>; msg?: string | undefined }[],
+);
+vi.mock("../src/log.js", () => {
+  const at = (level: string) => (a: unknown, b?: string) => {
+    if (level !== "warn") return;
+    warnings.push(
+      typeof a === "string" ? { fields: {}, msg: a } : { fields: a as Record<string, unknown>, msg: b },
+    );
+  };
+  const fake = (): unknown => ({
+    debug: at("debug"),
+    info: at("info"),
+    warn: at("warn"),
+    error: at("error"),
+    child: () => fake(),
+  });
+  return {
+    log: () => fake(),
+    errorFields: (err: unknown) => ({ err }),
+    since: (started: number) => Date.now() - started,
+  };
+});
 
 const record = (over: Partial<PdfRecord> = {}): PdfRecord => ({
   page: 1,
@@ -279,10 +311,15 @@ describe("the whole stage, with the model stubbed out", () => {
   /** How many times the stub was asked, so a retry can be counted rather than inferred. */
   let asks = 0;
 
-  async function run(sabotage?: (r: PdfRecord[]) => PdfRecord[]) {
+  /**
+   * `into` runs the stage over a directory that already exists, which is the
+   * only way to exercise the chunk cache: the key is deterministic, so a second
+   * run over the same `dataDir` finds the first run's answers.
+   */
+  async function run(sabotage?: (r: PdfRecord[]) => PdfRecord[], into?: string) {
     asks = 0;
     const bytes = new Uint8Array(await readFile(EASY));
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-"));
+    const dir = into ?? (await mkdtemp(path.join(tmpdir(), "spya-pdf-")));
     const pass = await pass0(bytes);
     return runPdfExtract({
       bytes,
@@ -340,6 +377,75 @@ describe("the whole stage, with the model stubbed out", () => {
       }),
     ).rejects.toThrow(/missing from the transcription/);
   }, 30_000);
+
+  /* ================================= the chunk cache, and what a crash leaves ==
+     Every entry under `pdf-chunks/` is a paid vision-model call, so the two
+     things that can go wrong here pull in opposite directions and both cost
+     money: a valid entry that stops being read re-buys the call on every run,
+     and a corrupt entry that is not tolerated wedges the article for ever,
+     because the key is deterministic and nothing in the codebase deletes these
+     files. Both directions get a test. See docs/postmortems/pdf-chunk-cache-corrupt-entry.md. */
+  describe("the chunk cache", () => {
+    async function cacheFiles(dir: string): Promise<string[]> {
+      const names = await readdir(path.join(dir, "pdf-chunks"));
+      return names.filter((n) => n.endsWith(".json")).sort();
+    }
+
+    it("reads a well-formed entry back rather than paying for the call again", async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-cache-"));
+      const first = await run(undefined, dir);
+      expect(asks).toBeGreaterThan(0);
+      expect((await cacheFiles(dir)).length).toBe(first.chunks);
+
+      const again = await run(undefined, dir);
+      /* The load-bearing assertion in this file: zero. One ask here is one
+         vision-model call bought a second time for nothing. */
+      expect(asks).toBe(0);
+      expect(again.records).toBe(first.records);
+    }, 60_000);
+
+    it("treats a half-written entry as a miss, not as a failure of the whole step", async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-cache-"));
+      const first = await run(undefined, dir);
+      const names = await cacheFiles(dir);
+      expect(names.length).toBeGreaterThan(1);
+
+      /* Exactly what `writeFile` leaves behind when the process dies mid-write:
+         the file exists, and it stops in the middle of a record. */
+      const victim = path.join(dir, "pdf-chunks", names[0]!);
+      const whole = await readFile(victim, "utf-8");
+      await writeFile(victim, whole.slice(0, Math.floor(whole.length / 2)), "utf-8");
+      expect(() => JSON.parse(whole.slice(0, Math.floor(whole.length / 2)))).toThrow(SyntaxError);
+
+      const again = await run(undefined, dir);
+      expect(again.records).toBe(first.records);
+      /* One, not all of them: the damaged chunk is re-read and every intact
+         entry beside it is still used. */
+      expect(asks).toBe(1);
+      /* And the good entry is back on disk, so the next run pays nothing. */
+      expect(JSON.parse(await readFile(victim, "utf-8")).records.length).toBeGreaterThan(0);
+    }, 60_000);
+
+    it("says in the log that it threw an entry away, since nothing else records the crash", async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-cache-"));
+      await run(undefined, dir);
+      const names = await cacheFiles(dir);
+      await writeFile(path.join(dir, "pdf-chunks", names[0]!), "{ \"records\": [", "utf-8");
+
+      warnings.length = 0;
+      await run(undefined, dir);
+      expect(warnings.length).toBe(1);
+      expect(warnings[0]?.msg).toMatch(/cache/i);
+      expect(warnings[0]?.fields).toMatchObject({ slug: "paper", chunk: names[0]!.replace(".json", "") });
+    }, 60_000);
+
+    it("leaves no scratch file behind, so the next run does not read one", async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-cache-"));
+      await run(undefined, dir);
+      const names = await readdir(path.join(dir, "pdf-chunks"));
+      expect(names.filter((n) => !n.endsWith(".json"))).toEqual([]);
+    }, 60_000);
+  });
 });
 
 /* ============================================ the transport retry, for real ==
