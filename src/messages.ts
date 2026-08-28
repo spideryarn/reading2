@@ -1310,6 +1310,43 @@ export function sharingPersonalisedList(kinds: StepName[]): string {
   );
 }
 
+/**
+ * **We never found out**, and no write was attempted.
+ *
+ * The filesystem store has no column, or the page's metadata fetch failed. The
+ * second sentence is the load-bearing one and it is true *only* in this case:
+ * nothing was asked of the server, so whatever was true before still is.
+ */
+export const SHARING_UNKNOWN =
+  "We could not check who can read this, so nothing is offered here — reload the page to try " +
+  "again. Nothing has been changed.";
+
+/**
+ * **A write failed, and it may have taken effect anyway.**
+ *
+ * Split from `SHARING_UNKNOWN` on 2026-08-28 after GPT Sol found the card
+ * saying *"whatever it was before is unchanged"* to an owner whose publish had
+ * committed and whose response was lost. That is the one sentence this control
+ * must never say wrongly: it tells somebody their article is private while
+ * anybody with the link can read it.
+ *
+ * The route writes and *then* reads back to build its reply, and both stores
+ * persist before rebuilding the representation — so every failure mode after
+ * the write is a failure that leaves the write standing. Delete on this page
+ * learned the same thing on 2026-08-27 and its comment is the long version.
+ *
+ * So this says the honest thing, which is that we do not know — and points at
+ * the one action that settles it.
+ */
+export const SHARING_WRITE_UNCERTAIN =
+  "That did not come back, so we cannot say whether it took effect — it may have. Reload the page " +
+  "to see who can read this now.";
+
+/** A write is in flight. Says which way, because the two are not equally urgent. */
+export function sharingInFlight(to: "private" | "public"): string {
+  return to === "public" ? "Sharing this article…" : "Turning sharing off…";
+}
+
 /** The box the owner ticks, which the server refuses the request without. */
 export const SHARING_RIGHTS_CONFIRM =
   "I have the right to share this article's text.";

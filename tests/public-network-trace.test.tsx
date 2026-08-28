@@ -110,6 +110,21 @@ const ARTICLE: PublicArticle = {
       html: "<p>The first paragraph of the piece.</p>",
       gistable: true,
     },
+    /* **A paragraph with a real external link in it**, and it is here because
+       the trace could not otherwise see the hover card. `useLinkFacts` asks
+       `GET /api/library` and Wikipedia about an external link, and a fixture
+       with no links never gives it anything to ask about — so the suite was
+       green over a page that left the public namespace on any hover.
+       GPT Sol, 2026-08-28. */
+    {
+      id: "spya-cccccc",
+      tag: "p",
+      kind: "text",
+      text: "It cites an argument made elsewhere.",
+      words: 6,
+      html: '<p>It cites <a href="https://en.wikipedia.org/wiki/Attention">an argument</a> made elsewhere.</p>',
+      gistable: true,
+    },
   ],
   tree: {
     version: "test",
@@ -122,7 +137,7 @@ const ARTICLE: PublicArticle = {
         depth: 0,
         parent: null,
         children: [],
-        range: ["spya-aaaaaa", "spya-bbbbbb"],
+        range: ["spya-aaaaaa", "spya-cccccc"],
         title: "A piece",
         gist: "What the piece says.",
       },
@@ -139,8 +154,19 @@ const METADATA: PublicMetadata = {
   available: { arc: false, tweets: false, glossary: true, summary: false, ideas: false },
 };
 
-/** The same article as the owner would be served it. Extra fields and all. */
-const OWNED: Article = { ...ARTICLE, meta: { ...ARTICLE.meta, url: "https://example.com/a" } };
+/**
+ * The same article as its **owner** is served it.
+ *
+ * The title is deliberately different from the public one. `titleFor()` gives
+ * the owner their own rename and the public projection never calls it
+ * (src/public/dto.ts), so a distinct string here is not decoration: it is the
+ * only thing on screen that says *whose copy this is*, and the identity test
+ * below turns on being able to see it disappear.
+ */
+const OWNED: Article = {
+  ...ARTICLE,
+  meta: { ...ARTICLE.meta, title: "A piece, as its owner renamed it", url: "https://example.com/a" },
+};
 
 /**
  * How the **owned** route answers. A 404 is what a signed-in reader gets for
@@ -341,6 +367,68 @@ describe("a signed-out browser on a shared document", () => {
     expect(host.textContent).not.toContain("Make a free account");
   });
 
+  /**
+   * **The interaction the trace could not see.**
+   *
+   * A network trace records requests, and this one needs a *hover* to happen
+   * first — so a suite that only ever renders a page and reads its text was
+   * green over a visitor whose every hover asked `GET /api/library`
+   * (authenticated) and Wikipedia (off-origin). GPT Sol found it by reading the
+   * component tree rather than by running anything, 2026-08-28.
+   *
+   * Both events, not one. The card opens on `pointerover` for a mouse and on
+   * `focus` for a keyboard, and they are separate listeners — a fix that
+   * covered only the pointer would leave the keyboard path asking.
+   *
+   * Timers are advanced because the card rests before it opens: firing the
+   * event and asserting immediately would prove nothing about a lookup that had
+   * not been scheduled yet.
+   */
+  it("asks nobody about a link, on hover or on focus", async () => {
+    await open();
+
+    const link = host.querySelector<HTMLAnchorElement>('a[href^="https://en.wikipedia.org"]');
+    expect(link, "the fixture must contain an external link to hover").not.toBeNull();
+    /**
+     * **The card's own selector, restated here.**
+     *
+     * Without this the test passes by never opening a card at all — which is
+     * exactly what it did on its first run, and a test that cannot reach the
+     * code it names is worse than no test. If the fixture, the prose wrapper or
+     * the selector ever stop agreeing, this line says so instead of the suite
+     * going quietly green.
+     */
+    expect(link?.closest("mark.term, .prose a[href], a.cited-link")).toBe(link);
+    trace.length = 0;
+
+    for (const event of ["pointerover", "focusin"] as const) {
+      await act(async () => {
+        /* `MouseEvent` rather than `PointerEvent`, which jsdom does not have.
+           The handler reads `pointerType` and refuses touches; `undefined` is
+           not `"touch"`, so a mouse is what this looks like — which is the
+           case that matters, since a touch deliberately opens nothing. */
+        link?.dispatchEvent(new MouseEvent(event, { bubbles: true }));
+      });
+      /**
+       * **Past the rest delay, which is the whole reason this is a real wait.**
+       *
+       * `HOVER_DELAY.open` is 320ms and the card arms a timer rather than
+       * opening on the event — so the first version of this test, which
+       * advanced no time at all, asserted about a card that had not been built.
+       * It passed against a visitor who looked up every link.
+       */
+      await act(async () => {
+        await new Promise((go) => setTimeout(go, 400));
+      });
+      await settle();
+      expect(outsidePublic(), `after ${event}`).toEqual([]);
+    }
+
+    /* And the card really did open — the last guard against this test going
+       green by doing nothing. */
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  });
+
   it("opens the comments drawer without asking for anybody's comments", async () => {
     await open("?panel=questions");
     expect(outsidePublic()).toEqual([]);
@@ -367,6 +455,67 @@ describe("a signed-out browser on a shared document", () => {
 
     const heading = host.querySelector(".dock-drawer-head h2")?.textContent;
     expect(heading).toBe("Comments");
+  });
+});
+
+/**
+ * **One reader's article must never be on another reader's screen.**
+ *
+ * `useArticleAccess` keyed its answer by slug and by the *boolean* `signedIn`
+ * until 2026-08-28. Owner A signs out, reader B signs in: the slug has not
+ * changed and `signedIn` is `true` both times, so the effect never re-ran and
+ * A's private article stayed mounted — with `OwnedReader` and its three
+ * authenticated hooks — indefinitely. GPT Sol found it reviewing this half.
+ *
+ * **The identity changes inside the same mounted root**, which is the only
+ * arrangement that can see it. Unmounting and remounting would rebuild the
+ * state that holds the stale answer, so a test written that way passes against
+ * the bug — and that is exactly how this file was written before, which is why
+ * it never noticed.
+ *
+ * The assertion is made **synchronously after the re-render**, before anything
+ * settles. `setAnswer(null)` lives in an effect, and React runs effects after
+ * the render that scheduled them, so an implementation relying on the effect to
+ * clear shows the previous reader's article for a frame. A frame is enough.
+ */
+describe("when the reader changes underneath the page", () => {
+  it("never shows one reader's article to the next", async () => {
+    session.user = { id: "owner-a", email: "a@example.com" };
+    await open();
+    expect(host.textContent).toContain("as its owner renamed it");
+
+    /* B signs in where A was. Same root, no unmount — `root.render` reconciles,
+       so every piece of state in the tree survives except what the code itself
+       decides to drop. */
+    session.user = { id: "reader-b", email: "b@example.com" };
+    owned = () => json({ error: "not yours" }, 404);
+    await act(async () => {
+      root.render(createElement(NuqsAdapter, null, createElement(App, null)));
+    });
+
+    // Synchronously: A's copy is gone. Not "gone once the fetch lands".
+    expect(host.textContent).not.toContain("as its owner renamed it");
+
+    await settle();
+
+    /* And B ends up where B belongs: the public view of a document they do not
+       own, which is the same page a stranger gets. */
+    expect(host.textContent).toContain("View only");
+    expect(host.textContent).toContain("The first paragraph of the piece.");
+  });
+
+  it("drops the article when the reader signs out", async () => {
+    session.user = { id: "owner-a", email: "a@example.com" };
+    await open();
+    expect(host.textContent).toContain("as its owner renamed it");
+
+    session.user = null;
+    owned = () => json({ error: "no" }, 401);
+    await act(async () => {
+      root.render(createElement(NuqsAdapter, null, createElement(App, null)));
+    });
+
+    expect(host.textContent).not.toContain("as its owner renamed it");
   });
 });
 

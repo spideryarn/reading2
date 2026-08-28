@@ -54,12 +54,53 @@ import {
   SHARING_PERSONALISED,
   sharingPersonalisedList,
   SHARING_RIGHTS_CONFIRM,
+  SHARING_UNKNOWN,
   SHARING_WHAT_VISITORS_SEE,
+  SHARING_WRITE_UNCERTAIN,
   sharingConfirmBody,
+  sharingInFlight,
 } from "../messages.js";
 import type { ArticleSharing, VisibilityState } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { readHref } from "./router.js";
+
+/**
+ * What the card has learned since the page loaded — see `card` in the component
+ * for what each member draws and why they cannot be folded together.
+ */
+type Learned =
+  | { kind: "known"; state: VisibilityState }
+  | { kind: "pending"; to: "private" | "public" }
+  | { kind: "unknown"; because: "unread" | "write" };
+
+type CardState = Learned;
+
+const UNREAD: CardState = { kind: "unknown", because: "unread" };
+const WRITE_UNCERTAIN: CardState = { kind: "unknown", because: "write" };
+
+/**
+ * `PUT …/visibility`'s reply, **checked rather than asserted.**
+ *
+ * `readJson<T>` performs no validation — `T` is whatever the caller wrote — and
+ * it answers `{}` for a 204, which several routes in this app legitimately
+ * return. So a success we cannot parse used to reach `visibility === "public"`
+ * as `undefined`, evaluate `false`, and draw *"Only you can read this"* about a
+ * database nobody had read. GPT Sol, 2026-08-28.
+ *
+ * `null` for anything unrecognised, and the caller turns that into *we do not
+ * know* rather than into a state. A 2xx we cannot read is the absence of an
+ * answer, not a quiet `private`.
+ */
+function asVisibilityState(body: unknown): VisibilityState | null {
+  if (body === null || typeof body !== "object") return null;
+  const { visibility, publicAt } = body as Record<string, unknown>;
+  if (visibility !== "private" && visibility !== "public") return null;
+  /* `publicAt` is `string | null` and both are meaningful — a missing key is
+     not the same as an explicit `null`, and only the explicit one is the
+     server saying "private, and no timestamp". */
+  if (publicAt !== null && typeof publicAt !== "string") return null;
+  return { visibility, publicAt };
+}
 
 export function AccessSharing({
   slug,
@@ -79,25 +120,38 @@ export function AccessSharing({
   sharing: ArticleSharing | undefined;
 }) {
   /**
-   * What our own `PUT` last said, or `"unknown"` after one failed.
+   * What this card has learned since the page loaded, or `null` for nothing.
    *
-   * `null` means the owner has not touched it and `sharing` stands. A sentinel
-   * object rather than seeding state from the prop in an effect, because the
-   * prop arrives late and a seeding effect would have to decide whether a later
-   * `sharing` is fresher than a click — a question with no good answer. The
-   * same shape `DeleteArticle` on this page uses, for the same reason.
+   * A sentinel rather than seeding state from the prop in an effect, because
+   * the prop arrives late and a seeding effect would have to decide whether a
+   * later `sharing` is fresher than a click — a question with no good answer.
+   * The same shape `DeleteArticle` on this page uses, for the same reason.
    */
-  const [acted, setActed] = useState<VisibilityState | "unknown" | null>(null);
+  const [acted, setActed] = useState<Learned | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [rights, setRights] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  /* The switch's own answer wins over the page load, and a failed write beats
-     both — see `set` below for why a failure means we stop claiming to know. */
-  const state: VisibilityState | null = acted === "unknown" ? null : (acted ?? sharing ?? null);
-  const shared = state === null ? null : state.visibility === "public";
-  const publicAt = state?.publicAt ?? null;
+  /**
+   * **The four states this card can be in**, and they are four because three of
+   * them used to be one.
+   *
+   * `known` is the only one that draws a switch. The other three each say
+   * something different and one of them used to say something false:
+   *
+   * - **`pending`** — a write is out. Until 2026-08-28 there was no such state,
+   *   so a slow publish went on drawing *"Only you can read this"* with a live
+   *   Share button under it for as long as the request took.
+   * - **`unknown: "unread"`** — nothing was asked of the server, so whatever
+   *   was true before still is, and the copy may say so.
+   * - **`unknown: "write"`** — a write failed, and **it may have taken effect**.
+   *   The route writes and then reads back to build its reply, so every failure
+   *   after the write leaves the write standing. Saying "unchanged" here told
+   *   an owner their public article was private. GPT Sol, 2026-08-28.
+   */
+  const card: CardState = acted ?? (sharing ? { kind: "known", state: sharing } : UNREAD);
+  const shared = card.kind === "known" ? card.state.visibility === "public" : null;
+  const publicAt = card.kind === "known" ? card.state.publicAt : null;
   /**
    * Which artefacts were written for this reader's profile.
    *
@@ -120,7 +174,11 @@ export function AccessSharing({
   }, [slug]);
 
   async function set(to: "private" | "public"): Promise<void> {
-    setBusy(true);
+    /* The pending state replaces the buttons rather than disabling them, so a
+       second press is not merely refused — there is nothing there to press.
+       Sol asked for a double-click test; this is the shape that makes one
+       pass. */
+    setActed({ kind: "pending", to });
     setError(null);
     try {
       const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}/visibility`, {
@@ -139,23 +197,26 @@ export function AccessSharing({
          already in returns the current representation without changing
          anything — so reading back is the only way the card ends up agreeing
          with the database. A 200 is not evidence a field was honoured. */
-      setActed(await readJson<VisibilityState>(res));
+      /* **Validated, not cast.** `readJson` is typed by its caller and checks
+         nothing, and it answers `{}` for a 204 — so a malformed success used to
+         reach `visibility === "public"` as `undefined`, come out `false`, and
+         draw *"Only you can read this"* over a database nobody had read. A 2xx
+         we cannot parse is not an answer; it is the absence of one. */
+      const state = asVisibilityState(await readJson<unknown>(res));
+      setActed(state ? { kind: "known", state } : WRITE_UNCERTAIN);
       setConfirming(false);
       setRights(false);
     } catch (e) {
       setError((e as Error).message);
       /* **A failed request is not proof that nothing was written** — the same
-         lesson Delete on this page learned, 2026-08-27. So the switch goes to
-         "we do not know" rather than back to where it was, and the reader is
-         invited to reload. Claiming the old state would be the version of this
-         where somebody believes a document is private and it is not.
+         lesson Delete on this page learned, 2026-08-27. `"write"` rather than
+         `"unread"`, and that distinction is the whole of the fix: one of them
+         may honestly promise nothing changed and the other may not.
 
          It overrides `sharing` deliberately: the prop still holds what the page
          load said, which is now exactly the stale answer that must not be
          drawn. */
-      setActed("unknown");
-    } finally {
-      setBusy(false);
+      setActed(WRITE_UNCERTAIN);
     }
   }
 
@@ -163,10 +224,13 @@ export function AccessSharing({
 
   return (
     <div className="tw:font-sans tw:text-sm">
-      {shared === null ? (
+      {card.kind === "pending" ? (
+        /* No switch while one is out. The buttons are gone rather than
+           disabled, so a second press has nothing to land on. */
+        <p className="tw:m-0 tw:text-ink-faint">{sharingInFlight(card.to)}</p>
+      ) : card.kind === "unknown" ? (
         <p className="tw:m-0 tw:text-ink-faint">
-          We could not check who can read this, so nothing is offered here — reload the page to try
-          again. Whatever it was before is unchanged.
+          {card.because === "write" ? SHARING_WRITE_UNCERTAIN : SHARING_UNKNOWN}
         </p>
       ) : (
         <>
@@ -188,10 +252,9 @@ export function AccessSharing({
               <button
                 type="button"
                 className="linky"
-                disabled={busy}
                 onClick={() => void set("private")}
               >
-                {busy ? "Turning sharing off…" : "Stop sharing"}
+                Stop sharing
               </button>
             </>
           )}
@@ -224,16 +287,19 @@ export function AccessSharing({
                   className="linky"
                   /* The server refuses a publish without it too — this is the
                      reader being told why the button is not live yet, in the
-                     one place where a silent refusal would be baffling. */
-                  disabled={!rights || busy}
+                     one place where a silent refusal would be baffling.
+
+                     No `busy` beside it any more: a write in flight puts the
+                     card into `pending`, which draws no buttons at all, so
+                     there is nothing here to press twice. */
+                  disabled={!rights}
                   onClick={() => void set("public")}
                 >
-                  {busy ? "Sharing…" : "Share it"}
+                  Share it
                 </button>
                 <button
                   type="button"
                   className="linky"
-                  disabled={busy}
                   onClick={() => {
                     setConfirming(false);
                     setRights(false);

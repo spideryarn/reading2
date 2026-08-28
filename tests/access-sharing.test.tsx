@@ -45,6 +45,23 @@ const SLUG = "a-piece";
 const calls: { url: string; method: string; body: unknown }[] = [];
 /** How the `PUT` is answered. */
 let put: () => Response;
+/**
+ * Replies are **held** when a test asks, so that *in flight* is a state the
+ * test can see.
+ *
+ * The suite resolved instantly until 2026-08-28, which made "a slow publish
+ * goes on drawing 'Only you can read this' with a live Share button under it"
+ * invisible: the request went out and came back inside one `act`, so the wrong
+ * state was real and unobservable. docs/reusable/silent-success.md.
+ */
+let held: (() => void)[] = [];
+let hold = false;
+
+function release(): void {
+  const waiting = held;
+  held = [];
+  for (const go of waiting) go();
+}
 
 const PRIVATE: ArticleSharing = { visibility: "private", publicAt: null, personalised: [] };
 const SHARED: ArticleSharing = {
@@ -67,6 +84,8 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   calls.length = 0;
   put = () => json({ visibility: "public", publicAt: "2026-08-28T11:00:00.000Z" });
+  held = [];
+  hold = false;
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -74,7 +93,9 @@ beforeEach(() => {
     /* Anything that is not the `PUT` is a request this card should not be
        making at all, and the first test asserts exactly that — so the reply is
        deliberately useless rather than plausible. */
-    return Promise.resolve(method === "PUT" ? put() : json({}, 500));
+    const answer = () => (method === "PUT" ? put() : json({}, 500));
+    if (!hold) return Promise.resolve(answer());
+    return new Promise<Response>((go) => held.push(() => go(answer())));
   });
   host = document.createElement("div");
   document.body.append(host);
@@ -297,6 +318,108 @@ describe("what the dialog says about the reader's profile", () => {
   });
 });
 
+/**
+ * **The three ways a write can end badly**, which were one state until GPT Sol
+ * took them apart on 2026-08-28.
+ *
+ * The card must never tell an owner their article is private when it may be
+ * public. Every one of these is a route to exactly that.
+ */
+describe("when a write does not come back cleanly", () => {
+  it("says nothing certain while the write is still out", async () => {
+    hold = true;
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    /* **Not "Only you can read this" with a live Share button**, which is what
+       it drew for the whole length of the request before there was a pending
+       state. */
+    expect(host.textContent).toContain("Sharing this article");
+    expect(host.textContent).not.toContain("Only you can read this");
+    expect([...host.querySelectorAll("button")]).toEqual([]);
+
+    release();
+    await settle();
+    expect(host.textContent).toContain("Anyone with the link can read this");
+  });
+
+  /**
+   * **A second press has nothing to land on**, because the buttons are gone
+   * rather than disabled. Sol asked for a double-click test; this is it, and
+   * the assertion is on the request count because that is what a duplicate
+   * costs.
+   */
+  it("cannot be fired twice by a double click", async () => {
+    hold = true;
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(() => press("Share it")).toThrow(/No button/);
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+  });
+
+  /**
+   * **The sentence that was false.** A publish can commit and its response be
+   * lost — the route writes and *then* reads back to build its reply — so
+   * "whatever it was before is unchanged" told an owner their public article
+   * was private.
+   *
+   * The suite tested only a failed *unpublish* before, where the old sentence
+   * happened to be harmless. Sol named that gap by file and line.
+   */
+  it("admits a failed publish may have taken effect", async () => {
+    put = () => json({ error: "the connection went away" }, 500);
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(host.textContent).toContain("may have");
+    expect(host.textContent).not.toContain("Nothing has been changed");
+    expect(host.textContent).not.toContain("Only you can read this");
+  });
+
+  /**
+   * And the two uncertainties say different things. *We never asked* may
+   * promise nothing changed; *we asked and lost the answer* may not.
+   */
+  it("tells a check that never happened from a write that went missing", async () => {
+    await mount(undefined);
+    expect(host.textContent).toContain("Nothing has been changed");
+    expect(host.textContent).not.toContain("may have");
+  });
+
+  /**
+   * **A 2xx we cannot parse is the absence of an answer, not a quiet
+   * `private`.** `readJson` validates nothing and returns `{}` for a 204, so
+   * `visibility === "public"` came out `false` and the card drew "Only you can
+   * read this" about a database nobody had read.
+   */
+  it.each([
+    ["a 204 with no body", () => new Response(null, { status: 204 })],
+    ["a 200 that is not the shape", () => json({ ok: true })],
+    ["a 200 with a bad visibility", () => json({ visibility: "world", publicAt: null })],
+    ["a 200 with a bad timestamp", () => json({ visibility: "public", publicAt: 17 })],
+  ])("treats %s as unknown rather than as private", async (_name, reply) => {
+    put = reply;
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await settle();
+
+    expect(host.textContent).toContain("may have");
+    expect(host.textContent).not.toContain("Only you can read this");
+  });
+});
+
 describe("turning it off", () => {
   it("sends no rightsConfirmed at all", async () => {
     put = () => json({ visibility: "private", publicAt: null });
@@ -327,7 +450,7 @@ describe("turning it off", () => {
     press("Stop sharing");
     await settle();
 
-    expect(host.textContent).toContain("could not check");
+    expect(host.textContent).toContain("may have");
     expect(host.textContent).not.toContain("Anyone with the link can read this");
   });
 });

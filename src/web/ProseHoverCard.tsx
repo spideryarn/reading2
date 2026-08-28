@@ -28,7 +28,7 @@
  * them are a `Trigger` wrapping one React element, which is the property that
  * rules them out. What a link *can* honestly say is docs/project/links.md.
  */
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, type ReactElement } from "react";
 import {
   BookA,
   BookMarked,
@@ -68,6 +68,7 @@ export function ProseHoverCard({
   blockText,
   onOpenTerm,
   onJump,
+  lookUpLinks,
 }: {
   entries: GlossaryEntry[];
   /**
@@ -84,6 +85,28 @@ export function ProseHoverCard({
   onOpenTerm(id: string): void;
   /** Go to the block an in-article anchor points at. */
   onJump(id: BlockId): void;
+  /**
+   * **May this card look a link up, or only describe it?**
+   *
+   * `useLinkFacts` asks two things about an external link: `GET /api/library`,
+   * to say whether the reader already has that page on their shelf, and
+   * Wikipedia, for a summary. The first is authenticated and the second leaves
+   * our origin entirely.
+   *
+   * A visitor gets neither, and **the seam is that `useLinkFacts` is not
+   * called** rather than called with nothing — see `WithLinkFacts` below. GPT
+   * Sol found this reviewing the client half on 2026-08-28, and it is the
+   * sharpest finding of the set: the acceptance test says *a signed-out browser
+   * issues no request outside `/api/public/`*, and that was already false on
+   * the most ordinary interaction there is. The trace could not see it because
+   * a trace records requests and this one needs a **hover** to happen first.
+   *
+   * What survives for a visitor is everything `describeLink` derives from the
+   * href alone — the host, whether it leaves this publication, whether it is an
+   * in-article anchor and which block it lands on. That is the bulk of the
+   * card.
+   */
+  lookUpLinks: boolean;
 }) {
   const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
@@ -187,12 +210,6 @@ export function ProseHoverCard({
     },
   });
 
-  /* Before the early return, because it is a hook. It is handed the *shown*
-     link rather than the hovered one on purpose: a card takes 320ms of rest to
-     open, so a pointer crossing the prose asks Wikipedia about nothing.
-     link-facts.ts § What Wikipedia is told has the caveat to that. */
-  const facts = useLinkFacts(shown?.data.link ?? null, sourceUrl);
-
   if (!shown) return null;
   const { termIds, link, anchor, href } = shown.data;
   const found = termIds
@@ -207,7 +224,16 @@ export function ProseHoverCard({
     .filter(Boolean)
     .join(", ");
 
-  return (
+  /**
+   * The card, given whatever we were able to find out.
+   *
+   * A function rather than the JSX directly, because the two readers reach it
+   * by different routes: an owner through `WithLinkFacts`, which mounts the
+   * lookups, and a visitor straight from here with a constant. One body, drawn
+   * the same way, and the difference is entirely in what was asked of the
+   * network before it ran.
+   */
+  const card = (facts: LinkFacts) => (
     <FloatingPortal>
       {/* `dialog`, not `tooltip`: WAI's tooltip pattern is for text describing
           the thing you point at, and says outright that a tooltip does not take
@@ -251,7 +277,45 @@ export function ProseHoverCard({
       </div>
     </FloatingPortal>
   );
+
+  /* The **shown** link is handed to the lookups rather than the hovered one, on
+     purpose: a card takes 320ms of rest to open, so a pointer crossing the
+     prose asks Wikipedia about nothing. link-facts.ts § What Wikipedia is told
+     has the caveat to that. */
+  if (!lookUpLinks) return card(NO_LINK_FACTS);
+  return (
+    <WithLinkFacts link={link} sourceUrl={sourceUrl}>
+      {card}
+    </WithLinkFacts>
+  );
 }
+
+/**
+ * **The asynchronous half of a link card, and the component boundary that keeps
+ * it away from a visitor.**
+ *
+ * A render prop rather than a prop on the card, because the rule it enforces is
+ * about *calling* `useLinkFacts` at all. A hook cannot be skipped conditionally
+ * inside one component, and passing the hook itself down as a prop would change
+ * the number of hooks a component calls the moment the prop changed — which
+ * React answers with a thrown error rather than a fetch. So the condition is
+ * this component existing, which is the same shape `OwnedReader` uses for the
+ * comments, chat and glossary reads. reader-capability.ts.
+ */
+function WithLinkFacts({
+  link,
+  sourceUrl,
+  children,
+}: {
+  link: LinkPreview | null;
+  sourceUrl: string | null;
+  children: (facts: LinkFacts) => ReactElement;
+}) {
+  return children(useLinkFacts(link, sourceUrl));
+}
+
+/** What a visitor's card knows: whatever the href itself says, and no more. */
+const NO_LINK_FACTS: LinkFacts = { loading: false, library: null, wiki: null };
 
 /**
  * Where a link goes, as far as we can say without asking anybody.

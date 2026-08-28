@@ -189,7 +189,7 @@ export function App() {
   if (!user) {
     if (route.kind === "login") return <SignInPage />;
     if (route.kind !== "read") return <LandingPage />;
-    return <ArticlePage slug={route.slug} view={route.view} signedIn={false} />;
+    return <ArticlePage slug={route.slug} view={route.view} readerId={null} />;
   }
 
   // The shelf is home, so it gets no way-home logo — a link to the page you are
@@ -265,7 +265,7 @@ export function App() {
      added by the caller would be a second one on top of it. The corner mark is
      inside `ArticlePage` instead, on every branch that is not the landing
      page. */
-  return <ArticlePage slug={route.slug} view={route.view} signedIn={true} />;
+  return <ArticlePage slug={route.slug} view={route.view} readerId={user.id} />;
 }
 
 /**
@@ -335,36 +335,68 @@ const LOADING: ArticleAccess = { kind: "loading" };
  * which is unconditionally true in this slice whatever the flags would have
  * said.
  */
-function useArticleAccess(slug: string, signedIn: boolean): ArticleAccess {
+function useArticleAccess(slug: string, readerId: string | null): ArticleAccess {
   /**
-   * The answer **and the slug it is the answer to**, together.
+   * The answer, **and both facts it is an answer about**: which article, and
+   * **which reader**.
    *
-   * The pair rather than the answer alone, for the reason a `loaded` pair used
-   * to sit here: clearing state happens in the effect below, and an effect runs
-   * after the render that scheduled it — so the first render after the slug
-   * changes still held the *previous* article, and the children are keyed on
-   * the new slug, so a freshly mounted `Reader` was handed the old article and
-   * drew it. Mostly invisible, because the fetch usually lands before anybody
-   * reads a paragraph; not invisible in the tab, where it produced titles like
-   * `<the article you just left> · Metadata`. GPT Sol found it, 2026-08-27.
+   * The slug half is old, and the reason is that clearing state happens in the
+   * effect below while an effect runs *after* the render that scheduled it — so
+   * the first render after the slug changed still held the previous article,
+   * and the children are keyed on the new slug, so a freshly mounted `Reader`
+   * was handed the old article and drew it. Mostly invisible, because the fetch
+   * usually lands before anybody reads a paragraph; not invisible in the tab,
+   * where it produced titles like `<the article you just left> · Metadata`.
+   * GPT Sol found that one, 2026-08-27.
+   *
+   * ## The reader half is a cross-reader exposure, and it is worse
+   *
+   * This keyed on the **boolean** `signedIn` until 2026-08-28. Owner A signs
+   * out and reader B signs in: `slug` has not changed and `signedIn` is `true`
+   * both times, so the effect never re-ran and **A's private article stayed on
+   * B's screen, with `OwnedReader` and its three authenticated hooks mounted**.
+   * Not for a frame — indefinitely. The owner-to-signed-out direction leaked it
+   * for the render before the effect cleared, which is the same bug with a
+   * shorter fuse.
+   *
+   * So the identity is in the key, and the comparison below is what makes it
+   * mean something: an answer is only shown to the reader it was fetched for.
+   * GPT Sol, reviewing this half, 2026-08-28.
    */
-  const [answer, setAnswer] = useState<{ slug: string; access: ArticleAccess } | null>(null);
+  const [answer, setAnswer] = useState<{
+    slug: string;
+    readerId: string | null;
+    access: ArticleAccess;
+  } | null>(null);
 
   useEffect(() => {
-    // The slug is in the path, so it can change under us — via back/forward, or
-    // a pasted link. Guard the response so a slow first fetch can't overwrite a
-    // fast second one.
+    /* Both can change under us — the slug via back/forward or a pasted link,
+       the reader by signing in or out in another tab. Guard the response so a
+       slow first fetch cannot overwrite a fast second one. */
     let live = true;
     setAnswer(null);
-    void resolveAccess(slug, signedIn)
-      .then((access) => live && setAnswer({ slug, access }))
-      .catch((e: Error) => live && setAnswer({ slug, access: { kind: "error", message: e.message } }));
+    void resolveAccess(slug, readerId !== null)
+      .then((access) => live && setAnswer({ slug, readerId, access }))
+      .catch(
+        (e: Error) =>
+          live && setAnswer({ slug, readerId, access: { kind: "error", message: e.message } }),
+      );
     return () => {
       live = false;
     };
-  }, [slug, signedIn]);
+  }, [slug, readerId]);
 
-  return answer?.slug === slug ? answer.access : LOADING;
+  /**
+   * **Both, and synchronously.**
+   *
+   * `setAnswer(null)` in the effect is a render too late: React runs effects
+   * after the render that scheduled them, so on the first render after an
+   * identity change the state still holds the previous reader's answer. Testing
+   * it here rather than trusting the effect to have cleared it is the whole
+   * difference between "the wrong article is shown for one frame" and "the
+   * wrong article is never shown".
+   */
+  return answer?.slug === slug && answer.readerId === readerId ? answer.access : LOADING;
 }
 
 /**
@@ -449,22 +481,27 @@ async function findArticle(
 function ArticlePage({
   slug,
   view,
-  signedIn,
+  readerId,
 }: {
   slug: string;
   view: ArticleView;
   /**
-   * Whether there is a session — asked here and **nowhere below this line.**
+   * **Who is reading, or `null` for nobody** — and it is the identity rather
+   * than a boolean for a reason `useArticleAccess` sets out at length: a
+   * boolean cannot tell owner A from reader B, so an answer fetched for one was
+   * being shown to the other.
    *
-   * Everything downstream keys on *is this mine* instead. A signed-in reader on
-   * somebody else's shared document sees exactly what a stranger sees, which is
-   * the rule the whole read-only chrome follows.
+   * Below this line the only question anyone asks of it is *is there a
+   * session*, and only for the sign-up offer. Everything else keys on *is this
+   * mine*: a signed-in reader on somebody else's shared document sees exactly
+   * what a stranger sees, which is the rule the whole read-only chrome follows.
    * docs/plans/public-read-only-access.md.
    */
-  signedIn: boolean;
+  readerId: string | null;
 }) {
   useRenderCount("ArticlePage");
-  const access = useArticleAccess(slug, signedIn);
+  const access = useArticleAccess(slug, readerId);
+  const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
 
   /**
@@ -1911,6 +1948,13 @@ function Reader({
       <ProseHoverCard
         entries={terms}
         sourceUrl={article.meta.url ?? null}
+        /* A visitor's card describes a link and asks nobody about it. The
+           lookups behind this are `GET /api/library`, which is authenticated,
+           and Wikipedia, which leaves our origin — and until GPT Sol found it
+           on 2026-08-28 both fired on any hover, in a slice whose acceptance
+           test is that a signed-out browser leaves `/api/public/` never.
+           ProseHoverCard.tsx § lookUpLinks. */
+        lookUpLinks={owner !== null}
         blockText={blockText}
         onOpenTerm={openTermInGlossary}
         onJump={jumpTo}
