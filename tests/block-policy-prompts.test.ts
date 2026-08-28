@@ -31,8 +31,7 @@
  * throws. The three asked ones have exported, pure prompt builders and need no
  * such thing.
  */
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { cp, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -61,60 +60,32 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
 });
 
 const ROOT = path.resolve(import.meta.dirname, "..");
-
-/**
- * **A temp directory, deliberately not `data/`.**
- *
- * The four stages under test take an explicit `dir`, so nothing here needs the
- * corpus — and living in it was an active hazard rather than a neutral choice.
- * `store-parity`, `store-roundtrip`, `chat-anchor` and `store-artefact-manifest`
- * each enumerate *every* directory under `data/` and load what they find through
- * the real write path; a fixture that is a complete article gets swept into
- * somebody else's suite, and this one is a copy of `example/`.
- *
- * It showed up exactly as `tests/helpers/corpus-lock.ts` describes: clean runs,
- * then two, then six, then eight failures, all of them a stage throwing before
- * it built a prompt. Nothing about the policy under test.
- */
-let DIR: string;
+const SLUG = "test-block-policy-prompts";
+const DIR = path.join(ROOT, "data", SLUG);
 
 let blocks: Block[];
 let tree: Tree;
 let meta: Meta;
 
 beforeAll(async () => {
-  DIR = await mkdtemp(path.join(tmpdir(), "block-policy-prompts-"));
+  await rm(DIR, { recursive: true, force: true });
   await cp(path.join(ROOT, "example"), DIR, { recursive: true });
 
   const file = path.join(DIR, "blocks.json");
   const parsed = JSON.parse(await readFile(file, "utf8")) as { blocks: Block[] };
   blocks = parsed.blocks;
 
-  /* The **last two** blocks become one note, so the root's range still ends on
-     it and `textOf` still slices over it — which is the case summarise.ts has
-     to filter for itself, and the one a prompt-builder filter would miss.
-
-     **Two rather than one, and that is the difference between this file testing
-     the labels prompt and not testing it.** `renderBatch` prints a context
-     window of `CONTEXT_BLOCKS` — one — either side of a batch's span, and on
-     this fixture the last *labellable* block is index 31. A single note at index
-     33 is two past it: outside the window, absent from the prompt, and the
-     assertion passes on code that sends the whole bibliography. Measured, with
-     the guard removed, before this line was written (`output/labels-probe.mts`).
-     A real article's apparatus is a run of blocks beginning immediately after
-     the body, which is what this now is. */
-  const noteRun = blocks.slice(-2);
-  for (const [i, note] of noteRun.entries()) {
-    note.text = `A note about ${NOTE_WORD}, part ${i + 1}, which nobody reads front to back.`;
-    note.words = note.text.split(/\s+/).length;
-    note.gistable = true;
-    note.kind = "text";
-    note.role = "footnote";
-    note.treatment = "supplement";
-    /* One `noteId` across both, because a note is a RANGE of blocks and not a
-       block — docs/plans/footnotes.md § A note is a range of blocks. */
-    note.noteId = "note-1";
-  }
+  /* The **last** block becomes the note, so the root's range still ends on it
+     and `textOf` still slices over it — which is the case summarise.ts has to
+     filter for itself, and the one a prompt-builder filter would miss. */
+  const note = blocks[blocks.length - 1]!;
+  note.text = `A note about ${NOTE_WORD}, which nobody reads front to back.`;
+  note.words = note.text.split(/\s+/).length;
+  note.gistable = true;
+  note.kind = "text";
+  note.role = "footnote";
+  note.treatment = "supplement";
+  note.noteId = "note-1";
 
   /* The control. Its word must be in every prompt the note's word is missing
      from, or "absent" is a statement about the harness rather than the code. */
@@ -134,21 +105,8 @@ afterAll(() => rm(DIR, { recursive: true, force: true }));
 /** Run a stage that is about to fail on the mocked call, and return what it sent. */
 async function promptOf(run: () => Promise<unknown>): Promise<string> {
   sent.length = 0;
-  /* The thrown error is **kept**, not swallowed. Every stage here is expected
-     to throw — the mock does it deliberately — so `.catch(() => undefined)`
-     looks right and is what this had first. Then a stage that failed *before*
-     building a prompt gave `sent.length === 0` and an assertion reading
-     "expected 0 to be greater than 0", which says nothing about the cause. The
-     guard was doing its job and the diagnosis was missing. */
-  const thrown = await run().then(
-    () => null,
-    (err: unknown) => err,
-  );
-  const why = thrown instanceof Error ? thrown.message : String(thrown);
-  expect(
-    sent.length,
-    `the stage sent no request before failing — ${why}`,
-  ).toBeGreaterThan(0);
+  await run().catch(() => undefined);
+  expect(sent.length).toBeGreaterThan(0);
   return sent.join("\n");
 }
 
@@ -181,85 +139,6 @@ describe("the automatic stages never see the note", () => {
        bibliography. */
     const { generateIdeas } = await import("../src/ideas.js");
     const prompt = await promptOf(() => generateIdeas({ dir: DIR }));
-    expect(prompt).toContain(BODY_WORD);
-    expect(prompt).not.toContain(NOTE_WORD);
-  });
-
-  it("the table of contents — the largest call in the pipeline", async () => {
-    /* **The one the policy's own claim was false for.** `renderBlocks` sends
-       every block's text and marks a block NOT-GISTABLE when `!b.gistable` — and
-       a prose footnote *is* gistable, so a note was not even marked, let alone
-       withheld. The model could then invent sections and gists over the
-       apparatus, and `buildTree` copies those gists straight through into the
-       arc, the tweets, the glossary and the ideas, all of whose own evidence is
-       filtered. GPT Sol's review of stage 3, 2026-08-28.
-       The fix is stage 4's own ordering: the tree is built over the body alone
-       and the supplement node is appended afterwards (src/supplement.ts), so
-       the model is never handed a note at all. Handing it one with a label
-       would not have been a fix. */
-    const { generateToc } = await import("../src/toc.js");
-    const prompt = await promptOf(() =>
-      generateToc({ blocksPath: path.join(DIR, "blocks.json"), outDir: DIR }),
-    );
-    expect(prompt).toContain(BODY_WORD);
-    expect(prompt).not.toContain(NOTE_WORD);
-  });
-
-  it("the table of contents, even for an article the split gives up on", async () => {
-    /* **The hole the first fix left.** Building the tree over the body alone
-       withholds the notes only while `splitBlocks` finds them — and it refuses
-       the whole split when a note is stranded in the middle of the article
-       (src/supplement.ts), handing the model every block again. Zero of the
-       seven committed fixtures are that shape, so nothing would have caught
-       this; `renderBlocks` withholds a supplement's prose itself, and this is
-       the only input that exercises that line. */
-    const dir = await mkdtemp(path.join(tmpdir(), "block-policy-prompts-stranded-"));
-    try {
-      await cp(path.join(ROOT, "example"), dir, { recursive: true });
-      const stranded = blocks.map((b) => ({ ...b }));
-      /* One note in the middle of the argument, which is what a sidenote whose
-         stamp landed mid-prose looks like. */
-      const mid = stranded[5]!;
-      mid.text = `A stranded note about ${NOTE_WORD}, mid-argument.`;
-      mid.words = mid.text.split(/\s+/).length;
-      mid.role = "footnote";
-      mid.treatment = "supplement";
-      mid.noteId = "note-2";
-      await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks: stranded }));
-
-      const { splitBlocks } = await import("../src/supplement.js");
-      // The precondition, asserted rather than assumed: this really is the
-      // fallback path, or the test is about the ordinary one all over again.
-      expect(splitBlocks(stranded).groups).toEqual([]);
-
-      const { generateToc } = await import("../src/toc.js");
-      const prompt = await promptOf(() =>
-        generateToc({ blocksPath: path.join(dir, "blocks.json"), outDir: dir }),
-      );
-      expect(prompt).toContain(BODY_WORD);
-      expect(prompt).not.toContain(NOTE_WORD);
-      // And the block is still nameable, or no node could cover it.
-      expect(prompt).toContain(mid.id);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  });
-
-  it("the nav labels — every batch of them", async () => {
-    /* **The second one, and marking is not hiding.** `renderBatch` prints a
-       context window of `CONTEXT_BLOCKS` either side of the batch, in full, and
-       the last batch of a noted article always reaches into the notes — they
-       sit immediately after the body. Moving the marker to `isStructural` was
-       right and was not enough: the block's own text went out beneath it.
-
-       The tree here is the fixture's own — a *pre*-stage-4 tree, in which the
-       note has an ordinary leaf under a body section. That is the stricter
-       input on purpose: `renderBatch` must refuse the prose whatever shape the
-       tree is in, rather than relying on stage 4 having run. */
-    const { generateLabels } = await import("../src/labels.js");
-    const prompt = await promptOf(() =>
-      generateLabels({ tree, blocks, slug: "block-policy-prompts" }),
-    );
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });

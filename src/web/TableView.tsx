@@ -240,15 +240,8 @@ export function TableView({
           items: entries.map(([, a]) => ({
             node: a.node,
             blockId: a.node.range[0],
-            /* The apparatus takes no `text`, so the list falls through to its
-               title. `""` on a part is deliberate — it stops the renderer
-               falling back to the part's gist and turning the arc column into a
-               copy of L1 — but on a supplement there is no gist to fall back to
-               and "Notes" is the content. */
-            ...(a.supplement ? { supplement: true } : { text: a.text ?? "" }),
-            ...(a.index !== undefined && a.total !== undefined
-              ? { step: { index: a.index, total: a.total } }
-              : {}),
+            text: a.text ?? "",
+            step: { index: a.index, total: a.total },
           })),
           starts: entries.map(([row]) => row),
         });
@@ -256,7 +249,7 @@ export function TableView({
       }
       m.set(
         d,
-        itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id, geometry.supplementOf),
+        itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id),
       );
     }
     return m;
@@ -652,18 +645,9 @@ export function TableView({
                         its content is the panel's current entry. */}
                     {!panels && (
                       <div className="sticky">
-                        {/* A supplement sits outside the numbering — "3 / 7",
-                            not "3 / 9" — and its title is its content, so it
-                            gets the title where a part gets its marker. Never a
-                            hole: the arc has no sentence for the apparatus and
-                            never will. src/supplement.ts. */}
-                        {arc.supplement ? (
-                          <div className="arc-step arc-supplement">{arc.node.title}</div>
-                        ) : (
-                          <div className="arc-step">
-                            {arc.index} <span className="of">/ {arc.total}</span>
-                          </div>
-                        )}
+                        <div className="arc-step">
+                          {arc.index} <span className="of">/ {arc.total}</span>
+                        </div>
                         {/* No fallback if the sentence is missing: an empty cell
                             is a failure the reader can see, and borrowing the
                             part's own gist here would quietly turn this column

@@ -298,14 +298,23 @@ What it reuses, and what it deliberately does not:
   depth 3 (`revistes-ub-30977` has leaves at depth 2), and never substitute `gist` for `navLabel` or
   the reverse. `buildSummaryTree` is still the right source for the nesting, the `"3.2"` numbering
   and the `blocks` count — it is just not the whole of it.
-- **`focusRow`, not `atRow`.** This is the second half of Sol's first blocking finding and the
-  remedy is cheaper than either option it offered. `?at=` is section-granular by design —
+- **`focusRow`, not `atRow` — and no paragraph is ever current.** This is the second half of Sol's
+  first blocking finding. `?at=` is section-granular by design —
   [`sectionDepth`](../../src/web/position.ts) is `leafDepth - 1` and the id stored is the section's
   *first block* — so a paragraph rung fed from `atRow` would mark the section's first paragraph as
-  current, always, on every article, and look entirely plausible doing it. But the exact row under
-  the focus line is already measured and already exported:
-  [`LiveContext.focusRow`](../../src/web/useColumnContext.ts), which is what the gist columns'
-  panels use. That is the input. `atRow` is not used here at all.
+  current, always, on every article, and look entirely plausible doing it.
+
+  **I first answered that `LiveContext.focusRow` was the exact row and that this was a cheaper third
+  option. That was wrong, and checking it during the build is what caught it.** `focusRow` is
+  `sections[activeSectionIndex(…)].row` ([useColumnContext.ts](../../src/web/useColumnContext.ts)) —
+  the *section's* first row, sampled from the section rows only, because sampling every block's
+  rectangle every frame is what that hook exists to avoid. Both routes stop at the section. Nothing
+  on the page knows which paragraph the reader is on.
+
+  So Sol's second option is what is built: **the mark stops at the section.** Paragraph rows are
+  listed, clickable and hoverable, and none of them ever says *you are here* — enforced in one place
+  (`PARAGRAPHS_ARE_NEVER_CURRENT` in [outline.ts](../../src/web/outline.ts)) and asserted in
+  `tests/outline.test.ts`. `focusRow` is still the input, for the section and part it does know.
 - **`Tier`** (`cur` / `near` / `mid` / `far`) and the `before` (already read) flag are the existing
   vocabulary for distance and progress and the CSS exists. Computed over the *drawn rows*, so
   `levelList` itself is not reused — only the type and the styling.

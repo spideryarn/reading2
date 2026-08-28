@@ -417,59 +417,6 @@ describe("all five roles", () => {
     expect(() => checkNoteFields("roles", wrongType)).toThrow(/noteId that is not a string/);
   });
 
-  /**
-   * **Each field being legal is not the same as the block being coherent.**
-   *
-   * GPT Sol's review of stage 3: the validator checked the three fields in
-   * isolation, so the failure it exists to prevent walked in through the door
-   * that left open. Both shapes below pass every single-field check.
-   */
-  it("refuses a footnote that is not marked as apparatus", () => {
-    /* `role: "footnote"` with no treatment. `isBody` reads an absent treatment
-       as body, so this block declares itself apparatus in the one column
-       nothing reads, and is summarised, embedded, labelled and put on the clock
-       as argument — silent reclassification arriving as a well-formed import. */
-    const { treatment: _dropped, ...orphan } = SYNTHETIC[1]!;
-    expect(orphan.role).toBe("footnote");
-    expect(() => checkNoteFields("roles", [orphan])).toThrow(/is a footnote with treatment/);
-  });
-
-  it("still allows an appendix without one, which is why there are two axes", () => {
-    /* The control for the rule above, and the reason it is stated for
-       `"footnote"` alone rather than for every role: an appendix may be real
-       prose worth gisting. A rule that read "any role implies supplement" would
-       pass the test above and delete the distinction the two axes exist for. */
-    const appendix = SYNTHETIC.find((b) => b.role === "appendix")!;
-    expect(appendix.treatment).toBeUndefined();
-    expect(() => checkNoteFields("roles", [appendix])).not.toThrow();
-  });
-
-  it("refuses a noteId stage 2 could not have minted", () => {
-    /* Stage 2 mints ten hex digits and stage 3 refuses anything else
-       (`noteFieldsFor` gates on `NOTE_ID_PATTERN`), so a value in any other
-       shape did not come from this pipeline. Stage 5 resolves a marker to its
-       note by this id: an arbitrary string is a hover card resolving to
-       nothing, or to the wrong note. */
-    for (const bad of ["note-1", "spya-note-zzzzzzzzzz", "spya-note-00ab12cd3", ""]) {
-      const forged = [{ ...SYNTHETIC[1]!, noteId: bad }];
-      /* The exact message, not an alternation loose enough to also match "not
-         a string" — a test that accepts either error is not testing which one
-         fired. */
-      expect(() => checkNoteFields("roles", forged)).toThrow(/could not have minted/);
-    }
-  });
-
-  it("accepts the two shapes stage 2 really mints", () => {
-    /* The control: `NOTE_ID_PATTERN` allows an optional `-<n>` suffix, and a
-       validator that rejected it would refuse an ordinary Wikipedia article
-       whose one note is cited thirteen times. */
-    for (const good of ["spya-note-00ab12cd34", "spya-note-00ab12cd34-2"]) {
-      expect(NOTE_ID_PATTERN.test(good)).toBe(true);
-      const block = [{ ...SYNTHETIC[1]!, noteId: good }];
-      expect(() => checkNoteFields("roles", block)).not.toThrow();
-    }
-  });
-
   it("reaches a visitor through the public DTO", () => {
     const tree: Tree = {
       version: "1",

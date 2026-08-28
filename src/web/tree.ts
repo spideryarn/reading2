@@ -14,7 +14,6 @@
  * the whole feature rests on.
  */
 import type { Arc, Block, BlockId, NodeId, Summaries, Tree, TreeNode } from "../types.js";
-import { supplementIndex } from "../supplement.js";
 import type { Rung } from "./params.js";
 
 export interface Cell {
@@ -35,15 +34,6 @@ export interface Geometry {
   cellAt: Map<string, Cell>;
   /** Root-to-leaf node ids for each row index. */
   chains: NodeId[][];
-  /**
-   * Node id → the supplement node it sits under, itself included. Empty for
-   * every article with no apparatus, and for every tree written before
-   * 2026-08-28.
-   *
-   * Carried on the geometry because it is what `navigableItems` needs and the
-   * geometry is what every consumer already has. src/supplement.ts.
-   */
-  supplementOf: Map<NodeId, TreeNode>;
 }
 
 /** Descend from the root, following the child whose range contains each block. */
@@ -122,76 +112,7 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
     cells.push(column);
   }
 
-  return {
-    columnDepths,
-    leafDepth: maxDepth,
-    cells,
-    cellAt,
-    chains,
-    supplementOf: supplementIndex(tree),
-  };
-}
-
-/* --------------------------------------------- what a column can navigate --
-
-   **One projection, used by four things.** `itemsFromCells` (context.ts) drives
-   the visible fisheye, and three other consumers read the raw cells: keyboard
-   navigation (keynav.ts), the saved reading position (position.ts) and the
-   arc's numbering (buildArcColumn below). Fixing only the visible list is what
-   *breaks* the anchor invariant that keeps the three panels agreeing — GPT
-   Sol's decision 9, and the part of this stage most likely to be got wrong.
-
-   What it does: every cell under a supplement collapses into **one** item,
-   anchored at the supplement's first block and carrying the supplement node
-   itself. Without it, the sections column of a heavily noted article is a run of
-   forty blank leaf cells — a leaf under a supplement has no title, no gist and
-   no navLabel, because none of it is `isStructural` — and one of those blanks
-   becomes the reader's current item. With it, a reader standing mid-Notes is
-   *in* the "Notes" item: not nowhere (`currentIndex: -1`) and not wrongly in the
-   last part of the argument, which is where `currentIndex` would put them if
-   the blanks were merely filtered out. */
-
-export interface NavItem {
-  /** The supplement node itself where this is collapsed; the cell's node otherwise. */
-  node: TreeNode;
-  /** The row it starts on — its first block. */
-  startRow: number;
-  /** How many rows it covers, summed across the cells it collapsed. */
-  rowSpan: number;
-  /** True only when every cell behind it was one — see `itemsFromCells`. */
-  continuation: boolean;
-  /** The apparatus rather than the argument. Outside the numbering, dimmed. */
-  supplement: boolean;
-}
-
-export function navigableItems(
-  cells: readonly Cell[],
-  supplementOf: ReadonlyMap<NodeId, TreeNode>,
-): NavItem[] {
-  const out: NavItem[] = [];
-  let row = 0;
-  for (const cell of cells) {
-    const supplement = supplementOf.get(cell.node.id);
-    const last = out.at(-1);
-    if (supplement && last?.supplement && last.node.id === supplement.id) {
-      // Same supplement as the cell before: grow it rather than listing a
-      // second entry. A supplement's range is contiguous (tree-invariants.ts),
-      // so its cells are always consecutive and this can never merge across a
-      // part of the argument.
-      last.rowSpan += cell.rowSpan;
-      last.continuation = last.continuation && cell.continuation;
-    } else {
-      out.push({
-        node: supplement ?? cell.node,
-        startRow: row,
-        rowSpan: cell.rowSpan,
-        continuation: cell.continuation,
-        supplement: supplement !== undefined,
-      });
-    }
-    row += cell.rowSpan;
-  }
-  return out;
+  return { columnDepths, leafDepth: maxDepth, cells, cellAt, chains };
 }
 
 /** Human label for a column. `hasArc` renames L0, which stops being the root. */
@@ -280,21 +201,9 @@ export interface ArcCell {
   rowSpan: number;
   /** Absent when no arc entry matched this part — draws empty, never borrowed. */
   text?: string;
-  /**
-   * 1-based position among the parts, for the step marker — **absent on a
-   * supplement**, which sits outside the numbering.
-   *
-   * If Notes were one of nine depth-1 children, "3 / 9" would tell a reader
-   * there are six parts of argument left when there are four. So the apparatus
-   * is not counted and wears no marker: "3 / 7", and the Notes cell shows its
-   * title instead. `partsOf` in src/arc.ts is the same rule on the generation
-   * side; the two are separate because this one numbers the cells it is
-   * drawing rather than the tree.
-   */
-  index?: number;
-  total?: number;
-  /** The apparatus. Drawn unnumbered and dimmed. */
-  supplement?: boolean;
+  /** 1-based position among the parts, for the step marker. */
+  index: number;
+  total: number;
 }
 
 /**
@@ -314,35 +223,27 @@ export function buildArcColumn(
   geometry: Geometry,
   arc: Arc | undefined,
 ): Map<number, ArcCell> | null {
-  const cells = geometry.cells[1];
-  if (!arc || !cells?.length) return null;
-
-  /* Through the shared projection, so the arc's cells are the same items the
-     fisheye lists and the keys step through. At depth 1 a supplement is already
-     one cell, so this collapses nothing today — it is here so that the four
-     consumers cannot drift, which is the whole point of there being one. */
-  const parts = navigableItems(cells, geometry.supplementOf);
-  const numbered = parts.filter((p) => !p.supplement).length;
+  const parts = geometry.cells[1];
+  if (!arc || !parts?.length) return null;
 
   const byRange = new Map(arc.entries.map((e) => [`${e.range[0]}|${e.range[1]}`, e.text]));
   const out = new Map<number, ArcCell>();
-  let step = 0;
-  for (const part of parts) {
-    const key = `${part.node.range[0]}|${part.node.range[1]}`;
+  let row = 0;
+  parts.forEach((cell, i) => {
+    const key = `${cell.node.range[0]}|${cell.node.range[1]}`;
     // Read once and spread on the value, not on `has`: `text` must be absent
     // when nothing matched, never present-and-undefined, because "absent" is
     // what makes the cell draw empty rather than borrow its neighbour's.
-    // A supplement matches nothing by construction — `partsOf` never offered it
-    // to the model — and that is exactly right: the cell shows its title.
     const text = byRange.get(key);
-    if (!part.supplement) step += 1;
-    out.set(part.startRow, {
-      node: part.node,
-      rowSpan: part.rowSpan,
-      ...(part.supplement ? { supplement: true } : { index: step, total: numbered }),
+    out.set(row, {
+      node: cell.node,
+      rowSpan: cell.rowSpan,
+      index: i + 1,
+      total: parts.length,
       ...(text !== undefined && { text }),
     });
-  }
+    row += cell.rowSpan;
+  });
   return out;
 }
 
@@ -367,15 +268,6 @@ export interface OutlineEntry {
   endRow: number;
   words: number;
   children: OutlineEntry[];
-  /**
-   * The apparatus. **A band with its true proportional height, dimmed** — which
-   * is the whole reason the supplement is in the spine rather than hidden from
-   * it. On a heavily noted piece the scrollbar lies: you are "60% through" and
-   * the piece ends there, because the rest is endnotes. The rail must not lie
-   * about pixels either, so the band keeps its real size and the dimming is
-   * what says *the argument ends at this line*. Spine.tsx draws it.
-   */
-  supplement?: boolean;
 }
 
 /**
@@ -402,18 +294,13 @@ export function buildOutline(
     }
     let words = 0;
     for (let i = startRow; i <= endRow; i++) words += blocks[i]?.words ?? 0;
-    /* One band for the apparatus, never forty. A supplement's children are one
-       leaf per note, so descending into it would put a hairline segment in the
-       rail per endnote — the phantom-row failure `isStructural` prevents in the
-       ToC, arriving by a different door. */
-    const supplement = node.treatment === "supplement";
     const children =
-      node.depth < depthLimit && !supplement
+      node.depth < depthLimit
         ? node.children
             .map((id) => entryFor(tree.nodes[id]))
             .filter((e): e is OutlineEntry => e !== null)
         : [];
-    return { node, startRow, endRow, words, children, ...(supplement && { supplement: true }) };
+    return { node, startRow, endRow, words, children };
   };
 
   const root = tree.nodes[tree.rootId];
@@ -481,38 +368,9 @@ export function buildSummaryTree(
   depthLimit = 2,
 ): SummaryNode | null {
   const order = new Map<BlockId, number>(blocks.map((b, i) => [b.id, i]));
-  const entries = summaries?.entries ?? [];
-  const byRange = new Map(entries.map((e) => [`${e.range[0]}|${e.range[1]}`, e]));
-  /**
-   * **The root is matched by depth, not by range** — and this is the one thing
-   * appending a supplement node breaks.
-   *
-   * Every other join here is safe by construction: a supplement changes no body
-   * part's range, so part 3 still runs from the same first block id to the same
-   * last. Exactly one range moves — **the root's**, whose end goes from the last
-   * body block to the last note. Keyed by range, the whole-article summary's
-   * entry then misses and is dropped *without a word*, on every article
-   * summarised before 2026-08-28, with `sourceHash` still current because no
-   * block changed. Green suites, plausible output, and a reader who notices a
-   * missing paragraph months later.
-   *
-   * `SummaryEntry` already carries `depth`, and the root is unique, so keying it
-   * by its full range was precision it never needed. Everything below the root
-   * keeps range-matching, where the ambiguity that rule exists to prevent is
-   * real. docs/plans/footnotes.md § The invisible stage-4 failure.
-   *
-   * **The start block is still checked, and the plan said not to bother.** The
-   * plan's version — `depth === 0` alone — quietly gives up a guarantee that
-   * was already there and already tested: an entry written against a *different*
-   * article no longer matches anything and is dropped rather than shown
-   * (tests/summarise.test.ts, "drops an entry whose range matches no node").
-   * Only the root's **end** moves when a supplement is appended; its start is
-   * still the article's first block. So keying on `depth === 0` **and** the
-   * start id fixes the supplement case and keeps the stale case dropped, which
-   * is strictly better than either rule alone.
-   */
-  const rootStart = tree.nodes[tree.rootId]?.range[0];
-  const rootEntry = entries.find((e) => e.depth === 0 && e.range[0] === rootStart);
+  const byRange = new Map(
+    (summaries?.entries ?? []).map((e) => [`${e.range[0]}|${e.range[1]}`, e]),
+  );
 
   const build = (node: TreeNode | undefined, number: string): SummaryNode | null => {
     if (!node) return null;
@@ -521,8 +379,7 @@ export function buildSummaryTree(
     const endRow = order.get(node.range[1]);
     if (startRow === undefined || endRow === undefined || startRow > endRow) return null;
 
-    const found =
-      node.depth === 0 ? rootEntry : byRange.get(`${node.range[0]}|${node.range[1]}`);
+    const found = byRange.get(`${node.range[0]}|${node.range[1]}`);
     const children =
       node.depth < depthLimit
         ? node.children

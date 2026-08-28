@@ -691,17 +691,6 @@ td.gist.arc.active .gist-text { color: var(--ink-soft); }
   font-weight: 600;
 }
 .arc-step .of { color: var(--ink-faint); font-weight: 400; opacity: 0.8; }
-/* The apparatus in the arc column: its title where a part has its marker, set
-   as chrome rather than as prose. "Notes" is a label *about* the article, not a
-   compression *of* it, so it must not dress as a gist — a reader who has
-   learned the column's grammar reads the difference without being told.
-   docs/plans/footnotes.md § What the reader sees. */
-.arc-step.arc-supplement {
-  color: var(--ink-faint);
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
 
 td.gist .title::before {
   content: "";
@@ -1044,15 +1033,6 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   background: var(--highlight-wash);
 }
 .spine-part.active::before { opacity: 0.75; }
-
-/* The apparatus: **dimmed, at its true proportional height.** The band is the
-   same size it would be as a part — the rail must not lie about pixels — and
-   the tint drops so that the eye reads the argument as ending at its top edge.
-   Search lanes still paint over it, deliberately: a hit inside a footnote is a
-   real hit, and the dimming makes those marks more legible rather than less.
-   docs/plans/footnotes.md § What the reader sees. */
-.spine-part.supplement::before { opacity: 0.1; }
-.spine-part.supplement.active::before { opacity: 0.4; }
 
 /* L2 as hairlines: the subdivision of the article stays visible even where
    there is no room for a word of it. */

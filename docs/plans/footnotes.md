@@ -1009,85 +1009,16 @@ normalise identically, and all three narrow fingerprint queries — `pg.ts`, `pg
 `import.ts` — now select four columns. `structureHash` is untouched; its supplement branch belongs
 with the node.
 
-### The stale cached word count: a repair is possible, and we are letting it heal instead
+### The stale cached word count: it heals on re-extraction, and nothing cheaper can fix it
 
 `article_revisions.word_count` is written at publish and the shelf prefers it when non-null, so
-every already-published article keeps its inflated number until it is re-extracted.
-
-**An earlier version of this section said "nothing cheaper can fix it", and that was wrong.** The
-reasoning was that those revisions' block rows carry no `treatment`, so a backfill over the *rows*
-would recompute the identical figure — which is true, and is not the whole picture, because the
-rows are not the only thing stored. `stamped_html` is a column
-([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts)), carried forward on every new revision, and
-it is stage 3's serialisation *after* `canonicaliseNotes` — so it still contains
-`data-spya-notes`, `data-spya-note` and the block ids. A one-off repair can therefore parse it, do
-the same ancestor lookup `noteFieldsFor` does, match by block id, and recompute the scalar from the
-`words` already in the rows. **No refetch, no model call, no paid stage.** GPT Sol found this;
-it is a real option and it was described as impossible.
-
-**We are not building it**, and the reasons are cost rather than impossibility:
-
-- It is a script that parses every published article's HTML — not free, and it is a second
-  implementation of stage 3's classification rule, which is the sort of second copy this repo keeps
-  paying for.
-- It only reaches revisions whose `stamped_html` predates *stage 3* and postdates *stage 2*. Rows
-  published before canonical stamps existed carry no stamps to read, and repairing those means
-  running stage 2 over the stored source — at which point it is re-extraction with extra steps.
-- The number becomes true on re-extraction anyway, which is also the only moment the underlying
-  facts change.
-
-So: the choice is to let it heal, made with the alternative understood rather than in ignorance of
-it. `LibraryScalars.wordCount`'s doc comment says the same, in one sentence.
-
-### What GPT Sol's review of the built code changed — 2026-08-28
-
-[Review](footnotes-stage3-review-sol.md). The blocker was in the ToC and labels prompts and belongs
-to stage 4. Four findings landed here, and two of them are about tests proving nothing.
-
-**A mutation that survived 293 tests.** Writing `treatment: null` unconditionally in `writeBlocks`
-([`artifacts-pg.ts`](../../src/store/artifacts-pg.ts)) left `store-roundtrip`,
-`store-artefacts-pg`, `block-roles`, `store-parity` and `store-block-reads` all green — the Postgres
-path could have dropped the column on every write for ever. The cause was a missing **input**, not a
-missing assertion: every article in the committed corpus predates classification, so all five suites
-round-trip blocks whose three fields are already absent, and "absent went in, absent came out" is
-satisfied by a store that throws them away.
-[`tests/store-block-roles-pg.test.ts`](../../tests/store-block-roles-pg.test.ts) writes a
-*classified* article through the real path — `storeRawSource`, a fenced job, `beginStep`/`write`/
-`finishStep`, `publishRevision` with its guards run — and reads the columns back directly. All three
-mutations now redden it: `role` 3 of 3, `treatment` 3 of 3, `noteId` 2 of 3 (the fingerprint case
-stays green, correctly — `hashBlocks` does not carry `noteId`).
-
-**And the publish gate refused the first fixture, which is the part worth keeping.** Classifying
-three blocks without unlabelling their leaves and restamping `labels.json` describes an article
-stage 4 would never produce, and `validateTree` and `reasonsNotToPublish` both said so by name. The
-fixture now does what stage 3 followed by stage 4 does. A fixture waved through would have been
-testing a shape the pipeline cannot reach.
-
-**`checkNoteFields` validated each field in isolation**, so the silent-reclassification failure it
-exists to prevent walked in through the door that left open: `role: "footnote"` with **no
-`treatment`** passes every single-field check, and `isBody` reads an absent treatment as body — a
-block declaring itself apparatus in the one column nothing reads. Same for an arbitrary string as
-`noteId`, which stage 5 will resolve a marker through. Both are now cross-checked, with
-`NOTE_ID_PATTERN` imported from [`notes.ts`](../../src/notes.ts) rather than restated.
-`role: "appendix"` without a treatment stays legal — that is the case one closed set could not
-express and the reason there are two axes.
-
-A third rule — `noteId` implies `treatment: "supplement"` — was tried and **left out**. It has the
-same shape and `noteFieldsFor` cannot produce a counterexample, but it rejects the five-role fixture
-in `block-roles.test.ts` (whose appendix block carries a `noteId`), and stage 5 may want a `noteId`
-on a *marker's* block, which is body. Foreclosing that from the import validator before the stage
-that needs it exists is the wrong order.
-
-**Should a CHECK back the cross-field rules?** All three are columns of one row, so
-`check (role <> 'footnote' or treatment = 'supplement')` is expressible. **Not added**: it needs a
-migration this stage is not applying, and a constraint is the *backstop* while this is the *guard* —
-it would fail as a violation naming `revision_blocks_role`, inside a transaction, with no block id
-in it. The recommendation is that it ride along with the next migration this feature needs.
-
-**`ProfilePage` said "words in all" over a body-only number.** Newly false and reader-visible. Now
-`"12,345 words, not counting notes"`, and `LibraryEntry.words` says what it is so the next caller to
-sum it does not repeat the claim. Showing both halves is not available here — the shelf reads stored
-scalars and only the body figure is stored.
+every already-published article keeps its inflated number. **A recompute or a backfill migration
+would produce the identical figure**, because those revisions' stored blocks carry no `treatment` at
+all — they were extracted before stage 3a-i — and `countsTowardReadingTime` correctly reads an
+unclassified block as body. So there is nothing to recompute *from*. The number becomes true when
+the article is re-extracted and republished, which is also the only moment the underlying facts
+change. Said out loud in `LibraryScalars.wordCount`'s own doc comment so the next person does not go
+looking for a backfill.
 
 ### Two mutations, and the interesting one is the small number
 
@@ -1096,7 +1027,6 @@ scalars and only the body figure is stored.
 | `isSearchable` inverted (`!gistable`) | **26**, across `block-policy`, `library-search`, `chat-tools`, `chat-library-exclusion` |
 | `isSearchable` made to agree with the other four (`gistable && body`) | **2** — and both are the tests written for exactly this |
 | `countsTowardReadingTime` always true | **8**, all in `block-policy.test.ts` |
-| `writeBlocks` writes `treatment: null` | **0** before the Postgres fixture existed, **3** after |
 
 The middle row is the one worth keeping. It is not the crude inversion; it is *the refactor somebody
 will actually make* — five names looking like five spellings of one formula, tidied into one — and
@@ -1282,64 +1212,6 @@ supplement index that lives on it; that is the only signature that changed.
   because one hairline per endnote is the phantom-row failure arriving by a different door.
 - **`planBatches` needed nothing.** Its per-section filter is `isStructural`, which is false for
   every supplement block, so the node contributes no sibling set and costs no label call.
-
-### The two prompts that were still sending footnote prose
-
-GPT Sol's review of stage 3 landed mid-build and both fixes belong here, because both are the
-ordering this stage was already introducing. The claim "automatic model calls do not read footnotes"
-was **false**, and it was false for the two largest calls the pipeline makes.
-
-**The ToC prompt, which is the big one.** `renderBlocks` sends every block's text and marks a block
-`NOT-GISTABLE` from `!b.gistable` — and a prose footnote *is* gistable, so a note was not even
-marked. The model could invent sections and gists over the apparatus and `buildTree` copies those
-gists straight through, into the arc, the tweets, the glossary and the ideas, all of whose own
-evidence is filtered. Stage 4's ordering fixes it outright: the model is handed
-`splitBlocks().body`.
-
-**But the fallback left a hole, and it is the one this stage created.** When the apparatus is not one
-trailing run, `splitBlocks` gives up and `body` is every block again — so the fix withholds the notes
-only from articles it already understood. `renderBlocks` therefore withholds a supplement's **prose**
-itself and keeps its **id**, because the model's ranges have to tile the whole article and a block it
-cannot name is a block no node can cover. Zero of the seven fixtures are that shape, so only a
-synthetic stranded-note input exercises that line, and one exists.
-
-**The labels prompt, where marking is not hiding.** `renderBatch` prints a context window of
-`CONTEXT_BLOCKS` — one — either side of a batch, in full. Moving the marker to `isStructural` was
-right and was not enough: `body.push(...: ${block.text})` still sent the prose. Now
-`!isBodyEvidence(block)` skips the block entirely.
-
-**Measured over the real fixtures** (`output/prompt-leak.mts`), because the size of this mattered and
-the review's wording implies more than is there:
-
-| fixture | supplement blocks | in the ToC prompt | labels batches | note prose leaked | supplements the guard skipped |
-|---|---|---|---|---|---|
-| gwern | 41 | 0 | 3 | 0 (**1** without the guard) | 1 |
-| wiki_transformer | 121 | 0 | 4 | 0 (**1** without) | 1 |
-| acx_footnotes | 18 | 0 | 2 | 0 (**1** without) | 1 |
-| tufte | 5 | 0 | 1 | 0 | 1 |
-| ar5iv, gutenberg, constitution | 0 | 0 | 3 / 38 / 6 | 0 | **0** |
-
-The last column is the control — how many supplement blocks actually fell inside a window, i.e. how
-many the guard had to skip. It is **1**, not 41: `CONTEXT_BLOCKS` is one, so the exposure was the
-first note after the body and not the whole bibliography. Real, and an order of magnitude smaller
-than the review's wording suggests. The zeroes on the three control fixtures are what make the other
-rows evidence rather than arithmetic.
-
-Two things the measurement itself got wrong first, and both are worth keeping:
-
-- **Tufte reported a leak that was not one.** Its page shows the HTML source of a margin note as a
-  `<pre>` code sample, so the same sentence is legitimately in the argument. A detector that greps
-  the prompt for a note's words has to subtract the body's own text, or it reports the mirror of the
-  failure it exists to catch.
-- **The obvious fixture cannot exercise the labels path at all.** Planting one note in the *last*
-  block of `example/` — which is what the existing prompt test does — puts it **two** blocks past the
-  last labellable block, and the window reaches one. The assertion passes on code that sends the
-  whole apparatus. `tests/block-policy-prompts.test.ts` now plants a two-block note run, measured
-  with the guard removed before the line was written
-  ([a-corpus-that-cannot-exercise-its-arm](../reusable/silent-success.md)).
-
-All three guards were removed one at a time and each reddens exactly its own case: the ToC body
-split, the ToC withhold on the stranded path, and the labels skip.
 
 ### What the brief got wrong
 

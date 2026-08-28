@@ -35,10 +35,9 @@ import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
-import { isBodyEvidence, isStructural } from "./block-policy.js";
+import { isStructural } from "./block-policy.js";
 import { isSpideryarnId } from "./ids.js";
 import { generateLabels, mergeLabels } from "./labels.js";
-import { appendSupplement, splitBlocks } from "./supplement.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -127,28 +126,9 @@ export interface ModelNode {
   children?: ModelNode[];
 }
 
-/**
- * The article, as the structure model sees it.
- *
- * **A supplement's prose is withheld, and its id is not.** On the ordinary path
- * `generateToc` hands this only the body, so the branch never fires — but the
- * split falls back to the whole article whenever the apparatus is not one
- * trailing run (src/supplement.ts), and on that path this function is the only
- * thing between a bibliography and the largest prompt the pipeline sends. A
- * marker alone was the shape of the original bug: `NOT-GISTABLE` is written from
- * `gistable`, and a prose footnote *is* gistable, so a note went out unmarked
- * and in full. Marking it would not have been a fix either — the text is what
- * must not travel. GPT Sol's review of stage 3, 2026-08-28.
- *
- * The **id stays**, because the model's ranges have to tile the whole article
- * and a block it cannot name is a block no node can cover. `NOT-GISTABLE` is
- * reused rather than a new marker invented: SYSTEM above already explains it,
- * and a word the prompt never defines is a word the model gets to interpret.
- */
 function renderBlocks(blocks: Block[]): string {
   return blocks
     .map((b, i) => {
-      if (!isBodyEvidence(b)) return `[${i}] ${b.id} <${b.tag}> NOT-GISTABLE: (withheld)`;
       const mark = b.gistable ? "" : " NOT-GISTABLE";
       return `[${i}] ${b.id} <${b.tag}>${mark}: ${b.text}`;
     })
@@ -576,22 +556,6 @@ export interface TocRun {
    * heavily cited piece the two differ by a third. src/block-policy.ts.
    */
   structural: number;
-  /**
-   * How many supplement nodes were appended — one per run of apparatus, and in
-   * v1 that is one or none. src/supplement.ts.
-   */
-  supplementNodes: number;
-  /** Blocks under those nodes: the endnotes and the bibliography. */
-  supplementBlocks: number;
-  /**
-   * **Supplement blocks the split refused to place**, which is the number that
-   * must be looked at rather than assumed zero. Non-zero means the apparatus is
-   * not one trailing run, so no node was built at all and the tree is exactly
-   * what it would have been before this stage — a correct article with the
-   * feature silently absent, which is precisely the shape a run stat exists to
-   * make visible (docs/reusable/silent-success.md).
-   */
-  strandedSupplement: number;
   labelled: number;
   internal: number;
   /**
@@ -680,18 +644,10 @@ export async function generateToc(opts: {
   const structural = blocks.filter((b) => isStructural(b)).length;
   const started = Date.now();
 
-  /* **The tree is built from the body alone, and the apparatus is appended
-     afterwards.** That ordering is what makes it impossible for a part gist or
-     the root gist to summarise a footnote: the structure model is never shown
-     one. Everything below this line therefore works over `body`, up to the
-     append — including the token budget, which was being asked to pay for a
-     tree over gwern's forty endnotes. src/supplement.ts. */
-  const { body, groups, stranded } = splitBlocks(blocks);
-
   /* Before the call, and before a minute of anyone's time is spent: an article
      whose table of contents cannot fit in one response is refused here rather
      than discovered six minutes in. `budgetFor` throws for that case. */
-  const answerTokens = estimateTocTokens(body);
+  const answerTokens = estimateTocTokens(blocks);
   const maxTokens = budgetFor("table of contents", answerTokens);
 
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
@@ -713,7 +669,7 @@ export async function generateToc(opts: {
       thinking: { type: "adaptive" },
       output_config: { effort: EFFORT },
       system: SYSTEM,
-      messages: [{ role: "user", content: renderBlocks(body) }],
+      messages: [{ role: "user", content: renderBlocks(blocks) }],
     }, { ...(opts.signal ? { signal: opts.signal } : {}) });
 
     if (opts.onProgress) {
@@ -758,20 +714,7 @@ export async function generateToc(opts: {
   }
 
   const { root } = parseJson(raw);
-  /* `body`, so the root's range ends at the last body block and every check in
-     `buildTree` — the tiling, the "covers the whole article" guard — is asked
-     about the argument the model was actually shown. */
-  const structure = appendSupplement(buildTree(root, {}, body, slug), groups);
-
-  /* **Appended before `generateLabels`, not after.** `labels.json` records
-     `structureHash(opts.tree)` (src/labels.ts), so a supplement added afterwards
-     would make the labels stale at birth — a freshness stamp that is wrong the
-     moment it is written, and nothing would ever say so. There is no later
-     gist-composition pass to worry about: composition is an instruction to the
-     model in SYSTEM above, and `buildTree` copies back what it returns.
-     `planBatches` needs no supplement branch of its own — its `own` filter is
-     `isStructural`, which is false for every supplement block, so the node
-     contributes no sibling set and costs no call. */
+  const structure = buildTree(root, {}, blocks, slug);
 
   /* Pass two. The tree has to exist first: the batches are cut along its own
      section boundaries, so that every label a reader compares with another was
@@ -838,9 +781,6 @@ export async function generateToc(opts: {
     model: CAPABLE_MODEL,
     blocks: blocks.length,
     structural,
-    supplementNodes: groups.length,
-    supplementBlocks: blocks.length - body.length,
-    strandedSupplement: stranded,
     labelled: Object.values(tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(tree.nodes).filter((n) => n.children.length > 0).length,
     labelBatches: labelRun.batches,

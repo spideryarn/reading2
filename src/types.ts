@@ -1075,12 +1075,6 @@ export interface LibraryEntry {
   url?: string;
   /** ISO. `meta.fetchedAt` where stage 2 recorded one, else the mtime of blocks.json. */
   addedAt: string;
-  /**
-   * **The body's words, not every block's** — `LibraryScalars.wordCount`, which
-   * is `articleWordCounts(blocks).body` (src/block-policy.ts). Footnotes and
-   * bibliographies are on the page and are not what the card is promising.
-   * Anything that adds these up must not call the total "words in all".
-   */
   words: number;
   minutes: number;
   blocks: number;

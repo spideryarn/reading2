@@ -32,8 +32,7 @@
  *   npm run validate-tree -- example
  *   npm run validate-tree -- data/<slug>
  */
-import { isBody, isStructural } from "./block-policy.js";
-import { isSupplementNode } from "./supplement.js";
+import { isStructural } from "./block-policy.js";
 import type { Block, Tree, TreeNode } from "./types.js";
 
 /**
@@ -212,23 +211,7 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
         covered.set(i, node.id);
       }
     } else {
-      /* **The gist rule, stated in both directions**, and that is the whole
-         reason `treatment` exists on a node rather than being read off the
-         absent gist. Keyed on absence alone, a pipeline bug that drops a gist
-         becomes indistinguishable from a deliberate supplement, and the
-         dangerous outcome here is acceptance (see the header). So: an internal
-         node must carry a gist *unless* it is a supplement, **and** a
-         supplement must not carry one. Never infer the role from a missing
-         gist. */
-      if (isSupplementNode(node)) {
-        if (node.gist)
-          fail(
-            `${node.id}: supplement carries a gist — the apparatus is shown as written, ` +
-              `never summarised (docs/plans/footnotes.md § The tree)`,
-          );
-      } else if (!node.gist) {
-        fail(`${node.id}: internal node has no gist — nothing to render at its level`);
-      }
+      if (!node.gist) fail(`${node.id}: internal node has no gist — nothing to render at its level`);
 
       // Titles stay short at every internal depth; it is navLabel that grows.
       const t = wordsIn(node.title ?? "");
@@ -278,8 +261,6 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
     if (!covered.has(i)) fail(`block ${block.id} (index ${i}) is not covered by any leaf`);
   });
 
-  checkSupplements(blocks, tree, index, fail);
-
   const byDepth = new Map<number, number>();
   for (const n of Object.values(tree.nodes)) byDepth.set(n.depth, (byDepth.get(n.depth) ?? 0) + 1);
 
@@ -288,110 +269,4 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
   const unique = (xs: string[]) => [...new Set(xs)];
 
   return { problems: unique(problems), advice: unique(advice), byDepth };
-}
-
-/**
- * **The six things a supplement node has to be**, each stated separately.
- *
- * The exception the gist rule makes for a supplement (see `checkTree` above)
- * has to be paid for, or a malformed body node escapes
- * "every-internal-node-needs-a-gist" simply by calling itself apparatus. Six
- * checks, not one. A supplement node must:
- *
- *  1. be a depth-one child of the root
- *  2. cover exactly one contiguous range
- *  3. contain **only** blocks whose `treatment` is `supplement`
- *  4. contain **every** such block exactly once
- *  5. have only leaves beneath it
- *  6. carry no gist, and never be nested or be the root
- *
- * Each gets its own message and each is mutated separately in
- * tests/supplement.test.ts. "Delete the supplement and watch the validator
- * fail" mostly re-tests the old coverage invariant and proves nothing about any
- * of these.
- *
- * **Invariant 4 is conditional on there being a supplement node at all**, and
- * that condition is doing real work rather than softening the rule. Every tree
- * written before 2026-08-28 has notes and no supplement node; so does an
- * article whose notes are not one trailing run, which `splitBlocks` refuses to
- * build a node for rather than building an invalid one (src/supplement.ts).
- * Both must keep publishing. The trigger is the **presence of a node**, which
- * is explicit — not the absence of a gist, which is the inference this whole
- * design refuses to make.
- */
-function checkSupplements(
-  blocks: Block[],
-  tree: Tree,
-  index: Map<string, number>,
-  fail: (msg: string) => void,
-): void {
-  const supplements = Object.values(tree.nodes).filter((n) => isSupplementNode(n));
-  if (supplements.length === 0) return;
-
-  const covers = new Map<number, string>(); // block index -> supplement node id
-
-  for (const node of supplements) {
-    // 1 — a depth-one child of the root, and 6's "never the root".
-    if (node.id === tree.rootId)
-      fail(`${node.id}: the root is the whole article and can never be the supplement`);
-    if (node.depth !== 1 || node.parent !== tree.rootId)
-      fail(
-        `${node.id}: supplement is depth ${node.depth} under ${node.parent ?? "nothing"} — ` +
-          `a supplement is a depth-one child of the root`,
-      );
-    // 6 — never nested. Implied by the parent check above, said in its own
-    // words because "a supplement inside a supplement" is a different mistake
-    // from "a supplement too deep", and the message is what gets read.
-    if (node.parent !== null && isSupplementNode(tree.nodes[node.parent] ?? {}))
-      fail(`${node.id}: supplement nested inside supplement ${node.parent}`);
-
-    // 5 — only leaves beneath it. The apparatus is never given a structure of
-    // its own; one node, then one leaf per block.
-    const deep = node.children
-      .map((id) => tree.nodes[id])
-      .filter((c): c is TreeNode => !!c && c.children.length > 0);
-    if (deep.length > 0)
-      fail(
-        `${node.id}: supplement has ${deep.length} internal child(ren) (${deep[0]!.id}) — ` +
-          `only leaves may sit under a supplement`,
-      );
-
-    const lo = index.get(node.range[0]);
-    const hi = index.get(node.range[1]);
-    // A range whose endpoints do not resolve is already reported by `span`.
-    if (lo === undefined || hi === undefined) continue;
-    // 2 — one contiguous range, read as indices rather than as ids.
-    if (lo > hi) {
-      fail(`${node.id}: supplement range runs backwards (index ${lo} > ${hi})`);
-      continue;
-    }
-
-    for (let i = lo; i <= hi; i++) {
-      // 3 — only supplement blocks inside it. This is the direction that
-      // matters most: a body paragraph swallowed by the supplement disappears
-      // from the argument, from every summary and from the arc, and every other
-      // check in this file would still pass.
-      const block = blocks[i];
-      if (block && isBody(block))
-        fail(
-          `${node.id}: supplement covers ${block.id} (index ${i}), which is body — ` +
-            `a supplement contains only blocks whose treatment is "supplement"`,
-        );
-      const other = covers.get(i);
-      // 2 — two supplements may sit side by side (Notes then References) but
-      // never over one another.
-      if (other) fail(`${node.id}: supplement overlaps supplement ${other} at block index ${i}`);
-      else covers.set(i, node.id);
-    }
-  }
-
-  // 4 — and every supplement block is inside one. See the note above on why
-  // this is asked only of a tree that has a supplement node.
-  const outside = blocks.filter((b, i) => !isBody(b) && !covers.has(i));
-  if (outside.length > 0)
-    fail(
-      `${outside.length} supplement block(s) sit outside every supplement node ` +
-        `(${outside.slice(0, 3).map((b) => b.id).join(", ")}) — a tree with a supplement node ` +
-        `must put every note in one`,
-    );
 }

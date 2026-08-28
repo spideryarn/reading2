@@ -32,7 +32,8 @@
  * in a URL and never by comparing id strings (docs/project/block-ids.md).
  */
 import type { BlockId, NodeId, TreeNode } from "../types.js";
-import { navigableItems, type Cell } from "./tree.js";
+import type { Cell } from "./tree.js";
+import { itemStarts } from "./keynav.js";
 
 /** How far an entry is from the one the reader is in. Four steps, no gradient. */
 export type Tier = "cur" | "near" | "mid" | "far";
@@ -46,11 +47,6 @@ export interface ContextItem {
   node: TreeNode;
   /** Where clicking it goes: the first block of the item. */
   blockId: BlockId;
-  /**
-   * The apparatus, collapsed to one entry. It has no gist and never will, so
-   * the list shows its title — "Notes" — and nothing else.
-   */
-  supplement?: boolean;
   /** The arc sentence, when this is the arc column. Otherwise the gist is used. */
   text?: string;
   /**
@@ -94,24 +90,18 @@ export interface ContextEntry {
 export function itemsFromCells(
   cells: Cell[],
   blockAt: (row: number) => BlockId | undefined,
-  supplementOf: ReadonlyMap<NodeId, TreeNode>,
 ): { items: ContextItem[]; starts: number[] } {
+  const allStarts = itemStarts(cells);
   const items: ContextItem[] = [];
   const starts: number[] = [];
-  /* `navigableItems`, not the cells: at the sections column a note's chain is
-     root → supplement → leaf, so the raw cells give a run of blank leaf entries
-     — one per endnote, none with a title — and one of them becomes the reader's
-     current item. The projection collapses them into a single "Notes". It is
-     shared with keynav, position and the arc's numbering **because a fix here
-     alone is what breaks the anchor invariant**: three panels agreeing depends
-     on all four counting the same items. src/web/tree.ts § navigableItems. */
-  for (const item of navigableItems(cells, supplementOf)) {
-    if (item.continuation) continue;
-    const blockId = blockAt(item.startRow);
-    if (!blockId) continue;
-    items.push({ node: item.node, blockId, ...(item.supplement && { supplement: true }) });
-    starts.push(item.startRow);
-  }
+  cells.forEach((cell, i) => {
+    if (cell.continuation) return;
+    const start = allStarts[i] ?? 0;
+    const blockId = blockAt(start);
+    if (!blockId) return;
+    items.push({ node: cell.node, blockId });
+    starts.push(start);
+  });
   return { items, starts };
 }
 
