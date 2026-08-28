@@ -541,6 +541,49 @@ chunk is 103 KB with a DSN (35.6 KB gzipped) and carries a genuine dynamic
 import of `main`, and **8 KB with no DSN**, Sentry having been tree-shaken out
 entirely — so a build without monitoring pays nothing for it.
 
+### Two changes on 2026-08-28, after the canary landed
+
+**The signed-in reader's email now rides on every error.** Greg's ask:
+
+> Make sure we send up the user's email address (if logged-in) as part of every
+> error.
+
+`user` becomes the one field past the event builder that carries a person, cut
+to `id` and `email` — Sentry's `User` has an index signature, and `ip_address`
+is inferred from the connection unless refused. What is *not* turned on to
+achieve it is `dataCollection.userInfo`, which stays `false`: that option lets
+instrumentation populate `user.*` from whatever it finds, which is a far wider
+promise than *the address of the person the gate just let in*. The identity is
+set by us, at one seam, from a `VerifiedUser`.
+
+Both halves write to the **isolation** scope. Under Fluid Compute the global
+scope is shared between concurrently-served requests, so a global `setUser`
+would put one reader's email on another reader's error — intermittently, on the
+one field where being wrong is worst.
+
+The browser half is called from `lib/api.ts`'s existing auth listener rather
+than from `web/monitoring.ts`, and that is load-bearing rather than tidy: that
+module is in the entry chunk, so importing `supabase` from it would evaluate
+`lib/supabase.ts` *before* `boot.tsx`'s first statement — and that file throws
+at module load without its build-time variables, which is exactly the blank page
+`boot.tsx` exists to report. The obvious placement would have moved the throw to
+before the reporter was armed.
+
+**And the upload turned out not to be slow.** The 114 seconds the API build
+spent uploading was a cold start. Measured with genuinely changed code:
+
+| | client | API |
+|---|---|---|
+| first ever upload | 19 s | 114 s |
+| every upload after | 8 s | 6 s |
+
+Sentry's chunked upload negotiates checksums first and sends only what it does
+not have, server-side rather than from a local cache — so a fresh Vercel build
+machine gets the same benefit. Nothing was turned off. One line changed in
+`scripts/deploy.ts`'s `BUILD_ENV` so the local preflight *deterministically*
+does not upload, rather than not uploading because nobody happens to export the
+token.
+
 ### What is deliberately still not done
 
 - **`waitUntil`.** The review prefers it to an awaited flush as the Fluid
@@ -550,10 +593,12 @@ entirely — so a build without monitoring pays nothing for it.
   wanting it was stale: `pump()` returns immediately when `VERCEL` is set, so
   production ingest is driven by the browser's `/advance` request and a failed
   step is still inside a live invocation.
-- **The far-end canary.** Nothing here proves an event actually arrives — only a
-  deployment can, and there is no DSN yet. It is the first thing to do once
-  there is one, because a flush that silently does nothing looks exactly like a
-  flush that worked.
+- ~~**The far-end canary.**~~ Done, 2026-08-28. An error shaped like the Drizzle
+  leak — a bound parameter in its message — was captured and flushed against the
+  real project. It arrived as `Error` with no message, `message_withheld: true`,
+  real frames, an empty `url` and `transaction`, and no trace of the canary
+  string anywhere in it. That is the check that is not fooled by a flush which
+  silently does nothing.
 - **The `api/index.js` gap.** The review is right that its import-failure catch
   could lazily load the SDK. Left alone: that path runs when the module system
   is already failing, and adding a module load to it is the wrong instinct.
