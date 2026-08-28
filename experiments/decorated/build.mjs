@@ -239,9 +239,51 @@ function commentRanges() {
   return perBlock;
 }
 
+/**
+ * Two of the span kinds are POINT marks, and the judgement pass returned clauses.
+ *
+ * A hedge is "may be", "arguably", "it seems likely" — three or four words, dotted,
+ * with a raised query. Asked for those, the model returned the whole hedged claim,
+ * up to 194 characters of it. A number is "86 billion neurons"; it returned "won the
+ * 2025 annual Berggruen Prize Essay Competition". At that length the decoration stops
+ * being a mark on a word and becomes a highlight of a sentence — which is both a
+ * different decoration and the one the reading-science review argued hardest against.
+ *
+ * So we narrow them here rather than draw them wrong, and we say how many. Where a
+ * quote has no hedging phrase and no numeral in it at all, the span is dropped: a
+ * mark we cannot place is worse than no mark, because it looks placed.
+ */
+// The lexicon was grown against the article, not guessed: every phrase here was one
+// the first version dropped. It is deliberately about MARKERS of uncertainty rather
+// than the claims they qualify — "may be", not "may be possible in the near future".
+const HEDGE =
+  /\b(?:may(?:be)?|might|arguably|perhaps|possibly|probably|plausibl\w*|at least|it seems|seem(?:s|ed)?|appears?|suggest\w*|likely|unlikely|uncertain\w*|apparently|harder to say|hard to say|one possibility|possibilit\w*|minority view|knock-down|tend(?:s|ed)? to|roughly|not (?:at all )?clear|not completely|generally|in some sense|to some extent|as far as we know|(?:I|we) don[’']t (?:have|know)|could\b)/i;
+// `\d[\d,.]*s?` so that "1950s" matches: a trailing letter defeats a plain `\b`.
+const NUMERAL =
+  /\b(?:\d[\d,.]*s?(?:\s?(?:%|percent|billion|million|thousand|trillion))?|one|two|three|four|five|six|seven|eight|nine|ten|dozens?|hundreds?|thousands?|millions?|billions?)\b/i;
+// Whatever the lexicon matches, a point mark stays a point mark.
+const MAX_POINT_MARK = 34;
+
+/** Shrink a quote to the phrase that actually earns the mark. */
+function narrow(kind, quote) {
+  if (kind === 'hedge' || kind === 'number') {
+    const m = (kind === 'hedge' ? HEDGE : NUMERAL).exec(quote);
+    if (!m) return null;
+    // The marker plus the words that make it read as a phrase rather than a stub:
+    // "may be possible" rather than "may", "the 1950s, he seeded" rather than "1950s".
+    const words = kind === 'hedge' ? 2 : 2;
+    const after = quote.slice(m.index + m[0].length).match(new RegExp(`^(?:\\s+\\S+){0,${words}}`));
+    const len = Math.min(m[0].length + (after ? after[0].length : 0), MAX_POINT_MARK);
+    return { at: m.index, len };
+  }
+  return { at: 0, len: quote.length };
+}
+
 /** The judgement pass: key sentence, hinge, hedge, number, strong, quiet. */
 function annotationRanges() {
   const perBlock = new Map();
+  let narrowed = 0;
+  let dropped = 0;
   for (const [blockId, ann] of Object.entries(annotations)) {
     const block = byId.get(blockId);
     if (!block) { note('annotated block missing', blockId); continue; }
@@ -249,10 +291,19 @@ function annotationRanges() {
     for (const span of ann.spans ?? []) {
       const i = locate(block.text, span.quote, undefined, `span ${span.kind} in ${blockId}`);
       if (i === -1) continue;
-      list.push({ start: i, end: i + span.quote.length, classes: [`sp-${span.kind}`] });
+      const fit = narrow(span.kind, span.quote);
+      if (!fit) {
+        dropped++;
+        note('span dropped', `${span.kind} in ${blockId} had no ${span.kind === 'hedge' ? 'hedging phrase' : 'numeral'} in it · ${JSON.stringify(span.quote.slice(0, 50))}`);
+        continue;
+      }
+      if (fit.len !== span.quote.length) narrowed++;
+      list.push({ start: i + fit.at, end: i + fit.at + fit.len, classes: [`sp-${span.kind}`] });
     }
     if (list.length) perBlock.set(blockId, list);
   }
+  if (narrowed) note('spans narrowed', `${narrowed} hedge/number spans shrunk from a clause to the phrase that earns the mark`);
+  if (dropped) note('spans dropped', `${dropped} in total`);
   return perBlock;
 }
 
