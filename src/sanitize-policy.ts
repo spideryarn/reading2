@@ -431,8 +431,17 @@ export function installArticlePolicy(purify: DOMPurify): void {
    * glossary, search, quote-matching and every embedding are computed over, read
    * `(x1,…,xn)(x_{1},...,x_{n})`: the same formula twice, once as symbols and
    * once as source. Invisible on the page and present in every model call.
+   *
+   * It is also in the accessibility tree, in what a text selection copies, and
+   * in anything that indexes the page — all of which read the DOM rather than
+   * the paint. So "not painted" is narrower than "not seen": a screen-reader
+   * user gets the TeX read out.
+   *
    * Wikipedia emits one on all 188 formulas of a single article; LaTeXML emits
-   * them too. Found 2026-08-28 — docs/plans/readability-repair-pass.md.
+   * them too. Found 2026-08-28 — docs/plans/readability-repair-pass.md. Two
+   * independent browser checks agree it never paints: the `<math>` box measures
+   * the same width with the stray node and without, and `Range.getClientRects()`
+   * returns zero boxes for all 45 of the affected elements on that page.
    *
    * **A hook rather than `FORBID_CONTENTS`, and that is the point of this
    * comment.** Setting that key *replaces* DOMPurify's default list rather than

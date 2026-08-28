@@ -264,6 +264,46 @@ So the honest ranking of what stage 2 is doing wrong, on this evidence:
 2. **Truncation (T)** — real and severe when it happens (the Constitution), and rarer than expected.
 3. Everything else.
 
+### What the rare items actually look like, checked in a browser
+
+The corpus counts elements; it cannot say whether what survives is any good. So the four
+equation-and-table-heavy fixtures were run through the real stage 2 and opened in Chrome
+(`file://` is refused by the extension — serve the directory over `http://127.0.0.1`).
+
+**Everything that survives extraction renders correctly**, which is the reassuring half:
+
+- All **116 MathML formulas** on the ar5iv *Attention Is All You Need* paint natively — real
+  fraction bars, radicals, superscripts. Chrome needs no library for this.
+- Its **7 tables** all fit the column and none overflows; **9 figures keep all 9 captions**, none
+  orphaned; all images load.
+- MDN's **30 `<pre>` blocks** and RFC 9110's **133** keep `white-space: pre`, so ABNF indentation —
+  which is meaning, not decoration — survives.
+
+Two things did turn up, and neither is what was expected.
+
+**MathML's TeX annotation was leaking into `textContent`.** Fixed in
+[`src/sanitize-policy.ts`](../../src/sanitize-policy.ts). It was written up first as a *rendering*
+bug — "the reader sees `\frac{1}{2}` after the symbols" — and that was wrong: Chrome ignores a bare
+text node inside `<math>`, so nothing painted. Two independent checks agree (the `<math>` box is the
+same width with the stray node and without; `Range.getClientRects()` returns zero boxes for all 45
+affected elements). What it did pollute is `textContent`, which is what everything after stage 2
+reads — 25 of that paper's 151 blocks, 486 characters — plus the accessibility tree and copy-paste.
+Quieter than claimed, and still worth fixing. The lesson is the ordinary one: **a bug in the DOM is
+not a bug on the page, and only looking tells you which you have.**
+
+**A docs site's code-block chrome survives as bare text.** MDN puts the language name in a `<span>`
+above each example, and 30 of them come through extraction as stray lines reading `http`, `html`,
+`css`. Traced through all three stages: 36 in the fetched page, 30 after Readability, 30 after our
+sanitiser — so it is **not ours**, it is failure mode **B** at small scale, and it is the kind of
+thing a per-domain rule or a boilerplate pass would take out.
+
+**And one gap in stage 3, not stage 2.** A bare inline `<svg>` gets **no block id** — a
+`<figure>`-wrapped one is fine. The sanitiser keeps inline SVG deliberately
+([Greg, 2026-08-25](../project/security.md)), so we keep a diagram that the ToC, notes and the zoom
+tree cannot address. Narrow, but it is a hole in
+[the one contract](../project/block-ids.md), and closing it is that file's decision rather than
+this plan's.
+
 ### The threshold that failed in both directions
 
 Worth recording, because it was stated up front — 5% of the page, in a run of 1,500+ characters — and
