@@ -844,6 +844,20 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
  * hooks a visitor must not mount are not mounted anywhere below this line,
  * because they were never called. They live in `OwnedReader`, one component up.
  * reader-capability.ts says why a boolean could not have done it.
+ *
+ * ## A known follow-up, measured rather than guessed
+ *
+ * `noExcessiveCognitiveComplexity` scores this function **49** against a
+ * threshold of 25. It was **38** before the capability seam and over the
+ * threshold then too, so this is not a line that was crossed here — but eleven
+ * of those points are the `owner ? … : …` gates, and they are worth a number.
+ *
+ * The extraction that would pay it back is the **mode band dispatch**: the six
+ * `owner && mode === "…"` branches near the bottom become one `<OwnerBands>`,
+ * which takes about fourteen props. Greg's team lead weighed it on 2026-08-28
+ * and said leave it — a fourteen-prop extraction made late and under time
+ * pressure is how a lint number becomes a bug. Recorded here rather than in a
+ * plan file because this is where somebody will be standing when they wonder.
  */
 function Reader({
   slug,
