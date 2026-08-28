@@ -197,6 +197,44 @@ describe("pages that shift under a listing", () => {
      `newcomer` came back would be asserting something untrue. */
 });
 
+/**
+ * **When the two termination signals disagree.**
+ *
+ * Both cases below are GPT Sol's, found reviewing the first repair, 2026-08-28.
+ * They are the same mistake in two places: treating an *absence* of information
+ * as a definite "no more".
+ */
+describe("an explicit next-page signal beats everything else", () => {
+  it("keeps going past an empty page that says there is more", async () => {
+    /* A row deleted between requests can empty a page in the middle, and the
+       service says so. Checking emptiness first — which is what the first
+       repair did — ends the listing here and loses `b` without a word. */
+    const gappy: GetAccountPage = async (page) => {
+      if (page === 1) return { users: [raw("a")], hasNext: true };
+      if (page === 2) return { users: [], hasNext: true };
+      return { users: [raw("b")], hasNext: false };
+    };
+    const rows = await listAccounts(gappy);
+    expect(rows.map((r) => r.id)).toEqual(["a", "b"]);
+  });
+
+  it("does not read an unparseable Link header as the end of the list", async () => {
+    /* `nextFrom` said `false` for any non-empty header it did not recognise, so
+       a proxy rewriting the header — or a format change — ended the listing
+       after one page. The same fail-open as an unrecognised body, one layer
+       out. Here the header is nonsense, so the flag must be unanswered and the
+       empty page is what ends it. */
+    const served: number[] = [];
+    const weird: GetAccountPage = async (page) => {
+      served.push(page);
+      /* `hasNext` absent models what `nextFrom` now returns for junk. */
+      return page === 1 ? { users: [raw("a")] } : { users: [] };
+    };
+    await expect(listAccounts(weird)).resolves.toHaveLength(1);
+    expect(served).toEqual([1, 2]);
+  });
+});
+
 describe("a list that is short is an error, not a page", () => {
   /**
    * The service says there are 120 and hands back 50 and then nothing.
@@ -460,6 +498,18 @@ describe("the request itself", () => {
       () => get()(3, 200),
     );
     expect(page.hasNext).toBe(false);
+  });
+
+  it("leaves the next-page flag unanswered when the Link header makes no sense", async () => {
+    /* **Not `false`.** Read as "finished", a rewritten or future-format header
+       would end the listing after one page, silently. `false` is only for a
+       header that really is a set of relations and has no `next` in it. */
+    for (const junk of ["not-a-link", "<https://x/>", "garbage; foo=bar", "0"]) {
+      const page = await withFetch(reply({ users: [raw("a")] }, { headers: { link: junk } }), () =>
+        get()(1, 200),
+      );
+      expect(page.hasNext, junk).toBeUndefined();
+    }
   });
 
   it("leaves the next-page flag unanswered when there is no Link header at all", async () => {

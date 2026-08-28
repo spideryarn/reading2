@@ -20,7 +20,7 @@
  *    that makes this safe is a route gate somewhere else, so the one thing a
  *    future call site can be given here is a name that argues with it.
  *
- * ## Six queries, not one, and not one per user
+ * ## Five queries, not one, and not one per user
  *
  * The counts live in five tables that share nothing but an article. A single
  * statement joining all five would multiply rows — somebody with 3 articles and
@@ -29,8 +29,10 @@
  * N+1 that grows with the sign-up list.
  *
  * So: **one grouped aggregate per table, run together, joined in TypeScript by
- * owner id.** Six statements whatever the number of accounts, each hitting an
- * index that already exists.
+ * owner id.** Five statements whatever the number of accounts, each hitting an
+ * index that already exists — and a sixth thing beside them that is not a
+ * statement at all: the account listing, which comes from the Auth service over
+ * HTTP (admin-accounts.ts).
  *
  * The file is in three parts for one reason — so that each of them can be
  * checked by something: `mergeUsers` is pure and takes two owners' worth of
@@ -177,7 +179,7 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
 /* ---------------------------------------------------------- the queries --- */
 
 /**
- * The six statements, as builders rather than as results.
+ * The five statements, as builders rather than as results.
  *
  * Pulled out so that **what they mean** can be asserted without a database:
  * `tests/admin-queries.test.ts` reads `.toSQL()` off each one and pins the
@@ -301,10 +303,11 @@ export const pgAdminStore: AdminStore = {
   async listUsersAcrossOwners(): Promise<AdminUser[]> {
     const q = adminQueries(getDb());
 
-    /* All six at once — five grouped aggregates and the account list. They
+    /* All six at once — five grouped aggregates and one HTTP listing. They
        depend on none of each other, so the wall-clock cost is one round trip
-       rather than six. The pool is sized 5 by default (src/db/client.ts) and
-       only five of these are queries now, so they no longer queue.
+       rather than six. Five of them are queries and the pool is sized 5
+       (src/db/client.ts), so they no longer queue one deep as they did when the
+       accounts were a query too.
 
        **The accounts are asked of the Auth service over HTTP**, not of the
        database: `auth.users` is Supabase's and `spideryarn_app` has no grants

@@ -396,22 +396,22 @@ string. That argument still holds for the five count queries, which is where the
 the accounts no longer come from a query at all, so the declaration is gone and the tooling risk
 with it.
 
-**The production role has to be able to read `auth.users`.** Today it connects as `postgres` and
-can. When the least-privilege runtime role that
-[postgres-migration.md](../plans/postgres-migration.md) plans arrives, it will need:
+**The production role must never need to read `auth.users`, and that is now the design.** This
+paragraph used to say the opposite — that the least-privilege runtime role would need
+`grant usage on schema auth` and a column-level `grant select` — and it survived the change that
+made it wrong. Following it would have widened exactly the privilege this repair exists to avoid.
+GPT Sol caught it on the second review, 2026-08-28.
 
-```sql
-grant usage on schema auth to spideryarn_runtime;
-grant select (id, email, created_at, last_sign_in_at, email_confirmed_at,
-              raw_app_meta_data, deleted_at)
-  on auth.users to spideryarn_runtime;
-```
+There is nothing to grant. The accounts come over HTTP
+([above](#the-accounts-come-from-the-auth-service-not-from-a-query)), and the five count queries
+touch only `spideryarn`. A future runtime role narrower than `spideryarn_app` needs no `auth` grants
+at all.
 
-Losing it surfaces as a permission error, turned into a safe generic 500 by `guardDbStore` and
-rendered by the page as words — loud, rather than as an empty list. **An infrequently visited admin
-page is still a poor alarm**, and Sol is right about that: the proper answer is a
-`has_schema_privilege` / `has_column_privilege` probe at deploy time, which belongs with the
-schema-drift work rather than here. Written down rather than done.
+What *is* still written down rather than done: **a deploy-time check that the administrator resolves
+to a real account on the project being deployed to.** That is the gap the account-id bug went
+through — the only mitigation for a silent lockout turned out to be unreachable from the failure it
+was written for ([admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md)) —
+and it is the check that would make the id-versus-email question stop mattering.
 
 ## The page itself
 

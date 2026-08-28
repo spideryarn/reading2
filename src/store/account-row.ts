@@ -7,9 +7,11 @@
  * the counts from our own tables. Putting it in either would make the two
  * import each other.
  *
- * It survives unchanged from when the accounts came out of a `select()` on
- * `auth.users`, and that is the point: `mergeUsers` and its tests never learned
- * that the source moved.
+ * Nearly unchanged from when the accounts came out of a `select()` on
+ * `auth.users`, which is the point — `mergeUsers` did not have to learn that
+ * the source moved. One field did change: the opaque `meta` became `providers`,
+ * because an `app_metadata` carried through and narrowed a layer later is not
+ * the boundary this file claimed to be.
  */
 export interface AccountRow {
   id: string;

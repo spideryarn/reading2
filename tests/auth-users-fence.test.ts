@@ -122,13 +122,26 @@ describe("drizzle cannot see auth.users", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("would notice one if it came back", () => {
-    /* The control. A rule whose check has never been seen to fire is a rule
-       nobody can tell from an empty directory — docs/reusable/silent-success.md,
-       and this repo has shipped that mistake more than once. The pattern is
-       applied to a string here rather than to a file, so the check itself is
-       what gets exercised. */
-    const declaration = 'export const authSchema = pgSchema("auth");';
-    expect(/pgSchema\(\s*["'`]auth["'`]\s*\)/.test(declaration)).toBe(true);
+  it("would notice one however it was spelled, and wherever it was put", () => {
+    /* **The control**, and it is doing two jobs. A rule whose check has never
+       been seen to fire cannot be told apart from an empty directory
+       (docs/reusable/silent-success.md). And the sweep it guards is a grep, so
+       the spellings it does *not* match are exactly what makes it useless.
+
+       **It calls `AUTH_SCHEMA` itself.** The first version recompiled a simpler
+       literal here, so it would have stayed green while the regex the sweep
+       actually uses was broken — a control testing something other than the
+       thing it controls. GPT Sol, 2026-08-28. */
+    for (const spelling of [
+      'pgSchema("auth")',
+      "pgSchema('auth')",
+      "pgSchema(`auth`)",
+      'pgSchema( "auth" )',
+      'pgSchema(\n  "auth",\n)',
+    ]) {
+      expect(AUTH_SCHEMA.test(spelling), spelling).toBe(true);
+    }
+    /* And not our own schema, or the rule would refuse every file in there. */
+    expect(AUTH_SCHEMA.test('pgSchema("spideryarn")')).toBe(false);
   });
 });

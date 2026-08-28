@@ -159,16 +159,24 @@ export async function listAccounts(getPage: GetAccountPage): Promise<AccountRow[
 
     /* **Termination, in the order the signals deserve.**
 
-       `hasNext` is the service's own answer and is believed when present. An
-       empty page ends it too, for a service that sends no `Link`.
+       An explicit `hasNext` is the service's own answer and outranks everything
+       else, in *both* directions. An empty page ends the listing only when the
+       service did not say — which is the case of a service that sends no `Link`
+       at all, where nothing else can end it.
+
+       The order matters and the first version had it backwards: emptiness was
+       checked first, so a page that was empty *and* said `hasNext: true` ended
+       the listing and lost everything after it. A service may serve an empty
+       page and mean it — a row deleted between requests can empty a page in the
+       middle — and it told us so. GPT Sol, 2026-08-28.
 
        What is deliberately *not* here is "stop once as many have arrived as the
        count promised". That is what let the duplicate above end the loop early,
        and it is exactly the kind of shortcut that agrees with the right answer
        until the one moment it matters. The count is an *audit* below, never a
        terminator. */
-    if (got.users.length === 0) ended = true;
-    else if (got.hasNext === false) ended = true;
+    if (got.hasNext === false) ended = true;
+    else if (got.hasNext === undefined && got.users.length === 0) ended = true;
   }
 
   if (!ended) {
@@ -359,6 +367,14 @@ export function gotruePages(url: string, key: string): GetAccountPage {
  */
 function nextFrom(header: string | null): { hasNext?: boolean } {
   if (header === null || header.trim() === "") return {};
+  /* **A header we cannot parse is not an answer.** This returned `false` for
+     every non-empty string that did not match, so `Link: not-a-link` — a proxy
+     rewriting the header, a future format — read as "definitely finished" and
+     ended the listing after one page. That is the same fail-open as an
+     unrecognised body, in the header. GPT Sol, 2026-08-28.
+     `false` is now said only for a header that is recognisably a set of link
+     relations and has no `next` among them. */
+  if (!/;\s*rel\s*=/i.test(header)) return {};
   return { hasNext: /;\s*rel\s*=\s*"?next"?/i.test(header) };
 }
 

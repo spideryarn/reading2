@@ -57,8 +57,12 @@
  * - four want a specific **column**, because the migration that added it is the
  *   thing under test and a database one migration behind would otherwise fail
  *   with a confusing column error instead of "run npm run db:migrate";
- * - `admin-store` also needs `auth.users` to be **readable**, which is a grant
- *   rather than a migration, and is the thing most likely to differ in prod;
+ * - one suite used to need `auth.users` **readable** and no longer does: the
+ *   admin store asks the Auth service over HTTP instead, and leaving the
+ *   requirement here made its tests skip under exactly the least-privileged
+ *   role production uses (GPT Sol, 2026-08-28). `readable` stays because the
+ *   distinction between "the table is there" and "this role may read it" is
+ *   still the one most likely to differ in production;
  * - `db-transaction-errors` wants nothing but a live connection.
  *
  * Usage:
