@@ -179,6 +179,13 @@ unexpectedly green control as broken until you have seen it red once — spidery
 four controls passed at once and the tell was that four controls passing at once is not a thing that
 happens.
 
+**The same guard belongs on the mutation, and on the ordinary edit beside it.** Within the hour, on
+the same afternoon, a scripted edit block died on a syntax error partway through — so a test went on
+asserting a field the rename had already moved, passed trivially, and was about to be cited as
+evidence. So: make a red-first that did not actually mutate report **"NO-OP"** rather than a green
+run, and check the anchor on every scripted replacement, not only the ones inside controls. A partial
+edit is the same failure wearing different clothes — some of it applied, so nothing looks skipped.
+
 ## Spotting the family
 
 You are probably in it when:
