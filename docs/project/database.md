@@ -1,10 +1,44 @@
 # Database
 
-This is a **stub**. Today there is no database: the store is JSON files on disk. It is written now
-because [auth.md](auth.md) needed something to point at — the auth decision turns on a foreign key
-into `auth.users`, which only makes sense once you know where the rest of the data is going.
+**The database is Supabase Postgres, and everything is moving into it.**
 
-## Today: files under `data/<slug>/`
+> We were using flat JSON files initially, but we're moving everything to Postgres/Supabase to run
+> across Vercel webservers that don't have a shared filesystem.
+>
+> — Greg, 2026-08-28
+
+That is the whole reason, and it is the same one [vision.md](vision.md#one-the-database) gives for
+reversing *"filesystem over database"*: a single writable disk is the thing serverless hosting does
+not have, so the choice is a database or no deploy. The work is
+[postgres-migration.md](../plans/postgres-migration.md); there are 27 migrations under `drizzle/` and
+the schema is [`src/db/schema.ts`](../../src/db/schema.ts).
+
+**This file opened by saying "there is no database" until 2026-08-28**, which was true when it was
+written as a stub for [auth.md](auth.md) to point at and had not been true for some time.
+
+## Which store is live, and the one refusal that matters
+
+`SPIDERYARN_STORE` still **defaults to `files`**, so a fresh checkout runs on disk and nothing
+changes for anyone who has not opted in. But [`src/store/index.ts`](../../src/store/index.ts)
+**refuses to boot on `files` in production**, and the reason generalises well beyond deployment: the
+filesystem store has **no owner column**, so it has no second reader, and a store with no second
+reader cannot express "somebody who is not the owner". That is why
+[auth.md](auth.md#whose-data-is-it) is a Postgres story, and why
+[public-read-only-access.md](../plans/public-read-only-access.md#postgres-is-the-destination-and-this-feature-cannot-work-without-it)
+is Postgres-only by nature rather than by preference — `data/` is one directory per slug and there is
+nowhere in it to record who may read what.
+
+The house rule where the two stores meet is a **refusal, never a fallback**:
+
+> Do not catch a Postgres error and fall back to files.
+
+A fallback would hide exactly the divergence the parity test exists to find, and would do it in
+production, silently. The same reasoning governs each place a feature has no filesystem answer —
+admin's user list, the visibility switch, public reading — and each of them refuses with its own
+sentence rather than returning a plausible default. Those branches are **scaffolding around a store
+that is going away**, and they get deleted rather than maintained.
+
+## The filesystem era: files under `data/<slug>/`
 
 One directory per article, one file per pipeline stage:
 

@@ -66,6 +66,43 @@ which Sol raised and the first draft had not thought about at all.
 
 ---
 
+## Postgres is the destination, and this feature cannot work without it
+
+> We were using flat JSON files initially, but we're moving everything to Postgres/Supabase to run
+> across Vercel webservers that don't have a shared filesystem.
+>
+> — Greg, 2026-08-28
+
+That is the context this whole plan sits in, and it is why nothing here has a filesystem answer.
+[postgres-migration.md](postgres-migration.md) is the parent piece of work; `SPIDERYARN_STORE` still
+defaults to `files` and [`src/store/index.ts`](../../src/store/index.ts) already **refuses to boot on
+`files` in production**, for a reason that is this feature's reason too — the filesystem store has no
+owner column, so it has no second reader, and therefore no notion of somebody who is not the owner.
+
+**Public reading is Postgres-only by nature, not by preference.** `data/` is one directory per slug
+and there is nowhere in it to record who may read what. So the three filesystem branches this work
+has had to write are **transitional scaffolding around a store that is going away**, and each of them
+should be read that way:
+
+| Branch | What it does today | When `files` goes |
+|---|---|---|
+| `requirePostgres()` in [`src/public/routes.ts`](../../src/public/routes.ts) | 501 with its own sentence, rather than a 404 | dead code, delete it |
+| the visibility store's refusal in [`src/store/index.ts`](../../src/store/index.ts) | a write refuses loudly rather than pretending | dead code, delete it |
+| `visibility?` **optional** on `ArticleMetadata` | absent means *this store cannot say*, and the sharing card draws "we could not check" | the field becomes required and that card state disappears |
+
+Each is a **refusal rather than a default**, and that is the load-bearing choice. The tempting
+version — answer `private` on a store with no column — would make the sharing card say *"Only you can
+read this"* confidently and falsely on every article in dev. That is the failure this repo keeps
+writing up ([silent-success.md](../reusable/silent-success.md)), and it is the same reasoning
+`src/store/index.ts` already gives for refusing to fall back from Postgres to files: *"Do not catch a
+Postgres error and fall back to files."*
+
+One consequence to know about before it surprises somebody:
+[`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) compares the two stores'
+`articleMetadata`, and it holds **only while no parity fixture is published**. Publish one and the
+filesystem side says *cannot answer* where Postgres says `public`. That divergence is the feature
+working, not a regression, and the seam carries a comment saying so.
+
 ## What the code already gets right
 
 Three things, found by reading rather than assumed. Together they make this feature smaller than it

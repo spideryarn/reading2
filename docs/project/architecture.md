@@ -14,7 +14,7 @@ From the brief (Greg, 2026-08-24), verbatim:
 So: a pipeline of small, independently runnable stages, each writing JSON to disk, feeding a simple
 server and a React client. (*Independently cacheable* was the intent and is not yet the fact — two
 stages of seven cache on a content hash, the rest on a file existing. See
-[database.md](database.md#today-files-under-dataslug).) "It can be a simple one at first" is a design
+[database.md](database.md#the-filesystem-era-files-under-dataslug).) "It can be a simple one at first" is a design
 constraint, not an apology — keep it boring while the ideas are still moving.
 
 ## Pipeline
@@ -242,7 +242,7 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - TypeScript, ESM (`"type": "module"`), strict mode — see [`tsconfig.json`](../../tsconfig.json).
 - Every stage is runnable on its own against a slug, so any one can be re-run without the others.
 - Anything expensive should be cached on a content hash. Two stages do it, and copy *their* choice of
-  hash input rather than only the idea — [database.md](database.md#today-files-under-dataslug).
+  hash input rather than only the idea — [database.md](database.md#the-filesystem-era-files-under-dataslug).
 - What the model calls cost, and the three prompt caches that stop us paying for the article twice,
   are in [prompt-caching.md](prompt-caching.md).
 - **Where the calls actually go** is [ai-gateway.md](ai-gateway.md): every paid call goes through
