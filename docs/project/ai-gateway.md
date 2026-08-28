@@ -128,6 +128,21 @@ which reads exactly like a mistyped model id and is neither. It is per account, 
 the same policy be set on an organisation and on an individual key too, so two keys that both work
 can still disagree about one model.
 
+**The specific fact worth carrying, because it will bite again the day somebody enables ZDR:**
+`voyageai/voyage-4` is **not** a Zero Data Retention endpoint. OpenRouter's own list
+(`GET /api/v1/endpoints/zdr`) has 806 entries and no Voyage among them, and the model page says why
+— *"Logs: this provider may retain prompts, but does not use them for training."* Retention without
+training means it fails `zdr: true` and passes `data_collection: "deny"`. The model has exactly one
+provider, so there is no fallback: **ZDR's "Non-frontier" scope switches embeddings off entirely,
+and nothing else.** Chat, the pipeline and the PDF reader are unaffected, because Anthropic's and
+OpenAI's endpoints *are* on that list — which is what makes the failure look like a bug in one
+feature rather than a policy applying to everything.
+
+Both OpenAI embedding models pass ZDR, so a project that must have ZDR everywhere has a way out
+that costs nothing measurable — see
+[embedding-endpoints-refused.md](../plans/embedding-endpoints-refused.md) for the eval's numbers and
+the billing catch.
+
 This is not hypothetical. **Drift, Trail and Force were dead in production from the day they shipped
 until 2026-08-28**, because `OPENROUTER_API_KEY` on Vercel is a different account from the one in
 `.env.local`, and that account may not use `voyageai/voyage-4`. Every check passed throughout:
@@ -309,6 +324,24 @@ Three properties of that write are load-bearing and none of them is obvious:
 `npm run cost`. `evals/` is not: it calls models outside both gateways, and the report says so on
 every run rather than being quietly partial.
 
+**That sentence was false for two of the eight until 2026-08-28.** `npm run labels` and
+`npm run pdf` had never had the line: both called `main()` straight from the guard, so every batch
+and every chunk they bought went nowhere near `npm run cost` and was counted by `unscopedCalls()` as
+fallen on the floor. Nothing noticed, because the two checks that look at spend ask a different
+question — `tests/no-undeclared-spend.test.ts` asks *can this file reach a provider, and is that
+declared*, which both files passed, and there was nothing at all asking *does this entrypoint open
+the ledger*. The concrete cost of six files copying a shared tail is that the two which did not copy
+it are the two that leak.
+
+[`tests/paid-cli-ledger.test.ts`](../../tests/paid-cli-ledger.test.ts) is what stops a third. It
+keeps an explicit list of the paid CLIs and **parses** each one, asking whether the branch that runs
+when the module is the entry file invokes `withLedger("cli", …)` — the one imported from
+`cli-ledger.js` — and nothing else beside it. It is not a text search for `withLedger` near an
+`isMain`, and the reason is [silent-success.md](../reusable/silent-success.md): a comment, a dead
+branch, a locally-defined wrapper of the same name and a bare `main()` sitting next to a correct
+wrapper all beat a text search while the money still disappears. Each of those is a case in the
+test, red, alongside the real files with the wrapper taken back out.
+
 ### Aborted is a cause, not a coincidence
 
 Both wires used to record *any* failure raised while a signal happened to be aborted as `"aborted"`.
@@ -348,6 +381,10 @@ wrong.
   that can reach a paid provider and is neither a seam, nor allow-listed with a reason, nor declared.
   A **tripwire, not a boundary**, in the same sense as `OPENROUTER_BASE` being unexported: it caught
   two live offenders on its first run.
+- [`tests/paid-cli-ledger.test.ts`](../../tests/paid-cli-ledger.test.ts) — the other question, which
+  that one structurally cannot ask: does each paid CLI's entrypoint actually open the ledger. Also a
+  tripwire — its list of paid CLIs is kept honest only for an entry module that imports a seam
+  *directly*, and one reaching a paid call transitively would need real dataflow to see.
 
 A declared bypass cannot be priced by OpenRouter, so its row carries `cost_source: "computed"` and a
 `price_version`, and `credits_used_nanos` stays null. That column means one thing — what OpenRouter
