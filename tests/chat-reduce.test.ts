@@ -27,10 +27,13 @@
  */
 import { describe, expect, it } from "vitest";
 import type { ChatMessage, ChatThread } from "../src/types.js";
-import type { ChatEvent, ChatInput, ChatState, OpId } from "../src/web/chat/model.js";
+import type { ChatInput, ChatState, OpId } from "../src/web/chat/model.js";
 import { asOpId, initialState } from "../src/web/chat/model.js";
 import { project } from "../src/web/chat/project.js";
-import { reduce } from "../src/web/chat/reduce.js";
+/* The purity harness lives in a helper because tests/chat-invariants.test.ts
+   needs the same one, and a `seal`/`twice` pair that exists twice is a pair one
+   of whose copies quietly stops being run. */
+import { twice } from "./helpers/chat-reduce.js";
 
 const SLUG = "a-piece";
 
@@ -57,88 +60,6 @@ const DELETE = asOpId("spya-del001");
  * only thing left holding the tombstone down.
  */
 const DELETE_NAME = asOpId("spya-del001");
-
-/**
- * A `Map` or a `Set` that screams if the reducer writes to it.
- *
- * `Object.freeze` is no help here — a frozen `Map` accepts `set` happily — so
- * the mutating methods are replaced with ones that throw. Everything else is
- * bound to the real collection, including `Symbol.iterator`, so
- * `new Map(booby-trapped)` still copies it.
- */
-function sealed<T extends object>(collection: T, what: string): T {
-  const guarded = new Set(["set", "add", "delete", "clear"]);
-  return new Proxy(collection, {
-    get(target, prop) {
-      if (typeof prop === "string" && guarded.has(prop)) {
-        return () => {
-          throw new Error(`the reducer called ${what}.${prop}() — it must not mutate its input`);
-        };
-      }
-      const value = Reflect.get(target, prop, target);
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
-}
-
-/**
- * Frozen all the way down, so an in-place edit throws rather than passing.
- *
- * Sealed **in place** rather than copied, so that a transition which changes
- * nothing can be asserted to hand back the object it was given — the
- * controller's cached projection depends on exactly that.
- */
-function seal(state: ChatState): ChatState {
-  if (Object.isFrozen(state)) return state;
-  for (const t of state.base) {
-    for (const m of t.messages) Object.freeze(m);
-    Object.freeze(t.messages);
-    Object.freeze(t);
-  }
-  Object.freeze(state.base);
-  for (const op of state.operations.values()) Object.freeze(op);
-  const mutable = state as {
-    operations: ChatState["operations"];
-    tombstones: ChatState["tombstones"];
-  };
-  mutable.operations = sealed(state.operations, "operations");
-  mutable.tombstones = sealed(state.tombstones, "tombstones");
-  return Object.freeze(state);
-}
-
-/**
- * Apply one event twice, and insist the two answers agree.
- *
- * The second run is the point: it is handed the *same* input as the first, so
- * anything the first run wrote into that input shows up as a difference here.
- */
-function twice(state: ChatState, event: ChatEvent): ReturnType<typeof reduce> {
-  const sealedState = seal(state);
-  const sealedEvent = Object.freeze({ ...event }) as ChatEvent;
-  const first = reduce(sealedState, sealedEvent);
-  const second = reduce(sealedState, sealedEvent);
-  expect(spread(second.state), "the same event twice gave two different states").toEqual(
-    spread(first.state),
-  );
-  expect(second.commands, "the same event twice asked for different work").toEqual(first.commands);
-  return first;
-}
-
-/**
- * The state as something two of can be compared.
- *
- * The `Map` and the `Set` are laid out flat because the booby-trapped ones
- * above are `Proxy` objects, and vitest's deep equality reads a `Set` through
- * its internal slots — which a proxy does not have, so it reports two
- * references to the *same* sealed set as unequal, with "no visual difference".
- */
-function spread(state: ChatState): unknown {
-  return {
-    ...state,
-    operations: [...state.operations.entries()],
-    tombstones: [...state.tombstones],
-  };
-}
 
 /** Everything the projection shows, by title. */
 function titles(state: ChatState): string[] {
@@ -920,6 +841,7 @@ describe("a turn", () => {
       opId: REPAIR,
       thread: conversation(),
     }).state;
+    expect(rows(repaired)).toEqual(["q1", "a1"]);
     expect(answer(repaired, "a1")?.text, "the snapshot put the replaced answer back").toBe(
       "a better answer",
     );
@@ -950,11 +872,18 @@ describe("a turn", () => {
       done: { text: "a new answer", citations: [], searches: 0, model: "m" },
     }).state;
 
+    /* **The server's copy still has the turn the edit threw away**, which is the
+       half the first version of this test never asked about: it checked the
+       question's text and not the row set, so it passed on
+       `q1, a1, a-edit` — the rewritten question with the discarded answer still
+       under it. An edit *truncates*, and a merge that only replaces rows cannot
+       express that. GPT Sol, 2026-08-28. */
     const repaired = twice(done, {
       type: "repair.succeeded",
       opId: REPAIR,
       thread: long,
     }).state;
+    expect(rows(repaired), "the snapshot undid the edit's discard").toEqual(["q1", "a-edit"]);
     expect(
       answer(repaired, "q1")?.text,
       "the snapshot put the question the reader rewrote back",
@@ -992,8 +921,42 @@ describe("a turn", () => {
       opId: REPAIR,
       thread: pendingRow,
     }).state;
+    expect(rows(repaired)).toEqual(["q1", "a1"]);
     expect(answer(repaired, "a1")?.status, "the snapshot put the spinner back").toBe("done");
     expect(answer(repaired, "a1")?.text).toBe("it finished after all");
+  });
+
+  /**
+   * **And the half none of the four narrowings ever reached.** A repair whose
+   * answer is `null` — the server does not have this conversation — removes it
+   * outright, and did so without consulting anything. A send started after the
+   * question was asked went with it, live or finished, and a live operation
+   * cannot re-project over a thread that is no longer there. GPT Sol, 2026-08-28.
+   *
+   * One check covers this and the three above, because it asks about the
+   * conversation rather than about rows: nothing may have happened here since we
+   * asked.
+   */
+  it("does not remove a conversation the reader has added to since asking", () => {
+    const refused = repairing(loaded(conversation()));
+    const sent = twice(refused, sending(TURN_B, "a-new", "q-new")).state;
+
+    const gone = twice(sent, { type: "repair.succeeded", opId: REPAIR, thread: null }).state;
+    expect(rows(gone), "a conversation with a live send in it was removed").toEqual([
+      "q1",
+      "a1",
+      "q-new",
+      "a-new",
+    ]);
+
+    /* And the premise, without which "never remove anything" would pass: when
+       nothing has happened since, the server's `null` is believed. */
+    const quiet = twice(repairing(loaded(conversation())), {
+      type: "repair.succeeded",
+      opId: REPAIR,
+      thread: null,
+    }).state;
+    expect(quiet.base).toEqual([]);
   });
 
   it("does not let an older repair land over a newer one", () => {
@@ -1515,6 +1478,42 @@ describe("a stop or a cancel", () => {
   });
 
   /**
+   * **And a second cancel that had already been *sent* inherits it too.**
+   *
+   * Supersession and replacement are different: a wish still waiting is replaced
+   * outright, and one already in flight is superseded so that its answer says
+   * nothing. Inheritance covered only the first, so two cancels that both went
+   * out and both failed left the conversation hidden for ever — the first's
+   * refusal was silenced for being superseded, and the second's could not lift a
+   * tombstone it did not own. GPT Sol, 2026-08-28, on exactly this test's gap.
+   */
+  it("lets a second cancel lift the tombstone of one already sent", () => {
+    const start = loaded(conversation());
+    /* Both go out at once: `a1` is the server's own name for the row, so
+       neither of these waits for anything. */
+    const first = wishing(start, "cancel", "a1").state;
+    expect(first.operations.get(WISH)).toMatchObject({ waitingOn: null });
+    const second = wishing(first, "cancel", "a1", OTHER_WISH).state;
+    expect(second.operations.get(WISH)?.superseded, "the first was superseded").toBe(true);
+
+    const firstFailed = twice(second, {
+      type: "intent.failed",
+      opId: WISH,
+      error: "the network",
+    }).state;
+    expect(titles(firstFailed), "a superseded wish spoke").toEqual([]);
+
+    const bothFailed = twice(firstFailed, {
+      type: "intent.failed",
+      opId: OTHER_WISH,
+      error: "This conversation has moved on since you looked",
+    }).state;
+    expect(titles(bothFailed), "both cancels failed and the conversation stayed hidden").toEqual([
+      "a conversation",
+    ]);
+  });
+
+  /**
    * A wish the reader has overtaken is dropped at the frame rather than sent.
    *
    * Deleting the conversation supersedes everything for it, the cancel
@@ -1601,6 +1600,69 @@ describe("a stop or a cancel", () => {
     }).state;
     expect(refused.tombstones.size, "the tombstone could not be found to lift").toBe(0);
     expect(titles(refused)).toEqual(["why?"]);
+  });
+
+  /**
+   * **A delete of a conversation the server has not named yet.**
+   *
+   * `delete.started` supersedes everything for the conversation, the live turn
+   * included — and the single "a superseded operation does nothing" rule then
+   * threw away that turn's `begin` frame, which is the one event carrying the
+   * server's real name for it. So the tombstone and the delete operation both
+   * stayed on the id this tab invented.
+   *
+   * And the DELETE had already gone out under that name. `deleteThread` on the
+   * server answers happily for a conversation it has never heard of, so the
+   * reader is told it worked and the real one comes back on their next reload —
+   * the same silent success as the cancel that was never sent. **A request
+   * issued under a name that has since changed has to be issued again**, which
+   * is the one holder of a thread id that lives outside the state. GPT Sol,
+   * 2026-08-28.
+   */
+  it("renames a delete of a conversation the server had not named, and asks again", () => {
+    const opened = twice(
+      loaded(),
+      starting({
+        id: TURN_A,
+        shape: "send",
+        threadId: "guess-thread",
+        replyId: "guess-a",
+        question: message({ id: "guess-q", role: "user", text: "why?", status: "done" }),
+        opening: thread("guess-thread", "why?"),
+        namesThread: true,
+      }),
+    ).state;
+    const removed = twice(opened, {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "guess-thread" },
+    });
+    expect(removed.commands).toEqual([
+      { type: "delete", opId: DELETE, slug: SLUG, threadId: "guess-thread" },
+    ]);
+    expect(removed.state.operations.get(TURN_A)?.superseded, "the premise").toBe(true);
+
+    const named = twice(removed.state, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: { threadId: "spya-real1", title: "why?", messageId: "srv-a", questionId: "srv-q" },
+    });
+
+    /* The tombstone and the delete both followed the server's name... */
+    expect([...named.state.tombstones.keys()], "the tombstone stayed on a name nobody has").toEqual([
+      "spya-real1",
+    ]);
+    expect(named.state.operations.get(DELETE)).toMatchObject({ threadId: "spya-real1" });
+    /* ...and the request went again, because the first one named a conversation
+       the server had never written down. */
+    expect(named.commands, "the DELETE was never re-issued under the real id").toContainEqual({
+      type: "delete",
+      opId: DELETE,
+      slug: SLUG,
+      threadId: "spya-real1",
+    });
+    /* The superseded turn still retires, and still draws nothing. */
+    expect(named.state.operations.has(TURN_A)).toBe(false);
+    expect(titles(named.state)).toEqual([]);
   });
 
   /**

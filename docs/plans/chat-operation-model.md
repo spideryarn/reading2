@@ -1,6 +1,7 @@
 # The chat operation model — the build plan
 
-**Status:** stage 1 built as `6f35022`, reviewed by GPT Sol, and one reader-reachable regression
+**Status:** **stage 3 built 2026-08-28** — see [§ What stage 3 actually did](#what-stage-3-actually-did).
+Stage 1 built as `6f35022`, reviewed by GPT Sol, and one reader-reachable regression
 fixed on top, 2026-08-28. **Stage 2 built 2026-08-28 as `852eda2`, refused by GPT Sol with three ship
 blockers, and rebuilt on top the same day.** Stage 3 is what is left of stage 3 after that, which is
 less than this plan says below. What each stage turned out to need that this plan did not say is at
@@ -771,3 +772,139 @@ says nothing about this. `controller.detach()` clears the callbacks from the hoo
 and only the callbacks. **What the controller decides for itself survives the unmount; what it was
 doing on somebody else's behalf does not.** That distinction is the whole of why the cancel is an
 operation and the `?thread=` correction is a callback.
+
+## What stage 3 actually did
+
+Built 2026-08-28, on top of `80e7190`. It is the only stage that is **all tests**, because stage 2
+took the intent union with it — so what was left was Sol's list of seven invariants from the very
+first review of the plan, written before any of this existed.
+[`tests/chat-invariants.test.ts`](../../tests/chat-invariants.test.ts).
+
+**They are permutations, not sequences**, and that is the point rather than the presentation. Every
+bug this directory exists to remove was an *ordering*: the earlier load answering last, the newer
+rename committing first, the 409 landing after a send it had nothing to do with. A single
+hand-written sequence cannot tell an invariant from an accident of arrangement, so each of these runs
+every order of a handful of events and checks **after every step** — the controller tells React after
+every dispatch, so a reader can see any intermediate state, and an invariant that is briefly false is
+false. Orders in which a result arrives before its operation is registered are included rather than
+filtered out: the gate refuses them, and that is part of what has to stay true.
+
+The purity harness moved to [`tests/helpers/chat-reduce.ts`](../../tests/helpers/chat-reduce.ts) so
+that the two suites share one copy. A `seal`/`twice` pair that exists twice is a pair one of whose
+copies quietly stops being run.
+
+### Two of the seven are narrower than Sol wrote them, and both say so
+
+- **"every pending answer has exactly one writer"** is *at most one* here. A `pending` row that
+  arrived from a load, or from a hook that has since unmounted, has **no** writer until something
+  goes looking — and what goes looking is the scan in `useChat.ts`, which is not the reducer's. The
+  half that lives here is the half the reducer can break, and it is the one that matters: two writers
+  for one row is two things patching one message from two vocabularies, which is what `owned` and
+  `watched` used to be.
+- **"stop and discard cannot coexist"** cannot be "one of them fires, ever" after the `begin` frame:
+  if the reader presses stop and the request goes, then presses cancel, the stop cannot be un-sent.
+  So the machine holds three things instead — at most one *live* wish per row, never two *waiting*,
+  and never a stop issued into a conversation that is going.
+
+### The permutation found a bug, which is the argument for writing them this way
+
+`began → stop → cancel` and `cancel → stop` were two of the six orders, and neither had ever been
+asked. Both sent a `/stop` naming a row in a conversation the server was being told to discard —
+whose failure would then write *"Couldn't stop that answer"* over a discard that worked. That is the
+obsolete-result-reports shape for the fourth time. **A stop is now refused outright for a tombstoned
+conversation**, which also covers stop-after-delete.
+
+Unreachable through the panel today, because a tombstoned conversation is projected away and takes
+its stop button with it — and that is exactly the argument that stopped being enough the last three
+times.
+
+### One probe that reddened nothing, reported rather than hidden
+
+`mergedArrival`'s deletions-win clause is **implied** by the projection's tombstone filter for
+everything a reader can see: removing it changes nothing in the invariant that names it. It is not
+dead — it keeps a deleted conversation out of `base` in the one case that scenario cannot reach,
+where the arriving list is the first to mention it — but it is not what holds the invariant, and the
+test says so instead of implying a probe found it load-bearing.
+
+The first probe tried for "a stale operation can never change state" was also a dud, and for a
+sharper reason: the gate's `!op` half **cannot be disabled**, because everything past it is written
+against an operation that was found, so removing it produces a crash rather than a wrong answer. What
+that half actually rests on is *retirement*, so the honest probe makes `withoutOp` a no-op — and that
+reddens four tests.
+
+### Not in this stage
+
+**The rename fence is out of scope and stays open.** Two PATCHes racing on the server is still real:
+supersession fixes the screen and does nothing about the database. The narrow fix is the one
+`expectedTailId` already uses on the destructive path — send something the server can refuse — and it
+needs a server change, so it is separate work rather than a test.
+
+## What the third review of stage 2 sent back
+
+**Refused a third time**, 2026-08-28, and on the question that mattered — is the repair rule closed or
+narrowed? — the answer was **narrowed again**. Three findings, and the first one changed the approach
+rather than the code.
+
+### The repair, fourth and last: stop modelling which rows changed
+
+`touched` recorded row *replacements*. Sol's list of what it therefore missed is the point: the
+mutations are **append, replace, truncate and recreate-after-absence**, and only one of them is a
+replacement. A completed edit *truncates* — it rewrites a question and discards everything under it —
+so the merge restored the old answer and every later turn from the stale snapshot. And a `null`
+repair *removed the conversation outright* without consulting anything, taking a send started after
+the question was asked with it.
+
+**Sol also found the test that let it through**, which is the more useful half: the edit test asserted
+the rewritten question's *text* and never the row set, so it passed on `q1, old-a1, a-edit` — the
+discard undone, with the assertion still green. Every assertion in that group names the rows now.
+
+Greg's diagnosis is what ended it: **operations retire into `base`, so the record of what this tab did
+is destroyed at the moment the repair needs it**, and all four fixes were attempts to reconstruct that
+record from row ids. Two ways out were put up — drop the repair whenever anything changed locally, or
+keep the local mutations replayable and merge by re-projection — and the first was chosen: closed
+today, small, and it does not trade a quiet wrong answer for a quieter one.
+
+**It is implemented by identity rather than by marking, and that distinction is the whole of why this
+one is closed.** Marking every write site would need six of them, and a seventh added next year by
+someone who has never read this. Instead the repair keeps the conversation *as it stood when its
+request went out* — `RepairOperation.saw` — and compares by reference when the answer arrives. The
+reducer never mutates and the purity harness enforces that, so **any** write to that conversation
+produces a new object: all four mutation shapes are one check, because it models none of them, and
+there is no call site to forget at. Structural sharing keeps it from being indiscriminate.
+
+The cost, chosen rather than discovered: a repair does nothing whenever the reader touched that
+conversation while it was out, a rename included. They keep a conversation that is locally right, they
+still have the 409's message, and the server's version arrives on the next load — the behaviour before
+any of this. `touching()` and its four call sites are gone.
+
+**If repairs ever become load-bearing**, the other option is where to go: keep the local mutations as
+something replayable over whatever `base` becomes, so a repair merges by re-projection. That means
+operations no longer retiring into `base`, which is a redesign of the commit path and does not belong
+in this stage.
+
+### One honest exception to the supersession rule
+
+The single rule — a superseded operation retires and does nothing else — was too broad by exactly one
+event. **`turn.began` is not the operation writing its own work; it is the only event carrying the
+server's real name for the conversation**, and the operation that superseded the turn is who needs it.
+Delete a new conversation before its `begin` frame and the blanket rule threw the frame away, so the
+tombstone and the delete both stayed on an id this tab invented.
+
+So `names(event)` is one exception in one place, rather than five scattered `op.superseded` checks put
+back. The superseded turn renames everything and then retires silently: it draws nothing, its wishes
+are dropped, and the panel is not told to follow a conversation that is being deleted.
+
+**And renaming is not enough on its own.** Sol's note on `renamed()` is that it covers every holder of
+a thread id the reducer owns, and that **the fourth holder is outside the state — requests already
+sent under the old name**. A rename and a delete both leave at registration; the server answers
+happily for a conversation it has never heard of, so the reader is told the delete worked and the real
+conversation returns on their next reload. `renamed()` therefore emits a fresh command for each, and
+that is the only repair available for a request that has already gone.
+
+### Supersession has to hand the tombstone on, not only replacement
+
+A wish still waiting is *replaced*; one already in flight is *superseded* and kept so its answer can
+retire it. Only the first handed its tombstone to the newer wish, so two cancels that both went out
+and both failed left the conversation hidden for ever — the first's refusal silenced for being
+superseded, the second's unable to lift a tombstone it did not own. Both kinds of taking-over now
+count.

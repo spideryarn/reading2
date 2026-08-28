@@ -71,6 +71,30 @@ function unchanged(state: ChatState): Outcome {
 }
 
 /**
+ * **The one event a superseded operation is still needed for.**
+ *
+ * The rule at the gate is that a superseded operation retires and does nothing
+ * else, and it is right for every answer *about* the operation's own work: the
+ * reader is looking at whatever took over, so an older one has nothing to draw
+ * and nothing to say. `turn.began` is not that. It is the only event that
+ * carries the server's real name for a conversation, and the operation that
+ * superseded this turn — a delete of that very conversation — is precisely who
+ * needs it. Discard it and the tombstone and the DELETE both stay on an id this
+ * tab invented, and the conversation comes back on the next reload.
+ *
+ * One exception, named here rather than five scattered `op.superseded` checks
+ * put back. GPT Sol, 2026-08-28.
+ */
+function names(event: ChatResult): boolean {
+  return event.type === "turn.began";
+}
+
+/** Has this operation asked again, and is this therefore not the last answer? */
+function waiting(op: Operation): boolean {
+  return (op.kind === "rename" || op.kind === "delete") && op.outstanding > 1;
+}
+
+/**
  * Is this answer still wanted?
  *
  * The map lookup in `reduce` is most of it: an operation that has retired, or
@@ -142,7 +166,15 @@ function register<O extends Operation>(
   for (const [id, other] of state.operations) {
     operations.set(id, replaces(other) ? { ...other, superseded: true } : other);
   }
-  operations.set(op.id, { ...op, seq: state.nextSeq, superseded: false } as Operation);
+  operations.set(op.id, {
+    ...op,
+    seq: state.nextSeq,
+    superseded: false,
+    /* One request, until something renames the conversation under it — see
+       `outstanding` in model.ts. Only the two kinds that ask at registration
+       carry it. */
+    ...(op.kind === "rename" || op.kind === "delete" ? { outstanding: 1 } : {}),
+  } as Operation);
   return { ...state, operations, nextSeq: state.nextSeq + 1 };
 }
 
@@ -181,26 +213,6 @@ function tombstoned(
 }
 
 /**
- * Tell every repair in flight for this conversation that a row has moved.
- *
- * Called from every place that writes a message into `base` — see
- * `RepairOperation.touched`, which is where the reasoning is. Cheap: there is
- * almost never a repair out, and the map is only rebuilt when there is.
- */
-function touching(state: ChatState, threadId: string, ids: readonly string[]): ChatState {
-  if (ids.length === 0) return state;
-  let operations: Map<OpId, Operation> | null = null;
-  for (const [id, op] of state.operations) {
-    if (op.kind !== "repair" || op.threadId !== threadId) continue;
-    const fresh = ids.filter((m) => !op.touched.includes(m));
-    if (fresh.length === 0) continue;
-    operations ??= new Map(state.operations);
-    operations.set(id, { ...op, touched: [...op.touched, ...fresh] });
-  }
-  return operations ? { ...state, operations } : state;
-}
-
-/**
  * What a turn has drawn, written into `base`, and the operation retired.
  *
  * **The same function the projection uses**, given the operation's final state.
@@ -212,10 +224,7 @@ function touching(state: ChatState, threadId: string, ids: readonly string[]): C
 function commit(state: ChatState, op: TurnOperation): ChatState {
   /* Anything still waiting on this turn is waiting for a `begin` frame that is
      never coming — see `stranded`. */
-  const cleared = touching(stranded(state, op.id), op.threadId, [
-    op.replyId,
-    ...(op.question ? [op.question.id] : []),
-  ]);
+  const cleared = stranded(state, op.id);
   const base = rewrite(cleared.base, op.threadId, (t) => {
     const messages = turnMessages(t.messages, op);
     return messages === t.messages ? t : { ...t, updatedAt: op.at, messages };
@@ -270,9 +279,15 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
          Tombstoned is left alone, which is what `put` did: a conversation the
          reader has discarded is not renamed under them if a refused cancel
          brings it back. */
-      const base = state.tombstones.has(threadId)
-        ? state.base
-        : rewrite(state.base, threadId, (t) => ({ ...t, title }));
+      /* **Rebuilt only if the title actually differs**, which matters more than
+         it looks: a repair asks whether this conversation is still the same
+         object, so a `{ ...t }` that changes nothing would make it drop for no
+         reason. Conservative rather than wrong, but silently doing less is how
+         this file gets things wrong, so the no-op is a no-op. */
+      const base =
+        state.tombstones.has(threadId)
+          ? state.base
+          : rewrite(state.base, threadId, (t) => (t.title === title ? t : { ...t, title }));
       return {
         state: register<RenameOperation>(
           { ...state, base },
@@ -394,6 +409,19 @@ function startIntent(
   event: Extract<ChatInput, { type: "intent.started" }>,
 ): Outcome {
   const { id, intent, threadId, messageId } = event.op;
+  /* **A stop has nothing to stop in a conversation that is going.** A cancel
+     stops the answer *and* removes the conversation, and a delete removes it
+     outright; either way a stop issued afterwards names a row in a conversation
+     the server is being told to throw away, and its failure would write
+     "Couldn't stop that answer" over a discard that worked — which is the same
+     obsolete-result-reports shape as the cancel that reported over a delete.
+     Found by the permutation in tests/chat-invariants.test.ts, not by reading
+     the code: `began → stop → cancel` and `cancel → stop` were two of the six
+     orders and neither had ever been asked. Unreachable through the panel today,
+     because a tombstoned conversation is projected away and takes its stop
+     button with it — which is exactly the argument that stopped being enough
+     the last three times. */
+  if (intent === "stop" && state.tombstones.has(threadId)) return unchanged(state);
   const writer = writerOf(state, messageId);
   const turn = writer && writer.kind === "turn" ? writer : undefined;
   /* A send and an edit both invent the answer row's id, so only the `begin`
@@ -417,13 +445,22 @@ function startIntent(
      `stopWanted.current.delete(...)` a cancel used to do to a stop on the same
      row, and it is the same rule in both directions — one of them fires, ever. */
   const kept = new Map<OpId, Operation>();
-  const replaced = new Set<string>();
+  /** Wishes this event takes over from — whether it drops them or outlives them. */
+  const taken = new Set<string>();
   for (const [otherId, other] of state.operations) {
-    if (other.kind === "intent" && other.waitingOn !== null && other.messageId === messageId) {
-      replaced.add(otherId);
+    if (other.kind !== "intent" || other.messageId !== messageId) {
+      kept.set(otherId, other);
       continue;
     }
-    kept.set(otherId, other);
+    /* **Both kinds of taking-over count**, and that is a fix. A wish still
+       waiting is *replaced* — dropped outright, because it has never been sent.
+       One already in flight is *superseded* — kept, because its answer still has
+       to retire it, but silenced. Only the first used to hand its tombstone on,
+       so two cancels that both went out and both failed left the conversation
+       hidden for ever: the first's refusal was silenced for being superseded and
+       the second's could not lift a tombstone it did not own. */
+    taken.add(otherId);
+    if (other.waitingOn === null) kept.set(otherId, other);
   }
   /* The conversation leaves the screen at once, whatever the server ends up
      saying — the reader pressed a destructive button. A standing tombstone is
@@ -432,7 +469,7 @@ function startIntent(
      replaced* is inherited, because otherwise nothing left could ever lift it
      and a refused cancel would leave the screen and the server disagreeing. */
   const standing = state.tombstones.get(threadId);
-  const inherit = standing && !standing.final && replaced.has(standing.by);
+  const inherit = standing && !standing.final && taken.has(standing.by);
   const marked: ChatState =
     intent === "cancel" && (!standing || inherit)
       ? { ...state, tombstones: tombstoned(state, threadId, { by: id, final: false }) }
@@ -528,11 +565,40 @@ function wishesNamed(
  * reported it against stage 2 and again after the first round of fixes, because
  * every test in the repo pushed back the id the client had guessed.
  */
-function renamed(state: ChatState, from: string, to: string): ChatState {
-  if (from === to) return state;
+function renamed(state: ChatState, from: string, to: string): Outcome {
+  if (from === to) return unchanged(state);
   const operations = new Map<OpId, Operation>();
+  const commands: ChatCommand[] = [];
   for (const [id, op] of state.operations) {
-    operations.set(id, op.kind !== "load" && op.threadId === from ? { ...op, threadId: to } : op);
+    if (op.kind === "load" || op.threadId !== from) {
+      operations.set(id, op);
+      continue;
+    }
+    if (op.kind !== "rename" && op.kind !== "delete") {
+      operations.set(id, { ...op, threadId: to });
+      continue;
+    }
+    /* One more answer to wait for — see `outstanding` in model.ts. Without it
+       the doomed first request, which named a conversation the server has never
+       heard of, reports its own failure over the second one that worked. */
+    operations.set(id, { ...op, threadId: to, outstanding: op.outstanding + 1 });
+    /* **And ask again**, because a request that has already gone out is the one
+       holder of a thread id that is not in this state and cannot be rewritten
+       here. A rename or a delete leaves at registration, naming a conversation
+       the server has not written down yet — and the server answers happily for a
+       conversation it has never heard of, so the reader is told it worked and
+       the real one comes back on their next reload. That is the silent-success
+       shape again, and the only fix is a second request under the name the
+       server minted. GPT Sol, 2026-08-28.
+       A turn's own POST is not re-issued: it is already in flight and it is what
+       produced this frame. A recovery cannot exist here — its row would have to
+       have been named. A wish that had been sent would have to have been sent
+       against a named row too. */
+    commands.push(
+      op.kind === "rename"
+        ? { type: "rename", opId: id, slug: state.slug, threadId: to, title: op.title }
+        : { type: "delete", opId: id, slug: state.slug, threadId: to },
+    );
   }
   const standing = state.tombstones.get(from);
   let tombstones = state.tombstones;
@@ -546,7 +612,7 @@ function renamed(state: ChatState, from: string, to: string): ChatState {
     if (!already || standing.final) next.set(to, standing);
     tombstones = next;
   }
-  return { ...state, operations, tombstones };
+  return { state: { ...state, operations, tombstones }, commands };
 }
 
 /**
@@ -597,7 +663,8 @@ function startTurn(
   }
   const { title } = op;
   if (title !== null && !state.tombstones.has(op.threadId)) {
-    base = rewrite(base, op.threadId, (t) => ({ ...t, title }));
+    // Same reasoning as `rename.started`: an unchanged title changes nothing.
+    base = rewrite(base, op.threadId, (t) => (t.title === title ? t : { ...t, title }));
   }
   return {
     state: register<TurnOperation>(
@@ -631,8 +698,33 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
          message is not in this conversation." */
       const base = withServerIds(state.base, op.threadId, op.replyId, begun, op.namesThread);
       /* Everything else keyed on the name this tab invented — the tombstone, and
-         every operation that named the conversation before the server did. */
+         every operation that named the conversation before the server did —
+         plus a fresh request for anything that had already asked under it. */
       const moved = renamed({ ...state, base }, op.threadId, begun.threadId);
+      /**
+       * **The one exception to "a superseded operation does nothing".**
+       *
+       * A turn is superseded only by a delete of its conversation, and this
+       * frame is not the turn writing an answer nobody wants: it is the only
+       * event that carries the server's real name for the conversation, and the
+       * operation that superseded this one is the one that needs it. Delete a
+       * new conversation before its `begin` frame and the blanket rule threw the
+       * frame away, so the tombstone and the delete both stayed on an id this
+       * tab invented and the conversation came back on the next reload.
+       *
+       * So the renaming happens and then the turn retires, silently: it draws
+       * nothing, its wishes are dropped, and the panel is not told to follow a
+       * conversation that is being deleted. GPT Sol, 2026-08-28 — "a superseded
+       * turn's naming event may still be required by the operation that
+       * superseded it."
+       */
+      if (op.superseded) {
+        const cleared = stranded(moved.state, op.id);
+        return {
+          state: { ...cleared, operations: withoutOp(cleared, op.id) },
+          commands: moved.commands,
+        };
+      }
       const named: TurnOperation = {
         ...op,
         threadId: begun.threadId,
@@ -654,15 +746,16 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
          transition, so there is no moment in which the row has a name and the
          wish has not been consumed. */
       const wishes = wishesNamed(
-        { ...moved, operations: withOp(moved, named) },
+        { ...moved.state, operations: withOp(moved.state, named) },
         op,
         begun.threadId,
         begun.messageId,
         begun.attempt ?? null,
       );
       return {
-        state: { ...moved, operations: wishes.operations },
+        state: { ...moved.state, operations: wishes.operations },
         commands: [
+          ...moved.commands,
           ...wishes.commands,
           {
             type: "named",
@@ -770,8 +863,10 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
           op.shape === "send"
             ? [op.replyId, ...(op.question ? [op.question.id] : [])]
             : [],
-        /* Nothing yet: it collects what is written from now until it answers. */
-        touched: [],
+        /* The conversation as the reader is looking at it right now. If it is
+           not this same object when the answer comes back, something happened
+           here in the meantime and the answer is out of date — see `saw`. */
+        saw: state.base.find((t) => t.id === op.threadId) ?? null,
       };
       const cleared = stranded(state, op.id);
       const dropped: ChatState = {
@@ -834,28 +929,19 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
  */
 function merged(mine: ChatThread, fresh: ChatThread, op: RepairOperation): ChatThread {
   const known = new Set(fresh.messages.map((m) => m.id));
+  /* Rows this tab has and the server does not. Nothing here is *newer* than the
+     snapshot — that case is refused outright now, above — so these are rows the
+     server had not written down when it answered: a send's optimistic pair,
+     most often. `drop` is the exception: the refused turn's own rows, which the
+     server has just said never happened. */
   const extra = mine.messages.filter((m) => !known.has(m.id) && !op.drop.includes(m.id));
-  /* A row this tab rewrote while the repair was out keeps this tab's version,
-     **in the server's position**, because the id is the same row and only its
-     contents are newer here. Without this the snapshot put back the answer a
-     retry had replaced, the question an edit had rewritten, and the spinner a
-     recovery had just resolved — three rows the "absent from the snapshot" rule
-     could not see, because every one of them keeps its id. */
-  const messages = op.touched.length
-    ? fresh.messages.map((m) => (op.touched.includes(m.id) ? (byId(mine, m.id) ?? m) : m))
-    : fresh.messages;
   return {
     ...fresh,
     title: mine.title,
     /* ISO-8601, so the later string is the later moment. */
     updatedAt: fresh.updatedAt > mine.updatedAt ? fresh.updatedAt : mine.updatedAt,
-    messages: extra.length === 0 ? messages : [...messages, ...extra],
+    messages: extra.length === 0 ? fresh.messages : [...fresh.messages, ...extra],
   };
-}
-
-/** One message of one thread, or nothing. */
-function byId(thread: ChatThread, id: string): ChatMessage | undefined {
-  return thread.messages.find((m) => m.id === id);
 }
 
 function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcome {
@@ -925,6 +1011,23 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
     case "repair.succeeded": {
       const retired = { ...state, operations: withoutOp(state, op.id) };
       if (op.kind !== "repair") return { state: retired, commands: NOTHING };
+      /* **Nothing may have happened here since we asked.** The one check, and
+         it replaces four attempts to work out which rows had moved — see `saw`.
+         It covers the `null` branch below as well, which is the half those
+         attempts never reached at all: a thread the server has lost is removed
+         outright, and a send started after the question was asked would have
+         gone with it.
+
+         **This line is where the reducer's purity stops being hygiene and starts
+         holding something up.** It is sound because a write to this conversation
+         cannot happen in place — so any write at all produces a new object, and
+         reference inequality is the whole question. `tests/helpers/chat-reduce.ts`
+         seals the maps and freezes the threads on every transition, and that is
+         no longer only a tidiness check: relax it and this comparison starts
+         answering "nothing happened" to writes that did. */
+      if ((retired.base.find((t) => t.id === op.threadId) ?? null) !== op.saw) {
+        return { state: retired, commands: NOTHING };
+      }
       const fresh = event.thread;
       const base = fresh
         ? rewrite(retired.base, op.threadId, (t) => merged(t, fresh, op))
@@ -949,8 +1052,7 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
          the stored row omits a field it has nothing to say about, so a spread
          alone cannot clear one left over from the attempt this watch is
          recovering. */
-      const noted = touching(retired, op.threadId, [op.messageId]);
-      const base = rewriteMessage(noted.base, op.threadId, op.messageId, (m) => ({
+      const base = rewriteMessage(retired.base, op.threadId, op.messageId, (m) => ({
         ...m,
         stopped: false,
         truncated: false,
@@ -958,18 +1060,17 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
         error: "",
         ...event.message,
       }));
-      return { state: { ...noted, base }, commands: NOTHING };
+      return { state: { ...retired, base }, commands: NOTHING };
     }
     case "recovery.givenUp": {
       const retired = { ...state, operations: withoutOp(state, op.id) };
       if (op.kind !== "recovery") return { state: retired, commands: NOTHING };
-      const noted = touching(retired, op.threadId, [op.messageId]);
-      const base = rewriteMessage(noted.base, op.threadId, op.messageId, (m) => ({
+      const base = rewriteMessage(retired.base, op.threadId, op.messageId, (m) => ({
         ...m,
         status: "error" as const,
         error: event.error,
       }));
-      return { state: { ...noted, base }, commands: NOTHING };
+      return { state: { ...retired, base }, commands: NOTHING };
     }
     case "recovery.stopped":
       /* The reader deleted the conversation, or left the article. Nothing to
@@ -1048,7 +1149,16 @@ export function reduce(state: ChatState, event: ChatEvent): Outcome {
      * *admitted* — that is what lets it retire rather than sit in the map for
      * ever, which is the distinction the plan draws.
      */
-    if (op.superseded) {
+    /* **An older request's answer to an operation that has asked again.** It was
+       about a name that no longer means what it did, and there is nothing on the
+       wire to tell it from the answer that matters, so the operation waits for
+       the last of them. One place, beside the rule above, rather than a check in
+       each of the four branches that could report. */
+    if (waiting(op)) {
+      const fewer = { ...op, outstanding: (op as { outstanding: number }).outstanding - 1 };
+      return { state: { ...state, operations: withOp(state, fewer as Operation) }, commands: NOTHING };
+    }
+    if (op.superseded && !names(event)) {
       /* A turn is superseded only by a delete of its conversation, and a wish
          waiting on it would then wait for ever. */
       const cleared = op.kind === "turn" ? stranded(state, op.id) : state;

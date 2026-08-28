@@ -95,26 +95,34 @@ export interface RepairOperation extends Registered {
    */
   drop: readonly string[];
   /**
-   * Rows this tab has written **since this repair went out**, which the
-   * snapshot it is waiting for cannot know about.
+   * The conversation **as it stood when this repair's request went out**, or
+   * `null` if there was none.
    *
-   * This is the third form of one bug, and the field that closes it rather than
-   * narrowing it again. Snapshot-over-newer-projection was in `refreshThread`,
-   * then in the repair replacing the conversation outright, then in the merge
-   * that replaced *that* — which kept only rows the snapshot did not have. Every
-   * operation that rewrites a row **keeps its id**: a retry answers into the row
-   * it replaces, an edit keeps the question's id, a recovery patches the row it
-   * was chasing. So "absent from the snapshot" protects a later *send*, which
-   * mints ids, and nothing else.
+   * The whole of the answer to a bug that came back four times. A snapshot from
+   * the server is old the moment it is taken, so it may only be written if
+   * nothing here has moved since it was asked for — and every earlier attempt
+   * tried to work out *which rows* had moved, from ids. That kept failing
+   * because the mutations are not all replacements: an edit **truncates**, a
+   * refused send leaves rows to **drop**, a thread can be **recreated** after
+   * the server says it is gone, and each fix modelled the shapes its author had
+   * in mind. Sol's four, found one at a time.
    *
-   * A live operation needs no protection — it draws over `base`, so it is
-   * re-projected over whatever lands. It is the ones that **retire** while the
-   * repair is out whose writes are in `base` and older on the server. Recording
-   * them here says exactly that, with no notion of time and nothing to keep in
-   * step: whatever was written after the question was asked cannot be answered
-   * by it. GPT Sol, 2026-08-28.
+   * This models none of them. The reducer never mutates — tests/helpers/chat-reduce.ts
+   * enforces it — so any write to this conversation, by any path, present or
+   * future, produces a **new object**. Reference inequality is therefore the
+   * exact question "has anything happened here since I asked?", and it has no
+   * call sites to forget at: a write added tomorrow is covered by construction.
+   * Structural sharing is what keeps it from being indiscriminate — a write to
+   * another conversation leaves this reference alone.
+   *
+   * The cost is stated rather than discovered: **a repair does nothing whenever
+   * the reader touched that conversation while it was out**, a rename included.
+   * They keep a conversation that is locally right, they still have the 409's
+   * error message, and the server's version of events arrives on the next load —
+   * which is what happened before any of this. Greg chose that over a fifth
+   * narrowing, 2026-08-28.
    */
-  touched: readonly string[];
+  saw: ChatThread | null;
 }
 
 /** Stop this answer, or throw the whole conversation away. Never both. */
@@ -310,13 +318,39 @@ export interface RecoveryOperation extends Registered {
   attempt: string | null;
 }
 
-export interface RenameOperation extends Registered {
+/**
+ * How many requests this operation has out, which is normally one.
+ *
+ * A rename and a delete both leave at registration, naming the conversation by
+ * whatever it is called then — and a conversation the server has not written
+ * down yet is called something this tab invented. When the `begin` frame gives
+ * it the server's name, the request has to go again under that name, because a
+ * request already in flight is the one holder of a thread id that this state
+ * cannot rewrite (`renamed` in reduce.ts).
+ *
+ * Two requests then have two answers, and they are indistinguishable: they come
+ * back under one `opId` carrying nothing that says which is which. So the
+ * operation waits for the **last** of them and says nothing about the others,
+ * which is what stops the doomed first request — a PATCH against a conversation
+ * the server has never heard of — reporting "Couldn't rename that conversation"
+ * over a second one that worked.
+ *
+ * **The residue, named rather than left to be found:** if the stale answer
+ * arrives *last* it is the one that speaks. Nothing on the wire can tell them
+ * apart, and the alternative — minting a second operation id inside the reducer
+ * — is exactly the impurity this whole directory is built to avoid.
+ */
+interface Reissuable {
+  outstanding: number;
+}
+
+export interface RenameOperation extends Registered, Reissuable {
   kind: "rename";
   threadId: string;
   title: string;
 }
 
-export interface DeleteOperation extends Registered {
+export interface DeleteOperation extends Registered, Reissuable {
   kind: "delete";
   threadId: string;
 }
@@ -341,8 +375,14 @@ export type Operation =
   | DeleteOperation
   | IntentOperation;
 
-/** An operation as its caller hands it over: the reducer adds the rest. */
-export type Registering<O extends Operation> = Omit<O, "seq" | "superseded">;
+/**
+ * An operation as its caller hands it over: the reducer adds the rest.
+ *
+ * `seq`, `superseded` and `outstanding` are all answers to questions about the
+ * *state*, so the reducer owns them. A caller that filled one in would be the
+ * second vocabulary this directory exists to remove.
+ */
+export type Registering<O extends Operation> = Omit<O, "seq" | "superseded" | "outstanding">;
 
 /** Where the one fetch that fills the list has got to. */
 export type LoadPhase = "loading" | "ready" | "failed";
