@@ -16,6 +16,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PublicArticle } from "../src/public-types.js";
+import { PUBLIC_ROUTE_NAMES } from "../src/public/route-names.js";
 import { loadPublicArticle, loadPublicMetadata, publicFetch } from "../src/web/public-api.js";
 
 /** Every request this file's calls made, exactly as `fetch` saw it. */
@@ -138,6 +139,22 @@ describe("reading a public endpoint", () => {
  * lead's steer. Before it there were two literal spellings of each path and no
  * line anywhere that said they had to match.
  *
+ * ## Why the import is `route-names.js` and is at the top of the file
+ *
+ * It was `PUBLIC_ROUTES` from `public/routes.js`, dynamically imported inside
+ * the test with a note saying it "pulls in the public reader and the store" —
+ * a cost stated as a hunch and never measured. It was **776ms**, because the
+ * inventory sat in the same module as the `read` functions, which reach
+ * `public-reader.ts` → `sanitize.ts` → **jsdom**. With vitest's 5s default and
+ * a dozen workers competing, that is not a safe margin, and this test failed in
+ * full runs while passing alone — which reads exactly like flakiness and is
+ * not.
+ *
+ * `route-names.ts` is the leaf the server half split out for it: name, pattern
+ * and `path()`, importing nothing at all. So the import is static and at the
+ * top, where an import belongs, and the seam still has one authoritative
+ * spelling. A list of URL shapes had no business importing an HTML sanitiser.
+ *
  * **One direction only, deliberately.** Every route the client asks for must be
  * in the inventory; the reverse is not asserted, because slice 1b lands public
  * glossary, summaries, ideas and tweets on the server before the client has
@@ -146,14 +163,11 @@ describe("reading a public endpoint", () => {
  */
 describe("the client and the server agree about the paths", () => {
   it("asks only for routes the server's own inventory names", async () => {
-    /* Imported here rather than at the top: it pulls in the public reader and
-       the store, which the tests above have no business loading. */
-    const { PUBLIC_ROUTES } = await import("../src/public/routes.js");
-    const spelled = new Set(PUBLIC_ROUTES.map((r) => r.path("a-piece")));
+    const spelled = new Set(PUBLIC_ROUTE_NAMES.map((r) => r.path("a-piece")));
     /* The inventory does not encode — `path()` is the *spelling*, and encoding
        is the client's own job, which the test above covers. A plain slug is the
        same either way, which is why this one uses one. */
-    expect(spelled.size).toBe(PUBLIC_ROUTES.length); // no two routes spell alike
+    expect(spelled.size).toBe(PUBLIC_ROUTE_NAMES.length); // no two routes spell alike
 
     next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
     calls.length = 0;
