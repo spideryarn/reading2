@@ -250,7 +250,19 @@ export interface TurnOperation extends Registered {
   question: ChatMessage | null;
   /** An edit's target: this question and everything under it is replaced. */
   editing: string | null;
-  /** The conversation this send had to invent. Written to `base` at registration. */
+  /**
+   * The conversation this send had to invent. Written to `base` at registration.
+   *
+   * **An argument, not a fact the operation keeps.** `startTurn` puts it in
+   * `base`, records it in `unnamed`, and registers the operation with `null`
+   * here — so after registration this is always `null`, and a read of it can
+   * never come back with the provisional thread id. `turn.began` moves every
+   * name this tab invented to the server's, and this was the one field it could
+   * not reach: GPT Sol, 2026-08-28. Renaming it instead would have kept a
+   * snapshot that is stale in every other field — no question, no answer, the
+   * title as it was — wearing a current id. The conversation is in `base`;
+   * `null` says to look there.
+   */
   opening: ChatThread | null;
   /**
    * A title this turn writes straight into `base`.
@@ -265,11 +277,24 @@ export interface TurnOperation extends Registered {
   /**
    * Does the `begin` frame's title belong to this conversation?
    *
-   * True only for the turn that *creates* it. `withServerIds` used to work this
-   * out from "the thread has two messages or fewer", which is the same thing
-   * for the case it was written for and wrong for the second send into a
-   * one-turn conversation: it would put the server's stored title back over a
-   * rename the reader had just made.
+   * True for the turn that *creates* it, and for an edit of the first question,
+   * which renames it — `withEdit` on the server says so. The frame's title is
+   * worth taking because the server cuts on a word boundary and the optimistic
+   * one is a blunt 60-character slice.
+   *
+   * **Reducer-owned, like `seq`, `superseded` and `held`** — which is why
+   * `Registering` omits it. It has now been got wrong from two directions and
+   * both were the same mistake, a caller answering a question about the state:
+   * `withServerIds` used to read it off the list as "two messages or fewer",
+   * which said "the first turn" for the case its author had in mind and
+   * something else for the second send into a one-turn conversation; so it was
+   * made an argument, and the hook then worked it out from the message count on
+   * screen and handed over a guess that went stale the moment the reader renamed
+   * the conversation. GPT Sol asked for it to come inside on 2026-08-28, and the
+   * two facts it needs — `unnamed`, and whether a rename is live for this
+   * conversation — are both here and nowhere else. `startTurn` decides it and
+   * `readerNamed` withdraws it, which is the same rule from the two sides the
+   * reader can arrive from.
    */
   namesThread: boolean;
   /** `updatedAt` for the conversation. Minted outside the reducer. */
@@ -386,14 +411,19 @@ export type Operation =
 /**
  * An operation as its caller hands it over: the reducer adds the rest.
  *
- * `seq`, `superseded` and `held` are all answers to questions about the
- * *state*, so the reducer owns them. A caller that filled one in would be the
- * second vocabulary this directory exists to remove — and `held` especially:
- * "has the server named this conversation?" is exactly the question a caller
- * outside the state would have to guess at, which is how `namesThread` came to
- * be wrong.
+ * `seq`, `superseded`, `held` and `namesThread` are all answers to questions
+ * about the *state*, so the reducer owns them. A caller that filled one in would
+ * be the second vocabulary this directory exists to remove — and `held`
+ * especially: "has the server named this conversation?" is exactly the question
+ * a caller outside the state would have to guess at, which is how `namesThread`
+ * came to be wrong, twice. It is in this list now rather than in the argument
+ * list, which is the whole of the fix: the hook can no longer supply an answer,
+ * right or wrong.
  */
-export type Registering<O extends Operation> = Omit<O, "seq" | "superseded" | "held">;
+export type Registering<O extends Operation> = Omit<
+  O,
+  "seq" | "superseded" | "held" | "namesThread"
+>;
 
 /** Where the one fetch that fills the list has got to. */
 export type LoadPhase = "loading" | "ready" | "failed";

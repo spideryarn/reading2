@@ -34,21 +34,82 @@ function sealed<T extends object>(collection: T, what: string): T {
 }
 
 /**
+ * Every object and array under this one, frozen — and the `Map`s and `Set`s it
+ * finds have their *contents* frozen, since freezing a collection does nothing.
+ *
+ * **Written as a walk rather than as a list of the fields worth freezing**, for
+ * the reason `mentions()` in tests/chat-invariants.test.ts is a walk: a list is a
+ * list of the fields somebody thought of, and the one that gets mutated is the
+ * one nobody listed. It covers a field added next year on the day it is added.
+ *
+ * Memoised in a `WeakSet` of what *this* function has been through, rather than
+ * on `Object.isFrozen`. An object frozen shallowly by anything else is frozen
+ * and has unfrozen children, so `isFrozen` as the memo would stop the walk at
+ * exactly the objects it most needs to get inside — a guard that goes quiet the
+ * moment it is defeated.
+ */
+const walked = new WeakSet<object>();
+
+function freezeDeep<T>(value: T): T {
+  if (value === null || typeof value !== "object") return value;
+  const held = value as unknown as object;
+  if (walked.has(held)) return value;
+  walked.add(held);
+  if (held instanceof Map) {
+    for (const [key, entry] of held) {
+      freezeDeep(key);
+      freezeDeep(entry);
+    }
+    return value;
+  }
+  if (held instanceof Set) {
+    for (const entry of held) freezeDeep(entry);
+    return value;
+  }
+  for (const entry of Object.values(held)) freezeDeep(entry);
+  Object.freeze(held);
+  return value;
+}
+
+/**
  * Frozen all the way down, so an in-place edit throws rather than passing.
  *
  * Sealed **in place** rather than copied, so that a transition which changes
  * nothing can be asserted to hand back the object it was given — the
  * controller's cached projection depends on exactly that.
+ *
+ * **It used to freeze the shells only** — the operation, not the `reply` on it;
+ * the tombstone map, not the tombstones in it — so a mutation one level down
+ * went through, and if it was idempotent the twice-run comparison agreed with
+ * itself and said nothing. GPT Sol, 2026-08-28. That matters more here than
+ * anywhere else in the suite: `RepairOperation.saw` decides whether a repair may
+ * write by comparing a conversation **by reference**, which is sound only
+ * because the reducer never mutates, and this is what enforces that.
+ *
+ * **Watched before and after, on three planted mutations**, each idempotent so
+ * that the twice-run comparison cannot see it, and each in a place the old seal
+ * did not reach. The old harness passed every one of them; this one throws on
+ * all three:
+ *
+ * - an operation-owned nested value — `op.reply.status` written in place in
+ *   `moved()`, for a retry or an edit, whose row is drawn rather than written
+ *   into `base`. A *send*'s reply is the same object as the message in `base`,
+ *   which the old seal did freeze, so this gap was open for exactly the two
+ *   shapes nothing else covered: `chat-reduce.test.ts` 67/67 before, 1 failing
+ *   after;
+ * - a tombstone value — `{ by, final }` mutated in place in `tombstoned()`
+ *   rather than replaced: 67/67 before, 3 failing after;
+ * - nested event data — `event.done.text` trimmed in place, rewriting the
+ *   caller's payload: `chat-invariants.test.ts` 11/11 before, 3 failing after.
  */
 export function seal(state: ChatState): ChatState {
-  if (Object.isFrozen(state)) return state;
-  for (const t of state.base) {
-    for (const m of t.messages) Object.freeze(m);
-    Object.freeze(t.messages);
-    Object.freeze(t);
-  }
-  Object.freeze(state.base);
-  for (const op of state.operations.values()) Object.freeze(op);
+  if (walked.has(state)) return state;
+  freezeDeep(state.base);
+  /* The three collections are frozen through their *contents* here and
+     booby-trapped below: an operation and everything on it, a tombstone's
+     `{ by, final }`, and the strings in `unnamed`, which need nothing. */
+  freezeDeep(state.operations);
+  freezeDeep(state.tombstones);
   const mutable = state as {
     operations: ChatState["operations"];
     tombstones: ChatState["tombstones"];
@@ -57,6 +118,7 @@ export function seal(state: ChatState): ChatState {
   mutable.operations = sealed(state.operations, "operations");
   mutable.tombstones = sealed(state.tombstones, "tombstones");
   mutable.unnamed = sealed(state.unnamed, "unnamed");
+  walked.add(state);
   return Object.freeze(state);
 }
 
@@ -84,10 +146,19 @@ export function spread(state: ChatState): unknown {
  * anything the first run wrote into that input shows up as a difference here.
  * React invokes an updater twice under `StrictMode`, and this file's ancestor
  * has been bitten by an impure one.
+ *
+ * **The twice-run comparison is the weaker half of this, and it is worth being
+ * clear which half does the work.** A mutation the reducer performs on its input
+ * is invisible to a comparison of two runs whenever it is idempotent — the
+ * second run reads the mutated input and writes the same thing again, so the two
+ * answers agree. The freeze is what catches those, which is why it has to reach
+ * all the way down: the event's nested `op`, `begun` and `done` as much as the
+ * event itself. It was a shallow copy and a shallow freeze until GPT Sol pointed
+ * at it, 2026-08-28.
  */
 export function twice(state: ChatState, event: ChatEvent): ReturnType<typeof reduce> {
   const sealedState = seal(state);
-  const sealedEvent = Object.freeze({ ...event }) as ChatEvent;
+  const sealedEvent = freezeDeep({ ...event }) as ChatEvent;
   const first = reduce(sealedState, sealedEvent);
   const second = reduce(sealedState, sealedEvent);
   expect(spread(second.state), "the same event twice gave two different states").toEqual(

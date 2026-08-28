@@ -1006,6 +1006,11 @@ after asking the first question in it: `readerNamed` clears it on every live tur
 registers, and `startTurn` registers with it already false when a rename for that conversation is
 live. One rule, stated twice because the two orders arrive at two events.
 
+> **Half superseded by the fifth review.** The two-sided rule is unchanged, but the hook no longer
+> decides `namesThread` at all: the reducer works it out from `unnamed` and the live renames, and
+> `Registering` omits the field so nothing outside can supply it —
+> [§ `namesThread` came inside](#namesthread-came-inside-which-is-what-sol-asked-for-by-name).
+
 ### The stage 3 suite claimed more than it exercised, twice
 
 Neither was widened to match the words; the words and the tests were made to agree, which is the rule
@@ -1021,3 +1026,117 @@ this document set for itself.
   runs over three states now. **Watched failing:** a probe that admits a superseded `repair.failed`
   while leaving its success silent — bug 10 and bug 12's exact shape — reddens the test with the row
   and passes unnoticed without it.
+
+## What the fifth review of stage 2 sent back
+
+**Stage 2 ships**, 2026-08-28 —
+[chat-operation-model-stage2-fifth-sol.md](chat-operation-model-stage2-fifth-sol.md). The window it
+was refused over four times is confirmed closed: no early DELETE, a fabricated early success is
+refused, and `turn.began` releases exactly one DELETE even when `from === to`.
+
+**Stage 3 was the work, and all three findings were the same complaint**: a test said it checked more
+than it checked. That is the third round running in which Sol has found that here, which makes it the
+thing to be most careful about — so the rule stayed what it has been: do not widen a claim to fit a
+test; either widen the test or narrow the words.
+
+### The naming invariant said "whole-state scan" and was a list of fields
+
+`mentions()` in [`tests/chat-invariants.test.ts`](../../tests/chat-invariants.test.ts) missed two of
+them — `state.unnamed`, and `TurnOperation.opening`, which still held the provisional thread id after
+the frame. **It is not a list any more.** It walks the state: every object, every array, every `Map`
+key and value, every `Set` member, reporting the *path* of any string equal to the name. A field
+added next year is scanned the day it is added, which is what the docstring was claiming all along.
+Ids are `spya-…`-shaped and prose is not, so whole-string comparison cannot collide with a title.
+
+Two probes, both red: `knownAs` made a no-op leaves `state.unnamed member`, and a `startTurn` that
+keeps `opening` leaves `state.operations[…].opening.id`. Both are reported by path, which is how a
+future one will be read.
+
+**And `opening` is now let go of rather than renamed.** It was the one name in the state that
+`turn.began` could not reach, and the brief for this round asked whether it should follow the
+rename or be exempt — Greg has seen none of it. Neither: **it is an argument to registration, not
+a fact the operation keeps.** Every read of it in the repo is in `startTurn` — put the thread in
+`base`, record it in `unnamed` — and the operation is registered with `opening: null` from there
+on. Renaming it instead would have kept a
+snapshot that is stale in every *other* field the moment the question is written under it: no
+question, no answer, the title as it was, wearing a current id. `null` sends a future reader to
+`base`, loudly, where the conversation actually is. An exemption was the other defensible answer and
+was rejected on the grounds the brief gives: "nothing reads it today" is how the id contract gets
+broken a release later.
+
+### The purity harness proved less than it claimed, and it is what `saw` rests on
+
+`seal` froze the operation *shell* and not the values on it, tombstone values, or nested event data;
+`twice` took a shallow copy of the event. **An idempotent nested mutation escapes both** — the freeze
+never reaches it, and the twice-run comparison cannot see it, because the second run reads the
+mutated input and writes the same answer again. That matters here more than anywhere else in the
+suite: `RepairOperation.saw` decides whether a repair may write by comparing a conversation **by
+reference**, which is sound only because the reducer never mutates, and this harness is what enforces
+that.
+
+It is a walk now, for the same reason `mentions()` is: objects, arrays, and the contents of `Map`s
+and `Set`s, memoised in a `WeakSet` of what *this* function has been through rather than on
+`Object.isFrozen` — an object frozen shallowly by anything else is frozen and has unfrozen children,
+so `isFrozen` as the memo would stop the walk at exactly the objects it most needs to get inside.
+
+**Watched before and after, on three planted idempotent mutations**, each in a place the old seal did
+not reach. The old harness passed every one:
+
+| planted in a copy of the reducer | old harness | deepened harness |
+| --- | --- | --- |
+| `op.reply.status` written in place in `moved()`, for a retry or an edit | 67/67 green | 1 failing |
+| a tombstone's `{ by, final }` mutated in place in `tombstoned()` | 67/67 green | 3 failing |
+| `event.done.text` trimmed in place, rewriting the caller's payload | 11/11 green | 3 failing |
+
+The first of those is worth a sentence: a **send**'s `reply` is the same object as the message it
+wrote into `base`, which the old seal did freeze — so the gap was open for exactly the two shapes
+nothing else covered.
+
+**The probe rig had to redirect the whole import chain**, and that is the note for next time: the
+harness is imported by the tests, so a probe aimed at the reducer alone reaches nothing. Each probe
+was a copy of the reducer, a copy of the harness importing *that*, and a copy of the test file
+importing *that* — with `die unless $c == 1` on every substitution, which caught one anchor that had
+stopped matching after an edit and would otherwise have "passed".
+
+### "Every kind" left the turn out of the symmetry table
+
+`turn.done` against `turn.failed` is in both tables now, retired and superseded. A turn is superseded
+by exactly one thing — a delete of its conversation — so that is how the state is reached, and the
+comparison is the whole state rather than `error` alone, because a turn is also the only kind with a
+wish that can be left waiting on it.
+
+**Watched failing:** exempting `turn.failed` alone from the gate's superseded rule — bugs 10 and 12
+aimed at the kind that was missing — reddens exactly one assertion, `b.base` against `a.base`,
+because the discarded turn's failure writes an error row into a conversation whose success writes
+nothing at all. `turn.began` is deliberately not paired with anything: it is the one event a
+superseded operation is still admitted for, and it is not an ending.
+
+### `namesThread` came inside, which is what Sol asked for by name
+
+It still arrived from the hook, worked out from the message count on screen — the same shape as the
+guess that was already a bug once, and it had now been got wrong from two directions for the same
+reason: a caller answering a question about the state. It is **reducer-owned** now, listed in
+`Registering`'s omissions beside `seq`, `superseded` and `held`, so the hook cannot supply an answer,
+right or wrong. `startTurn` decides it from the two facts that are only in the state:
+
+```
+namesThread = !claimed && (unnamed.has(threadId) || op.title !== null)
+```
+
+— the conversation is one this tab invented and the server has not confirmed, **or** this turn is an
+edit of the first question, which renames it and says so by carrying a `title`; and no rename of that
+conversation is live. `readerNamed` is unchanged and is the same rule from the other side, for a
+rename that arrives after the turn registered.
+
+**One clause nothing could redden, found by probing rather than by reading.** Dropping
+`op.title !== null` left all 67 tests in `tests/chat-reduce.test.ts` green: the rule that an edit of
+the first question takes the server's *word-boundary* cut of the new title — where the optimistic one
+is a blunt 60-character slice — had never been asked at this level, in either the old code or the
+new. Two tests now say it, and the second says the other half: a reader's rename still wins over the
+edit's frame. Every clause of the derivation now has a probe that reddens it — always-false, 2 red;
+always-true, 2 red; without `!claimed`, 2 red; without the title half, 1 red.
+
+**Not done, deliberately:** the field itself stays. Sol's wording allowed deleting it "if nothing else
+needs it", and `withServerIds` still takes it as an argument — it is a rule about ids in a pure
+function, and deciding it at the frame instead of at registration would lose the stickiness that
+`readerNamed` gives a rename which has since retired.

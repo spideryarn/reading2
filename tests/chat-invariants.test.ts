@@ -88,7 +88,6 @@ function turn(op: {
   editing?: string | null;
   opening?: ChatThread | null;
   title?: string | null;
-  namesThread?: boolean;
 }): Extract<ChatInput, { type: "turn.started" }> {
   const replyId = op.replyId ?? "a-new";
   return {
@@ -104,7 +103,6 @@ function turn(op: {
       editing: op.editing ?? null,
       opening: op.opening ?? null,
       title: op.title ?? null,
-      namesThread: op.namesThread ?? false,
       at: AT,
       began: false,
       attempt: null,
@@ -417,24 +415,59 @@ describe("turn.began changes every name in one transition", () => {
    * of the frame's position in it.
    *
    * Probes: each of the three id swaps in `withServerIds`, and each half of
-   * `renamed`, turns this red on its own — five probes, one rule.
+   * `renamed`, turns this red on its own — five probes, one rule. And two more
+   * since the scan was widened: `knownAs` made a no-op, so the provisional name
+   * stays in `unnamed`; and `startTurn` keeping `opening` on the registered
+   * operation, so the thread it invented keeps its old id in a field of its own.
+   *
+   * **It said "whole-state scan" and was a list of fields, and it missed two of
+   * them** — `state.unnamed` and `TurnOperation.opening` — which GPT Sol found on
+   * 2026-08-28, the third round running in which a test here claimed more than it
+   * checked. So it is no longer a list. It walks the state: every object, every
+   * array, every `Map` key and value, every `Set` member, and reports the path of
+   * any string equal to the name. A field added next year is scanned the day it
+   * is added, and nothing is exempted on the grounds that nothing reads it —
+   * "nothing reads it today" is how the id contract gets broken a release later.
+   *
+   * Ids are `spya-…`-shaped and prose is not, so a walk that compares whole
+   * strings cannot collide with a title or an error message.
    */
-  function mentions(state: ChatState, name: string): string[] {
-    const found: string[] = [];
-    for (const t of state.base) {
-      if (t.id === name) found.push("a thread in base");
-      for (const m of t.messages) if (m.id === name) found.push("a message in base");
+  interface Hunt {
+    name: string;
+    /* Every reference once: the state shares objects all over — a repair's `saw`
+       is a thread in `base` — and this is also what stops a cycle. */
+    seen: Set<unknown>;
+    found: string[];
+  }
+
+  function walk(value: unknown, path: string, hunt: Hunt): void {
+    if (typeof value === "string") {
+      if (value === hunt.name) hunt.found.push(path);
+      return;
     }
-    for (const op of state.operations.values()) {
-      if (op.kind !== "load" && op.threadId === name) found.push(`${op.kind}.threadId`);
-      if (op.kind === "turn" && (op.replyId === name || op.question?.id === name)) {
-        found.push("the turn's own rows");
+    if (value === null || typeof value !== "object") return;
+    if (hunt.seen.has(value)) return;
+    hunt.seen.add(value);
+    if (value instanceof Map) {
+      for (const [key, held] of value) {
+        walk(key, `${path} key`, hunt);
+        walk(held, `${path}[${String(key)}]`, hunt);
       }
-      if (op.kind === "recovery" && op.messageId === name) found.push("recovery.messageId");
-      if (op.kind === "intent" && op.messageId === name) found.push("intent.messageId");
+      return;
     }
-    for (const key of state.tombstones.keys()) if (key === name) found.push("a tombstone");
-    return found;
+    if (value instanceof Set) {
+      for (const held of value) walk(held, `${path} member`, hunt);
+      return;
+    }
+    /* Arrays come through `Object.entries` as well, keyed by index, so there is
+       one branch here rather than two. */
+    for (const [key, held] of Object.entries(value)) walk(held, `${path}.${key}`, hunt);
+  }
+
+  function mentions(state: ChatState, name: string): string[] {
+    const hunt: Hunt = { name, seen: new Set(), found: [] };
+    walk(state, "state", hunt);
+    return hunt.found;
   }
 
   it("leaves no provisional name anywhere in the state, whatever else is in flight", () => {
@@ -447,7 +480,6 @@ describe("turn.began changes every name in one transition", () => {
         replyId: "guess-a",
         question: message({ id: "guess-q", role: "user", text: "why?", status: "done" }),
         opening: thread("guess-thread", "why?"),
-        namesThread: true,
       }),
     ).state;
 
@@ -570,6 +602,20 @@ describe("success and failure are admitted by the same rule", () => {
    * rule from the gate reddens this, and so does applying it to everything
    * **except** the `.failed` events — which is precisely the code as it stood
    * before this stage, and precisely the shape of bugs 10 and 12.
+   *
+   * **"Every kind" left the turn out**, which GPT Sol found on 2026-08-28 — the
+   * one kind with two endings that write, and the one where a wish can be left
+   * waiting. It is in both tables now, retired and superseded. The pair is
+   * `turn.done` against `turn.failed`: the *endings*, which is what this
+   * invariant is about. `turn.began` is deliberately not paired with anything,
+   * because it is the one event a superseded operation is still admitted for —
+   * see `names()` in reduce.ts — and it is not an ending.
+   *
+   * **Watched failing:** exempting `turn.failed` alone from the gate's
+   * superseded rule — bugs 10 and 12 aimed at the kind that was missing — reddens
+   * exactly one test and one assertion, `b.base` against `a.base`, because the
+   * discarded turn's failure writes an error row into a conversation whose
+   * success writes nothing at all.
    */
   const pairs: [string, ChatEvent, ChatEvent][] = [
     ["load", { type: "load.succeeded", opId: LOAD, threads: [conversation()] }, { type: "load.failed", opId: LOAD, error: "no" }],
@@ -578,6 +624,7 @@ describe("success and failure are admitted by the same rule", () => {
     ["repair", { type: "repair.succeeded", opId: REPAIR, thread: conversation() }, { type: "repair.failed", opId: REPAIR, error: "no" }],
     ["recovery", { type: "recovery.found", opId: RECOVER, message: message({ id: "a1", status: "done" }) }, { type: "recovery.givenUp", opId: RECOVER, error: "no" }],
     ["intent", { type: "intent.succeeded", opId: WISH }, { type: "intent.failed", opId: WISH, error: "no" }],
+    ["turn", { type: "turn.done", opId: TURN_A, done: DONE }, { type: "turn.failed", opId: TURN_A, error: "no" }],
   ];
 
   it("treats both endings alike when the operation is gone", () => {
@@ -630,10 +677,23 @@ describe("success and failure are admitted by the same rule", () => {
       true,
     );
 
+    /* And a turn, which is the kind that was missing here — GPT Sol, 2026-08-28.
+       A turn is superseded by exactly one thing, a delete of its conversation, so
+       that is how this state is reached. Both endings must retire it in silence
+       and leave the discard alone; a turn is also the only kind with a wish that
+       can be waiting on it, which is why the map is compared and not just
+       `error`. */
+    let discarded = twice(loaded(conversation()), sending(TURN_A, "a-one", "q-one")).state;
+    discarded = twice(discarded, { type: "delete.started", op: { id: DELETE, kind: "delete", threadId: THREAD } }).state;
+    expect(discarded.operations.get(TURN_A)?.superseded, "the premise: the turn is superseded").toBe(
+      true,
+    );
+
     for (const [kind, from, won, lost] of [
       ["rename", quiet, { type: "rename.succeeded", opId: RENAME_A }, { type: "rename.failed", opId: RENAME_A, error: "no" }],
       ["intent", quiet, { type: "intent.succeeded", opId: WISH }, { type: "intent.failed", opId: WISH, error: "no" }],
       ["repair", settled, { type: "repair.succeeded", opId: REPAIR, thread: conversation() }, { type: "repair.failed", opId: REPAIR, error: "no" }],
+      ["turn", discarded, { type: "turn.done", opId: TURN_A, done: DONE }, { type: "turn.failed", opId: TURN_A, error: "no" }],
     ] as [string, ChatState, ChatEvent, ChatEvent][]) {
       const a = twice(from, won).state;
       const b = twice(from, lost).state;

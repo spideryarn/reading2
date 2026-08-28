@@ -492,7 +492,6 @@ export function useChat(slug: string): ChatApi {
            answer arrive. Found in a browser pass, 2026-08-28. */
         ...(stance ? { stance } : {}),
       };
-      const onScreen = controller.threads.find((t) => t.id === id);
       controller.startTurn(
         {
           type: "turn.started",
@@ -521,11 +520,13 @@ export function useChat(slug: string): ChatApi {
                   messages: [],
                 },
             title: null,
-            /* Only the turn that *creates* a conversation takes the server's
-               name for it. Asked of what is on screen rather than of `base`,
-               because a send still streaming in this conversation has already
-               made it not-new. */
-            namesThread: (onScreen?.messages.length ?? 0) === 0,
+            /* Whether the `begin` frame's title belongs to this conversation is
+               **not decided here any more**. It was, from the message count on
+               screen, and that is a caller answering a question about the state:
+               the count cannot know about a rename the reader has not made yet,
+               so a name they had just typed was overwritten by a slice of the
+               question. `startTurn` in chat/reduce.ts asks `unnamed` and the live
+               renames instead. GPT Sol, 2026-08-28. */
             at: now,
             began: false,
             attempt: null,
@@ -601,7 +602,6 @@ export function useChat(slug: string): ChatApi {
           editing: null,
           opening: null,
           title: null,
-          namesThread: false,
           at: now,
           began: false,
           attempt: null,
@@ -671,7 +671,6 @@ export function useChat(slug: string): ChatApi {
              own order.
              tests/chat-title-ownership.test.ts. */
           title: index === 0 ? question.slice(0, 60) : null,
-          namesThread: index === 0,
           at: now,
           began: false,
           attempt: null,

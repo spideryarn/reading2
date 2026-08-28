@@ -737,21 +737,47 @@ function startTurn(
      A send into a thread that is already in `base` opens nothing. */
   const unnamed = op.opening ? nameless(state, op.opening.id) : state.unnamed;
   /**
-   * **A rename the reader made first keeps the naming right.**
+   * **Whether the `begin` frame's title belongs to this conversation, decided
+   * here rather than handed in.**
    *
-   * The hook decides `namesThread` from what is on screen — a conversation with
-   * no messages is one this turn is about to create — and that is right about
-   * the conversation and wrong about the title, because a reader can name an
-   * empty conversation before asking anything in it. `readerNamed` is the same
-   * rule from the other side, for a rename made after the turn registered.
+   * Two facts, and both of them are in the state:
+   *
+   * - the conversation is one **this tab invented and the server has not
+   *   confirmed**, so the frame is the first thing that knows its real name — or
+   *   this turn is an edit of the first question, which *renames* the
+   *   conversation, and says so by carrying a `title`. Either way the server's
+   *   version is worth taking, because it cuts on a word boundary where the
+   *   optimistic one is a blunt 60-character slice;
+   * - and **the reader has not named it themselves**, which a live rename for
+   *   this conversation is what says. `readerNamed` is the same rule from the
+   *   other side, for a rename made after the turn registered — one rule, stated
+   *   twice because the two orders arrive at two events.
+   *
+   * The hook used to decide this from the message count on screen, which is a
+   * caller answering a question about the state: it could not know about a
+   * rename that had not happened yet, so the frame put a slice of the question
+   * over the name the reader had just typed. GPT Sol asked for it to come inside,
+   * 2026-08-28; `useChat.ts` no longer has an opinion to go stale.
    */
   const claimed = [...state.operations.values()].some(
     (other) => other.kind === "rename" && other.threadId === op.threadId,
   );
+  const namesThread = !claimed && (unnamed.has(op.threadId) || op.title !== null);
   return {
     state: register<TurnOperation>(
       { ...state, base, unnamed },
-      claimed && op.namesThread ? { ...op, namesThread: false } : op,
+      /* **And the conversation it invented is let go of here**, because this is
+         the last line that reads it: `opening` is an argument to registration —
+         the thread to put in `base` — and not a fact the operation goes on
+         holding. Kept, it would be the one name in the state that `turn.began`
+         does not move to the server's, which GPT Sol found on 2026-08-28. It is
+         let go of rather than renamed on purpose: the snapshot is stale in every
+         *other* field the moment the question is written under it, so carrying it
+         forward with a fresh id would be a stale thread wearing a current name.
+         A future reader who wants the conversation should look in `base`, and
+         `null` sends them there loudly rather than quietly answering with the id
+         this tab invented. */
+      { ...op, opening: null, namesThread },
       /* **A turn supersedes nothing.** Two sends in one conversation are two
          appends and both belong on screen, and a turn that renamed the
          conversation did so by writing to `base` rather than by drawing, so it

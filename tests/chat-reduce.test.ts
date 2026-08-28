@@ -109,7 +109,6 @@ function turnOp(op: {
   editing?: string | null;
   opening?: ChatThread | null;
   title?: string | null;
-  namesThread?: boolean;
 }): Extract<ChatInput, { type: "turn.started" }>["op"] {
   const replyId = op.replyId ?? "a-new";
   return {
@@ -123,7 +122,6 @@ function turnOp(op: {
     editing: op.editing ?? null,
     opening: op.opening ?? null,
     title: op.title ?? null,
-    namesThread: op.namesThread ?? false,
     at: AT,
     began: false,
     attempt: null,
@@ -139,7 +137,6 @@ function editing(threadId: string, title: string): Extract<ChatInput, { type: "t
     editing: "q1",
     question: message({ id: "q1", role: "user", text: title, status: "done" }),
     title,
-    namesThread: true,
   });
 }
 
@@ -545,7 +542,6 @@ describe("a turn", () => {
         replyId: "guess-a",
         question: message({ id: "guess-q", role: "user", text: "why?", status: "done" }),
         opening: thread("guess-thread", "why?"),
-        namesThread: true,
       }),
     );
     expect(rows(sent.state, "guess-thread")).toEqual(["guess-q", "guess-a"]);
@@ -582,6 +578,64 @@ describe("a turn", () => {
   });
 
   /**
+   * **An edit of the first question renames the conversation, so the frame's
+   * title is that turn's to take** — even though the conversation is one the
+   * server has known about all along.
+   *
+   * `withEdit` on the server applies the same rule, and the optimistic title
+   * written at registration is a blunt 60-character slice where the server's is
+   * cut on a word boundary; without this the blunt one stays on screen until the
+   * next reload. **Written because nothing could redden the clause that says
+   * so:** `namesThread` moved into the reducer on 2026-08-28 and the probe that
+   * dropped its `op.title !== null` half left all 67 tests in this file green,
+   * which is a rule nothing was checking — the hook had been deciding this as
+   * `index === 0` and no test at this level ever asked.
+   */
+  it("takes the server's cut of the title when an edit renames the conversation", () => {
+    const start = loaded(conversation());
+    const edited = twice(start, editing("spya-t1", "the question, rewritten at some length")).state;
+    expect(titles(edited)).toEqual(["the question, rewritten at some length"]);
+
+    const named = twice(edited, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: {
+        threadId: "spya-t1",
+        title: "the question, rewritten at some…",
+        messageId: "srv-a",
+        questionId: "q1",
+      },
+    }).state;
+    expect(titles(named)).toEqual(["the question, rewritten at some…"]);
+  });
+
+  /**
+   * And **not** when the reader has renamed it themselves, which is the same
+   * rule as for a conversation the server has not named yet: a live rename takes
+   * the naming right away from the turn beside it, whichever of the two the
+   * reader did first.
+   */
+  it("leaves a reader's rename alone when an edit's frame comes back", () => {
+    const start = loaded(conversation());
+    const renamed = renaming(start, RENAME_A, "spya-t1", "mine");
+    const edited = twice(renamed, editing("spya-t1", "the question, rewritten")).state;
+    /* The edit's own title still lands — it is the later writer to `base`, and a
+       title is never withdrawn. What must not happen is the *server's* cut
+       arriving afterwards and overwriting the reader's rename. */
+    const named = twice(edited, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: {
+        threadId: "spya-t1",
+        title: "the question, rewritten — the server's cut",
+        messageId: "srv-a",
+        questionId: "q1",
+      },
+    }).state;
+    expect(titles(named)).toEqual(["the question, rewritten"]);
+  });
+
+  /**
    * **The payoff.** An edit destroys — it rewrites a question and discards every
    * turn under it — and the discard is something the operation *draws*, so
    * refusing it is dropping one entry from a map. The turns come back because
@@ -604,7 +658,6 @@ describe("a turn", () => {
         replyId: "a-new",
         question: message({ id: "q1", role: "user", text: "first, rewritten", status: "done" }),
         title: "first, rewritten",
-        namesThread: true,
       }),
     );
     expect(rows(edited.state)).toEqual(["q1", "a-new"]);
@@ -1560,7 +1613,6 @@ describe("a stop or a cancel", () => {
         replyId: "a-new",
         question: message({ id: "q-new", role: "user", text: "why?", status: "done" }),
         opening: thread("guess-thread", "why?"),
-        namesThread: true,
       }),
     ).state;
     const cancelled = twice(sent, {
@@ -1638,7 +1690,6 @@ describe("a stop or a cancel", () => {
         replyId: "guess-a",
         question: message({ id: "guess-q", role: "user", text: "why?", status: "done" }),
         opening: thread("guess-thread", "why?"),
-        namesThread: true,
       }),
     ).state;
     const removed = twice(opened, {
@@ -1690,7 +1741,6 @@ describe("a stop or a cancel", () => {
         replyId: "a-one",
         question: message({ id: "q-one", role: "user", text: "why?", status: "done" }),
         opening: thread("guess-thread", "why?"),
-        namesThread: true,
       }),
     ).state;
     /* A second question typed into the same new conversation before the first
@@ -1973,7 +2023,6 @@ describe("a mutation of a conversation the server has not named", () => {
         replyId: "guess-a",
         question: message({ id: "guess-q", role: "user", text: "why?", status: "done" }),
         opening: thread(threadId, "why?"),
-        namesThread: true,
       }),
     ).state;
   }
@@ -2077,12 +2126,14 @@ describe("a mutation of a conversation the server has not named", () => {
   /**
    * **A reader's rename takes the naming right away from the opening turn.**
    *
-   * `namesThread` is decided in the hook when the turn registers, which cannot
-   * know about a rename that has not happened yet — so the `begin` frame's
+   * `namesThread` used to be decided in the hook when the turn registered, which
+   * cannot know about a rename that has not happened yet — so the `begin` frame's
    * title, which is a slice of the question, landed over the name the reader had
    * just typed. That is `withServerIds` taking `namesThread` as an argument
    * because guessing it was a bug, and then being handed a guess that went stale.
-   * GPT Sol, 2026-08-28.
+   * GPT Sol, 2026-08-28. It is decided in `startTurn` now, from `unnamed` and the
+   * live renames, so there is no longer a guess to go stale — and this test says
+   * the same thing either way, which is why it did not change.
    */
   it("keeps the reader's title, and is the title the server is told", () => {
     const renamed = twice(opening(), {
@@ -2102,8 +2153,8 @@ describe("a mutation of a conversation the server has not named", () => {
   /**
    * And the other order, which is the same rule from the other side: a
    * conversation renamed before anything has been asked in it. The turn is
-   * registered *after* the rename, so the hook's `namesThread` is stale in the
-   * same way and the reducer clears it for the same reason.
+   * registered *after* the rename, so `startTurn` asks the same question at
+   * registration that `readerNamed` asks when the rename arrives second.
    */
   it("keeps a title given before the first question was even asked", () => {
     const empty = twice(loaded(), { type: "thread.begun", thread: thread("new-1", "New chat") }).state;
@@ -2118,7 +2169,6 @@ describe("a mutation of a conversation the server has not named", () => {
       threadId: "new-1",
       replyId: "guess-a",
       question: message({ id: "guess-q", role: "user", text: "why?", status: "done" }),
-      namesThread: true,
     })).state;
 
     const named = twice(sent, begun(REAL, "why?"));

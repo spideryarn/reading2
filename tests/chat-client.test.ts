@@ -130,7 +130,10 @@ describe("withServerIds — believing the server about what things are called", 
    * are not in the list the check is applied to — and the title the `begin`
    * frame carries is then the server's stored one, which lands over a rename
    * the reader made a moment earlier. Only the turn that creates a conversation
-   * names it, and only the turn knows whether it did.
+   * names it — and since 2026-08-28 the answer comes from the reducer, which is
+   * the only place that knows both whether the server has named the conversation
+   * (`ChatState.unnamed`) and whether the reader has renamed it. It stayed an
+   * argument here because this function is a rule about ids and nothing else.
    */
   it("leaves the title alone for a turn that did not name the conversation", () => {
     const before = optimistic([
