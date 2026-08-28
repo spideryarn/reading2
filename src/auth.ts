@@ -62,6 +62,66 @@ export interface AuthedUser {
 }
 
 /**
+ * **The mark that says "this came out of `requireUser`", and nothing else can
+ * wear it.**
+ *
+ * A `unique symbol` in module scope. It is not exported, so no other file can
+ * write this key — an object literal cannot be given it, `as` cannot conjure
+ * it, and `JSON.parse` cannot produce it. Only `requireUser` below stamps it,
+ * and only after every claim has been checked.
+ *
+ * Added on 2026-08-28 for docs/plans/public-read-only-access.md, on GPT Sol's
+ * answer 2. Making the authenticated dispatcher take a required `AuthedUser`
+ * parameter — the obvious version — prevents *omission* and nothing else: any
+ * `{ id, email }` satisfies it, so it does not encode the one fact that
+ * matters, which is where the value came from.
+ */
+const VERIFIED_USER: unique symbol = Symbol("spideryarn.verifiedUser");
+
+/**
+ * A user the gate produced, as opposed to one somebody built.
+ *
+ * This is the type `serveAuthenticatedApi` takes (src/routes.ts). The public
+ * dispatcher runs before `requireUser` and therefore cannot produce one, so
+ * "an authenticated route reached without authentication" stops being a rule
+ * somebody has to keep and becomes a thing that does not typecheck.
+ */
+export type VerifiedUser = AuthedUser & {
+  readonly [VERIFIED_USER]: true;
+};
+
+/**
+ * **And the same check at runtime**, because the type alone is a compile-time
+ * promise and this boundary is worth more than that.
+ *
+ * `as never`, `as any`, plain JavaScript, and a stale build all get past the
+ * type. None of them gets past this. Sol asked for it by name, and the test it
+ * makes possible — call the authenticated dispatcher with `undefined as never`
+ * and watch it throw *before any handler or store spy runs* — is the whole
+ * reason the split is worth doing rather than merely tidy.
+ *
+ * 500, not 401: nobody's credentials are in question. A caller reached the
+ * authenticated dispatcher without going through the gate, which is a broken
+ * invariant in our own code, and src/owner.ts raises exactly the same kind of
+ * error for the same kind of reason.
+ */
+export function assertVerifiedUser(value: unknown): asserts value is VerifiedUser {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    (value as Record<symbol, unknown>)[VERIFIED_USER] !== true
+  ) {
+    throw Object.assign(
+      new Error(
+        "The authenticated API was dispatched with a user that did not come from " +
+          "requireUser(). See src/auth.ts § VerifiedUser.",
+      ),
+      { status: 500 },
+    );
+  }
+}
+
+/**
  * Everything the gate needs to know about a token, or why not.
  *
  * A seam rather than a direct call, because six test files drive `handleApi`
@@ -227,7 +287,7 @@ function isAllowed(_claims: { sub: string; email: string }): boolean {
 export async function requireUser(
   req: IncomingMessage,
   verify: Verifier = verifyWithSupabase,
-): Promise<AuthedUser> {
+): Promise<VerifiedUser> {
   const header = req.headers?.authorization ?? "";
   const [scheme, token] = header.split(" ");
   if (scheme?.toLowerCase() !== "bearer" || !token) {
@@ -283,5 +343,16 @@ export async function requireUser(
     );
   }
 
-  return user;
+  /* **The brand goes on last, after every refusal above.** Not at the top of
+     the function and not on the claims: the whole content of the mark is
+     "everything in this function said yes", so anywhere earlier would be a
+     promise about a check that had not run yet. Non-enumerable, so it does not
+     turn up in an `Object.keys`, a spread or a log line — and a symbol key is
+     never serialised by `JSON.stringify` at all. */
+  return Object.defineProperty(user, VERIFIED_USER, {
+    value: true,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  }) as VerifiedUser;
 }
