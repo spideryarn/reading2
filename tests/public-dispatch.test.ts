@@ -219,14 +219,40 @@ describe("the closed public namespace", () => {
     }
   });
 
-  /** A sweep, not a spot check — every route, every method that is not GET. */
-  it("405s every non-GET method on every public route", async () => {
+  /**
+   * A sweep, not a spot check — every route, every method that is not a read.
+   *
+   * `HEAD` is deliberately **not** in this list; it is a read, and it has its own
+   * block below. It was in this list until 2026-08-28, when a black-box spike
+   * pointed out that a link-preview unfurler HEADs a URL before it GETs one, and
+   * stage 2 of the plan is entirely about link previews.
+   */
+  it("405s every method that is not a read, on every public route", async () => {
     for (const path of ["/api/public/article/example", "/api/public/metadata/example"]) {
-      for (const method of ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]) {
+      for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE"]) {
         const r = await call(method, path);
         expect({ path, method, status: r.status }).toEqual({ path, method, status: 405 });
-        expect(r.headers.Allow).toBe("GET");
+        expect(r.headers.Allow).toBe("GET, HEAD");
       }
+    }
+  });
+
+  /**
+   * **HEAD mirrors GET**: same status, same headers, no body.
+   *
+   * Through the hand-built response, which is what makes the *explicit* branch
+   * in `send` worth having — this `res` has none of Node's own body
+   * suppression, so if the implementation leaned on that, this test would show
+   * a body and there would be nowhere to check the truth except a real socket.
+   * The socket case is the next one; this is the one that pins our own code.
+   */
+  it("answers HEAD exactly as it answers GET, without a body", async () => {
+    for (const path of ["/api/public/article/example", "/api/public/metadata/example"]) {
+      const get = await call("GET", path);
+      const head = await call("HEAD", path);
+      expect({ path, status: head.status }).toEqual({ path, status: get.status });
+      expect(head.headers["Cache-Control"]).toBe(get.headers["Cache-Control"]);
+      expect(head.headers["Cache-Control"]).toBe("no-store");
     }
   });
 
@@ -271,6 +297,66 @@ describe("the closed public namespace", () => {
       const r = await call("GET", path);
       expect({ path, status: r.status }).toEqual({ path, status: 401 });
     }
+  });
+
+  /**
+   * **The spellings that are ours to decide, decided.**
+   *
+   * `docs/plans/public-read-only-access.md` claimed case variants and doubled
+   * slashes "either miss `/api/` entirely or land on the authenticated gate".
+   * A black-box spike found that neither happens in dev, and the paragraph has
+   * since been corrected — the honest split is that **the `/api/` prefix is the
+   * platform's decision and everything after it is ours**, and only the second
+   * half is testable here.
+   *
+   * These are the second half. `isPublicNamespace` is a case-sensitive
+   * `startsWith` on a path that reached `handleApi`, so a case variant *inside*
+   * the namespace is simply not in it: it falls through to the authenticated
+   * table and the gate answers 401. Fail-closed, and the direction that matters
+   * — a variant that read as public when it was not would be the hole.
+   *
+   * `/api//public/…` matters for a reason of its own: on Vercel `originalUrl`
+   * rebuilds the path from a capture, so a doubled slash surviving the platform
+   * would arrive here intact. It is refused too.
+   */
+  it("treats a case variant of the namespace as outside it, and refuses it", async () => {
+    for (const path of [
+      "/api/PUBLIC/article/example",
+      "/api/Public/article/example",
+      "/api//public/article/example",
+    ]) {
+      const r = await call("GET", path);
+      /* 401 from the gate, not 200: the namespace check did not match, so the
+         authenticated half owns the request. */
+      expect({ path, status: r.status }).toEqual({ path, status: 401 });
+    }
+  });
+
+  /**
+   * **And a case variant of the *route*, one level in, lands somewhere else
+   * again** — which is worth pinning because it is not what I first assumed.
+   *
+   * `/api/public/ARTICLE/example` **is** inside the namespace: the prefix is
+   * spelled correctly. What it misses is `ARTICLE`, so it is an unknown path in
+   * the closed room and gets the room's own 404, never the gate's 401. Both are
+   * refusals and neither serves anything, but they are different mechanisms and
+   * a test that expected the wrong one would be describing a design nobody
+   * built. The first draft of this test asserted 401 here and was red.
+   */
+  it("and a case variant of the route is the closed room's own 404", async () => {
+    const r = await call("GET", "/api/public/ARTICLE/example");
+    expect(r.status).toBe(404);
+    expect(r.body.error).toMatch(/No public API route/);
+    expect(r.headers["Cache-Control"]).toBe("no-store");
+  });
+
+  /**
+   * And the one inside the room that *is* the right spelling still works — so
+   * the case above is not passing because every path 401s.
+   */
+  it("while the exact spelling still reaches the public handler", async () => {
+    const r = await call("GET", "/api/public/article/example");
+    expect(r.status).toBe(501);
   });
 
   /** And an authenticated route with no header is still 401, unchanged. */

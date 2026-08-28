@@ -30,7 +30,7 @@
  * nothing is worse than one that is not there.
  */
 
-import type { IncomingMessage, ServerResponse } from "node:http";
+import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -181,6 +181,41 @@ async function call(
   const { handleApi } = await import("../src/routes.js");
   await handleApi(req, res, opts.as === undefined ? undefined : asPerson(opts.as));
   return { status, headers, text, body: text ? JSON.parse(text) : {} };
+}
+
+/**
+ * One request, over a real TCP socket, reporting what actually arrived.
+ *
+ * Deliberately `node:http` rather than `fetch`: `fetch` discards a HEAD body
+ * before anybody can count it, so it cannot tell "the server sent nothing" from
+ * "the client threw it away" — and that is the whole question here.
+ */
+function overTheWire(
+  port: number,
+  method: string,
+  path: string,
+): Promise<{ status: number; headers: Record<string, string | undefined>; bytes: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const req = httpRequest({ port, host: "127.0.0.1", method, path, timeout: 20_000 }, (res) => {
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => {
+        const body = Buffer.concat(chunks);
+        resolve({
+          status: res.statusCode ?? 0,
+          headers: res.headers as Record<string, string | undefined>,
+          bytes: body.length,
+          text: body.toString("utf8"),
+        });
+      });
+    });
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error(`${method} ${path} timed out`));
+    });
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 async function events() {
@@ -561,6 +596,61 @@ when("sharing one article", { timeout: 60_000 }, () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     } finally {
       fetchSpy.mockRestore();
+    }
+  });
+
+  /**
+   * **HEAD over a real socket**, which is the only place the wire can be read.
+   *
+   * Every other case in this file drives `handleApi` with a hand-built `res`
+   * that records whatever `end()` is given. That is right for asserting our own
+   * code and useless for asserting Node's: a fake response has none of the body
+   * suppression a real `ServerResponse` applies to a HEAD, so "no body reached
+   * the client" is a claim only a socket can settle.
+   *
+   * What must hold, and all of it is checked against the GET rather than against
+   * a constant, so the two cannot drift:
+   *
+   * - the same status,
+   * - the same `Cache-Control` and `Content-Type`,
+   * - a `Content-Length` **equal to the GET's**, which is what makes a HEAD a
+   *   truthful preview — Node drops the header entirely unless it is set, so
+   *   this is the assertion that would go red if `send`'s branch were removed,
+   * - and zero bytes of body.
+   *
+   * The unfurler this is for is stage 2's, and it HEADs before it GETs.
+   */
+  it("answers a real HEAD over a socket with the GET's headers and no body", async () => {
+    const { handleApi } = await import("../src/routes.js");
+    const server = createServer((req, res) => {
+      void handleApi(req, res).then((handled) => {
+        if (!handled) {
+          res.statusCode = 404;
+          res.end();
+        }
+      });
+    });
+    try {
+      await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
+      const address = server.address();
+      const port = typeof address === "object" && address !== null ? address.port : 0;
+
+      const get = await overTheWire(port, "GET", `/api/public/article/${SLUG}`);
+      const head = await overTheWire(port, "HEAD", `/api/public/article/${SLUG}`);
+
+      /* The GET first, as the control: if the article were not being served at
+         all, every claim about the HEAD below would hold vacuously. */
+      expect(get.status).toBe(200);
+      expect(get.bytes).toBeGreaterThan(100);
+      expect(get.text).toContain("The prose a visitor is here for");
+
+      expect(head.status).toBe(200);
+      expect(head.headers["cache-control"]).toBe(get.headers["cache-control"]);
+      expect(head.headers["content-type"]).toBe(get.headers["content-type"]);
+      expect(head.headers["content-length"]).toBe(get.headers["content-length"]);
+      expect(head.bytes).toBe(0);
+    } finally {
+      await new Promise<void>((done) => server.close(() => done()));
     }
   });
 

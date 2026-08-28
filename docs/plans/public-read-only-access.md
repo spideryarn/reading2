@@ -272,10 +272,57 @@ Sol's finding 5, checked against the code and adopted whole:
   [`src/vercel.ts`](../../src/vercel.ts), not through a hand-built path, so what is tested is what
   ships.
 
-Sol checked the obvious bypasses and they already fail closed: case variants, `//api/public` and
-percent-encoded spellings either miss `/api/` entirely or land on the authenticated gate, and
-`handleApi` returns false for any path not starting with `/api/`. The dangerous three are
-whole-path decoding, public-handler fallthrough, and a slug capture that does not reuse `slugPart`.
+### The odd spellings, and which of them are ours to decide
+
+The first version of this paragraph said case variants and `//api/public` "either miss `/api/`
+entirely or land on the authenticated gate". A black-box spike checked it on 2026-08-28 and
+**neither happens**. They are still safe; the reason given was the wrong reason, and a safety
+argument that names the wrong mechanism is worth less than no argument at all.
+
+The honest split is that **`/api/` is the platform's decision and everything after it is ours**, and
+only the second half is testable here.
+
+**Everything after `/api/` — ours, decided, and pinned by
+[public-dispatch.test.ts](../../tests/public-dispatch.test.ts):**
+
+| Request | What happens | Why |
+|---|---|---|
+| `/api/public/article/x` | the public handler | the one spelling that is in the namespace |
+| `/api/PUBLIC/article/x` | **401 from the gate** | `isPublicNamespace` is a case-sensitive `startsWith`, so this is not in the namespace at all and the authenticated half owns it |
+| `/api//public/article/x` | **401 from the gate** | same — the doubled slash means the prefix does not match |
+| `/api/public/ARTICLE/x` | **404 from the closed room** | this one *is* in the namespace; what it misses is the route, so it gets the room's own refusal and never reaches the gate |
+
+Those last two rows are different mechanisms, and the first draft of the test asserted the wrong one
+for the third row and was red. Both are refusals and neither serves anything, but writing "they fail
+closed" without saying *which* closure is how the previous version of this paragraph went wrong.
+
+**The `/api/` prefix itself — the platform's, and it differs by environment:**
+
+- **In dev**, Vite mounts the API as connect middleware with no path, so it sees everything;
+  `handleApi` returns `false` for any URL not starting with a literal lowercase `/api/`, and Vite's
+  SPA fallback then answers with raw `index.html` at **200**. So `/API/public/…` and
+  `//api/public/…` never reach an API handler *at all* — no data, no handler, inert. That is not
+  "missing `/api/`" and it is not "landing on the gate"; it is a third thing the paragraph did not
+  have.
+- **On Vercel**, [`vercel.json`](../../vercel.json) decides before our code runs, and it has two
+  rewrites: `/api/(.*)` to the function, and `/((?!api/).*)` to `index.html`. Read the second one
+  carefully — **its negative lookahead is a literal lowercase `api/`**. So whichever way Vercel's
+  matcher treats case:
+  - if the match is **case-sensitive**, `/API/public/…` misses the first rewrite, matches the
+    second, and is served `index.html` — the same inert outcome as dev;
+  - if it is **case-insensitive**, `/API/public/…` matches the first rewrite with `$1` =
+    `public/article/x`, and [`originalUrl`](../../src/vercel.ts) rebuilds the path with a **literal
+    lowercase `/api/`** prefix — so `handleApi` sees `/api/public/article/x` and serves the article
+    normally. Same predicate, same projection, same answer as any other reader.
+
+  Both branches are safe, by different routes, and **which one is real is untested** — it needs a
+  deployment, and neither the Vercel documentation nor the config settles it. The same uncertainty
+  covers whether the edge collapses `//api/…` to `/api/…` before routing. Worth resolving the next
+  time anything is deployed; not worth a deployment of its own, because there is no branch in which
+  a private article is served.
+
+The genuinely dangerous three are unchanged: whole-path decoding, public-handler fallthrough, and a
+slug capture that does not reuse `slugPart`.
 
 ---
 

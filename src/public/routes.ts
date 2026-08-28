@@ -64,17 +64,56 @@ function httpError(status: number, message: string): Error {
 }
 
 /**
- * The same JSON reply `send` in src/routes.ts writes.
+ * The same JSON reply `send` in src/routes.ts writes — **plus the one thing a
+ * HEAD needs it to do differently.**
  *
  * Written again rather than imported, because importing it would make this
  * module depend on the four-thousand-line file that dispatches to it — a cycle
  * `npm run cycles` gates on, and a much larger import graph than
  * tests/public-imports.test.ts is willing to allow.
+ *
+ * ## What Node does on its own, measured rather than assumed
+ *
+ * Against a real `http.createServer`, 2026-08-28, with the same 80-byte body:
+ *
+ *     res.end(body)   GET  200  content-length: 80  wire: 80 bytes
+ *     res.end(body)   HEAD 200  content-length: —   wire:  0 bytes
+ *
+ * So Node **does** suppress the body — a HEAD cannot leak the article by
+ * accident — and it **drops `Content-Length` entirely**. That second half is the
+ * reason this function has a branch at all. A HEAD is supposed to be a truthful
+ * preview of the GET, and an unfurler that HEADs a URL to decide whether to
+ * fetch it learns nothing from a missing length.
+ *
+ * Setting the header and calling `end()` with no body gives the honest answer:
+ *
+ *     HEAD 200  content-length: 80  wire: 0 bytes
+ *
+ * **Explicit rather than leaning on the suppression**, and that is worth more
+ * than the header: a `res` that is not Node's — the hand-built one every route
+ * test in this repo uses — has no suppression at all, so a version that relied
+ * on it would be untestable anywhere except against a real socket, and would
+ * look correct in every unit test while the truth lived somewhere no test
+ * reached. docs/reusable/silent-success.md.
+ *
+ * The **error** paths do still lean on it: a HEAD that 404s goes out through
+ * `serveApi`'s catch, which is not this function, and Node drops the body there.
+ * Correct, and worth saying out loud rather than implying this branch covers it.
  */
-function send(res: ServerResponse, status: number, body: unknown): void {
+function send(res: ServerResponse, status: number, body: unknown, method: string): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
-  res.end(JSON.stringify(body));
+  const payload = JSON.stringify(body);
+  if (method === "HEAD") {
+    /* `Buffer.byteLength`, not `payload.length`: `Content-Length` counts bytes
+       and the title of an article is very often not ASCII. A character count
+       here would understate the length of every piece with a curly quote in its
+       heading. */
+    res.setHeader("Content-Length", String(Buffer.byteLength(payload)));
+    res.end();
+    return;
+  }
+  res.end(payload);
 }
 
 /**
@@ -173,19 +212,19 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
      from a bug report rather than from a test. */
   const article = ARTICLE.exec(path);
   if (article) {
-    requireGet(res, method);
+    requireReadMethod(res, method);
     const slug = slugFrom(article);
     requirePostgres();
-    send(res, 200, await pgPublicReader.loadArticle(slug));
+    send(res, 200, await pgPublicReader.loadArticle(slug), method);
     return;
   }
 
   const metadata = METADATA.exec(path);
   if (metadata) {
-    requireGet(res, method);
+    requireReadMethod(res, method);
     const slug = slugFrom(metadata);
     requirePostgres();
-    send(res, 200, await pgPublicReader.loadMetadata(slug));
+    send(res, 200, await pgPublicReader.loadMetadata(slug), method);
     return;
   }
 
@@ -200,19 +239,34 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
 }
 
 /**
- * **GET, and nothing else, for every public route there will ever be.**
- *
- * Checked per route rather than once at the top, because a route added later
- * with its own method check is the version of this that stays true — but note
- * that both call sites use this one function, so "every public route rejects
- * every non-GET method" is a property of one line and
- * tests/public-routes.test.ts sweeps every route to say so.
+ * **Reads only, for every public route there will ever be — which is GET and
+ * HEAD, and nothing else.**
  *
  * The rule underneath is older than this feature: every GET in this app is a
  * pure read and everything that spends money is a POST. `POST /api/similar/:slug`
  * in src/routes.ts says why at length, and the reason given is exactly ours —
  * a link prefetcher, a proxy retry, a crawler or a double-tap on Back can all
  * pay for a GET again, none of them having asked anybody.
+ *
+ * ## Why HEAD, which the first version refused
+ *
+ * It refused everything but a literal `GET`, and a black-box spike caught it on
+ * 2026-08-28. **A HEAD is not a write — it is a GET without a body**, and
+ * link-preview unfurlers routinely HEAD a URL before they GET it. Stage 2 of
+ * docs/plans/public-read-only-access.md is *entirely* about link previews, so a
+ * namespace that 405s the first request an unfurler makes is a trap we would
+ * have set for ourselves and then walked into a fortnight later.
+ *
+ * It costs the same database read as the GET, which is what "mirror GET" means
+ * and is the only honest way to answer: a HEAD whose status disagreed with the
+ * GET's would be worse than no HEAD at all. `send` above is where the body is
+ * left off, and it says what Node does and does not do on its own.
+ *
+ * Checked per route rather than once at the top, because a route added later
+ * with its own method check is the version of this that stays true — but both
+ * call sites use this one function, so "every public route refuses every
+ * non-read method" is a property of one line, and
+ * tests/public-dispatch.test.ts sweeps every route and every method to say so.
  *
  * 405 with `Allow`, not 404: the path exists and the method is wrong, and there
  * is nothing to hide about which methods a public route takes.
@@ -223,8 +277,8 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
  * never looked at anything else, so the `Allow` would be a header this file
  * believed it had sent. docs/reusable/silent-success.md.
  */
-function requireGet(res: ServerResponse, method: string): void {
-  if (method === "GET") return;
-  res.setHeader("Allow", "GET");
-  throw httpError(405, `Public routes are GET only, not ${method}`);
+function requireReadMethod(res: ServerResponse, method: string): void {
+  if (method === "GET" || method === "HEAD") return;
+  res.setHeader("Allow", "GET, HEAD");
+  throw httpError(405, `Public routes are read-only, not ${method}`);
 }
