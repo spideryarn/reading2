@@ -116,6 +116,7 @@ import { PALETTE_BY_HUE } from "./hit-colours.js";
 import { nextModeIndex } from "./Dock.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
+import { useSlow } from "./useSlow.js";
 
 interface Props {
   matcher: Matcher;
@@ -130,6 +131,8 @@ interface Props {
   runs: SavedSearch[];
   /** False until the fetch has answered — see `SearchApi.loaded`. */
   loaded: boolean;
+  /** …and whether it answered by failing. `SearchApi.loadFailed`. */
+  loadFailed: boolean;
   /** Which of them are switched on — `?runs=`. Possibly none, which is the default. */
   active: string[];
   /** Its palette slot, for every saved run. `assignSlots` in hit-colours.ts. */
@@ -185,6 +188,7 @@ export function SearchPanel({
   onFind,
   runs,
   loaded,
+  loadFailed,
   active,
   slots,
   onToggle,
@@ -264,6 +268,7 @@ export function SearchPanel({
         <Saved
           runs={runs}
           loaded={loaded}
+          loadFailed={loadFailed}
           active={active}
           slots={slots}
           onToggle={onToggle}
@@ -595,9 +600,43 @@ const Box = forwardRef<
  * on its own: the criterion is printed in full beside them, so a reader who
  * cannot tell two hues apart has still lost nothing but a shortcut.
  */
+/**
+ * The wait before the saved searches, and nothing at all if the wait is short.
+ *
+ * Behind `useSlow` since 2026-08-27. It used to draw the moment the panel
+ * opened, so on a warm cache it was a spinner that appeared and vanished inside
+ * 100ms — which reads as breakage, and is the failure the whole
+ * empty-versus-loading rule is trying to avoid rather than a second copy of it.
+ * useSlow.ts, and docs/project/web-client.md § Empty is not the same as not
+ * asked yet.
+ *
+ * Its own component because `useSlow` is a hook and `Saved` returns early.
+ */
+function SavedLoading() {
+  const slow = useSlow(true);
+  return (
+    <div className="srch-empty">
+      {/* `role="status"` rather than a bare paragraph: the words arrive 600ms
+          after the panel does, and a line that appears with no live region
+          around it is silent to a screen reader. It also reads politely — the
+          reader is not interrupted, they are told when they next pause.
+          `srch-waiting` holds the line's height across those 600ms, so the
+          panel does not grow when the sentence lands. GPT Sol, 2026-08-27. */}
+      <p className="srch-working srch-waiting" role="status">
+        {slow && (
+          <>
+            <LoaderCircle size={13} className="srch-spin" /> Fetching your saved searches…
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
 function Saved({
   runs,
   loaded,
+  loadFailed,
   active,
   slots,
   onToggle,
@@ -610,6 +649,7 @@ function Saved({
 }: {
   runs: SavedSearch[];
   loaded: boolean;
+  loadFailed: boolean;
   active: string[];
   slots: Map<string, number>;
   onToggle(id: string, on: boolean): void;
@@ -628,11 +668,19 @@ function Saved({
      `SearchApi.loaded`. It is also the only thing a reader following a shared
      link sees, and for a legacy `?run=` link it directly contradicts the URL. */
   if (!loaded && sorted.length === 0) {
+    return <SavedLoading />;
+  }
+
+  /* And the state one beat later, which the fix above did not cover. `loaded`
+     is true either way by design (SearchApi.loaded), so a request that gave up
+     dropped straight out of the spinner into the sentence below — the same
+     claim about the article, arrived at from the other side. GPT Sol found it
+     in the equivalent chat fix, 2026-08-27. The error itself is printed above
+     by `srch-error`; this only refuses to make the claim. */
+  if (loadFailed && sorted.length === 0) {
     return (
       <div className="srch-empty">
-        <p className="srch-working">
-          <LoaderCircle size={13} className="srch-spin" /> Fetching your saved searches…
-        </p>
+        <p>Couldn't load your saved searches. Reload to try again.</p>
       </div>
     );
   }

@@ -68,6 +68,7 @@ function Preview() {
           onFind={() => {}}
           runs={runs}
           loaded
+          loadFailed={false}
           active={active}
           slots={slots}
           onToggle={(id, on) => setActive((a) => (on ? [...a, id] : a.filter((x) => x !== id)))}

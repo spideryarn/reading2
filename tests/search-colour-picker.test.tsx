@@ -53,6 +53,7 @@ async function mount(runs: SavedSearch[] = RUNS): Promise<void> {
         onFind={() => {}}
         runs={runs}
         loaded
+        loadFailed={false}
         active={[]}
         slots={assignSlots(runs)}
         onToggle={() => {}}
