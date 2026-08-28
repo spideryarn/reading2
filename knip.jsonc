@@ -59,9 +59,11 @@
   // fonts the reading view is set in.
   //
   // The root-level globs are here for the same reason in reverse: without them
-  // a stray `scratch-tok2.mts` at the repo root is not in the project at all,
-  // so it is never reported as unused. A file that falls out of scope looks
-  // exactly like a file with nothing wrong with it.
+  // a stray `scratch-*.mts` at the repo root is not in the project at all, so it
+  // is never reported as unused. A file that falls out of scope looks exactly
+  // like a file with nothing wrong with it. This earned its keep: it is how
+  // `scratch-redact.mts` and `scratch-tok2.mts` stayed visible until they were
+  // deleted on 2026-08-28, having sat unreferenced for one and three days.
   "project": [
     "src/**/*.{ts,tsx,css}",
     "styles/**/*.css",

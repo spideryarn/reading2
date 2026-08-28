@@ -99,6 +99,8 @@ clear-cut, ask at the end about anything that is not. Tier 1 from there.
 | **1.8** the Sentry packages | `91680a1` — `@sentry/node-core` and `@sentry/core` declared, `@sentry/node` dropped, thirteen packages out of the lockfile. `@babel/types` and `@tanstack/table-core` swept up with them; knip's "Unlisted dependencies" is now empty. |
 | **1.7** the stale comment | In the tree, under **a peer's** commit `01b55b2` — they were in `src/library-search.ts` for the block-policy work and their `git add` took my hunks with it. Nothing lost; see the note in 1.7. |
 | **1.10** `.env.local`, unread | `c5ac05a` — `src/pdf-read.ts` spent without ever reading it; the gate that already knows which CLIs spend now holds the rule for all eight. Found by checking 1.5's claim about a stale comment. |
+| **1.5** ten exports, two false comments | `e65d754` — five status types, `spineWidth`, `GUTTER_PX`; the "can move without unmounting" claim rewritten in `useSimilar` and `useProjection`, guards kept. |
+| **1.6** dead code knip cannot see | `0a4e0db` — `editTurn` and the stale `JobStore`, plus **nine** citations of `editTurn` rather than the two the plan counted. `preview-colour.tsx` refused; see 1.6. |
 | **1.9** the origins list | `0e75064` — `ownOrigins()` reads `VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_URL`, so nobody has to set anything. Two red-first tests; `.env.example` and `security.md` say what the gap was. |
 
 **Not done, and deliberately so:** 0.4 (the three streaming tests) and all of Tier 2.
@@ -472,9 +474,23 @@ is where these were found.
   absence is the exact bug `store/fs.ts:246-254` records GPT Sol finding. A dead function wearing
   the obvious name, missing the safety check. **Delete** (~50 lines), and fix the stale references
   at `routes.ts:1222` and `store/fs.ts:247`.
-- **`src/web/preview-colour.tsx`** — its own header says *"Delete when the check is done; it is not
-  in the router and nothing links to it."* Tracked in git, so recoverable. Delete the file, not the
-  habit — the throwaway preview page is a pattern worth keeping.
+- ~~**`src/web/preview-colour.tsx`**~~ — **refused, 2026-08-28, and this is the interesting one.**
+  Its header says *"Delete when the check is done; it is not in the router and nothing links to
+  it."* Two things about that were wrong, and both took one grep.
+
+  **Something does link to it.** `preview-colour.html` sits at the repo root, is tracked, and
+  carries `<script type="module" src="/src/web/preview-colour.tsx">`. knip called the `.tsx` an
+  unused file because knip does not read HTML. Deleting the `.tsx` alone would have left a page that
+  loads nothing — dead code replaced by a broken entry point.
+
+  **And the check is not done.** `docs/plans/search-row-colour.md:315` says the browser pass was
+  never made: *"Greg asked for a Claude-in-Chrome pass and the extension was not connected … so
+  there is no honest way to claim it."* Two things only a real browser can judge are still
+  unverified — where Floating UI puts the panel at the narrowest band, and whether the two rings
+  read as two different things at 1.35rem. This page is the tool for exactly that pass. Deleting it
+  would delete the instrument for an outstanding check and leave the check outstanding.
+
+  So it stays until somebody makes the pass. **A question for Greg**, not a piece of work to take.
 - **`grantIsOver` and `MAX_UPLOAD_BYTES` re-export lines** in `upload-records.ts:119,182`. The
   functions stay; only the unreferenced re-exports go. **Do not touch `source.ts:186`'s re-export of
   `MAX_UPLOAD_BYTES`** — `pipeline.ts:41` uses it.
@@ -811,15 +827,34 @@ And one this wave adds:
    guards are all cases where something existed, or was believed to exist, and nothing had ever
    watched it work. Every fix here goes red first.
 
-## Do not delete these
+## The three scratch files: gone, 2026-08-28
 
-`scratch-redact.mts`, `scratch-tok2.mts` and `rename-preview.html` are untracked at the repo root.
-They read as finished one-off probes and are almost certainly disposable, but git has no copy and
-they are somebody's work. **Ask Greg.** Wave 1 said the same thing about `scratch-tok2.mts` and both
-of its reviewers flagged it independently.
+`scratch-redact.mts`, `scratch-tok2.mts` and `rename-preview.html` were untracked at the repo root.
+Wave 1 said "ask Greg" about `scratch-tok2.mts`, both of its reviewers flagged it independently, and
+this plan said the same about all three. Greg's answer: check they are unused and obsolete, and if
+so remove them. They were, and each for a different reason:
 
-After each: `npm test`, `npm run typecheck`, `npm run check`, and a browser pass on anything under
-`src/web`. Many small commits — several agents are editing this tree.
+- **`scratch-redact.mts`** — twelve lines probing whether `new URL()` can strip a password out of a
+  Postgres connection string, over six awkward inputs. That function shipped: `withoutPassword` at
+  [`src/db/ssl.ts:115`](../../src/db/ssl.ts), same three lines of logic. The probe had already done
+  its job.
+- **`scratch-tok2.mts`** — fourteen lines counting the tokens in a `tree.json`'s nav labels against
+  its structure nodes, per label and per node. That measurement fed the batching in
+  [`src/labels.ts`](../../src/labels.ts) and the "roughly 7,000 tokens of answer" in
+  [table-of-contents.md § 314](../project/table-of-contents.md). Its actual output survives in two
+  GPT Sol activity logs under `docs/plans/`.
+- **`rename-preview.html`** — not merely unused: **broken**. It loads
+  `<script src="/rename-preview.tsx">`, and that file does not exist anywhere in the tree. It was
+  the orphan half of a preview page whose other half had already gone;
+  [worktrees.md:57](worktrees.md) records `rename-preview.tsx` as a typecheck complaint back when it
+  still existed.
+
+Copies were taken before deleting. `knip.jsonc`'s comment about root-level globs is updated: it used
+to name `scratch-tok2.mts` as the hypothetical stray, and the point it was making — that a file out
+of scope looks exactly like a file with nothing wrong with it — is exactly why those two were
+visible at all.
+
+**`src/web/preview-colour.tsx` is a different case and is still here.** See 1.6.
 
 ## Baseline, 2026-08-28
 
