@@ -30,8 +30,18 @@
 import { and, eq } from "drizzle-orm";
 
 import { articles } from "../db/schema.js";
-import { currentOwnerId } from "../owner.js";
+import { currentOwnerId, type OwnerId } from "../owner.js";
 
-export function ownedSlug(slug: string, ownerId?: string) {
+/**
+ * **`OwnerId`, not `string`** — tightened 2026-08-28 on GPT Sol's finding that
+ * the argument added for the AI ledger *"currently accepts any string"*.
+ *
+ * The default is the ambient owner, which is safe; the explicit form is for a
+ * caller that already knows whose row it is writing, and the whole value of it
+ * is that the caller knows. A `string` parameter would take a slug, an email or
+ * a job id as happily as a uuid, and the query would run and match nothing —
+ * which reads exactly like "there is no such article".
+ */
+export function ownedSlug(slug: string, ownerId?: OwnerId) {
   return and(eq(articles.slug, slug), eq(articles.ownerId, ownerId ?? currentOwnerId()));
 }

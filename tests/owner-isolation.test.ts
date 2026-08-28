@@ -171,26 +171,40 @@ describe("whose id the store is handed", () => {
 describe("every article lookup names an owner", () => {
   /**
    * `eq(articles.slug, …)` finds anybody's article, because the slug column is
-   * globally unique. `ownedSlug()` is the only sanctioned spelling.
+   * globally unique. `ownedSlug()` is the only sanctioned spelling — and since
+   * 2026-08-28 there is a second sanctioned predicate beside it, `publicSlug()`,
+   * which resolves a slug by *visibility* instead.
    *
-   * **Two files are exempt, and each for its own stated reason.**
-   * `owned-slug.ts` is where the predicate is *defined* — it moved there from
-   * `pg.ts` on 2026-08-28, because `pg.ts` imports `src/api.ts` and so put the
-   * whole read layer behind a one-line predicate, closing an import cycle for
-   * the AI ledger; `pg.ts` re-exports it, so no other caller changed. And
-   * `pg.ts` holds `slugIsTaken`, the one deliberately *unfiltered* lookup, which
-   * returns a boolean and lives there so that this rule can have no exemptions
-   * anywhere else.
+   * **Three files are exempt, and each for its own stated reason.**
+   * `owned-slug.ts` is where the owner predicate is *defined* — it moved there
+   * from `pg.ts` on 2026-08-28, because `pg.ts` imports `src/api.ts` and so put
+   * the whole read layer behind a one-line predicate, closing an import cycle
+   * for the AI ledger; `pg.ts` re-exports it, so no other caller changed.
+   * `public-slug.ts` is where the public one is defined, in its own file for a
+   * reason of the same shape: putting the two together would make the public
+   * leaf import `currentOwnerId`, which is exactly the dependency public reads
+   * must not have (docs/plans/public-read-only-access.md). And `pg.ts` holds
+   * `slugIsTaken`, the one deliberately *unfiltered* lookup, which returns a
+   * boolean and lives there so that this rule can have no exemptions anywhere
+   * else.
+   *
+   * **Exempting a file is not trusting it**, and that distinction is GPT Sol's,
+   * 2026-08-28: *"Extend the guard to three exemptions, but do not trust three
+   * whole files."* So each of the three is positively inspected below — what it
+   * is exempted *for* has to still be in it. A rule whose one allowed case has
+   * silently moved is a rule that now protects nothing.
    *
    * A grep rather than a type: there is no type that can distinguish "the right
    * `where`" from "a `where`", and the failure mode this guards is somebody
    * writing a perfectly well-typed query.
    */
+  const EXEMPT = ["owned-slug.ts", "public-slug.ts", "pg.ts"];
+
   it("so no store module resolves a slug without one", async () => {
     const dir = fileURLToPath(new URL("../src/store/", import.meta.url));
     const offenders: string[] = [];
     for (const name of await readdir(dir)) {
-      if (!name.endsWith(".ts") || name === "owned-slug.ts" || name === "pg.ts") continue;
+      if (!name.endsWith(".ts") || EXEMPT.includes(name)) continue;
       const source = await readFile(dir + name, "utf8");
       /* Comments are stripped first. Several of these files explain the rule in
          prose that quotes the forbidden expression, and a guard that fires on
@@ -208,6 +222,7 @@ describe("every article lookup names an owner", () => {
       "utf8",
     );
     const body = /export function ownedSlug[\s\S]*?\n}/.exec(source)?.[0] ?? "";
+    expect(body).toContain("articles.slug");
     expect(body).toContain("articles.ownerId");
     /* The owner may now be supplied — the AI ledger knows whose row it is
        writing — but the *default* has to stay the ambient one, or a caller that
@@ -220,6 +235,57 @@ describe("every article lookup names an owner", () => {
       "utf8",
     );
     expect(pg).toContain('export { ownedSlug } from "./owned-slug.js"');
+  });
+
+  /**
+   * **The second exemption, inspected for what makes it safe.**
+   *
+   * `publicSlug` is allowed to resolve a slug without an owner precisely
+   * because it resolves it by `visibility = 'public'` instead. Strip that
+   * clause and the file is still exempt from the grep above and is now a bare
+   * unfiltered lookup — which is the one way this exemption becomes the hole it
+   * was added to avoid.
+   *
+   * The `owner.ts` half is the other reason the file exists at all: a public
+   * leaf that could reach `currentOwnerId` is one edit from being an owner
+   * predicate again. tests/public-imports.test.ts says the same thing about the
+   * whole graph; this says it about the source, which is where somebody would
+   * be typing.
+   */
+  it("and the public predicate filters on visibility, with no owner in the file", async () => {
+    const source = await readFile(
+      fileURLToPath(new URL("../src/store/public-slug.ts", import.meta.url)),
+      "utf8",
+    );
+    const body = /export function publicSlug[\s\S]*?\n}/.exec(source)?.[0] ?? "";
+    expect(body).toContain("articles.slug");
+    expect(body).toMatch(/eq\(\s*articles\.visibility\s*,\s*"public"\s*\)/);
+    /* Comments stripped, because the header explains at length *why* the owner
+       is not here — and a guard that fires on its own documentation teaches
+       people to delete the documentation. */
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toContain("owner.js");
+    expect(code).not.toContain("currentOwnerId");
+  });
+
+  /**
+   * **The third exemption, inspected for the same reason.**
+   *
+   * `slugIsTaken` is the one deliberately unfiltered lookup in the repo. What
+   * makes it not a way to read somebody else's article is that it selects an id
+   * and returns a boolean — so it can answer *"is this slug spoken for"* and
+   * nothing else. If it ever grew a second column, the exemption for `pg.ts`
+   * would be covering a real leak.
+   */
+  it("and the one unfiltered lookup still returns nothing but a boolean", async () => {
+    const source = await readFile(
+      fileURLToPath(new URL("../src/store/pg.ts", import.meta.url)),
+      "utf8",
+    );
+    const body = /export async function slugIsTaken[\s\S]*?\n}/.exec(source)?.[0] ?? "";
+    expect(body).toMatch(/Promise<boolean>/);
+    expect(body).toMatch(/\.select\(\{\s*id:\s*articles\.id\s*\}\)/);
+    expect(body).toMatch(/return rows\.length > 0;/);
   });
 
   /**

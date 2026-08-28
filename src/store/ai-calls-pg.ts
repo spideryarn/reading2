@@ -25,6 +25,7 @@ import { and, asc, eq, gte, lt } from "drizzle-orm";
 import type { AiCallRow } from "../ai-spend.js";
 import { getDb } from "../db/client.js";
 import { aiCalls, articles } from "../db/schema.js";
+import type { OwnerId } from "../owner.js";
 import type { CostStore, LedgerRead } from "./contracts.js";
 import { ownedSlug } from "./owned-slug.js";
 
@@ -53,7 +54,13 @@ async function articleIdFor(slug: string, ownerId: string): Promise<string | nul
          would stop agreeing the moment a CLI or eval scope names an owner
          explicitly — at which point the ambient answer would be the environment
          and the row's would be the one the ledger is billing. GPT Sol. */
-      .where(ownedSlug(slug, ownerId))
+      /* The cast, and it is narrowing rather than lying: `ownedSlug`'s second
+         parameter became an `OwnerId` on 2026-08-28, on GPT Sol's finding that
+         a `string` there would take a slug or an email as happily as a uuid and
+         match nothing — which reads exactly like "there is no such article".
+         `AiCallRow.ownerId` is still typed `string` (src/ai-spend.ts), and
+         retyping it is the ledger's own change to make. */
+      .where(ownedSlug(slug, ownerId as OwnerId))
       .limit(1);
     return rows[0]?.id ?? null;
   } catch {
