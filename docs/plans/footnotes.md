@@ -1110,6 +1110,207 @@ the two `array_agg`s in `scalarInputsQuery` are genuinely aligned (`ORDER BY ord
 is no fourth two-column feed into `hashBlocks`; and every remaining direct `gistable` read —
 `TableView.tsx:674`, `blocks.ts`, `pg-shelf.ts` — is correct where it stands.
 
+## Stage 4, as it actually landed — 2026-08-28
+
+[`src/supplement.ts`](../../src/supplement.ts) is the whole of the new machinery: split the blocks,
+append the node. `TreeNode` gains `treatment?: "supplement"` and nothing else.
+
+**Measured through the real extraction pipeline over the committed fixtures** (`output/verify4.mts`
+— canonicalise, Readability, sanitise, split, then the stage-4 split and append over a mechanical
+body tree), because a green test written by the person who wrote the code is the weakest evidence
+available:
+
+| fixture | blocks | body | apparatus | node | `checkTree` | parts before/after | sections | summary targets | fisheye at mid-notes | arc marker | spine bands | structureHash |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| gwern | 184 | 143 | 41 | "Notes" | clean | 12 / 12 | 36 / 36 | 49 → 49 | "Notes" | 12 numbered + 1 | 1 | moved |
+| wiki_transformer | 356 | 235 | 121 | "Notes" | clean | 20 / 20 | 59 / 59 | 80 → 80 | "Notes" | 20 numbered + 1 | 1 | moved |
+| acx_footnotes | 96 | 78 | 18 | "Notes" | clean | 7 / 7 | 20 / 20 | 27 → 27 | "Notes" | 7 numbered + 1 | 1 | moved |
+| tufte | 68 | 63 | 5 | "Notes" | clean | 6 / 6 | 16 / 16 | 23 → 23 | "Notes" | 6 numbered + 1 | 1 | moved |
+| ar5iv, gutenberg, constitution | — | all | **0** | none | clean | unchanged | unchanged | unchanged | — | — | — | **unchanged** |
+
+The last row is the control, and the last column of it is the one that would have cost the most: a
+`structureHash` that moved on a supplement-free tree would have invalidated every `labels.json`,
+`ideas.json` and similarity artefact on disk at once.
+
+**The apparatus is one trailing run on all four**, measured before anything was built
+(`output/supp-contig.mts`): gwern 143–183, wiki_transformer 235–355, acx_footnotes 78–95, tufte
+63–67 — each a single run ending at the last block. So `splitBlocks` takes the maximal trailing run
+and **refuses the whole split** if any supplement block sits outside it: no node, the tree exactly as
+it would have been before this stage, and the count reported in `TocRun.strandedSupplement` rather
+than swallowed. Partial coverage was the alternative and it is worse — a node covering only some of
+the apparatus breaks invariant 4 the moment it exists.
+
+### The nine guards, each watched go red on its own
+
+"Delete the supplement and watch validation fail" mostly re-tests the old coverage invariant, so each
+guard in `checkSupplements` was deleted separately (`output/mutate-invariants.mts`) and the suite
+re-run. Every one reddens its own case and only its own:
+
+| guard removed | tests reddened |
+|---|---|
+| 1 — depth-one child of the root | 1 |
+| 2 — supplements overlap | 1 |
+| 2 — range runs backwards | 1 |
+| 3 — contains only supplement blocks | 2 (its own, and the disguised-body-node case) |
+| 4 — contains every supplement block | 1 |
+| 5 — only leaves beneath it | 1 |
+| 6 — carries no gist | 1 |
+| 6 — never nested | 1 |
+| 6 — never the root | 1 |
+| the *other* direction: an internal body node must have a gist | 1 |
+
+The last row is the one the design turns on. A gistless body node must not be able to buy the
+exception by calling itself apparatus, and it cannot: the test that renames a gistless part
+`treatment: "supplement"` is caught by invariant 3, because a part is full of body blocks.
+
+### The invisible failure, and the plan's fix was half a fix
+
+The whole-article summary breaks exactly as predicted — the root's range end moves and
+`buildSummaryTree` drops the entry without a word. The test that builds a tree, writes summaries
+against it, appends a supplement and asserts the article-level summary is still there **fails on the
+old join** and passes on the new one.
+
+**But `depth === 0` alone, as the plan specified it, quietly gives up a guarantee that was already
+there and already tested.** `tests/summarise.test.ts` has had a case since summaries shipped —
+"drops an entry whose range matches no node, rather than moving it" — feeding a **depth-0** entry
+whose range matches nothing and asserting it is dropped. Matching the root by depth alone attaches
+it, and that test goes red. Which is the right answer: a stale root summary shown as current is the
+lie the drop rule exists to prevent.
+
+The fix is `depth === 0` **and the start block id**. Only the root's *end* moves when a supplement is
+appended; its start is still the article's first block. So the supplement case is fixed and the stale
+case stays dropped, which is strictly better than either rule alone, and no existing test had to be
+changed.
+
+### Four consumers, one projection
+
+`navigableItems` ([`web/tree.ts`](../../src/web/tree.ts)) collapses every cell under a supplement to
+one item anchored at its first block, and the fisheye ([`context.ts`](../../src/web/context.ts)),
+keyboard navigation ([`keynav.ts`](../../src/web/keynav.ts)), the saved reading position
+([`position.ts`](../../src/web/position.ts)) and the arc's numbering all read it. Each was reverted
+to the raw cells in turn, and each reddens **its own** assertion and no other — which is the shape of
+the bug this guards against, one panel disagreeing with the other three while everything still
+renders.
+
+`navPlan` now takes the `Geometry` rather than its cells and leaf depth, because it needs the
+supplement index that lives on it; that is the only signature that changed.
+
+### What else it touched, and one thing it did not
+
+- `partsOf` ([`arc.ts`](../../src/arc.ts)) is where "the parts of the argument" is defined, so
+  excluding the supplement there fixes the arc's `buildArc` throw and the glossary, ideas and tweet
+  skeletons in one edit. The client's numbering is a *separate* copy of the rule — it numbers the
+  cells it is drawing, not the tree — and both are held by tests.
+- `targetsOf` ([`summarise.ts`](../../src/summarise.ts)) returns before descending into a supplement.
+  Forty endnotes sail past `MIN_BLOCKS`, and `textOf` filters by `isBodyEvidence`, so the call would
+  have gone out with an empty scope and come back with a plausible paragraph about nothing.
+- `deriveLibraryScalars` excludes the node and its leaves from the part and section counts.
+- `publicTree` ([`dto.ts`](../../src/public/dto.ts)) **silently drops optional `TreeNode` fields by
+  design**, so `treatment` is named there by hand. Without that line a visitor's copy numbers the
+  apparatus as a part.
+- The spine band is dimmed and keeps its true proportional height; the spine never descends into it,
+  because one hairline per endnote is the phantom-row failure arriving by a different door.
+- **`planBatches` needed nothing.** Its per-section filter is `isStructural`, which is false for
+  every supplement block, so the node contributes no sibling set and costs no label call.
+
+### What the brief got wrong
+
+- **`structureHash` needing a legacy branch was right, but not because of the supplement node.**
+  `structureHash` never hashed `treatment` at all, so the corpus was safe without a branch — the
+  branch is what makes the hash *sensitive* to a node becoming apparatus, which it has to be, since
+  `labels.json` stamps it. Written as: no node carrying `treatment` ⇒ the old five fields byte for
+  byte (`5bb2ef0284bce2cd` over `example/tree.json`, pinned before anything was changed).
+- **The plan's summary fix was half a fix** — see above.
+
+## Stage 5a, as it actually landed — 2026-08-28
+
+The prose side: the marker, the preview, the jump, and the back-links. One new file,
+[`src/web/notes-view.ts`](../../src/web/notes-view.ts), plus a note card in
+[`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx), a marker branch in `TableView`'s delegated
+click handler, and one section of `styles.css`. The tree, the spine dimming and the exclusion
+tooltips are stage 4's and are not here.
+
+**What actually arrives at the client**, measured through the real pipeline rather than read off the
+stage-2 header, because everything below depends on it:
+
+```html
+<sup><a href="#spya-a3maqu" id="fnref1" data-spya-note-ref="spya-note-71f9008f33">1</a></sup>
+```
+
+The stamp survives Readability and the sanitiser, and the `href` has already been repointed at the
+note's **block** id. Every marker in all four fixtures — 34 gwern, 170 wikipedia, 18 acx, 5 tufte —
+resolves, and every one lands on the **first** block of its note, which is what makes "gather the
+range from the block it landed on" correct rather than lucky.
+
+**The marker is recognised twice.** The attribute is ours and cannot be forged by a page, but a buggy
+pipeline could write one, so the resolved block's `role` is checked too — and all three note fields
+together, since stage 3 writes them in one ancestor lookup and a block carrying one without the
+others is a fault rather than a shape to be tolerant of. Never by being inside a `<sup>`.
+
+**The preview strips ids rather than namespacing them**, which was the one question the brief asked
+to have answered out loud. A namespaced id is still an id, and nothing links *into* a floating copy
+of a note — so namespacing keeps a second naming scheme unique for no reader's sake, while stripping
+removes the hazard outright. The hazard is real and not theoretical: a note's stored html carries its
+own block id, and Wikipedia's carries about a hundred of Parsoid's `mw…` ids, all of which are
+already in the document once. `internalTarget`'s `[id="…"]` fallback takes the first in document
+order, so a duplicated id in a portal can capture the article's own links.
+
+The note's own back-links are dropped from the preview with them. On Wikipedia they are the run of
+`1 2 3 …` that *opens* the note — thirteen links to where the reader already is, ahead of the first
+word of the thing they asked to see.
+
+**Plural back-links, and the number that is not thirteen.** The most-cited note in `wiki_transformer`
+has 13 markers in **12** passages: one paragraph cites it twice. So "markers" and "places this is
+cited" are a third pair of numbers that a naive implementation conflates, in the same family as
+notes-versus-blocks. The card says *cited in 12 passages*; the note carries 13 back-links, one per
+use, each pointing at its own block.
+
+Landing among thirteen identical arrows with no way to tell which is yours is the failure the plan
+named, so the jump remembers where it came from: `onFollowNote(from, to)` in App, and
+`markReturnPath` puts `data-came-from` on the back-link whose href is the passage the reader left.
+Written straight onto the injected html rather than through `annotateHtml` — the annotation path
+would re-parse and re-serialise every marked block for one attribute — and re-applied whenever the
+prose is re-annotated, because React replaces those nodes wholesale.
+
+**Touch is deliberate, and it is the exception to the card's own rule.** `tapSelector` used to be
+`mark.term` alone, on the stated grounds that a link already does something under a finger and
+replacing that with a preview would take a working affordance away. A marker is the case where that
+reasoning inverts: navigating is exactly what it should not do, because the jump recentres all three
+panels on "Notes" for a citation the reader has not read yet. So a marker gets the spine's
+`bandPress` rule — first tap shows the note, second tap goes there. A **back-link** keeps the
+ordinary behaviour: going back is what the reader wants from it, and it is one tap.
+
+One touch bug was fixed on the way: `useHoverCard`'s scroll dismissal fired for scrolls *inside* the
+card, so the first thing a finger does with a note preview — scroll it — would have closed it.
+
+**Six mutations, each run and reverted:**
+
+| mutation | tests reddened |
+|---|---|
+| recognise a marker by its attribute alone, skipping the role check | **1** |
+| preview only the note's first block | 3 |
+| stop stripping ids out of the fragment | 3 |
+| leave the note's own back-links in the preview | 3 |
+| mark every back-link as the way the reader came | 1 |
+| count a citing passage once per marker | 2 |
+
+The first row is the one worth keeping, because it reddened **nothing** on the first run. The
+negative fixture named a note id the index had never heard of, so the assertion passed for any
+implementation — including one that never looks at the target at all, which is the mutation. Putting
+a real note in the index beside the mis-aimed marker is what made it a test of the rule rather than
+of an unknown id. Same shape as [a-corpus-that-cannot-exercise-its-arm](../reusable/silent-success.md).
+
+A second, smaller version of the same thing: the first draft of these tests used ids like
+`spya-body01`, which are **not valid spideryarn ids** — `o` and `1` are not in the alphabet — so
+every resolution went through `internalTarget`'s legacy `[id="…"]` fallback instead of the
+`tr[data-block]` path production uses. Green, and about the wrong code path.
+
+**What is not verified.** Everything above is vitest, and vitest cannot see a reader. Nothing here
+has been through a browser: not the marker's dress, not whether a long note scrolls inside the card,
+not focus order, not a real finger, and not the `data-came-from` highlight, which needs a real jump
+to a real notes section. And the shelf still has no footnote-bearing article on it, so a browser pass
+needs one ingested first.
+
 ## What this is deliberately not doing
 
 - **Parsing `(Smith, 2001)` into a link to its bibliography entry.** That is citation parsing, not

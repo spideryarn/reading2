@@ -582,7 +582,15 @@ export function useHoverCard<T>({
      * Only for a touch-opened card, so the desktop behaviour is untouched.
      * Raised by a GPT Sol review, 2026-08-27.
      */
-    const dismiss = () => {
+    const dismiss = (event?: Event) => {
+      /* Unless the scroll is *inside* the card, which is the reader reading it.
+         A footnote preview is a whole note and taller than the panel, so on a
+         phone the first thing a finger does with an open card is scroll it — and
+         without this that dismisses the card it is scrolling. `scroll` does not
+         bubble, hence the capture listener, and its target for a page scroll is
+         the document rather than an element. */
+      const target = event?.target;
+      if (target instanceof Element && target.closest(`.${CARD_CLASS}`)) return;
       if (byTouchRef.current) shut();
     };
 

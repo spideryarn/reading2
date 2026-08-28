@@ -116,6 +116,32 @@ Resolution goes through `internalTarget` in [`internal-links.ts`](../../src/web/
 fragment lands. It returns null for a fragment this document does not answer to, and then there is no
 card: an honest "we cannot tell you" rather than a panel about nothing.
 
+## A footnote marker is one of those links, and it gets the note instead
+
+A superscript `1` is an in-article `#fragment` like any other, so the card above would happily draw
+it — as *elsewhere in this article* over 260 clipped characters of the note. That is the wrong answer
+for the one link whose destination is short enough to show in full, and it is why
+[`notes-view.ts`](../../src/web/notes-view.ts) exists.
+
+Three things it does differently, and each of them is a decision rather than a detail:
+
+- **It shows the whole note, over the note's whole range of blocks.** A note is a *range* — gwern's
+  longest is eight blocks — so the fragment gathers every block carrying the same `noteId`, in
+  document order, and a long one scrolls rather than being cut. The reasoning is
+  [footnotes.md](../plans/footnotes.md): the preview being good is what makes the jump rare, and the
+  jump is expensive because it recentres all three panels on "Notes".
+- **It rebuilds the fragment rather than injecting the stored html**, stripping every `id` out of the
+  copy. The stored html of a note carries its own block id and, on Wikipedia, a hundred of Parsoid's
+  — and duplicate ids in a document where everything is addressed by id would reach `internalTarget`
+  itself.
+- **It owns its own links.** The card is in a portal, outside `TableView`'s delegated handler, so a
+  link inside the preview would otherwise navigate the whole page away.
+
+A marker is recognised by its `data-spya-note-ref` stamp **and** by the `role` of the block that
+stamp resolves to — never by being inside a `<sup>`, because superscripts are also powers, ordinals
+and trademarks. The other direction is the same machinery: a note's back-links point at the passages
+that cite it, one per use, and their card says *cited here* rather than *elsewhere in this article*.
+
 ## The identifier the path is carrying
 
 The section above says `philpapers.org/rec/BUTAAT` shows no trail, because `BUTAAT` is a catalogue

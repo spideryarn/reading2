@@ -30,10 +30,12 @@
  */
 import { useCallback, useMemo, type ReactElement } from "react";
 import {
+  Asterisk,
   BookA,
   BookMarked,
   BookOpen,
   CornerDownRight,
+  CornerUpLeft,
   ExternalLink,
   FileText,
   Globe,
@@ -49,6 +51,14 @@ import { useLinkFacts, type LinkFacts } from "./link-facts.js";
 import { Link } from "./Link.js";
 import { readHref } from "./router.js";
 import { internalTarget } from "./internal-links.js";
+import {
+  isBackLink,
+  noteMarkerAt,
+  notePreviewHtml,
+  NOTE_REF_ATTR,
+  type NoteIndex,
+  type NoteMarker,
+} from "./notes-view.js";
 
 /** What the pointer found: a term, a link, or both over the same words. */
 interface Hit {
@@ -60,14 +70,26 @@ interface Hit {
   anchor: { blockId: BlockId; text: string } | null;
   /** The raw href, for the foot of the card. */
   href: string | null;
+  /**
+   * A footnote marker, and the whole note behind it.
+   *
+   * The card this produces is not a description of a destination — it is the
+   * destination, in full. "make the hover preview good enough that most visits
+   * never jump at all" (docs/plans/footnotes.md § The fisheye).
+   */
+  note: NoteMarker | null;
+  /** A note's back-link: the same machinery pointing the other way. */
+  back: boolean;
 }
 
 export function ProseHoverCard({
   entries,
   sourceUrl,
   blockText,
+  notes,
   onOpenTerm,
   onJump,
+  onFollowNote,
   lookUpLinks,
 }: {
   entries: GlossaryEntry[];
@@ -81,10 +103,27 @@ export function ProseHoverCard({
   sourceUrl: string | null;
   /** The rendered text of a block, for previewing an in-article anchor. */
   blockText: Map<BlockId, string>;
+  /**
+   * The article's footnotes, indexed once — see notes-view.ts.
+   *
+   * Built in App rather than here because `read` runs on every `pointerover`
+   * that hits a link, and a note is a *range* of blocks: the index is what makes
+   * "which note is this, and what is all of it" two map lookups.
+   */
+  notes: NoteIndex;
   /** Show this term in the glossary band — the card's one way out to the list. */
   onOpenTerm(id: string): void;
   /** Go to the block an in-article anchor points at. */
   onJump(id: BlockId): void;
+  /**
+   * Go to a note, remembering the passage it was cited from.
+   *
+   * Separate from `onJump` because the return journey is the half that is easy
+   * to get wrong: one Wikipedia note is marked thirteen times, so the note's
+   * thirteen back-links all look alike, and only the caller can say which one
+   * the reader should be looking at when they land.
+   */
+  onFollowNote(from: BlockId | null, to: BlockId): void;
   /**
    * **May this card look a link up, or only describe it?**
    *
@@ -142,12 +181,19 @@ export function ProseHoverCard({
         if (blockId && text) anchor = { blockId, text };
       }
 
+      /* A footnote marker, recognised by its stamp **and** by what the stamp
+         resolves to — notes-view.ts says why both. It wins over the ordinary
+         anchor card: "elsewhere in this article", with the note's first 260
+         characters under it, is a worse answer than the note. */
+      const note = anchorEl ? noteMarkerAt(anchorEl, document, notes) : null;
+      if (note) return { termIds, link, anchor, href, note, back: false };
+
       // Nothing to say. A bare `<a>` we cannot describe is not worth a panel.
       if (termIds.length === 0 && !link) return null;
       if (termIds.length === 0 && link?.kind === "anchor" && !anchor) return null;
-      return { termIds, link, anchor, href };
+      return { termIds, link, anchor, href, note: null, back: !!anchorEl && isBackLink(anchorEl) };
     },
-    [byId, sourceUrl, blockText],
+    [byId, sourceUrl, blockText, notes],
   );
 
   const { shown, close, anchorProps, arrowRef, context } = useHoverCard<Hit>({
@@ -188,7 +234,14 @@ export function ProseHoverCard({
        card carries both halves, and its foot still has "open in a new tab". So
        the link goes from zero taps away to one, and what the author means by
        the word goes from unreachable to zero. docs/plans/touch-glossary-card.md. */
-    tapSelector: "mark.term",
+    /* **And a footnote marker, which is the exception that proves the rule.**
+       A marker is a link, so by the paragraph above a tap should be left to
+       navigate — and navigating is the one thing a marker should not do under a
+       finger. The jump recentres all three panels on "Notes", so the reader's
+       place in the argument leaves every column for the sake of a citation they
+       have not read yet. First tap shows the note, second tap goes there: the
+       spine's `bandPress` rule, which this card already uses for a term. */
+    tapSelector: `mark.term, a[${NOTE_REF_ATTR}]`,
     /* The second tap on the same words, which is what the foot's "in the
        glossary" button does. Both, rather than the button alone: on a touch
        screen the words are a far bigger target than a 10px-tall row of text,
@@ -201,7 +254,14 @@ export function ProseHoverCard({
        commit, so it does nothing and leaves the card open with its two named
        buttons — the reader chooses, which is the same answer the card was
        already giving. Raised by a GPT Sol review, 2026-08-27. */
-    onCommit: ({ data }) => {
+    onCommit: ({ el, data }) => {
+      /* A marker's second tap is the jump it would have made on the first,
+         which is why the swallowed navigation is not a loss. */
+      if (data.note) {
+        close();
+        onFollowNote(el.closest("tr[data-block]")?.getAttribute("data-block") ?? null, data.note.blockId);
+        return;
+      }
       const ids = data.termIds.filter((id) => byId.has(id));
       const only = ids.length === 1 ? ids[0] : undefined;
       if (!only) return;
@@ -211,7 +271,7 @@ export function ProseHoverCard({
   });
 
   if (!shown) return null;
-  const { termIds, link, anchor, href } = shown.data;
+  const { termIds, link, anchor, href, note, back } = shown.data;
   const found = termIds
     .map((id) => byId.get(id))
     .filter((e): e is GlossaryEntry => e !== undefined);
@@ -219,7 +279,13 @@ export function ProseHoverCard({
 
   const label = [
     ...found.map((e) => e.name),
-    link?.kind === "external" ? link.host : link?.kind === "anchor" ? "in this article" : null,
+    note
+      ? `note ${note.label}`.trim()
+      : link?.kind === "external"
+        ? link.host
+        : link?.kind === "anchor"
+          ? "in this article"
+          : null,
   ]
     .filter(Boolean)
     .join(", ");
@@ -240,7 +306,9 @@ export function ProseHoverCard({
           focus and should not contain focusable controls. This one holds a link
           and a button. Flagged by a GPT Sol review, 2026-08-26. */}
       <div {...anchorProps} role="dialog" aria-label={label}>
-        <div className="tooltip prose-card">
+        {/* `note` widens the card and nothing else: a whole footnote in a
+            21rem column is a very tall, very narrow object. styles.css. */}
+        <div className={`tooltip prose-card${note ? " has-note" : ""}`}>
           {/* More than one term only where two overlap the same words —
               "attention" inside "attention head", commoner now that the whole
               list is drawn. Both are shown: picking one would be picking for
@@ -249,15 +317,35 @@ export function ProseHoverCard({
           {found.map((entry) => (
             <TermCard key={entry.id} entry={entry} onOpen={() => { close(); onOpenTerm(entry.id); }} />
           ))}
+          {/* The note in full, in place of the link half rather than under it.
+              A marker IS a link into this article, so `LinkCard` would happily
+              draw it — as "elsewhere in this article" over 260 clipped
+              characters of the note. The whole point of this stage is that the
+              reader does not have to go and look. */}
+          {note && (
+            <NoteCard
+              note={note}
+              divided={found.length > 0}
+              onGo={() => {
+                close();
+                onFollowNote(
+                  shown.el.closest("tr[data-block]")?.getAttribute("data-block") ?? null,
+                  note.blockId,
+                );
+              }}
+              onJump={(id) => { close(); onJump(id); }}
+            />
+          )}
           {/* The link half, under the term half when there is one. That order
               is deliberate: the reader is in the middle of a sentence, and what
               the word means comes before where it would take them. */}
-          {link && (
+          {link && !note && (
             <LinkCard
               link={link}
               anchor={anchor}
               href={href}
               facts={facts}
+              back={back}
               divided={found.length > 0}
               onJump={(id) => { close(); onJump(id); }}
             />
@@ -350,6 +438,7 @@ function LinkCard({
   anchor,
   href,
   facts,
+  back,
   divided,
   onJump,
 }: {
@@ -358,6 +447,15 @@ function LinkCard({
   href: string | null;
   /** What the two lookups found, and whether either is still outstanding. */
   facts: LinkFacts;
+  /**
+   * This anchor is a note's back-link — the same resolution pointing the other
+   * way, and the one place "elsewhere in this article" is true and useless.
+   *
+   * A note cited thirteen times has thirteen of these, side by side and
+   * identical apart from where they go, so saying **which passage** each one
+   * leads to is what makes them thirteen rather than one.
+   */
+  back: boolean;
   /** A rule above it, because a term card is sitting on top. */
   divided: boolean;
   onJump(id: BlockId): void;
@@ -368,8 +466,8 @@ function LinkCard({
       return (
         <>
           <p className="prose-card-label">
-            <CornerDownRight size={9} />
-            elsewhere in this article
+            {back ? <CornerUpLeft size={9} /> : <CornerDownRight size={9} />}
+            {back ? "cited here" : "elsewhere in this article"}
           </p>
           {/* The destination's own words. Trimmed rather than summarised: a
               paragraph's first sentence is the author's, and a gist of it would
@@ -382,8 +480,8 @@ function LinkCard({
               className="prose-card-open"
               onClick={() => onJump(anchor.blockId)}
             >
-              <CornerDownRight size={10} />
-              go there
+              {back ? <CornerUpLeft size={10} /> : <CornerDownRight size={10} />}
+              {back ? "back to the passage" : "go there"}
             </button>
           </p>
         </>
@@ -552,6 +650,96 @@ function ExternalBody({
         )}
       </p>
     </>
+  );
+}
+
+/**
+ * **A footnote, whole, where the reader is standing.**
+ *
+ * This is the card the footnote feature is for. A jump to the notes recentres
+ * all three panels on "Notes" and takes the reader's place in the argument out
+ * of every column; the plan's answer to that is not cleverness in the panels but
+ * "make the hover preview good enough that most visits never jump at all"
+ * (docs/plans/footnotes.md § The fisheye). So: the note's full text, over the
+ * note's whole *range* of blocks, with its own hyperlinks live.
+ *
+ * Three things it does not do, each of them deliberate:
+ *
+ *  - **It does not clip.** A long note scrolls inside the card. Cutting a note
+ *    at 260 characters and saying nothing is how a preview lies about the thing
+ *    it is previewing, and the whole reason a reader trusts it enough to stay.
+ *  - **It does not inject the stored html as-is.** That would put duplicate
+ *    block ids in the document — see notes-view.ts § Why the preview is rebuilt.
+ *  - **It does not leave its links to `TableView`.** The card is in a portal, so
+ *    the delegated handler that turns an in-article fragment into a recorded
+ *    jump never sees them, and they would navigate the page out from under the
+ *    reader. Hence the handler below, which is that handler's rules in one
+ *    place: modified clicks and `target` are the browser's, an in-article
+ *    fragment is a jump, and anything else is left alone.
+ */
+function NoteCard({
+  note,
+  divided,
+  onGo,
+  onJump,
+}: {
+  note: NoteMarker;
+  divided: boolean;
+  /** Go to the note itself, remembering where we came from. */
+  onGo(): void;
+  /** Follow a link the note itself makes into the article. */
+  onJump(id: BlockId): void;
+}) {
+  /* Rebuilt when the note changes and not on every render of the card: an
+     external lookup finishing, or the pointer moving inside the panel, must not
+     re-parse a note's html. */
+  const html = useMemo(() => notePreviewHtml(note.note, document), [note.note]);
+  const places = note.note.citedBy.length;
+
+  return (
+    <div className={`prose-card-body${divided ? " divided" : ""}`}>
+      <p className="prose-card-label">
+        <Asterisk size={9} />
+        {note.label ? `note ${note.label}` : "note"}
+      </p>
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents lint/a11y/noStaticElementInteractions: the click handled is always
+          on a real <a> inside the note — Enter on a focused link fires a click that
+          lands here — and this is standing in for TableView's delegated handler,
+          which cannot reach into a portal. */}
+      <div
+        className="note-preview"
+        onClick={(e) => {
+          // A modified click is the reader asking for a new tab, and the href is
+          // a real fragment: leaving it to the browser is the right answer.
+          if (e.defaultPrevented || e.button !== 0) return;
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          const link = (e.target as Element).closest?.("a[href]");
+          if (!link) return;
+          const to = link.getAttribute("target")?.toLowerCase();
+          if (to && to !== "_self") return;
+          const blockId = internalTarget(link, document);
+          if (!blockId) return; // a link out to the web — the browser's job
+          e.preventDefault();
+          onJump(blockId);
+        }}
+        /* The article's own stored html, sanitised at ingest, with every id
+           stripped out of the copy — notes-view.ts. Unsuppressed, like the
+           prose column's own (TableView.tsx): the rule is right in general and
+           the two places it is wrong are both this one fact. */
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+      <p className="prose-card-foot">
+        {/* What the preview cannot show, because it strips them: the note's
+            back-links, which are one per place it is cited. Saying how many
+            there are is what tells a reader this note is load-bearing before
+            they go anywhere. */}
+        {places > 1 && <span className="prose-card-meta">cited in {places} passages</span>}
+        <button type="button" className="prose-card-open" onClick={onGo}>
+          <CornerDownRight size={10} />
+          go to the note
+        </button>
+      </p>
+    </div>
   );
 }
 

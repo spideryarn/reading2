@@ -4245,6 +4245,113 @@ td.text.has-hit[data-hues="8"] {
 }
 .prose-card-open:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px; }
 
+/* ------------------------------------------------------- footnotes ------
+   The apparatus, dressed as apparatus. src/web/notes-view.ts, and
+   docs/plans/footnotes.md § What the reader sees.
+
+   A marker is **chrome inside prose** — a superscript that says "there is a
+   note here", not a word of the author's sentence — so it takes the UI face and
+   the faint ink, and it drops the article's link colour and underline. It has
+   to be visibly pressable all the same, so the hover and focus states are the
+   loudest thing about it: a reader who cannot tell a marker from a power will
+   never find out what a hover does. Stage 2 already wraps every one of them in
+   a `<sup>`, whatever the publisher wrote, so the size is not set here.
+
+   The padding is a touch target as much as a look: the hit area of `1` at
+   0.75em is a few pixels square, and a finger cannot be asked to find it. */
+.prose a[data-spya-note-ref] {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 0.1em 0.25em;
+  margin: 0 0.05em;
+  border-radius: 3px;
+  /* The finger's target is bigger than the ink, without moving any line. */
+  box-decoration-break: clone;
+}
+.prose a[data-spya-note-ref]:hover,
+.prose a[data-spya-note-ref]:focus-visible,
+/* Written by the hover card onto the words a finger has opened it against —
+   see TAP_ATTR in useHoverCard.ts. A touch screen has no hover to show which
+   marker is armed for a second tap. */
+.prose a[data-spya-note-ref][data-hover-tap] {
+  color: var(--highlight-ink);
+  background: var(--highlight-wash);
+}
+.prose a[data-spya-note-ref]:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 1px;
+}
+
+/* The way back, at the note. Plural, and by a lot: one Wikipedia note in this
+   corpus is cited thirteen times and carries thirteen of these in a row. They
+   are the note's own text — stage 2 stamps the author's element rather than
+   replacing it, because rewriting a note's words costs the block its id — so
+   this is dress and nothing more. */
+.prose a[data-spya-note-back] {
+  font-family: var(--font-ui);
+  color: var(--ink-faint);
+  text-decoration: none;
+  padding: 0 0.2em;
+  border-radius: 3px;
+}
+.prose a[data-spya-note-back]:hover,
+.prose a[data-spya-note-back]:focus-visible { color: var(--highlight-ink); }
+/* **The one the reader actually came by.** Thirteen identical arrows and no way
+   to tell which is yours is the failure this whole half of the feature exists
+   to avoid — src/web/notes-view.ts § markReturnPath. */
+.prose a[data-spya-note-back][data-came-from] {
+  color: var(--highlight-ink);
+  background: var(--highlight-wash);
+  outline: 1px solid var(--highlight);
+}
+
+/* ---- the note, in the hover card ----
+   Wider than the ordinary card, because a whole footnote in a 21rem column is a
+   very tall very narrow object, and the point of the preview is that a reader
+   can take it in without going anywhere. Set in the reading face: this is the
+   author's prose, not our chrome, and the card's own labels are the chrome
+   around it. */
+.tooltip.prose-card.has-note { max-width: 27rem; }
+.note-preview {
+  /* A long note scrolls rather than being cut. `contain` so the scroll does not
+     run on into the article underneath once the note ends. */
+  max-height: 16rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-family: var(--font-reading);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.note-preview .note-part + .note-part { margin-top: 0.45rem; }
+/* A note that contains a list arrives as several blocks — gwern's longest is
+   eight — and the ones after the first really are list items. Indented rather
+   than bulleted, because the bullet would be ours and the indent is the shape
+   the author already wrote. */
+.note-preview .note-part[data-tag="li"] + .note-part[data-tag="li"] {
+  padding-left: 0.7rem;
+  border-left: 1px solid var(--rule);
+}
+.note-preview p { margin: 0 0 0.4rem; }
+.note-preview p:last-child { margin-bottom: 0; }
+.note-preview a {
+  color: var(--highlight-ink);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  overflow-wrap: break-word;
+}
+.note-preview img { max-width: 100%; height: auto; }
+.note-preview blockquote {
+  margin: 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+  font-style: italic;
+}
+.note-preview pre { max-width: 100%; overflow-x: auto; font-family: var(--font-mono); font-size: 0.85em; }
+.note-preview code { font-family: var(--font-mono); font-size: 0.9em; }
+
 /* Where the piece uses it. The ids are `BlockRef`s, so they are real links —
    right-click gives you a URL to the paragraph, and left-click jumps. */
 .gloss-where {

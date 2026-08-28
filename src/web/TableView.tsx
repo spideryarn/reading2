@@ -30,6 +30,7 @@ import {
 } from "./annotate.js";
 import { readSelection } from "./selection.js";
 import { internalTarget } from "./internal-links.js";
+import { markReturnPath, noteMarkerAt, type NoteIndex } from "./notes-view.js";
 import type { Section } from "./position.js";
 import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./context.js";
 import { ContextPanel } from "./ContextPanel.js";
@@ -38,6 +39,14 @@ import { BlockRange, BlockRef } from "./BlockRef.js";
 import { MessageSquare } from "lucide-react";
 import { SWIPE_ATTR } from "./swipe.js";
 import type { AnchoredThread } from "./useChatAnchors.js";
+import { Lightbox } from "./Lightbox.js";
+import {
+  addZoomHandles,
+  figureFor,
+  ZOOM_BTN_CLASS,
+  ZOOM_WRAP_CLASS,
+  type ZoomedFigure,
+} from "./zoomable.js";
 
 interface Props {
   article: Article;
@@ -61,6 +70,22 @@ interface Props {
   arcCells: Map<number, ArcCell> | null;
   /** Jump to a block, recording it in the URL. See App § useReadingPosition. */
   onJump(blockId: BlockId): void;
+  /**
+   * The article's footnotes — src/web/notes-view.ts. Absent for every view that
+   * has none to speak of, and then a marker click is an ordinary internal link.
+   */
+  notes?: NoteIndex | undefined;
+  /**
+   * The passage the reader left when they followed a marker, so the note they
+   * land in can say which of its back-links is theirs.
+   *
+   * One Wikipedia note in this corpus is marked thirteen times and carries
+   * thirteen back-links, side by side and identical apart from where they point.
+   * Without this the return journey is a guess with twelve wrong answers.
+   */
+  noteReturn?: BlockId | null | undefined;
+  /** A marker was followed: go to the note, and remember the way back. */
+  onFollowNote?: ((from: BlockId | null, to: BlockId) => void) | undefined;
   /** Every stored comment for this article — see docs/project/comments.md. */
   comments: Comment[];
   /** The comment whose dialog is open, so its mark can say so. */
@@ -144,6 +169,9 @@ export function TableView({
   navDepth,
   arcCells,
   onJump,
+  notes,
+  noteReturn,
+  onFollowNote,
   comments,
   openComment,
   onSelect,
@@ -220,14 +248,24 @@ export function TableView({
           items: entries.map(([, a]) => ({
             node: a.node,
             blockId: a.node.range[0],
-            text: a.text ?? "",
-            step: { index: a.index, total: a.total },
+            /* The apparatus takes no `text`, so the list falls through to its
+               title. `""` on a part is deliberate — it stops the renderer
+               falling back to the part's gist and turning the arc column into a
+               copy of L1 — but on a supplement there is no gist to fall back to
+               and "Notes" is the content. */
+            ...(a.supplement ? { supplement: true } : { text: a.text ?? "" }),
+            ...(a.index !== undefined && a.total !== undefined
+              ? { step: { index: a.index, total: a.total } }
+              : {}),
           })),
           starts: entries.map(([row]) => row),
         });
         continue;
       }
-      m.set(d, itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id));
+      m.set(
+        d,
+        itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id, geometry.supplementOf),
+      );
     }
     return m;
   }, [colKey, geometry, arcCells, blocks]);
@@ -376,10 +414,34 @@ export function TableView({
       /* The unmarked majority never reaches the parser at all. `annotateHtml`
          has this test too; doing it here as well is what keeps an unmarked
          block out of the Map's churn as well as out of the parse. */
-      if (marks.length > 0) byBlock.set(block.id, annotateHtml(block.html, marks));
+      const marked = marks.length > 0 ? annotateHtml(block.html, marks) : block.html;
+      /* The enlarge buttons go on LAST, and `addZoomHandles` returns its input
+         unchanged when there is no figure in it — so the Map still holds only
+         the blocks that differ from their own html, and a paragraph of plain
+         prose costs one regex. See zoomable.ts § the four load-bearing things,
+         the third of which is this ordering. */
+      const withHandles = addZoomHandles(marked);
+      if (withHandles !== block.html) byBlock.set(block.id, withHandles);
     }
     return byBlock;
   }, [blocks, marksByBlock, termMarksByBlock, hitMarks, openTerm]);
+
+  /**
+   * The back-link that leads to where the reader came from, marked.
+   *
+   * Written onto the injected html rather than through `annotateHtml`, and the
+   * reason is cost: a note's back-links are already in the prose, so this is one
+   * attribute on one anchor, where the annotation path would re-parse and
+   * re-serialise every block carrying a mark for a piece of transient state. It
+   * re-runs when the prose is re-annotated, because React replaces those nodes
+   * wholesale and a stale mark leaves with the node it was on — the same
+   * property `TAP_ATTR` relies on in useHoverCard.ts.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: proseHtml is a deliberate re-run trigger
+  useEffect(() => markReturnPath(bodyRef.current ?? document, noteReturn ?? null), [
+    noteReturn,
+    proseHtml,
+  ]);
 
   // Whether the end columns need to read as a layer depends on whether the
   // table actually outruns the window — which App knows exactly, because it
@@ -507,6 +569,14 @@ export function TableView({
           const blockId = internalTarget(e.target as Element, document);
           if (!blockId) return; // not ours to handle — an outbound link, or a dead fragment
           e.preventDefault();
+          /* A footnote marker is an internal link with one extra thing to
+             remember: which passage the reader left. Recognised by the shared
+             rule rather than by the attribute alone — notes-view.ts. */
+          const note = notes && onFollowNote ? noteMarkerAt(link, document, notes) : null;
+          if (note && onFollowNote) {
+            const from = link.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
+            return onFollowNote(from, note.blockId);
+          }
           onJump(blockId);
         }}
         onMouseUp={(e) => {
@@ -597,9 +667,18 @@ export function TableView({
                         its content is the panel's current entry. */}
                     {!panels && (
                       <div className="sticky">
-                        <div className="arc-step">
-                          {arc.index} <span className="of">/ {arc.total}</span>
-                        </div>
+                        {/* A supplement sits outside the numbering — "3 / 7",
+                            not "3 / 9" — and its title is its content, so it
+                            gets the title where a part gets its marker. Never a
+                            hole: the arc has no sentence for the apparatus and
+                            never will. src/supplement.ts. */}
+                        {arc.supplement ? (
+                          <div className="arc-step arc-supplement">{arc.node.title}</div>
+                        ) : (
+                          <div className="arc-step">
+                            {arc.index} <span className="of">/ {arc.total}</span>
+                          </div>
+                        )}
                         {/* No fallback if the sentence is missing: an empty cell
                             is a failure the reader can see, and borrowing the
                             part's own gist here would quietly turn this column

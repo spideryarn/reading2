@@ -29,6 +29,7 @@ import { sanitizeArticle } from "./sanitize.js";
 import { TableView } from "./TableView.js";
 import type { TermSelection } from "./annotate.js";
 import { formsOf } from "../term-match.js";
+import { horizontalInset, safeAreaInsets } from "./safe-area.js";
 import { Spine } from "./Spine.js";
 import { AnnotateDialog } from "./AnnotateDialog.js";
 import { CommentDialog } from "./CommentDialog.js";
@@ -38,6 +39,7 @@ import { Dock } from "./Dock.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { GlossaryPanel } from "./GlossaryPanel.js";
 import { ProseHoverCard } from "./ProseHoverCard.js";
+import { buildNoteIndex } from "./notes-view.js";
 import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel } from "./DiagramPanel.js";
@@ -1517,6 +1519,36 @@ function Reader({
     [article.blocks],
   );
 
+  /**
+   * The article's footnotes: which blocks make up each note, and which passages
+   * cite it. Built once here because two consumers need the same answer — the
+   * hover card, which shows a note's whole range, and the table, which marks the
+   * back-link the reader arrived by. src/web/notes-view.ts.
+   */
+  const notes = useMemo(() => buildNoteIndex(article.blocks), [article.blocks]);
+
+  /**
+   * The passage the reader left when they followed a footnote marker.
+   *
+   * One note can be marked thirteen times, so its thirteen back-links are
+   * identical apart from where they go; without this the reader lands in the
+   * notes with no way to tell which one is theirs.
+   *
+   * It survives every other kind of jump and is replaced only when another
+   * marker is followed, which is deliberate: the mark answers "where did I come
+   * from", and that stays true after the reader has been back and read on. The
+   * one stale case — following a marker and never returning — leaves a mark on
+   * a passage the reader really did leave.
+   */
+  const [noteReturn, setNoteReturn] = useState<BlockId | null>(null);
+  const followNote = useCallback(
+    (from: BlockId | null, to: BlockId) => {
+      setNoteReturn(from);
+      jumpTo(to);
+    },
+    [jumpTo],
+  );
+
   /** Whether the paragraph-level nav labels are riding beside the prose. */
   const leafOn = showText && fit.columns.includes(geometry.leafDepth);
 
@@ -1727,6 +1759,9 @@ function Reader({
         navDepth={navDepth}
         arcCells={arcCells}
         onJump={jumpTo}
+        notes={notes}
+        noteReturn={noteReturn}
+        onFollowNote={followNote}
         comments={comments}
         openComment={note}
         chats={chats}
@@ -1959,8 +1994,10 @@ function Reader({
            ProseHoverCard.tsx § lookUpLinks. */
         lookUpLinks={owner !== null}
         blockText={blockText}
+        notes={notes}
         onOpenTerm={openTermInGlossary}
         onJump={jumpTo}
+        onFollowNote={followNote}
       />
 
       {/* The mode band. Rendered only in its mode, which is what keeps the
