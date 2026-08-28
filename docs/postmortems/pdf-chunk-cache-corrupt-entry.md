@@ -39,21 +39,27 @@ not on Retry. And the failure was a bare `SyntaxError` with a stack in `runPdfEx
 message never named the file a human would have to delete by hand.
 
 The blast radius is one article per damaged file and it is permanent. Worse, the wedged step is the
-expensive one: PDF extract is the only stage in the pipeline that pays a vision model per page.
+expensive one — `src/pdf-read.ts`'s own first line calls it "the only part of PDF ingestion that
+costs money" — and the entry that wedges it is a paid call that has already been made and can never
+be reused.
 
 ### The codebase already contained the correct answer
 
-This is the part worth keeping. Every sibling of this cache reads its own checkpoint tolerantly, and
-they were all written **before** the broken one:
+This is the part worth keeping. Every sibling of this cache reads its own artefact tolerantly, and
+four of the five were in the tree **before** the broken one was written:
 
 | Where | How it reads back | Landed |
 |---|---|---|
-| [`src/labels.ts`](../../src/labels.ts) `readJsonIfPresent` | `try { JSON.parse(await readFile(…)) } catch { return undefined }` | `3385866`, 2026-08-26 10:26 |
-| [`src/summarise.ts`](../../src/summarise.ts) `readJson` | same shape | before |
-| [`src/ideas.ts`](../../src/ideas.ts) `readJson` | same shape | before |
-| [`src/tweets.ts`](../../src/tweets.ts) `readJson` | same shape | before |
-| [`src/glossary.ts`](../../src/glossary.ts), [`src/arc.ts`](../../src/arc.ts) (`meta.json`) | `.then(raw => JSON.parse(raw)).catch(() => null)` — parse **inside** the chain | before |
-| **`src/pdf-read.ts`** | **`readFile(…).catch(() => null)`, then parse outside it** | `f68a601`, 2026-08-26 18:11 |
+| [`src/tweets.ts`](../../src/tweets.ts) `readJson` | `try { JSON.parse(await readFile(…)) } catch { return null }` | `12081b0`, 2026-08-25 17:41 |
+| [`src/glossary.ts`](../../src/glossary.ts) `readJson` | same shape | `bf5a91e`, 2026-08-25 19:41 |
+| [`src/summarise.ts`](../../src/summarise.ts) `readJson` | same shape | `4f0b781`, 2026-08-26 00:39 |
+| [`src/labels.ts`](../../src/labels.ts) `readJsonIfPresent` | same shape, `undefined` | `3385866`, 2026-08-26 10:26 |
+| **`src/pdf-read.ts`** | **`readFile(…).catch(() => null)`, then parse outside it** | **`f68a601`, 2026-08-26 18:11** |
+| [`src/ideas.ts`](../../src/ideas.ts) `readJson` | the tolerant shape again | `97c9ad5`, 2026-08-27 00:09 |
+
+A sixth reader, for `meta.json`, appears inline in `glossary.ts`, `arc.ts`, `summarise.ts`,
+`ideas.ts` and `tweets.ts` as `.then(raw => JSON.parse(raw)).catch(() => null)` — the parse **inside**
+the chain, so the `catch` covers it. That is the same decision made a different way, five more times.
 
 `labels.ts` even wrote down *why*, and the reasoning transfers word for word:
 
@@ -67,9 +73,10 @@ The same is true of `writeAtomic`, which existed in [`src/toc.ts`](../../src/toc
 truncates and a killed process leaves an invalid file — **eight hours before** the broken cache was
 written, on the same day.
 
-So this was not a hard problem nobody had thought about. It was a solved problem, solved twice, in
-the two files nearest to this one, and the third instance of the same pattern did not copy either
-half.
+So this was not a hard problem nobody had thought about. It was a solved problem, solved repeatedly,
+in the files nearest to this one — and the next instance of the same pattern copied neither half. The
+one that landed *after* it, six hours later in `ideas.ts`, got it right again without anybody
+noticing that the one in between had not.
 
 ## The commit
 
@@ -108,21 +115,22 @@ re-read after a discard is written back over the damaged file.
 
 ### The tests, and the control for each
 
-Four tests in [`tests/pdf-read.test.ts`](../../tests/pdf-read.test.ts) § the chunk cache. Every one
-of them was watched failing, because a check nobody has seen fail is not evidence
+Four tests in [`tests/pdf-read.test.ts`](../../tests/pdf-read.test.ts) § the chunk cache, and five
+claims. Every claim was watched failing, because a check nobody has seen fail is not evidence
 ([silent-success.md](../reusable/silent-success.md)):
 
-| Test | Seen red by |
+| The claim | Seen red by |
 |---|---|
 | a half-written entry is a miss, not a failure | the bug itself, before the fix: `SyntaxError` at `src/pdf-read.ts:814`, quoted above |
-| a well-formed entry is read back — `asks` is **0** on the second run | making `readCachedChunk` return `null` always: `expected 2 to be +0` |
-| only the damaged chunk is re-read — `asks` is **1**, not all of them | the same control: `expected 2 to be 1` |
+| a well-formed entry is read back — the stub is asked **0** times on the second run | making `readCachedChunk` return `null` always: `expected 2 to be +0` |
+| only the damaged chunk is re-read — **1** ask, not all of them | the same control: `expected 2 to be 1` |
 | the discard is logged | deleting only the `warn` call: `expected +0 to be 1`, and nothing else red |
 | no scratch file is left behind | replacing the `rename` with a second `writeFile`: `expected [ …(2) ] to deeply equal []` |
 
-The second row is the one that guards the money. A fix for a corrupt entry that quietly turned
-*every* entry into a miss would have passed the first test, looked correct, and re-bought the whole
-transcription of every PDF on every run.
+The middle two rows are what guard the money, and they are counted in **model calls** rather than
+asserted about the code. Without them, a fix that tolerated a corrupt entry by quietly treating
+*every* entry as a miss would produce a correct article, a green suite and a re-bought transcription
+of every PDF on every run — which is the more expensive bug of the two.
 
 The logger is `silent` under vitest by construction (`src/log.ts` § level), so the log test replaces
 the module rather than reading stdout.
@@ -154,10 +162,27 @@ it. The trick that made it easy was doing the damage by hand rather than trying 
 truncate the file to half its length, and the state a `SIGKILL` would have left is on disk in one
 line. That works for any write-then-read pair in the repo and it is the reusable move here.
 
-There is a fourth, weaker one worth naming because it nearly worked. `docs/plans/pdf-ingestion.md`
-and the header of `src/pdf-read.ts` both describe the cache as the thing that makes a re-run free.
-Neither says what happens if an entry is unreadable — and a design note that describes only the
-happy path reads exactly like one that has considered both.
+**4. And one weaker one, worth naming because it nearly worked.**
+[pdf-ingestion.md](../plans/pdf-ingestion.md) and the header of `src/pdf-read.ts` both describe the
+cache as the thing that makes a re-run free. Neither says what happens if an entry is unreadable —
+and a design note that describes only the happy path reads exactly like one that has considered both.
+
+### One more instance, found and deliberately not fixed
+
+`keepTheOriginal` in the same file (`src/pdf-read.ts`) decides whether the PDF's provenance has
+already been recorded like this:
+
+```ts
+if (await readFile(path.join(opts.dataDir, "raw.json"), "utf-8").catch(() => null)) return;
+```
+
+Any non-empty bytes count as "done". A half-written `raw.json` therefore skips writing `raw.pdf` and
+the manifest both — and `readRaw` in [`src/fetch.ts`](../../src/fetch.ts), which *is* tolerant,
+answers `null` for it, which the callers are told to read as "assume HTML". So the same crash that
+wedged the chunk cache would, one line later, lose a PDF's provenance quietly instead of loudly.
+Both writes there are plain `writeFile` too. Left alone on purpose: it is a different artefact with
+other agents working near it, and it is a silent wrong rather than a permanent trap. It is the
+clearest evidence available that the rule above wants to be a rule and not a fix.
 
 ## See also
 
@@ -166,4 +191,3 @@ happy path reads exactly like one that has considered both.
 - [architecture.md § Conventions](../project/architecture.md#conventions) — the content-hash caching
   convention this is about.
 - [`src/labels.ts`](../../src/labels.ts) — the sibling checkpoint that got both halves right first.
-</content>
