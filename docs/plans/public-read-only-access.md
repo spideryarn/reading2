@@ -1158,6 +1158,51 @@ question is narrower than "is the mobile masthead acceptable": **does *this page
 change* need to be visible at every scroll position, or only on arrival?** If arrival is enough,
 nothing needs building.
 
+### The client half went to Sol and came back BLOCKED
+
+The server half was reviewed and returned no blockers. The client half returned **three**, and they
+are worth reading because all three came from the same place, which the agent that built it named
+better than the review did:
+
+> The seam is right in the components I was thinking about, and leaks in the ones I was not.
+
+**One reader's article on another reader's screen.** `useArticleAccess` keyed its answer by slug and
+by the *boolean* `signedIn` rather than by *who*. Owner A signs out, reader B signs in, and A's
+private article stays mounted — the key never changed. Every server-side guard in this feature is
+blind to that, because it happens after the data has arrived.
+
+**A hover left the namespace.** Every visitor mounted `ProseHoverCard`, four lines below the
+carefully-built capability union; it mounts `useLinkFacts`, which calls `apiFetch("/api/library")` and
+Wikipedia. So *"a signed-out browser issues no request outside `/api/public/`"* — the acceptance
+criterion of the whole client half — **was already false on the most ordinary interaction there is.**
+The trace missed it because the trace never hovers, which is the answer to the question the review was
+asked: *what can this test not see?*
+
+**A lost response was reported as no change.** The card's catch correctly admitted a write might have
+committed before its reply was lost, and then drew *"Whatever it was before is unchanged"* — telling
+an owner their public article is private. The route writes and then reads back to build its reply, so
+**every failure mode after the write leaves the write standing**. The fix splits *unknown* by whether
+we asked at all. And `readJson` returns `{}` for a 204, so an unparseable success was reaching
+`visibility === "public"` as `undefined` and coming out `private`.
+
+**The fifth state.** Three of the four visitor sentences turned out untruthful at the edges: a failed
+metadata fetch rendered *"There is…"*, `/tweets` announced a thread the wire said was absent, and a
+signed-in non-owner was told chat is *"for signed-in readers"*. There are five states now, and the
+test does **not** assert the union has five members — a union can grow a member that says nothing new
+— it compares the sentences and asserts only the knowing one claims *"There is"*.
+
+**And the copy now survives stage 3.** *"Chat is for whoever added this article"* stays true when a
+second reader holds the same document; *"for signed-in readers"* would not have. The account pitch
+stopped promising this article's chat, glossary and shelf entry, none of which an account provides
+until [§ Stage 3](#stage-3-one-article-many-readers).
+
+**One finding of the review was wrong**, checked rather than accepted: `%2F` in a slug is not a
+traversal. `URL` leaves an encoded slash in the pathname, so the path reaches `isPublicNamespace`
+unchanged and stays in the closed room. `../` really does escape — `/api/public/../article/x`
+normalises to `/api/article/x` — and that one is refused. Rejecting `%2F` would refuse a slug that
+legitimately carries one, so it is kept as a **passing** case with the reasoning attached, precisely
+so nobody defends against it later.
+
 ### Three more things the build taught us
 
 **A network trace tests where the hooks are, not what the component believes.** The client half's
