@@ -731,21 +731,30 @@ export interface AdminStore {
 /* ------------------------------------------------------------- sharing -- */
 
 /**
- * `private` or `public`, and **never `published`**.
+ * `private` or `public` — **defined in [src/types.ts](../types.ts)** since
+ * 2026-08-28, and re-exported here so that every file already importing it from
+ * this one goes on working.
  *
- * `article_revisions.status` already has a value spelled `published` and it
- * means *the pipeline finished*, not *anybody may read this*. Two meanings of
- * one word, two tables apart, is how a mistake gets made at three in the
- * morning. docs/plans/public-read-only-access.md.
+ * It had to move because `ArticleMetadata` gained a `visibility` field, and that
+ * is a shape the browser reads. This file reaches the whole store layer; a
+ * client importing it would drag pino and `process.env` into the bundle, which
+ * tests/client-imports.test.ts exists to prevent.
  */
-export type Visibility = "private" | "public";
+export type { Visibility } from "../types.js";
+/* Imported as well as re-exported, because the two contracts below *use* the
+   name and a bare `export … from` does not bring it into this module's scope. */
+import type { Visibility, VisibilityState } from "../types.js";
 
-/** What the switch answers with: the whole state of the subresource. */
-export interface VisibilityState {
-  visibility: Visibility;
-  /** ISO when it was last turned on, or `null` while it is private. */
-  publicAt: string | null;
-}
+/**
+ * What the switch answers with — **defined in [src/types.ts](../types.ts)**
+ * since 2026-08-28, and re-exported here like `Visibility` beside it.
+ *
+ * It moved for the same reason: `ArticleMetadata` now carries one, and that is
+ * a shape the browser reads. Reusing it there rather than restating it is the
+ * point — the sharing card reads the toggle's reply and the page load with the
+ * same line.
+ */
+export type { VisibilityState } from "../types.js";
 
 /**
  * May a stranger read this article?

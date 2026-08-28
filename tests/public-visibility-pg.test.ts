@@ -552,6 +552,75 @@ when("sharing one article", { timeout: 60_000 }, () => {
     expect(r.status).toBe(404);
   });
 
+  /**
+   * **The owner can read their own document's visibility**, which until
+   * 2026-08-28 nothing could.
+   *
+   * A real hole in 1a rather than a nicety. The Access & Sharing card had
+   * nothing owner-facing to read, so it was asking
+   * `GET /api/public/metadata/:slug` anonymously — the only non-mutating
+   * question available to it — and that endpoint **cannot tell private from
+   * absent**, because both are 404 by design. The card was drawing "we could
+   * not check" because it could not honestly draw anything else.
+   *
+   * Asserted through `handleApi` as the owner, at the moment the article is
+   * public, so it is the round trip the card makes rather than a store call.
+   */
+  it("tells the owner their own article is shared, and when", async () => {
+    expect((await articleRow())?.visibility).toBe("public");
+    const r = await call("GET", `/api/metadata/${SLUG}`, { as: OWNER });
+    expect(r.status).toBe(200);
+    /* **The same `VisibilityState` the PUT answers with**, nested rather than
+       two flat fields, so the sharing card reads the toggle's reply and the
+       page load with one line and the two cannot drift. */
+    expect(r.body.visibility).toEqual({
+      visibility: "public",
+      publicAt: (await articleRow())?.publicAt?.toISOString(),
+    });
+  });
+
+  /**
+   * **And the GET and the PUT answer in the same shape**, which is the reason
+   * they share a type rather than each having their own.
+   *
+   * Asserted by comparing the two responses rather than by comparing each to a
+   * literal: a test that checked both against the same hand-written object
+   * would still pass if they drifted together away from it, and drifting
+   * together is not the failure — drifting apart is.
+   */
+  it("and answers the GET in the same shape as the PUT", async () => {
+    const put = await call("PUT", `/api/article/${SLUG}/visibility`, {
+      body: { visibility: "public", rightsConfirmed: true },
+      as: OWNER,
+    });
+    const get = await call("GET", `/api/metadata/${SLUG}`, { as: OWNER });
+    expect(put.status).toBe(200);
+    /* The PUT's whole body is the state; the GET carries it under one key. */
+    expect(get.body.visibility).toEqual(put.body);
+  });
+
+  /**
+   * **And a stranger cannot ask the same question**, which is what makes the
+   * field safe to put on this response at all.
+   *
+   * The owned metadata route is owner-only by construction — `ownedSlug` — so
+   * this is really a check that adding a field did not change who may read it.
+   * Bob gets the same 404 he got before, and gets it whether or not the article
+   * is public: a public *article* does not make its owner's metadata page
+   * public.
+   */
+  it("but a stranger asking the owned route still gets nothing", async () => {
+    expect((await articleRow())?.visibility).toBe("public");
+    for (const who of [OUTSIDER, undefined]) {
+      const r = await call("GET", `/api/metadata/${SLUG}`, who ? { as: who } : {});
+      /* 404 for Bob, 401 for nobody at all — different refusals, and neither
+         carries the field. */
+      expect([401, 404]).toContain(r.status);
+      expect(r.text).not.toContain("publicAt");
+      expect(r.body.visibility).toBeUndefined();
+    }
+  });
+
   /* ----------------------------------- ownerless, and spending nothing -- */
 
   /**

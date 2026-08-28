@@ -77,6 +77,7 @@ import type {
   ThreadFound,
   Tree,
   TweetThread,
+  Visibility,
 } from "../types.js";
 import { sameStamp } from "./artifacts.js";
 import type { ArticleReader } from "./contracts.js";
@@ -1332,6 +1333,29 @@ export const pgArticleReader: Pick<
       /* Off the same `shelfFrom` as `purpose`, so the two stores answer this
          from the same derivation rather than from two readings of one column. */
       archivedAt: shelfFrom(found.article).archivedAt ?? null,
+
+      /* **Free, and that is why this is here rather than behind a second
+         endpoint.** `currentRevisionQuery` selects `articles` whole — the same
+         row `shelfFrom` above is reading — so it costs no query, no projection
+         change, and nothing in `REVISION_READ_POLICY`, which is keyed by
+         `article_revisions` columns and has no opinion about `articles` ones.
+
+         **Present here and absent on the filesystem**, which is the whole point
+         of the field being optional: this store can answer and that one cannot.
+         The same `VisibilityState` the `PUT` returns, so the sharing card reads
+         the toggle's reply and the page load with one line.
+
+         See ArticleMetadata in src/types.ts for why the owner needs it at all —
+         the card was asking the *public* endpoint about its own document, which
+         cannot tell private from absent. */
+      visibility: {
+        /* The cast is the boundary between a `text` column with a CHECK on it
+           and a two-member union: Postgres guarantees the value
+           (`articles_visibility`, drizzle/0024) and TypeScript cannot see the
+           guarantee. Same shape as `kind` in the block reads. */
+        visibility: found.article.visibility as Visibility,
+        publicAt: found.article.publicAt?.toISOString() ?? null,
+      },
     };
   },
 

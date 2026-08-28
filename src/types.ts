@@ -941,6 +941,27 @@ export interface SkipCounts {
   capped: number;
 }
 
+/**
+ * **Whose fault it is when a passage cannot be turned into a vector.**
+ *
+ * Carried on `EmbeddingFailure` in [embeddings.ts](embeddings.ts), which is
+ * where the reasoning lives. It is declared *here* rather than there because
+ * [messages.ts](messages.ts) needs it to hold a total map of sentences, and
+ * `messages.ts` is one of the modules the client shares — so it may only import
+ * other shared modules, type-only or not (`tests/client-imports.test.ts`, and
+ * the rule is deliberately blind to `import type`: a shared module reaching
+ * into the server can drag `node:fs` into the browser bundle, and the erasure
+ * that makes one import safe is not a property a grep can check).
+ *
+ * - `config` — this app's account may not use the model, or has no key.
+ *   Permanent until a person changes a setting.
+ * - `provider` — refused, unreachable, or answered with something that is not
+ *   vectors. Another go may work.
+ * - `busy` — our own admission control, not the provider's. Another go in a
+ *   moment will work.
+ */
+export type EmbeddingReason = "config" | "provider" | "busy";
+
 export interface ProjectionResponse {
   model: string;
   /** How many blocks were embedded. Short ones and non-prose are skipped. */
@@ -1187,6 +1208,46 @@ export interface StageState {
   bytes: number | null;
 }
 
+/**
+ * May a stranger read this article? `private` or `public`, and **never
+ * `published`**.
+ *
+ * `article_revisions.status` already has a value spelled `published` and it
+ * means *the pipeline finished*, not *anybody may read this*. Two meanings of
+ * one word, two tables apart, is how a mistake gets made at three in the
+ * morning. docs/plans/public-read-only-access.md.
+ *
+ * **Declared here rather than in `src/store/contracts.ts`, which re-exports it**,
+ * because since 2026-08-28 it is part of a response the browser reads —
+ * `ArticleMetadata` below — and every wire shape in this app lives in this file.
+ * That is not a filing preference: `contracts.ts` reaches the whole store layer,
+ * and a client importing it would drag pino and `process.env` into the bundle
+ * (tests/client-imports.test.ts).
+ */
+export type Visibility = "private" | "public";
+
+/**
+ * The whole state of one article's sharing — **the same shape the `PUT` answers
+ * with**, and deliberately reused rather than restated.
+ *
+ * `PUT /api/article/:slug/visibility` returns this, and `ArticleMetadata` below
+ * carries it, so the owner's sharing card reads the toggle's reply and the page
+ * load with the same line. Two shapes here would be two places for the card to
+ * drift between the state it was told and the state it fetched.
+ */
+export interface VisibilityState {
+  visibility: Visibility;
+  /**
+   * ISO when sharing was last switched on, or `null` while it is private.
+   *
+   * Cleared on unshare, so it answers "how long has this been up" and not "was
+   * this ever public" — the second is the append-only
+   * `article_visibility_changes` log's question, and it is deliberately not on
+   * any response.
+   */
+  publicAt: string | null;
+}
+
 /** What GET /api/metadata/:slug returns: which stages have run, and nothing the article payload already carries. */
 export interface ArticleMetadata {
   slug: string;
@@ -1232,6 +1293,47 @@ export interface ArticleMetadata {
    * `null` is an answer rather than a gap. Same shape as `purpose`.
    */
   archivedAt: string | null;
+
+  /* ---- sharing. docs/plans/public-read-only-access.md § Stage 1 ---- */
+
+  /**
+   * **Who may read this — or absent, on a store that cannot say.**
+   *
+   * Added 2026-08-28, and it closes a real hole in stage 1a rather than a
+   * nicety: the owner's Access & Sharing card had nothing owner-facing to read,
+   * so it was asking `GET /api/public/metadata/:slug` anonymously — the only
+   * non-mutating question available to it — and **that endpoint cannot tell
+   * *private* from *no such article***. Both are 404, deliberately, so a
+   * stranger learns nothing about what exists. The card was drawing "we could
+   * not check" because it could not honestly draw anything else.
+   *
+   * On this response rather than a second endpoint because the card lives in
+   * Metadata, this route is owner-only by construction, and the Postgres read
+   * already has the row in hand — `currentRevisionQuery` selects `articles`
+   * whole, which is where `purpose` and `archivedAt` above come from too. It
+   * costs no query and no projection change.
+   *
+   * ## Why optional, and why absent rather than `private`
+   *
+   * The filesystem store has no `visibility` column and nowhere to put one, so
+   * it cannot answer. The first version of this field was required and that
+   * store reported `private`, on the reasoning that nothing *can* be shared
+   * there so `private` is the truth.
+   *
+   * That was wrong, and the argument against it is the one `requirePostgres`
+   * already makes on the public route: a store with no honest answer must
+   * **refuse to answer** rather than supply a plausible one. A required
+   * `private` is a claim the store is in no position to make, and the card
+   * would have drawn *"Only you can read this"* — confidently, and with no way
+   * to be right — over every article in development.
+   *
+   * Absent means *this store cannot say*. The card keeps its existing "we could
+   * not check" state, which is true, and nothing throws — a read must not
+   * refuse the way `visibilityStore.set` does, or the whole Metadata page goes
+   * down in dev to be principled about a field nobody can set there.
+   * docs/reusable/silent-success.md.
+   */
+  visibility?: VisibilityState;
 }
 
 /** A source the model consulted, from OpenRouter's `annotations`. See src/explain.ts. */

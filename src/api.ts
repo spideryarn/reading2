@@ -684,6 +684,50 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
     purpose: shelf.purpose ?? null,
     // The same `shelf` read that answers `purpose`. See ArticleMetadata.
     archivedAt: shelf.archivedAt ?? null,
+
+    /**
+     * **`visibility` is absent here, and absent is the answer.**
+     *
+     * Not omitted for want of plumbing: this store has no `visibility` column
+     * and nowhere to put one — `data/` is one directory per slug — so it cannot
+     * answer the question at all.
+     *
+     * It briefly reported `private`, on the reasoning that nothing *can* be
+     * shared here so `private` is the truth. That was wrong, and the argument
+     * against it is the one `requirePostgres` already makes on the public route
+     * (src/public/routes.ts): a store with no honest answer must refuse to
+     * answer rather than supply a plausible one. `private` is a claim this store
+     * is in no position to make, and the owner's sharing card would have drawn
+     * *"Only you can read this"* — confidently, with no way to be right — over
+     * every article in development. docs/reusable/silent-success.md.
+     *
+     * **Absent rather than thrown**, though, and that half of the earlier
+     * reasoning stands. `visibilityStore.set` refuses with a 501 on this store,
+     * which is right for a *write* with nowhere to land; doing the same for a
+     * read would take the whole Metadata page down in development to be
+     * principled about a field nobody can set there. The card has a "we could
+     * not check" state already, and that state is true.
+     *
+     * **The two stores disagree about this field for every article, and no test
+     * says so — because none compares them here.**
+     *
+     * Checked rather than assumed, and the first version of this comment got it
+     * wrong: it said `tests/store-parity.test.ts` compares this response, and
+     * that file does not mention `articleMetadata` at all. The only cross-store
+     * comparison of it is `tests/store-carry-forward.test.ts`, which reads
+     * `stages[].done` out of both and never looks at anything else. So the
+     * divergence introduced here is invisible to the suite, which is why it is
+     * written down here instead.
+     *
+     * A comment claiming a check that was never written is the failure this
+     * repo keeps having, and asserting one while *introducing* the divergence it
+     * was supposed to cover would have been a good example of it.
+     *
+     * If a whole-object comparison of `articleMetadata` is ever added, it will
+     * go red on this field immediately — Postgres answers and this store does
+     * not — and *that divergence is the feature working*. Whoever writes that
+     * test should compare the fields both stores can answer, not the object.
+     */
   };
 }
 
