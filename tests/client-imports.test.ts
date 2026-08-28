@@ -164,6 +164,30 @@ function importsOf(file: string): string[] {
   return scan(file).map((i) => i.spec);
 }
 
+/**
+ * **The rule, as a function**, so the sweep and the table below ask the same
+ * question of the same code.
+ *
+ * Split out on 2026-08-28: the sweep reads real files and today every shared
+ * module is a leaf, so it passes without exercising one interesting case. A
+ * rule inlined in the loop could only be tested by editing a real module, and
+ * an edit-based check is one whose target can move underneath it.
+ *
+ * `typeOnly` is in the parameter and not in the body, deliberately — see the
+ * long comment on the sweep for why the erased form is flagged anyway.
+ */
+function disqualifying(name: string, imports: Imported[]): string[] {
+  const out: string[] = [];
+  for (const { spec } of imports) {
+    if (spec.startsWith("node:")) out.push(`src/${name} → ${spec}`);
+    // A shared module reaching further into src/ can drag anything with it.
+    if (spec.startsWith("./") && !SHARED.has(spec.slice(2))) {
+      out.push(`src/${name} → ${spec}`);
+    }
+  }
+  return out;
+}
+
 describe("the client's imports", () => {
   it("never reaches out of src/web except to a shared pure module", () => {
     const offenders: string[] = [];
@@ -208,57 +232,97 @@ describe("the client's imports", () => {
    * the client bundles anyway. Flagging that would push somebody to duplicate a
    * type rather than share it, which is worse than the thing being prevented.
    *
-   * ## And a type-only import of a local module is the same case
+   * ## A local `import type` is NOT the same case, and that was decided the hard way
    *
-   * That argument never depended on dompurify being a *package*. The rule
-   * underneath is that **a shared module reaching further into `src/` can drag
-   * anything with it** — and a whole-statement `import type` cannot drag
-   * anything, because TypeScript deletes it before a bundler ever sees it.
+   * The tempting move is to read the paragraph above as a general rule about
+   * erasure — a whole-statement `import type` is deleted before a bundler sees
+   * it, so it cannot drag anything, so flagging it is a false positive. That
+   * relaxation was written on 2026-08-28 and **reverted the same afternoon**,
+   * and the reason is worth the paragraph because the argument for it is
+   * genuinely persuasive and will be made again.
    *
-   * The case that forced this, 2026-08-28: `src/messages.ts` takes
-   * `import type { EmbeddingReason } from "./embeddings.js"`, and the comment
-   * at `PLACING` in that file explains that the type-only spelling is
-   * *load-bearing* — `embeddings.ts` reaches back to `messages.ts` through
-   * `ai-call.ts`, so a value import there would close a cycle. A guard that
-   * flagged it would have been pushing somebody to duplicate a union rather
-   * than share it: exactly the outcome the dompurify paragraph above rejects.
+   * It is true about the *bundle* and beside the point about the *design*. The
+   * rule this file enforces is not only "do not break the browser build" — it
+   * is **shared modules stay leaves**. A type-only import is a real dependency
+   * in the source, and the fix is cheap and better every single time.
    *
-   * **`node:` is deliberately still absolute**, type import or not. A `node:`
-   * type in a module the browser loads erases just as cleanly, but it is a
-   * sentence about the shape of this code that is worth somebody stopping over,
-   * and the cost of being strict there is one conversation rather than a
-   * duplicated type.
+   * The evidence is from the same afternoon. `src/messages.ts` grew
+   * `import type { EmbeddingReason } from "./embeddings.js"`; this guard fired;
+   * and whoever owned that work moved `EmbeddingReason` into
+   * [`src/types.ts`](../src/types.ts) instead — unprompted, and the better
+   * outcome, because the shape both halves speak now lives in a module that
+   * imports nothing. The relaxation would have removed exactly that pressure and
+   * left the type where it was. Greg's team lead weighed both and reverted it.
    *
-   * The precision this rests on is in `Imported.typeOnly`, and it is the whole
-   * of the risk: `import { type A, b }` still emits the module, and waving that
-   * through would leave a check that reads as a check while permitting the one
-   * import it exists to stop.
+   * **Why dompurify above really is different**, since that is where the
+   * reasoning goes wrong: dompurify is a *package the client already bundles*,
+   * so there is no leaf to move the type into and the only alternative is
+   * duplicating it. `embeddings.ts` is ours, and there was a leaf.
+   *
+   * `node:` stays absolute for its own reason, unchanged by any of this: a node
+   * built-in named in a module the browser loads erases just as cleanly, but it
+   * is a sentence about the shape of this code worth somebody stopping over.
+   *
+   * So `Imported.typeOnly` is computed and **deliberately not consulted here**.
+   * It is kept because the test below rests on it: if this rule is ever revisited
+   * the distinction has to be trustworthy, and `import { type A, b }` — which
+   * still emits the module — must never be mistaken for the erased form.
    */
   it("keeps the shared modules free of node built-ins", () => {
     const impure: string[] = [];
     for (const name of SHARED) {
       const file = path.join(ROOT, "src", name.replace(/\.js$/, ".ts"));
-      for (const { spec, typeOnly } of scan(file)) {
-        if (spec.startsWith("node:")) impure.push(`src/${name} → ${spec}`);
-        // A shared module reaching further into src/ can drag anything with it
-        // — unless the statement erases, in which case there is no edge at all.
-        if (spec.startsWith("./") && !SHARED.has(spec.slice(2)) && !typeOnly) {
-          impure.push(`src/${name} → ${spec}`);
-        }
-      }
+      impure.push(...disqualifying(name, scan(file)));
     }
     expect(impure).toEqual([]);
   });
 
   /**
-   * **The scanner can tell the two spellings apart**, which is the assumption
-   * the rule above rests on and the one place it could go quietly wrong.
+   * **What the rule flags, stated as data.**
+   *
+   * The sweep above reads real files, so it can only ever exercise the imports
+   * somebody happens to have written — and today every shared module is a leaf,
+   * so it passes without touching a single interesting case. This is the same
+   * rule asked about each spelling directly.
+   *
+   * The type-only row is here **as an expected flag rather than as a deleted
+   * case**, so that the decision in the comment above is executable rather than
+   * only asserted in prose. If somebody relaxes the rule again, this goes red
+   * and points them at the paragraph explaining why it was already tried.
+   */
+  it("flags a local import however it is spelled, and a node: built-in", () => {
+    const local = (spec: string, typeOnly: boolean) => disqualifying("messages.js", [
+      { spec, typeOnly },
+    ]);
+
+    // A value import of a module that is not on the list: the original rule.
+    expect(local("./embeddings.js", false)).toHaveLength(1);
+    /* And the erased form too — this is the reverted relaxation, pinned. The
+       bundle does not care; "shared modules stay leaves" does. */
+    expect(local("./embeddings.js", true)).toHaveLength(1);
+    // A module that IS on the list is fine either way.
+    expect(local("./types.js", false)).toHaveLength(0);
+    expect(local("./types.js", true)).toHaveLength(0);
+    // `node:` is absolute, type import or not.
+    expect(local("node:fs", false)).toHaveLength(1);
+    expect(local("node:fs", true)).toHaveLength(1);
+    // A package is deliberately not flagged — the dompurify case.
+    expect(local("dompurify", false)).toHaveLength(0);
+  });
+
+  /**
+   * **The scanner can tell the two spellings apart.**
+   *
+   * The rule above no longer consults `typeOnly`, so this is not load-bearing
+   * today — it is kept because the distinction is what any future revisit would
+   * rest on, and because `import { type A, b }` still emits the module and must
+   * never be mistaken for the erased form.
    *
    * Asserted against fixture text rather than against a real file, because the
    * property is about the parse and not about any module's current contents —
-   * and because the dangerous form (`import { type A, b }`) is one nobody
-   * happens to have written in a shared module today, so a check that only read
-   * the repo would pass without ever exercising it.
+   * and because the dangerous form is one nobody happens to have written in a
+   * shared module today, so a check that only read the repo would pass without
+   * ever exercising it.
    */
   it("counts only a whole-statement type import as erased", () => {
     const fixture = path.join(ROOT, "node_modules", ".import-scan-fixture.ts");
