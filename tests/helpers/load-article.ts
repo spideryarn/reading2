@@ -69,7 +69,7 @@ import { type OwnerId, currentOwnerId, runAsOwner } from "../../src/owner.js";
 import { createFsArtifactStore } from "../../src/store/artifacts-fs.js";
 import { pgArtifactsIn } from "../../src/store/artifacts-pg.js";
 import { storeRawSource } from "../../src/store/blobs.js";
-import { violatesConstraint } from "../../src/store/db-errors.js";
+import { insertWhenSlotFree } from "./running-slot.js";
 import { mintAttempt } from "../../src/store/jobs.js";
 import {
   PublishRefused,
@@ -195,21 +195,23 @@ async function storeRawBytesFor(slug: string): Promise<void> {
 /**
  * Take the single running slot, run `body`, and give the slot back.
  *
- * **The retry is not defensive padding, and it covers two different refusals.**
- * `jobs_only_one_running` is a partial unique index over the *whole table*, so a
- * dev server mid-ingest or another suite's fixture will refuse this insert.
- * `jobs_active_slug` is narrower and covers `queued` as well as `running`: it
- * fires when this *article* already has a job in flight. Waiting can clear
- * either one — but neither can be cleared by waiting if the row is **wedged**,
- * which is what the timeout message has to say, because "try again later" is
- * useless advice when the answer is "delete the stuck row".
+ * **The wait for the slot is not defensive padding**, and it now lives in
+ * `insertWhenSlotFree` — see `./running-slot.ts` for which two refusals it
+ * covers and why waiting cannot clear a wedged row. It moved there on
+ * 2026-08-28 because a suite that had never met this grew the same failure:
+ * one of it, not one per file that gets bitten.
  *
- * **The job is deleted rather than marked done**, and the delete is fenced on
- * the token. Marking it `done` in a `finally` would claim success for a body
- * that threw, and — worse — an unfenced update could overwrite a job something
- * else had already failed, leaving synthetic history that reads as a real
- * ingest. Deleting a row this function created, only while it still holds the
- * claim, says the true thing: this job never existed. GPT Sol, 2026-08-28.
+ * **The job is deleted rather than marked done.** Marking it `done` in a
+ * `finally` would claim success for a body that threw, and — worse — an
+ * unfenced update could overwrite a job something else had already failed,
+ * leaving synthetic history that reads as a real ingest. Deleting the row says
+ * the true thing: this job never existed.
+ *
+ * The delete matches on `jobs.id` **alone**, not on the attempt token — this
+ * docstring claimed otherwise until GPT Sol read the two together on
+ * 2026-08-28. That is safe here only because the id is minted inside this call
+ * and names nothing else; it is not a fence, and nothing should rely on it as
+ * one.
  */
 async function withRunningJob<T>(
   slug: string,
@@ -217,43 +219,24 @@ async function withRunningJob<T>(
   body: (job: { id: string; attemptId: string }) => Promise<T>,
 ): Promise<T> {
   const db = getDb();
-  for (let attempt = 1; ; attempt++) {
-    const job = { id: mintId(), attemptId: mintAttempt() };
-    try {
-      await db.insert(jobs).values({
-        id: job.id,
-        ownerId,
-        slug,
-        steps: FIXTURE_STEPS,
-        status: "running",
-        attemptId: job.attemptId,
-        leaseExpiresAt: new Date(Date.now() + 600_000),
-        workKey: `fixture-${job.id}`,
-      });
-    } catch (err) {
-      /* `violatesConstraint` walks the whole error chain. Reading
-         `err.cause.constraint` at one level misses Drizzle's wrapper, and a miss
-         here rethrows a contended slot as though it were a bug. */
-      const contended =
-        violatesConstraint(err, "jobs_only_one_running") ||
-        violatesConstraint(err, "jobs_active_slug");
-      if (!contended) throw err;
-      if (attempt >= 40) {
-        throw new Error(
-          `could not start a job for "${slug}" in 20s: either another job holds the single ` +
-            "running slot, or this article already has one queued or running. If nothing is " +
-            "actually working, a row is wedged and waiting will not clear it — look for a " +
-            "`queued` or `running` row in `jobs` and remove it.",
-        );
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      continue;
-    }
-    try {
-      return await body(job);
-    } finally {
-      await db.delete(jobs).where(eq(jobs.id, job.id));
-    }
+  const job = await insertWhenSlotFree(slug, async () => {
+    const started = { id: mintId(), attemptId: mintAttempt() };
+    await db.insert(jobs).values({
+      id: started.id,
+      ownerId,
+      slug,
+      steps: FIXTURE_STEPS,
+      status: "running",
+      attemptId: started.attemptId,
+      leaseExpiresAt: new Date(Date.now() + 600_000),
+      workKey: `fixture-${started.id}`,
+    });
+    return started;
+  });
+  try {
+    return await body(job);
+  } finally {
+    await db.delete(jobs).where(eq(jobs.id, job.id));
   }
 }
 

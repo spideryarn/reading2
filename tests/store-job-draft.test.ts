@@ -28,6 +28,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, jobs } from "../src/db/schema.js";
 import { mintId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
+import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
 import { NotTheLiveAttempt, openOrBeginJobDraft } from "../src/store/pg-revisions.js";
 import type { JobStep } from "../src/types.js";
@@ -82,22 +83,31 @@ async function claimedJob(slug: string): Promise<{ id: string; attemptId: string
       .set({ status: "done", attemptId: null, leaseExpiresAt: null, finishedAt: new Date() })
       .where(and(inArray(jobs.id, made), eq(jobs.status, "running")));
   }
-  const id = mintId();
-  made.push(id);
-  const attemptId = mintAttempt();
-  await getDb()
-    .insert(jobs)
-    .values({
-      id,
-      ownerId: DEV_OWNER_ID,
-      slug,
-      steps: STEPS,
-      status: "running",
-      attemptId,
-      leaseExpiresAt: new Date(Date.now() + 600_000),
-      workKey: `wk-${id}`,
-    });
-  return { id, attemptId };
+  /* The running slot is global (`jobs_only_one_running` is unique on `(true)`),
+     so a concurrent suite or a dev server mid-ingest owns it as legitimately as
+     we do. Without this wait, losing that race surfaced here as a duplicate-key
+     error against whichever case inserted second — a failure naming this file
+     for something that was never its fault. */
+  return await insertWhenSlotFree(slug, async () => {
+    const id = mintId();
+    const attemptId = mintAttempt();
+    await getDb()
+      .insert(jobs)
+      .values({
+        id,
+        ownerId: DEV_OWNER_ID,
+        slug,
+        steps: STEPS,
+        status: "running",
+        attemptId,
+        leaseExpiresAt: new Date(Date.now() + 600_000),
+        workKey: `wk-${id}`,
+      });
+    // Only once the row exists: `made` drives teardown, and an id that never
+    // inserted would have teardown chasing a row that is not there.
+    made.push(id);
+    return { id, attemptId };
+  });
 }
 
 async function cleanUp(slug: string): Promise<void> {
