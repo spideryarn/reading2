@@ -65,10 +65,10 @@ export interface AuthedUser {
  * **The mark that says "this came out of `requireUser`", and nothing else can
  * wear it.**
  *
- * A `unique symbol` in module scope. It is not exported, so no other file can
- * write this key — an object literal cannot be given it, `as` cannot conjure
- * it, and `JSON.parse` cannot produce it. Only `requireUser` below stamps it,
- * and only after every claim has been checked.
+ * A `unique symbol` in module scope, used **only as a type** — nothing writes it
+ * as a property, and `verified` below says why the property version was not
+ * enough. What it does is make `VerifiedUser` a type no other file can satisfy:
+ * an object literal cannot be given this key, and `as` cannot conjure it.
  *
  * Added on 2026-08-28 for docs/plans/public-read-only-access.md, on GPT Sol's
  * answer 2. Making the authenticated dispatcher take a required `AuthedUser`
@@ -76,7 +76,48 @@ export interface AuthedUser {
  * `{ id, email }` satisfies it, so it does not encode the one fact that
  * matters, which is where the value came from.
  */
-const VERIFIED_USER: unique symbol = Symbol("spideryarn.verifiedUser");
+declare const VERIFIED_USER: unique symbol;
+
+/**
+ * **Provenance by identity, not by property**, and the difference is the whole
+ * of GPT Sol's finding 1 on the built code, 2026-08-28.
+ *
+ * The first version added a symbol-keyed property and `assertVerifiedUser` read
+ * it back. Reading a property asks *"does this answer yes"*, which is a much
+ * weaker question than *"is this the object we made"* — and all three of Sol's
+ * cases were run against the code here before this was changed:
+ *
+ * - a `Proxy` whose `get` trap returns `true` for any symbol key — **accepted**;
+ * - `Object.create(realUser)`, inheriting the brand and then overwriting `id` —
+ *   **accepted**, with the new id;
+ * - a genuinely branded user whose `id` was reassigned after verification —
+ *   **allowed**, because `defineProperty` locked the symbol and left `id`
+ *   writable.
+ *
+ * The forged or altered id then reaches `setRequestOwner` in src/routes.ts,
+ * which is the value every store read filters on.
+ *
+ * A `WeakSet` answers the right question: membership is object identity, so a
+ * proxy is a different object, an heir is a different object, and neither can
+ * be added because this set is not exported. `Object.freeze` closes the third
+ * case, which no membership test could.
+ *
+ * ## What this defends against, honestly
+ *
+ * **The attacker is our own future code, not a stranger.** Nobody outside this
+ * process can construct an object and hand it to a dispatcher, and no request
+ * shape produces one. What this prevents is a refactor six months from now that
+ * builds a user-shaped object for a test seam, a cache or a "system" caller and
+ * passes it in — and a line that reassigns `user.id` between the gate and
+ * `setRequestOwner`, which would be a one-character bug with the blast radius of
+ * the whole isolation.
+ *
+ * A smaller claim than "unforgeable", and the honest one. It is also exactly
+ * what the brand is for: the failure this codebase has actually had was not an
+ * intruder, it was the gate proving a person existed and then throwing the
+ * identity away.
+ */
+const verified = new WeakSet<object>();
 
 /**
  * A user the gate produced, as opposed to one somebody built.
@@ -106,11 +147,7 @@ export type VerifiedUser = AuthedUser & {
  * error for the same kind of reason.
  */
 export function assertVerifiedUser(value: unknown): asserts value is VerifiedUser {
-  if (
-    value === null ||
-    typeof value !== "object" ||
-    (value as Record<symbol, unknown>)[VERIFIED_USER] !== true
-  ) {
+  if (value === null || typeof value !== "object" || !verified.has(value)) {
     throw Object.assign(
       new Error(
         "The authenticated API was dispatched with a user that did not come from " +
@@ -343,16 +380,16 @@ export async function requireUser(
     );
   }
 
-  /* **The brand goes on last, after every refusal above.** Not at the top of
-     the function and not on the claims: the whole content of the mark is
+  /* **Frozen first, then remembered, and both last.** Not at the top of the
+     function and not on the claims: the whole content of the mark is
      "everything in this function said yes", so anywhere earlier would be a
-     promise about a check that had not run yet. Non-enumerable, so it does not
-     turn up in an `Object.keys`, a spread or a log line — and a symbol key is
-     never serialised by `JSON.stringify` at all. */
-  return Object.defineProperty(user, VERIFIED_USER, {
-    value: true,
-    enumerable: false,
-    writable: false,
-    configurable: false,
-  }) as VerifiedUser;
+     promise about a check that had not run yet.
+
+     `freeze` before `add` reads in the right order but is not the load-bearing
+     part — what is, is that both happen before the value escapes. A caller
+     holding a reference is the only thing that could change `id` afterwards,
+     and `setRequestOwner` is one frame away. */
+  Object.freeze(user);
+  verified.add(user);
+  return user as VerifiedUser;
 }

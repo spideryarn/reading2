@@ -202,9 +202,34 @@ export const PUBLIC_ROUTES: readonly PublicRoute[] = [
  * 400 rather than 404, matching the authenticated routes: the request is
  * malformed, and "not found" would send whoever sent it looking for a missing
  * article.
+ *
+ * ## And the decode itself can throw
+ *
+ * `decodeURIComponent("%")` raises `URIError`, which names no status, so the
+ * shared catch in `serveApi` mapped it to **500** — `/api/public/article/%` was
+ * an internal server error rather than a bad request. GPT Sol's finding 7,
+ * 2026-08-28. The route pattern admits `%` deliberately (a slug may legitimately
+ * arrive percent-encoded), so this is reachable by anybody typing a URL.
+ *
+ * Wrong in two ways at once, and the second is the one that matters: a 500 says
+ * *we are broken* to a visitor who merely mistyped, and a public 500 is also a
+ * line in the error tracker — `captureFailure` fires at status >= 500 — so a
+ * crawler walking malformed URLs would fill Sentry with reports of itself.
+ *
+ * The same fixed 400, and deliberately **not** interpolating the offending
+ * value on this path: `JSON.stringify` of an undecodable string is safe enough,
+ * but every `httpError` message here is written to a log, and the rule in
+ * docs/project/logging.md is that a message contains nothing but words we chose.
+ * The valid-but-not-a-slug case above already interpolates, which is a
+ * pre-existing choice this is not the place to revisit.
  */
 function slugFrom(match: RegExpExecArray): string {
-  const value = decodeURIComponent(match[1] ?? "");
+  let value: string;
+  try {
+    value = decodeURIComponent(match[1] ?? "");
+  } catch {
+    throw httpError(400, "That is not a slug we can read.");
+  }
   if (!isSlug(value)) throw httpError(400, `Not a slug: ${JSON.stringify(value)}`);
   return value;
 }

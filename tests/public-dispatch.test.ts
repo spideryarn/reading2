@@ -143,6 +143,93 @@ describe("the authenticated dispatcher's one parameter", () => {
   });
 
   /**
+   * **The three ways the first version of the brand could be forged**, each of
+   * which was demonstrated against the code before it was changed. GPT Sol's
+   * finding 1, 2026-08-28.
+   *
+   * The brand used to be a symbol-keyed property and the check used to read it
+   * back — which asks *"does this answer yes"* rather than *"is this the object
+   * we made"*. It is now a module-private `WeakSet`, so membership is identity
+   * and none of these is the object that was added.
+   *
+   * The stake is not abstract: whatever id reaches `serveAuthenticatedApi` is
+   * the one handed to `setRequestOwner`, and that is the value every store read
+   * filters on.
+   */
+  describe("and the ways it used to be forgeable", () => {
+    async function dispatch(user: unknown) {
+      return runInRequest(() => serveAuthenticatedApi(user as never, envelope("/api/library")));
+    }
+
+    /** A proxy that says `true` to any symbol read. Passed the property check. */
+    it("refuses a proxy that answers yes to every symbol", async () => {
+      const proxy = new Proxy(
+        { id: "00000000-0000-4000-8000-00000000dead", email: "forged@example.test" },
+        { get: (target, key) => (typeof key === "symbol" ? true : Reflect.get(target, key)) },
+      );
+      await expect(dispatch(proxy)).rejects.toThrow(/did not come from requireUser/);
+    });
+
+    /**
+     * An object *inheriting* from a genuinely branded user, with its own `id`.
+     * The property check walked the prototype chain and found the real brand.
+     */
+    it("refuses an heir of a real user wearing a different id", async () => {
+      const req = Object.assign((async function* () {})(), {
+        method: "GET",
+        url: "/api/library",
+        headers: AUTHED_HEADERS,
+      }) as unknown as IncomingMessage;
+      const real = await requireUser(req, acceptAny);
+
+      /* `defineProperty` rather than assignment, and the reason is itself a
+         result: `real` is frozen now, so its `id` is read-only and a plain
+         `heir.id = …` *throws* — the freeze blocks the naive version of this
+         attack on its own. An own property shadows the inherited one, which
+         gets past the freeze and leaves only the identity question, which is
+         what this case is here to ask. */
+      const heir = Object.create(real) as { id: string };
+      Object.defineProperty(heir, "id", {
+        value: "00000000-0000-4000-8000-00000000beef",
+        enumerable: true,
+      });
+      /* The inheritance is real — this is not a test of a broken fixture. */
+      expect(Object.getPrototypeOf(heir)).toBe(real);
+      expect(heir.id).not.toBe(real.id);
+      /* And it really does inherit the email, so it is user-shaped throughout. */
+      expect(heir).toHaveProperty("email", real.email);
+
+      await expect(dispatch(heir)).rejects.toThrow(/did not come from requireUser/);
+    });
+
+    /**
+     * And the one no membership test could catch: changing a **real** branded
+     * user's id after the gate has vouched for it. `defineProperty` locked the
+     * symbol and left `id` writable, so this used to succeed silently and the
+     * request would run as somebody else.
+     */
+    it("will not let a verified user's id be changed after the fact", async () => {
+      const req = Object.assign((async function* () {})(), {
+        method: "GET",
+        url: "/api/library",
+        headers: AUTHED_HEADERS,
+      }) as unknown as IncomingMessage;
+      const real = await requireUser(req, acceptAny);
+      const before = real.id;
+
+      /* Non-strict assignment on a frozen object is silently ignored rather than
+         throwing, and vitest runs as a module, so the assertion is the *value*
+         rather than a rejection — checking for a throw would pass on a freeze
+         that had been removed in a non-strict context. */
+      expect(() => {
+        (real as { id: string }).id = "00000000-0000-4000-8000-00000000cafe";
+      }).toThrow();
+      expect(real.id).toBe(before);
+      expect(Object.isFrozen(real)).toBe(true);
+    });
+  });
+
+  /**
    * **The positive control, and the three above are worthless without it.**
    *
    * A boundary that refuses everything passes every refusal test ever written.
@@ -291,6 +378,38 @@ describe("the closed public namespace", () => {
     const r = await call("GET", "/api/public/article/..%2F..%2Fetc");
     expect(r.status).toBe(400);
     expect(r.body.error).toMatch(/Not a slug/);
+  });
+
+  /**
+   * **And percent-encoding that will not decode is a 400 too, not a 500.**
+   *
+   * `decodeURIComponent("%")` raises `URIError`, which names no status, so the
+   * shared catch mapped it to 500 — `/api/public/article/%` reported *we are
+   * broken* to a visitor who had merely mistyped. GPT Sol's finding 7.
+   *
+   * The second half is why it is worth more than tidiness: `captureFailure`
+   * fires at status >= 500, so a crawler walking malformed URLs would have
+   * filled the error tracker with reports of itself. An error tracker full of
+   * mistyped URLs is an error tracker nobody reads — which is the reasoning
+   * src/routes.ts already gives for not reporting 404s.
+   *
+   * Every route in the inventory, because the decode is shared and a route
+   * added later gets it for free — the point of `PUBLIC_ROUTES`.
+   */
+  it("400s percent-encoding that cannot be decoded, rather than 500ing", async () => {
+    for (const route of PUBLIC_ROUTES) {
+      for (const bad of ["%", "%2", "%zz", "%E0%A4%A", "a%", "%C3%28"]) {
+        const r = await call("GET", route.path(bad));
+        expect({ route: route.name, bad, status: r.status }).toEqual({
+          route: route.name,
+          bad,
+          status: 400,
+        });
+        /* Never the raw `URIError` text, and never a stack. */
+        expect(String(r.body.error)).not.toMatch(/URI|malformed/i);
+        expect(r.headers["Cache-Control"]).toBe("no-store");
+      }
+    }
   });
 
   /**
