@@ -111,11 +111,17 @@ The public namespace gets the same treatment, in the other direction.
 **1. `ownedSlug()` is the whole of the isolation, and it is not optional.**
 
 ```ts
-// src/store/pg.ts
+// src/store/owned-slug.ts
 export function ownedSlug(slug: string) {
   return and(eq(articles.slug, slug), eq(articles.ownerId, currentOwnerId()));
 }
 ```
+
+**It moved on 2026-08-28, the day after this plan was written.** `ownedSlug` used to live in `pg.ts`
+and now lives in [`src/store/owned-slug.ts`](../../src/store/owned-slug.ts), because `pg.ts` imports
+`src/api.ts` and so put the whole read layer behind a one-line predicate. `pg.ts` re-exports it, so
+no caller changed — but the guard below now exempts **two** files by name rather than one, and
+anything this plan says about "beside `ownedSlug` in `pg.ts`" is stale.
 
 [`tests/owner-isolation.test.ts`](../../tests/owner-isolation.test.ts) asserts that **no file under
 `src/store/` writes `eq(articles.slug, …)` outside `pg.ts`**, precisely because five near-identical
@@ -468,6 +474,58 @@ than a wall.
 The read-only chrome is then keyed on **"is this mine"**, not on **"am I signed in"** — which is the
 right question anyway, and the one the signed-in-stranger case would otherwise have forced us to
 retrofit.
+
+---
+
+## What other people have already learned
+
+Greg asked for a look at how analogous products draw this line. The working is in
+[public-access-how-others-do-it.md](../research/public-access-how-others-do-it.md); four findings
+change something here, and three confirm a decision already made.
+
+**Indexability must be a separate switch from shareability, and it is stage 2's biggest trap.**
+OpenAI shipped shared ChatGPT links with a *"make this chat discoverable"* checkbox. People read it
+as *"share this with one person"*, thousands of conversations carrying names, emails and medical and
+business detail were indexed by Google, and OpenAI withdrew the feature outright. Notion keeps the
+two apart — *"Share to web"* is one control and search-engine indexing is a second, explicit one.
+So when stage 2 arrives, **`indexable` is a new column, not a third value of `visibility`**, and the
+two sentences in the UI have to be impossible to mistake for one another. This plan already defers
+indexing, which is the right order; the mistake would be to arrive there and overload the flag we
+already have.
+
+**There is a clean precedent for exactly what Greg asked for, and it is ChatGPT's share link:**
+freeze the output at share time, serve that snapshot to anybody, require an account for anything that
+would call the model again. Ours reads live rather than freezing, which is better — an owner who
+regenerates a summary wants the shared link to show the new one — but it is worth knowing the
+snapshot design exists and is the one documented answer to *"how do you show AI output to a stranger
+without paying for it again"*.
+
+**The call to action is "make a free account", not "unlock this page".** The New York Times' own
+reported figure is that free registration on its own lifted paid conversion by more than 40%, ahead
+of any change to the meter. Substack pitches the ongoing free thing rather than the one document.
+That settles the wording in [`src/messages.ts`](../../src/messages.ts): the ask is to join, placed
+next to the specific thing the visitor just found they could not do.
+
+**Nobody can tell us about the canonical tag.** No source specific to reader or annotation products
+was found either way, so [§ The one tension](#the-one-tension-in-that-list-said-out-loud) rests on
+general SEO practice and should be revisited once a document or two is actually public. Likewise the
+copyright posture: nothing found says whether a Readability-extracted rehost sits where an ordinary
+user upload sits, and [§ Rights](#rights-and-takedown-the-thing-a-canonical-tag-does-not-fix) wants a
+real legal read rather than an inference from Instapaper's policy.
+
+And three that confirm rather than change:
+
+- **Do not gate the prose.** Every product that hard-walled logged-out reading either reversed it or
+  kept paying for it. Twitter's 2023 login wall took its Google index from 471 million pages to 180
+  million and it was quietly reversed within days; Quora never reversed and is still complained
+  about. Greg's first decision — the full article, same as the owner — is the one with the evidence
+  behind it.
+- **Nothing about the owner.** No researched product puts the owner's identity in front of an
+  anonymous viewer by design. Google Docs is the exception and only because the document *is* the
+  owner's own file being handed over.
+- **Opt-in, per document, before the public surface exists.** Bluesky's 2023 backlash was not about
+  being public by default; it was shipping the logged-out web view *before* giving existing users the
+  toggle. Ours is off by default and ticked by hand, which is the other order.
 
 ---
 
@@ -830,4 +888,8 @@ not thought about at all.
 - [metadata-page.md](metadata-page.md) — where the Access & Sharing card goes, and why it was dropped the first time
 - [reader-profile.md](../project/reader-profile.md) — `profileHash`, and why a variant table is the honest shape
 - [copy.md](../project/copy.md) — the rules for every sentence a visitor reads
+- [public-access-how-others-do-it.md](../research/public-access-how-others-do-it.md) — how X, Bluesky,
+  Notion, Figma, Readwise and ChatGPT draw this same line, and what it cost the ones who got it wrong
 - [public-read-only-access-review-sol.md](public-read-only-access-review-sol.md) — the review in full
+- [public-read-only-stage1-input-sol.md](public-read-only-stage1-input-sol.md) — Sol's design input
+  for the build, which is the specification stage 1 is being written against
