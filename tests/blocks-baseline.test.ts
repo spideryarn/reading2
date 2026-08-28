@@ -26,11 +26,16 @@
  * | swallow a throwing store read | *lets an infrastructure fault through untouched* |
  * | drop `assertIdsCarried` | *stops a run that kept none of the previous ids* |
  *
- * ## The Postgres half needs a database and says so
+ * ## The Postgres half needs a database and says so out loud
  *
- * It skips loudly when there is none, like every other Postgres suite here —
- * and the skip matters, because "0 failures" from a suite that never ran looks
- * exactly like a pass.
+ * It skips when there is none — but unlike every other Postgres suite here, it
+ * says so under the reporter `npm test` actually uses. Those all warn with
+ * `console.warn`, which vitest's default reporter does not print, so in practice
+ * they skip in silence. `process.stderr.write` is what gets through; the
+ * measurement behind that is beside the probe below.
+ *
+ * The distinction is worth the paragraph, because "0 failures" from a suite that
+ * never ran looks exactly like a pass.
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -290,22 +295,94 @@ describe("the HTML stage 3 consumes", () => {
 /* --------------------------------------- the argument that must not go missing -- */
 
 /**
- * **Nothing in `src/` may call `splitIntoBlocks` with one argument.**
+ * Every `splitIntoBlocks(…)` call in one file, with its argument list.
+ *
+ * **A balanced-paren scan over the whole file, not a line regex, and the first
+ * version was the line regex.** It read
+ * `/\bsplitIntoBlocks\(\s*[^,()]*\)/` — no comma before the closing bracket —
+ * which cannot cross a nested paren and cannot see past a newline. So it caught
+ * `splitIntoBlocks(html)` and **missed the two shapes that matter**:
+ *
+ * ```
+ * splitIntoBlocks(await store.read(slug, "extract", "extractedHtml"))   ← missed
+ * splitIntoBlocks(                                                     ← missed
+ *   html,
+ * )
+ * ```
+ *
+ * The first of those is not a curiosity. It is *the* shape a post-D conversion
+ * will take — read the HTML from the store, inline, in one call — so the guard
+ * missed the exact form of the exact trap it was written for, while passing a
+ * red check against the toy version. That is the failure mode this repo keeps
+ * writing down: a check that agrees with the code because it shares an
+ * assumption with it, and a red that proved less than it looked like.
+ *
+ * The scan takes the text from the opening bracket to its match, counting
+ * depth, and then asks whether that text has a comma at depth zero.
+ *
+ * **What it still cannot see**, stated rather than discovered later: a bracket
+ * or a comma inside a string literal or a comment is counted as code. Nothing
+ * in this repo calls stage 3 that way, and the failure direction is a false
+ * *positive* — a complaint about a call that is fine — which somebody reads and
+ * corrects, rather than a silent miss.
+ */
+function callsIn(source: string): { line: number; args: string }[] {
+  const needle = "splitIntoBlocks(";
+  const found: { line: number; args: string }[] = [];
+
+  for (let at = source.indexOf(needle); at !== -1; at = source.indexOf(needle, at + 1)) {
+    /* The declaration is not a call. Checked on the text before it rather than
+       on the line, since the scan is no longer line-based. */
+    if (source.slice(0, at).trimEnd().endsWith("function")) continue;
+
+    const open = at + needle.length - 1;
+    let depth = 0;
+    let i = open;
+    for (; i < source.length; i++) {
+      const ch = source[i];
+      if (ch === "(") depth++;
+      else if (ch === ")" && --depth === 0) break;
+    }
+    /* An unbalanced tail means the file does not parse; that is somebody else's
+       error and not this test's to report. */
+    if (depth !== 0) continue;
+
+    found.push({
+      line: source.slice(0, at).split("\n").length,
+      args: source.slice(open + 1, i),
+    });
+  }
+  return found;
+}
+
+/** Does this argument list separate two arguments, rather than merely contain a comma? */
+function hasTwoArguments(args: string): boolean {
+  let depth = 0;
+  for (const ch of args) {
+    if (ch === "(" || ch === "[" || ch === "{") depth++;
+    else if (ch === ")" || ch === "]" || ch === "}") depth--;
+    else if (ch === "," && depth === 0) return true;
+  }
+  return false;
+}
+
+/**
+ * **Nothing in `src/` may call `splitIntoBlocks` without its baseline.**
  *
  * The trap this closes, which is specific and worth stating: landing D deletes
  * `dir` and `htmlFile` from `StepContext`, so the code that calls stage 3 *has*
  * to be edited — that part is safe, because it will not compile. What is not
  * safe is the shape of the edit. `splitIntoBlocks(html, previous?: Block[])`
  * takes its baseline **optionally**, so a conversion that reads the HTML from
- * the store and writes `splitIntoBlocks(html)` compiles cleanly, runs green,
- * and silently re-mints every id in the article.
+ * the store and writes `splitIntoBlocks(await store.read(…))` compiles cleanly,
+ * runs green, and silently re-mints every id in the article.
  *
  * `runBlocks`'s `previous` is required, which closes the production path the
  * strong way. This closes the one underneath it.
  *
- * **Why a grep and not a required parameter.** Making the second argument
- * required would touch 81 call sites across four test files — one of which
- * belongs to another session's in-flight work — and those tests pass one
+ * **Why a source scan and not a required parameter.** Making the second
+ * argument required would touch 81 call sites across four test files — one of
+ * which belongs to another session's in-flight work — and those tests pass one
  * argument *legitimately*: they are exercising the first-ingest path, which is a
  * real case. Forcing all of them to write `, undefined` would be noise that
  * looks like rigour and teaches nothing. The precedent for reading the source
@@ -332,30 +409,58 @@ describe("the baseline argument", () => {
     };
     await walk(root);
 
-    /* A call with no comma before its closing bracket — `splitIntoBlocks(x)` —
-       and not `splitIntoBlocks(x, y)`. The declaration is skipped by requiring
-       something other than a type annotation in front of the bracket. */
-    const oneArgument = /\bsplitIntoBlocks\(\s*[^,()]*\)/;
     const offenders: string[] = [];
     for (const file of files) {
       const source = await readFile(file, "utf-8");
-      source.split("\n").forEach((line, i) => {
-        if (/function splitIntoBlocks/.test(line)) return;
-        if (oneArgument.test(line)) offenders.push(`${path.relative(root, file)}:${i + 1}`);
-      });
+      for (const call of callsIn(source)) {
+        if (!hasTwoArguments(call.args)) {
+          offenders.push(`${path.relative(root, file)}:${call.line}`);
+        }
+      }
     }
 
     expect(offenders).toEqual([]);
   });
 
-  it("would notice — the check is run against a call that omits it", () => {
-    /* A check that has never been red is not evidence, and a grep over a
-       directory that happens to be clean is exactly that. So the pattern is
-       exercised here on both shapes, in this file, where it cannot go stale
-       without failing. */
-    const oneArgument = /\bsplitIntoBlocks\(\s*[^,()]*\)/;
-    expect(oneArgument.test("  const r = splitIntoBlocks(html);")).toBe(true);
-    expect(oneArgument.test("  const r = splitIntoBlocks(html, previous);")).toBe(false);
+  it("would notice each shape a real conversion could take", () => {
+    /* A check that has never been red is not evidence, and a scan over a
+       directory that happens to be clean is exactly that — so the scanner is
+       exercised here on every shape, in this file, where it cannot rot without
+       failing.
+
+       **The nested-call case is the one that matters**, because it is what a
+       post-D conversion actually looks like and because the first version of
+       this check missed it while passing its red test. Anything added here
+       should be a shape somebody might really write, not a variation that
+       happens to be easy to match. */
+    const omits = (source: string) =>
+      callsIn(source).map((call) => hasTwoArguments(call.args) === false);
+
+    expect(omits("const r = splitIntoBlocks(html);")).toEqual([true]);
+    expect(omits("const r = splitIntoBlocks(html, previous);")).toEqual([false]);
+
+    // The realistic post-D shape: the HTML read inline, in one call.
+    expect(
+      omits('const r = splitIntoBlocks(await store.read(slug, "extract", "extractedHtml"));'),
+    ).toEqual([true]);
+    // …and the same thing done correctly.
+    expect(
+      omits('const r = splitIntoBlocks(await store.read(slug, "extract", "extractedHtml"), prev);'),
+    ).toEqual([false]);
+
+    // Split across lines, which a line-based check cannot see at all.
+    expect(omits("const r = splitIntoBlocks(\n  html,\n);")).toEqual([false]);
+    expect(omits("const r = splitIntoBlocks(\n  html\n);")).toEqual([true]);
+
+    // An object or array argument holds commas that separate nothing.
+    expect(omits("const r = splitIntoBlocks(pick({ a: 1, b: 2 }));")).toEqual([true]);
+    expect(omits("const r = splitIntoBlocks(html, [a, b]);")).toEqual([false]);
+
+    // The declaration is not a call.
+    expect(omits("export function splitIntoBlocks(html: string, previous?: Block[]) {")).toEqual([]);
+
+    // Two calls in one file are two answers, not one.
+    expect(omits("splitIntoBlocks(a, b);\nsplitIntoBlocks(c);")).toEqual([false, true]);
   });
 });
 
@@ -425,48 +530,53 @@ if (process.env.DATABASE_URL) {
   }
   await pool.end();
 }
-/* **Unconditional, and it took a run to notice why.** The first version warned
-   only inside the `if`, so the one case that produces no warning at all was a
-   missing `DATABASE_URL` — a silent skip, which is the exact thing this block is
-   supposed to make impossible. Every road to `reachable === false` says why. */
-if (!reachable) console.warn(`\n  ⚠ the Postgres half of this file is SKIPPING: ${why}\n`);
-const when = reachable ? describe : describe.skip;
-
 /**
- * **One test that always runs, and whose name is the reason.**
+ * **Say, under the reporter `npm test` actually uses, that these did not run.**
  *
- * `describe.skip` hides four cases behind the word "skipped", so the reason is
- * put in a test name, where `--reporter=verbose` shows it beside the four that
- * did not run.
+ * `process.stderr.write`, and the reason it is not `console.warn` is the whole
+ * content of this comment — three attempts got it wrong before a measurement got
+ * it right.
  *
- * **And under the default reporter it is still invisible, which is worth saying
- * rather than leaving somebody to discover.** An earlier version of this comment
- * claimed a test name is printed by "every reporter". It is not. Vitest 4's
- * default reporter prints counts and nothing else — not passing test names, and
- * not `console.warn` either, from collection *or* from inside a test body. Both
- * were measured, by grepping a default run for the message and getting zero.
+ * | mechanism | shown by vitest 4.1.11's default reporter |
+ * |---|---|
+ * | `it.skip("reason in the name")` | no |
+ * | `it.todo("reason in the name")` | no |
+ * | `console.warn` at module level | no |
+ * | `console.warn` **inside a passing test** | no |
+ * | `ctx.annotate(msg, "warning" / "notice")` | no |
+ * | **`process.stderr.write(…)`** | **yes** |
  *
- * So `npm test` shows `4 skipped` and no cause, and there is no way to change
- * that short of failing — which would redden the suite for everyone without a
- * local Postgres, and a missing database is a fact about a laptop rather than a
- * defect. The reason lives here and one `--reporter=verbose` away. That is the
- * honest state of it, and the limitation is recorded in
- * docs/project/testing.md § a suite that cannot run.
+ * All six were measured in a throwaway suite, not reasoned about, and the five
+ * negatives are the useful part: they are what stops the next person re-running
+ * the same probes.
+ *
+ * **The rule they add up to**, which is not the one this file claimed twice:
+ * it is *not* that the reporter swallows collection-time output. Vitest's
+ * default reporter swallows **intercepted `console` output from anything that is
+ * not failing, wherever it happens**. The interception is the mechanism, not the
+ * timing. That is why moving the warning into a test body did not help, and why
+ * putting the reason in a test name was never going to work — the default
+ * reporter prints counts, not names. `process.stderr.write` is not intercepted,
+ * so it goes straight out, from module scope, and survives a multi-file run
+ * (checked against this file and `tests/blocks.test.ts` together).
+ *
+ * **Unconditional, and it took a run to notice why.** The first version warned
+ * only inside `if (process.env.DATABASE_URL)`, so the one case that printed
+ * nothing at all was a missing `DATABASE_URL` — a silent skip, inside the block
+ * written to prevent silent skips. Every road to `reachable === false` now says
+ * why.
+ *
+ * Not a failing test, deliberately: a missing database is a fact about a laptop
+ * rather than a defect, and reddening `npm test` for everyone without a local
+ * Postgres is not what a skip is for.
  */
-describe("the Postgres half of this file", () => {
-  it(
-    reachable
-      ? "is running — the database has the columns src/store/artifacts-pg.ts selects"
-      : `is NOT RUNNING, and these assertions have not executed: ${why}`,
-    () => {
-      /* Deliberately not `expect(reachable).toBe(true)`. A missing database is
-         not a failure — it is a fact about this laptop, and the name has just
-         stated it. Failing here would make `npm test` red for everybody without
-         a local Postgres, which is not what the skip is for. */
-      expect(typeof why).toBe("string");
-    },
+if (!reachable) {
+  process.stderr.write(
+    `\n  ⚠ the Postgres half of tests/blocks-baseline.test.ts is NOT RUNNING.\n` +
+      `    These four assertions have not executed: ${why}\n\n`,
   );
-});
+}
+const when = reachable ? describe : describe.skip;
 
 when("the baseline, over the Postgres store", () => {
   const SLUG = "test-blocks-baseline";
