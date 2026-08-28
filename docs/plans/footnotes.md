@@ -105,7 +105,7 @@ Readability has now been **measured** rather than assumed, by running the real `
 |---|---|---|---|---|
 | `gwern.html` | 34 footnote refs | 100%, structure intact | `<ol>` of `<li id="fnN">` | **34/34 resolve to the right block** |
 | `wiki_transformer.html` | 170 real markers (3 `<sup>` are not footnotes) | 100% | Parsoid reference list, intact | **170/170 resolve** |
-| `ar5iv.html` | 18 `<sup>` | survives — but it is **not a footnote system** | none | n/a |
+| `ar5iv.html` | 18 `<sup>` | survives — LaTeXML, **a fifth shape**, inline and never linking back | none | out of scope for v1 |
 | `tufte.html` | 0 `<sup>`; `<label>` + `<input>` + `<span class="sidenote">` | **numbering deleted, note text survives as unmarked body prose** | none | n/a |
 | `gutenberg.html` | 3 `<sup>` are "Mr." abbreviations | n/a | n/a | n/a |
 
@@ -132,12 +132,22 @@ a second, independent reason to key the marker off **what it targets** (a block 
 back-links, one per place the citation is used — up to thirteen on a single note in this fixture.
 Fable's "back-links plural, not singular" is not a hypothetical.
 
-**Two fixtures are not footnote systems and must not be treated as tests of one.** `ar5iv` is
-LaTeXML's shared author note ("equal contribution"), rendered fully inline with no id/href pair at
-all; `gutenberg`'s three superscripts are abbreviation marks. Both nonetheless report a healthy
-`stats.retargeted` — 85 and 162 — from figure, section and chapter cross-references that have nothing
-to do with footnotes. **`retargeted > 0` is therefore not evidence that footnotes work**, and it is
-exactly the shape of check that would have been believed.
+**`gutenberg` is not a footnote system** — its three superscripts are abbreviation marks in "Mr." —
+and it nonetheless reports a healthy `stats.retargeted` of 162, from chapter and table-of-contents
+links. `ar5iv` reports 85, from figure and section cross-references. **`retargeted > 0` is therefore
+not evidence that footnotes work**, and it is exactly the shape of check that would have been
+believed.
+
+**`ar5iv` is a correction.** An earlier version of this plan called it "not a footnote system", on
+the strength of its shared author note ("equal contribution"), which is rendered fully inline with no
+id/href pair. That generalised from one case: the fixture carries **nine `ltx_role_footnote*`
+occurrences**, and two of them are genuine footnotes with substantive prose
+(`evals/extraction/fixtures/ar5iv.html:256` and `:617`). GPT Sol found this while reviewing stage 2.
+
+So LaTeXML is a **fifth shape**, and an instructive one: its notes are inline and never link back, so
+a round-trip test cannot see them. It is out of scope for v1 — but it must be described as an
+unsupported shape deliberately left alone, never as a fixture with no footnotes in it. A test that
+pins a known omission as correctness is worse than no test.
 
 ### Tufte's sidenotes are broken by our own sanitiser, today
 
@@ -558,9 +568,30 @@ ordinals and trademarks. And all of the above is a reading of the code, not a me
 exists to confirm it against the real fixtures, because the whole chain is downstream of Readability
 keeping the notes container at all.
 
+## What is in v1
+
+> Proceed, use your judgment, get the v1 out first, and we can add complexity later.
+>
+> — Greg, 2026-08-28
+
+So v1 is **the four web shapes, end to end**: recognised, marked, out of the argument, present in the
+structure, and readable from the prose. Two things are cut, and both are cuts rather than decisions —
+neither is foreclosed:
+
+- **The substantive-versus-citation distinction at the marker.** This is the one question left open
+  above, and shipping without it means a marker looks the same whether it hides a mini-essay or
+  "Ibid., 43." Deferred rather than settled: the reconciliation stands whenever we want it.
+- **PDFs** (stage 6). The approach is decided — native blocks carrying `role`, per Greg above — but
+  it is additive, and the web path has to exist for it to converge on.
+
+Kept in v1 despite costing something, because both are painful to retrofit and cheap while we are
+already rewriting the DOM: **`noteId`**, so a note has an identity rather than being wherever its
+number happens to point, and **plural back-links**, because Wikipedia marks one note thirteen times
+and the singular version reads as working.
+
 ## The stages
 
-Five, each ending somewhere the tests are green and the tree is safe to commit
+Six, each ending somewhere the tests are green and the tree is safe to commit
 ([engineering-manager.md](../reusable/engineering-manager.md)). If the job were abandoned at the end
 of any one of them, what landed would still make sense.
 
@@ -607,6 +638,71 @@ them, and stage 3 built the tree from body blocks only — which fails the cover
 supplement exists. Neither was independently shippable. Recognition now comes first because
 everything else depends on the shapes being alike, and because it is the only stage that fixes
 something already broken for readers.
+
+## Stage 2, as it actually landed — 2026-08-28
+
+[`src/notes.ts`](../../src/notes.ts), called from `runExtract` beside `unhideCollapsedSections`, plus
+[`tests/notes-canonical.test.ts`](../../tests/notes-canonical.test.ts) (50 tests).
+
+Measured with a harness independent of those tests — asking not "did an anchor resolve" but **"does
+the reader land on prose or on a stub"**, because `retargeted` reported 36 of 36 on a shape where
+half the links were useless:
+
+| fixture | before | after |
+|---|---|---|
+| substack | 18 → prose, **18 → a bare digit** | **36 → prose, 0 → stub**; 120 blocks → 98 |
+| gwern | 87 / 17 (the 17 are section headings) | unchanged |
+| wikipedia | 338 / 5 | unchanged |
+| tufte | sidenote text arriving as body prose | 5 notes recognised |
+| ar5iv, gutenberg | no notes, healthy retarget counts of 85 and 162 | **0 notes** — untouched |
+
+**Four explicit adapters, not one generic inference.** The first version recognised a note by
+*round-tripping* alone — the note links back to where it was cited — which is elegant and too broad.
+GPT Sol reproduced two cases where it was **worse than doing nothing**: a numbered link into a
+reciprocal `<td>` made the table disappear and moved its cell into Notes, and one into reciprocal
+`<nav>` prose hoisted that prose out and dressed it as apparatus. A hostile page needs no forged
+attribute for that, only the topology. So recognition now requires explicit shape evidence — Gwern's
+`doc-noteref`, Wikipedia's `cite_ref`/`cite_note`, Substack's component attributes, Tufte's classes —
+with round-tripping kept as validation on top.
+
+### The lesson worth keeping: change the text of as few blocks as possible
+
+The first version discarded every author back-link and wrote its own `↩`. Gwern writes `↩︎` — the
+same arrow **plus U+FE0E**, an invisible variation selector. One codepoint, and:
+
+- `exactKey` is `tag + text` ([`blocks.ts:317`](../../src/blocks.ts)), so it misses;
+- the folded fallback key deliberately **keeps** combining marks, for Devanagari's sake, so it misses
+  too;
+- therefore **0 of 34 Gwern note blocks and 31 of 121 Wikipedia note blocks were re-minted** on
+  re-extraction, orphaning every comment and saved scroll position on them.
+
+All 34 tests were green. The stable-id test compared `noteId` across two fresh DOMs and never ran
+block carry-over, which is precisely the mechanism that broke.
+
+The fix is to **annotate the author's own back-link in place** — same node, same text — and synthesise
+one only where the source has none (Tufte, and Substack). Verified after the fix, against a true
+"before" pipeline: gwern **34 kept / 0 re-minted**, wikipedia **121 / 0**, with 2 minted blocks per
+article for the notes container.
+
+The general rule, and it applies to every stage after this one: *every block whose text this pipeline
+changes is a block that loses its id at the next re-extraction.*
+
+### Two more the tests did not catch
+
+- **Fragment resolution disagreed with the browser.** `indexTargets` overwrote on each `[id]`, so the
+  **last** duplicate won, while [`blocks.ts:784`](../../src/blocks.ts) takes the **first** in document
+  order and says so — the comment above the code claimed spec order while the code did the opposite.
+  A correct link could be rewritten to point at a different element. Duplicate ids are ordinary CMS
+  output.
+- **A note's identity was hashed from text including hidden `<script>`/`<style>`/form content**, so
+  changing something invisible changed a note's identity while its visible prose stood still. Now
+  hashed after those are stripped.
+
+### Known limit, accepted for v1
+
+Notes with **identical text** ("Ibid.") get order-dependent suffixes, so inserting a new identical
+note ahead of them shifts every later one's identity. Real, niche, and the same family as the marker
+renumbering trap that stage 3 fixes; revisit it there rather than inventing a second mechanism here.
 
 ## What this is deliberately not doing
 

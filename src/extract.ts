@@ -27,6 +27,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { fetchHtml } from "./fetch.js";
 import { slugFromUrl } from "./ingest.js";
+import { canonicaliseNotes, type NoteStats } from "./notes.js";
 import { sanitizeHtml } from "./sanitize.js";
 import type { Meta } from "./types.js";
 
@@ -158,6 +159,8 @@ export interface ExtractResult {
   /** Readability's own character count, for the log line. */
   length: number | null;
   excerpt: string | null;
+  /** What the footnote canonicalisation did — see src/notes.ts. */
+  notes: NoteStats;
 }
 
 /**
@@ -280,6 +283,11 @@ export async function runExtract(opts: {
     virtualConsole: new VirtualConsole(),
   });
   unhideCollapsedSections(dom.window.document);
+  /* Before Readability, and it has to be: Readability's `keepClasses: false`
+     takes the identifying classes off, and the sanitiser downstream of it
+     deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
+     3 there is nothing left to recognise a note by. See src/notes.ts. */
+  const notes = canonicaliseNotes(dom.window.document);
   const article = new Readability(dom.window.document).parse();
   if (!article) {
     throw new Error("Readability could not parse this page.");
@@ -314,6 +322,7 @@ export async function runExtract(opts: {
     meta,
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,
+    notes,
   };
 }
 
@@ -332,6 +341,10 @@ async function main(): Promise<void> {
   console.log(`Byline: ${result.meta.byline}`);
   console.log(`Site: ${result.meta.siteName}`);
   console.log(`Length (chars): ${result.length}`);
+  console.log(
+    `Notes: ${result.notes.notes} (${result.notes.markers} markers, ` +
+      `${JSON.stringify(result.notes.shapes)})`,
+  );
   console.log(`Excerpt: ${result.excerpt}`);
   console.log(`\nWritten to: ${path.resolve(result.outFile)}`);
   console.log(`            ${path.resolve("data", result.slug, "meta.json")}`);
