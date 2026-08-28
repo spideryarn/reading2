@@ -37,20 +37,31 @@ import { currentEntryId, showsChildren, type SummaryNode } from "../src/web/tree
 
 /* A two-part article, three sections each, built by hand — the join from
    tree.json is buildSummaryTree's business and is not what is under test. */
-function node(id: string, depth: number, title: string): TreeNode {
+function node(
+  id: string,
+  depth: number,
+  title: string,
+  parent: string | null,
+  children: string[] = [],
+): TreeNode {
   return {
     id,
     depth,
     title,
+    /* `parent` and `children` are what a TreeNode is threaded on, so the
+       fixture states them rather than casting past them: the panel reads only
+       id, depth, title and range, but a node that claimed no parent would be
+       a different shape from anything stage 5 writes. */
+    parent,
+    children,
     range: [`spya-${id}a`, `spya-${id}z`],
-    children: [],
     gist: `The gist of ${title}.`,
-  } as TreeNode;
+  };
 }
 
-function section(id: string, title: string, row: number): SummaryNode {
+function section(id: string, title: string, row: number, parent: string): SummaryNode {
   return {
-    node: node(id, 2, title),
+    node: node(id, 2, title, parent),
     number: id,
     startRow: row,
     endRow: row,
@@ -61,20 +72,29 @@ function section(id: string, title: string, row: number): SummaryNode {
 }
 
 function tree(): SummaryNode {
-  const one = [section("1.1", "Alpha", 0), section("1.2", "Beta", 1), section("1.3", "Gamma", 2)];
-  const two = [section("2.1", "Delta", 3), section("2.2", "Epsilon", 4), section("2.3", "Zeta", 5)];
+  const one = [
+    section("1.1", "Alpha", 0, "1"),
+    section("1.2", "Beta", 1, "1"),
+    section("1.3", "Gamma", 2, "1"),
+  ];
+  const two = [
+    section("2.1", "Delta", 3, "2"),
+    section("2.2", "Epsilon", 4, "2"),
+    section("2.3", "Zeta", 5, "2"),
+  ];
+  const ids = (kids: SummaryNode[]) => kids.map((k) => k.node.id);
   return {
-    node: node("root", 0, "The whole thing"),
+    node: node("root", 0, "The whole thing", null, ["1", "2"]),
     number: "",
     startRow: 0,
     endRow: 5,
     blocks: 6,
     gist: "The gist of the whole thing.",
     children: [
-      { node: node("1", 1, "First part"), number: "1", startRow: 0, endRow: 2, blocks: 3,
-        gist: "The gist of the first part.", children: one },
-      { node: node("2", 1, "Second part"), number: "2", startRow: 3, endRow: 5, blocks: 3,
-        gist: "The gist of the second part.", children: two },
+      { node: node("1", 1, "First part", "root", ids(one)), number: "1", startRow: 0, endRow: 2,
+        blocks: 3, gist: "The gist of the first part.", children: one },
+      { node: node("2", 1, "Second part", "root", ids(two)), number: "2", startRow: 3, endRow: 5,
+        blocks: 3, gist: "The gist of the second part.", children: two },
     ],
   };
 }

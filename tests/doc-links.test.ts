@@ -223,15 +223,18 @@ const ENTRY_POINTS = [
 function ownershipFromAgentsMd(): Map<string, string[]> {
   const lines = readFileSync("AGENTS.md", "utf8").split("\n");
   const owned = new Map<string, string[]>();
-  let current: string | null = null;
+  /* The list being filled in, held directly rather than by its key: the key
+     would have to be looked up again on every line, and `Map.get` answers
+     `string[] | undefined` however sure we are that we just put it there. */
+  let current: string[] | null = null;
   for (const line of lines) {
-    const owner = line.match(/^- \*\*\[([a-z0-9-]+\.md)\]/);
+    const owner = line.match(/^- \*\*\[([a-z0-9-]+\.md)\]/)?.[1];
     if (owner) {
-      current = owner[1];
-      owned.set(current, []);
+      current = [];
+      owned.set(owner, current);
       continue;
     }
-    if (!current) continue;
+    if (current === null) continue;
     // A "↳" block runs until the next bullet or a blank line, and its
     // continuation lines start with prose as often as with a backtick.
     const inBlock = line.includes("↳") || /^\s+\S/.test(line);
@@ -239,8 +242,14 @@ function ownershipFromAgentsMd(): Map<string, string[]> {
       current = null;
       continue;
     }
-    for (const [, name] of line.matchAll(/`([a-z0-9-]+\.md)`/g)) {
-      owned.get(current)!.push(name);
+    for (const match of line.matchAll(/`([a-z0-9-]+\.md)`/g)) {
+      /* A successful match always has group 1 — the group is the whole point
+         of the pattern — but skipping rather than asserting means a pattern
+         edited into having no group drops every claim instead of throwing,
+         and the "parses the ownership list at all" guard below is what turns
+         that into a failure. */
+      const name = match[1];
+      if (name) current.push(name);
     }
   }
   return owned;

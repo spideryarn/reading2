@@ -670,6 +670,14 @@ describe("SummaryPanel", () => {
     status: "ready",
     summaries: SUMMARIES,
     stale: false,
+    /* A reader with no profile, and summaries written without one — which is
+       what SUMMARIES above is. So the "Written for you" line and the "use my
+       profile" checkbox are both correctly absent from every assertion below;
+       nothing here is about the profile. tests/summary-expand.test.tsx sets
+       the same three, and src/web/useSummaries.ts says what they mean. */
+    profiled: false,
+    profileChanged: false,
+    hasProfile: false,
     error: null,
     job: null,
     failed: null,
