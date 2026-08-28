@@ -91,13 +91,18 @@ interface Props {
   /**
    * Whether the conversations have been asked for and answered.
    *
-   * It means "we have asked", not "it worked" — see `useChat`. One thing here
-   * needs it, and it is not display: **nothing may be minted before the first
-   * fetch lands.** That request replaces the whole list when it arrives
-   * (useChat.ts § refresh), so a conversation started before it is taken with
-   * it, and the answer streaming into that conversation then patches a row that
-   * is not there. The list looks the same either way, which is the point: this
-   * is the panel's only way to tell "no conversations" from "not asked yet".
+   * It means "we have asked", not "it worked" — see `useChat`. What it is for
+   * is one thing, and it is not display: **this is the panel's only way to tell
+   * "no conversations" from "not asked yet"**, which look identical, and it
+   * opens a conversation when there are none.
+   *
+   * It used to be load-bearing for a second reason, and is not any more: the
+   * arriving list was written straight over whatever was on screen, so a
+   * conversation minted before it landed was taken with it and the answer
+   * streaming into that conversation then patched a row that was not there.
+   * That is fixed where it belongs — the list now merges rather than replaces
+   * (useChat.ts § `mergedArrival`), so waiting for the fetch is no longer what
+   * keeps a new conversation alive.
    */
   loaded: boolean;
   /**

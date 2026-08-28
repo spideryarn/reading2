@@ -184,8 +184,10 @@ describe("the composer under the conversation list", () => {
     expect(document.activeElement).not.toBe(box);
   });
 
-  /* Minting before the fetch lands is wiped by it — the arriving snapshot
-     replaces the whole list — and an empty list is also the loading state. */
+  /* An empty list is also the loading state, and the composer belongs to a
+     list rather than to a spinner. (This used to carry a second reason —
+     minting before the fetch landed was wiped by it — which stopped being true
+     when the arrival started merging; see useChat.ts § `mergedArrival`.) */
   it("is absent when there is no list yet, which is also the loading state", () => {
     paint([], null, false);
     expect(composer()).toBeNull();

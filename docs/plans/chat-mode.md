@@ -1104,6 +1104,8 @@ time, because `navigator.clipboard.writeText()` does not resolve in an automatio
 
 ## See also
 
+- [chat-client-architecture.md](chat-client-architecture.md) — why `useChat` grew eleven refs, what
+  shape it should end up in, and the one step of it that is built
 - [vision.md § Anti-goals](../project/vision.md#anti-goals) — the objection this feature has to answer
 - [original-version/search-and-chat.md](../project/original-version/search-and-chat.md) — their chat, and what went wrong with it
 - [comments.md](../project/comments.md) — select a passage and ask about *that*; the older, narrower feature

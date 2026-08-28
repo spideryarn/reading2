@@ -306,7 +306,7 @@ export function withoutEmpty(threads: ChatThread[], id: string): ChatThread[] {
  *   the snapshot, because the send that created it told the server; putting it
  *   back reads as the delete button not working.
  *
- * Both rules are the arrival load's alone. Neither is safe for `refresh(only)`,
+ * Both rules are the arrival load's alone. Neither is safe for `refreshThread`,
  * where the screen is the thing known to be wrong and a thread the server does
  * not have is one somebody else deleted — which is why that branch takes the
  * server's copy, and deletes on its absence.
@@ -544,10 +544,59 @@ async function drainTurn(body: ReadableStream<Uint8Array>, sink: TurnSink): Prom
   }
 }
 
+/** Where the one fetch that fills the list has got to. See `phase`. */
+type LoadPhase = "loading" | "ready" | "failed";
+
+/** Either this article's conversations, or why they are not here. */
+type ThreadsOutcome =
+  | { ok: true; threads: ChatThread[] }
+  | { ok: false; error: string };
+
+/**
+ * Ask the server for this article's conversations.
+ *
+ * **It writes nothing, and it does not throw** — a body that says `error`, a
+ * non-2xx and a dead network all come back as the same `{ ok: false }`, because
+ * to a reader waiting for a list they are the same thing and used to be handled
+ * in three places.
+ *
+ * Both of those properties are what its callers rely on. Writing nothing is
+ * what lets the caller decide *once*, after the await, whether this answer is
+ * still wanted; not throwing is what stops that decision having a second copy
+ * in a `catch`. The two guards this file lost when it was written this way had
+ * both been missing from exactly such a second copy.
+ */
+async function askForThreads(slug: string): Promise<ThreadsOutcome> {
+  try {
+    const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
+      await apiFetch(`/api/chat/${encodeURIComponent(slug)}`),
+    );
+    if (body.error) return { ok: false, error: body.error };
+    return { ok: true, threads: body.threads ?? [] };
+  } catch (e) {
+    return { ok: false, error: describeFetchFailure(e as Error) };
+  }
+}
+
 export function useChat(slug: string): ChatApi {
   const [threads, setThreads] = useState<ChatThread[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  /**
+   * Where the one fetch that fills the list has got to.
+   *
+   * **One value rather than the two booleans it replaces**, and that is a
+   * safety change rather than a tidy-up. `loaded` and `loadFailed` are four
+   * combinations of which only three are legal, and the illegal one — not
+   * loaded, but failed — was reachable: a superseded load failing set
+   * `loadFailed` back to true under a list the current load had already
+   * displayed, and the panel then said it could not load a list it was showing.
+   * A value that cannot hold that combination cannot be put into it.
+   *
+   * Both of the old names are still what `ChatApi` exposes, derived at the
+   * bottom of this function. The panel needs the difference between "asked and
+   * empty" and "asked and it failed", and it should not have to learn a third
+   * word for it.
+   */
+  const [phase, setPhase] = useState<LoadPhase>("loading");
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -604,60 +653,47 @@ export function useChat(slug: string): ChatApi {
   /**
    * Which article's conversations these are.
    *
-   * Read by `refresh` after its `await`, so a load that comes back for the
-   * article the reader has just left cannot write its threads over the new
-   * one's. The effect below sets it synchronously, before anything is fetched.
+   * Read by `refreshThread` after its `await`, so a repair that comes back for
+   * the article this hook has left cannot write on the new one. The effect
+   * below sets it synchronously, before anything is fetched.
+   *
+   * **This is the hook keeping its own contract, not a race a reader can
+   * reach.** It takes a slug, so it must behave when given a different one —
+   * but production never gives it one: both mounts of `useChat` sit under a
+   * `Reader` keyed on the slug, so changing article remounts, and an abandoned
+   * hook cannot write on its successor. Say that plainly here, because two
+   * earlier versions of this comment did not and both were wrong.
+   *
+   * What it guards, at that level, is two things rather than the one it looks
+   * like. The abandoned repair's "couldn't reach the server" is the easy half.
+   * The other is a **write**: a thread id names one conversation *per article*
+   * and is explicitly not promised to be unique across them — `chat_threads` is
+   * keyed `(article_id, id)` and says so — so the repair can find its id in the
+   * new slug's list and replace a different conversation with it, or delete one
+   * by the other branch. This comment used to call that unobservable, on the
+   * unchecked assumption that ids are global. Both halves are pinned in
+   * tests/chat-error-scope.test.ts, at the hook's level, which is the level the
+   * guard lives at. GPT Sol read the schema rather than the code, 2026-08-28.
    */
   const showing = useRef(slug);
 
   /**
    * How many streams are writing into each conversation right now.
    *
-   * Only `refresh` reads it, and only to answer one question: is anything on
-   * screen for this conversation newer than what the server is about to say?
-   * See the note there.
+   * Only `refreshThread` reads it, and only to answer one question: is
+   * anything on screen for this conversation newer than what the server is
+   * about to say? See the note there.
    */
   const running = useRef(new Map<string, number>());
 
   /**
-   * Which load on arrival is the current one.
+   * Ask the server about **one** conversation, because the screen is wrong
+   * about it.
    *
-   * Bumped by every `refresh()` that asks for the whole list, and read again
-   * after the await: a response whose number is no longer the latest belongs to
-   * a load something has already superseded, and it may not write.
-   *
-   * `showing.current` does not cover this, and the difference is the same one
-   * `loadFailed` was bitten by — see the note in the mount effect. That ref
-   * distinguishes **articles**; this distinguishes **loads of one article**, of
-   * which `StrictMode` deliberately starts two.
-   *
-   * **Two loads of one article is a development-only state**, and worth saying
-   * so rather than leaving the guard looking broader than it is: `Reader` is
-   * keyed on the slug in App.tsx, so changing article remounts this hook rather
-   * than re-running its effect, and nothing else starts a second arrival load.
-   * `StrictMode` is the case, and a dev-only wrong state is still worth two
-   * lines — the `loadFailed` bug this is modelled on was exactly that, and it
-   * cost a day of believing a panel that said it could not load a list it was
-   * displaying.
-   *
-   * Merging is only half a defence, which is why the number is here at all: a
-   * stale snapshot answering *after* the current one finds the fuller list
-   * already on screen and loses to it, but one answering *first* puts its
-   * shorter copy on an empty screen, and then it is the current response that
-   * loses. Found by GPT Sol reviewing the composer under the list, 2026-08-27.
-   */
-  const load = useRef(0);
-
-  /**
-   * Ask the server what this article's conversations actually are.
-   *
-   * Two callers, and they want different amounts of it. On arrival the answer
-   * is merged over what is already there rather than written across it — see
-   * `mergedArrival`, which says what the fetch's own duration lets the reader do
-   * in the meantime. After a 409 the screen is not merely out of date, it is
-   * *wrong* — it is showing an edit that did not happen, with the turns it would
-   * have discarded already gone — but only for **one conversation**, and that is
-   * all that gets replaced.
+   * The only caller is the 409 path in `run`. After a 409 the screen is not
+   * merely out of date, it is *wrong* — it is showing an edit that did not
+   * happen, with the turns it would have discarded already gone — but only for
+   * that one conversation, and that is all this replaces.
    *
    * That narrowing is not tidiness. Replacing the whole list put a snapshot
    * taken before an unrelated send over the top of that send's optimistic rows,
@@ -669,104 +705,118 @@ export function useChat(slug: string): ChatApi {
    * The same argument applies *within* one conversation, so a thread another
    * stream is still writing into is left alone too — there is nothing the server
    * can tell us about it that is not already older than the screen.
+   *
+   * **The arrival load used to be this same function**, told apart by whether
+   * it had been given a thread id. Splitting them is what let the arrival load
+   * move into the effect below, and with it the whole generation counter — see
+   * there.
    */
-  /**
-   * Returns whether the list came back. The mount effect below is the only
-   * caller that cares — a per-thread refresh failing later says nothing about
-   * whether the list itself ever arrived. See `loadFailed`.
-   */
-  const refresh = useCallback(
-    async (only?: string): Promise<boolean> => {
+  const refreshThread = useCallback(
+    async (only: string): Promise<void> => {
       const mine = slug;
-      /* Claimed before anything is awaited, so two loads of one article are
-         ordered by when they were *asked*, not by when they answered. */
-      const generation = only === undefined ? (load.current += 1) : load.current;
-      try {
-        const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
-          await apiFetch(`/api/chat/${encodeURIComponent(mine)}`),
-        );
-        if (showing.current !== mine) return false;
-        if (only === undefined && generation !== load.current) return false;
-        if (body.error) {
-          setError(body.error);
-          return false;
-        }
-        const fresh = body.threads ?? [];
-        if (only === undefined) {
-          /* Read here, outside the updater, so what it is handed is a value
-             rather than a ref — see `mergedArrival`. */
-          const deleted = new Set(gone.current);
-          setThreads((prev) => mergedArrival(prev, fresh, deleted));
-          return true;
-        }
-        // More than one means somebody else is still writing here — this run is
-        // counted too, and it is the one that failed.
-        if ((running.current.get(only) ?? 0) > 1) return true;
-        const server = fresh.find((t) => t.id === only);
-        setThreads((prev) =>
-          server
-            ? prev.map((t) => (t.id === only ? server : t))
-            : // The server does not have it at all: it was deleted, or it was
-              // never written down. Either way it is not a conversation.
-              prev.filter((t) => t.id !== only),
-        );
-        return true;
-      } catch (e) {
-        /* The same two guards the success path uses, and the second one for the
-           same reason `loadFailed` needed it: a superseded load failing after
-           the current one succeeded put a failure message over a list that was
-           on the screen and correct. Guarding only the writes and not the
-           errors would have left exactly that bug in a quieter form. GPT Sol,
-           2026-08-28. */
-        if (showing.current !== mine) return false;
-        if (only === undefined && generation !== load.current) return false;
-        setError(describeFetchFailure(e as Error));
-        return false;
+      const outcome = await askForThreads(mine);
+      if (showing.current !== mine) return;
+      if (!outcome.ok) {
+        setError(outcome.error);
+        return;
       }
+      // More than one means somebody else is still writing here — this run is
+      // counted too, and it is the one that failed.
+      if ((running.current.get(only) ?? 0) > 1) return;
+      const server = outcome.threads.find((t) => t.id === only);
+      setThreads((prev) =>
+        server
+          ? prev.map((t) => (t.id === only ? server : t))
+          : // The server does not have it at all: it was deleted, or it was
+            // never written down. Either way it is not a conversation.
+            prev.filter((t) => t.id !== only),
+      );
     },
     [slug],
   );
 
+  /**
+   * The one fetch that fills the list — and the only place its answer is
+   * written down.
+   *
+   * **That "only" is the whole design of this effect**, and it is worth saying
+   * why, because the shape it replaces looked more careful and was less safe.
+   * The load used to live in the callback above and be guarded by two refs: one
+   * naming the article, one numbering the load. Every place that wrote anything
+   * had to re-state both by hand, and twice the file got it wrong in the same
+   * way — the success path guarded and the failure path not, so a superseded
+   * load that *failed* put an error over a list that was on screen and correct.
+   * Once as `loadFailed` (GPT Sol, 2026-08-27), once as `error` in the `catch`
+   * (GPT Sol, 2026-08-28), in the same file, a day apart.
+   *
+   * So the guard is not repeated here; there is only one place it could go.
+   * `askForThreads` cannot write and cannot throw, `settle` is the only thing
+   * that writes, and every way the request can end arrives there. A guard
+   * cannot be missing from a path that does not exist.
+   *
+   * And it is `live` rather than a slug or a number, for the reason
+   * useComments.ts has always used one: it is scoped to **this run of this
+   * effect** by construction. A slug ref cannot tell two loads of one article
+   * apart — `StrictMode` starts exactly that — and a number can, but only by
+   * being read correctly at every site that writes. This is read at one.
+   */
   useEffect(() => {
     showing.current = slug;
     setThreads([]);
-    setLoaded(false);
-    setLoadFailed(false);
-    // `loaded` even when the fetch failed. It means "we have asked", not "it
-    // worked" — a reader whose server is down should still be able to open a
-    // conversation and see the send fail with a reason, rather than face a
-    // panel that never resolves into anything. What it *may not* do is let the
-    // panel then say the reader has asked nothing, which is what `loadFailed`
-    // is for.
-    /**
-     * **`live`, not `showing.current`, and the difference is a real bug.**
-     *
-     * `showing.current` distinguishes *slugs*, and what has to be
-     * distinguished here is *runs of this effect*. Under `StrictMode` React
-     * mounts, unmounts and mounts again, so two fetches for the same article
-     * are in flight at once — and the first one failing after the second one
-     * succeeded set `loadFailed` back to true, leaving the panel saying it
-     * could not load a list it was displaying. Same slug, so the ref guard let
-     * it straight through. GPT Sol found it on the second pass, 2026-08-27.
-     *
-     * A `let` closed over by the cleanup below is the same shape useComments.ts
-     * and useSearch.ts already use, and it is per-run by construction.
-     */
+    setPhase("loading");
+    /* **And the error, which used to outlive the article it was about.**
+       Everything that fails in this hook writes to one string — a load, a stop,
+       a delete, the repair after a 409 — and every one of those failures is
+       about *this* slug. Left behind, a dropped connection on one piece put
+       "Couldn't reach the server" over the next piece the reader opened.
+
+       **Not a bug any reader has hit**, and worth saying so: `Reader` is keyed
+       on the slug and both mounts of this hook are under it, so changing
+       article remounts rather than re-running this. What it buys is the hook
+       keeping its own promise instead of leaning on a caller two files away.
+
+       And it is not the whole of that promise. `askToStop`, `askToCancel` and
+       `remove` all write to `error` from a `catch` with no slug guard, so one
+       of them failing late would still land here after this reset. Guarding
+       three more call sites by hand is the exact habit that produced the
+       four staleness vocabularies this file is trying to get rid of — the
+       operation model in docs/plans/chat-client-architecture.md closes them all
+       at once, and that is where it should happen. GPT Sol, 2026-08-28.
+       tests/chat-error-scope.test.ts. */
+    setError(null);
     let live = true;
-    void refresh()
-      // `refresh` catches its own failures, so this only guards against it
-      // being changed later into something that does not — `loaded` must flip
-      // on every path or the panel waits for ever.
-      .catch(() => false)
-      .then((ok) => {
-        if (!live || showing.current !== slug) return;
-        setLoadFailed(!ok);
-        setLoaded(true);
-      });
+    /** The only thing here that writes anything. */
+    const settle = (outcome: ThreadsOutcome) => {
+      if (!live) return;
+      if (!outcome.ok) {
+        setError(outcome.error);
+        /* `failed`, and note that this still counts as having asked — the panel
+           reads `loaded` as "we have asked", not "it worked", so that a reader
+           whose server is down can still open a conversation and watch the send
+           fail with a reason rather than face a spinner that never resolves.
+           What it may *not* do is then say the reader has asked nothing, which
+           is what the `failed` phase is for. */
+        setPhase("failed");
+        return;
+      }
+      /* Read here, outside the updater, so what it is handed is a value rather
+         than a ref — see `mergedArrival`, which also says what the fetch's own
+         duration lets the reader do in the meantime. */
+      const deleted = new Set(gone.current);
+      setThreads((prev) => mergedArrival(prev, outcome.threads, deleted));
+      setPhase("ready");
+    };
+    void askForThreads(slug)
+      /* `askForThreads` catches its own failures, so this can only fire if it
+         is later changed into something that does not. Mapped to an outcome
+         rather than handled, so that it joins the one path below instead of
+         becoming a second one. */
+      .catch((e: Error) => ({ ok: false as const, error: describeFetchFailure(e) }))
+      .then(settle);
     return () => {
       live = false;
     };
-  }, [slug, refresh]);
+  }, [slug]);
 
   /** Rewrite one thread in place, or append it if it is new. Deletions win. */
   const put = useCallback((id: string, edit: (t: ChatThread) => ChatThread) => {
@@ -1090,7 +1140,7 @@ export function useChat(slug: string): ChatApi {
           if (showing.current !== mine) return;
           if (settled) {
             /* Only this row, and only by patching it. Replacing the whole
-               thread with the server's copy is the mistake `refresh` documents
+               thread with the server's copy is the mistake `refreshThread` documents
                at length: it puts a snapshot taken before an unrelated send over
                the top of that send's optimistic rows. */
             put(threadId, (t) => ({
@@ -1204,7 +1254,7 @@ export function useChat(slug: string): ChatApi {
          stream about fifteen seconds in. Caught by tests/use-chat-recovery.test.ts
          while it was being written for a different case entirely. */
       claim(owned.current, replyId);
-      /* Counted for `refresh` alone — see the note there. Incremented before
+      /* Counted for `refreshThread` alone — see the note there. Incremented before
          the request leaves and decremented in the `finally` below, so a 409 can
          tell "nothing else is happening here" from "there is a live answer in
          this conversation whose rows the server has not heard about yet". */
@@ -1341,7 +1391,7 @@ export function useChat(slug: string): ChatApi {
                2026-08-26. */
             if (response.status === 409) {
               setError(why);
-              await refresh(current);
+              await refreshThread(current);
               return;
             }
             throw new Error(why);
@@ -1413,7 +1463,7 @@ export function useChat(slug: string): ChatApi {
         }
       })();
     },
-    [slug, put, askToStop, refresh],
+    [slug, put, askToStop, refreshThread],
   );
 
   const send = useCallback(
@@ -1665,8 +1715,10 @@ export function useChat(slug: string): ChatApi {
 
   return {
     threads,
-    loaded,
-    loadFailed,
+    /* Derived, not stored. "We have asked" is true of both the answers a load
+       can come back with, and only `loading` is neither. */
+    loaded: phase !== "loading",
+    loadFailed: phase === "failed",
     recovering,
     send,
     cancelAndDiscard,
