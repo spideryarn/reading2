@@ -162,6 +162,30 @@ describe("the public API's import graph", () => {
   });
 
   /**
+   * **The route inventory's spelling is a leaf, and must stay one.**
+   *
+   * `src/public/route-names.ts` imports nothing at all. That is not tidiness: it
+   * lived in `routes.ts` beside the readers until 2026-08-28, which meant
+   * importing the inventory pulled `store/public-reader.ts` → `sanitize.ts` →
+   * **jsdom**, and cost **803ms measured on an idle machine**. The client's test
+   * that pins its paths against this inventory did that import inside a test
+   * body on vitest's default 5s timeout and failed in two full runs out of two
+   * while passing alone — a cross-lane failure that read as flakiness and was a
+   * module graph.
+   *
+   * This is the check that stops somebody adding a convenience import next month
+   * and quietly restoring it, because nothing else would notice until a test
+   * somewhere else started timing out again.
+   *
+   * `toEqual` on the whole graph rather than a forbidden list, deliberately:
+   * *anything* it reaches is a regression, including a module that is cheap
+   * today and grows an expensive import of its own later.
+   */
+  it("keeps the route inventory's spelling free of every import", () => {
+    expect(graphFrom("src/public/route-names.ts")).toEqual(["src/public/route-names.ts"]);
+  });
+
+  /**
    * **The predicate leaf really is a leaf.**
    *
    * This is the point of `public-slug.ts` being its own file rather than living

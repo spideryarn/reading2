@@ -42,6 +42,7 @@
 import type { ServerResponse } from "node:http";
 
 import { isSlug } from "../ingest.js";
+import { PUBLIC_ROUTE_NAMES, type PublicRouteName } from "./route-names.js";
 import { STORE } from "../store/live.js";
 import { pgPublicReader } from "../store/public-reader.js";
 
@@ -136,55 +137,71 @@ export function isPublicNamespace(path: string): boolean {
 }
 
 /**
- * What a slug may be spelled with, in a route pattern.
+ * One public route: its spelling, from [route-names.ts](route-names.ts), plus
+ * what it reads.
  *
- * The character class every authenticated slug route in src/routes.ts uses, so
- * a slug that is legal there is legal here and the two cannot disagree about
- * what a slug looks like. It is permissive on purpose — `%` and `.` are in it —
- * and `slugFrom` below is what makes that safe.
+ * The two halves are declared apart because the spelling needs no imports and
+ * the reading needs jsdom — see that file's header for the 803ms this saves and
+ * the cross-lane test failure that found it. They are joined here, once, and the
+ * joining is checked below.
  */
-const SLUG_CHARS = "[\\w.%-]+";
-
-/** One public route: how to recognise it, how to spell it, and what it reads. */
-export interface PublicRoute {
-  /** The path segment after `/api/public/`. */
-  readonly name: string;
-  readonly pattern: RegExp;
-  /** The path a request for `slug` would use. Exported so sweeps can build one. */
-  path(slug: string): string;
+export interface PublicRoute extends PublicRouteName {
   read(slug: string): Promise<unknown>;
 }
 
-function publicRoute(name: string, read: (slug: string) => Promise<unknown>): PublicRoute {
-  return {
-    name,
-    /* Built from the name rather than written out beside it. Two spellings of
-       one route is one place for them to disagree, and the disagreement would
-       be a route the dispatcher serves and the sweeps below never visit. */
-    pattern: new RegExp(`^/api/public/${name}/(${SLUG_CHARS})$`),
-    path: (slug) => `/api/public/${name}/${slug}`,
-    read,
-  };
-}
+/**
+ * What each route reads, by name.
+ *
+ * A record rather than a second list, so it cannot fall out of *order* with the
+ * names — only out of *coverage*, which the guard below catches on module load.
+ */
+const READS: Record<string, (slug: string) => Promise<unknown>> = {
+  article: (slug) => pgPublicReader.loadArticle(slug),
+  metadata: (slug) => pgPublicReader.loadMetadata(slug),
+};
 
 /**
- * **Every route in the closed room, in one place.**
+ * **Every route in the closed room, spelling and reader together.**
  *
- * The dispatcher walks this and the tests sweep it, so "every public route
- * refuses every non-read method" and "every public route spends nothing" are
- * claims about *whatever is in here* rather than about two paths somebody
- * remembered to type into a test.
+ * The dispatcher walks this and three sweeps drive off it, so "every public
+ * route refuses every non-read method" and "the whole public surface spends
+ * nothing" are claims about *whatever is in here* rather than about paths
+ * somebody remembered to type into a test. The client's own test pins its paths
+ * against it too, so a unilateral rename on either side is a red test rather
+ * than a 404 in a stranger's browser.
  *
- * GPT Sol's finding 5, 2026-08-28: both sweeps hardcoded the same two paths, so
- * the day slice 1b adds `summary`, `glossary`, `ideas` and `tweets` — four
- * routes, which is what 1b is — the new ones would be unswept and the suite
- * would stay green. The inventory is the fix; adding a route to it is the only
- * way to add a route at all.
+ * **The two guards below are what stop the split becoming two lists**, and they
+ * run at module load rather than in a test — a route with no reader would
+ * otherwise be `undefined` at the moment somebody requested it, which is a 500
+ * for a reader and a stack trace for us, in production, for a mistake that is
+ * visible the instant the file is imported.
+ *
+ * They fail in both directions on purpose: a name with no reader is a route the
+ * dispatcher would match and then crash on, and a reader with no name is a
+ * handler nothing can reach — the second is harmless today and is exactly what
+ * a typo in `READS` looks like, so it should not be silent either.
  */
-export const PUBLIC_ROUTES: readonly PublicRoute[] = [
-  publicRoute("article", (slug) => pgPublicReader.loadArticle(slug)),
-  publicRoute("metadata", (slug) => pgPublicReader.loadMetadata(slug)),
-];
+export const PUBLIC_ROUTES: readonly PublicRoute[] = PUBLIC_ROUTE_NAMES.map((route) => {
+  const read = READS[route.name];
+  if (!read) {
+    throw new Error(
+      `The public route "${route.name}" has no reader in src/public/routes.ts. ` +
+        "Every name in PUBLIC_ROUTE_NAMES needs one; see route-names.ts.",
+    );
+  }
+  return { ...route, read };
+});
+
+{
+  const named = new Set(PUBLIC_ROUTE_NAMES.map((route) => route.name));
+  const orphans = Object.keys(READS).filter((name) => !named.has(name));
+  if (orphans.length) {
+    throw new Error(
+      `src/public/routes.ts has readers for routes that do not exist: ${orphans.join(", ")}. ` +
+        "Add them to PUBLIC_ROUTE_NAMES in route-names.ts, or delete them.",
+    );
+  }
+}
 
 /**
  * The captured slug, decoded **once**, then validated.
