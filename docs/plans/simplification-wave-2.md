@@ -838,21 +838,31 @@ so remove them. They were, and each for a different reason:
   Postgres connection string, over six awkward inputs. That function shipped: `withoutPassword` at
   [`src/db/ssl.ts:115`](../../src/db/ssl.ts), same three lines of logic. The probe had already done
   its job.
-- **`scratch-tok2.mts`** — fourteen lines counting the tokens in a `tree.json`'s nav labels against
-  its structure nodes, per label and per node. That measurement fed the batching in
-  [`src/labels.ts`](../../src/labels.ts) and the "roughly 7,000 tokens of answer" in
-  [table-of-contents.md § 314](../project/table-of-contents.md). Its actual output survives in two
-  GPT Sol activity logs under `docs/plans/`.
+- **`scratch-tok2.mts`** — **kept, and I had deleted it before the check came back.** Fourteen lines
+  counting the tokens in a `tree.json`'s nav labels against its structure nodes. I reasoned that a
+  probe whose answer has been written down has done its job. The Sonnet audit found the answer and
+  it is more specific than I realised: [toc-scaling.md § 61](toc-scaling.md) cites *"about 40 tokens
+  each"* for nav labels and *"17.7 tokens per block on the constitution, 25.2 on the test article"*
+  for structure — numbers this script computes and nothing else in the repo does. Those two numbers
+  are the whole argument for taking labels out of the structure call, which is a live design, and
+  this is the only way to re-measure them when the prompt changes.
+
+  Restored from the copy taken before deleting. **The lesson is about me, not the file:** Greg's
+  instruction was to have a subagent check the three and remove what was obsolete, and I ran the
+  check myself while the subagent was still working, then acted on my own answer. Two of three
+  agreed. The third did not, and it is the one three separate documents had already flagged as
+  needing its owner's say-so — which should have been the signal to wait rather than the thing to
+  discharge.
 - **`rename-preview.html`** — not merely unused: **broken**. It loads
   `<script src="/rename-preview.tsx">`, and that file does not exist anywhere in the tree. It was
   the orphan half of a preview page whose other half had already gone;
   [worktrees.md:57](worktrees.md) records `rename-preview.tsx` as a typecheck complaint back when it
   still existed.
 
-Copies were taken before deleting. `knip.jsonc`'s comment about root-level globs is updated: it used
-to name `scratch-tok2.mts` as the hypothetical stray, and the point it was making — that a file out
-of scope looks exactly like a file with nothing wrong with it — is exactly why those two were
-visible at all.
+Copies were taken before deleting, which is the only reason the third one could come back.
+`knip.jsonc`'s comment about root-level globs still names `scratch-tok2.mts`, correctly: it is still
+there and still reported, and the point it was making — that a file out of scope looks exactly like
+a file with nothing wrong with it — is why any of this was visible at all.
 
 **`src/web/preview-colour.tsx` is a different case and is still here.** See 1.6.
 

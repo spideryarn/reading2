@@ -532,11 +532,25 @@ tab stops — in front of the prose, when the keyboard model is ↑/↓ stepping
 directly to an arbitrary landmark or open its tooltip card. Do nothing, a roving tabindex over the
 current column, or a "jump to section" command? **Product decision.**
 
-### A.2 `JobStore` — resolved: keep it
-Both reviewers said keep. It is the future multi-process queue contract (`contracts.ts:158`), the
-Postgres migration is visibly in flight, and Sol notes deleting it would throw away a written spec.
-`ChatStore`/`SearchStore` are a storage-correctness task belonging to that migration, not to this
-plan. Tier 1.7 only fixes the misleading comment. **No decision needed — recorded as closed.**
+### A.2 ~~`JobStore` — resolved: keep it~~ **Superseded, 2026-08-28. It was deleted.**
+Both reviewers said keep, and at the time they were right. It was the future multi-process queue
+contract (`contracts.ts:158`), the Postgres migration was visibly in flight, and Sol noted that
+deleting it would throw away a written spec.
+
+**Then the queue landed and the spec did not become the thing that landed.** `5cb6602` put a real
+`JobStore` in [`src/store/jobs.ts:116`](../../src/store/jobs.ts), implemented twice — `pgJobStore`
+and `fsJobStore` — and owner-scoped throughout. The one in `contracts.ts` stayed where it was and
+drifted: `claim(attemptId, leaseMs)` against the real `claim(id, owner, attempt, leaseMs)`,
+`rescueExpired()` against `failExpired()`, `get(id)` against `get(id, owner)`. Two interfaces of
+one name declaring two different APIs, one of them implemented and one of them not.
+
+A spec that has been overtaken is not a spec, and this one was worse than absent: it was wrong about
+the thing it named, in the file a reader would look in first. Deleted in `0a4e0db`, with the header
+of `contracts.ts` rewritten to point at where the contract actually lives. **This paragraph is
+struck rather than removed** because the wave-2 review prompt copied it verbatim, so the "keep"
+verdict is in two files and a reader could still meet it.
+
+`ChatStore`/`SearchStore` remain a storage-correctness task belonging to that migration, as before.
 
 ### A.3 One definition of a slug, or two?
 Both reviewers reclassified this. Fable checked the disk: every slug under `data/` already satisfies
