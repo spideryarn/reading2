@@ -171,34 +171,47 @@ describe("whose id the store is handed", () => {
 describe("every article lookup names an owner", () => {
   /**
    * `eq(articles.slug, …)` finds anybody's article, because the slug column is
-   * globally unique. `ownedSlug()` is the only sanctioned spelling — and since
-   * 2026-08-28 there is a second sanctioned predicate beside it, `publicSlug()`,
-   * which resolves a slug by *visibility* instead.
+   * globally unique. There are exactly **three** sanctioned lookups in the repo,
+   * each in its own one-function leaf:
    *
-   * **Three files are exempt, and each for its own stated reason.**
-   * `owned-slug.ts` is where the owner predicate is *defined* — it moved there
-   * from `pg.ts` on 2026-08-28, because `pg.ts` imports `src/api.ts` and so put
-   * the whole read layer behind a one-line predicate, closing an import cycle
-   * for the AI ledger; `pg.ts` re-exports it, so no other caller changed.
-   * `public-slug.ts` is where the public one is defined, in its own file for a
-   * reason of the same shape: putting the two together would make the public
-   * leaf import `currentOwnerId`, which is exactly the dependency public reads
-   * must not have (docs/plans/public-read-only-access.md). And `pg.ts` holds
-   * `slugIsTaken`, the one deliberately *unfiltered* lookup, which returns a
-   * boolean and lives there so that this rule can have no exemptions anywhere
-   * else.
+   * | file | what it is for |
+   * |---|---|
+   * | `owned-slug.ts` | `ownedSlug` — slug **and owner**, the reader's own article |
+   * | `public-slug.ts` | `publicSlug` — slug **and `visibility = 'public'`**, ownerless on purpose |
+   * | `slug-is-taken.ts` | `slugIsTaken` — the one deliberately unfiltered one, and it returns a boolean |
    *
-   * **Exempting a file is not trusting it**, and that distinction is GPT Sol's,
-   * 2026-08-28: *"Extend the guard to three exemptions, but do not trust three
-   * whole files."* So each of the three is positively inspected below — what it
-   * is exempted *for* has to still be in it. A rule whose one allowed case has
-   * silently moved is a rule that now protects nothing.
+   * **Exempting a file is not trusting it.** GPT Sol, 2026-08-28: *"Extend the
+   * guard to three exemptions, but do not trust three whole files."* The first
+   * version of this did trust them, and `pg.ts` was one — fourteen hundred lines
+   * exempted to protect six, so a *fourth* unfiltered lookup added anywhere in
+   * it would have passed. That is why `slugIsTaken` now has its own file: the
+   * exemption existed for that function alone, so moving the function removed
+   * the exemption rather than merely narrowing it.
+   *
+   * What is left is a rule with no file-sized holes: each exempt file must
+   * contain **exactly one** bare lookup, and it must be inside the function the
+   * file is named for. A second one anywhere in any of them fails, whether it is
+   * above the function, below it, or in a helper beside it.
    *
    * A grep rather than a type: there is no type that can distinguish "the right
    * `where`" from "a `where`", and the failure mode this guards is somebody
    * writing a perfectly well-typed query.
    */
-  const EXEMPT = ["owned-slug.ts", "public-slug.ts", "pg.ts"];
+  const BARE_LOOKUP = /eq\(\s*articles\.slug\s*,/g;
+
+  /** Comments stripped, because several of these files quote the forbidden
+      expression while explaining the rule — and a guard that fires on its own
+      documentation teaches people to delete the documentation. */
+  const codeOf = (source: string) =>
+    source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+
+  /** The three, and what each is allowed to contain. */
+  const SANCTIONED = [
+    { file: "owned-slug.ts", fn: "ownedSlug" },
+    { file: "public-slug.ts", fn: "publicSlug" },
+    { file: "slug-is-taken.ts", fn: "slugIsTaken" },
+  ];
+  const EXEMPT = SANCTIONED.map((one) => one.file);
 
   it("so no store module resolves a slug without one", async () => {
     const dir = fileURLToPath(new URL("../src/store/", import.meta.url));
@@ -269,23 +282,62 @@ describe("every article lookup names an owner", () => {
   });
 
   /**
-   * **The third exemption, inspected for the same reason.**
+   * **And each exempt file contains exactly one bare lookup, inside the function
+   * it is named for.**
    *
-   * `slugIsTaken` is the one deliberately unfiltered lookup in the repo. What
-   * makes it not a way to read somebody else's article is that it selects an id
-   * and returns a boolean — so it can answer *"is this slug spoken for"* and
-   * nothing else. If it ever grew a second column, the exemption for `pg.ts`
-   * would be covering a real leak.
+   * This is the half GPT Sol's finding 4 was about. The sweep above skips three
+   * files; without this, skipping them means trusting them, and "trusting" a
+   * file is trusting every line anybody adds to it later.
+   *
+   * Two assertions per file and they catch different things: the **count**
+   * catches a second lookup added anywhere in the file, and the **containment**
+   * catches the one that is there being moved out of the function into a helper
+   * that nothing else vouches for.
+   */
+  it("and each sanctioned file holds exactly one, inside the function it is named for", async () => {
+    const dir = fileURLToPath(new URL("../src/store/", import.meta.url));
+    for (const { file, fn } of SANCTIONED) {
+      const code = codeOf(await readFile(dir + file, "utf8"));
+
+      const occurrences = code.match(BARE_LOOKUP) ?? [];
+      expect(occurrences.length, `${file} should hold exactly one bare slug lookup`).toBe(1);
+
+      const body =
+        new RegExp(`export (?:async )?function ${fn}[\\s\\S]*?\\n\\}`).exec(code)?.[0] ?? "";
+      expect(body, `${file} has no ${fn} to hold it`).not.toBe("");
+      expect(
+        (body.match(BARE_LOOKUP) ?? []).length,
+        `${file}'s lookup is outside ${fn}`,
+      ).toBe(1);
+    }
+  });
+
+  /**
+   * **The one unfiltered lookup still returns nothing but a boolean.**
+   *
+   * `slugIsTaken` is allowed to resolve a slug without an owner for exactly one
+   * reason: it selects an id and answers yes or no, so it can say *"is this slug
+   * spoken for"* and nothing else. If it ever grew a second column, its
+   * exemption would be covering a real leak.
    */
   it("and the one unfiltered lookup still returns nothing but a boolean", async () => {
     const source = await readFile(
-      fileURLToPath(new URL("../src/store/pg.ts", import.meta.url)),
+      fileURLToPath(new URL("../src/store/slug-is-taken.ts", import.meta.url)),
       "utf8",
     );
     const body = /export async function slugIsTaken[\s\S]*?\n}/.exec(source)?.[0] ?? "";
     expect(body).toMatch(/Promise<boolean>/);
     expect(body).toMatch(/\.select\(\{\s*id:\s*articles\.id\s*\}\)/);
     expect(body).toMatch(/return rows\.length > 0;/);
+  });
+
+  /**
+   * And `pg.ts` is no longer exempt at all, which is the point of the move —
+   * asserted rather than assumed, because "we removed the exemption" is exactly
+   * the kind of claim that survives the exemption being quietly put back.
+   */
+  it("and pg.ts is swept like every other store module", () => {
+    expect(EXEMPT).not.toContain("pg.ts");
   });
 
   /**

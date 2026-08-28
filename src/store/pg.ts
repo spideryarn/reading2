@@ -141,30 +141,17 @@ export function shelfFrom(article: typeof articles.$inferSelect): ShelfState {
 export { ownedSlug } from "./owned-slug.js";
 import { ownedSlug } from "./owned-slug.js";
 
-type Db = ReturnType<typeof getDb>;
-type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
-/**
- * **Does this slug exist for anybody at all?** The one sanctioned unfiltered
- * lookup, and it lives here so that the guard above can have no exemptions.
- *
- * It is not a way to reach somebody else's article — it returns a boolean and
- * nothing else. It exists because `articles.slug` is globally unique, so
- * "`ownedSlug` found nothing" has two very different causes: there is no such
- * article, or there is one and it is not yours. `beginRevision` needs to tell
- * those apart, because the second one deserves a sentence saying so rather than
- * "could not create or lock the article row".
- *
- * If you are reaching for this to *read* something, you want `ownedSlug`.
- */
-export async function slugIsTaken(slug: string, db: Db | Tx = getDb()): Promise<boolean> {
-  const rows = await db
-    .select({ id: articles.id })
-    .from(articles)
-    .where(eq(articles.slug, slug))
-    .limit(1);
-  return rows.length > 0;
-}
+/* **`slugIsTaken` moved to [slug-is-taken.ts](slug-is-taken.ts) on 2026-08-28**,
+   and is deliberately NOT re-exported from here.
+
+   It was the only reason this file was exempt from the owner-isolation grep, and
+   the exemption covered fourteen hundred lines to protect six — so a fourth
+   unfiltered lookup added anywhere in here would have passed. GPT Sol's finding
+   4. Moving the function removed the exemption, and this file is now swept like
+   every other. `ownedSlug` above is re-exported because it has a dozen callers;
+   this one had exactly one, so it is imported from its new home instead. */
+
 
 /** Every article this reader owns — the `where` for a list rather than a lookup. */
 export function ownedByReader() {

@@ -124,16 +124,30 @@ no caller changed — but the guard below now exempts **two** files by name rath
 anything this plan says about "beside `ownedSlug` in `pg.ts`" is stale.
 
 [`tests/owner-isolation.test.ts`](../../tests/owner-isolation.test.ts) asserts that **no file under
-`src/store/` writes `eq(articles.slug, …)` outside `pg.ts`**, precisely because five near-identical
-lookups once existed and there was no way to tell by looking whether all five had been fixed. The
-worst possible version of this feature is an `or(visibility === 'public')` bolted onto that
-predicate — one edit, in the one place, that quietly widens every read in the app. **We are not
+`src/store/` writes `eq(articles.slug, …)` outside the sanctioned leaves**, precisely because five
+near-identical lookups once existed and there was no way to tell by looking whether all five had been
+fixed. The worst possible version of this feature is an `or(visibility === 'public')` bolted onto
+that predicate — one edit, in the one place, that quietly widens every read in the app. **We are not
 doing that.**
 
-Sol found the sharp edge in the obvious alternative, too: that test **exempts the whole of `pg.ts`**,
-so simply adding `publicSlug()` there weakens the guard rather than extending it. The guard has to be
-tightened to name the three sanctioned lookups by name — `ownedSlug`, `publicSlug`, and the
-boolean-only `slugIsTaken` — and reject a fourth.
+Sol found the sharp edge in the obvious alternative, too: that test used to **exempt the whole of
+`pg.ts`**, so simply adding `publicSlug()` there would have weakened the guard rather than extending
+it.
+
+**Built 2026-08-28, and it went one step further than the plan asked.** The guard names three
+sanctioned lookups — `ownedSlug`, `publicSlug`, and the boolean-only `slugIsTaken` — and rejects a
+fourth. But naming them is not enough on its own, which was Sol's finding 4 on the built code:
+
+> It verifies that `slugIsTaken` is safe, but not that it is the only bare slug lookup in `pg.ts`.
+> Adding a fourth unfiltered lookup anywhere in an exempt file stays green.
+
+So each of the three now lives in **its own one-function leaf** —
+[`owned-slug.ts`](../../src/store/owned-slug.ts),
+[`public-slug.ts`](../../src/store/public-slug.ts),
+[`slug-is-taken.ts`](../../src/store/slug-is-taken.ts) — and the guard insists each file holds
+*exactly one* bare lookup, *inside the function it is named for*. `slugIsTaken` moving out is what
+let `pg.ts` lose its exemption entirely: the exemption existed for that one function, and fourteen
+hundred lines were being trusted to protect six.
 
 **2. `articles.slug` is globally unique.** One row per slug, for everybody:
 
@@ -141,7 +155,8 @@ boolean-only `slugIsTaken` — and reject a fourth.
 CONSTRAINT "articles_slug_unique" UNIQUE("slug")
 ```
 
-So two people cannot both hold the same article. `slugIsTaken()` exists specifically so
+So two people cannot both hold the same article. `slugIsTaken()`
+([`src/store/slug-is-taken.ts`](../../src/store/slug-is-taken.ts)) exists specifically so
 `beginRevision` can refuse the second person by name. **This does not block stage 1** — Greg's
 cost-efficiency point is delivered by public reading itself, where nobody needs a second copy. It
 blocks exactly one thing, and it is the best conversion moment we have: *"sign up and this lands on
@@ -979,6 +994,46 @@ the file, carrying 338 lines of this work under its message. Nothing was lost an
 recorded in the next commit, but the working agreement only covers one direction: it protects a peer
 from your commit message and says nothing about your finished work landing under theirs. Whoever
 takes 1b will meet it on the same file.
+
+### The client half, built 2026-08-28 in `3120d71`
+
+Eleven files of source and seven of tests. The two-step fetch, the capability seam, the read-only
+chrome, the four sentences, and the owner's Access & Sharing card. What it changed about the plan:
+
+**A `readOnly` prop was never going to work, and the seam is three component boundaries.** Sol's
+answer 8 said so and was right about the size of it. `useComments`, `useChatAnchors` and
+`useGlossaryRead` now mount in [`OwnedReader`](../../src/web/App.tsx); the record-open POST and the
+rename overlay in `OwnedArticle`; and `Reader` takes a discriminated
+[`ReaderCapability`](../../src/web/reader-capability.ts) whose visitor arm has **no `comments` field
+to be empty** — there is nothing there for a later edit to read. `Metadata` and `Tweets` are
+unreachable from the visitor path; [`PublicPages.tsx`](../../src/web/PublicPages.tsx) stands in.
+
+**`resolveAccess` is split in two so `sanitizeArticle` is called exactly once**, on both paths. A
+public payload is the same extracted HTML reaching `innerHTML` by the same route, and the guard in
+`tests/sanitize-client.test.ts` had been reading a setter's name — which had already gone stale once
+and went stale again here. It reads the doorway now.
+
+**A marked control opens its band, and the band carries the reason in visible text.** NN/G's rule is
+that a tooltip may never be the only carrier of information somebody needs, and a hover tooltip is
+out of reach of touch and keyboard entirely — so a dimmed button whose only explanation is a `title`
+is, on a phone, a dead thing with no explanation. The four sentences are decided by one pure
+function, [`visitorGap`](../../src/web/visitor.ts), so that they can be tested apart; the marked set
+is derived from `MODES`, so a ninth mode is marked whether or not whoever adds it remembers.
+
+**A fourth sentence was needed and the plan had three.** `PublicMetadata.available` tells *nobody
+built one* apart from *we do not carry it on a shared link yet*, and collapsing those would either
+libel somebody's article or promise that an account fixes something only slice 1b can. The sign-up
+line is withheld on the second, for the same reason.
+
+**Two gaps, both server-side, both for 1b.** The confirmation dialog cannot *name* which artefacts
+were personalised: `profileHash` is stored on every one of them and no owner endpoint exposes it
+(`ArticleMetadata` is stages, timings and byte counts). And there is no way to *read* an article's
+visibility — the sharing card asks `GET /api/public/metadata/:slug` anonymously, which is the only
+non-mutating question available and is also the honest one, but it cannot see `public_at`.
+
+**Diagram is marked whole**, though its default picture is free and drawn from the tree already on
+the page: `DiagramPanel` mounts `useSimilar` and `useProjection` for its other two, both POSTs that
+spend. Carving the free picture out of a 1700-line panel is not this slice's work.
 
 ## Open questions
 

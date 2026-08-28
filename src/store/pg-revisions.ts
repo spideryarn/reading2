@@ -79,7 +79,8 @@ import { hashBlocks } from "../source-hash.js";
 import { checkTree } from "../tree-invariants.js";
 import type { Block, StepName, Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
-import { REVISION_PROJECTIONS, ownedSlug, requireSlug, slugIsTaken } from "./pg.js";
+import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
+import { slugIsTaken } from "./slug-is-taken.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "./artifacts.js";
 
 const logger = log("store");
