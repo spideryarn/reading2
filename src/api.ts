@@ -686,11 +686,13 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
     archivedAt: shelf.archivedAt ?? null,
 
     /**
-     * **`visibility` is absent here, and absent is the answer.**
+     * **`sharing` is absent here, and absent is the answer.**
      *
      * Not omitted for want of plumbing: this store has no `visibility` column
      * and nowhere to put one — `data/` is one directory per slug — so it cannot
-     * answer the question at all.
+     * answer the question at all — nor the personalisation one beside it, since
+     * it has no artefacts to read a `profileHash` off either. One block, one
+     * fact about the store.
      *
      * It briefly reported `private`, on the reasoning that nothing *can* be
      * shared here so `private` is the truth. That was wrong, and the argument

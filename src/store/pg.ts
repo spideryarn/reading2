@@ -1074,6 +1074,48 @@ export function scalarInputsQuery(
     .where(inArray(articleRevisions.id, [...revisionIds]));
 }
 
+
+/**
+ * **Which of this revision's artefacts were written for a reader profile.**
+ *
+ * `profileHash` is non-null exactly when one was used — `src/profile.ts` — and
+ * only four artefacts can carry it. The tree and the arc deliberately do not
+ * vary by profile (docs/project/reader-profile.md: a reader-specific tree is one
+ * that shifts under a reader who edits their box), and `fetch`, `extract` and
+ * `blocks` have no model call to personalise. So this is exhaustive over the
+ * artefacts that *can* be personalised rather than over `STEP_ORDER`.
+ *
+ * **Only artefacts that EXIST are listed, and that is a requirement rather than
+ * a side effect.** An artefact never generated cannot have been personalised,
+ * and listing one would have the confirmation dialog name a glossary that is not
+ * there. `document?.profileHash` on a null document is `undefined`, so absent
+ * artefacts drop out here — but the property is stated because it is the kind a
+ * refactor loses silently.
+ *
+ * `!= null` rather than truthiness, and rather than `!== undefined`: the field
+ * is `string | null | undefined`, and **`null` means written deliberately
+ * without a profile** (src/types.ts), which is a different thing from personalised
+ * and must not be listed. A truthy test would also drop an empty-string hash,
+ * which no writer produces but which would be a hash all the same.
+ *
+ * Ordered by `STEP_ORDER`, so the dialog lists them in the order the page shows
+ * the stages rather than in the order this function happens to check.
+ */
+function personalisedSteps(revision: {
+  tweets: TweetThread | null;
+  glossary: Glossary | null;
+  summary: Summaries | null;
+  ideas: Ideas | null;
+}): StepName[] {
+  const carriers: Partial<Record<StepName, { profileHash?: string | null } | null>> = {
+    tweets: revision.tweets,
+    glossary: revision.glossary,
+    summary: revision.summary,
+    ideas: revision.ideas,
+  };
+  return STEP_ORDER.filter((step) => carriers[step]?.profileHash != null);
+}
+
 export const pgArticleReader: Pick<
   ArticleReader,
   | "loadArticle"
@@ -1334,27 +1376,28 @@ export const pgArticleReader: Pick<
          from the same derivation rather than from two readings of one column. */
       archivedAt: shelfFrom(found.article).archivedAt ?? null,
 
-      /* **Free, and that is why this is here rather than behind a second
-         endpoint.** `currentRevisionQuery` selects `articles` whole — the same
-         row `shelfFrom` above is reading — so it costs no query, no projection
-         change, and nothing in `REVISION_READ_POLICY`, which is keyed by
-         `article_revisions` columns and has no opinion about `articles` ones.
+      /* **Free, and that is why all three are here rather than behind a second
+         endpoint.** `currentRevisionQuery` selects `articles` whole — the row
+         `shelfFrom` above is reading — and `REVISION_PROJECTIONS.metadata`
+         already carries all four artefacts that can hold a `profileHash`, so
+         this costs no query, no projection change, and no widening of
+         `REVISION_READ_POLICY`.
 
          **Present here and absent on the filesystem**, which is the whole point
-         of the field being optional: this store can answer and that one cannot.
-         The same `VisibilityState` the `PUT` returns, so the sharing card reads
-         the toggle's reply and the page load with one line.
+         of the block being optional: this store can answer and that one cannot.
 
          See ArticleMetadata in src/types.ts for why the owner needs it at all —
          the card was asking the *public* endpoint about its own document, which
-         cannot tell private from absent. */
-      visibility: {
+         cannot tell private from absent — and for why it is one block rather
+         than three fields. */
+      sharing: {
         /* The cast is the boundary between a `text` column with a CHECK on it
            and a two-member union: Postgres guarantees the value
            (`articles_visibility`, drizzle/0024) and TypeScript cannot see the
            guarantee. Same shape as `kind` in the block reads. */
         visibility: found.article.visibility as Visibility,
         publicAt: found.article.publicAt?.toISOString() ?? null,
+        personalised: personalisedSteps(revision),
       },
     };
   },

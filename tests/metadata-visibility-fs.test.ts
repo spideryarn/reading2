@@ -2,7 +2,7 @@
  * **The filesystem store does not answer the sharing question, and that is the
  * answer.**
  *
- * `ArticleMetadata.visibility` is optional precisely so this store can leave it
+ * `ArticleMetadata.sharing` is optional precisely so this store can leave it
  * out. It has no `visibility` column and nowhere to put one — `data/` is one
  * directory per slug — so it cannot say whether a document is shared.
  *
@@ -35,15 +35,20 @@ import { articleMetadata } from "../src/api.js";
 const FIXTURE = "example";
 
 describe("the filesystem store's metadata", () => {
-  it("leaves visibility absent, rather than guessing private", async () => {
+  it("leaves the sharing block absent, rather than guessing private", async () => {
     const meta = await articleMetadata(FIXTURE);
-    expect(meta.visibility).toBeUndefined();
-    /* Absent, not present-and-empty: `"visibility" in meta` would be true for
-       `{ visibility: undefined }`, which is a different thing on the wire —
+    expect(meta.sharing).toBeUndefined();
+    /* Absent, not present-and-empty: `"sharing" in meta` would be true for
+       `{ sharing: undefined }`, which is a different thing on the wire —
        `JSON.stringify` drops the second and a client checking `in` would be
        told the store had answered. */
-    expect("visibility" in meta).toBe(false);
-    expect(JSON.stringify(meta)).not.toContain("visibility");
+    expect("sharing" in meta).toBe(false);
+    expect(JSON.stringify(meta)).not.toContain("sharing");
+    /* And `personalised` did not escape on its own. The whole reason it lives
+       inside the block is that on its own, `[]` and `undefined` collapse under
+       one `?? []` — so its appearing anywhere outside the block would be the
+       bug the block exists to prevent. */
+    expect(JSON.stringify(meta)).not.toContain("personalised");
   });
 
   /**

@@ -1248,6 +1248,48 @@ export interface VisibilityState {
   publicAt: string | null;
 }
 
+/**
+ * Everything the owner's Access & Sharing card needs, in one block.
+ *
+ * **Extends `VisibilityState` rather than restating it**, so the card reads the
+ * `PUT`'s reply and the page load with the same two fields and they cannot
+ * drift — while `VisibilityState` itself stays what the switch returns and
+ * gains nothing about artefacts, which are not the switch's business.
+ */
+export interface ArticleSharing extends VisibilityState {
+  /**
+   * **Which artefacts were written for this reader's profile**, by step name.
+   *
+   * The confirmation dialog names them. GPT Sol's improvement on the plan's
+   * first draft, 2026-08-27: *"the confirmation dialog should name which of this
+   * document's artefacts were generated with a profile"*, rather than warning in
+   * general — which turns a sentence nobody reads into a specific fact about the
+   * thing being shared.
+   *
+   * Non-null `profileHash` is what decides it, and only four artefacts can carry
+   * one: `tweets`, `glossary`, `summary` and `ideas`. The tree and the arc
+   * deliberately do not vary by profile — a reader-specific tree is one that
+   * shifts under a reader who edits their box (reader-profile.md) — and
+   * `fetch`, `extract` and `blocks` have no model call to personalise.
+   *
+   * **Only artefacts that EXIST may be listed, and that is a requirement rather
+   * than an accident of how it is computed.** An artefact never generated cannot
+   * have been personalised, and listing one would have the dialog name a
+   * glossary that is not there. It falls out of reading `profileHash` off the
+   * stored document — no document, no hash — but it is written down here because
+   * that is the kind of property a refactor drops silently.
+   *
+   * **Names, not sentences.** `["glossary", "summary"]`, and the client turns
+   * them into prose: docs/project/copy.md puts every reader-facing sentence in
+   * `src/messages.ts`, and one built on the server would be the first in this
+   * app written outside it.
+   *
+   * `[]` means none were, and it is unambiguous **because it only exists inside
+   * this block** — see `ArticleMetadata.sharing`.
+   */
+  personalised: StepName[];
+}
+
 /** What GET /api/metadata/:slug returns: which stages have run, and nothing the article payload already carries. */
 export interface ArticleMetadata {
   slug: string;
@@ -1297,7 +1339,8 @@ export interface ArticleMetadata {
   /* ---- sharing. docs/plans/public-read-only-access.md § Stage 1 ---- */
 
   /**
-   * **Who may read this — or absent, on a store that cannot say.**
+   * **Who may read this and what was written for you — or absent, on a store
+   * that cannot say.**
    *
    * Added 2026-08-28, and it closes a real hole in stage 1a rather than a
    * nicety: the owner's Access & Sharing card had nothing owner-facing to read,
@@ -1309,16 +1352,34 @@ export interface ArticleMetadata {
    *
    * On this response rather than a second endpoint because the card lives in
    * Metadata, this route is owner-only by construction, and the Postgres read
-   * already has the row in hand — `currentRevisionQuery` selects `articles`
-   * whole, which is where `purpose` and `archivedAt` above come from too. It
-   * costs no query and no projection change.
+   * already has everything in hand: `currentRevisionQuery` selects `articles`
+   * whole (where `purpose` and `archivedAt` come from), and the `metadata`
+   * projection already carries all four artefacts that can hold a
+   * `profileHash`. No new query and no widening of `REVISION_READ_POLICY`.
    *
-   * ## Why optional, and why absent rather than `private`
+   * ## One block, not three optional fields
+   *
+   * This is the shape trap, and it is why `personalised` is in here rather than
+   * arriving later as a second optional. On its own, `personalised?: StepName[]`
+   * has `[]` meaning *none were personalised* and `undefined` meaning *we could
+   * not tell* — and one `?? []` anywhere flattens the second into the first, so
+   * the dialog would tell an owner *"nothing here was written for your reader
+   * profile"* about an article it knows nothing about.
+   *
+   * Inside a block it cannot happen: **the block being present is the store
+   * saying it can answer**, so `personalised: []` is unambiguous. And "cannot
+   * say" has exactly one cause — the filesystem store has no column and no
+   * artefacts to read a hash off — so it is one fact about the store rather than
+   * three independent unknowns. Two optionals would also admit a state where
+   * visibility is known and personalisation is not, which cannot occur and which
+   * the client would still have to branch for.
+   *
+   * ## Why absent rather than a default
    *
    * The filesystem store has no `visibility` column and nowhere to put one, so
-   * it cannot answer. The first version of this field was required and that
-   * store reported `private`, on the reasoning that nothing *can* be shared
-   * there so `private` is the truth.
+   * it cannot answer. The first version of this was required and that store
+   * reported `private`, on the reasoning that nothing *can* be shared there so
+   * `private` is the truth.
    *
    * That was wrong, and the argument against it is the one `requirePostgres`
    * already makes on the public route: a store with no honest answer must
@@ -1328,12 +1389,12 @@ export interface ArticleMetadata {
    * to be right — over every article in development.
    *
    * Absent means *this store cannot say*. The card keeps its existing "we could
-   * not check" state, which is true, and nothing throws — a read must not
-   * refuse the way `visibilityStore.set` does, or the whole Metadata page goes
-   * down in dev to be principled about a field nobody can set there.
+   * not check" state, which is true, and nothing throws — a read must not refuse
+   * the way `visibilityStore.set` does, or the whole Metadata page goes down in
+   * dev to be principled about a field nobody can set there.
    * docs/reusable/silent-success.md.
    */
-  visibility?: VisibilityState;
+  sharing?: ArticleSharing;
 }
 
 /** A source the model consulted, from OpenRouter's `annotations`. See src/explain.ts. */

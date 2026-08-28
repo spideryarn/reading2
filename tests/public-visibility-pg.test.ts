@@ -573,9 +573,14 @@ when("sharing one article", { timeout: 60_000 }, () => {
     /* **The same `VisibilityState` the PUT answers with**, nested rather than
        two flat fields, so the sharing card reads the toggle's reply and the
        page load with one line and the two cannot drift. */
-    expect(r.body.visibility).toEqual({
+    expect(r.body.sharing).toEqual({
       visibility: "public",
       publicAt: (await articleRow())?.publicAt?.toISOString(),
+      /* Nothing on this fixture carries a `profileHash`, and empty is a real
+         answer here rather than a gap — the block being present is the store
+         saying it can tell. The case below plants one so that this is not the
+         only reading. */
+      personalised: [],
     });
   });
 
@@ -595,8 +600,98 @@ when("sharing one article", { timeout: 60_000 }, () => {
     });
     const get = await call("GET", `/api/metadata/${SLUG}`, { as: OWNER });
     expect(put.status).toBe(200);
-    /* The PUT's whole body is the state; the GET carries it under one key. */
-    expect(get.body.visibility).toEqual(put.body);
+    /* The PUT answers `VisibilityState`; the GET's block **extends** it, so the
+       two agree on every field the switch owns and the block adds one the
+       switch has no business knowing. Compared field by field against the PUT's
+       own body rather than against a literal, because drifting together is not
+       the failure — drifting apart is. */
+    const sharing = get.body.sharing as Record<string, unknown>;
+    for (const key of Object.keys(put.body as Record<string, unknown>)) {
+      expect({ key, value: sharing[key] }).toEqual({
+        key,
+        value: (put.body as Record<string, unknown>)[key],
+      });
+    }
+    expect(sharing).toHaveProperty("personalised");
+  });
+
+  /**
+   * **`personalised` names the artefacts written for a profile, and only the
+   * ones that exist.**
+   *
+   * GPT Sol's improvement on the plan, 2026-08-27: the confirmation dialog
+   * should name *which* artefacts were personalised rather than warn in general,
+   * which turns a sentence nobody reads into a specific fact about the thing
+   * being shared.
+   *
+   * Three artefacts are planted and they are deliberately different from each
+   * other, because a test where every case points the same way proves one thing
+   * rather than three:
+   *
+   * - a **glossary with a `profileHash`** — must be listed;
+   * - a **summary with `profileHash: null`**, which means *written deliberately
+   *   without a profile* (src/types.ts) and is a different thing from
+   *   personalised — must NOT be listed, and is what a truthy test or a
+   *   `!== undefined` test would get wrong;
+   * - **`ideas` absent entirely** — must not be listed, which is the "only
+   *   artefacts that exist" guarantee. An artefact never generated cannot have
+   *   been personalised, and listing one would have the dialog name a glossary
+   *   that is not there.
+   */
+  it("names the personalised artefacts, and only ones that were really built", async () => {
+    const db = getDb();
+    await db
+      .update(articleRevisions)
+      .set({
+        /* Whole artefacts rather than casts, because the *shape* is part of what
+           is being tested: `profileHash` is one optional field among ten, and a
+           partial literal behind an `as` would compile past a rename of it. */
+        glossary: {
+          version: "1",
+          generator: "test",
+          slug: SLUG,
+          sourceHash: "s1",
+          entries: [],
+          passes: 1,
+          generatedAt: "2026-08-28T00:00:00.000Z",
+          elapsedMs: 1,
+          profileHash: "abc123",
+        },
+        summary: {
+          version: "1",
+          generator: "test",
+          slug: SLUG,
+          sourceHash: "s1",
+          entries: [],
+          missing: 0,
+          generatedAt: "2026-08-28T00:00:00.000Z",
+          elapsedMs: 1,
+          /* **Null, not absent**, and that is the case this fixture exists for:
+             null means *written deliberately without a profile*, which is a
+             different thing from personalised. */
+          profileHash: null,
+        },
+        ideas: null,
+      })
+      .where(eq(articleRevisions.id, REVISION_ID));
+    try {
+      const r = await call("GET", `/api/metadata/${SLUG}`, { as: OWNER });
+      const sharing = r.body.sharing as { personalised: string[] };
+      expect(sharing.personalised).toEqual(["glossary"]);
+      /* Said separately, because `toEqual` above would pass a list that happened
+         to be right for the wrong reason if the ordering ever changed. */
+      expect(sharing.personalised).not.toContain("summary");
+      expect(sharing.personalised).not.toContain("ideas");
+      /* And never a step that has no model call to personalise. */
+      for (const step of ["fetch", "extract", "blocks", "toc", "arc"]) {
+        expect(sharing.personalised, step).not.toContain(step);
+      }
+    } finally {
+      await db
+        .update(articleRevisions)
+        .set({ glossary: null, summary: null, ideas: null })
+        .where(eq(articleRevisions.id, REVISION_ID));
+    }
   });
 
   /**
@@ -617,7 +712,7 @@ when("sharing one article", { timeout: 60_000 }, () => {
          carries the field. */
       expect([401, 404]).toContain(r.status);
       expect(r.text).not.toContain("publicAt");
-      expect(r.body.visibility).toBeUndefined();
+      expect(r.body.sharing).toBeUndefined();
     }
   });
 
