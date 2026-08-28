@@ -208,6 +208,15 @@ You are probably in it when:
 - The evidence is a screenshot, or any single sample of a continuous space.
 - The thing declares an intent (`position: sticky`, a link, a subscription) rather than reporting an
   outcome. Declarations report what you asked for, not what happened.
+- **You agree with what you are being told.** Four claims went unchecked in one afternoon here and
+  the pattern was not that they were obscure — it was that **nobody doubted them**. The worst was an
+  agent reporting that a feature had not shipped, about a commit it had made itself twenty minutes
+  earlier, *while agreeing with the instruction to drop it*: it read the instruction, agreed with the
+  reasoning, and reported compliance with a decision its own work had already overtaken. Its own
+  account is the line to remember — **"the agreeing is what stopped the checking"**. Doubt does not
+  trigger verification reliably enough to be the trigger; the repo has to be. A useful phrasing when
+  you think somebody is wrong, because it survives you being the mistaken one: *check it yourself
+  rather than taking my word.*
 - **The outcome depends on something about the *viewer* that you cannot see from here.** A near miss
   from the same session: a component library's `dark:` classes compile to
   `@media (prefers-color-scheme: dark)`, on a page that is dark unconditionally with no media query.
