@@ -312,6 +312,72 @@ starts the poll that wipes it; `Tweets.tsx` is still the old shape and still car
 Also stale, and cheap: the plan cites `useIdeas.ts:156-166` for `FORCE_ONLY_WHEN_NAMED`. The set is
 `src/pipeline.ts:202`. Rule 3, as predicted.
 
+### What the Tier 2 code review changed — 2026-08-28
+
+[prompt](simplification-wave-2-tier2-review-prompt.md) ·
+[answer](simplification-wave-2-tier2-review-sol.md) · fixed in `750cf87`. Verdict: **revise the 2.5
+gate; leave the production migrations in place.** `collectCitations`, `useStepJob`, the three
+`stageCli` tails and `isMain` are all sound as committed. The gate was not.
+
+**It found the fault by *running* the exported detectors against adversarial sources rather than
+reading them**, and that is the part to copy. Seven ways in, every one ordinary code with the right
+syntax in the right order:
+
+| beaten by | what actually happened |
+|---|---|
+| `if (isMain(entry)) return;` | the polarity never checked — started, it does nothing; imported, it runs |
+| a `return` between the guard and the env read | positions still in order |
+| `if (false) await withLedger("cli", main)` | reachability never checked |
+| a wrapper that is not awaited | the ledger can outlive the command |
+| a tail that is not awaited | same, one level up |
+| `async function leak() { await main(); }` + `await leak();` | the walker skipped function bodies |
+| `import { stageCli } from "./fake/cli-ledger.js"` | `endsWith("/cli-ledger.js")` matches a basename |
+
+Two more turned up while building the reproduction harness: the IIFE form of the closure, and
+`void stageCli(...)` — **which had a green control asserting it was fine.**
+
+**Every one reproduced against the committed `a547ca3` before anything was changed.** None of Sol's
+findings was wrong this round.
+
+**The two faults are one mistake in two places: asking whether syntax is present rather than whether
+it is the statement that runs.** That is the third time in two days — Tier 1's medium finding was a
+`loadEnvLocal()` that runs *after* the spending, and §0.1's original gate was beaten by
+`withLedger("cli", async () => {}).then(main)`. So the answer this time is shape rather than
+sampling: `stageCli`'s body must **be** the three statements, and a CLI's tail must **be** a
+top-level `await stageCli(import.meta.url, main);`. Sampling positions was beaten four ways with
+every position still in the right order. `main` is now looked for over the whole module, function
+bodies included, and the same reach fix went onto the old tail, which the closure beat identically.
+All five held files still pass, so it is a tightening with no false positives.
+
+**And the basename finding is the item's own lesson landing on the item.** `endsWith("/cli-ledger.js")`
+matches a name and not an identity — which is exactly what was wrong with
+`import.meta.url.endsWith(path.basename(process.argv[1]))`, the spelling this whole item exists to
+delete. The same mistake, in the file that replaced it, on the same day. Dispatch now resolves the
+specifier against the importing file's own path.
+
+**Two claims of mine were wrong and are corrected in place.**
+
+- `src/is-main.ts` said the `realpath` fallback costs *"two `stat` calls once per process"*. It is
+  two `realpathSync` calls **per non-matching call**, and every guarded module asks as it loads, so
+  ten guarded modules is up to twenty. Out by an order of magnitude, and exactly the sort of
+  measurement-in-a-comment that never gets re-run.
+- `a547ca3`'s message said the gate checks *"by position and not by presence"*. True of the
+  positions, false of polarity, reachability and awaiting. Sol named it as the weakest claim in the
+  three commits, which is the question worth asking it every time: both times it has been asked, the
+  answer has been one of my own gates.
+
+**One finding accepted and deliberately not fixed.** Under Node's `--preserve-symlinks-main` a
+symlinked entry and its target can load as two module instances, so `isMain`'s fallback can answer
+`true` for the one that is *not* the entry. No script here passes that flag, and the alternative is
+reinstating the silent no-op that actually happens. The flag is named in the docstring so nobody has
+to rediscover which one it is.
+
+**Not fixed, and it should be:** `converse`'s citation collection has no end-to-end test — every
+`url_citation` in `tests/` is in `tests/explain.test.ts`. Sol: *"worth adding before the remaining
+stream refactor because its unique assertion is cross-round persistence."* It confirmed the
+extraction did not change accumulation — `converse` still holds one map above the round loop, so a
+page cited in round one is still not cited again in round two — but nothing tests that.
+
 
 ### What the code review changed, and it earned its keep
 
