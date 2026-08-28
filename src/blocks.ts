@@ -976,6 +976,38 @@ export function blocksArtefact(blocks: Block[]): { sanitizer: number; blocks: Bl
  * here as a value rather than as a sentence in a comment because a rule written
  * only in prose is not a rule the code follows —
  * tests/blocks-baseline.test.ts holds it, and landing D reads it.
+ *
+ * ## There is no fallback to `stampedHtml`, and the review asked for one
+ *
+ * GPT Sol's review (docs/plans/blocks-carry-forward-sol.md, question 1) said:
+ * *"prefer `extractedHtml`, falling back to `stampedHtml` for legacy/blocks-only
+ * cases"*. That fallback is deliberately **not** here, and this is the paragraph
+ * that says why, because the next person will meet both columns and have to work
+ * out which one and on what grounds.
+ *
+ * **A fallback to `stampedHtml` is a fallback to HTML that still carries our
+ * ids.** So on every run that took it, the ids would survive whether or not the
+ * baseline read worked — the reuse branch would supply them, and `carried` would
+ * read 0 while `reused` read 139, which looks like a healthy idempotent re-run.
+ * The stage would report success, the seam this whole change exists to build
+ * would be doing nothing, and nobody would find out until the first genuine
+ * re-extraction, when stage 2 hands over a document with no ids in it and every
+ * one of them is minted at once. That is the same shape as the bug being fixed,
+ * moved one step further from the thing that causes it.
+ *
+ * **The two cases the review had in mind are covered without it.** A legacy
+ * article, and a `{ steps: ["blocks"] }` re-run over an article stage 2 has not
+ * touched, both still have their `extractedHtml` — it is a carried column
+ * (`REVISION_CARRY_POLICY`), so a draft inherits stage 2's last output even when
+ * stage 2 did not run in this job. There is no state in which `stampedHtml`
+ * exists and `extractedHtml` does not; if there ever is, the honest answer is
+ * that stage 2 has not run and stage 3 has nothing to do, which is a failure and
+ * not a fallback.
+ *
+ * The general form of the rule, worth keeping when this is next weighed: prefer
+ * the arrangement in which the thing you depend on is **exercised**. Reading
+ * stage 2's output means the baseline is load-bearing on every single run, so a
+ * broken baseline fails immediately rather than eventually.
  */
 export const BLOCKS_INPUT_HTML: ArtifactKind = "extractedHtml";
 
@@ -1007,13 +1039,33 @@ export class BaselineMissing extends Error {
   }
 }
 
-/** Every id changed at once, which is what losing the baseline looks like from the far side. */
+/**
+ * Every id changed at once, which is what losing the baseline looks like from
+ * the far side.
+ *
+ * **The message is the whole justification for having no escape hatch.** A stage
+ * that stops with something a person can act on is fine; a stage that continues
+ * and orphans forty-three comments is not. So it says four things, and each one
+ * is there because a reader of the log would otherwise have to go and find it:
+ * what was compared, how many ids were on each side, that **nothing has been
+ * written** — so the article is exactly as it was and the fix is not a
+ * restoration — and what the one legitimate cause is and who has to decide about
+ * it.
+ */
 export class IdsNotCarried extends Error {
   constructor(readonly slug: string, before: number, after: number) {
     super(
-      `blocks "${slug}": not one of the ${before} previous ids appears in the ${after} blocks ` +
-        "this run produced. Either the matcher is broken or this is a different article; " +
-        "either way every anchor into it would be orphaned. Refusing.",
+      `blocks "${slug}": compared the ${before} block ids carried in as the baseline against ` +
+        `the ${after} ids this run produced, and not one is in both. Every comment, saved ` +
+        "search and ToC row anchored into this article would stop naming anything " +
+        "(docs/project/block-ids.md).\n" +
+        "Nothing has been written — the blocks and the HTML are still the previous run's, " +
+        "so there is nothing to restore.\n" +
+        "The usual causes are that this URL now serves a different article, that a re-fetch " +
+        "got a paywall or error page, or that extraction went wrong; in all three, stopping " +
+        "is the right outcome. The one legitimate case is a piece genuinely rewritten from " +
+        "end to end, and there is deliberately no flag for it: somebody has to add the " +
+        "exemption on purpose (`assertIdsCarried` in src/blocks.ts).",
     );
     this.name = "IdsNotCarried";
   }

@@ -35,7 +35,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
@@ -50,7 +49,18 @@ import {
 } from "../src/blocks.js";
 import { createFsArtifactStore } from "../src/store/artifacts-fs.js";
 import type { ArtifactStore } from "../src/store/artifacts.js";
+import type { JobDraftRef } from "../src/store/artifacts-pg.js";
+import type { Db } from "../src/db/client.js";
+import { mintId } from "../src/ids.js";
+import { mintAttempt } from "../src/store/jobs.js";
+import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import type { Block, OwnerId } from "../src/types.js";
+
+/** The transaction type, derived the same way `src/store/artifacts-pg.ts` derives it. */
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/** Thrown to unwind a fixture transaction; never an error anybody has to see. */
+class RollBack extends Error {}
 
 /* ------------------------------------------------------------ the article -- */
 
@@ -277,12 +287,110 @@ describe("the HTML stage 3 consumes", () => {
   });
 });
 
+/* --------------------------------------- the argument that must not go missing -- */
+
+/**
+ * **Nothing in `src/` may call `splitIntoBlocks` with one argument.**
+ *
+ * The trap this closes, which is specific and worth stating: landing D deletes
+ * `dir` and `htmlFile` from `StepContext`, so the code that calls stage 3 *has*
+ * to be edited — that part is safe, because it will not compile. What is not
+ * safe is the shape of the edit. `splitIntoBlocks(html, previous?: Block[])`
+ * takes its baseline **optionally**, so a conversion that reads the HTML from
+ * the store and writes `splitIntoBlocks(html)` compiles cleanly, runs green,
+ * and silently re-mints every id in the article.
+ *
+ * `runBlocks`'s `previous` is required, which closes the production path the
+ * strong way. This closes the one underneath it.
+ *
+ * **Why a grep and not a required parameter.** Making the second argument
+ * required would touch 81 call sites across four test files — one of which
+ * belongs to another session's in-flight work — and those tests pass one
+ * argument *legitimately*: they are exercising the first-ingest path, which is a
+ * real case. Forcing all of them to write `, undefined` would be noise that
+ * looks like rigour and teaches nothing. The precedent for reading the source
+ * instead is `tests/sanitize-stale-artefact.test.ts`, for the reason it gives:
+ * a rule stated in one function is not a rule the codebase follows.
+ *
+ * **The honest limit.** This checks the *call shape*, not the value. Somebody
+ * can still pass `undefined` explicitly and this will not stop them — but then
+ * they have written the word, and the difference between an omission and a
+ * decision is the entire point of the check.
+ */
+describe("the baseline argument", () => {
+  it("is never omitted by anything in src/", async () => {
+    const { readdir } = await import("node:fs/promises");
+    const root = path.join(import.meta.dirname, "..", "src");
+
+    const files: string[] = [];
+    const walk = async (dir: string): Promise<void> => {
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) await walk(full);
+        else if (entry.name.endsWith(".ts")) files.push(full);
+      }
+    };
+    await walk(root);
+
+    /* A call with no comma before its closing bracket — `splitIntoBlocks(x)` —
+       and not `splitIntoBlocks(x, y)`. The declaration is skipped by requiring
+       something other than a type annotation in front of the bracket. */
+    const oneArgument = /\bsplitIntoBlocks\(\s*[^,()]*\)/;
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = await readFile(file, "utf-8");
+      source.split("\n").forEach((line, i) => {
+        if (/function splitIntoBlocks/.test(line)) return;
+        if (oneArgument.test(line)) offenders.push(`${path.relative(root, file)}:${i + 1}`);
+      });
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("would notice — the check is run against a call that omits it", () => {
+    /* A check that has never been red is not evidence, and a grep over a
+       directory that happens to be clean is exactly that. So the pattern is
+       exercised here on both shapes, in this file, where it cannot go stale
+       without failing. */
+    const oneArgument = /\bsplitIntoBlocks\(\s*[^,()]*\)/;
+    expect(oneArgument.test("  const r = splitIntoBlocks(html);")).toBe(true);
+    expect(oneArgument.test("  const r = splitIntoBlocks(html, previous);")).toBe(false);
+  });
+});
+
 /* ------------------------------------------------------------- Postgres -- */
 
 const { loadEnvLocal } = await import("../src/env.js");
 loadEnvLocal();
 
+/**
+ * **These have never run, and the reason is written here rather than only in
+ * somebody's report.**
+ *
+ * As of 2026-08-28 they cannot execute on a laptop whose database is behind
+ * `drizzle/0027_block_roles.sql`. That migration adds `role`, `treatment` and
+ * `note_id` to `revision_blocks`, and `readBlocks` in
+ * `src/store/artifacts-pg.ts` selects all three — so *every* read of a block row
+ * fails with `column "role" does not exist`, whatever the test is about. The
+ * repo's own drift guard says the same thing independently
+ * (`tests/db-schema-drift.test.ts`).
+ *
+ * **What has to be true before this describe block can run:**
+ *
+ * 1. `drizzle/0027_block_roles.sql` is applied to the database in
+ *    `DATABASE_URL` — `npm run db:migrate`, after reading its `Target:` line.
+ * 2. Nothing else is holding the single `running` job slot (`withClaim` below
+ *    waits it out, up to 20 seconds).
+ *
+ * The probe checks for the column itself, not merely for the table, precisely
+ * so that a half-migrated database **skips loudly** instead of producing three
+ * red lines that read like a bug in the code under test. A suite that reports
+ * "0 failures" because it never ran is the thing this project keeps writing
+ * postmortems about, so the console line is not optional decoration.
+ */
 let reachable = false;
+let why = "DATABASE_URL is not set — run npm run db:start (docs/project/supabase-local.md)";
 if (process.env.DATABASE_URL) {
   const { Pool } = await import("pg");
   const pool = new Pool({
@@ -290,21 +398,63 @@ if (process.env.DATABASE_URL) {
     max: 1,
     connectionTimeoutMillis: 10_000,
   });
-  let why = "";
   try {
     const probe = await pool.query(
       "select to_regclass('spideryarn.revision_blocks') is not null as ready",
     );
     reachable = probe.rows[0]?.ready === true;
     if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
+    if (reachable) {
+      /* The column, not the table. `readBlocks` selects it, so without it every
+         read fails for a reason that has nothing to do with the baseline. */
+      const migrated = await pool.query(
+        "select 1 from information_schema.columns where table_schema = 'spideryarn' " +
+          "and table_name = 'revision_blocks' and column_name = 'role'",
+      );
+      reachable = migrated.rowCount === 1;
+      if (!reachable) {
+        why =
+          "drizzle/0027_block_roles.sql is not applied — revision_blocks has no `role` column, " +
+          "and src/store/artifacts-pg.ts selects it, so every block read fails. " +
+          "Run `npm run db:migrate` (check its Target: line first) and these will run.";
+      }
+    }
   } catch (err) {
     reachable = false;
     why = `could not reach it: ${(err as Error).message}`;
   }
   await pool.end();
-  if (!reachable) console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
 }
+/* **Unconditional, and it took a run to notice why.** The first version warned
+   only inside the `if`, so the one case that produces no warning at all was a
+   missing `DATABASE_URL` — a silent skip, which is the exact thing this block is
+   supposed to make impossible. Every road to `reachable === false` says why. */
+if (!reachable) console.warn(`\n  ⚠ the Postgres half of this file is SKIPPING: ${why}\n`);
 const when = reachable ? describe : describe.skip;
+
+/**
+ * **One test that always runs, and whose name is the reason.**
+ *
+ * `describe.skip` hides four cases behind the word "skipped", and the console
+ * warning above turned out not to survive vitest's default reporter — module-level
+ * output during collection is not shown. So the state is put where it cannot be
+ * missed: in a test name, which every reporter prints. A reader scanning a run
+ * sees *why* the Postgres half did not execute rather than a silent count.
+ */
+describe("the Postgres half of this file", () => {
+  it(
+    reachable
+      ? "is running — the database has the columns src/store/artifacts-pg.ts selects"
+      : `is NOT RUNNING, and these assertions have not executed: ${why}`,
+    () => {
+      /* Deliberately not `expect(reachable).toBe(true)`. A missing database is
+         not a failure — it is a fact about this laptop, and the name has just
+         stated it. Failing here would make `npm test` red for everybody without
+         a local Postgres, which is not what the skip is for. */
+      expect(typeof why).toBe("string");
+    },
+  );
+});
 
 when("the baseline, over the Postgres store", () => {
   const SLUG = "test-blocks-baseline";
@@ -436,27 +586,63 @@ when("the baseline, over the Postgres store", () => {
     const begun = await owner.runAsOwner(admin.ADMIN_USER_ID as OwnerId, () =>
       revisions.beginRevision({ slug }),
     );
-    const ref = {
-      slug,
-      articleId: begun.articleId,
-      revisionId: begun.revisionId,
-      jobId: randomUUID(),
-      attemptId: randomUUID(),
-    };
-    return { begun, ref, store: (tx: never) => pg.pgArtifactsIn(ref, tx) };
+    void pg;
+    return { begun, revisionId: begun.revisionId, articleId: begun.articleId };
   }
 
-  it("carries every id across a re-extraction, from the rows the draft was given", async () => {
-    const { begun, ref } = await aDraft(SLUG);
+  /**
+   * A live claim on a draft, and everything it touches rolled back.
+   *
+   * **`writeArtefacts` will not write without one.** It calls
+   * `requireLiveJobOwnsDraft` first — this job, this attempt, still `running`,
+   * still pointed at this draft — so a test that wants the production write path
+   * has to supply a real job row rather than a plausible-looking `JobDraftRef`.
+   * That is the check doing its job, and it is exactly why the store cannot be
+   * hand-built here.
+   *
+   * `jobs_only_one_running` is a unique index over the whole table, so at most
+   * one `running` row exists anywhere — including another `npm test` on the same
+   * laptop. `insertWhenSlotFree` waits for it instead of failing with a
+   * duplicate-key error that points at the wrong suite.
+   */
+  async function withClaim(
+    slug: string,
+    revisionId: string,
+    articleId: string,
+    body: (tx: Tx, ref: JobDraftRef) => Promise<void>,
+  ): Promise<void> {
+    const { schema } = mod;
+    await insertWhenSlotFree(slug, async () => {
+      const id = mintId();
+      const attemptId = mintAttempt();
+      try {
+        await db.transaction(async (tx) => {
+          await tx.insert(schema.jobs).values({
+            id,
+            ownerId: mod.admin.ADMIN_USER_ID,
+            slug,
+            steps: [{ name: "blocks", label: "Splitting into blocks", status: "pending" }],
+            status: "running",
+            attemptId,
+            leaseExpiresAt: new Date(Date.now() + 600_000),
+            workKey: `wk-${id}`,
+            draftRevisionId: revisionId,
+          });
+          await body(tx, { slug, articleId, revisionId, jobId: id, attemptId });
+          throw new RollBack();
+        });
+      } catch (err) {
+        if (!(err instanceof RollBack)) throw err;
+      }
+    });
+  }
+
+  it("carries every id through stage 3 and back out of the store it wrote them to", async () => {
+    const { begun, revisionId, articleId } = await aDraft(SLUG);
     /* `beginDraftIn` copies the published revision's block rows into the new
        draft before any stage runs — the baseline is already there, and this is
        the number that says so. */
     expect(begun.blocksCopied).toBe(3);
-
-    const previous = await db.transaction((tx) =>
-      previousBlocksFrom(mod.pg.pgArtifactsIn(ref, tx), SLUG),
-    );
-    expect(previous?.map((b) => b.id)).toEqual([H, P1, P2]);
 
     const root = await mkdtemp(path.join(tmpdir(), "spya-baseline-pg-"));
     roots.push(root);
@@ -464,33 +650,87 @@ when("the baseline, over the Postgres store", () => {
     /* Stage 2's output: the same words, no ids anywhere. */
     await writeFile(htmlFile, EXTRACTED, "utf-8");
 
-    const run = await runBlocks({ htmlFile, previous });
-    expect(run.stats.minted).toBe(0);
-    expect(run.blocks.map((b) => b.id)).toEqual([H, P1, P2]);
+    await withClaim(SLUG, revisionId, articleId, async (tx, ref) => {
+      const store = mod.pg.pgArtifactsIn(ref, tx);
+
+      const previous = await previousBlocksFrom(store, SLUG);
+      expect(previous?.map((b) => b.id)).toEqual([H, P1, P2]);
+
+      const run = await runBlocks({ htmlFile, previous });
+      expect(run.stats.minted).toBe(0);
+      expect(run.blocks.map((b) => b.id)).toEqual([H, P1, P2]);
+
+      /* **Through `writeArtefacts`, which is the point of this test.** Stopping
+         at `runBlocks` would prove the matcher works and say nothing about the
+         path landing D actually takes: `write` deletes every block row for this
+         revision and inserts the new ones, so an id that survived the match and
+         then failed to survive the write would look identical from outside. */
+      await store.beginStep(SLUG, "blocks");
+      await store.write(SLUG, "blocks", { blocks: { blocks: run.blocks }, stampedHtml: run.html }, {});
+
+      const readBack = await store.read(SLUG, "blocks", "blocks");
+      /* The exact ids, in document order, read out of the table the write put
+         them in. This is the assertion the whole change exists for. */
+      expect(readBack?.blocks.map((b) => b.id)).toEqual([H, P1, P2]);
+      expect(readBack?.blocks.map((b) => b.text)).toEqual(PUBLISHED.map((b) => b.text));
+    });
+  }, 60_000);
+
+  it("stays idempotent — a second stage 3 over the rows the first one wrote", async () => {
+    /* The case the plan's existing acceptance list cannot reach: item 8 runs the
+       pipeline with `data/<slug>/` empty, and a *fresh* ingest mints everything
+       by design, so it cannot tell "carries ids correctly" from "re-mints every
+       time". This runs the stage a second time against unchanged text and
+       asserts the same exact ids, not merely that some were carried. */
+    const { revisionId, articleId } = await aDraft(SLUG);
+    const root = await mkdtemp(path.join(tmpdir(), "spya-baseline-pg2-"));
+    roots.push(root);
+    const htmlFile = path.join(root, "a.html");
+
+    await withClaim(SLUG, revisionId, articleId, async (tx, ref) => {
+      const store = mod.pg.pgArtifactsIn(ref, tx);
+      await store.beginStep(SLUG, "blocks");
+
+      await writeFile(htmlFile, EXTRACTED, "utf-8");
+      const first = await runBlocks({ htmlFile, previous: await previousBlocksFrom(store, SLUG) });
+      await store.write(SLUG, "blocks", { blocks: { blocks: first.blocks }, stampedHtml: first.html }, {});
+
+      /* Stage 2 runs again and hands over an id-free document, exactly as
+         Readability does. The only way the ids can come back is the baseline. */
+      await writeFile(htmlFile, EXTRACTED, "utf-8");
+      const second = await runBlocks({ htmlFile, previous: await previousBlocksFrom(store, SLUG) });
+      await store.write(SLUG, "blocks", { blocks: { blocks: second.blocks }, stampedHtml: second.html }, {});
+
+      expect(second.stats.minted).toBe(0);
+      const readBack = await store.read(SLUG, "blocks", "blocks");
+      expect(readBack?.blocks.map((b) => b.id)).toEqual([H, P1, P2]);
+    });
   }, 60_000);
 
   it("refuses to mint when the draft's carried baseline is not there", async () => {
-    const { ref } = await aDraft(SLUG);
+    const { revisionId, articleId } = await aDraft(SLUG);
     const { schema } = mod;
     /* The carry-forward did not happen — a failed copy, a bad migration, a
        hand-edit. The article has a published revision, so this is not a first
        ingest, and minting would orphan every anchor into it. */
     await db
       .delete(schema.revisionBlocks)
-      .where(eq(schema.revisionBlocks.revisionId, ref.revisionId));
+      .where(eq(schema.revisionBlocks.revisionId, revisionId));
 
-    await expect(
-      db.transaction((tx) => previousBlocksFrom(mod.pg.pgArtifactsIn(ref, tx), SLUG)),
-    ).rejects.toBeInstanceOf(BaselineMissing);
+    await withClaim(SLUG, revisionId, articleId, async (tx, ref) => {
+      const store = mod.pg.pgArtifactsIn(ref, tx);
+      await expect(previousBlocksFrom(store, SLUG)).rejects.toBeInstanceOf(BaselineMissing);
+    });
   }, 60_000);
 
   it("mints quietly for an article with no published revision", async () => {
-    const { begun, ref } = await aDraft(FRESH_SLUG);
+    const { begun, revisionId, articleId } = await aDraft(FRESH_SLUG);
     expect(begun.basedOn).toBeNull();
     expect(begun.blocksCopied).toBe(0);
 
-    await expect(
-      db.transaction((tx) => previousBlocksFrom(mod.pg.pgArtifactsIn(ref, tx), FRESH_SLUG)),
-    ).resolves.toBeUndefined();
+    await withClaim(FRESH_SLUG, revisionId, articleId, async (tx, ref) => {
+      const store = mod.pg.pgArtifactsIn(ref, tx);
+      await expect(previousBlocksFrom(store, FRESH_SLUG)).resolves.toBeUndefined();
+    });
   }, 60_000);
 });
