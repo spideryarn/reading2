@@ -73,6 +73,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/Tooltip.tsx`](../../src/web/Tooltip.tsx) | the wrapper: `<Tooltip content={…}>{trigger}</Tooltip>`, plus `TooltipGroup` |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | `BandCard` — what a spine band actually says |
 | [`src/web/ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) | the other one — see below |
+| [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's three links, and the one place a tooltip's trigger is not a host element |
 | [`src/web/styles.css`](../../src/web/styles.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
 `Tooltip` is deliberately generic — nothing in it knows about the spine. The obvious second customer
@@ -127,7 +128,7 @@ it is never a fallback for a missing gist in the reading view.
 Listing the sub-sections is why [`App.tsx`](../../src/web/App.tsx) builds the outline three levels
 deep rather than two. The rail itself still only ever draws L1 and L2.
 
-## Four things that are load-bearing
+## Five things that are load-bearing
 
 Each of these is a way the obvious version fails silently.
 
@@ -150,7 +151,19 @@ Each of these is a way the obvious version fails silently.
 4. **The tooltip is the trigger's *description*, not its name.** `useRole` wires the panel up as
    `aria-describedby`. The spine's bands used to get their accessible name from the `title`
    attribute the tooltip replaced, so the name has to be restated as `aria-label` — otherwise a
-   screen reader meets fifty anonymous buttons.
+   screen reader meets fifty anonymous buttons. (The masthead links below need nothing: their
+   accessible name is the word next to the icon.)
+5. **The trigger has to hand over its ref.** `useHover` puts a native `mouseenter` listener on
+   `elements.domReference` — the node the ref gave it — so a trigger that swallows the ref opens
+   nothing at all, with no error and no visible difference from before the tooltip was added. Every
+   trigger in the app is a host element except the homepage masthead's, which are `Link`
+   ([`src/web/Link.tsx`](../../src/web/Link.tsx)), a function component. React 19 hands a function
+   component its `ref` as an ordinary prop and `Link` spreads its rest props onto the `<a>`, so it
+   works — and `Link`'s props now say `ref` out loud rather than leaving it to that spread, because
+   `AnchorHTMLAttributes` does not include it and `Tooltip` clones its child as
+   `Record<string, unknown>`, so nothing else would have complained.
+   [`tests/tooltip-on-link.test.tsx`](../../tests/tooltip-on-link.test.tsx) hovers a real one, and
+   its third case is the same test with the ref taken away.
 
 ## Grouping, and why the delays are what they are
 

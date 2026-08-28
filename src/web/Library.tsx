@@ -45,7 +45,7 @@
  * See docs/plans/library-shelf-actions-and-search.md and
  * docs/plans/library-sorting.md.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { throttle, useQueryState } from "nuqs";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { functionalUpdate } from "@tanstack/react-table";
@@ -69,6 +69,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, DESIGN_HREF } from "./router.js";
 import { ShelfCard } from "./ShelfEntry.js";
 import { ShelfControls, type ShelfFilter } from "./ShelfControls.js";
+import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useJobs } from "./useJobs.js";
 import { useLibrarySearch } from "./useLibrarySearch.js";
 import { useNow } from "./useNow.js";
@@ -79,10 +80,10 @@ import { useRenderCount } from "./perf.js";
 
 export function Library() {
   useRenderCount("Library");
-  /* Only to decide whether the Admin link is drawn. `useSession` is already
-     subscribed once at the top of the app (App.tsx), and a second subscription
-     is one listener rather than a second source of truth — the SDK is the
-     source, and both read it. */
+  /* Who the Admin link is drawn for, and whose address the Profile tooltip
+     names. `useSession` is already subscribed once at the top of the app
+     (App.tsx), and a second subscription is one listener rather than a second
+     source of truth — the SDK is the source, and both read it. */
   const { user } = useSession();
   const shelf = useShelf();
   const { articles, error, reload } = shelf;
@@ -273,43 +274,86 @@ export function Library() {
             line off the strapline below. */}
         <div className="tw:flex tw:flex-wrap tw:items-baseline tw:justify-between tw:gap-x-4 tw:gap-y-1">
           <h1 className="tw:font-prose tw:text-3xl tw:text-foreground">Spideryarn</h1>
-          <div className="tw:flex tw:items-baseline tw:gap-4">
-            {/* Home is where a global thing gets a way in. The profile page
-                holds what is true of the reader on every article, so a link to
-                it from inside one article would be a link nobody finds —
-                docs/project/reader-profile.md. Before Design because it is for
-                the reader and Design is developer furniture. */}
-            <Link
-              href="/profile"
-              className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-              title="What the model knows about who it is writing for"
-            >
-              <User size={13} />
-              Profile
-            </Link>
-            {/* **Only the administrator sees this, and only the server enforces
-                it.** Drawing or not drawing a link is a courtesy — the page is
-                in the bundle either way, and typing the address gets a
-                non-administrator the shelf back (App.tsx). src/admin.ts. */}
-            {isAdmin(user?.id) && (
-              <Link
-                href={ADMIN_HREF}
-                className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-                title="Who has signed up, and how much they have read"
+          {/* One group, so that once the first card is up the other two open
+              instantly as the pointer runs along the row — Tooltip.tsx. The
+              delays are the ones the dock and the metadata cards use, because
+              this is the same kind of thing: a short row of quiet chrome whose
+              labels are already visible, where the tooltip adds a sentence
+              rather than naming the button. */}
+          <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+            <div className="tw:flex tw:items-baseline tw:gap-4">
+              {/* Home is where a global thing gets a way in. The profile page
+                  holds what is true of the reader on every article, so a link to
+                  it from inside one article would be a link nobody finds —
+                  docs/project/reader-profile.md. Before Design because it is for
+                  the reader and Design is developer furniture. */}
+              <Tooltip
+                placement="bottom"
+                keepSide
+                content={
+                  <Tip>
+                    What the model knows about who it is writing for.
+                    {/* The address is the answer to "am I signed in as the
+                        right person", which is the question this link gets
+                        asked most. Second, under what the page is for, and
+                        simply absent until the session arrives — a card saying
+                        "Signed in as undefined" is worse than one that does not
+                        mention it. */}
+                    {user?.email && (
+                      <span className="tw:mt-1 tw:block tw:text-ink-faint">
+                        Signed in as {user.email}
+                      </span>
+                    )}
+                  </Tip>
+                }
               >
-                <Shield size={13} />
-                Admin
-              </Link>
-            )}
-            <Link
-              href={DESIGN_HREF}
-              className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
-              title="Every token, face and component variant on one page — look here after changing tokens.css"
-            >
-              <Palette size={13} />
-              Design
-            </Link>
-          </div>
+                <Link
+                  href="/profile"
+                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+                >
+                  <User size={13} />
+                  Profile
+                </Link>
+              </Tooltip>
+              {/* **Only the administrator sees this, and only the server enforces
+                  it.** Drawing or not drawing a link is a courtesy — the page is
+                  in the bundle either way, and typing the address gets a
+                  non-administrator the shelf back (App.tsx). src/admin.ts. */}
+              {isAdmin(user?.id) && (
+                <Tooltip
+                  placement="bottom"
+                  keepSide
+                  content={<Tip>Who has signed up, and how much they have read.</Tip>}
+                >
+                  <Link
+                    href={ADMIN_HREF}
+                    className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+                  >
+                    <Shield size={13} />
+                    Admin
+                  </Link>
+                </Tooltip>
+              )}
+              <Tooltip
+                placement="bottom"
+                keepSide
+                content={
+                  <Tip>
+                    Every token, face and component variant on one page — look here after changing
+                    tokens.css.
+                  </Tip>
+                }
+              >
+                <Link
+                  href={DESIGN_HREF}
+                  className="tw:inline-flex tw:items-center tw:gap-1.5 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
+                >
+                  <Palette size={13} />
+                  Design
+                </Link>
+              </Tooltip>
+            </div>
+          </TooltipGroup>
         </div>
         <p className="tw:mt-1 tw:text-sm tw:text-muted-foreground">
           Read deeply, at whatever level of detail you need. Pick a piece.
@@ -770,5 +814,27 @@ function UndoStrip({ title, onUndo }: { title: string; onUndo: () => void }) {
         Undo
       </button>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------- masthead --- */
+
+/**
+ * A sentence in a hover card, sized.
+ *
+ * `.tooltip` in styles.css paints the surface and nothing else — no size, no
+ * colour — because every tooltip in the reading view carries classed content
+ * that sets its own (`.tip-crumb`, `.tip-search`, `.tip-soon`). This page is
+ * Tailwind, so the sizing lives here in the same way `Note` does in
+ * Metadata.tsx rather than as a sixth `.tip-*` rule in the stylesheet.
+ *
+ * `foreground/85` and NOT `ink-soft`: `--ink-soft` is declared in styles.css
+ * but is not bridged into Tailwind's theme (tailwind.css), so
+ * `tw:text-ink-soft` compiles to nothing at all and the text silently inherits.
+ * `ink-faint` below IS bridged, which is why the second line can use it.
+ */
+function Tip({ children }: { children: ReactNode }) {
+  return (
+    <span className="tw:block tw:text-xs tw:leading-relaxed tw:text-foreground/85">{children}</span>
   );
 }

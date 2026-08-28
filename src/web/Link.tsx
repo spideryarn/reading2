@@ -10,10 +10,22 @@
  *
  * See router.ts for why the routing here is thirty lines of our own.
  */
-import type { AnchorHTMLAttributes, MouseEvent } from "react";
+import type { AnchorHTMLAttributes, MouseEvent, Ref } from "react";
 import { navigate } from "./router.js";
 
-type Props = AnchorHTMLAttributes<HTMLAnchorElement> & { href: string };
+/**
+ * `ref` is spelled out because `AnchorHTMLAttributes` does not include it, and
+ * something depends on it: a `<Tooltip>` gives its trigger a ref, and the
+ * homepage masthead's three links are triggers (Library.tsx). React 19 hands a
+ * function component its `ref` as an ordinary prop, so the spread below already
+ * carried it — but only by accident, with nothing to stop a later reader
+ * replacing the spread with a list of named props and silently leaving Floating
+ * UI without a reference element. tests/tooltip-on-link.test.tsx.
+ */
+type Props = AnchorHTMLAttributes<HTMLAnchorElement> & {
+  href: string;
+  ref?: Ref<HTMLAnchorElement>;
+};
 
 export function Link({ href, onClick, ...rest }: Props) {
   function handle(event: MouseEvent<HTMLAnchorElement>) {

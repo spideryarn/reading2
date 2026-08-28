@@ -566,7 +566,7 @@ Two further costs, verified from the registry source:
   classes at all. One extra dependency bought solely for this swap.
 
 The four load-bearing traps from
-[tooltips.md § Four things](../project/tooltips.md#four-things-that-are-load-bearing), against Radix:
+[tooltips.md § Five things](../project/tooltips.md#five-things-that-are-load-bearing), against Radix:
 
 | | Floating UI | Radix |
 |---|---|---|
