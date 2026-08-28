@@ -39,6 +39,12 @@ import {
   tookTooLong,
   wentQuiet,
 } from "./messages.js";
+import type { Citation } from "./types.js";
+/* `src/urls.ts` has no imports of its own, and `src/types.ts` only a type from
+   `messages.js` — so neither drags a logger, a store or a reader in here. That
+   is the constraint this module's header states, and it is checked from outside
+   by tests/public-imports.test.ts and tests/client-imports.test.ts. */
+import { isWebUrl } from "./urls.js";
 /**
  * Was that abort the *reader*, rather than one of our own clocks?
  *
@@ -332,6 +338,53 @@ export interface Usage {
 interface Annotation {
   type: string;
   url_citation?: { url?: string; title?: string };
+}
+
+/**
+ * Read one delta's `annotations` into the answer's citation list.
+ *
+ * **It lives here because the wire shape does.** `Annotation` above is
+ * OpenRouter's, and every rule below is a rule about *that* shape rather than
+ * about chat or about explanations — `type` is the discriminator and not the
+ * presence of `url_citation`, the URL is optional on the wire, and the same
+ * page cited by five sentences arrives as five annotations. Chat and explain
+ * each had their own byte-identical copy until 2026-08-28; a fix to one of them
+ * would not have reached the other, and the fix this most needed protecting is
+ * the `isWebUrl` one below.
+ *
+ * `into` is the caller's accumulator rather than a return value because a
+ * streamed answer collects across many deltas and the caller drains it once at
+ * the end with `[...into.values()]`. Keyed on the URL, which is what makes the
+ * dedupe a dedupe.
+ *
+ * **`onDropped` takes no argument, deliberately.** The one thing it could
+ * usefully carry is the URL, and the URL is the one thing its callers must not
+ * log: a citation is a page the *model* chose because of what the reader asked,
+ * so the URL is a fact about a reader's question and a path can carry the
+ * question inside it (docs/project/logging.md § "Host, not URL, when the URL
+ * was not the reader's"). A callback that cannot be handed the URL cannot leak
+ * it, which is a cheaper guarantee than a sentence asking people not to. The
+ * two callers each keep their own `line.warn`, and they are not interchangeable:
+ * explain's logger carries a `blockId` child field and chat's does not.
+ *
+ * This module still has no logger and must not grow one — see the header.
+ */
+export function collectCitations(
+  annotations: Annotation[] | undefined,
+  into: Map<string, Citation>,
+  onDropped?: () => void,
+): void {
+  for (const a of annotations ?? []) {
+    const c = a.url_citation;
+    if (a.type !== "url_citation" || !c?.url || into.has(c.url)) continue;
+    // Refused here rather than guarded at the point of render, because this
+    // is where model output stops being a string and starts being stored.
+    if (!isWebUrl(c.url)) {
+      onDropped?.();
+      continue;
+    }
+    into.set(c.url, { url: c.url, ...(c.title ? { title: c.title } : {}) });
+  }
 }
 
 /**

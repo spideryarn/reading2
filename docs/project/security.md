@@ -716,10 +716,19 @@ does not get compared against the code unless somebody thinks to.
 
 **`Citation.url` becomes an `href`** — the web pages a chat answer cites, rendered as a source list
 under the answer ([`ChatPanel.tsx`](../../src/web/ChatPanel.tsx)). Allowlisted by `isWebUrl` in
-[`src/urls.ts`](../../src/urls.ts), and allowlisted **twice**: once in
-[`src/converse.ts`](../../src/converse.ts) before the URL is stored, and again in the panel before it
-is rendered. The repetition is deliberate — `chat.json` is a file on disk that predates the check and
-can be hand-edited, and the render is the boundary that actually matters.
+[`src/urls.ts`](../../src/urls.ts), and allowlisted **twice**: once in `collectCitations` in
+[`src/openrouter-stream.ts`](../../src/openrouter-stream.ts) before the URL is stored, and again in
+the panel before it is rendered. The repetition is deliberate — `chat.json` is a file on disk that
+predates the check and can be hand-edited, and the render is the boundary that actually matters.
+
+**The first of those two was itself two, until 2026-08-28.** Chat and explanations each read the
+model's `annotations` with their own byte-identical copy of the rule, so a fix to the check would
+have landed in one of them and not the other — the shape this whole file warns about, one level
+down. They now share `collectCitations`, which sits beside OpenRouter's annotation wire shape
+because every rule in it is a rule about that shape; `tests/collect-citations.test.ts` pins it and
+`tests/explain.test.ts § citations` still proves the wire reaches it. The helper reports a refusal
+to its caller through a callback that **takes no argument**, so neither caller can log the URL it
+threw away — see [logging.md](logging.md#redaction-is-path-based-and-that-is-the-whole-limitation).
 
 `isWebUrl` also has to *parse*, not only allow, and that is the second half of its job: the panel
 calls `new URL()` again to show a hostname when a citation has no title, and `new URL()` **throws**

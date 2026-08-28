@@ -314,10 +314,15 @@ describe("failures are loud", () => {
 });
 
 describe("citations", () => {
+  /* The two titles differ, and that is the whole test. Until 2026-08-28 both
+     sightings said "A", so removing the `into.has()` guard let `Map.set`
+     overwrite the same key with the same value and this stayed green — it was
+     pinning the Map, not the dedupe it is named after. Found by mutating the
+     guard while extracting `collectCitations`. First sighting wins. */
   it("keeps one entry per url, however many sentences it grounded", async () => {
     const cite = (url: string, title?: string) => ({ type: "url_citation", url_citation: { url, title } });
     fetchMock.mockResolvedValue(
-      reply({}, [cite("https://a.test", "A"), cite("https://a.test", "A"), cite("https://b.test")]),
+      reply({}, [cite("https://a.test", "A"), cite("https://a.test", "A again"), cite("https://b.test")]),
     );
     expect((await ask()).citations).toEqual([{ url: "https://a.test", title: "A" }, { url: "https://b.test" }]);
   });
@@ -326,5 +331,23 @@ describe("citations", () => {
     const cite = (url: string) => ({ type: "url_citation", url_citation: { url } });
     fetchMock.mockResolvedValue(reply({}, [cite("javascript:alert(1)"), cite("https://ok.test")]));
     expect((await ask()).citations).toEqual([{ url: "https://ok.test" }]);
+  });
+
+  /* The two annotation shapes that are neither a citation nor a bad one, kept
+     end-to-end rather than only in tests/collect-citations.test.ts: the helper is a
+     pure function and this is the wire, so this is what proves the wire still
+     reaches it. `annotations` is a growing list on OpenRouter's side and a new
+     member arriving with a `url_citation`-shaped payload must not be read as
+     one — the type is the discriminator, not the presence of the field. */
+  it("ignores an annotation of another type, and a url_citation with no url", async () => {
+    fetchMock.mockResolvedValue(
+      reply({}, [
+        { type: "file_citation", url_citation: { url: "https://wrong-type.test" } },
+        { type: "url_citation", url_citation: {} },
+        { type: "url_citation" },
+        { type: "url_citation", url_citation: { url: "https://kept.test" } },
+      ]),
+    );
+    expect((await ask()).citations).toEqual([{ url: "https://kept.test" }]);
   });
 });

@@ -73,6 +73,7 @@ import {
   type StreamEnd,
   type ToolCallDelta,
   type Usage,
+  collectCitations,
   explainAbort,
   providerFailedMidAnswer,
   readerAborted,
@@ -96,7 +97,7 @@ import {
   parseToolArgs,
   runTool,
 } from "./chat-tools.js";
-import { isWebUrl, withoutWebLinks } from "./urls.js";
+import { withoutWebLinks } from "./urls.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import {
   type OpenRouterMessage,
@@ -1484,17 +1485,14 @@ export async function* converse({
         if (chunk.error) throw providerFailedMidAnswer();
         const choice = chunk.choices?.[0];
         if (choice?.finish_reason) finishReason = choice.finish_reason;
-        for (const a of choice?.delta?.annotations ?? []) {
-          const c = a.url_citation;
-          if (a.type !== "url_citation" || !c?.url || citations.has(c.url)) continue;
-          // Refused here rather than guarded at the point of render, because this
-          // is where model output stops being a string and starts being stored.
-          if (!isWebUrl(c.url)) {
-            line.warn({ model: used }, "dropped a citation whose URL was not http(s)");
-            continue;
-          }
-          citations.set(c.url, { url: c.url, ...(c.title ? { title: c.title } : {}) });
-        }
+        /* The rules are in `collectCitations`, beside the wire shape they are
+           about. `citations` is hoisted above the round loop with `text` and the
+           rest, so a page cited in round one is not cited again in round two.
+           The warning stays here because the logger is this file's — see the
+           note on `onDropped` for why it is not handed the URL. */
+        collectCitations(choice?.delta?.annotations, citations, () =>
+          line.warn({ model: used }, "dropped a citation whose URL was not http(s)"),
+        );
         /* The model asking for a tool, a fragment at a time. `roundText` is kept
            beside `text` because the assistant message pushed back into the
            conversation below must be **this round's** words and not the whole

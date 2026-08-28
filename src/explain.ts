@@ -60,6 +60,7 @@ import {
   type SearchUsagePath,
   type StreamEnd,
   type Usage,
+  collectCitations,
   explainAbort,
   providerFailedMidAnswer,
   readerAborted,
@@ -68,7 +69,6 @@ import {
 } from "./openrouter-stream.js";
 import { ProviderRefused, openRouterStream } from "./ai-call.js";
 import { ENDED_UNFINISHED, NOT_CONFIGURED, saidNothing } from "./messages.js";
-import { isWebUrl } from "./urls.js";
 import { PROFILE_RULES, profileSection } from "./profile.js";
 import {
   type OpenRouterMessage,
@@ -561,17 +561,13 @@ export async function* explainStream({
       if (chunk.error) throw providerFailedMidAnswer();
       const choice = chunk.choices?.[0];
       if (choice?.finish_reason) finishReason = choice.finish_reason;
-      for (const a of choice?.delta?.annotations ?? []) {
-        const c = a.url_citation;
-        if (a.type !== "url_citation" || !c?.url || citations.has(c.url)) continue;
-        // Refused here rather than guarded at the point of render, because this
-        // is where model output stops being a string and starts being stored.
-        if (!isWebUrl(c.url)) {
-          line.warn({ model: used }, "dropped a citation whose URL was not http(s)");
-          continue;
-        }
-        citations.set(c.url, { url: c.url, ...(c.title ? { title: c.title } : {}) });
-      }
+      /* The rules are in `collectCitations`, beside the wire shape they are
+         about; the warning stays here because this `line` is a child logger
+         carrying the blockId, and chat's is not. It says nothing about *which*
+         URL — see the note on `onDropped`. */
+      collectCitations(choice?.delta?.annotations, citations, () =>
+        line.warn({ model: used }, "dropped a citation whose URL was not http(s)"),
+      );
       const piece = choice?.delta?.content;
       if (typeof piece === "string" && piece.length > 0) {
         text += piece;
