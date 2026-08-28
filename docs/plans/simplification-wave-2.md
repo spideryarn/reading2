@@ -90,7 +90,18 @@ state.
 | **the Tweets copy** | `7468327` — `THREAD_RECHECK_FAILED` in `messages.ts`; the raw error goes to the console. |
 | **0.1's gate, hardened** | `b2992a9` — it could be beaten three ways. |
 
-**Not done, and deliberately so:** 0.4 (the three streaming tests) and all of Tier 1 and Tier 2.
+Then Greg read the questions at the end of the code review and said: go on with everything that is
+clear-cut, ask at the end about anything that is not. Tier 1 from there.
+
+| | |
+|---|---|
+| the held-back doc line | `9dad75a` — `src/store/artifacts.ts`, once the peer finished in that file. |
+| **1.8** the Sentry packages | `91680a1` — `@sentry/node-core` and `@sentry/core` declared, `@sentry/node` dropped, thirteen packages out of the lockfile. `@babel/types` and `@tanstack/table-core` swept up with them; knip's "Unlisted dependencies" is now empty. |
+| **1.7** the stale comment | In the tree, under **a peer's** commit `01b55b2` — they were in `src/library-search.ts` for the block-policy work and their `git add` took my hunks with it. Nothing lost; see the note in 1.7. |
+| **1.10** `.env.local`, unread | `c5ac05a` — `src/pdf-read.ts` spent without ever reading it; the gate that already knows which CLIs spend now holds the rule for all eight. Found by checking 1.5's claim about a stale comment. |
+| **1.9** the origins list | `0e75064` — `ownOrigins()` reads `VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_URL`, so nobody has to set anything. Two red-first tests; `.env.example` and `security.md` say what the gap was. |
+
+**Not done, and deliberately so:** 0.4 (the three streaming tests) and all of Tier 2.
 
 ### What the code review changed, and it earned its keep
 
@@ -476,27 +487,50 @@ into `priceVersion` at `:447`). knip was flagging re-exports and citations, not 
 
 **Effort** S · **Value** medium · **Risk** low, given a re-grep before each delete.
 
-### 1.7 Two notions of "matches", where the code says there must be one
+### 1.7 Two notions of "matches" — and I read the wrong comment. **Done, 2026-08-28**
 
-`src/library-search.ts:60` states the contract:
+**The first draft of this section was wrong, and wrong in the way this whole plan keeps warning
+about.** It said the code declares one notion of "matches" and the wiring fails to deliver it. What
+the code actually declares is *two* notions, deliberately, with the reason written down — and I
+found the stale half of the comment first and stopped reading.
 
-> Exported, along with `fold` and `occurrences` below, for src/chat-tools.ts — chat's
-> `search_article_words` runs this same matcher over the one article the reader has open. It imports
-> them rather than reimplementing them… a reader typing words into the library box and asking chat
-> about the same words must get the same notion of "matches", and the way to be sure of that is not
-> to have two notions.
+`src/library-search.ts:60` said:
 
-`src/chat-tools.ts:59` imports `{ fold, parseQuery }` — **not `occurrences`**. It counts with
-`termPattern` regexes instead (`chat-tools.ts:528`, `term-match.ts:75`), which apply
-`BEFORE`/`SUFFIX`/`AFTER` boundary guards. `occurrences` (`library-search.ts:110`) is a bare
-`indexOf` substring scan. So "cat" in the library box counts hits inside "category"; asking chat
-the same words does not.
+> Exported, along with `fold` and `occurrences` below, for src/chat-tools.ts … a reader typing words
+> into the library box and asking chat about the same words must get the same notion of "matches",
+> and the way to be sure of that is not to have two notions.
 
-This is why knip called `occurrences` unused: the export exists *to guarantee* one notion, and the
-caller it was exported for does not use it. **A wiring bug, not dead code.**
+`src/chat-tools.ts:481` says the opposite, and says it later:
 
-**Confirmed by experiment.** Both matchers were run over the same folded text. They disagree on
-every case tried — seven out of seven:
+> **Where it deliberately differs from the library box: this one matches whole words.**
+> `occurrences` over there is a substring scan, which is fine for a list a person reads — they can
+> see the highlighted result and judge it. It is not fine here, because what goes back to the model
+> is a *count* presented as exact, and a substring scan finds `AI` three times in "he said the claim
+> was fair" and ranks that paragraph above one that actually says AI. A model told "these counts are
+> exact and cover the whole article" believes it. Caught by a GPT-5.6 review, 2026-08-26, and
+> verified before it was fixed.
+
+So the split is a fix, not a fault, and it is two days old. What the two sides share is `parseQuery`
+and `fold` — the notion of what a *query* is. What they do not share is the matching rule. The
+`library-search.ts` comment predates the split, was never updated, and named `occurrences` as
+something chat imports when chat does not.
+
+**Done.** The comment now says what is shared, what is not, and why, and records that its earlier
+version was believed. `occurrences` is no longer exported — its only caller is `searchLibrary` in
+the same file, which is also why knip flagged it; that flag was correct and this section's first
+draft called it a wiring bug.
+
+**It landed under somebody else's name.** The plan was to hold it until the peer's `isSearchable`
+work was committed and then commit it cleanly. What happened instead is that their `git add
+src/library-search.ts` took my hunks with theirs, so both halves are in `01b55b2` — as is the
+`src/ideas.ts` comment fix from 1.10. This is the third face of the shared-index coin and it is
+written up in memory; the point worth repeating here is that **nothing was lost**, so the answer is
+to notice and move on rather than to try to unpick history that peers are already committing onto.
+
+**What is left is a real question, and it is Greg's.** The library box ranks with
+`score += occurrences(...)` (`library-search.ts:231`) and includes on `count === 0` (`:227`), so the
+substring scan is not only a displayed number — it decides which articles come back and in what
+order. Measured over both matchers on the same folded text:
 
 | needle | text | library box | chat |
 |---|---|---|---|
@@ -507,21 +541,49 @@ every case tried — seven out of seven:
 | `use` | Uses, used, user, use. | **4** | 2 |
 | `read` | Reading, reader, already read. | **4** | 1 |
 
-`library-search.ts:226` counts with `occurrences` — a bare `indexOf` scan, so it counts hits inside
-longer words. `chat-tools.ts:528` counts with `termPattern`, which applies boundary guards.
+`chat-tools.ts`'s justification — a person can see the highlighted hit and judge it — answers the
+*count*, not the *ranking*. Row 4 is the one to look at: for the query `one`, a paragraph saying
+"money" and "phone" outranks one that says "one". Three ways to go, and none is free:
 
-**And it is not only a count.** `library-search.ts:231` does `score += count`, so this feeds the
-library's **ranking**: an article that says "categories" a dozen times outranks one that says "cat"
-twice, for the query `cat`. Then `:227` uses `count === 0` to decide whether an article matches at
-all — so the library box also *returns* articles that contain the query only inside longer words.
+- **Whole words**, the rule chat uses. Clean, but typing `extract` stops finding `extraction`;
+  `term-match.ts`'s `SUFFIX` allows a plural and nothing more.
+- **Substrings**, as today. Keeps the accidental stemming, keeps the bad ranking.
+- **Word-start**: match where the needle starts a word, run on to any ending. `extract` finds
+  `extraction`; `one`, `art` and `read` stop matching mid-word. It does **not** fix `cat`/`category`,
+  because `category` does start with `cat`.
 
-**So the wrong one is the reader-facing one.** The comment says the two must agree; the way to make
-them agree is almost certainly to move the library box onto the boundary-guarded matcher, not to
-move chat onto the substring one. That is a product decision with visible consequences for search
-results, so it needs Greg — but the divergence itself is no longer in doubt.
+Word-start is the only one that improves reader-facing results without losing anything, and it would
+give the two searches a shared rule again while leaving `term-match.ts`'s whole-word rule where it
+belongs — underlining a glossary term, where you do not want `cat` underlining `category`.
+**Not done, because it changes search results.**
 
-**Do:** a red test pinning the disagreement, then ask Greg which notion wins.
-**Effort** S · **Value** high · **Risk** low for the test; the fix is product-facing.
+**Effort** S · **Value** medium · **Risk** the comment fix is none; the matcher change is
+product-facing.
+
+### 1.10 One paid CLI never read `.env.local`, and the comment about it named the wrong files. **Done, `c5ac05a`**
+
+**Not in the plan — found by checking one sentence in 1.5.** 1.5 says the comment at
+`src/ideas.ts:910-919` claims a gap that has closed: *"The other pipeline stages do NOT do this, and
+that is a real gap rather than a convention."* The claim is that all six now call `loadEnvLocal()`.
+Checking it turned up seven, not six — and an eighth CLI that spends and still did not.
+
+`src/pdf-read.ts` reads `process.env.OPENROUTER_API_KEY` at `:357` and never called
+`loadEnvLocal()`, so `npm run pdf x.pdf` from a shell without an exported key stopped at
+"OPENROUTER_API_KEY is not set" with the key sitting in `.env.local`. **The comment was stale in a
+way that hid the one remaining case**: it described the gap as belonging to "the other pipeline
+stages", named none of them, and `pdf-read` is not one of the seven anybody thinks of under that
+phrase.
+
+**The rule lives in `tests/paid-cli-ledger.test.ts`, and that is the point of it.** `PAID_CLIS` is
+already the set of modules that spend, and a module that spends is one that needs a key — so the
+new `envOffence()` shares the list, the parser, the walker and the binding check, and
+`ledgerLocalName` became a one-line call on a general `importedLocalName(body, module, export)`.
+
+Red first, which mattered more here than usual: a rule written over eight files where seven already
+comply is a check with nothing behind it. Eight controls, plus a mutation control on the real
+`src/pdf-read.ts`.
+
+**Effort** S · **Value** medium · **Risk** none.
 
 ### 1.8 The two Sentry packages we import are undeclared; the one we declare is unused
 
@@ -536,18 +598,22 @@ class, lower stakes and test-only: `@tanstack/table-core` and `@babel/types`.
 
 **Effort** XS · **Value** medium · **Risk** none.
 
-### 1.9 `SPIDERYARN_ORIGINS` is never set, so half a doubled defence is inert
+### 1.9 `SPIDERYARN_ORIGINS` was never set, so half a doubled defence was inert. **Done, `0e75064`**
 
-`sanitize-policy.ts:292` reads it to decide whether an absolute URL is our own API. It appears in
-one test and is **not** in `.env.example` or `deployment.md`. So server-side, `isOwnApi` cannot
-recognise the production origin and falls through to the localhost fallback at `:297`.
+`sanitize-policy.ts:292` read it to decide whether an absolute URL is our own API. It appeared in
+one test and was **not** in `.env.example` or `deployment.md`, so server-side `isOwnApi` could not
+recognise the production origin and fell through to the localhost fallback at `:297`.
 
-The defence still holds at render time — the browser pass uses `location.origin` (`:296`), which is
-exact. But the file's own header calls out this failure mode: *"two half-policies… looks like
-defence in depth"*. **Either set it on Vercel and document it, or say in the file that the server
-pass cannot do this one.** Not a live hole; do not report it as one.
+The plan offered two ways out — set it on Vercel and document it, or write in the file that the
+server pass cannot do this one — and **both were worse than the third one**, which is that Vercel
+already tells every deployment its own host. `VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_URL` are
+set with no configuration, and `src/monitoring.ts:182` already reads a sibling, so they were known
+to arrive. `ownOrigins()` reads both; `SPIDERYARN_ORIGINS` stays as the override for a custom
+domain and is now written down in `.env.example`.
 
-**Effort** XS · **Value** low-medium · **Risk** none.
+Two tests, one per variable, red first. **The direction of failure is the reason this was safe to
+do without asking:** `isOwnApi` returning true *removes* the attribute, so an origin wrongly counted
+as ours costs a stripped link, never a leaked request.
 
 ---
 
