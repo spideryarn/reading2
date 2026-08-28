@@ -367,7 +367,14 @@ a { color: inherit; }
   align-items: flex-end;
   gap: 0.3rem;
 }
-.L-gutter .gutter { display: flex; }
+/* The gutter column appears if ANY of the things that live in it is switched on.
+   Without this, four layers — the gists, the questions, the marginal glosses and
+   the assumption stamps — turn on and do nothing at all, because their container
+   is still `display: none`. Each looked like a layer that had simply been built
+   badly rather than one that was never shown. */
+:is(.L-gutter, .L-gists, .L-questions, .L-marginalia, .L-ideas) .gutter { display: flex; }
+/* Only the connective glyph belongs to the gutter layer proper. */
+html:not(.L-gutter) .conn { display: none; }
 
 .conn {
   font-family: var(--mono);
@@ -387,6 +394,9 @@ a { color: inherit; }
 
 .gist { display: none; max-width: 100%; }
 .L-gists .gist { display: block; }
+/* A heading's label is the heading. Printing it in the gutter beside itself is
+   noise, and it is the author's words repeated — the same mistake the seams made. */
+.blk-heading .gist { display: none !important; }
 
 .q { display: none; font-style: italic; color: var(--ink-4); max-width: 100%; }
 .L-questions .q { display: block; }
@@ -543,12 +553,21 @@ html:not(.L-arc) #arc-rail { display: none; }
 .L-roles .role-objection   .body { border-color: var(--rule-strong); border-left-style: dashed; }
 .L-roles .role-concession  .body { border-color: var(--rule-strong); border-left-style: dotted; }
 .L-roles .role-rebuttal    .body { border-color: var(--ink-3); border-left-style: double; border-left-width: 4px; }
+/* The role name at the far LEFT of the block's own column, not offset by the
+   gutter width — `.blk` already starts at the gutter's left edge, so measuring
+   from there again put the label on top of the prose. The gutter's own content is
+   right-aligned in that same column, so the two never meet. */
 .L-roles .blk::after {
   content: attr(data-role-label);
   position: absolute;
-  left: calc(var(--gutter) + 2rem - 1.4rem);
+  left: 0;
+  top: 0.35rem;
   font-family: var(--sans);
   font-size: 0.55rem;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.09em;
+  color: var(--ink-5);
+  pointer-events: none;
 }
 
 /* ------------------------------------------- L-lineate: the thesis set as verse -- */
@@ -806,6 +825,8 @@ html:not(.L-arc) #arc-rail { display: none; }
   :root { --gutter: 0rem; --margin: 0rem; }
   #stream { column-gap: 0; }
   .gutter, .margin { display: none !important; }
+  /* With no gutter to hang in, the role label would sit on the first line of prose. */
+  .L-roles .blk::after { display: none; }
   .seam-d1, .seam-d2, #colophon, .gate, #arc-rail { padding-left: 1.5rem; }
   #page { padding-left: 0; }
   .L-spine #spine { display: none; }
