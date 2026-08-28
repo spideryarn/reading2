@@ -27,6 +27,7 @@
  * bytes were thrown away by stage 1 long before this existed.
  */
 
+import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -45,6 +46,8 @@ import {
 } from "../db/schema.js";
 import { blocksArtefact } from "../blocks.js";
 import { type DocumentKind, type RawManifest, sniffKind } from "../fetch.js";
+import { canonicalKey } from "../source.js";
+import { type RawSourceStore, blobStore } from "./blobs.js";
 import { ownedByReader, ownedSlug } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
@@ -136,6 +139,93 @@ export function rawFileName(contentType: string | null, bytes: Uint8Array): stri
 }
 
 /**
+ * Refused: the revision points at an object the bucket does not have.
+ *
+ * Its own type because the repair depends on which half is wrong, and a bare
+ * `Error` here would be read as "this article has no source document" — the one
+ * thing it definitely does not mean. Either the bucket is the wrong one (see the
+ * credentials note on `exportArticle`) or the object has been deleted out from
+ * under a row that still references it.
+ */
+export class MissingRawObject extends Error {
+  readonly status = 500;
+  constructor(slug: string, key: string) {
+    super(
+      `"${slug}" points at "${key}" in the sources bucket and there is no such object. ` +
+        "Refusing to export an article as though it never had a source document. " +
+        "Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY name the project DATABASE_URL does.",
+    );
+    this.name = "MissingRawObject";
+  }
+}
+
+/** Refused: the object under a content-addressed key is not what the key says. */
+export class CorruptRawObject extends Error {
+  readonly status = 500;
+  constructor(slug: string, key: string, actual: string) {
+    super(
+      `"${slug}": the object at "${key}" hashes to ${actual}. The key IS the hash, so ` +
+        "one of them is wrong and neither can be trusted. Refusing to write it out.",
+    );
+    this.name = "CorruptRawObject";
+  }
+}
+
+/**
+ * The document itself, from wherever this revision keeps it.
+ *
+ * **Two eras, and the newer one is authoritative where both answer.** Until
+ * docs/plans/delete-the-importer.md § C6 the payload was `article_revisions.raw_bytes`,
+ * an 11 MiB `bytea`; now it is a *reference* — `raw_source_sha256` plus
+ * `raw_source_kind` — with the bytes in the `sources` bucket. The column is
+ * dropped at the demolition, so the reference branch is the one with a future
+ * and the column branch is here only for rows written before the change.
+ *
+ * **The kind comes from the column, not from sniffing.** `rawFileName` exists
+ * because there was no `raw_kind` column and the body was the only honest
+ * authority; there is one now, written by the fetch that stored the object, and
+ * a recorded answer beats re-deriving it. Sniffing stays for the legacy branch,
+ * which has nothing else.
+ *
+ * **The bytes are re-hashed.** The key *is* the digest, so checking costs one
+ * pass over a buffer already in memory and turns "the bucket handed us
+ * something" into "the bucket handed us the right thing". `storeRawSource`
+ * verifies on the way in for the same reason.
+ */
+async function readRawDocument(
+  slug: string,
+  revision: {
+    rawBytes: Buffer | null;
+    rawContentType: string | null;
+    rawSourceSha256: string | null;
+    rawSourceKind: string | null;
+  },
+  sources: RawSourceStore,
+): Promise<{ bytes: Uint8Array; kind: DocumentKind; storedSha256: string | null } | null> {
+  if (revision.rawSourceSha256 && revision.rawSourceKind) {
+    const kind = revision.rawSourceKind as DocumentKind;
+    const key = canonicalKey(revision.rawSourceSha256, kind);
+    const bytes = await sources.get(key);
+    /* **Throw, never fall through to `raw_bytes`.** A dangling reference and an
+       article with no source document are different facts, and the whole point
+       of the reference is that the row asserts the object exists. Quietly
+       exporting the legacy column instead — or nothing — would make a broken
+       bucket look like an article that was always sourceless. */
+    if (!bytes) throw new MissingRawObject(slug, key);
+    const actual = createHash("sha256").update(bytes).digest("hex");
+    if (actual !== revision.rawSourceSha256) throw new CorruptRawObject(slug, key, actual);
+    return { bytes, kind, storedSha256: revision.rawSourceSha256 };
+  }
+
+  if (!revision.rawBytes) return null;
+  return {
+    bytes: revision.rawBytes,
+    kind: sniffKind(revision.rawContentType, revision.rawBytes) === "pdf" ? "pdf" : "html",
+    storedSha256: null,
+  };
+}
+
+/**
  * Write the raw document and its manifest, and say which files were written.
  *
  * Its own function because `exportArticle` was already long and this pushed it
@@ -146,36 +236,29 @@ export function rawFileName(contentType: string | null, bytes: Uint8Array): stri
  */
 async function writeRawDocument(
   dir: string,
+  slug: string,
   revision: {
     rawBytes: Buffer | null;
     rawContentType: string | null;
     rawEncoding: string | null;
     rawSha256: string | null;
+    rawByteCount: number | null;
+    rawFilename: string | null;
+    rawSourceSha256: string | null;
+    rawSourceKind: string | null;
     requestedUrl: string | null;
     finalUrl: string | null;
     fetchedAt: Date | null;
     createdAt: Date;
   },
+  sources: RawSourceStore,
 ): Promise<string[]> {
-  if (!revision.rawBytes) return [];
+  const document = await readRawDocument(slug, revision, sources);
+  if (!document) return [];
 
-  /* **The bytes say which it is, because nothing else can.** This wrote
-     `raw.html` unconditionally until 2026-08-27, so every exported PDF landed
-     under a name claiming to be HTML — and the name is the only thing that
-     tells the next `db:import` which decoder to use, since `readRaw` falls
-     back to *"no manifest means assume HTML"*. A re-import then read a PDF as
-     a web page.
-
-     Sniffing rather than reading `raw_content_type` is deliberate and is the
-     rule stage 1 already follows: the stored content type is *the server's
-     claim*, and src/fetch.ts says why that is not good enough — "A PDF served
-     as `application/octet-stream` is still a PDF; a Cloudflare challenge page
-     served as `application/pdf` is still HTML." There is no `raw_kind`
-     column; docs/plans/raw-bytes-in-storage.md adds one, and until it does
-     the body is the honest authority. */
-  const file = rawFileName(revision.rawContentType, revision.rawBytes);
-  const kind: DocumentKind = file === "raw.pdf" ? "pdf" : "html";
-  await writeFile(path.join(dir, file), revision.rawBytes);
+  const { bytes, kind, storedSha256 } = document;
+  const file = kind === "pdf" ? "raw.pdf" : "raw.html";
+  await writeFile(path.join(dir, file), bytes);
 
   /* raw.json — stage 1's manifest, rebuilt from the columns. It was not
      exported at all, which meant a round trip lost the content type, the
@@ -188,38 +271,48 @@ async function writeRawDocument(
      between "we know it was null" and "we never recorded it" is exactly what
      that type exists to express (src/fetch.ts).
 
-     Two fields are genuinely unrecoverable and are therefore absent rather
-     than invented: `origin`/`uploadId`/`filename` live only in the manifest
-     and have no column, so an exported upload reads back as a fetch. That is
-     a real gap — docs/plans/raw-bytes-in-storage.md § a reference the
-     transaction owns is where it gets a home — and absent is the honest way
-     to carry it, since an invented `origin: "url"` would be a false statement
-     every later reader would believe.
+     **`storedSha256` and `storedBytes` are what make this loadable again**, and
+     they are the reason this function had to learn about the bucket at all.
+     src/store/artifacts-pg.ts refuses a manifest without them (`NoStoredDocument`),
+     because a manifest naming no object would record a fetch with no document
+     behind it. Omit them and `db:export` produces a directory that nothing can
+     read back — a round trip that looks complete and is not. Absent on the
+     legacy `raw_bytes` branch, where there genuinely is no object.
+
+     **`bytes` is the network count, from its own column.** Not
+     `bytes.byteLength`, which is the size of what we *stored* — the same two
+     numbers `storedBytes` and `bytes` exist to keep apart, since `writeRaw`
+     stores the decoded string and any page that was not already UTF-8 differs.
+     The fallback to the buffer length is for legacy rows, which have no column
+     and for which the two numbers were never distinguished anyway.
+
+     `origin`/`uploadId` remain genuinely unrecoverable and are therefore absent
+     rather than invented: they live only in the manifest and have no column, so
+     an exported upload still reads back as a fetch. `filename` now survives —
+     `raw_filename` was added for it in § C6.
 
      **`backfilled` is always set, and that is not a hedge.** Every manifest
      this writes is a *reconstruction from columns*, never a copy of the file
-     stage 1 wrote — which is what `backfilled` already means (src/fetch.ts),
-     and `src/store/import.ts` already acts on: `readRaw` returns null for a
-     backfilled manifest, so a re-import takes the `kind` and the filename and
-     declines to treat any of the provenance as a fact. That is exactly right
-     here. It also stops the export claiming a distinction the schema cannot
-     make: there is no column saying whether stage 1 wrote a manifest at all,
-     so `data/writes` (which has one) and `data/constitution` (which does not)
-     are indistinguishable by the time the bytes are in Postgres. */
+     stage 1 wrote — which is what `backfilled` already means (src/fetch.ts). It
+     also stops the export claiming a distinction the schema cannot make: there
+     is no column saying whether stage 1 wrote a manifest at all, so
+     `data/writes` (which has one) and `data/constitution` (which does not) are
+     indistinguishable by the time the bytes are in Postgres. */
   const manifest: RawManifest = {
     kind,
     file,
     ...(revision.requestedUrl === null ? {} : { requestedUrl: revision.requestedUrl }),
     ...(revision.finalUrl === null ? {} : { url: revision.finalUrl }),
+    ...(revision.rawFilename === null ? {} : { filename: revision.rawFilename }),
     contentType: revision.rawContentType,
     encoding: revision.rawEncoding,
-    bytes: revision.rawBytes.byteLength,
+    bytes: revision.rawByteCount ?? bytes.byteLength,
     sha256: revision.rawSha256,
+    ...(storedSha256 === null ? {} : { storedSha256, storedBytes: bytes.byteLength }),
     fetchedAt: (revision.fetchedAt ?? revision.createdAt).toISOString(),
     backfilled:
       "Rebuilt from the database by db:export. Provenance beyond the two URLs " +
-      "was not stored, so a re-import treats this manifest as absent — " +
-      "src/store/import.ts, readRaw.",
+      "was not stored, so origin and uploadId are absent rather than invented.",
   };
   await writeJson(path.join(dir, "raw.json"), manifest);
   return [file, "raw.json"];
@@ -232,7 +325,17 @@ async function writeRawDocument(
  * the article as it is being served, not an archive — see open question 4 in
  * docs/plans/postgres-migration.md about how many revisions to keep.
  */
-export async function exportArticle(slug: string, target: ExportTarget): Promise<ExportResult> {
+export async function exportArticle(
+  slug: string,
+  target: ExportTarget,
+  /* **Injected, and defaulted at the call rather than inside.** The default is
+     the real bucket, so an ordinary caller writes nothing extra; a test can
+     hand in a store it controls without reaching for the environment. Not
+     optional deeper down — `writeRawDocument` takes it as a required argument,
+     so a future caller cannot forget it and silently get `blobStore()`'s
+     filesystem fallback. */
+  sources: RawSourceStore = blobStore(),
+): Promise<ExportResult> {
   const db = getDb();
   const rows = await db
     .select({ article: articles, revision: articleRevisions })
@@ -309,7 +412,7 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
   if (revision.ideas) await put("ideas.json", revision.ideas);
   if (revision.labels) await put("labels.json", revision.labels);
 
-  written.push(...(await writeRawDocument(dir, revision)));
+  written.push(...(await writeRawDocument(dir, slug, revision, sources)));
 
   if (revision.stampedHtml) {
     /* stage 3's artefact lives in `output/`, not in `data/` — see

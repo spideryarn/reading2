@@ -9,24 +9,34 @@
  * exercised only by tests and therefore free to drift from the path production
  * actually runs. It is the *real* write path, driven over a fixture:
  *
- * 1. a running `jobs` row, because every artefact write is fenced on one;
- * 2. `openOrBeginJobDraft`, the same call `advanceJob` makes;
- * 3. `copyArtefacts` from the filesystem store to `pgArtifactsIn`, which is
+ * 1. the raw document put in the bucket with `storeRawSource`, which is what
+ *    stage 1 does before it writes a manifest naming the object;
+ * 2. a running `jobs` row, because every artefact write is fenced on one;
+ * 3. `openOrBeginJobDraft`, the same call `advanceJob` makes;
+ * 4. `copyArtefacts` from the filesystem store to `pgArtifactsIn`, which is
  *    `beginStep` → `write` → `finishStep` per step, in pipeline order;
- * 4. `publishRevision`, with its guards run rather than routed around;
- * 5. the job released, so the next call can have the single running slot.
+ * 5. `publishRevision`, with its guards run rather than routed around;
+ * 6. the job removed, so the next call can have the single running slot.
  *
- * Every byte therefore crosses the same seam a real ingest crosses. What that
- * buys is stated plainly in tests/helpers/artefacts.ts; what it *costs* is that
- * this loader carries strictly less than the importer did, and the difference
- * is not an oversight — see § What this does not carry.
+ * **One thing here is deliberately not production's shape**, and the claim is
+ * narrowed rather than dropped: production runs *one step per transaction*, so
+ * that each serverless invocation commits its own work. This wraps the whole
+ * copy in one, because a fixture that committed step by step could leave an
+ * article half-loaded behind a failure and the next suite to read it would fail
+ * somewhere unrelated. Every *statement* is the production statement; the
+ * transaction boundary around them is the fixture's. GPT Sol, 2026-08-28.
  *
  * ## What this does not carry
  *
  * `ArtifactStore` owns artefacts and nothing else, so **no reader state** comes
  * across: comments, chat, searches, glossary lookups, the shelf. A suite that
- * needs any of it must write it through the live reader stores, which is also
- * how production gets it.
+ * needs any of it must seed it separately — and must not be given a way to do it
+ * from here. Sol's finding, and the reason is sharper than "separation of
+ * concerns": `pgCommentStore.create` can only make a *current, unanswered*
+ * comment, `pgShelfStore.patch` cannot set `opens` or a historical `archivedAt`,
+ * and chat creation mints its own message ids. So "restore reader state through
+ * the live stores" is not achievable for most of it, and a loader option that
+ * pretended otherwise would be an importer growing back one field at a time.
  *
  * **`created_at` is today unless you say otherwise.** A draft minted by this
  * function was minted *now*, and the filesystem's idea of when the article
@@ -35,20 +45,41 @@
  * explicit option rather than something quietly inferred — a fixture that
  * guessed would make "today" pass for history and the parity claim would be
  * about nothing.
+ *
+ * **And `extractedHtml` is still stage 3's HTML, not stage 2's.** The filesystem
+ * store maps both `extractedHtml` and `stampedHtml` to the same `output/<slug>.html`
+ * (src/store/artifacts-fs.ts), because stage 3 overwrites stage 2's file in
+ * place. Copying therefore puts post-stage-3 HTML in the stage-2 column. This is
+ * **not fixed here** and saying so is the point: nothing reads that column today
+ * — `Article` does not expose it and `db:export` writes `stamped_html` — so a
+ * loader that nulled it would be inventing a policy the pipeline does not have.
+ * On the real path the column is honest, because `extract` writes it before
+ * `blocks` overwrites the file.
  */
-import { and, eq } from "drizzle-orm";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+import { eq } from "drizzle-orm";
 
 import { getDb } from "../../src/db/client.js";
-import { articleRevisions, jobs } from "../../src/db/schema.js";
+import { articles, jobs } from "../../src/db/schema.js";
+import type { RawManifest } from "../../src/fetch.js";
 import { mintId } from "../../src/ids.js";
-import { currentOwnerId } from "../../src/owner.js";
+import { type OwnerId, currentOwnerId, runAsOwner } from "../../src/owner.js";
 import { createFsArtifactStore } from "../../src/store/artifacts-fs.js";
 import { pgArtifactsIn } from "../../src/store/artifacts-pg.js";
+import { storeRawSource } from "../../src/store/blobs.js";
+import { violatesConstraint } from "../../src/store/db-errors.js";
 import { mintAttempt } from "../../src/store/jobs.js";
-import { openOrBeginJobDraft, publishRevision } from "../../src/store/pg-revisions.js";
-import type { JobStep } from "../../src/types.js";
-import type { StepName } from "../../src/types.js";
+import {
+  PublishRefused,
+  openOrBeginJobDraft,
+  publishRevision,
+} from "../../src/store/pg-revisions.js";
+import type { JobStep, StepName } from "../../src/types.js";
 import { copyArtefacts } from "./artefacts.js";
+
+const ROOT = path.resolve(import.meta.dirname, "..", "..");
 
 /** What the load produced, so a caller can assert on it rather than assume. */
 export interface LoadedArticle {
@@ -61,31 +92,56 @@ export interface LoadedArticle {
    * keeps meeting (docs/reusable/silent-success.md).
    */
   readonly copied: readonly StepName[];
+  /**
+   * The revision this draft was copied from, or `null` for an article the
+   * database has never published.
+   *
+   * **Exposed because it is the only way to tell a real load from a carried
+   * one.** `beginDraftIn` copies columns, block rows and step-run rows forward,
+   * so an article a previous run published can read back perfectly from columns
+   * this path never wrote. A suite whose subject is "the artefact store can put
+   * an article into Postgres" must assert this is `null`, or it is measuring
+   * whatever loaded the article last time. GPT Sol, 2026-08-28.
+   */
+  readonly basedOn: string | null;
   /** False when `publish` was off, or when the gate refused and `publish` was `"try"`. */
   readonly published: boolean;
-  /** The gate's reasons, when it refused. Empty otherwise. */
+  /** The gate's own reasons, when it refused. Empty otherwise. */
   readonly refusedBecause: readonly string[];
 }
 
 export interface LoadOptions {
   /**
-   * What `article_revisions.created_at` should say. Left alone when absent,
-   * which means "now" — see the note above about history.
+   * What `articles.created_at` should say. Left alone when absent, which means
+   * "now" — see the note above about history.
+   *
+   * **`articles`, not `article_revisions`.** The library sorts on
+   * `ADDED_AT = coalesce(article_revisions.fetched_at, articles.created_at)`
+   * (src/store/pg.ts), so the revision's own timestamp is not the one any order
+   * depends on. The first version of this set the wrong table and would have
+   * looked like it worked, since nothing reads the column it was setting.
    */
   readonly createdAt?: Date;
   /**
    * `true` (the default) publishes and throws if the gate refuses.
-   * `"try"` publishes but reports a refusal on the result instead of throwing,
-   * for a suite whose subject *is* the gate.
+   * `"try"` reports a **refusal** on the result instead of throwing, for a suite
+   * whose subject *is* the gate. Only `PublishRefused` is caught: a lost fence,
+   * a dropped connection or an ordinary bug still throws, because turning those
+   * into "the gate said no" would let a broken database read as a policy answer.
    * `false` leaves the revision a draft.
    */
   readonly publish?: boolean | "try";
   /**
-   * Whose article it is. Defaults to `currentOwnerId()`, which outside a
-   * request is the environment's owner — the same answer `importArticle` used,
-   * so a suite that does not care about ownership does not have to say.
+   * Whose article it is. Defaults to `currentOwnerId()`, which outside a request
+   * is the environment's owner.
+   *
+   * **It really does control ownership**, because the whole load runs inside
+   * `runAsOwner`. Passing it to the `jobs` row alone would have been a lie:
+   * `beginDraftIn` stamps `articles.owner_id` from `currentOwnerId()`, so a
+   * caller naming a different owner would have got a job belonging to one person
+   * and an article belonging to another. Sol caught that shape, 2026-08-28.
    */
-  readonly ownerId?: string;
+  readonly ownerId?: OwnerId;
 }
 
 /** A job's step list has to be non-empty and well-formed; nothing reads these. */
@@ -94,21 +150,70 @@ const FIXTURE_STEPS: JobStep[] = [
 ];
 
 /**
+ * Put the raw document in the bucket, the way stage 1 does before it writes a
+ * manifest naming it.
+ *
+ * **Without this the loader was quietly relying on somebody else's backfill.**
+ * `copyArtefacts` moves `raw.json`, which is a *reference* — `storedSha256` is
+ * the key of an object in the `sources` bucket — and the Postgres adapter writes
+ * the reference without ever checking the object is there. So a fixture whose
+ * bytes had not already been stored produced a revision pointing at nothing, and
+ * every read of the manifest still succeeded. The corpus happened to have been
+ * backfilled, which is exactly why it went unnoticed. GPT Sol, 2026-08-28.
+ *
+ * Content-addressed and create-only, so re-running is free: the second call is a
+ * dedup hit against the identical bytes.
+ *
+ * Returns quietly when there is no manifest — `data/constitution` has none, and
+ * an article with no stage-1 output is a legitimate fixture, not a failure.
+ */
+async function storeRawBytesFor(slug: string): Promise<void> {
+  const at = path.join(ROOT, "data", slug, "raw.json");
+  let manifest: RawManifest;
+  try {
+    manifest = JSON.parse(await readFile(at, "utf8")) as RawManifest;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+  if (!manifest.storedSha256) return;
+
+  const bytes = await readFile(path.join(ROOT, "data", slug, manifest.file));
+  const { sha256 } = await storeRawSource(bytes, manifest.kind);
+  /* **The manifest's key must be the key of the bytes beside it.** Both are on
+     disk and either could have been edited, so a fixture where they disagree is
+     one that would write a reference to somebody else's document. Loud here
+     rather than mysterious three assertions later. */
+  if (sha256 !== manifest.storedSha256) {
+    throw new Error(
+      `data/${slug}: raw.json says the stored object is ${manifest.storedSha256}, but ` +
+        `${manifest.file} beside it hashes to ${sha256}. One of the two has been edited.`,
+    );
+  }
+}
+
+/**
  * Take the single running slot, run `body`, and give the slot back.
  *
- * **The retry is not defensive padding.** `jobs_only_one_running` is a partial
- * unique index over the *whole table*, so a dev server mid-ingest, or another
- * suite's fixture, will refuse this insert — and the refusal arrives as a
- * constraint name rather than as anything a test could recognise. Retrying on
- * that one name and rethrowing everything else keeps a genuine bug loud.
+ * **The retry is not defensive padding, and it covers two different refusals.**
+ * `jobs_only_one_running` is a partial unique index over the *whole table*, so a
+ * dev server mid-ingest or another suite's fixture will refuse this insert.
+ * `jobs_active_slug` is narrower and covers `queued` as well as `running`: it
+ * fires when this *article* already has a job in flight. Waiting can clear
+ * either one — but neither can be cleared by waiting if the row is **wedged**,
+ * which is what the timeout message has to say, because "try again later" is
+ * useless advice when the answer is "delete the stuck row".
  *
- * The release is in `finally` because a job left running would wedge every
- * later call in the same run, turning one real failure into a file full of
- * timeouts that say nothing about what broke.
+ * **The job is deleted rather than marked done**, and the delete is fenced on
+ * the token. Marking it `done` in a `finally` would claim success for a body
+ * that threw, and — worse — an unfenced update could overwrite a job something
+ * else had already failed, leaving synthetic history that reads as a real
+ * ingest. Deleting a row this function created, only while it still holds the
+ * claim, says the true thing: this job never existed. GPT Sol, 2026-08-28.
  */
 async function withRunningJob<T>(
   slug: string,
-  ownerId: string,
+  ownerId: OwnerId,
   body: (job: { id: string; attemptId: string }) => Promise<T>,
 ): Promise<T> {
   const db = getDb();
@@ -126,15 +231,19 @@ async function withRunningJob<T>(
         workKey: `fixture-${job.id}`,
       });
     } catch (err) {
-      const constraint = (err as { cause?: { constraint?: string } }).cause?.constraint;
-      /* `jobs_active_slug` too, not only the global slot: a previous load of the
-         same slug that died before its `finally` leaves a running row for this
-         article, and that refuses on a different name for the same reason. */
-      if (constraint !== "jobs_only_one_running" && constraint !== "jobs_active_slug") throw err;
+      /* `violatesConstraint` walks the whole error chain. Reading
+         `err.cause.constraint` at one level misses Drizzle's wrapper, and a miss
+         here rethrows a contended slot as though it were a bug. */
+      const contended =
+        violatesConstraint(err, "jobs_only_one_running") ||
+        violatesConstraint(err, "jobs_active_slug");
+      if (!contended) throw err;
       if (attempt >= 40) {
         throw new Error(
-          `could not get the running-job slot for "${slug}" in 20s — another job is holding it. ` +
-            "Re-run when the queue is idle, or check for a wedged `running` row in `jobs`.",
+          `could not start a job for "${slug}" in 20s: either another job holds the single ` +
+            "running slot, or this article already has one queued or running. If nothing is " +
+            "actually working, a row is wedged and waiting will not clear it — look for a " +
+            "`queued` or `running` row in `jobs` and remove it.",
         );
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -143,14 +252,7 @@ async function withRunningJob<T>(
     try {
       return await body(job);
     } finally {
-      /* Done and owning no draft. The pointer is cleared as well as the status
-         because `jobs_draft_revision_unique` is not partial on status: a
-         finished job still holding a draft id is a row that can refuse a later,
-         legitimate claim on the same revision. */
-      await db
-        .update(jobs)
-        .set({ status: "done", attemptId: null, leaseExpiresAt: null, draftRevisionId: null, finishedAt: new Date() })
-        .where(and(eq(jobs.id, job.id)));
+      await db.delete(jobs).where(eq(jobs.id, job.id));
     }
   }
 }
@@ -160,52 +262,65 @@ async function withRunningJob<T>(
  *
  * Idempotent in the way the pipeline is idempotent: each call mints a fresh
  * draft from whatever is published, copies over it and publishes again. It does
- * not compare against what is already there, and it is not trying to.
+ * not compare against what is already there, and it is not trying to — see
+ * `LoadedArticle.basedOn` for why a caller usually wants to know.
  */
 export async function loadArticleIntoPg(
   slug: string,
   opts: LoadOptions = {},
 ): Promise<LoadedArticle> {
   const { publish = true, ownerId = currentOwnerId() } = opts;
-  const fs = createFsArtifactStore();
-  const db = getDb();
 
-  return withRunningJob(slug, ownerId, async (job) => {
-    const draft = await openOrBeginJobDraft({ slug, job });
-    const ref = {
-      slug,
-      articleId: draft.articleId,
-      revisionId: draft.revisionId,
-      jobId: job.id,
-      attemptId: job.attemptId,
-    };
+  return runAsOwner(ownerId, async () => {
+    await storeRawBytesFor(slug);
 
-    /* One transaction around the whole copy, which is what the coordinator will
-       do for one step. Not one per step: a fixture that committed step by step
-       could leave an article half-loaded behind a failure, and the next suite
-       to read it would fail somewhere else entirely. */
-    const copied = await db.transaction((tx) => copyArtefacts(fs, pgArtifactsIn(ref, tx), slug));
+    const fs = createFsArtifactStore();
+    const db = getDb();
 
-    if (opts.createdAt) {
-      await db
-        .update(articleRevisions)
-        .set({ createdAt: opts.createdAt })
-        .where(eq(articleRevisions.id, draft.revisionId));
-    }
-
-    if (publish === false) return { ...ref, copied, published: false, refusedBecause: [] };
-
-    try {
-      await publishRevision({ slug, revisionId: draft.revisionId, job });
-      return { ...ref, copied, published: true, refusedBecause: [] };
-    } catch (err) {
-      if (publish !== "try") throw err;
-      return {
-        ...ref,
-        copied,
-        published: false,
-        refusedBecause: [(err as Error).message],
+    return withRunningJob(slug, ownerId, async (job) => {
+      const draft = await openOrBeginJobDraft({ slug, job });
+      const ref = {
+        slug,
+        articleId: draft.articleId,
+        revisionId: draft.revisionId,
+        jobId: job.id,
+        attemptId: job.attemptId,
       };
-    }
+
+      const copied = await db.transaction((tx) => copyArtefacts(fs, pgArtifactsIn(ref, tx), slug));
+
+      /* **Refuse a copy that moved nothing, before publishing it.** Carry-forward
+         means a draft opened from a published revision already holds that
+         revision's blocks, tree and step runs — so publishing after copying zero
+         steps republishes the *old* article and reports success. The filesystem
+         directory could have been empty, or misspelled, or half-written, and the
+         result would be indistinguishable from a load that worked. Sol found
+         this, and it is the same shape as everything else in this landing. */
+      if (copied.length === 0) {
+        throw new Error(
+          `nothing to load for "${slug}": the filesystem store has no complete step for it. ` +
+            "Publishing now would republish whatever is already in Postgres and call it a load.",
+        );
+      }
+
+      const base = { ...ref, copied, basedOn: draft.basedOn };
+
+      if (opts.createdAt) {
+        await db
+          .update(articles)
+          .set({ createdAt: opts.createdAt })
+          .where(eq(articles.id, draft.articleId));
+      }
+
+      if (publish === false) return { ...base, published: false, refusedBecause: [] };
+
+      try {
+        await publishRevision({ slug, revisionId: draft.revisionId, job });
+        return { ...base, published: true, refusedBecause: [] };
+      } catch (err) {
+        if (publish !== "try" || !(err instanceof PublishRefused)) throw err;
+        return { ...base, published: false, refusedBecause: err.reasons };
+      }
+    });
   });
 }

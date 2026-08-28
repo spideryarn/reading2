@@ -897,6 +897,55 @@ database that has ever been imported into is measuring the importer as much as t
 suite in C7 therefore has to run against an article the database has not seen before, or prove it
 another way.
 
+#### What the review of the loader changed — [c7-fixture-loader-sol.md](c7-fixture-loader-sol.md)
+
+**PROCEED-WITH-CHANGES**, with ten findings against a helper I had already watched work end to end.
+Four of them would have produced a *green* suite proving nothing, which is the whole reason a test
+helper got a review of its own — and then a suite of its own, `tests/helpers-load-article.test.ts`,
+with each fix watched to fail before it was made.
+
+| what was wrong | why it would not have shown up |
+|---|---|
+| **It stored no bytes.** `copyArtefacts` moves `raw.json`, which is a *reference*; the adapter writes the reference without checking the object exists | the corpus had been backfilled, so every fixture's object was already in the bucket. A fixture whose bytes were new would have produced a revision pointing at nothing, and every read still succeeded. `storeRawSource` now runs first, the way stage 1 runs it |
+| **`createdAt` set the wrong table.** The library sorts on `coalesce(article_revisions.fetched_at, articles.created_at)`, and the option wrote `article_revisions.created_at` | nothing reads the column it was setting, so the option silently did nothing. Proved by mutating it back: the assertion reads today's date where 2019 was asked for |
+| **A copy that moved zero steps still published** | carry-forward means the draft already holds the published revision's blocks and tree, so publishing republishes the old article and reports success. A misspelled slug was indistinguishable from a load that worked |
+| **`publish: "try"` caught every error** | a lost fence or a dropped connection read as "the gate said no". Only `PublishRefused` is caught now |
+| **`ownerId` did not control ownership.** `beginDraftIn` stamps `articles.owner_id` from `currentOwnerId()` | a caller naming an owner got a *job* belonging to one person and an *article* belonging to another. The whole load runs inside `runAsOwner` now |
+| **The job was marked `done` in a `finally`** | it claimed success for a body that threw, could overwrite a job something else had already failed, and left synthetic ingest history. It is deleted instead — a row this function created never existed |
+| **`cause.constraint` read one level deep** | Drizzle wraps, so a contended running-slot could rethrow as a bug. `violatesConstraint` walks the chain |
+
+Two findings are recorded rather than fixed, and saying which is which matters:
+
+- **`extractedHtml` still gets stage 3's HTML.** The filesystem store maps both `extractedHtml` and
+  `stampedHtml` to `output/<slug>.html`, because stage 3 overwrites stage 2's file in place. Nothing
+  reads that column — `Article` does not expose it and `db:export` writes `stamped_html` — so a
+  loader that nulled it would be inventing a policy the pipeline does not have. On the real path the
+  column is honest, because `extract` writes it before `blocks` overwrites the file.
+- **The single transaction around the whole copy is not production's boundary**, which is one step
+  per transaction so each invocation commits its own work. Every *statement* is the production
+  statement; the transaction around them is the fixture's, and the claim in the file now says so.
+
+And one about the gate itself, which is D's rather than C's: `reasonsNotToPublish` implements the
+core and `toc` rows of the truth table but **not the fetch-lineage rows** — a revision whose `fetch`
+run is `running` or `error`, or which is `done` with no source reference, publishes today.
+
+#### `db:export` reads the bucket now, and refuses twice
+
+`writeRawDocument` read `article_revisions.raw_bytes` and returned `[]` when it was null. After C6
+that column is null for everything the pipeline writes, so export was about to stop producing source
+documents with no signal at all — in the one tool whose whole job is "you can always get your data
+back out". It resolves `raw_source_sha256` + `raw_source_kind` through the blob store, re-hashes what
+comes back, and throws `MissingRawObject` or `CorruptRawObject` rather than falling through to the
+legacy column. The kind now comes from the column rather than from sniffing the body, which is what
+`rawFileName`'s comment asked for when it said *"there is no `raw_kind` column"*.
+
+The manifest gains `storedSha256`, `storedBytes` and `filename`, and takes `bytes` from
+`raw_byte_count`. Without the first two an exported directory is one **the adapter refuses to load**
+(`NoStoredDocument`) — a round trip that looks complete and is not. `tests/store-export-raw.test.ts`
+is built on the real loader for that reason: a hand-built row would prove the export reads two
+columns, not that what the adapter writes and what the export reads are the same thing. Both refusals
+were watched to fire by deleting each guard in turn.
+
 **What is deliberately *not* in C:** the coordinator that opens the transaction and calls
 `write` + `finishStep` + the job transition together. That is D's, and putting it here would mean
 building the atomic boundary before there is a stage returning products to put inside it.
