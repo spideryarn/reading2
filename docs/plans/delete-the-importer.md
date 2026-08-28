@@ -579,6 +579,45 @@ checkpoint twice. A small Postgres table keyed by revision, step and key is the 
 must stay **outside** the artefact/job transaction — preserving failed work is the entire point of
 it.
 
+#### B3's key is not the revision, and that would have made the table useless
+
+The paragraph above says *"A small Postgres table keyed by revision, step and key is the boring
+answer."* **The revision is the wrong key**, and it would have failed in the quiet way: the table
+gets written on every run and read on none, and the only symptom is a larger bill.
+
+A checkpoint exists so that a retry does not pay twice. **A retry is a new job**
+([`src/jobs.ts:209`](../../src/jobs.ts)), and a new job begins a new draft revision. Key the
+checkpoint on the revision and the retry looks under an id that did not exist when the work was done.
+Every lookup misses, `usableCheckpoint` returns an empty map, and the run buys every batch again.
+
+Both existing checkpoints already say what the key is, and neither is the revision:
+
+| checkpoint | what gates reuse at all | what identifies one entry | what losing it costs |
+|---|---|---|---|
+| `labels-progress.json` — [`src/labels.ts:650`, `667-694`](../../src/labels.ts) | `version`, `generator`, `slug` and `sourceHash`, all four exact | a per-batch `fingerprint` — the prompt that asked the question | one paid labelling call per batch; the comment at [`src/toc.ts:717-722`](../../src/toc.ts) puts it as "a 429 eight batches into a book costs the one batch rather than the eight" |
+| `pdf-chunks/<key>.json` — [`src/pdf-read.ts:753`, `774-787`](../../src/pdf-read.ts) | nothing outside the key | a sha256 over `rawSha256`, the chunk's pages, its context, the prompt fingerprint, the reader id and `maxTokens` | one paid page-reading call per chunk, and these are the expensive ones |
+
+Both are addressed by **what the work was about**, never by which attempt happened to be running.
+That is the property to keep. A content address means a checkpoint written by an attempt that died is
+usable by any later attempt asking the identical question, and *unusable* the moment the question
+changes — which is the same sentence, and the reason nothing has to invalidate anything. Keying on
+the revision throws that away and keeps only the half that does not matter.
+
+So the interface takes a namespace and an opaque content key, and the store never interprets either.
+Ownership and cleanup follow from the same fact: an entry is dead when nothing will ever ask its
+question again, which is a time-based sweep rather than a cascade from a revision.
+
+Two more things the inventory turned up:
+
+- **Size is not a problem.** The largest real one on disk is `data/ball-lightning/pdf-chunks` at
+  100 KB over five files. A Postgres table is right; nothing here needs the bucket.
+- **`tweets` decides it is done by reading its own output.** `isDone: (ctx) => threadIsCurrent(ctx.dir)`
+  compares a `sourceHash` stored in `tweets.json` ([`src/pipeline.ts:1206`](../../src/pipeline.ts),
+  [`src/tweets.ts:140`](../../src/tweets.ts)). That is not a checkpoint and does not belong in B3 —
+  it is an `isDone` over a finished artefact, and the Postgres side already answers it from the step
+  run's stamp. It needs porting in D, and it is listed here because a sweep for "reads a file it
+  wrote last time" finds it and it is the wrong drawer.
+
 ### C — the Postgres artefact adapter, plus the three replacement suites
 
 The `raw` kind writes a `raw_sources` row and the revision's reference columns rather than seven
@@ -1139,86 +1178,130 @@ as a filesystem-specific inspection result. One thing does need fixing —
 `STEP_STORAGE.fetch = ["article_revisions.raw_bytes"]` ([`src/store/pg.ts:336`](../../src/store/pg.ts))
 would otherwise have the page advertising a dropped column.
 
-### Stage 3 carries block ids in a file — **and D takes the file away**
+### Three stages carry identity in a file — **and D takes the file away**
 
-This is not in any earlier draft, no review has seen it, and it is the largest thing D breaks.
+Not in any earlier draft. I found one of these; [the review](blocks-carry-forward-sol.md) found the
+other two and narrowed my claim about the first, which was too broad.
 
-[block-ids.md](../project/block-ids.md) is the one contract everything else depends on, and ids
-survive re-extraction because stage 3 matches this run's blocks against the previous run's. It gets
-the previous run from **a file on disk**:
+[block-ids.md](../project/block-ids.md) is the one contract everything else depends on. Ids survive
+re-extraction because a stage matches this run's output against the previous run's — and **three
+stages get the previous run by reading a file on disk**, which is the thing D removes.
 
-```ts
-// If a previous run's blocks.json is sitting there, use it to carry ids
-// across a re-extraction that wiped them from the HTML.
-let previous: Block[] | undefined;
-try {
-  previous = JSON.parse(await readFile(jsonFile, "utf-8")).blocks as Block[];
-} catch {
-  previous = undefined; // first run for this article
-}
-```
+| stage | what it reads | what it is for | what breaks without it |
+|---|---|---|---|
+| **blocks** | `output/<slug>.blocks.json` — [`src/blocks.ts:911-918`](../../src/blocks.ts) | carrying a paragraph's id across a re-extraction | every anchor: comments, saved searches, the ToC, scroll position |
+| **glossary** | `glossary.json` — [`src/glossary.ts:1078`](../../src/glossary.ts) | *both* appending to the existing list and inheriting its ids | "find more terms" silently becomes "replace the glossary", history resets, every `?term=` link dies |
+| **ideas** | `ideas.json` — [`src/ideas.ts:764`](../../src/ideas.ts) | inheriting ids, and only when `sourceHash` matches | every surviving `?idea=` link |
 
-[`src/blocks.ts:911-918`](../../src/blocks.ts). `jsonFile` defaults to `output/<slug>.blocks.json`,
-and the pipeline's only call passes no `jsonFile` at all
-([`src/pipeline.ts:1007`](../../src/pipeline.ts)) — so that default path is the **only** channel by
-which a previous id reaches stage 3.
+The glossary one is worth reading, because **the file already carries the postmortem for the bug D
+would reintroduce**: *"without it, `taken` is empty, every id is re-minted, every `?term=` link"* —
+somebody fixed exactly this, wrote down why, and D undoes it from the other end.
 
-D removes the filesystem writes. After it the read fails on every run, and the `catch` reads that
-failure as *"first run for this article"*. Every id is re-minted, on every run, and the code says so
-in a comment that used to be true. It is the same shape as everything else in § What this has taught
-us: a handler that cannot tell "there was nothing" from "I could not look".
+`tweets` and `summary` also read their own output, but only to ask whether it is stale
+(`threadIsCurrent`), and D replaces that with the step run's stamp. The ToC's `labels-progress.json`
+and the PDF chunk cache are checkpoints, and they are B3's. So the sweep finds five self-reads and
+they fall into three different drawers; only the three above are identity.
+
+#### What the blocks failure actually is — narrower than I first wrote
+
+I claimed every id re-mints on every run. That is wrong, and the correction matters because it names
+the thing D has to decide. Ids **already present in the HTML are reused directly**
+([`src/blocks.ts:750-757`](../../src/blocks.ts)), with no previous blocks needed. So:
+
+> After D, a stage-3 run whose input is **stage 2's HTML** re-mints every id unless previous blocks
+> come from the store. A run over **already-stamped HTML** keeps them from the document itself.
+
+Which means D must say **which HTML stage 3 consumes**, and Postgres deliberately holds both:
+`extractedHtml` is stage 2's, with no ids in it at all, and `stampedHtml` is stage 3's own previous
+output. Reading the wrong one turns identity loss on and off invisibly. "Read the HTML from the
+store" is not a specification.
 
 **Nothing is deleted; everything comes loose.** Re-ingesting a slug reuses the article row —
 `beginDraftIn` inserts `onConflictDoNothing` on `articles.slug` and re-reads
 ([`src/store/pg-revisions.ts:490-500`](../../src/store/pg-revisions.ts)) — so comments, chat threads,
 saved searches and the shelf keep their `article_id` and stay in the database. It is their **block**
 ids that stop naming anything in the current revision. The reader does not lose their notes. They
-lose the passages the notes were attached to, all at once, and the rows that are left cannot say
-which paragraph they meant.
+lose the passages the notes were attached to, all at once, and what is left cannot say which
+paragraph it meant.
 
-Counted from `data/` rather than from the local database, because six sessions are writing to that
-database and its numbers moved twice in an hour: **43 comment anchors, 91 saved search hits and
-1,912 ToC entries**, over fifteen article directories.
+Counted from `data/` rather than from the local database, whose numbers moved twice in an hour under
+six sessions: **43 comment anchors, 91 saved search hits and 1,912 ToC entries**, over fifteen
+article directories.
 
-**The fix is small, and it is a prerequisite for D rather than an addition to it.** Stage 3 must take
-its previous blocks from the store instead of from a path. `splitIntoBlocks` matches on exactly four
-fields per previous block — `id`, `tag`, `text`, `html` — plus the previous document's order, because
-matching is first-come and each id is consumed once ([`src/blocks.ts:300-351`](../../src/blocks.ts)).
-`revision_blocks` already holds every one of them:
+#### The fix, and the three things the review changed about it
+
+Stage 3 takes its previous blocks from the store instead of from a path. It is a parameter and a
+store read — no schema change, no new artefact — and it is a **prerequisite for D rather than an
+addition to it**.
+
+**Read the draft's own carried rows, before writing them.** `beginDraftIn` copies the published
+revision's block rows into the new draft before any stage runs
+([`src/store/pg-revisions.ts:525`](../../src/store/pg-revisions.ts)), so by the time stage 3 runs the
+baseline is already sitting there. That is not matching against itself: before the first write those
+rows *are* the previous published blocks, a failed computation has not replaced them, and a
+deliberate second stage-3 run matching the immediately preceding result is correct idempotence. Use
+`store.read` and not `has` — carried completion rows make `has` answer a different question, which is
+the distinction C4 exists for.
+
+**`revision_blocks` is sufficient, and the review corrected what "sufficient" means.** I worried that
+`html` would have to be byte-identical. It does not: for a block with text `exactKey` uses only the
+tag and the whitespace-collapsed text, and the folded pass uses only the tag and the normalised words
+([`src/blocks.ts:328-351`](../../src/blocks.ts)). `html` is read for **textless** blocks only, to
+recover the `src` of an image or a rule. So serialisation differences cannot break ordinary paragraph
+matching, and the table below is complete rather than fragile.
 
 | what the matcher reads | `revision_blocks` |
 |---|---|
 | `id` | `block_id` |
 | `tag` | `tag` |
 | `text` | `text` |
-| `html` | `html` |
+| `html` — textless blocks only, for `src` | `html` |
 | the previous document's order | `ordinal` |
 
-So this is a parameter and a store read, not a schema change and not a new artefact. The thing to be
-careful about is the one the `catch` got wrong: **"no previous revision" and "I could not read the
-previous revision" must not arrive at the same branch.** The first is an ordinary first ingest; the
-second is the failure this section is about, and it has to be loud.
+**Three cases, not two, and the third one fails.** My first version said only that "no previous
+revision" and "I could not read it" must not share a branch. The review's cut is better and it is the
+one to build:
 
-**And the guard cannot save us, because it has the same dependency.** The pipeline does warn about
-this exact thing —
+| | what it means | what to do |
+|---|---|---|
+| no `basedOn` | a genuine first ingest | mint, quietly |
+| `basedOn` exists, its copied baseline is missing or unusable | the carry-forward did not happen | **fail the stage** |
+| the store read throws | an infrastructure fault | **propagate, fail the stage** |
+
+Never warn and mint. That converts a database hiccup into permanent identity loss, and the reader
+finds out by scrolling. The missing piece to build is carrying `basedOn` — or an equivalent
+baseline-state signal — into D, because today the stage cannot tell case 1 from case 2.
+
+#### The guard, and why my first answer was not one
+
+The existing warning is unreachable after D. `previousBlockCount` counts blocks in **two files on
+disk** ([`src/pipeline.ts:453-457`](../../src/pipeline.ts)), so it returns `0`, and the clause that
+keeps a first ingest quiet —
 
 ```ts
 if (previousBlocks > 0 && kept === 0 && minted > 0) {
   … `blocks ${ctx.slug}: all ${minted} ids re-minted — ${previousBlocks} previous ids lost, anchors orphaned`
 ```
 
-[`src/pipeline.ts:1059-1062`](../../src/pipeline.ts) — and `previousBlocks` comes from
-`previousBlockCount`, which counts blocks in **two files on disk**
-([`src/pipeline.ts:453-457`](../../src/pipeline.ts)). After D both are gone, `previousBlocks` is `0`,
-and the condition that keeps a first ingest quiet keeps *every* ingest quiet. The warning goes silent
-at the exact moment it becomes true.
+[`src/pipeline.ts:1059-1062`](../../src/pipeline.ts) — keeps **every** ingest quiet. The warning goes
+silent at the exact moment it becomes true.
 
-So the check has to be made from outside the thing it is checking: count how many comment and search
-anchors still name a block in the current revision, before and after. A number taken from the same
-files the fix removes cannot report on the fix.
-[block-id-matching-non-latin.md](../postmortems/block-id-matching-non-latin.md) is the same failure
-from the other end — a matcher that lost every id on every re-extraction, and nobody would have seen
-it either.
+I proposed replacing it with a count of comment and search anchors that still resolve. The review
+says that is an audit and not a guard, and gives four reasons I had not thought through: it misses
+chat anchors; search hits are generated data that is *allowed* to go stale; comments deliberately
+point at `block_identities` rather than at the current revision; and **an article with no reader
+anchors would let a completely broken matcher pass**. That last one is
+[silent-success.md](../reusable/silent-success.md) again — a measure that reports success because
+there was nothing there to measure. So, three protections rather than one:
+
+1. **At runtime**, compare the baseline's ids with the output's. A non-empty baseline and a non-empty
+   output that share *nothing* stops the stage, unless something explicitly asked for a
+   whole-article replacement.
+2. **An integration test on the Postgres path**: published blocks → copied draft → fresh stage-2
+   HTML → stage 3 → the unchanged paragraphs still hold their exact ids. Plus: a failed baseline read
+   throws rather than minting.
+3. **The anchor audit as a one-off corpus check** at the re-ingest, comparing exact anchor *sets*
+   rather than totals — because an aggregate that matches can still be made of different anchors.
 
 ### The switchover, and what "preserve what we have" costs
 
@@ -1245,12 +1328,27 @@ the cheapest one.
 
 So the work to preserve what we have is not a migration. It is:
 
-1. **Stage 3 takes its previous blocks from the store** — above, and a prerequisite for D anyway.
+1. **The three identity carry-forwards move to the store** — blocks, glossary and ideas, above. A
+   prerequisite for D rather than an addition to it.
 2. **`db:export` fails closed** — § `db:export` must fail closed. It is the rollback tool, and on
    2026-08-28 it was found silently dropping `shelf.purpose`
    ([the postmortem](../postmortems/export-never-wrote-the-readers-purpose.md)). A backup nobody has
    watched fail is not a backup.
 3. **`noema`'s raw document** — one decision, still Greg's, in § What it does not delete.
+
+**And the order changes.** The review's sixth finding is that the re-ingest cannot simply be moved
+earlier; several things have to be true before it happens at all, and the source route is one of them
+because this document already says it moves *no later than D*. The sequence:
+
+1. the three identity fixes, the zero-overlap guard, and **B3**
+2. **D**, including the source route
+3. **delete the importer** — the replacement suites are already green, C7
+4. **enable the publication gate**
+5. **the re-ingest** — and it is safe only after 1, because it is the event that would otherwise
+   orphan every anchor
+6. the compatibility release, then validating the export and source paths
+7. **drop `raw_bytes`**, later, and it is the only irreversible step — currently holding nothing on
+   any revision
 
 ### D — the stages, **and the source route**
 
@@ -1380,6 +1478,9 @@ relearning ([silent-success.md](../reusable/silent-success.md)).
 
 - [delete-the-importer-review-sol.md](delete-the-importer-review-sol.md) — the NO-SHIP input round on
   this document's first draft, and the source of most of what is above
+- [blocks-carry-forward-sol.md](blocks-carry-forward-sol.md) — NO-SHIP on five of seven, and the
+  round that found glossary and ideas carrying identity in a file too
+  ([the prompt](blocks-carry-forward-prompt.md))
 - [transactional-stage-runner.md](transactional-stage-runner.md) — the landings this re-sequences
 - [raw-bytes-in-storage.md](raw-bytes-in-storage.md) — where `storeRawSource`, `raw_sources` and the
   project-pair check come from, and whose backfill this deletes
