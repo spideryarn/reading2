@@ -1304,6 +1304,34 @@ Never warn and mint. That converts a database hiccup into permanent identity los
 finds out by scrolling. The missing piece to build is carrying `basedOn` — or an equivalent
 baseline-state signal — into D, because today the stage cannot tell case 1 from case 2.
 
+#### Two decisions taken while building it
+
+**Stage 3 consumes `extractedHtml`, never `stampedHtml`.** Both are in Postgres on purpose and the
+choice is not cosmetic: `stampedHtml` is stage 3's own previous output and still carries its ids, so
+reading it would make the stage appear to work while the baseline read was doing nothing — ids would
+survive because they were never removed, and the day a genuine re-extraction happened they would all
+go at once. Reading stage 2's output means the ids are *absent* from the input, so the baseline is
+load-bearing on every run and a broken one fails immediately rather than eventually. The rule is the
+same one as everywhere else here: prefer the arrangement where the thing you depend on is exercised,
+not the one where it is quietly optional.
+
+**The zero-overlap guard has no escape hatch, and that is deliberate.** `force` cannot be one — it
+means "re-run this step", which is the ordinary idempotent path, so it would disable the guard on
+exactly the runs that most need it. And there is no other whole-article-replacement operation in the
+repo.
+
+That leaves a stage that refuses when a run keeps none of the previous ids, with no way to override.
+Consider when zero overlap actually happens: the URL now serves a different article, a re-fetch
+picked up a paywall page, an extraction went wrong. **In every one of those, refusing is the correct
+outcome** — it is precisely the moment when re-minting silently would be the damage. The legitimate
+case, a piece genuinely rewritten end to end, is rare, and making it stop and ask a person is the
+safe side to be wrong on. The exemption gets added when somebody actually meets one, deliberately,
+rather than existing in advance for a case nobody has had.
+
+What the refusal owes in return is a message that can be acted on: what was compared, how many ids
+each side had, that nothing has been written, and that a real whole-article rewrite is the thing
+somebody has to allow on purpose.
+
 #### The guard, and why my first answer was not one
 
 The existing warning is unreachable after D. `previousBlockCount` counts blocks in **two files on
@@ -1334,6 +1362,37 @@ there was nothing there to measure. So, three protections rather than one:
    throws rather than minting.
 3. **The anchor audit as a one-off corpus check** at the re-ingest, comparing exact anchor *sets*
    rather than totals — because an aggregate that matches can still be made of different anchors.
+
+#### Built, 2026-08-28 — the blocks stage only
+
+Stage 3 is done; `glossary` and `ideas` are the next piece of work and take the seam this
+established. What landed, and the four things the code decided that the section above left open:
+
+- **`ArtifactStore` grew one method**, `hasEarlierBlocks(slug)`, and it is the "baseline-state
+  signal" this section said had to be carried in. It is not `basedOn`, because **there is no
+  `based_on_revision_id` column** — the name appears in `REVISION_CARRY_POLICY`'s comment as a
+  column that *would* be harmful to carry, not as one that exists. Postgres answers with
+  `articles.current_revision_id`, which is exactly the value `beginDraftIn` read as `basedOn` when it
+  made the draft, and a published revision cannot exist without blocks (`publishRevision` refuses
+  one). The filesystem answers with stage 4's `data/<slug>/blocks.json` — the second file
+  `previousBlockCount` used to read, for the same reason.
+- **`runBlocks`'s `previous` argument is required**, not optional. An optional one is exactly what
+  landing D could drop while still compiling.
+- **`PipelineStep.run` now takes the store**, like `isDone` and `stamp`, with no default — the
+  reason `stepIsDone` gives. `blocks` is the only step that reads it today.
+- **The filesystem's behaviour changes in one case**, and it is the case the old warn covered:
+  stage 3's copy missing while stage 4's copy is present now **fails** instead of warning and
+  minting. That is the table above applied to disk, and the recovery is to restore the file.
+
+**No explicit whole-article-replacement operation exists**, so the zero-overlap guard has no
+exemption. `force` on a step means *run it again*, which is the ordinary idempotent path and must
+keep its ids, so it cannot double as one. The consequence is real and is left standing deliberately:
+a publisher who genuinely rewrote every paragraph makes the stage refuse until somebody adds a flag
+on purpose. `assertIdsCarried` in [`src/blocks.ts`](../../src/blocks.ts) is where it would be
+honoured.
+
+`tests/blocks-baseline.test.ts` is the suite, with the mutation each case was watched failing
+against written at the top of it.
 
 ### The switchover, and what "preserve what we have" costs
 
