@@ -338,7 +338,7 @@ describe("two renames of one conversation", () => {
   /**
    * **The regression, at the reducer's own level.**
    *
-   * An edit of the first question renames the conversation — `editTurn` on the
+   * An edit of the first question renames the conversation — `withEdit` on the
    * server says so. So this is the sequence in
    * tests/chat-title-ownership.test.ts with React taken out of it: rename, then
    * an edit carrying another title, then the rename answering. The last writer

@@ -260,7 +260,7 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
 
          It used to be drawn by the operation and committed when the PATCH
          answered, which was wrong in a way no reducer test could see: a *first
-         question* renames its conversation too — `editTurn` on the server says
+         question* renames its conversation too — `withEdit` on the server says
          so and `edit` mirrors it — so an edit landing while the PATCH was out
          wrote a title into `base` that the operation then drew over and finally
          overwrote. The reader watched the name they had just replaced come

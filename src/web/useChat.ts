@@ -664,10 +664,11 @@ export function useChat(slug: string): ChatApi {
           question: target ? { ...target, text: question, editedAt: now } : null,
           editing: messageId,
           opening: null,
-          /* The same rule the server applies in `editTurn`: the first question
-             names the thread, so rewriting it renames the thread. Straight into
-             `base`, like a rename's — a title is never withdrawn, so the last
-             writer wins and that writer is the reader's own order.
+          /* The same rule the server applies in `withEdit` (src/chat.ts):
+             the first question names the thread, so rewriting it renames the
+             thread. Straight into `base`, like a rename's — a title is never
+             withdrawn, so the last writer wins and that writer is the reader's
+             own order.
              tests/chat-title-ownership.test.ts. */
           title: index === 0 ? question.slice(0, 60) : null,
           namesThread: index === 0,

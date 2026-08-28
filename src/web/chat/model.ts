@@ -255,7 +255,7 @@ export interface TurnOperation extends Registered {
   /**
    * A title this turn writes straight into `base`.
    *
-   * An edit of the *first* question renames its conversation — `editTurn` on
+   * An edit of the *first* question renames its conversation — `withEdit` on
    * the server says so. It goes into `base` rather than being drawn, for the
    * reason a rename's does: a title is never withdrawn, so the last writer wins
    * and that writer is the reader's own order. See `rename.started` in
