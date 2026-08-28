@@ -41,7 +41,8 @@ constraint, not an apology — keep it boring while the ideas are still moving.
  │ 3 blocks │   RANDOM IDS (block-ids.md)
  │          │──────────────►  data/<slug>/blocks.json
  └──────────┘                 [{id:"spya-k3m9qt", tag, kind, level?, text,
-   │                            words, html, gistable, note?}]  — array order
+   │                            words, html, gistable, note?,
+   │                            role?, treatment?, noteId?}]  — array order
    │                            IS document order
    │
    ├─────────────────────┐
@@ -88,6 +89,12 @@ ranges would overlap.
 Not every block gets summarised. Images, rules, and pull-quotes that repeat body text carry
 `gistable: false` — addressable, so the ToC can point at a diagram, but never the subject of a row
 of their own. See [block-ids.md § What gets an id](block-ids.md#what-gets-an-id).
+
+Stage 3 also reads back the footnote stamps stage 2 left in the DOM and writes `role`, `treatment`
+and `noteId` onto the blocks inside the notes container — apparatus rather than argument, and which
+note each block belongs to, since **a note is a range of blocks and not one block**. Nothing reads
+those fields yet; the predicates that will are the next stage.
+[docs/plans/footnotes.md](../plans/footnotes.md).
 
 ## Stage ownership
 

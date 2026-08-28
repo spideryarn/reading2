@@ -102,6 +102,50 @@ the careful thing and then following the recipe was worse than either alone.
 Commit when a piece of work is done and working, without waiting to be asked. And don't stress if
 someone sweeps up one of your changes anyway — it happens, it's recoverable, keep going.
 
+### A third way, when you cannot touch the shared index either — 2026-08-28
+
+The right-hand recipe in that table opens with `git reset`, which resyncs the **whole** index. That
+is fine when nothing is staged and wrong when a peer has spent ten minutes staging hunks — and you
+cannot always tell, because `git diff --cached` is a snapshot of a thing several agents are writing.
+
+A **private index** avoids the question. It writes neither the shared index nor the working tree, so
+a peer mid-commit cannot be disturbed:
+
+```sh
+export GIT_INDEX_FILE=$(mktemp) && rm -f "$GIT_INDEX_FILE"
+git read-tree HEAD
+git update-index --add -- <your clean files>              # read from the working tree
+git show HEAD:src/shared.ts > /tmp/mine.ts                # then add ONLY your lines to it
+BLOB=$(git hash-object -w /tmp/mine.ts)
+git update-index --add --cacheinfo 100644,$BLOB,src/shared.ts
+TREE=$(git write-tree)
+OLD=$(git rev-parse HEAD)
+NEW=$(git commit-tree "$TREE" -p "$OLD" -F msg.txt)
+git update-ref refs/heads/main "$NEW" "$OLD"              # old value = refuses on a race
+git reset -q -- <every path you just committed>           # NOT optional — see below
+```
+
+Build the blob from `git show HEAD:<file>` **plus your own lines**, never from the working tree, and
+anchor each insertion on an exact string that occurs once. That is what guarantees none of their work
+rides along. Check afterwards that every symbol you know to be theirs appears zero times in your
+version, and parse it (`npx esbuild <file> --loader:.ts=ts --outfile=/dev/null`) — a hand-built blob
+is exactly the kind of thing that looks right and is truncated.
+
+**The last line is the half that bites, and it bites your peers rather than you.** `update-ref` moves
+HEAD; the shared index is still the one from before, so it is now stale against the *new* HEAD, and
+git renders every path your commit added as **staged for deletion**. For a file you modified, that is
+a staged reversal of the lines you just committed. For a file that was **untracked** before the
+commit it is worse: `D drizzle/0027_block_roles.sql` staged, `?? drizzle/0027_block_roles.sql` on
+disk — a committed migration queued for removal while still sitting in the tree. The next agent to
+run an index-based `git commit` commits that deletion under their own message, which is precisely
+the accident this whole section exists to prevent, arriving by a new door.
+
+It happened on 2026-08-28. A peer read the status, could not tell it from a deliberate revert,
+refused to touch it, and asked — which was the right call and is the behaviour to copy. Run the
+`reset` in the **same command** as the ref move rather than as a follow-up step, keep it
+path-limited to the paths you just committed so a peer's staged work is untouched, and if somebody
+asks, the answer is: transient, mine, not a revert.
+
 ## The thing that fails silently
 
 **A commit can be green here and broken on any other machine**, because the typecheck and the tests
