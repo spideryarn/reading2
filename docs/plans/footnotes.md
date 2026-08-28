@@ -599,7 +599,8 @@ touch or a modified click.
 
 **6 — PDFs converge.** `renderHtml` partitions body, notes and references, emits marked containers
 and supplies headings where the document has none, so a transcribed paper reaches stage 2's
-canonical shape and reuses all of the above. Includes the bibliography-gate decision below.
+canonical shape and reuses all of the above — footnotes and references become native blocks carrying
+`role`, exactly as a web article's do, with the unverified-pages wording on the References supplement.
 
 **Why the order changed.** As first written, stage 2 gave notes a role while the tree still contained
 them, and stage 3 built the tree from body blocks only — which fails the coverage invariant until the
@@ -753,17 +754,47 @@ so they are excused rather than allowed to fail the paper
 ([`pdf-read.ts:1040`](../../src/pdf-read.ts)). Showing a PDF bibliography therefore publishes text
 the pipeline explicitly permits to be incomplete.
 
-**This is Greg's call, and there is a third option** that the review supplied and that is better than
-either of the two the plan started with. Rather than loosening the gate or printing unverified text
-with a caveat: show **the original page itself**. Verified references render as text where the gate
-passes; for a bibliography page that failed it, show the cropped, rasterised **PDF page** in the
-supplement, with the uncertain transcription attached for search and clearly marked as such. The
-pixels are authoritative, the gate is untouched, and nothing incomplete is passed off as a
-transcription. The cheaper variant of the same idea is a "References could not be verified"
-supplement that links to the original pages.
+**Decided, 2026-08-28: show the transcription as ordinary blocks.**
 
-That fits what this app already does elsewhere — it says "a scan cannot be checked" out loud rather
-than pretending. What is not available is showing an unverified bibliography silently.
+> We definitely want the HTML-ified transcription, so that footnotes/bibliography are native block
+> objects (perhaps with metadata so they get treated slightly differently) not an image or anything
+> weird like that.
+>
+> — Greg, 2026-08-28
+
+The review had proposed a third option — rasterise the unverified bibliography page and show the
+original pixels, authoritative and ungated. It was rejected, and the reasoning is worth keeping
+because the same idea will occur to somebody again:
+
+- **A page image is a foreign object in this app.** Everything here is a block of text with a stable
+  id; that is the one contract ([block-ids.md](../project/block-ids.md)). Pixels carry no ids, so a
+  reader could not select a sentence and comment on it, search could not reach it, chat could not
+  cite it, granularity zoom would have nothing to compress and reading position nothing to land on.
+  It would be the only thing in the article that none of the features work on.
+- **"Cropped" is not available.** A `PdfRecord` is `{page, type, text, continues, uncertain}` — no
+  coordinates. The model returns text, not boxes. So it would be the whole page, body prose
+  included, and the reader would meet the last paragraph twice: once as words, once as pixels.
+- **It is not cheap either.** There is no render path today — pdf.js is used only for
+  `getTextContent`, to build the scoring baseline. Rasterising needs `@napi-rs/canvas`, the exact
+  package Vercel's tracer leaves out of the function bundle, which already produced
+  `DOMMatrix is not defined` on every route with a green build
+  ([`pdf.ts:30`](../../src/pdf.ts), [pdfjs-dommatrix-serverless.md](../postmortems/pdfjs-dommatrix-serverless.md)).
+
+**What the gate exemption actually means, restated**, because the plan overstated it. The gate exists
+so that a paper does not *fail ingestion* over a bibliography whose recall is poor, and because a
+lost paragraph of body prose is invisible and serious. A garbled author name in a citation is
+neither — it is visible on the page and checkable against the source. So the exemption is a decision
+about failing, not a prohibition on showing.
+
+What remains is to **say so rather than imply it**. The gate is per page, and reference blocks come
+from pages, so we already know which ones went unchecked. That belongs at the supplement, not on
+each of sixty-four entries — a reader does not care which page an entry came from:
+
+> **64 references — transcribed from the PDF and not checked line by line.**
+
+replacing the ordinary "shown as written, never summarised" wording on a References supplement whose
+pages were exempt. Same shape as the app already saying "a scan cannot be checked" out loud rather
+than pretending.
 
 **We still cannot tell "no footnotes" from "detector broken."** The known positive is confirmed:
 `data/Nagel_Bat.pdf` has numbered footnotes on PDF pages 3, 4 and 5 (the article's own pages
@@ -775,6 +806,7 @@ expect a superscript digit to survive text-layer extraction.
 
 ## Still open
 
-- **The bibliography gate decision** above — Greg's.
 - Whether the marker carries the substantive-versus-citation distinction in v1, or stays
   undifferentiated — the Sol/Fable reconciliation is written down, but the call is Greg's.
+
+*(The bibliography question is settled — see [The PDF path](#the-pdf-path).)*
