@@ -48,6 +48,35 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   ideas: true,
 };
 
+/**
+ * **Exactly one artefact built, and it is the only shape that can catch a
+ * crossed wire.**
+ *
+ * The two fixtures above correlate everything — all `false` or all `true` — so
+ * a mode reading the *wrong* flag gives the identical answer for both and every
+ * test in this file stays green. GPT Sol named that mutation exactly:
+ * *"map `ideas.has` to `summary`"*.
+ *
+ * A single mixed fixture is not enough either, and I wrote one before checking:
+ * the flags are booleans, so any two artefacts that happen to share a value are
+ * still freely swappable. `summary` and `ideas` were both `false` in it, which
+ * is precisely the pair Sol named — the control passed, and the comment
+ * claiming *"no single swap produces the same table"* was simply false.
+ *
+ * One fixture per artefact is the shape that works: with only `ideas` built,
+ * any mode reading anything other than `ideas` answers *not built* where the
+ * truth is *not carried yet*.
+ */
+function only(built: keyof PublicArtefacts): PublicArtefacts {
+  return {
+    arc: built === "arc",
+    tweets: built === "tweets",
+    glossary: built === "glossary",
+    summary: built === "summary",
+    ideas: built === "ideas",
+  };
+}
+
 describe("what a visitor is told, mode by mode", () => {
   it("gives the table of contents away, which is the whole feature", () => {
     // The tree, the zoom, the spine — all drawn from the payload the visitor
@@ -119,6 +148,35 @@ describe("what a visitor is told, mode by mode", () => {
    * visitor *"There is a tweet thread for this piece"* about an article whose
    * own wire response said `tweets: false`. GPT Sol, 2026-08-28.
    */
+  /**
+   * **Each mode reads its own flag and nobody else's.**
+   *
+   * Swept per artefact rather than asserted once: with only `X` built, the mode
+   * for `X` must say *not carried yet* and every other artefact mode must say
+   * *nobody built one*. A crossed wire fails on at least one row whichever pair
+   * was crossed.
+   */
+  it.each(["glossary", "summary", "ideas"] as const)(
+    "reads its own flag when only %s is built",
+    (built) => {
+      const flags = only(built);
+      for (const mode of ["glossary", "summary", "ideas"] as const) {
+        expect(visitorGap(mode, flags)?.kind, `${mode} when only ${built} is built`).toBe(
+          mode === built ? "not-yet-public" : "not-built",
+        );
+      }
+      // And the tweets page, which is not a mode but reads the same table.
+      expect(tweetsGap(flags).kind).toBe("not-built");
+    },
+  );
+
+  it("reads the tweets flag when only tweets is built", () => {
+    expect(tweetsGap(only("tweets")).kind).toBe("not-yet-public");
+    for (const mode of ["glossary", "summary", "ideas"] as const) {
+      expect(visitorGap(mode, only("tweets"))?.kind).toBe("not-built");
+    }
+  });
+
   it("asks the flags about the tweet thread too", () => {
     expect(tweetsGap(NOTHING_BUILT).kind).toBe("not-built");
     expect(tweetsGap(EVERYTHING_BUILT).kind).toBe("not-yet-public");

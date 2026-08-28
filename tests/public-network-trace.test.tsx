@@ -465,6 +465,38 @@ describe("a signed-out browser on a shared document", () => {
     expect(host.textContent).not.toContain("There is a tweet thread");
   });
 
+  /**
+   * **Modes changed by pressing the buttons, not by writing the URL.**
+   *
+   * Every mode assertion in this file arrives at its mode through `?mode=` on a
+   * fresh mount, which is a page load rather than a transition — so a band that
+   * only fetches when it is *switched into*, or a dock handler that reaches for
+   * something on press, would never be exercised. GPT Sol listed "fetch from a
+   * hover/click/timer" as the mutation this file would miss, and the click half
+   * was the one still outstanding after the hover test.
+   *
+   * The dock buttons carry an accessible name, so the sweep asks for them the
+   * way a reader would rather than by class.
+   */
+  it("stays inside the public namespace when the modes are pressed", async () => {
+    await open();
+    trace.length = 0;
+
+    for (const label of ["Summary", "Glossary", "Ideas", "Search", "Diagram", "Chat", "Review"]) {
+      const button = [...host.querySelectorAll("button")].find(
+        (b) => b.getAttribute("aria-label") === label,
+      );
+      expect(button, `the bar must offer ${label}`).toBeDefined();
+      await act(async () => button?.click());
+      await settle();
+      expect(outsidePublic(), `after pressing ${label}`).toEqual([]);
+    }
+
+    /* And the presses really did move the band — otherwise this passes by
+       clicking seven dead buttons. */
+    expect(host.textContent).toContain("Review is for whoever added this article");
+  });
+
   it("opens the comments drawer without asking for anybody's comments", async () => {
     await open("?panel=questions");
     expect(outsidePublic()).toEqual([]);

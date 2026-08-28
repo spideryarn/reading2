@@ -68,6 +68,47 @@ describe("publicFetch", () => {
     );
     expect(calls).toEqual([]);
   });
+
+  /**
+   * **A prefix test is a test on a string, and the browser sends a resolved
+   * path.**
+   *
+   * `/api/public/../article/x` passes `startsWith("/api/public/")` and leaves
+   * as `/api/article/x` — the authenticated namespace, asked anonymously, which
+   * answers 401 to a caller that believed it was in the closed room. Today's
+   * loaders encode their slugs and cannot produce one, so this was a guard
+   * weaker than it claimed rather than a live hole. GPT Sol, finding 9.
+   */
+  it.each([
+    "/api/public/../article/a-piece",
+    "/api/public/./../article/a-piece",
+    "/api/public/foo/../../article/a-piece",
+    "//elsewhere.example/api/public/article/a-piece",
+    "https://elsewhere.example/api/public/article/a-piece",
+  ])("refuses %s, which does not resolve where it looks like it does", async (path) => {
+    await expect(publicFetch(path)).rejects.toThrow(/public namespace/);
+    expect(calls).toEqual([]);
+  });
+
+  /**
+   * **And `%2F` is not one of them**, which I had assumed it was.
+   *
+   * An encoded slash is not a path separator: `URL` leaves it in the pathname,
+   * so the path still begins `/api/public/`, and the server agrees — the raw
+   * path reaches `isPublicNamespace` unchanged, stays in the closed room, and
+   * fails the route patterns there, which answer 404 rather than falling
+   * through. It escapes nothing at either end.
+   *
+   * Kept as a passing case rather than deleted, because "this looks like a
+   * traversal and is not" is the kind of thing somebody will otherwise decide
+   * to defend against — and rejecting it would refuse a slug that legitimately
+   * carries an encoded character.
+   */
+  it("allows an encoded slash, which is not a path separator", async () => {
+    next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
+    await expect(publicFetch("/api/public/article/a%2Fb")).resolves.toBeInstanceOf(Response);
+    expect(calls[0]?.url).toBe("/api/public/article/a%2Fb");
+  });
 });
 
 describe("reading a public endpoint", () => {
@@ -116,6 +157,31 @@ describe("reading a public endpoint", () => {
     next = () =>
       new Response(JSON.stringify({ error: "Public reading needs Postgres" }), { status: 501 });
     await expect(loadPublicArticle("a-piece")).rejects.toBeInstanceOf(Error);
+  });
+
+  /**
+   * **The loaders, not just `publicFetch`.**
+   *
+   * The credentials and header assertions above call `publicFetch` directly, so
+   * they say nothing about whether `loadPublicArticle` and `loadPublicMetadata`
+   * actually go through it. Swap either for a bare `fetch(path)` and every one
+   * of them stays green while the real client sends cookies. GPT Sol named that
+   * mutation by file and line, 2026-08-28.
+   *
+   * These are the two functions the app calls, so this is the assertion that
+   * describes production.
+   */
+  it.each([
+    ["the article", () => loadPublicArticle("a-piece")],
+    ["the metadata", () => loadPublicMetadata("a-piece")],
+  ])("sends no credentials and no Authorization when loading %s", async (_name, load) => {
+    next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
+    await load();
+
+    const [call] = calls;
+    expect(call).toBeDefined();
+    expect(call?.init?.credentials).toBe("omit");
+    expect(new Headers(call?.init?.headers).get("Authorization")).toBeNull();
   });
 
   it("encodes the slug into the path", async () => {

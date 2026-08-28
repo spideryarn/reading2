@@ -174,6 +174,33 @@ describe("the sharing card, on the page that owns it", () => {
     expect(host.textContent).toContain("Shared since");
   });
 
+  /**
+   * **`personalised` survives the wiring**, which nothing asserted.
+   *
+   * The prop is threaded `Metadata` → `SharingSection` → `AccessSharing`, and
+   * dropping it anywhere along that path leaves the dialog falling back to its
+   * *"may have been written for your reader profile"* hedge — the very sentence
+   * the field was built to replace. Every unit test passes, because they hand
+   * the card its props directly. GPT Sol named this mutation, 2026-08-28.
+   *
+   * It is asserted through the **dialog**, because that is the only place the
+   * value is visible: the card itself says nothing about profiles until the
+   * owner opens the confirmation.
+   */
+  it("carries the personalised list all the way to the dialog", async () => {
+    sharing = { visibility: "private", publicAt: null, personalised: ["glossary", "summary"] };
+
+    await open();
+    const share = [...host.querySelectorAll("button")].find((b) =>
+      (b.textContent ?? "").includes("Share with anyone"),
+    );
+    await act(async () => share?.click());
+
+    expect(host.textContent).toContain("your glossary and your summary");
+    // And not the hedge, which is what a dropped prop falls back to.
+    expect(host.textContent).not.toContain("may have been written");
+  });
+
   it("says a private article is private, and offers to share it", async () => {
     sharing = { visibility: "private", publicAt: null, personalised: [] };
 

@@ -147,6 +147,30 @@ function scan(file: string): Imported[] {
   )) {
     if (m[2]) found.push({ spec: m[2], typeOnly: /^\s*type\s/.test(m[1] ?? "") });
   }
+  /**
+   * **`import.meta.glob("…")`, which is Vite's and which the rules above cannot
+   * see at all.**
+   *
+   * It takes a pattern rather than a path, and Vite expands it at build time
+   * into a real import of every file that matches — so
+   * `import.meta.glob("../*.ts")` in a shared module pulls the whole of `src/`
+   * into the browser, and every check in this file passes, because there is no
+   * `from` clause anywhere in it. GPT Sol named it as the mutation
+   * `client-imports` would miss, 2026-08-28.
+   *
+   * The pattern is recorded verbatim rather than resolved: a glob names a *set*
+   * of files, and the honest answer to "what does this drag in" is that we
+   * cannot say from a regex. So the rule below refuses any glob that reaches
+   * out of the module's own directory, which is the fail-closed reading — and
+   * an unhelpful error on a legitimate glob is a conversation, where the
+   * alternative is `node:fs` in the bundle and nothing saying so.
+   *
+   * Not marked `typeOnly`: there is no such spelling, and the expansion is
+   * value imports by construction.
+   */
+  for (const m of text.matchAll(/\bimport\.meta\.glob\w*\(\s*\[?\s*["']([^"']+)["']/g)) {
+    if (m[1]) found.push({ spec: m[1], typeOnly: false });
+  }
   /* `import "./side-effect.css"` and dynamic `import("…")` too. Neither form has
      a type-only spelling: a side-effect import exists *for* the side effect,
      and a dynamic import is a runtime call. */
@@ -180,8 +204,13 @@ function disqualifying(name: string, imports: Imported[]): string[] {
   const out: string[] = [];
   for (const { spec } of imports) {
     if (spec.startsWith("node:")) out.push(`src/${name} → ${spec}`);
-    // A shared module reaching further into src/ can drag anything with it.
-    if (spec.startsWith("./") && !SHARED.has(spec.slice(2))) {
+    /* **Any relative specifier, not just `./`.** A shared module reaching
+       further into `src/` can drag anything with it — and `../` reaches out of
+       `src/` altogether, which is worse rather than exempt. The check was
+       `startsWith("./")` until 2026-08-28, so `import.meta.glob("../*.ts")`
+       passed it on a technicality after the scanner had been taught to see the
+       glob at all. */
+    if (spec.startsWith(".") && !SHARED.has(spec.replace(/^\.\//, ""))) {
       out.push(`src/${name} → ${spec}`);
     }
   }
@@ -308,6 +337,11 @@ describe("the client's imports", () => {
     expect(local("node:fs", true)).toHaveLength(1);
     // A package is deliberately not flagged — the dompurify case.
     expect(local("dompurify", false)).toHaveLength(0);
+    /* A Vite glob reaching out of the directory, which `scan` records by its
+       pattern. `../*.ts` is not on the allowlist and cannot be, so it is
+       flagged like any other local reach — which is the fail-closed answer to
+       a form whose expansion a regex cannot know. */
+    expect(local("../*.ts", false)).toHaveLength(1);
   });
 
   /**
@@ -338,6 +372,9 @@ describe("the client's imports", () => {
         // A default import that merely starts with the letters "type".
         'import types from "./f.js";',
         'import "./g.js";',
+        // Vite's glob, which has no `from` clause for the other rules to see.
+        'const mods = import.meta.glob("./h/*.ts");',
+        'const eager = import.meta.glob("./i/*.ts", { eager: true });',
       ].join("\n"),
     );
     try {
@@ -349,6 +386,11 @@ describe("the client's imports", () => {
       expect(byName.get("./e.js")).toBe(false);
       expect(byName.get("./f.js")).toBe(false);
       expect(byName.get("./g.js")).toBe(false);
+      /* Recorded at all, which is the point — the scanner was blind to this
+         form entirely. Never type-only: there is no such spelling, and the
+         expansion is value imports by construction. */
+      expect(byName.get("./h/*.ts")).toBe(false);
+      expect(byName.get("./i/*.ts")).toBe(false);
     } finally {
       rmSync(fixture, { force: true });
     }
