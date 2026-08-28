@@ -235,6 +235,34 @@ You are probably in it when:
   the reach of any test, since a headless DOM has no OS to ask. Whenever the answer varies by
   environment, the environment you happen to be in is a sample of one.
 
+- **The check that decides "this is broken" is shallower than the decision it protects.** Then
+  broken cannot be told from ordinary, and it arrives wearing ordinary's clothes. Three of these in
+  one day, in three different files, and each was invisible because the wrong branch is a branch that
+  runs every day:
+  - a baseline classifier asked only whether `entries` was an array, while staleness was judged on
+    `sourceHash` — so an artefact with **no** hash passed as usable, failed the ordinary staleness
+    comparison, and was treated as *the text has changed*. Every id re-minted, reported as success.
+    **Unusable arriving disguised as stale.**
+  - a fingerprint ignored a field that the policy above it was stated on, so an article whose
+    classification had changed hashed identical and reported itself current.
+  - a file reader returned `null` for *absent*, for *corrupt* and for *over the size ceiling* alike,
+    while the caller's question was "has this article ever been through a run before" — so a
+    half-written file answered *no*, and a whole identity set was minted over the top of it.
+
+  The rule that covers all three: **whatever field the decision reads, the usability check must read
+  too.** And the tell is that the two answers are *different kinds of thing* — "the shape is fine" is
+  not an answer to "can I believe this".
+
+  Its test-side twin is worth the same paragraph, because it is what let all three survive: **a test
+  derived from the implementation only proves the implementation is itself.** The wrong-shape cases
+  for the first one asserted exactly what the production validator asserted — that the field was an
+  array — so they stayed green straight through the data-loss path. Derive the cases from the
+  *decision* instead: enumerate what the code needs in order to tell its states apart, and write one
+  for each way that input can be missing or wrong. A sibling failure from the same day: a fixture
+  that planted its test data two blocks past the context window, so the test passed with the guard
+  removed. One repeats the code's assumption, the other cannot reach the code at all, and both look
+  like coverage.
+
 Collected in spideryarn, 2026-08-25. Applied there in
 [browser-testing.md](../project/browser-testing.md) and
 [testing.md](../project/testing.md#sweep-a-continuous-input-dont-sample-it).

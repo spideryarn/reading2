@@ -1399,8 +1399,8 @@ there was nothing there to measure. So, three protections rather than one:
 
 #### Built, 2026-08-28 — the blocks stage only
 
-Stage 3 is done; `glossary` and `ideas` are the next piece of work and take the seam this
-established. What landed, and the four things the code decided that the section above left open:
+Stage 3 is done; `glossary` and `ideas` followed it on the same day and are below. What landed,
+and the four things the code decided that the section above left open:
 
 - **`ArtifactStore` grew one method**, `hasEarlierBlocks(slug)`, and it is the "baseline-state
   signal" this section said had to be carried in. It is not `basedOn`, because **there is no
@@ -1427,6 +1427,56 @@ honoured.
 
 `tests/blocks-baseline.test.ts` is the suite, with the mutation each case was watched failing
 against written at the top of it.
+
+#### Glossary and ideas — built, reviewed, and one finding worth the round trip
+
+The same fix, and the seam generalised: `ArtifactStore.readBaseline<K>` returns
+`{state:"ok",value} | {state:"absent"} | {state:"unusable"}` and both adapters share one rule table,
+so the two stores cannot drift about what a usable baseline is.
+
+**Where these two differ from blocks, and it is the whole job.** Blocks always wants its baseline.
+Glossary and ideas gate on a `sourceHash` match, and a mismatch **legitimately** means *do not
+inherit* — the text changed, so the old ids describe text that is gone. So there are four states, and
+two of them end in minting:
+
+| state | correct |
+|---|---|
+| no previous artefact | mint |
+| previous artefact, `sourceHash` differs | mint — correct, not an error |
+| previous artefact present but **unusable** | **fail** |
+| the store read throws | **propagate** |
+
+**The review found the classifier could not tell the third from the second, and that is the finding
+to keep.** `SHAPE.glossary` asked only whether `entries` was an array; `sourceHash` was never
+validated anywhere. So `{entries: [...]}` with no hash classified as **usable**, failed the ordinary
+staleness comparison, and was handled as *the text changed* — minting every entry id, resetting
+`passes`, overwriting the baseline, and reporting success. **Unusable arriving disguised as stale.**
+Missing and duplicated ids passed the same way; a duplicate is the quieter half, because
+first-writer-wins means the second holder loses its id and every `?term=` link that meant it now
+resolves to the wrong entry.
+
+Fixed with a per-kind `BaselineRule` naming which field carries the staleness hash and which array
+carries identity, checked by `whyUnusableAsBaseline` and shared by both adapters. Restoring the
+shallow check reddens **seven** tests across both stores, two of which assert the refusal happens
+*before* the model call and before the write — so a broken baseline costs neither money nor the
+artefact that is still there.
+
+**The general form outlived the feature** and is now in
+[silent-success.md](../reusable/silent-success.md): *the check that decides "this is broken" cannot
+be shallower than the decision it protects* — whatever field the decision reads, the usability check
+must read too. Three instances landed in one day, in three different files. A second session hit the
+same shape independently, in a fingerprint that ignored the field its policy was stated on.
+
+And the review's second finding is the reason the first survived: the "wrong shape" tests asserted
+exactly what the production validator asserted — that the field was an array — so they **repeated its
+assumption** and stayed green through the data-loss path. A test derived from the implementation only
+proves the implementation is itself.
+
+> **Not yet committed**, and not for any reason to do with the work. Another session's in-flight
+> `stripFence` de-duplication sits in `src/glossary.ts` and `src/ideas.ts`, and one of my hunks
+> contains a line of theirs inside it — take-both-or-neither at hunk granularity. Unpicking it would
+> mean hand-restoring lines their refactor deleted, which is what
+> [version-control.md](../project/version-control.md)'s two recorded accidents both were. Waiting.
 
 #### What the baseline landing leaves owed
 
@@ -1458,6 +1508,64 @@ is how the original bug got in.
 cleaned `output/` but kept `data/`; the recovery is to restore the file or delete both. And
 `assertIdsCarried` labels its error with the HTML file's basename, which is the slug only because the
 layout happens to be `output/<slug>.html`.
+
+#### Built, 2026-08-28 — glossary and ideas
+
+The other two stages in the table, on the seam stage 3 opened. `previousGlossaryFrom` in
+[`src/glossary.ts`](../../src/glossary.ts) and `previousIdeasFrom` in
+[`src/ideas.ts`](../../src/ideas.ts) read the previous artefact from the store; `generateGlossary`
+and `generateIdeas` take it as a **required** `previous`, for the reason `runBlocks` does.
+`tests/glossary-ideas-baseline.test.ts` is the suite, with the mutation each case was watched failing
+against written at the top of it.
+
+**These two have four states, not three, and that is the whole difference from stage 3.** Stage 3
+wants its baseline unconditionally. These two inherit ids *only when `sourceHash` matches*, so a
+mismatch is a legitimate refusal to inherit rather than a fault:
+
+| | what it means | what to do |
+|---|---|---|
+| no previous artefact | a first run | mint, quietly |
+| one whose `sourceHash` differs | the article's text moved | mint, quietly — **correct, not an error** |
+| one the store cannot read | we cannot tell which of the two it would have been | **fail the stage** |
+| the store read throws | an infrastructure fault | **propagate, fail the stage** |
+
+Rows two and three are the pair that has to stay apart, and folding either into the other is the bug
+`36dadcc` fixed in the blocks version arriving through a different door. Row two is decided
+downstream, by `existingFor` and `idsByTerm`, which is why `previousGlossaryFrom` hands back the
+artefact rather than a decision: those two have three answers — *append*, *rewrite keeping the ids*,
+*start again* — where a caller-side gate could only have one.
+
+**`ArtifactStore` grew a general tri-state read, not two more siblings of `hasEarlierBlocks`.**
+`readBaseline(slug, step, kind)` returns `ok` / `absent` / `unusable`, from the `readOutcome` the file
+adapter already had and from an unflattened `readArtefact` in the Postgres one. The reason it is
+general where `hasEarlierBlocks` is specific: stage 3 cannot ask its question of its own artefact,
+because that artefact **is** the baseline and a missing one could only ever report itself missing —
+so it has to ask a second source, which is stage 4's copy on disk and the published-revision pointer
+in Postgres, and those two have nothing in common but the answer. Glossary and ideas have one copy
+each, so the honest second question is about that same copy. Two shapes of question because there are
+two shapes of artefact; collapsing them would make one of the two lie. `hasEarlierBlocks` is
+unchanged.
+
+**The append half is the trap this landing had that stage 3 did not.** `glossary.json` does two jobs
+— `existingFor` decides whether "Find more terms" *adds to* the list, and `idsByTerm` lends its ids to
+a rewrite — and a fix that restored the ids while quietly turning a top-up into a replacement would
+pass every id assertion there is. It is watched red on its own: making `generateGlossary` ignore
+`opts.previous` for `existingFor` alone reddens **exactly** the two append tests and nothing else.
+
+**What this leaves owed.**
+
+- **Postgres cannot detect a carry-forward that did not happen**, the way stage 3 can. Glossary and
+  ideas are columns copied by `beginDraftIn`'s single `INSERT … SELECT`, so they carry or the
+  statement fails; there is no equivalent of "the pointer says there were blocks and the rows are
+  gone". If a future change moves either artefact out of `article_revisions` into a table of its own,
+  that stops being true and this stage needs the `hasEarlierBlocks` treatment.
+- **Both CLIs still swallow their baseline read**, exactly as `previousBlocksInFile` does and for the
+  same reason — no store to ask. The blast radius is smaller than stage 3's (a top-up that starts a
+  fresh list, in a directory a person named by hand) and there is no `assertIdsCarried` behind it.
+- **The Postgres half of the new suite exercises the read and not the write**, deliberately: these
+  stages take no job claim to read, and inserting one would have put every assertion behind the
+  database's single `running` slot. It cost four failures in a full-suite run before it came out.
+  `store.write` for these kinds is covered by `tests/store-artefacts-pg.test.ts`.
 
 ### The switchover, and what "preserve what we have" costs
 
