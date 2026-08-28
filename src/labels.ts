@@ -34,6 +34,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { CACHE_FLOOR_TOKENS, estimateTokens } from "./article-prompt.js";
+import { withLedger } from "./cli-ledger.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL } from "./models.js";
 import { loadEnvLocal } from "./env.js";
@@ -1640,6 +1641,13 @@ async function main(): Promise<void> {
   console.log(`\nEval:      npm run eval:toc -- ${dir}`);
 }
 
+/* **`withLedger`, not a bare `main()`.** Every batch here is a paid call, and
+   without the collector open they land nowhere: not in `npm run cost`, and
+   counted as unscoped by `unscopedCalls()` in src/ai-spend.ts. This was the only
+   thing separating `npm run labels` from the six stages that already had it —
+   tests/paid-cli-ledger.test.ts is what stops it happening again. Awaited rather
+   than `void`ed, so flushing the ledger and any failure in it stay part of the
+   command finishing. */
 if (path.resolve(process.argv[1] ?? "") === path.resolve(import.meta.filename)) {
-  await main();
+  await withLedger("cli", main);
 }
