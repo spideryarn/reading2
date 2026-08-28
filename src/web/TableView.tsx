@@ -39,14 +39,6 @@ import { BlockRange, BlockRef } from "./BlockRef.js";
 import { MessageSquare } from "lucide-react";
 import { SWIPE_ATTR } from "./swipe.js";
 import type { AnchoredThread } from "./useChatAnchors.js";
-import { Lightbox } from "./Lightbox.js";
-import {
-  addZoomHandles,
-  figureFor,
-  ZOOM_BTN_CLASS,
-  ZOOM_WRAP_CLASS,
-  type ZoomedFigure,
-} from "./zoomable.js";
 
 interface Props {
   article: Article;
@@ -248,15 +240,8 @@ export function TableView({
           items: entries.map(([, a]) => ({
             node: a.node,
             blockId: a.node.range[0],
-            /* The apparatus takes no `text`, so the list falls through to its
-               title. `""` on a part is deliberate — it stops the renderer
-               falling back to the part's gist and turning the arc column into a
-               copy of L1 — but on a supplement there is no gist to fall back to
-               and "Notes" is the content. */
-            ...(a.supplement ? { supplement: true } : { text: a.text ?? "" }),
-            ...(a.index !== undefined && a.total !== undefined
-              ? { step: { index: a.index, total: a.total } }
-              : {}),
+            text: a.text ?? "",
+            step: { index: a.index, total: a.total },
           })),
           starts: entries.map(([row]) => row),
         });
@@ -264,7 +249,7 @@ export function TableView({
       }
       m.set(
         d,
-        itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id, geometry.supplementOf),
+        itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id),
       );
     }
     return m;
@@ -414,14 +399,7 @@ export function TableView({
       /* The unmarked majority never reaches the parser at all. `annotateHtml`
          has this test too; doing it here as well is what keeps an unmarked
          block out of the Map's churn as well as out of the parse. */
-      const marked = marks.length > 0 ? annotateHtml(block.html, marks) : block.html;
-      /* The enlarge buttons go on LAST, and `addZoomHandles` returns its input
-         unchanged when there is no figure in it — so the Map still holds only
-         the blocks that differ from their own html, and a paragraph of plain
-         prose costs one regex. See zoomable.ts § the four load-bearing things,
-         the third of which is this ordering. */
-      const withHandles = addZoomHandles(marked);
-      if (withHandles !== block.html) byBlock.set(block.id, withHandles);
+      if (marks.length > 0) byBlock.set(block.id, annotateHtml(block.html, marks));
     }
     return byBlock;
   }, [blocks, marksByBlock, termMarksByBlock, hitMarks, openTerm]);
@@ -667,18 +645,9 @@ export function TableView({
                         its content is the panel's current entry. */}
                     {!panels && (
                       <div className="sticky">
-                        {/* A supplement sits outside the numbering — "3 / 7",
-                            not "3 / 9" — and its title is its content, so it
-                            gets the title where a part gets its marker. Never a
-                            hole: the arc has no sentence for the apparatus and
-                            never will. src/supplement.ts. */}
-                        {arc.supplement ? (
-                          <div className="arc-step arc-supplement">{arc.node.title}</div>
-                        ) : (
-                          <div className="arc-step">
-                            {arc.index} <span className="of">/ {arc.total}</span>
-                          </div>
-                        )}
+                        <div className="arc-step">
+                          {arc.index} <span className="of">/ {arc.total}</span>
+                        </div>
                         {/* No fallback if the sentence is missing: an empty cell
                             is a failure the reader can see, and borrowing the
                             part's own gist here would quietly turn this column

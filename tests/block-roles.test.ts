@@ -435,7 +435,13 @@ describe("all five roles", () => {
         },
       },
     };
-    const built = publicArticle({
+    /* Assigned to a variable, not passed as a literal, and deliberately: TypeScript
+       applies excess-property checks only to a direct object literal. `publicArticle`
+       is growing artefact parameters in another session's in-flight work, so a
+       literal is rejected by whichever of the two signatures is not current —
+       missing keys against the wider one, excess keys against the narrower. Through
+       a variable this satisfies both, which is what a test in a shared tree needs. */
+    const input = {
       slug: "roles",
       title: "Roles",
       byline: null,
@@ -454,7 +460,8 @@ describe("all five roles", () => {
       summary: null,
       ideas: null,
       tweets: null,
-    });
+    };
+    const built = publicArticle(input);
     expect(built.blocks.map((b) => b.role)).toEqual([undefined, ...ROLES]);
     expect(built.blocks.filter((b) => b.treatment === "supplement").length).toBe(4);
     expect(built.blocks.filter((b) => b.noteId !== undefined).length).toBe(ROLES.length);

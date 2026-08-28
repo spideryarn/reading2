@@ -29,7 +29,6 @@ import { sanitizeArticle } from "./sanitize.js";
 import { TableView } from "./TableView.js";
 import type { TermSelection } from "./annotate.js";
 import { formsOf } from "../term-match.js";
-import { horizontalInset, safeAreaInsets } from "./safe-area.js";
 import { Spine } from "./Spine.js";
 import { AnnotateDialog } from "./AnnotateDialog.js";
 import { CommentDialog } from "./CommentDialog.js";

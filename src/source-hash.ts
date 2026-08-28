@@ -139,30 +139,40 @@ export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
  * as unchanged. `ideas` is the first stage to fold this in — see
  * docs/plans/ideas-mode.md § Freshness.
  */
-/*
- * **A tree with no supplement node hashes byte for byte as it did before**, and
- * for the same reason `hashBlocks` above has a legacy branch: today's whole
- * corpus predates the supplement node (2026-08-28), and folding a sixth field
- * into the canonical form unconditionally would invalidate every `labels.json`,
- * `ideas.json` and similarity artefact on disk at once — a mass re-run of paid
- * stages bought for nothing, since not one of those trees has apparatus in it.
- * `5bb2ef0284bce2cd` over `example/tree.json`, computed before this stage was
- * written and pinned in tests/supplement.test.ts.
+/**
+ * A fingerprint of the **tree** — every node's id, parent, range, title and
+ * gist.
  *
- * The supplemented branch is framed the way `hashBlocks` is, and for the
- * identical reason: `title` and `gist` are model prose, so an unescaped
- * delimiter is a collision waiting for the article that contains it. Keyed on
- * the **tree** rather than per node, so one hash never mixes the two forms.
+ * The companion to `hashBlocks`, and here for the identical reason: it began in
+ * src/labels.ts (which re-exports it, so nothing that imported it from there
+ * had to change) and a second stage now needs the same answer. Two modules
+ * computing "the same" structure hash two ways can only ever disagree, and the
+ * day they do, one artefact reports itself current against a different
+ * definition of current.
+ *
+ * **Not `renderOutline`'s text.** The outline is titles and indentation, which
+ * is the right thing to send a model and the wrong thing to compare two trees
+ * by: two structures that cut the article in completely different places print
+ * an identical outline. Walking the nodes means a boundary that moved changes
+ * the hash even when every title stayed put. That correction was GPT-5.6-sol's,
+ * 2026-08-26.
+ *
+ * **Why a second hash exists at all**, which is the thing to read before
+ * ignoring it: `StepStamp` in src/store/artifacts.ts says the late stages
+ * *"all read the tree as well as the blocks"*, and `inputHashFor` in
+ * src/pipeline.ts hashes only the blocks. Section boundaries can move without a
+ * single block changing, and a stage that judges what is load-bearing from the
+ * skeleton is then answering a different question against an input it reports
+ * as unchanged. `ideas` is the first stage to fold this in — see
+ * docs/plans/ideas-mode.md § Freshness.
  */
 export function structureHash(tree: Tree): string {
-  const ids = Object.keys(tree.nodes).sort();
-  const supplemented = ids.some((id) => tree.nodes[id]!.treatment != null);
-  const row = (id: string): string[] => {
-    const n = tree.nodes[id]!;
-    return [id, n.parent ?? "", n.range.join(".."), n.title ?? "", n.gist ?? ""];
-  };
-  const canonical = supplemented
-    ? `spya-tree/2\n${JSON.stringify(ids.map((id) => [...row(id), tree.nodes[id]!.treatment ?? ""]))}`
-    : ids.map((id) => row(id).join("\u0000")).join("\n");
+  const canonical = Object.keys(tree.nodes)
+    .sort()
+    .map((id) => {
+      const n = tree.nodes[id]!;
+      return [id, n.parent ?? "", n.range.join(".."), n.title ?? "", n.gist ?? ""].join("\u0000");
+    })
+    .join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }
