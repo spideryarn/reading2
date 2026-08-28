@@ -103,11 +103,26 @@ export const ADMIN_USER_ID_PROD = "001bb7a0-7720-4f1b-8b9d-1ee6e63d132a";
  * future recreated account.
  * docs/postmortems/admin-id-was-the-local-one.md.
  *
- * **This does not widen anything.** Each id is an account that exists on
- * exactly one project, so on either project the other entry names nobody: the
- * production database has no `f4d08b58…`, and nothing can be issued a `sub`
- * that already exists elsewhere. Two entries, one reachable administrator,
- * whichever database the server is pointed at.
+ * **What the second entry costs.** Not "nothing", which is what this comment
+ * said first and which GPT Sol correctly refused: OIDC guarantees uniqueness
+ * for the pair *(issuer, subject)*, not for a subject on its own, and GoTrue's
+ * admin create-user API takes an explicit id — `scripts/db-seed-owner.ts` uses
+ * it. An id can be created deliberately.
+ *
+ * The accurate version is narrower:
+ *
+ * - **The issuer is pinned one layer up.** `src/auth.ts` verifies every token
+ *   against the project named by `SUPABASE_URL`, so a token minted by the
+ *   laptop stack does not verify on production. `f4d08b58…` cannot arrive on a
+ *   production request unless that account exists *in production*.
+ * - **Creating one there needs the service-role key.** Anyone holding it owns
+ *   the project already, so this widens nothing an attacker can reach.
+ * - **It does widen what a mistake of ours can do**: a seed or a restore
+ *   pointed at production could mint that id, and it would be an administrator.
+ *
+ * The version that closes it outright compares *(project, id)* rather than id,
+ * which is a signature change at three call sites. Not done; written down
+ * rather than left implicit.
  *
  * Still a constant rather than an environment variable, for the reason in the
  * header: an unset env var read as "allow everyone" is the canonical fail-open,

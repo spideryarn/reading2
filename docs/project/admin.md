@@ -101,9 +101,21 @@ Admin link did not draw and `/api/admin/*` answered Greg 403 — the *silent loc
 names as its own cost, arriving on the first deploy rather than on some future recreated account.
 [admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md).
 
-**A second entry widens nothing.** Each id names an account that exists on exactly one project, so
-on either database the other entry names nobody: production has no `f4d08b58…`, and nothing can be
-issued a `sub` that already exists elsewhere.
+**What the second entry costs**, stated accurately — an earlier version of this said "widens
+nothing", and GPT Sol refused the reason. OIDC guarantees uniqueness for *(issuer, subject)*, not for
+a subject alone, and GoTrue's admin create-user API takes an explicit id, which
+[`scripts/db-seed-owner.ts`](../../scripts/db-seed-owner.ts) already uses. So:
+
+- **The issuer is pinned one layer up.** [`src/auth.ts`](../../src/auth.ts) verifies every token
+  against the project named by `SUPABASE_URL`, so a laptop-minted token does not verify on
+  production. The local id cannot arrive on a production request unless that account exists there.
+- **Creating one there needs the service-role key** — total compromise already. Nothing an attacker
+  reaches.
+- **It does widen what our own mistake can do.** A seed or a restore pointed at production could
+  mint that id, and it would be an administrator.
+
+Comparing *(project, id)* rather than id closes it outright, at a signature change in three call
+sites. Not done, and recorded rather than left implicit.
 
 The test spells both uuids out rather than importing the constants. Asserting
 `isAdmin(ADMIN_USER_ID_PROD)` passes for whatever the constant happens to say, which is the mistake
@@ -139,8 +151,7 @@ accounts.
 
 ## The page cannot read `auth.users` in production
 
-**Known broken, 2026-08-28, and not fixed here because it is a privilege change on the real
-database.** The link now draws; the page behind it does not load.
+**Known broken, 2026-08-28.** The link now draws; the page behind it does not load.
 
 `listUsersAcrossOwners` reads `auth.users` on the ordinary application connection. In production
 that is `spideryarn_app`, and
@@ -156,16 +167,30 @@ Locally the identical query works, because `DATABASE_URL` on a laptop is the `po
 So this page has never been run against a role resembling production's, which is the same mistake as
 the account id one layer down — [admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md).
 
-Three ways out, and the choice is Greg's:
+**And it was already known.** The header of
+[`scripts/check-owner-identity.ts`](../../scripts/check-owner-identity.ts), written the day before
+this page was built, says it outright:
+
+> `auth.users` is not readable by the application's database user. Measured, not assumed: the first
+> version of this script ran that query against production and got `42501 permission denied for
+> schema auth` … it is why this reaches for `SUPABASE_SERVICE_ROLE_KEY` from `.env.prod`.
+
+The fact had been measured against production, written down, and worked around — and nothing
+connected it to the new page. The same sentence names the fix.
+
+Four ways out:
 
 | | What it does | Cost |
 |---|---|---|
-| **A narrow view** (recommended) | a `security definer` view in `spideryarn`, owned by `postgres`, selecting the seven declared columns; `grant select` on **the view** to `spideryarn_app` | one migration run as `postgres`; the app role still cannot see `auth`, and the seven-column ceiling becomes a database fact rather than a Drizzle convention |
-| **Grant the table** | `grant usage on schema auth` + `grant select on auth.users to spideryarn_app` | works — `postgres` holds `SELECT` on `auth.users` *with* grant option, unlike `REFERENCES` — but the running server can then read every column of every account, which is what the role split existed to prevent |
-| **Go around the database** | ask GoTrue's admin API with the service role key instead of Drizzle | no DDL, but it puts a service-role key in the server's environment and needs a second code path for the counts |
+| **The admin API** (recommended) | ask GoTrue for the accounts, as `check-owner-identity.ts` already does; keep the five count queries and `mergeUsers` exactly as they are | **no DDL, and no new credential** — `SUPABASE_SERVICE_ROLE_KEY` is already in the production server's environment for Storage ([`blobs.ts`](../../src/store/blobs.ts), checked by [`vercel-health.ts`](../../src/vercel-health.ts)). Only the *people* query changes; needs pagination handling. Supabase's own advice is to use the Auth API rather than depend on its managed schema |
+| **Column grants** | `grant usage on schema auth` + `grant select (id, email, created_at, …) on auth.users to spideryarn_app` | one migration as `postgres`; keeps the query code; no credential column is reachable — but the app role can now see into `auth`, which the split existed to prevent |
+| **A view** | a view in `spideryarn` owned by `postgres` selecting the seven columns, `grant select` on the view | same as above and one more object. Note the mechanism is *view-owner permissions*, **not** `SECURITY DEFINER` — Postgres says those are not equivalent, and the first version of this table used the wrong name |
+| **Grant the table** | `grant select on auth.users to spideryarn_app` | works — `postgres` holds `SELECT` on `auth.users` *with* grant option, unlike `REFERENCES` — but the running server can then read every column of every account |
 
-The first keeps `spideryarn_app` fenced and makes the "counts and dates only" rule enforceable by
-Postgres rather than by the paragraph above.
+**The admin API is the recommendation**, and it changed on review: this table first ranked the view
+first and listed "puts a service-role key in the server's environment" as the API's cost, which is
+simply not true — the key is already there. GPT Sol, 2026-08-28. It is also the only option needing
+nothing from the production database.
 
 ## Where the numbers come from
 

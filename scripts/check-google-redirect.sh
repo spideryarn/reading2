@@ -38,9 +38,20 @@ CONTROL="https://not-registered.example/cb"
 if [ "$#" -gt 0 ]; then
   URIS=("$@")
 else
+  # Derived, not hardcoded. A pasted project ref goes on saying ACCEPTED about
+  # the project we used to be on: the old callback stays registered with Google
+  # after we move, so the check would pass while naming the wrong thing. This is
+  # the same class as the admin account id read off a laptop —
+  # docs/postmortems/admin-id-was-the-local-one.md. GPT Sol, 2026-08-28.
+  LOCAL_URL=$(grep '^SUPABASE_URL=' .env.local 2>/dev/null | cut -d= -f2- | tr -d '"')
+  PROD_URL=$(grep '^SUPABASE_URL=' .env.prod 2>/dev/null | cut -d= -f2- | tr -d '"')
+  if [ -z "${PROD_URL:-}" ]; then
+    echo "No SUPABASE_URL in .env.prod — cannot check the remote callback" >&2
+    exit 2
+  fi
   URIS=(
-    "http://127.0.0.1:54361/auth/v1/callback"                       # local stack
-    "https://alschkahzfagtppxspfq.supabase.co/auth/v1/callback"     # this project, remote
+    "${LOCAL_URL:-http://127.0.0.1:54361}/auth/v1/callback"   # local stack
+    "${PROD_URL}/auth/v1/callback"                            # this project, remote
   )
 fi
 

@@ -32,10 +32,12 @@ const SOMEBODY_ELSE = "9a1f4c2e-7b3d-4a58-9e12-0c6d8f5a41b7";
 describe("the administrator", () => {
   it("is one account id per project, and the local one is what the suite signs in as", () => {
     expect(isAdmin(ADMIN_USER_ID_LOCAL)).toBe(true);
-    /* If these two ever drift, every route test in the repo authenticates as
-       somebody who is not the administrator and the admin suite's "lets the
-       administrator through" case starts asserting a 403 by accident. */
-    expect(ADMIN_USER_ID_LOCAL).toBe(TEST_SUB);
+    /* `TEST_SUB` aliases the constant, so asserting they are equal compares a
+       value to itself and can never fail — which is the mistake this whole file
+       is now about, so it is gone. What is worth checking is the property the
+       suite actually depends on: whatever the helper signs with, `isAdmin` says
+       yes to it. That breaks if somebody points `TEST_SUB` somewhere else. */
+    expect(isAdmin(TEST_SUB)).toBe(true);
     expect(ADMIN_EMAIL).toBe(TEST_EMAIL);
   });
 

@@ -48,11 +48,28 @@ Four things could have and none did:
   constant, so every route test agreed with it too. A whole suite about the administrator, and not
   one assertion whose answer came from outside the file being tested.
 - **The browser pass.** Done on `localhost`, where the constant is correct.
-- **`describeAdminMiss`.** It **worked**. The server wrote *"the administrator's email arrived on an
-  account id we do not recognise — see src/admin.ts"* into the log on every attempt for a day. It was
-  written for the recreated-account case, which was imagined as a future event; the same failure
-  arrived on the first deploy instead, and nobody was reading the log. **A mitigation that only
-  writes something down is not a mitigation until something reads it.**
+- **`describeAdminMiss`.** This is the interesting one, and the first version of this postmortem got
+  it wrong — it said the sentence *"the administrator's email arrived on an account id we do not
+  recognise"* was written to the log on every attempt for a day, and nobody read it. That was
+  asserted without checking, and it is false. **The sentence was never written at all**, and it could
+  not have been.
+
+  `describeAdminMiss` runs inside the `/api/admin` namespace check in
+  [`routes.ts`](../../src/routes.ts) — it needs a request to reach the server. But the client never
+  sends one: `AdminUsersPage`, which holds the only `fetch` of `/api/admin/users`
+  ([`useAdminUsers.ts`](../../src/web/useAdminUsers.ts)), mounts only after
+  [`App.tsx`](../../src/web/App.tsx) has already asked `isAdmin` and got yes. A reader `isAdmin`
+  refuses is shown the shelf and makes no admin request ever.
+
+  So **the only mitigation for the silent lockout is unreachable from the failure it was written
+  for.** It fires for a hand-written `fetch` and for nothing else. The two client "courtesies" that
+  [admin.md](../project/admin.md) is careful to call cosmetic turn out to be load-bearing in one
+  direction nobody looked at: they are what stops the diagnosis being logged. GPT Sol found this
+  reviewing the fix, 2026-08-28.
+
+  **A mitigation nothing can trigger is not a mitigation.** What would work is a check that runs at
+  deploy time and asks the production project directly, rather than one that waits for a refusal
+  that the client is built never to send.
 - **The doc.** [admin.md](../project/admin.md) named the risk exactly — *"a recreated account is a
   different administrator"* — and the sentence directly above the constant said "local". The two
   paragraphs never met.
@@ -68,9 +85,27 @@ coverage and it is a restatement.
 past. `isAdmin` searches the list. Still a constant, for the reason it always was: an unset env var
 read as "allow everyone" is the canonical fail-open, and an array literal has no unset state either.
 
-**It widens nothing.** Each id names an account that exists on exactly one project, so on either
-database the other entry names nobody: production has no `f4d08b58…`, and nothing can be issued a
-`sub` that already exists elsewhere.
+**What the second entry costs, stated accurately.** The first version of this said "it widens
+nothing", on the grounds that "nothing can be issued a `sub` that already exists elsewhere". That
+reason is false and GPT Sol said so: OIDC only guarantees uniqueness for the pair *(issuer,
+subject)*, and GoTrue's admin create-user API takes an explicit id — which this repo already uses,
+in [`scripts/db-seed-owner.ts`](../../scripts/db-seed-owner.ts). An id can be created deliberately.
+
+What is actually true is narrower and worth writing down properly:
+
+- **The issuer is pinned one layer up.** [`src/auth.ts`](../../src/auth.ts) verifies every token
+  against the project named by `SUPABASE_URL`, so a token minted by the laptop stack does not verify
+  on production at all. `f4d08b58…` cannot arrive on a production request unless an account with
+  that id exists **in production**.
+- **Creating one there needs the service-role key**, through the admin API or a restore. Anyone
+  holding that key already owns the project, so this widens nothing an attacker could reach.
+- **It does widen what a mistake of ours can do.** A seed or an import pointed at production could
+  create that id, and it would then be an administrator. That is a small, real cost, and it is the
+  price of one constant covering two projects.
+
+The stronger version — comparing *(project, id)* rather than id, so that the local id is refused on
+production even if it exists there — is a signature change at three call sites and would close it
+outright. Not done, and recorded here rather than left implicit.
 
 The new tests **spell both uuids out** rather than importing the constants:
 
@@ -112,5 +147,21 @@ Locally the same query works, because `DATABASE_URL` on a laptop is the `postgre
 admin page has never run against a role that resembles production's — **the same shape of mistake as
 the uuid, one layer down**, and it was written in the same day by the same reasoning.
 
-Greg's call, because it is a privilege change on the real database. See
-[admin.md](../project/admin.md).
+**And this one was already known.** The header of
+[`scripts/check-owner-identity.ts`](../../scripts/check-owner-identity.ts), written 2026-08-26, says
+it in as many words:
+
+> `auth.users` is not readable by the application's database user. Measured, not assumed: the first
+> version of this script ran that query against production and got `42501 permission denied for
+> schema auth`. Supabase owns that schema and the app has no business in it — which is the right
+> answer, and it is why this reaches for `SUPABASE_SERVICE_ROLE_KEY` from `.env.prod`.
+
+So the fact had been measured against production, written down, and acted on — a day before the
+admin page was built doing exactly the query it says does not work. **The finding was in the repo
+and nothing connected it to the new code.** That is the more useful root cause than the privilege
+itself, and the same sentence names the fix: the admin API, which the repo already uses for this
+exact question.
+
+The service-role key is already in the production server's environment — `blobs.ts` needs it for
+Storage and `vercel-health.ts` checks it is set — so that route costs no new credential. See
+[admin.md](../project/admin.md) for the four options and the choice.
