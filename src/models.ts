@@ -340,7 +340,25 @@ export type NonTaskAiJob = "pdf" | "embeddings" | "dictation";
  * one name in one codebase is a bug waiting for whoever imports the wrong one.
  * Caught by a GPT Sol review before it was written.
  */
-export type AiJob = Task | NonTaskAiJob;
+/**
+ * **A model call made to measure something**, rather than to do a job for a
+ * reader — and its own category rather than a fourth `NonTaskAiJob`, because
+ * those three each have one fixed model and appear on the profile page's
+ * inventory, and an eval has neither.
+ *
+ * Most eval spend does *not* land here. An eval that exercises `converse` is
+ * doing `chat`, and a PDF bake-off is doing `pdf`; recording those as `eval`
+ * would throw away the one thing that makes eval spend worth keeping, which is
+ * being able to ask what a job costs when somebody is measuring it properly.
+ * `eval` is for the calls that stand in for nothing the app does — a judge
+ * scoring two retrieval arms, a rescue pass over a mangled extraction.
+ *
+ * `scope_kind` is the column that says a row is eval spend, and it says so for
+ * all of them. This one only says *what kind of work* the call was.
+ */
+export type EvalAiJob = "eval";
+
+export type AiJob = Task | NonTaskAiJob | EvalAiJob;
 
 /**
  * **Which tier each task is on — and the file's actual decision, rather than its
@@ -487,6 +505,11 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   pdf: "chat",
   dictation: "chat",
   embeddings: "embeddings",
+  /* **What an eval would use if it went through the gateway** — and `rescue`,
+     the only one that does, posts to chat/completions. The declared bypasses in
+     `evals/declared-spend.ts` do not consult this table at all: they say which
+     wire they actually used, because they are the thing that knows. */
+  eval: "chat",
 };
 
 const ALL_TASKS = Object.keys(TASK_WIRE) as Task[];

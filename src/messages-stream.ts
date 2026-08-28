@@ -555,6 +555,11 @@ function record(
       answeredBy,
       costNanos: meter.costNanos,
       upstreamCostNanos: meter.upstreamCostNanos,
+      /* See the same three lines in ai-call.ts: this wire is OpenRouter's
+         `/v1/messages`, never `api.anthropic.com`, and OpenRouter prices it. */
+      providerAccount: "openrouter",
+      computedCostNanos: null,
+      priceVersion: null,
       generationId: meter.generationId,
       upstream: meter.upstream,
       credentialFingerprint: meter.credentialFingerprint,
