@@ -698,10 +698,13 @@ export function buildGlossary(
 /**
  * Does this glossary still describe the article on disk?
  *
- * Pure, and used at both ends, exactly as the thread's is: `GET
- * /api/glossary/:slug` puts the answer in the response so the panel can say the
- * list is out of date, and the pipeline's `stamp` (src/pipeline.ts) compares the
- * same `sourceHash` so it will not skip a step whose artefact has gone stale.
+ * Pure. `GET /api/glossary/:slug` calls it and puts the answer in the response,
+ * so the panel can say the list is out of date.
+ *
+ * The pipeline no longer calls this. Its `stamp` (src/pipeline.ts) applies the
+ * same rule to the same `sourceHash` independently, which is a second place the
+ * comparison lives — worth knowing, because the two agreeing is a convention
+ * rather than something enforced.
  */
 export function isStale(glossary: Glossary, blocks: BlockFingerprint[]): boolean {
   return glossary.sourceHash !== hashBlocks(blocks);

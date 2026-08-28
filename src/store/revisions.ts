@@ -45,10 +45,12 @@
  * `ABANDONED_DRAFT_MS` below explains that each abandoned draft carries a full
  * copy of the article's `revision_blocks`. Nothing calls `sweep()`. That is not
  * a leak today, because nothing creates drafts — **it becomes one the moment
- * `begin()` becomes reachable, so the first production `begin()`, the artefact
- * wiring, a scheduled `sweep()` and a test proving drafts are removed have to
- * land together.** Recorded as an acceptance condition on step 11, not as a
- * separate fix. See docs/plans/simplification-wave-2.md § 0.6.
+ * `begin()` becomes reachable.** So the first production `begin()`, the artefact
+ * wiring, the job fence carried through `publish` and `fail`, an atomic clear of
+ * `jobs.draft_revision_id`, a scheduled `sweep()`, and a test that drives a
+ * *refused* and a *failed* draft through that sweep, all have to land together.
+ * Recorded as an acceptance condition on step 11, not as a separate fix. See
+ * docs/plans/simplification-wave-2.md § 0.6.
  *
  * ## What the artefact half would still need
  *
@@ -75,8 +77,17 @@
  * will end with one `warn` line and a failed draft, and the reader will stay on
  * the revision they had. That is the honest state of a half-finished seam, and
  * it is preferable to the alternative, which is a republished copy of the old
- * revision under a green tick. When stage 5 lands and the artefacts arrive as
- * values, publication starts succeeding here with no change to this file.
+ * revision under a green tick.
+ *
+ * **This file will need changing, though — an earlier draft of this comment said
+ * it would not.** `begin` takes `opts.job` and hands it to `beginRevision`, and
+ * then `RevisionHandle` drops it: the handle carries `slug`, `revisionId` and
+ * `artifacts` and nothing else. So `publish` and both failure paths have no job
+ * token to fence on, publication would skip the live-attempt check, and a failed
+ * draft keeps `jobs.draft_revision_id` pointing at it — which the sweeper
+ * deliberately spares. Carrying the fence through `publish` and `fail`, and
+ * clearing that pointer in the same transaction, is part of the work, not a
+ * consequence of it.
  *
  * **Today none of that runs**, because nothing calls `begin()` — see the top of
  * this comment. An ingest under `SPIDERYARN_STORE=postgres` writes files and
