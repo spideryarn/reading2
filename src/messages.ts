@@ -25,6 +25,7 @@
  *    brackets and last, so it is skippable by a reader who does not want it and
  *    quotable by one reporting a problem.
  */
+import type { EmbeddingReason } from "./types.js";
 import { MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /**
@@ -289,6 +290,14 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-no-response": "retry",
   "ai-tool-lost": "retry",
   "ai-tool-loop": "retry",
+  /* Placing passages by meaning — Force's dotted lines, Drift and Trail's dots.
+     Registered from the day they were written, unlike the `[emb1]` and `[emb2]`
+     they replace: those were inline in src/routes.ts and in no table at all, so
+     an account that may not use the model came out as a retryable blip and
+     Sentry withheld the sentence that explained it. See `PLACING_*` below. */
+  "ai-embed-account": "ours",
+  "ai-embed-down": "retry",
+  "ai-embed-busy": "retry",
 };
 
 
@@ -516,6 +525,120 @@ export const UNEXPECTED_FAILURE: ReaderFacingFailure = {
     "app knew how to explain. It has been recorded, and it needs fixing here rather than by you. " +
     "[ai-unexpected]",
 };
+
+/* ---------------------------------------------------------- placing passages -- */
+
+/**
+ * **The three ways the pictures that read passages for meaning can fail** —
+ * Force's dotted lines, and Drift and Trail's dots.
+ *
+ * They arrived here on 2026-08-28, from two sentences written inline in
+ * src/routes.ts as `[emb1]` and `[emb2]`. Being outside this file cost more
+ * than tidiness:
+ *
+ * - **Neither code was in `CODE_KINDS`**, so `kindOfMessage` returned `null`
+ *   for both. `worthRetrying` reads that as *yes*, which is the safe direction
+ *   for an unknown blip and the wrong one for the failure that was actually
+ *   happening — an account not allowed to use the model, which no amount of
+ *   trying again can fix.
+ * - **`monitoring-scrub.ts` reads the same table** to decide whether a sentence
+ *   is provably ours and may therefore be sent to Sentry. An unregistered code
+ *   is withheld, so the one message that said what was wrong was the one
+ *   monitoring could not repeat. ⟨Sol⟩
+ *
+ * One sentence per `EmbeddingReason` in src/embeddings.ts, and the mapping is
+ * `embeddingFailure` below. The reader is never told which of the two `config`
+ * causes it was — a key that is missing and an account that may not use the
+ * model call for exactly the same thing from them, which is nothing. That
+ * distinction is in the log, for the person who can act on it.
+ *
+ * **"the model that reads passages for what they are about"** rather than "the
+ * embedding model": rule 1 in docs/project/copy.md. A reader who came here to
+ * read an article has no idea what an embedding is, and does not need one.
+ */
+export const PLACING_NOT_CONFIGURED: ReaderFacingFailure = {
+  kind: "ours",
+  /* **It does not say which** — the first draft said "its account is not allowed
+     to", and `config` also covers a key that is simply not set. A sentence that
+     names a cause its own reason cannot guarantee is a sentence that will be
+     wrong on some Tuesday, and the reader's move is identical either way. ⟨Sol⟩
+     Which one it was is in the log, for the person who can act on it. */
+  message:
+    "This app is not set up to use the model that reads passages for what they are about. Nothing " +
+    "you can do from here will change that, and trying again will not help until somebody fixes " +
+    "it. [ai-embed-account]",
+};
+
+export const PLACING_UNREACHABLE: ReaderFacingFailure = {
+  kind: "retry",
+  /* **"did not answer with anything usable" rather than "could not be
+     reached"**, because this covers three things and only one of them is a
+     network: a socket that never opened, a deadline of ours, and a 200 carrying
+     something that is not vectors. A *refusal* is not here at all — those have a
+     status, and `placingFailed` hands them to `providerHttpFailure`, which has
+     a sentence for each. ⟨Sol⟩ */
+  message:
+    "The model that reads passages for what they are about did not answer with anything usable. " +
+    "Waiting a few seconds and trying again usually works. [ai-embed-down]",
+};
+
+export const PLACING_BUSY: ReaderFacingFailure = {
+  kind: "retry",
+  /* Ours, and the sentence says so rather than blaming the AI service: this is
+     `MAX_INFLIGHT` in src/article-vectors.ts refusing to start a fifth article,
+     and nothing upstream has been asked anything. */
+  message:
+    "This app is already placing passages for as many articles as it can at once. Waiting a few " +
+    "seconds and trying again usually works. [ai-embed-busy]",
+};
+
+/**
+ * Which of the three the reader is shown, from the `reason` on the failure.
+ *
+ * **A total map rather than a `switch` with a default**, for the reason
+ * `RETRYABLE` above gives: a fourth `EmbeddingReason` should not be able to
+ * arrive here and fall into whichever branch happens to be last. Adding one
+ * fails to compile until somebody writes its sentence.
+ *
+ * `import type` on `EmbeddingReason`, and that is load-bearing: `embeddings.ts`
+ * reaches this module through `ai-call.ts`, so a value import here would close
+ * the cycle. Erased at compile time, it creates no edge at all — the same trick
+ * and the same reason as `AiJob` in [`ai-call.ts`](ai-call.ts).
+ */
+const PLACING: Record<EmbeddingReason, ReaderFacingFailure> = {
+  config: PLACING_NOT_CONFIGURED,
+  provider: PLACING_UNREACHABLE,
+  busy: PLACING_BUSY,
+};
+
+/**
+ * **A refusal with a status is answered by the status, not by the reason.**
+ *
+ * `provider` covers everything the upstream can do wrong, and the first version
+ * of this mapped all of it to one retryable sentence — so an invalid key,
+ * exhausted credit, a 403 and a payload too big were each answered with *"waiting
+ * a few seconds and trying again usually works"*. That is precisely the mistake
+ * this whole change was written to stop, reintroduced one layer up. ⟨Sol⟩ found
+ * it by running the statuses rather than by reading the claim.
+ *
+ * The fix is not a fourth reason. `providerHttpFailure` has mapped a status to
+ * the right kind and the right sentence since long before this feature existed,
+ * and it is exhaustive where a reason cannot be: 402 is `ours`, 403 and 413 are
+ * `blocked`, 429 and 5xx are `retry`. Deferring to it is one line and no new
+ * vocabulary.
+ *
+ * What is lost is the mention of *placing passages* — and it is not lost to the
+ * reader, because the two pictures say which of them failed before showing this
+ * sentence (`DiagramPanel.tsx`). The server's half is about the failure; the
+ * client's half is about the feature.
+ */
+export function placingFailed(
+  reason: EmbeddingReason,
+  status: number | null = null,
+): ReaderFacingFailure {
+  if (reason === "provider" && status !== null) return providerHttpFailure(status);
+  return PLACING[reason];
+}
 
 /**
  * The database would not do what the app asked of it.
@@ -1098,24 +1221,34 @@ export function sharingConfirmBody(title: string): string {
 /**
  * The personalisation warning.
  *
- * **Deliberately general, and that is a gap rather than a choice.** The plan
- * asks this to name which of *this document's* artefacts were generated against
- * the reader's profile — we store `profileHash` on every one of them, so the
- * fact exists. No owner endpoint exposes it: `ArticleMetadata` carries stages,
- * timings and byte counts and nothing about profiles (src/types.ts). Naming a
- * list we cannot compute would be worse than this sentence; adding the field is
- * server work and belongs with slice 1b.
+ * **General on purpose, and that is now a decision rather than a gap.** The
+ * plan asked this to name which of *this document's* artefacts were written
+ * against the reader's profile, and the fact does exist — `profileHash` is
+ * stored on every one of them. It is not served, and on 2026-08-28 it was
+ * decided not to serve it: reading it would have meant widening
+ * `REVISION_READ_POLICY`, and a read policy on the owner's revision is not
+ * worth loosening for one sentence in a dialog. The two visibility fields beside
+ * it were free; this one was not. So this sentence is the answer rather than a
+ * placeholder, and an earlier version of this comment saying it "belongs with
+ * slice 1b" was telling a future reader to go and build something already
+ * weighed and declined.
  *
- * What it does say is the part a general warning usually leaves out — that the
- * leak is what a personalised artefact *left out*, not what it quotes.
+ * What it says instead is the part a general warning usually leaves out — that
+ * the leak is what a personalised artefact **left out**, not what it quotes.
  * src/profile.ts forbids quoting the profile and carries a verbatim example of
- * what not to do, but a prompt is not an enforcement mechanism and the terms a
- * glossary skipped are inferable from the ones it kept.
+ * what not to do, but a prompt is not an enforcement mechanism, and the terms a
+ * glossary skipped are inferable from the ones it kept. That is the sentence
+ * worth having whether or not we can name the artefacts, which is the reason
+ * losing the list costs less than it looks.
+ *
+ * **"The pipeline" is gone.** It is our word for our machinery, and copy.md's
+ * first rule is to say what happened in words that assume nothing — the owner
+ * is a reader who marked a document shareable, not somebody operating a build.
  */
 export const SHARING_PERSONALISED =
-  "Anything the pipeline wrote for this piece may have been shaped by your reader profile, and it " +
-  "goes out as it is. None of it quotes your profile — but what it chose to skip is still visible " +
-  "in what it kept.";
+  "The summaries, glossaries and ideas here may have been written for your reader profile, and they " +
+  "go out exactly as they are. None of them quotes it — but what a profile made them skip is still " +
+  "visible in what they kept.";
 
 /** The box the owner ticks, which the server refuses the request without. */
 export const SHARING_RIGHTS_CONFIRM =
