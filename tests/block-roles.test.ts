@@ -446,6 +446,14 @@ describe("all five roles", () => {
       blocks: SYNTHETIC,
       tree,
       arc: null,
+      /* The four artefacts a synthetic article has never generated. Spelled out
+         as `null` rather than omitted because `publicArticle` distinguishes
+         present from absent by `!== null`, so an omitted key would take the
+         present branch and hand `publicGlossary` an undefined. */
+      glossary: null,
+      summary: null,
+      ideas: null,
+      tweets: null,
     });
     expect(built.blocks.map((b) => b.role)).toEqual([undefined, ...ROLES]);
     expect(built.blocks.filter((b) => b.treatment === "supplement").length).toBe(4);
