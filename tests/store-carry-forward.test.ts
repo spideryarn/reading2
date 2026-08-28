@@ -50,7 +50,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { and, asc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { articleMetadata as fsArticleMetadata } from "../src/api.js";
@@ -64,6 +64,7 @@ import {
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "../src/glossary.js";
+import { mintUniqueId } from "../src/ids.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { PROMPT_VERSION as SUMMARY_PROMPT_VERSION } from "../src/summarise.js";
@@ -75,7 +76,15 @@ import {
   recordStepRun,
 } from "../src/store/pg-revisions.js";
 import { NO_INPUT_HASH, PIPELINE_RUN } from "../src/store/revisions.js";
-import type { Arc, Block, StepName, Tree } from "../src/types.js";
+import type {
+  Arc,
+  Block,
+  Glossary,
+  StepName,
+  Summaries,
+  Tree,
+  TweetThread,
+} from "../src/types.js";
 
 loadEnvLocal();
 
@@ -127,12 +136,28 @@ function block(id: string, text: string): Block {
   };
 }
 
-const KEPT = "spya-cfaaa2";
-const DROPPED = "spya-cfaaa3";
+/**
+ * Minted rather than written out, because this fixture already drifted once.
+ *
+ * The ids here were `spya-cfaaa1`, `…2`, `…3`. Only the first is illegal: `1`
+ * is not in the alphabet (src/ids.ts — `l`/`i`/`1` and `o`/`0` are the pairs a
+ * person misreads copying an id out of a URL), while `…2` and `…3` are fine.
+ * One bad id was enough, because the three go in as a single multi-row insert
+ * and Postgres aborts the statement. `ID_PATTERN` is also what
+ * `block_identities_id_format` is built from, so `writeBlocks` was rejected
+ * every time and eight of this file's nine tests never ran.
+ *
+ * Nothing here depends on the *value* of an id, so the minter is asked for
+ * them and the fixture cannot say something the app could never mint.
+ */
+const MINTED = new Set<string>();
+const OPENING = mintUniqueId(MINTED);
+const KEPT = mintUniqueId(MINTED);
+const DROPPED = mintUniqueId(MINTED);
 
 /** The first extraction. */
 const B1: Block[] = [
-  block("spya-cfaaa1", "The opening paragraph, which both extractions agree about."),
+  block(OPENING, "The opening paragraph, which both extractions agree about."),
   block(KEPT, "The middle paragraph, as the page first said it."),
   block(DROPPED, "The closing paragraph, which the second extraction does not find."),
 ];
@@ -208,6 +233,12 @@ const arcFor = (blocks: Block[]): Arc => ({
    re-extraction the only thing that can make them not-current is the source
    hash. Pinning versions as literals is what turned five tests in
    tests/pipeline-artifact-store.test.ts red the afternoon three prompts moved. */
+/* Minted once, not per call: `glossaryFor` is asked for the same artefact twice
+   — once onto disk, once into the column — and two ids there would be two
+   different glossaries wearing one source hash. `GlossaryEntry.id` is a block id
+   by construction, which is what makes `?term=` validate for free. */
+const GLOSSARY_ENTRY_ID = mintUniqueId(MINTED);
+
 const glossaryFor = (hash: string): Glossary => ({
   version: GLOSSARY_PROMPT_VERSION,
   generator: CAPABLE_MODEL,
@@ -215,7 +246,7 @@ const glossaryFor = (hash: string): Glossary => ({
   sourceHash: hash,
   entries: [
     {
-      id: "spya-cfgl01",
+      id: GLOSSARY_ENTRY_ID,
       name: "Fixture",
       kind: "term",
       aliases: [],
@@ -239,12 +270,28 @@ const tweetsFor = (hash: string): TweetThread => ({
   elapsedMs: 1,
 });
 
-const summaryFor = (hash: string) => ({
+/**
+ * A `SummaryEntry` is a **block range and a depth**, not a node id and a rung.
+ *
+ * This fixture said `{ nodeId, level, text }`, which is the shape the type had
+ * before summaries were re-anchored onto ranges — a summary keyed by node id
+ * moves sideways onto a different section the moment the tree is rebuilt, which
+ * is precisely what a re-extraction does. See `SummaryEntry` in src/types.ts and
+ * `assemble` in src/summarise.ts, which is what really writes these. The range
+ * is B1's, because this artefact is stamped against B1 by definition.
+ */
+const summaryFor = (hash: string): Summaries => ({
   version: SUMMARY_PROMPT_VERSION,
   generator: CAPABLE_MODEL,
   slug: SLUG,
   sourceHash: hash,
-  entries: [{ nodeId: "n0", level: "short", text: "A fixture, summarised." }],
+  entries: [
+    {
+      range: [B1[0]?.id ?? "", B1[B1.length - 1]?.id ?? ""],
+      depth: 0,
+      short: "A fixture, summarised.",
+    },
+  ],
   missing: 0,
   generatedAt: "2026-08-26T00:00:00.000Z",
   elapsedMs: 1,
