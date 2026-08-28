@@ -16,7 +16,7 @@
  * finished comment, so there is nothing to poll.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Comment } from "../types.js";
+import type { BlockId, Comment } from "../types.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
 import { wentQuiet } from "../messages.js";
 import { apiFetch, failure, readJson } from "./lib/api.js";
@@ -67,8 +67,56 @@ export interface ClientComment extends Comment {
   replacing?: true;
 }
 
+/** What a selection knows about the passage it is marking. */
+export interface NewCommentInput {
+  blockId: BlockId;
+  quote: string;
+  start: number;
+  /** The reader's words, or nothing at all for a bare bookmark. */
+  body?: string;
+  /**
+   * The id for this Save, minted **once per draft** by whoever opened the box.
+   *
+   * It is the idempotency key, and minting it here per call would defeat the
+   * whole point: a reader whose first Save got a response we never saw would
+   * press Save again and store a *second* comment on the same words, because
+   * the server's same-id rule would have nothing to match. GPT Sol, reviewing
+   * the built code, 2026-08-28.
+   */
+  id: string;
+}
+
 export interface CommentsApi {
   comments: ClientComment[];
+  /**
+   * Has the first fetch come back?
+   *
+   * **`comments` is `[]` both before we have asked and after the answer was
+   * "none", and the drawer cannot tell those apart without this.** It said
+   * "Nothing asked yet." for the length of the request, to readers who had
+   * asked plenty — Greg hit the same thing in chat mode on a slow connection,
+   * 2026-08-27, and the sibling flag is `ChatApi.loaded`.
+   *
+   * It means *we have asked*, not *it worked*: a failed fetch sets it too, so
+   * the drawer stops claiming to be waiting. Which is why it is not enough on
+   * its own — see `loadFailed`.
+   * docs/project/web-client.md § Empty is not the same as not asked yet.
+   */
+  loaded: boolean;
+  /**
+   * Did that fetch fail?
+   *
+   * **The second half of the same bug, and the half the first fix missed.**
+   * `loaded` alone turns "the server did not answer" into "you have asked
+   * nothing" the moment the request gives up — the identical false claim, one
+   * beat later. GPT Sol, reviewing the first fix, 2026-08-27.
+   *
+   * Not `error !== null`, which is a different question. `error` carries any
+   * transport failure, including a retry or a delete that failed long after the
+   * list arrived, and it is cleared when one succeeds. This one is about the
+   * one fetch that fills the list, and nothing else ever sets it.
+   */
+  loadFailed: boolean;
   /* **No `ask`.** Selecting text used to create a comment and spend a model
      call on the spot; since 2026-08-26 it opens a conversation instead
      (docs/plans/chat-as-gateway.md), so nothing creates a new explanation and
@@ -78,6 +126,25 @@ export interface CommentsApi {
      has not already stored, because deleting a function closes the React path
      and nothing else — a stale tab in another window would still have bought
      one. See `answer` in src/routes.ts. */
+  /**
+   * Make a **free** comment — the reader's mark on a passage. No model call.
+   *
+   * Optimistic: the row goes in with the id we minted and the mark appears at
+   * once, because the whole point of a bookmark is that it costs nothing and
+   * happens immediately. Resolves to the stored comment, or `null` if the
+   * server refused — the caller needs to know before it opens a chat about it.
+   */
+  create(input: NewCommentInput): Promise<Comment | null>;
+  /** Change the reader's words, or clear them back to a bare bookmark. */
+  edit(id: string, body: string | null): Promise<void>;
+  /**
+   * Remember locally that this comment started that conversation.
+   *
+   * **Not a request.** The link is written server-side from inside the chat
+   * stream; this only keeps the browser in step so the mark and the dialog are
+   * right before the next reload.
+   */
+  noteThread(id: string, threadId: string): void;
   /** Ask the same question again — for a comment whose model call failed. */
   retry(id: string): void;
   /**
@@ -92,6 +159,8 @@ export interface CommentsApi {
 
 export function useComments(slug: string): CommentsApi {
   const [comments, setComments] = useState<ClientComment[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -117,14 +186,32 @@ export function useComments(slug: string): CommentsApi {
   useEffect(() => {
     let live = true;
     setComments([]);
+    /* Both cleared alongside the comments, not left over from the last article
+       — the whole point of them is that they describe *this* slug's fetch. */
+    setLoaded(false);
+    setLoadFailed(false);
     apiFetch(`/api/comments/${encodeURIComponent(slug)}`)
       .then((r) => readJson<{ comments?: Comment[]; error?: string }>(r))
       .then((body) => {
         if (!live) return;
-        if (body.error) setError(body.error);
-        else setComments(body.comments ?? []);
+        /* A body with an `error` in it is a failed load as much as a thrown
+           one is: there are no comments in it, and drawing "nothing asked yet"
+           off it is the same false claim. */
+        if (body.error) {
+          setError(body.error);
+          setLoadFailed(true);
+        } else setComments(body.comments ?? []);
+        setLoaded(true);
       })
-      .catch((e: Error) => live && setError(describeFetchFailure(e)));
+      .catch((e: Error) => {
+        if (!live) return;
+        setError(describeFetchFailure(e));
+        setLoadFailed(true);
+        /* `loaded` on the failure path too. Otherwise a drawer opened while the
+           network is down waits for ever, spinner turning, next to an error
+           message — one of them lying. See `loaded` in CommentsApi. */
+        setLoaded(true);
+      });
     return () => {
       live = false;
     };
@@ -177,12 +264,20 @@ export function useComments(slug: string): CommentsApi {
       // spinner rather than the old error with a spinner under it. A deep
       // re-ask keeps the old answer on screen instead: the reader is replacing
       // something they can still read, not waiting on nothing.
+      /* **Spread the stored comment, then override.** It used to be built from
+         five named fields, which was complete when a comment was five fields;
+         it now has a body, an edit time and a linked conversation, and naming
+         the fields would blank all three on screen the moment somebody pressed
+         Try again. The server keeps them — `beginAnswer` writes only the answer
+         columns — so dropping them here would be the client disagreeing with
+         the disk until the next reload. */
+      /* `answer` and `replacing` are *dropped* rather than set to undefined —
+         `exactOptionalPropertyTypes` is on, and an explicit `undefined` is a
+         different shape to an absent key, which is the same distinction the two
+         stores are compared on. */
+      const { answer: _prevAnswer, replacing: _wasReplacing, ...carried } = input as ClientComment;
       const pending: ClientComment = {
-        id: input.id,
-        blockId: input.blockId,
-        quote: input.quote,
-        start: input.start,
-        createdAt: input.createdAt,
+        ...carried,
         status: "pending",
         ...(previous ? { answer: previous, replacing: true as const } : {}),
       };
@@ -202,17 +297,19 @@ export function useComments(slug: string): CommentsApi {
 
       void (async () => {
         try {
-          const r = await apiFetch(`/api/comments/${encodeURIComponent(slug)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id: pending.id,
-              blockId: pending.blockId,
-              quote: pending.quote,
-              start: pending.start,
-              ...(deep ? { deep: true } : {}),
-            }),
-          });
+          /* **The id is in the path and the anchor is not in the body at all.**
+             Answering is its own route since 2026-08-28, and it reads the
+             stored passage rather than accepting one — so a retry cannot move a
+             comment to different words, and cannot blank the reader's note by
+             resending a subset of the row. docs/plans/comments-and-bookmarks.md. */
+          const r = await apiFetch(
+            `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(pending.id)}/answer`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ...(deep ? { deep: true } : {}) }),
+            },
+          );
           /* A failure before the stream opens is ordinary JSON — the server
              validates before it writes a header. A failure after it opens is a
              `done` frame carrying `status: "error"`. Two shapes, because they
@@ -260,15 +357,12 @@ export function useComments(slug: string): CommentsApi {
               // `replacing` deliberately dropped: from the first word on, what
               // is on screen is the new answer, not the old one being held.
               if (!gone) {
-                put({
-                  id,
-                  blockId: pending.blockId,
-                  quote: pending.quote,
-                  start: pending.start,
-                  createdAt: pending.createdAt,
-                  status: "pending",
-                  answer: text,
-                });
+                /* Spread, for the reason on `pending` above: a delta must not
+                   be the moment the reader's own note leaves the screen.
+                   `replacing` goes, because from the first word on what is on
+                   screen is the new answer, not the old one being held. */
+                const { replacing: _held, ...rest } = pending;
+                put({ ...rest, id, status: "pending", answer: text });
               }
               continue;
             }
@@ -322,6 +416,137 @@ export function useComments(slug: string): CommentsApi {
 
 
   /**
+   * Make a free comment.
+   *
+   * **The id is minted here**, so the mark can be drawn and the dialog opened
+   * in the same frame the reader lets go of the mouse. The server takes it as
+   * given unless it is malformed or already used — and "already used by a
+   * different comment" is a 409 rather than an overwrite, which is what stops a
+   * collision from quietly eating somebody else's note.
+   *
+   * The optimistic row is **removed again** if the request fails. A bookmark
+   * that stays on screen after the server refused it is worse than one that
+   * never appeared: the reader believes the passage is marked, and finds out it
+   * is not on their next visit.
+   */
+  const create = useCallback(
+    async (input: NewCommentInput): Promise<Comment | null> => {
+      const id = input.id;
+      const optimistic: ClientComment = {
+        id,
+        blockId: input.blockId,
+        quote: input.quote,
+        start: input.start,
+        createdAt: new Date().toISOString(),
+        ...(input.body ? { body: input.body } : {}),
+        status: "none",
+      };
+      /* What was under this id before, if anything, so a failure can put it
+         back rather than delete it. Blindly filtering by id on the way out
+         would remove a *legitimate* comment in the one case that matters — an
+         id collision — which is the failure the rollback exists to prevent.
+         GPT Sol, reviewing the built code. */
+      let displaced: ClientComment | undefined;
+      setComments((prev) => {
+        displaced = prev.find((c) => c.id === id);
+        return prev.some((c) => c.id === id)
+          ? prev.map((c) => (c.id === id ? optimistic : c))
+          : [...prev, optimistic];
+      });
+      setError(null);
+      try {
+        const r = await apiFetch(`/api/comments/${encodeURIComponent(slug)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id,
+            blockId: input.blockId,
+            quote: input.quote,
+            start: input.start,
+            ...(input.body ? { body: input.body } : {}),
+          }),
+        });
+        if (!r.ok) throw await failure(r);
+        const { comment } = await readJson<{ comment: Comment }>(r);
+        /* The server may have minted a different id. Drop the row we invented
+           before putting the real one, or `put` appends it and the reader has
+           two marks over one passage. */
+        if (comment.id !== id) setComments((prev) => prev.filter((c) => c.id !== id));
+        put(comment);
+        return comment;
+      } catch (e) {
+        setComments((prev) =>
+          displaced
+            ? prev.map((c) => (c.id === id ? displaced! : c))
+            : prev.filter((c) => c.id !== id),
+        );
+        setError(describeFetchFailure(e as Error));
+        return null;
+      }
+    },
+    [slug, put],
+  );
+
+  /**
+   * Change the reader's words on a comment they already made.
+   *
+   * **The response is merged over the stored row, never substituted for it.**
+   * The server answers with the whole comment, so substituting would be
+   * harmless today — but the shape this must never take is "build an optimistic
+   * comment out of the body alone", which blanks the answer, the citations and
+   * the linked conversation in memory until the next reload. GPT Sol's review
+   * named this as the client half of the field-mutability rules.
+   */
+  const edit = useCallback(
+    async (id: string, body: string | null): Promise<void> => {
+      setError(null);
+      try {
+        const r = await apiFetch(
+          `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ body }),
+          },
+        );
+        if (!r.ok) throw await failure(r);
+        const { comment } = await readJson<{ comment: Comment }>(r);
+        /* **The server's comment replaces the stored one; it is not merged
+           over it.** A merge cannot express a *removal*: clearing the body
+           returns a comment with no `body` key, and `{ ...c, ...comment }`
+           keeps the old one — so a reader who emptied the box watched their
+           words come straight back. The response is the whole row, so replacing
+           is both correct and the only thing that can clear a field. The one
+           client-only field, `replacing`, deliberately does not survive an
+           edit. GPT Sol, reviewing the built code, 2026-08-28. */
+        setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+      } catch (e) {
+        setError(describeFetchFailure(e as Error));
+      }
+    },
+    [slug],
+  );
+
+  /**
+   * Remember, **locally**, that this comment started that conversation.
+   *
+   * There is no request here and there must not be: the link is written by the
+   * server from inside the chat stream, which is the only place a real thread
+   * id exists. This is the browser catching up with a write that has already
+   * happened, so that the mark and the dialog behave correctly *now* rather
+   * than after the next reload — without it, clicking the passage you have just
+   * annotated opens the chat instead of your note.
+   *
+   * The id it is given converges: `ChatDialog` reports the optimistic one and
+   * then the server's correction, and the last word wins. A wrong value in the
+   * gap is invisible — it only fails to match a chat summary, which falls back
+   * to the behaviour there was before.
+   */
+  const noteThread = useCallback((id: string, threadId: string) => {
+    setComments((prev) => prev.map((c) => (c.id === id ? { ...c, threadId } : c)));
+  }, []);
+
+  /**
    * Re-ask a question whose model call failed.
    *
    * Reads `comments` from the closure rather than from a `setComments` updater.
@@ -371,5 +596,5 @@ export function useComments(slug: string): CommentsApi {
     [forget],
   );
 
-  return { comments, retry, deepen, remove, error };
+  return { comments, loaded, loadFailed, create, edit, noteThread, retry, deepen, remove, error };
 }

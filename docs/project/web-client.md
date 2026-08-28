@@ -37,7 +37,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/components/ui/`](../../src/web/components/ui/) | shadcn components, generated then owned by us — `button`, `toggle` |
 | [`src/web/lib/utils.ts`](../../src/web/lib/utils.ts) | `cn()`, the class-name helper every shadcn component imports as `@/lib/utils` |
 | [`components.json`](../../components.json) | what `shadcn add` reads: our paths, our `tw` prefix, Lucide — [setup-dev.md](setup-dev.md#adding-a-ui-component) |
-| [`src/web/selection.ts`](../../src/web/selection.ts) + [`annotate.ts`](../../src/web/annotate.ts) + [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | ask the model about a selected passage — [comments.md](comments.md) |
+| [`src/web/selection.ts`](../../src/web/selection.ts) + [`annotate.ts`](../../src/web/annotate.ts) + [`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) + [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | mark a passage, note it, and ask about it if you want — [comments.md](comments.md) |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | comments in reading order, and the panel's prev/next — [comments.md](comments.md#several-at-once) |
 | [`src/web/Cited.tsx`](../../src/web/Cited.tsx) | **model prose with block ids in it**, drawn as chips you can press with the paragraph itself on hover. Shared by chat and the summary panel rather than copied into each — [summaries.md § A summary is a door](summaries.md#a-summary-is-a-door) |
 | [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) + [`useChat.ts`](../../src/web/useChat.ts) | **chat**, in the band between the spine and the prose: threads, the streamed answer, the block-id chips that jump the article, and what a turn can have done to it — copy, retry, edit, **stop** — [chat-mode.md](../plans/chat-mode.md), and [§ What a turn can have done to it](../plans/chat-mode.md#what-a-turn-can-have-done-to-it) for why a stop is a `done` rather than an error |
@@ -386,6 +386,138 @@ browser already has a console — but before this, nothing reached it at all.
 neighbouring case and stays where it is: it names the failure where the request
 never got a *response at all*, which is a different thing from a response that
 says no.
+
+## Empty is not the same as not asked yet
+
+Every list in the client starts empty, and a fetch that has not come back yet
+leaves it empty. So `items.length === 0` answers three completely different
+questions with the same value — *you have none*, *we have not asked*, and *we
+asked and it failed* — and a component that reads it as the first tells the
+reader something false for as long as it is one of the other two.
+
+On a fast connection that window is 40ms and nobody sees it. Greg opened chat
+mode on a slow one, 2026-08-27:
+
+> I tried loading Chat mode on a slow internet connection, and it initially told
+> me there were no chats (even though I knew there were)! Then eventually the
+> existing chats loaded and replaced that message. Better to show a loading
+> spinner when loading, rather than default to the empty/initial state (which is
+> wrong and worrying).
+
+**Wrong and worrying is the whole of it.** A spinner says "wait"; an empty state
+says "there is nothing", and a reader who knows better than that has just been
+told the app has lost their work.
+
+### The rule
+
+**An empty claim requires a fetch that came back *and worked*.** That is the
+whole of it, and it is a hard rule. "Nothing asked yet", "Nothing searched for
+yet", "Nothing on the shelf yet" are all claims about the reader, and only a
+successful, completed collection fetch earns one.
+
+Which means every fetching hook exposes the three outcomes, not two. The client
+spells it three ways and all three are fine:
+
+- a `status` union — `useGlossary`, `useIdeas`, `useSimilar`, `useProjection`;
+- `null` for "not asked yet" against `[]` for "asked, none", with `"error"` as a
+  third value — `useShelf`, `useProfile`, `useAdminUsers`,
+  [`ProfilePage.tsx`](../../src/web/ProfilePage.tsx)'s two local fetches;
+- a pair of booleans, `loaded` and `loadFailed` — [`useChat`](../../src/web/useChat.ts),
+  [`useSearch`](../../src/web/useSearch.ts), [`useComments`](../../src/web/useComments.ts).
+
+**In the pair, `loaded` means *we have asked*, not *it worked*.** It is set on
+the failure path on purpose, so a reader whose server is down can still open a
+conversation and watch the send fail with a reason rather than face a panel that
+never resolves. That is exactly why `loadFailed` has to exist beside it: with
+`loaded` alone the panel drops out of the spinner into the same false claim one
+beat later. Both fixes were needed and the second was missed the first time
+round — GPT Sol found it, 2026-08-27.
+
+**`loadFailed` is not `error !== null`.** `error` in these hooks carries any
+transport failure — a retry, a delete, an answer that would not start — long
+after the list arrived, and the three hooks do not even agree about when it goes
+away (`useComments` and `useSearch` clear it when a retry *starts*; `useChat`
+never clears it at all). `loadFailed` is about the one fetch that fills the list,
+and only the mount effect sets or clears it. A body that comes back
+`200 { error }` counts as a failed load too: there are no rows in it.
+
+**Guard the result with a per-run flag, not with the slug.** `React.StrictMode`
+mounts, unmounts and mounts again, so two fetches for the *same* article are in
+flight at once — and `useChat` compared against a slug held in a ref, which they
+both matched. The first one failing after the second one succeeded set
+`loadFailed` back to true under a list that was on screen. A `let live = true`
+closed over by the effect's cleanup is per-run by construction; all three hooks
+use it. `tests/load-failed-flags.test.ts` mounts under a real `StrictMode` and
+asserts the double-run happened before relying on it.
+
+### The waiting state
+
+**Behind [`useSlow`](../../src/web/useSlow.ts)**, wherever the indicator *stands
+in place of the content*. A fetch that finishes in 40ms then draws nothing at
+all, and a spinner that flashes and vanishes reads as breakage — which is the
+failure this rule replaces, not a second copy of it. `SLOW_AFTER_MS` is 600 and
+lives in one place. A word in a status line that is on screen anyway — the
+profile textarea's `Saving…` / `Loading…` caption — is not standing in place of
+anything and does not need it.
+
+**Name what is being waited for.** "Fetching your conversations…", not
+"Loading…". The reader is waiting for a specific thing and the sentence is free.
+Same rule as [copy.md](copy.md), and the one `useSlow`'s own docstring asks for.
+
+**`role="status"` on the element, and hold its height.** The sentence arrives
+600ms after the panel does, and a line that simply appears is announced to nobody
+— `role="status"` is a polite live region, so a screen reader is told at the next
+pause rather than interrupted. The wrapper renders through the quiet 600ms with a
+`min-height` (or a `&nbsp;`) so the panel does not grow underneath the reader when
+the words land. Both were missing from the first version and both came from GPT
+Sol's second pass, 2026-08-27.
+
+**And the failure line does not guess why.** These fire on anything `readJson`
+throws — a 500, a non-JSON 200, a dropped connection — so the four of them say
+*"Couldn't load your conversations. Reload to try again."* and stop there.
+Promising the data is still on the server is a claim only the last of those three
+supports.
+
+The house shape is `LoaderCircle` from lucide with `.cmt-spinner`, in a flex row
+beside a sentence — [`ChatListLoading`](../../src/web/ChatPanel.tsx),
+[`CommentDialog.tsx`](../../src/web/CommentDialog.tsx),
+[`JobProgress.tsx`](../../src/web/JobProgress.tsx). It is on `/design` under
+"Icons and the spinner".
+
+### Where this does not apply
+
+A wait so short it is structural: [`App.tsx`](../../src/web/App.tsx) renders
+`null` for the single frame between page load and the auth SDK's first
+`INITIAL_SESSION`, because a spinner on every reload is worse than a frame of
+nothing.
+
+And a place where "empty" is itself the suspicious answer. The admin page says
+*"No accounts came back, which should not be possible — you are one. Something is
+wrong upstream of this page."* rather than drawing an empty grid, because there
+the empty array is the bug rather than an answer.
+
+### Testing it
+
+[`tests/use-comments-load-state.test.ts`](../../tests/use-comments-load-state.test.ts)
+is the pattern for the hook: a stubbed `apiFetch` with the *real* `readJson`
+behind it, deferred promises so a request can be left in flight while the article
+changes underneath it, and the interleaving where the article you left answers
+late and must do nothing at all.
+
+[`tests/load-failed-flags.test.ts`](../../tests/load-failed-flags.test.ts) is the
+same for `useChat` and `useSearch`, including the StrictMode case above.
+
+[`tests/chat-list-loading.test.tsx`](../../tests/chat-list-loading.test.tsx) and
+[`tests/dock-questions-loading.test.tsx`](../../tests/dock-questions-loading.test.tsx)
+are the pattern for the panel: the three states that must not say it — waiting,
+waiting-and-below-the-threshold, failed — **and** the two the indicator must not
+eat, a real empty list and a real populated one. Without those last two, a panel
+that simply never showed its empty state passes everything else.
+
+Every fetching hook in the client was surveyed on 2026-08-27. The three that got
+it wrong are the three fixed here: `useChat`/`ChatPanel`, `useComments`/`Dock`,
+and `ProfilePage`'s shelf — plus `useSearch`/`SearchPanel`, which had the
+loading half already and was missing the failed half.
 
 ## The constraints it works under
 

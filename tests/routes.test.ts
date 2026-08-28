@@ -13,7 +13,7 @@ import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { handleApi } from "../src/routes.js";
-import { createComment, loadComments } from "../src/comments.js";
+import { beginAnswer, createComment, loadComments, patchComment } from "../src/comments.js";
 import { loadShelf } from "../src/shelf.js";
 import { beginRun, deleteRun, loadRuns } from "../src/searches.js";
 import { mintId } from "../src/ids.js";
@@ -24,10 +24,30 @@ const SLUG = "test-routes-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
 afterEach(() => rm(DIR, { recursive: true, force: true }));
 
+/** A comment as a route answers with it — the fields these tests read off one. */
+interface ReplyComment {
+  id: string;
+  status: string;
+  error?: string;
+  /** The reader's own words. Absent on a bare bookmark. */
+  body?: string;
+  threadId?: string;
+}
+
 interface Reply {
   handled: boolean;
   status: number;
-  body: { error?: string; comments?: { id: string; status: string; error?: string }[] };
+  /* Named where a test needs the field to have a *type* — an id that goes into
+     a URL, a status compared against a literal. Everything else is `unknown`,
+     which `expect` takes happily: this is a fixture for driving `handleApi`,
+     and a second, drifting copy of every response shape in the app is worth
+     less than it costs. */
+  body: {
+    error?: string;
+    comments?: ReplyComment[];
+    comment?: ReplyComment;
+    [key: string]: unknown;
+  };
 }
 
 /** Drive `handleApi` with a fake request/response pair. */
@@ -569,15 +589,22 @@ describe("the anchor offset must be a real offset", () => {
 });
 
 describe("a pending comment nobody is answering", () => {
+  /* A `pending` row now has to be *made* pending, because creating one is free
+     and lands as `none`. `beginAnswer` is the only thing that writes `pending`
+     — which is exactly the property the sweep depends on — and it refuses a
+     `none` row, so this walks the whole way round: make the mark, give it an
+     answer as the old world would have, then re-ask it. */
+  const orphaned = async (id: string) => {
+    await createComment(SLUG, { blockId: "spya-k3m9qt", quote: "the hard problem", start: 12, id });
+    await patchComment(SLUG, id, { status: "done", answer: "an old explanation" });
+    return beginAnswer(SLUG, id);
+  };
+
   it("comes back as an error the reader can retry, not an eternal spinner", async () => {
     // What a crash mid-answer leaves on disk. Since `pending` is written before
     // the model call, this is indistinguishable from a live request *on disk* —
     // only the running process knows, and this one is not answering it.
-    const orphan = await createComment(SLUG, {
-      blockId: "spya-k3m9qt",
-      quote: "the hard problem",
-      start: 12,
-    });
+    const orphan = await orphaned("spya-k3m9qt");
     expect(orphan.status).toBe("pending");
 
     const r = await call("GET", `/api/comments/${SLUG}`);
@@ -590,12 +617,141 @@ describe("a pending comment nobody is answering", () => {
   });
 
   it("leaves an already-answered comment alone", async () => {
-    await createComment(SLUG, { blockId: "spya-k3m9qt", quote: "q", start: 0, id: "spya-k3m9qt" });
+    await orphaned("spya-k3m9qt");
     await call("GET", `/api/comments/${SLUG}`);
     const first = await call("GET", `/api/comments/${SLUG}`);
     // Swept once, then stable — the sweep must not keep rewriting the file.
     expect(first.body.comments?.[0]?.status).toBe("error");
     expect(first.body.comments).toHaveLength(1);
+  });
+
+  it("never touches a bookmark, because a bookmark is not a lost answer", async () => {
+    /* The sweep's filter is `status === "pending"`, so `none` is invisible to
+       it — and this test is deliberately NOT evidence that the filter is right,
+       because it passes the moment `none` exists. What it guards is the
+       *reverse* change: somebody widening the filter to "anything without an
+       answer" would turn every bookmark on the shelf into an error. */
+    await createComment(SLUG, { blockId: "spya-k3m9qt", quote: "q", start: 0, body: "mine" });
+    const r = await call("GET", `/api/comments/${SLUG}`);
+    expect(r.body.comments?.[0]?.status).toBe("none");
+    expect(r.body.comments?.[0]?.error).toBeUndefined();
+    expect(r.body.comments?.[0]?.body).toBe("mine");
+  });
+});
+
+describe("making a comment costs nothing", () => {
+  /* **A real block, and a quote really inside it.** The route checks the anchor
+     against the article now, so a made-up passage is a 400 rather than a stored
+     comment nothing can draw. These three come from `example/blocks.json`,
+     which is what `loadArticle` falls through to for a slug with no data of its
+     own — the same source `HIT` below uses, for the same reason. */
+  const BLOCK = "spya-gp3g6s";
+  const QUOTE = "Berggruen Prize";
+  const AT = 30;
+
+  /* **The value that crosses the wire.** Both halves of this app can be right
+     about a body and still disagree — the store keeps it, the route drops it,
+     and each side's own tests pass. So this goes in through the HTTP route and
+     comes back out through the store, and nothing in between is mocked. */
+  it("stores the reader's words, and reads them back off disk", async () => {
+    const r = await call("POST", `/api/comments/${SLUG}`, {
+      blockId: BLOCK,
+      quote: QUOTE,
+      start: AT,
+      body: "  this is the bit I doubt  ",
+    });
+    expect(r.status).toBe(201);
+    expect(r.body.comment?.status).toBe("none");
+    // Trimmed once, in one place, so the two stores cannot disagree about it.
+    expect(r.body.comment?.body).toBe("this is the bit I doubt");
+
+    const stored = (await loadComments(SLUG))[0];
+    expect(stored?.body).toBe("this is the bit I doubt");
+    expect(stored?.id).toBe(r.body.comment?.id);
+  });
+
+  it("treats a body of nothing but spaces as no body at all", async () => {
+    const r = await call("POST", `/api/comments/${SLUG}`, {
+      blockId: BLOCK,
+      quote: QUOTE,
+      start: AT,
+      body: "   ",
+    });
+    expect(r.status).toBe(201);
+    // Absent, not `""` — `exactOptionalPropertyTypes` and the store round-trip
+    // both treat those as different, and the database refuses the empty one.
+    expect("body" in (await loadComments(SLUG))[0]!).toBe(false);
+  });
+
+  it("bookmarks a passage with nothing written on it", async () => {
+    const r = await call("POST", `/api/comments/${SLUG}`, {
+      blockId: BLOCK,
+      quote: QUOTE,
+      start: AT,
+    });
+    expect(r.status).toBe(201);
+    expect(await loadComments(SLUG)).toHaveLength(1);
+  });
+
+  it("refuses a quote that is not in the block it names", async () => {
+    // The check the chat route's `checkAnchor` does, written out here because
+    // that one is weaker than it looks — it never verifies the offset, and on
+    // its own would accept an empty quote. GPT Sol, reviewing the plan.
+    const r = await call("POST", `/api/comments/${SLUG}`, {
+      blockId: BLOCK,
+      quote: "words that are not in this article at all",
+      start: 0,
+    });
+    expect(r.status).toBe(400);
+    expect(await loadComments(SLUG)).toEqual([]);
+  });
+
+  it("refuses an id that already belongs to a different comment", async () => {
+    const first = await call("POST", `/api/comments/${SLUG}`, {
+      id: "spya-k3m9qt",
+      blockId: BLOCK,
+      quote: QUOTE,
+      start: AT,
+    });
+    expect(first.status).toBe(201);
+    const clash = await call("POST", `/api/comments/${SLUG}`, {
+      id: "spya-k3m9qt",
+      blockId: BLOCK,
+      quote: "Essay Competition",
+      start: 0,
+    });
+    expect(clash.status).toBe(409);
+    // The stored one is untouched, which is the half that matters.
+    expect((await loadComments(SLUG))[0]?.quote).toBe(QUOTE);
+  });
+
+  it("will not answer a comment that was never a question", async () => {
+    const made = await call("POST", `/api/comments/${SLUG}`, {
+      blockId: BLOCK,
+      quote: QUOTE,
+      start: AT,
+    });
+    const r = await call("POST", `/api/comments/${SLUG}/${made.body.comment?.id}/answer`, {});
+    expect(r.status).toBe(409);
+  });
+
+  it("edits the words, and clearing them leaves the mark behind", async () => {
+    const made = await call("POST", `/api/comments/${SLUG}`, {
+      blockId: BLOCK,
+      quote: QUOTE,
+      start: AT,
+      body: "first thought",
+    });
+    const id = made.body.comment?.id;
+    const edited = await call("PATCH", `/api/comments/${SLUG}/${id}`, { body: "second thought" });
+    expect(edited.status).toBe(200);
+    expect(edited.body.comment?.body).toBe("second thought");
+
+    const cleared = await call("PATCH", `/api/comments/${SLUG}/${id}`, { body: null });
+    expect(cleared.status).toBe(200);
+    expect("body" in (await loadComments(SLUG))[0]!).toBe(false);
+    // The mark is still there. Clearing the words is not deleting the comment.
+    expect(await loadComments(SLUG)).toHaveLength(1);
   });
 });
 

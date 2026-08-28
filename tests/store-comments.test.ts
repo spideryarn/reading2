@@ -27,6 +27,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 
+import { CommentIdTaken, NotAnExplanation } from "../src/comments.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articles, blockIdentities, comments as commentsTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -96,19 +97,80 @@ when("the Postgres comment store", () => {
     await closeDb();
   });
 
-  it("stores a comment as pending, before any answer exists", async () => {
+  it("stores a comment as free — no model call was ever attempted", async () => {
     const stored = await pgCommentStore.create(SLUG, {
       id: "spya-ccc444",
       blockId: BLOCK_ID,
       quote: "a stretch of prose",
       start: 12,
     });
-    expect(stored.status).toBe("pending");
+    expect(stored.status).toBe("none");
     expect(stored.id).toBe("spya-ccc444");
     // Absent, not null: `exactOptionalPropertyTypes` is on and the wire form of
-    // `{answer: null}` is not the wire form of `{}`.
+    // `{answer: null}` is not the wire form of `{}`. The same is true of all
+    // three of the reader's fields, which is what the round-trip compares on.
     expect("answer" in stored).toBe(false);
     expect("error" in stored).toBe(false);
+    expect("body" in stored).toBe(false);
+    expect("updatedAt" in stored).toBe(false);
+    expect("threadId" in stored).toBe(false);
+  });
+
+  it("carries the reader's words to Postgres and back", async () => {
+    const stored = await pgCommentStore.create(SLUG, {
+      id: "spya-bqd234",
+      blockId: BLOCK_ID,
+      quote: "a stretch of prose",
+      start: 12,
+      body: "this is the bit I doubt",
+    });
+    expect(stored.body).toBe("this is the bit I doubt");
+    // Off a fresh read rather than off the insert's `returning()`, because
+    // `toComment` is the seam and a returning row could be right while the
+    // column mapping on the read path is wrong.
+    const read = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-bqd234");
+    expect(read?.body).toBe("this is the bit I doubt");
+  });
+
+  it("edits the body, and clearing it leaves the mark", async () => {
+    await pgCommentStore.create(SLUG, {
+      id: "spya-bqd345",
+      blockId: BLOCK_ID,
+      quote: "a stretch of prose",
+      start: 12,
+      body: "first",
+    });
+    const edited = await pgCommentStore.patchBody(SLUG, "spya-bqd345", "second");
+    expect(edited.body).toBe("second");
+    expect(edited.updatedAt).toBeDefined();
+    const cleared = await pgCommentStore.patchBody(SLUG, "spya-bqd345", null);
+    expect("body" in cleared).toBe(false);
+    expect((await pgCommentStore.load(SLUG)).some((c) => c.id === "spya-bqd345")).toBe(true);
+  });
+
+  it("links to one conversation, and refuses to be re-pointed", async () => {
+    await pgCommentStore.create(SLUG, {
+      id: "spya-knz456",
+      blockId: BLOCK_ID,
+      quote: "a stretch of prose",
+      start: 12,
+    });
+    const at = { blockId: BLOCK_ID, quote: "a stretch of prose", start: 12 };
+    expect(
+      (await pgCommentStore.linkThread(SLUG, "spya-knz456", "spya-t2t2t2", at)).threadId,
+    ).toBe("spya-t2t2t2");
+    // The same link again is the client retrying: a no-op, reported as success.
+    expect(
+      (await pgCommentStore.linkThread(SLUG, "spya-knz456", "spya-t2t2t2", at)).threadId,
+    ).toBe("spya-t2t2t2");
+    // A different one would orphan the first conversation.
+    await expect(
+      pgCommentStore.linkThread(SLUG, "spya-knz456", "spya-t3t3t3", at),
+    ).rejects.toBeInstanceOf(CommentIdTaken);
+    // And a link naming a comment that is not about this passage is refused.
+    await expect(
+      pgCommentStore.linkThread(SLUG, "spya-knz456", "spya-t2t2t2", { ...at, quote: "elsewhere" }),
+    ).rejects.toBeInstanceOf(CommentIdTaken);
   });
 
   it("mints an id when the client does not supply one", async () => {
@@ -120,9 +182,15 @@ when("the Postgres comment store", () => {
     expect(stored.id).toMatch(/^spya-[a-z][a-z0-9]{5}$/);
   });
 
-  it("resets in place on a retry rather than adding a second comment", async () => {
+  it("resets in place on a retry, keeping everything the reader owns", async () => {
     const first = await pgCommentStore.create(SLUG, {
       id: "spya-ddd555",
+      blockId: BLOCK_ID,
+      quote: "the question",
+      start: 3,
+      body: "my note",
+    });
+    await pgCommentStore.linkThread(SLUG, "spya-ddd555", "spya-t4t4t4", {
       blockId: BLOCK_ID,
       quote: "the question",
       start: 3,
@@ -133,12 +201,7 @@ when("the Postgres comment store", () => {
     });
 
     const before = (await pgCommentStore.load(SLUG)).length;
-    const retried = await pgCommentStore.create(SLUG, {
-      id: "spya-ddd555",
-      blockId: BLOCK_ID,
-      quote: "the question",
-      start: 3,
-    });
+    const retried = await pgCommentStore.beginAnswer(SLUG, "spya-ddd555");
     const after = await pgCommentStore.load(SLUG);
 
     // A second row would leave the failed original behind, drawing a second
@@ -148,8 +211,59 @@ when("the Postgres comment store", () => {
     expect(retried.status).toBe("pending");
     // The previous attempt's error goes; it belonged to the attempt replaced.
     expect("error" in retried).toBe(false);
-    // `createdAt` stays, because the reader asked the question once.
+    // `createdAt` stays, because the reader marked the passage once.
     expect(retried.createdAt).toBe(first.createdAt);
+    /* **And the reader's three survive.** This is the bug the split exists to
+       prevent: the old `create` rebuilt the row from a named `fields` object,
+       so a retry — which sends only the anchor — blanked the body and the link
+       in the same statement that cleared the answer. GPT Sol, 2026-08-28. */
+    expect(retried.body).toBe("my note");
+    expect(retried.threadId).toBe("spya-t4t4t4");
+  });
+
+  it("refuses a stored id rather than overwriting the comment under it", async () => {
+    await pgCommentStore.create(SLUG, {
+      id: "spya-cks567",
+      blockId: BLOCK_ID,
+      quote: "the first one",
+      start: 0,
+    });
+    await expect(
+      pgCommentStore.create(SLUG, {
+        id: "spya-cks567",
+        blockId: BLOCK_ID,
+        quote: "something else entirely",
+        start: 1,
+      }),
+    ).rejects.toBeInstanceOf(CommentIdTaken);
+    const stored = (await pgCommentStore.load(SLUG)).find((c) => c.id === "spya-cks567");
+    expect(stored?.quote).toBe("the first one");
+  });
+
+  it("refuses a second answer while one is already running", async () => {
+    await pgCommentStore.create(SLUG, {
+      id: "spya-run999",
+      blockId: BLOCK_ID,
+      quote: "the question",
+      start: 3,
+    });
+    await pgCommentStore.patch(SLUG, "spya-run999", { status: "done", answer: "old" });
+    await pgCommentStore.beginAnswer(SLUG, "spya-run999"); // now pending
+    await expect(pgCommentStore.beginAnswer(SLUG, "spya-run999")).rejects.toThrow(
+      /already being answered/,
+    );
+  });
+
+  it("will not answer a comment that was never a question", async () => {
+    await pgCommentStore.create(SLUG, {
+      id: "spya-fre889",
+      blockId: BLOCK_ID,
+      quote: "a bookmark",
+      start: 0,
+    });
+    await expect(pgCommentStore.beginAnswer(SLUG, "spya-fre889")).rejects.toBeInstanceOf(
+      NotAnExplanation,
+    );
   });
 
   it("does not let a patch rename a comment", async () => {
@@ -210,18 +324,25 @@ when("the Postgres comment store", () => {
     ).rejects.toThrow();
   });
 
-  it("survives an identical create arriving while another is uncommitted", async () => {
-    /* The reset-on-retry test above sends the two creates one after the other,
-       and that is the easy half. The hard half is the same two requests
-       overlapping: a double-clicked button, or the client retrying while the
+  it("survives a create arriving while an identical one is uncommitted", async () => {
+    /* The collision tests above send the two creates one after the other, and
+       that is the easy half. The hard half is the same two requests
+       overlapping: a double-clicked Save, or the client retrying while the
        first request is still in flight. Both transactions look for the row,
        both find nothing — a transaction cannot lock a row that does not exist
        yet — and both insert. GPT Sol found this in review, 2026-08-26.
 
        The primary key stops the second row, so the damage was never corruption;
        it was the second request failing with a raw uniqueness error, which
-       src/routes.ts turns into a 500. The reader sees their question fail for a
-       reason that has nothing to do with their question.
+       src/routes.ts turns into a 500. The reader sees their comment fail for a
+       reason that has nothing to do with their comment.
+
+       **What changed on 2026-08-28**: the fix used to be `on conflict do
+       update`, which made the second request *overwrite* the first. That is
+       right for a retry of a model call and wrong for a free comment, where a
+       collision may be somebody else's mark. It is now `do nothing` plus a
+       read, and this test says what that must mean: an identical create is the
+       same Save arriving twice and returns the stored row.
 
        **Two concurrent `create` calls do not reproduce it.** I tried that
        first: they pass either way, because each transaction is short enough
@@ -241,9 +362,9 @@ when("the Postgres comment store", () => {
         id,
         ownerId: currentOwnerId(),
         blockId: BLOCK_ID,
-        quote: "the first request",
+        quote: "the same passage",
         start: 7,
-        status: "pending",
+        status: "none",
       });
       await held; // the row exists, and nothing outside this transaction can see it
     });
@@ -253,7 +374,7 @@ when("the Postgres comment store", () => {
     const second = pgCommentStore.create(SLUG, {
       id,
       blockId: BLOCK_ID,
-      quote: "the second request",
+      quote: "the same passage",
       start: 7,
     });
     await settle(); // long enough for the second insert to be blocking on the key
@@ -262,12 +383,53 @@ when("the Postgres comment store", () => {
 
     const stored = await second;
     expect(stored.id).toBe(id);
-    expect(stored.status).toBe("pending");
-    // The second request wins the field, as a retry should — it is the same
-    // question, asked again.
-    expect(stored.quote).toBe("the second request");
-    // One comment, not two, and not one plus an exception.
+    expect(stored.status).toBe("none");
+    // The stored row comes back — not an exception, and not a second row.
+    expect(stored.quote).toBe("the same passage");
     expect((await pgCommentStore.load(SLUG)).filter((c) => c.id === id)).toHaveLength(1);
+  });
+
+  it("turns a losing concurrent create into a refusal, not a raw key error", async () => {
+    /* The other half of the race, and the one the reader must never see as a
+       500: two *different* comments minting the same id at the same instant.
+       The answer is a `CommentIdTaken` — which src/routes.ts maps to a 409 —
+       rather than Postgres's `23505` arriving as an unhandled fault. */
+    const id = "spya-jjk222";
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const db = getDb();
+    const holder = db.transaction(async (tx) => {
+      await tx.insert(commentsTable).values({
+        articleId: ARTICLE_ID,
+        id,
+        ownerId: currentOwnerId(),
+        blockId: BLOCK_ID,
+        quote: "the first reader's passage",
+        start: 7,
+        status: "none",
+      });
+      await held;
+    });
+
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+    await settle();
+    const second = pgCommentStore
+      .create(SLUG, { id, blockId: BLOCK_ID, quote: "a different passage", start: 2 })
+      .then(
+        () => "resolved",
+        (e: unknown) => e,
+      );
+    await settle();
+    release();
+    await holder;
+
+    expect(await second).toBeInstanceOf(CommentIdTaken);
+    // And the row that got there first is exactly as it was.
+    const stored = (await pgCommentStore.load(SLUG)).find((c) => c.id === id);
+    expect(stored?.quote).toBe("the first reader's passage");
   });
 
   it("404s for an article that is not there", async () => {

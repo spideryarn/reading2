@@ -453,8 +453,8 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
             current={panel}
             onPanel={drawer.onPanel}
             icon={MessageSquareText}
-            label="Questions"
-            title="The questions you have asked about this article"
+            label="Comments"
+            title="The passages you have marked on this article"
           >
             {drawer.comments.length > 0 && (
               <span className={`dock-count${pending ? " pending" : ""}`}>
@@ -467,8 +467,8 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
             href={readHref(slug, withPanel(search, "questions"), "article")}
             current={false}
             icon={MessageSquareText}
-            label="Questions"
-            title="Your questions, back in the article they are about"
+            label="Comments"
+            title="Your comments, back in the article they are about"
           />
         )}
 
@@ -501,7 +501,7 @@ export function Dock({ slug, view, mode, onMode, drawer }: Props) {
 }
 
 const TITLES: Record<Panel, string> = {
-  questions: "Your questions",
+  questions: "Your comments",
 };
 
 /**
@@ -809,7 +809,7 @@ function QuestionsLoading() {
     <p className="dock-empty dock-loading" role="status">
       {slow && (
         <>
-          <LoaderCircle className="cmt-spinner" size={13} /> Fetching your questions…
+          <LoaderCircle className="cmt-spinner" size={13} /> Fetching your comments…
         </>
       )}
     </p>
@@ -860,7 +860,7 @@ function Questions({
   if (comments.length === 0 && loadFailed) {
     return (
       <p className="dock-empty">
-        Couldn't load your questions. Reload to try again.
+        Couldn't load your comments. Reload to try again.
       </p>
     );
   }
@@ -868,7 +868,8 @@ function Questions({
   if (comments.length === 0) {
     return (
       <p className="dock-empty">
-        Nothing asked yet. Select a sentence in the article and the model will explain it.
+        Nothing marked yet. Select a sentence in the article to bookmark it, and add a
+        comment if you want one.
       </p>
     );
   }
@@ -878,13 +879,20 @@ function Questions({
         <li key={c.id}>
           <button type="button" className="dock-question" onClick={() => onOpen(c.id)}>
             <span className="dock-question-quote">{c.quote}</span>
-            <span className={`dock-question-state ${c.status}`}>
-              {c.status === "pending"
-                ? "thinking…"
-                : c.status === "error"
-                  ? "failed"
-                  : firstLine(c.answer)}
-            </span>
+            {/* **The reader's own words beat the model's**, which is the whole
+                ordering principle of this feature — and the list read as broken
+                without it: a comment somebody had written showed only the
+                sentence it was about, so scanning the list told you where you
+                had stopped but not what you had thought. Found in the browser
+                pass, 2026-08-28.
+
+                A bare bookmark has genuinely nothing to preview, and gets no
+                line rather than an empty one — the quote is the whole of it. */}
+            {previewOf(c) && (
+              <span className={`dock-question-state ${c.status}${c.body ? " own" : ""}`}>
+                {previewOf(c)}
+              </span>
+            )}
           </button>
         </li>
       ))}
@@ -893,11 +901,26 @@ function Questions({
 }
 
 /**
- * The opening of an answer, for the list — enough to recognise which question
- * this was, not enough to read instead of opening it.
+ * The one line under a row's quote, in the order that says whose list this is.
+ *
+ * What the reader wrote, then how the model call is going, then what it said,
+ * then — for a bare bookmark — nothing at all. The body comes first even on a
+ * comment that also has an answer: they made the mark and wrote the note, and
+ * the answer is the thing they can open.
+ */
+function previewOf(c: Comment): string {
+  if (c.body) return firstLine(c.body);
+  if (c.status === "pending") return "thinking…";
+  if (c.status === "error") return "failed";
+  return firstLine(c.answer);
+}
+
+/**
+ * The opening of a line, for the list — enough to recognise which mark this
+ * was, not enough to read instead of opening it.
  *
  * Cut on a word boundary rather than mid-syllable, and only when there is
- * something to cut: a short answer is shown whole rather than given an ellipsis
+ * something to cut: a short line is shown whole rather than given an ellipsis
  * it has not earned.
  */
 function firstLine(answer: string | undefined): string {

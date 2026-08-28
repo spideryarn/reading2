@@ -87,6 +87,7 @@ import {
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
 import { ChatConflict, withEdit, withRetry } from "./chat.js";
+import { CommentIdTaken, NotAnExplanation } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
 /* A pure predicate, so importing it here does not drag the filesystem store
    into a file that must work with either one — the same rule the `withEdit` /
@@ -460,7 +461,134 @@ function sse(res: ServerResponse): {
 }
 
 /**
- * Create a comment, answer it a few words at a time, and store the answer.
+ * The reader's own words, as the store may hold them: trimmed, or nothing.
+ *
+ * **One place, so `""` and absent cannot both mean "wrote nothing".** The
+ * database has a check constraint saying the same thing and the type has
+ * `body?: string` saying it a third time; this is the function that makes all
+ * three agree, and it is the only thing that may build the value.
+ */
+function tidyBody(body: unknown): string | null {
+  /* **Absent and `null` mean "no body"; anything else is a bad request.**
+     Coercing a number, an array or an object to `null` made `{ body: {…} }`
+     silently mean "bookmark this" — a client bug stored as a deliberate act,
+     with nothing anywhere disagreeing. GPT Sol, reviewing the built code. */
+  if (body === undefined || body === null) return null;
+  if (typeof body !== "string") throw httpError(400, "body must be a string or null [cmt-type]");
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  /* A limit, because this is the reader's own text going into a `text` column
+     and a JSON file and every archive of both. Generous enough that nobody
+     writing a note about a paragraph meets it. The message says the limit and
+     **never the text** — an `httpError` message is logged as `reason`, and
+     redaction here is path-based and cannot reach a string. */
+  if (trimmed.length > MAX_BODY_CHARS) {
+    throw httpError(400, `A comment can be at most ${MAX_BODY_CHARS} characters [cmt-long]`);
+  }
+  return trimmed;
+}
+
+/** Room for a few paragraphs of thinking about one passage, and no more. */
+const MAX_BODY_CHARS = 4000;
+
+/**
+ * Store a **free** comment — the reader's mark on a passage. No model call.
+ *
+ * This is what selecting text does since 2026-08-28. Until then, selecting text
+ * bought an explanation, and this route was `answer` below; the two split
+ * because a colliding id means opposite things to them (a retry to one,
+ * somebody else's comment to the other) and one function could not safely be
+ * both. docs/plans/comments-and-bookmarks.md.
+ *
+ * ## The anchor is checked against the article, here
+ *
+ * `checkAnchor` exists for chat and is **weaker than it looks**: it verifies the
+ * quote is *somewhere* in the block, not that it is at the offset given, and on
+ * its own it would accept an empty quote because every string contains `""`.
+ * GPT Sol pointed that out reviewing this plan. So the checks are written out
+ * rather than borrowed, and `start` is bounded as well as non-negative — a
+ * `start` past the end of the block draws the mark in the wrong place, which
+ * reads as a styling glitch rather than as bad data.
+ *
+ * **No message built here may contain the quote or the body.** Both are the
+ * reader's, `httpError` messages are logged as `reason`, and redaction matches
+ * key names rather than values, so the only thing keeping prose out of the log
+ * is not putting it in. Same rule as the top of src/comments.ts.
+ */
+async function createFree(slug: string, body: unknown): Promise<Comment> {
+  const {
+    id,
+    blockId,
+    quote,
+    start,
+    body: text,
+  } = (body ?? {}) as Record<string, unknown>;
+
+  if (typeof blockId !== "string" || typeof quote !== "string" || typeof start !== "number") {
+    throw httpError(400, "Expected { blockId, quote, start }");
+  }
+  if (!isSpideryarnId(blockId)) throw httpError(400, "blockId must be a block id");
+  if (id !== undefined && (typeof id !== "string" || !isSpideryarnId(id))) {
+    throw httpError(400, "id must be a block id");
+  }
+  if (!quote.trim()) throw httpError(400, "quote must not be empty");
+  if (quote.length > MAX_QUOTE_CHARS) {
+    throw httpError(400, `A quote can be at most ${MAX_QUOTE_CHARS} characters [cmt-quote]`);
+  }
+  if (!Number.isInteger(start) || start < 0) {
+    throw httpError(400, `start must be a non-negative integer, got ${start}`);
+  }
+  const tidied = tidyBody(text);
+
+  // Before anything is written, so a slug that is not an article is a clean 404
+  // with nothing left behind.
+  const article = await loadArticle(slug);
+  const block = article.blocks.find((b) => b.id === blockId);
+  if (!block) throw httpError(400, "blockId is not a block of this article");
+  if (start > block.text.length) throw httpError(400, "start is past the end of that block");
+  /* Folded, because `quote` came from a DOM selection and `block.text` from the
+     extractor, and the two disagree about runs of whitespace — the same fold
+     `checkAnchor` uses, for the same reason. */
+  if (!foldSpace(block.text).includes(foldSpace(quote))) {
+    throw httpError(400, "quote is not in that block");
+  }
+
+  return commentStore.create(slug, {
+    blockId,
+    quote,
+    start,
+    ...(tidied === null ? {} : { body: tidied }),
+    ...(typeof id === "string" ? { id } : {}),
+  });
+}
+
+/** A selection, not an essay. Long enough for a run-on sentence and no more. */
+const MAX_QUOTE_CHARS = 2000;
+
+/**
+ * Collapse runs of whitespace, for comparing a selection against a block.
+ *
+ * **One of these, used by both anchor checks.** A quote comes from a DOM
+ * selection and `block.text` comes from the extractor, and the two disagree
+ * about runs of whitespace — see the note in src/blocks.ts. `checkAnchor` had
+ * its own copy of this line; two copies of a normaliser is how a chat anchor
+ * and a comment anchor end up disagreeing about the same passage.
+ */
+const foldSpace = (t: string) => t.replace(/\s+/g, " ").trim();
+
+/**
+ * Answer a **legacy explanation** a few words at a time, and store the answer.
+ *
+ * Reached only as `POST /api/comments/:slug/:id/answer`, and only by *Try
+ * again* and *Search the web properly* on a comment that already has an answer
+ * or an error. Since 2026-08-26 a selection opens a conversation rather than
+ * buying one of these, and since 2026-08-28 it makes a free comment; nothing
+ * creates a new explanation, and this route cannot.
+ *
+ * **It takes an id and no anchor.** `beginAnswer` reads the stored passage
+ * rather than accepting one, which closes the hole where a retry could quietly
+ * move a comment to different words — and it refuses a `status: "none"` row,
+ * so a bookmark cannot be dragged into the retired path.
  *
  * **Validation happens before a single header is written**, so a bad request is
  * still an ordinary JSON 400 — the thrown `httpError` never reaches a
@@ -470,78 +598,37 @@ function sse(res: ServerResponse): {
  * leaves evidence, and the terminal state is written before the last frame so
  * the disk and the reader can never disagree. A model failure is a `done` frame
  * carrying a comment whose status is `error` — the request *did* succeed at what
- * it was for, which was recording the question; the dialog shows the failure and
- * offers a retry.
+ * it was for; the dialog shows the failure and offers a retry.
  *
  * Frames: one `begin`, then any number of `delta`, then exactly one `done`.
- *
- * **`begin` carries the whole comment, and that is the point of it.**
- * `commentStore.create` re-mints the id when the client's is malformed or
- * collides, and with a stream there is no response body to carry the real one
- * back. Without this frame the client would stream an answer into a row the
- * server has never heard of, and a reload would show a different comment.
- * src/web/useChat.ts § Begun is the write-up of that exact bug happening in
- * chat, weeks after the ids stopped matching.
  */
-async function answer(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { id, blockId, quote, start, deep, useProfile } = (body ?? {}) as Record<
-    string,
-    unknown
-  >;
-  if (typeof blockId !== "string" || typeof quote !== "string" || typeof start !== "number") {
-    throw httpError(400, "Expected { blockId, quote, start }");
-  }
-  // `start` indexes into the block's rendered text, so anything that is not a
-  // whole non-negative number is meaningless. A negative one is worse than
-  // meaningless: `resolveMark`'s fast path returns it unchanged, and the mark is
-  // drawn a few characters to the left of the words it belongs to — wrong, and
-  // wrong in a way that looks like a styling glitch rather than bad data.
-  if (!Number.isInteger(start) || start < 0) {
-    throw httpError(400, `start must be a non-negative integer, got ${start}`);
-  }
+async function answer(
+  slug: string,
+  id: string,
+  body: unknown,
+  res: ServerResponse,
+): Promise<void> {
+  const { deep, useProfile } = (body ?? {}) as Record<string, unknown>;
   /* Anything other than `true` is not deep. A 400 here would be a validation
      message built from the request body, which is the one thing `httpError`
      messages must never be — they are logged as `reason`, and redaction is
-     path-based and cannot reach a string. See the note on `httpError` below. */
+     path-based and cannot reach a string. */
   const deeper = deep === true;
   /* `!== false`, the mirror of the line above and deliberately not the same
-     rule. Deep search is an extra the reader asks for, so absent means no;
-     the profile is the default this app now writes with, so absent means yes
-     and only an explicit refusal turns it off. */
+     rule. Deep search is an extra the reader asks for, so absent means no; the
+     profile is the default this app now writes with, so absent means yes and
+     only an explicit refusal turns it off. */
   const wantsProfile = useProfile !== false;
 
-  // Before the comment is created, so a slug that is not an article is a clean
-  // 404 with nothing written, rather than a stored comment whose only content is
-  // the error we could have known about first.
+  // Before the row is touched, so a slug that is not an article is a clean 404.
   const article = await loadArticle(slug);
+  if (!isSpideryarnId(id)) throw httpError(400, "id must be a comment id");
 
-  /* **This route no longer creates explanations.**
-   *
-   * Since 2026-08-26 a selection opens a chat rather than buying an answer
-   * (docs/plans/chat-as-gateway.md), and Greg's call was that the explanation
-   * panel becomes a museum: it can show the ones you already made, and retry
-   * and deepen them, but there is no way to make a new one.
-   *
-   * Deleting `useComments.ask` closes the React path and **nothing else**. A
-   * stale tab left open in another window, or a direct request, would still
-   * land here and `create` would happily mint a row. "There is no way to make a
-   * new one" is then a fact about the current build rather than a rule, which
-   * is the kind of thing that quietly stops being true. So the rule lives here,
-   * where the writing happens.
-   *
-   * Retry and deepen both send the id they already have, so requiring one costs
-   * them nothing. `create` stays idempotent on that id and is still what resets
-   * the row — see the note on `CommentStore.create`. */
-  if (typeof id !== "string") throw httpError(400, "Expected { id }");
-  const known = (await commentStore.load(slug)).some((c) => c.id === id);
-  if (!known) {
-    throw httpError(
-      404,
-      "Selecting text starts a conversation now; there is no explanation to answer",
-    );
-  }
-
-  const comment = await commentStore.create(slug, { blockId, quote, start, id });
+  /* Throws `NotAnExplanation` for an unknown id and for a bookmark, which
+     `serveApi`'s error mapping turns into a 404 and a 409. The anchor comes
+     back off the stored row — the request never gets to name one. */
+  const comment = await commentStore.beginAnswer(slug, id);
+  const { blockId, quote } = comment;
   const key = `${slug}/${comment.id}`;
   const release = beganAnswering(key);
 
@@ -930,8 +1017,19 @@ function sweepChat(slug: string): Promise<ChatThread[]> {
  *    error on it rather than discarded. See the note in `sweepChat`.
  */
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
-  const { threadId, question, at, retry, edit, expectedTailId, useProfile, anchor, kind, stance } =
-    (body ?? {}) as Record<string, unknown>;
+  const {
+    threadId,
+    question,
+    at,
+    retry,
+    edit,
+    expectedTailId,
+    useProfile,
+    anchor,
+    kind,
+    stance,
+    sourceCommentId,
+  } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
   /* **Validated, never coerced.** An unknown value is a 400 rather than a
      silent fall back to the default: a client that sends `stance: "socratik"`
@@ -1018,6 +1116,19 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      anchor sent with either would be dropped without a word — and the reader
      would have a conversation the database says is about a passage they never
      chose. Refused rather than ignored. */
+  /* **The comment this conversation was started from, if it was.**
+     Travels with the anchor and under the same rule, because it means the same
+     kind of thing: a fact about the turn that *creates* a thread. It exists so
+     the link can be written **server-side, with the real thread id** — the
+     client mints an optimistic one and only finds out it was overruled if it
+     was, so a client-side link is a race it cannot see it has lost.
+     docs/plans/comments-and-bookmarks.md § the Save & ask choreography. */
+  if (sourceCommentId !== undefined && !isSpideryarnId(String(sourceCommentId))) {
+    throw httpError(400, "sourceCommentId must be a comment id");
+  }
+  if (sourceCommentId !== undefined && (wantsRetry || wantsEdit)) {
+    throw httpError(400, "A source comment can only be sent with a new question");
+  }
   if (anchor !== undefined && (wantsRetry || wantsEdit)) {
     throw httpError(400, "An anchor can only be sent with a new question");
   }
@@ -1213,6 +1324,34 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     res.setHeader("X-Accel-Buffering", "no");
     res.flushHeaders?.();
     stopBeating = heartbeat(res, alive);
+
+    /* **The link is written here, with the id the server settled on.**
+       This is the first moment a real thread id exists, and it is the only
+       place that has one — which is the whole reason this is not done from the
+       browser. A failure is logged and swallowed: the comment is stored and the
+       conversation is stored, and all that is missing is the arrow between
+       them, so failing the request would throw away work that plainly
+       succeeded. `linkThread` is compare-and-set from absent, so a repeat of
+       the same link is a no-op and a *different* one is refused. */
+    if (typeof sourceCommentId === "string" && wanted && "quote" in wanted) {
+      try {
+        /* **The anchor goes with it**, so the store can refuse a
+           `sourceCommentId` that names one of this reader's *other* comments —
+           a stale id from another tab, or a made-up one. Only a selection
+           anchor can carry a link: a block-only chat has no passage to match,
+           and a comment always has one. */
+        await commentStore.linkThread(slug, sourceCommentId, thread.id, {
+          blockId: wanted.blockId,
+          quote: wanted.quote,
+          start: wanted.start,
+        });
+      } catch (err) {
+        log("store").warn(
+          { slug, id: sourceCommentId, threadId: thread.id, ...errorFields(err) },
+          "could not link the comment to its conversation",
+        );
+      }
+    }
 
     /* The ids first, before a single word of the answer. The client minted the
        thread id optimistically and beginTurn may have overruled it (a collision,
@@ -1661,8 +1800,7 @@ function checkAnchor(anchor: ChatAnchor, blocks: Block[]): void {
   /* Whitespace-folded on both sides, because the rendered text the client
      measured collapses runs of space that `block.text` may keep. Comparing them
      literally rejected perfectly good selections. */
-  const fold = (t: string) => t.replace(/\s+/g, " ").trim();
-  if (!fold(block.text).includes(fold(anchor.quote))) {
+  if (!foldSpace(block.text).includes(foldSpace(anchor.quote))) {
     throw httpError(400, "anchor.quote is not in that block");
   }
 }
@@ -2369,15 +2507,55 @@ async function jobForSlug(slug: string): Promise<Job | null> {
  * against the piece, and this one is a property of the artefact against the
  * person.
  */
+/**
+ * An artefact, and whether the reader has changed since it was written.
+ *
+ * ## It takes a thunk, and that is the whole design
+ *
+ * `resolveProfile` is two queries of its own and has nothing to do with the
+ * artefact read. They used to run one after the other — the route awaited the
+ * artefact, then called this, which then went to the database again — so a
+ * reader waiting on a panel waited for both in series.
+ *
+ * A **thunk** rather than the value, and rather than a promise. A promise
+ * parameter would make the overlap a caller convention: every route could go on
+ * writing `const found = await loadGlossary(at)` and hand over an
+ * already-settled promise, and a test of this function would still pass. GPT
+ * Sol's fifth finding on docs/plans/library-read-latency.md. Taking the thunk
+ * moves the responsibility in here, where it can be proved.
+ *
+ * ## `allSettled`, and why not `all`
+ *
+ * `Promise.all` rejects with whichever failed *first*, so a reader asking for an
+ * article that does not exist could be told about a profile failure instead of
+ * getting a 404 — a real change in behaviour, and a confusing one, because the
+ * error would name the wrong thing. Settling both and rethrowing the artefact's
+ * rejection first preserves exactly the order the serial version had.
+ *
+ * The profile's rejection is rethrown after, rather than swallowed: a profile
+ * that could not be read is not the same as a profile that has not changed, and
+ * reporting `profileChanged: false` for it would be a silent wrong answer.
+ * Attaching `allSettled` immediately is also what keeps the losing rejection
+ * from surfacing as an unhandled one.
+ *
+ * Starting `resolveProfile` for a slug that turns out not to exist is harmless:
+ * its shelf read already catches, and the global half still counts.
+ */
 async function withProfileChanged<R extends { profileChanged: boolean }>(
   slug: string,
-  found: Omit<R, "profileChanged">,
-  artefact: { profileHash?: string | null },
+  load: () => Promise<Omit<R, "profileChanged">>,
+  stampOf: (found: Omit<R, "profileChanged">) => { profileHash?: string | null },
 ): Promise<R> {
-  const now = await resolveProfile(slug);
+  /* Both started before either is awaited — that is the point of the thunk. */
+  const settled = await Promise.allSettled([load(), resolveProfile(slug)] as const);
+  const [artefact, profile] = settled;
+  if (artefact.status === "rejected") throw artefact.reason;
+  if (profile.status === "rejected") throw profile.reason;
+  const found = artefact.value as Omit<R, "profileChanged">;
+  const now = profile.value as string | null;
   return {
     ...found,
-    profileChanged: profileIsStale(artefact.profileHash, now ? hashProfile(now) : null),
+    profileChanged: profileIsStale(stampOf(found).profileHash, now ? hashProfile(now) : null),
   } as R;
 }
 
@@ -2962,6 +3140,12 @@ async function serveApi(
   const source = /^\/api\/source\/([\w.%-]+)$/.exec(url);
   const comments = /^\/api\/comments\/([\w.%-]+)$/.exec(url);
   const one = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
+  /* Answering is its own sub-path rather than a field on the POST, because it
+     is the one thing a comment can do that spends money and streams. **There is
+     deliberately no route for linking a comment to its conversation**: the only
+     place that knows the real thread id is the chat stream itself, so the link
+     is written there. See docs/plans/comments-and-bookmarks.md. */
+  const commentAnswer = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/answer$/.exec(url);
   const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(url);
   const oneThread = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
   const chatStop = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/stop$/.exec(url);
@@ -3136,16 +3320,14 @@ async function serveApi(
     if (tweets && req.method === "GET") {
       {
         const at = slugPart(tweets, 1);
-        const found = await loadTweets(at);
-        send(res, 200, await withProfileChanged<ThreadResponse>(at, found, found.thread));
+        send(res, 200, await withProfileChanged<ThreadResponse>(at, () => loadTweets(at), (found) => found.thread));
       }
       return true;
     }
     if (glossary && req.method === "GET") {
       {
         const at = slugPart(glossary, 1);
-        const found = await loadGlossary(at);
-        send(res, 200, await withProfileChanged<GlossaryResponse>(at, found, found.glossary));
+        send(res, 200, await withProfileChanged<GlossaryResponse>(at, () => loadGlossary(at), (found) => found.glossary));
       }
       return true;
     }
@@ -3172,16 +3354,14 @@ async function serveApi(
     if (summary && req.method === "GET") {
       {
         const at = slugPart(summary, 1);
-        const found = await loadSummaries(at);
-        send(res, 200, await withProfileChanged<SummariesResponse>(at, found, found.summaries));
+        send(res, 200, await withProfileChanged<SummariesResponse>(at, () => loadSummaries(at), (found) => found.summaries));
       }
       return true;
     }
     if (ideas && req.method === "GET") {
       {
         const at = slugPart(ideas, 1);
-        const found = await loadIdeas(at);
-        send(res, 200, await withProfileChanged<IdeasResponse>(at, found, found.ideas));
+        send(res, 200, await withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas));
       }
       return true;
     }
@@ -3281,11 +3461,32 @@ async function serveApi(
       return true;
     }
     if (comments && req.method === "POST") {
-      /* The second endpoint in this file that does not answer with JSON — see
-         `answer`, which writes its own headers and ends the response. It is
-         still reached through `send` for its *failures*: validation throws
-         before a header is written, so a bad request is an ordinary 400. */
-      await answer(slugPart(comments, 1), await readBody(req), res);
+      /* **Making a comment is free and answers with JSON.** Until 2026-08-28
+         this path was `answer`, which spends a model call and streams; the two
+         meanings now have two routes, because a colliding id means opposite
+         things to them — a retry to one, somebody else's comment to the other.
+         docs/plans/comments-and-bookmarks.md § the store contract. */
+      send(res, 201, { comment: await createFree(slugPart(comments, 1), await readBody(req)) });
+      return true;
+    }
+    if (commentAnswer && req.method === "POST") {
+      /* The one endpoint here that does not answer with JSON — it writes its
+         own headers and ends the response. It is still reached through `send`
+         for its *failures*: validation throws before a header is written, so a
+         bad request is an ordinary 400. */
+      const [slug, id] = [slugPart(commentAnswer, 1), part(commentAnswer, 2)];
+      const answerBody = await readBody(req);
+      await withSpendAttribution({ articleSlug: slug }, () =>
+        answer(slug, id, answerBody, res),
+      );
+      return true;
+    }
+    if (one && req.method === "PATCH") {
+      const [slug, id] = [slugPart(one, 1), part(one, 2)];
+      const { body } = (await readBody(req) ?? {}) as Record<string, unknown>;
+      // `tidyBody` is the one place that decides what a body may be, so the
+      // route no longer keeps a second, slightly different copy of that rule.
+      send(res, 200, { comment: await commentStore.patchBody(slug, id, tidyBody(body)) });
       return true;
     }
     if (one && req.method === "DELETE") {
@@ -3539,6 +3740,17 @@ async function serveApi(
          nothing here is broken and the client's job is to reload and look
          again. See `ChatConflict` in src/chat.ts. */
       (err instanceof ChatConflict ? 409 : null) ??
+      /* Somebody else's comment already has that id, or that comment already
+         started a different conversation. 409 for the same reason as above:
+         nothing is broken, the client asked for something the stored state will
+         not allow, and reloading is the answer. `CommentIdTaken` in
+         src/comments.ts. */
+      (err instanceof CommentIdTaken ? 409 : null) ??
+      /* Two different failures under one class, and they must not share a code:
+         `missing` is a comment that is not there (404), `free` is a bookmark
+         being pushed down the retired explanation path (409). Guessing one for
+         both would make a deleted comment read as "you cannot answer that". */
+      (err instanceof NotAnExplanation ? (err.why === "missing" ? 404 : 409) : null) ??
       ((err as NodeJS.ErrnoException).code === "ENOENT" ? 404 : 500);
     // Handed to `logRequest`, which decides how much of it to write down — the
     // message for a failure this file chose, the whole stack for one it did

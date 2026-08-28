@@ -711,7 +711,7 @@ export function Metadata({
           </div>
 
           <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
-            <Row icon={MessageCircle} label="Questions asked">
+            <Row icon={MessageCircle} label="Comments">
               <Questions
                 count={provenance?.comments ?? null}
                 failed={Boolean(provenanceError)}

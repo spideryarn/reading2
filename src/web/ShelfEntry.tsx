@@ -42,7 +42,7 @@ export type Shelf = ReturnType<typeof useShelf>;
  * something it does not show is a list in an order the reader cannot check —
  * "why is this one at the top?" has to be answerable from the card. So sorting
  * by Last opened turns the date on the right into "opened 25 Aug", and sorting
- * by Questions turns it into "3 questions". Sorting by Added or Length changes
+ * by Comments turns it into "3 comments". Sorting by Added or Length changes
  * nothing, because the card already carries both.
  *
  * That is the "best of all worlds" Greg asked for, and it is the half a dense
@@ -174,7 +174,7 @@ export function ShelfCard({
               it sits above the stretched link and can be hovered at all.
 
               **The accessible name starts with the visible text.** This button
-              says "26 Aug 2026" or "3 questions" depending on the sort, and an
+              says "26 Aug 2026" or "3 comments" depending on the sort, and an
               `aria-label` of "Details of …" would replace that entirely — so
               somebody driving the page by voice cannot say what they can see,
               and WCAG 2.5.3 Label in Name is failed. Caught by a cross-family
@@ -225,7 +225,7 @@ export function Details({ entry }: { entry: LibraryEntry }) {
   const rows: [string, string][] = [
     ["Added", exactly(entry.addedAt) ?? "unknown"],
     ["Opened", opensLine(entry)],
-    ["Asked", entry.comments === 1 ? "1 question" : `${entry.comments} questions`],
+    ["Marked", entry.comments === 1 ? "1 comment" : `${entry.comments} comments`],
     ["Built", built.length ? built.join(" · ") : "nothing beyond the tree"],
     [
       "Size",

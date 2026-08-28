@@ -54,7 +54,7 @@ function at(iso: string | undefined): number | undefined {
  * The "best of all worlds" half of the design, and the half no table library
  * was ever going to provide: a card sorted by something it does not show is a
  * list in an order the reader cannot check — *why is this one at the top?* has
- * to be answerable from the card. Sorting by Questions turns the date at the
+ * to be answerable from the card. Sorting by Comments turns the date at the
  * bottom right into "3 questions"; by Last opened, into "opened yesterday".
  *
  * Keyed by column id, and every sortable column has one, so the card can never
@@ -82,7 +82,7 @@ export const CARD_NOTES: Record<string, CardNote> = {
   opens: (e) =>
     e.opens === 0 ? "never opened" : e.opens === 1 ? "opened once" : `opened ${e.opens} times`,
   questions: (e) =>
-    e.comments === 0 ? "no questions" : e.comments === 1 ? "1 question" : `${e.comments} questions`,
+    e.comments === 0 ? "no comments" : e.comments === 1 ? "1 comment" : `${e.comments} comments`,
 };
 
 /**
@@ -213,13 +213,13 @@ export function libraryColumns(shelf: Shelf, now: number): SortableColumn<Librar
     },
     {
       id: "questions",
-      header: "Questions",
+      header: "Comments",
       accessorFn: (e) => e.comments,
       sortDescFirst: true,
       sortingFn: numberOrMissing<LibraryEntry>(),
       meta: {
-        label: "Questions",
-        hint: "How many questions you have asked about it",
+        label: "Comments",
+        hint: "How many passages you have marked on it",
         ends: ["fewest first", "most first"],
         numeric: true,
       },

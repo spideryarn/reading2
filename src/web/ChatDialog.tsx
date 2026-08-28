@@ -74,6 +74,16 @@ export type ChatTarget =
        * is the thing this whole change is about.
        */
       question?: string;
+      /**
+       * The comment this conversation is being started from, if it is.
+       *
+       * Set only when the reader ticked "Also ask the AI" on a comment they
+       * have just saved. Passed through to the send and no further: the
+       * **server** writes the link, because the thread id this client is about
+       * to mint is a guess it only finds out was overruled if it was. See
+       * docs/plans/comments-and-bookmarks.md § the Save & ask choreography.
+       */
+      sourceCommentId?: string;
     }
   | { kind: "thread"; threadId: string };
 
@@ -183,7 +193,20 @@ export function ChatDialog({
         ...("quote" in target.anchor ? { quote: target.anchor.quote } : {}),
         question,
       });
-      const id = send(null, text, at, true, (real) => onThread(real), target.anchor);
+      const id = send(
+        null,
+        text,
+        at,
+        true,
+        (real) => onThread(real),
+        target.anchor,
+        undefined,
+        undefined,
+        /* Only ever set when the reader came here by ticking "Also ask the AI"
+           on a comment they just saved. The server links the two once it has a
+           real thread id; nothing here does, on purpose. */
+        target.sourceCommentId,
+      );
       onThread(id);
       /* The prose is told at once, with the id we have. If the server mints a
          different one, `onThread` above corrects the URL and the summary is

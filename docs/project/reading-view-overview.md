@@ -49,10 +49,11 @@ of compression, down the page for position and across for detail. Read that firs
 - **[diagram.md](diagram.md)** — the article's shape as a picture: four of them, what each can and
   cannot promise, the four that were cut, and why nothing was installed to draw them.
 
-### Asking about a passage
+### Marking a passage, and asking about one
 
-- **[comments.md](comments.md)** — select a sentence and the model explains it. **Closed to new
-  arrivals** (a selection now opens chat), but the anchoring and the streaming still apply.
+- **[comments.md](comments.md)** — select a sentence and it is yours: a bookmark, a note on it if
+  you want one, and an answer from the model only if you tick the box. **Saving costs nothing.**
+  Open it for the anchoring, the four store operations and why there are four, and the streaming.
 - **[chat-tools.md](chat-tools.md)** — the six tools chat can reach for and the filter they passed:
   *does it send the reader somewhere they could not otherwise get to?* Chat itself is in the plans:
   [chat-mode.md](../plans/chat-mode.md), [chat-as-gateway.md](../plans/chat-as-gateway.md).

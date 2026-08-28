@@ -51,6 +51,17 @@ interface Props {
    * so the passage keeps its mark and the new chat is tied to the same words.
    */
   onDiscuss(question: string): void;
+  /** Save the reader's own words, or `null` to clear them back to a bookmark. */
+  onEdit(body: string | null): void;
+  /**
+   * Open the conversation this comment started, if it still exists.
+   *
+   * Absent when there is nothing to open — either the comment never started one
+   * or the reader has since deleted it. **Whether the thread is really there is
+   * the caller's to decide**, because only the caller has the summary list; a
+   * `threadId` on the comment is advisory and can point at nothing.
+   */
+  onOpenThread?: (() => void) | undefined;
 }
 
 export function CommentDialog({
@@ -67,6 +78,8 @@ export function CommentDialog({
   onClose,
   onDelete,
   onRetry,
+  onEdit,
+  onOpenThread,
 }: Props) {
   const [followUp, setFollowUp] = useState("");
   const followUpBox = useRef<HTMLInputElement>(null);
@@ -161,10 +174,17 @@ export function CommentDialog({
         comment.status === "pending" ? " busy" : ""
       }`}
       role="dialog"
-      aria-label="Explanation"
+      /* **Not always an explanation any more.** A comment with no answer is the
+         reader's own mark on the passage, and calling that "Explanation" to a
+         screen reader would announce the model's voice over theirs. The three
+         cases in one expression, because the visible label below must say the
+         same thing. */
+      aria-label={comment.status === "none" ? (comment.body ? "Comment" : "Bookmark") : "Explanation"}
     >
       <header>
-        <span className="cmt-dialog-label">Explanation</span>
+        <span className="cmt-dialog-label">
+          {comment.status === "none" ? (comment.body ? "Comment" : "Bookmark") : "Explanation"}
+        </span>
         {/* Only worth the room once there is somewhere to go. */}
         {total > 1 && (
           <span className="cmt-nav">
@@ -189,6 +209,23 @@ export function CommentDialog({
           answer to a question you can no longer see, once the page has scrolled
           or you have stepped to a comment somewhere else entirely. */}
       <blockquote className="cmt-quote">{comment.quote}</blockquote>
+
+      {/* **The reader's own words, above the model's.** Whose panel this is
+          shows in the order: what they wrote comes first, and an explanation —
+          which only a comment made before 2026-08-28 has — sits underneath it.
+          Editable in place, because a note you cannot change is a note you stop
+          making. */}
+      <CommentBody
+        key={comment.id}
+        body={comment.body ?? ""}
+        onSave={onEdit}
+      />
+
+      {onOpenThread && (
+        <button type="button" className="linky cmt-open-thread" onClick={onOpenThread}>
+          Open the conversation this started
+        </button>
+      )}
 
       {/* The spinner is only for the wait before any words. Once text is
           arriving the answer below says everything this line would, and two
@@ -446,4 +483,65 @@ function hostOf(url: string): string {
   } catch {
     return url;
   }
+}
+
+/**
+ * The reader's own words on a comment, editable in place.
+ *
+ * ## Why it commits on blur rather than with a Save button
+ *
+ * A button is one more thing to hit, and the failure it protects against —
+ * losing what you typed — is the one this actually causes: a reader who edits a
+ * note and then presses the ✕ or steps to the next comment loses the edit,
+ * because the button was never pressed. Blur fires for all three of those, so
+ * committing there is what keeps the words. ⌘/Ctrl+Enter commits too, for the
+ * reader who wants to say "done" with the keyboard.
+ *
+ * **Keyed on the comment id by the caller**, so stepping between comments
+ * remounts this and cannot carry one reader's half-edited note onto another
+ * passage — the same bug the follow-up box below fixed once already.
+ *
+ * The empty string is sent as `null`: a cleared box is a comment becoming a
+ * bare bookmark again, and `""` is not a value the store may hold.
+ */
+function CommentBody({ body, onSave }: { body: string; onSave(next: string | null): void }) {
+  const [draft, setDraft] = useState(body);
+  /* What is actually stored, so a commit that changes nothing sends nothing. A
+     PATCH per blur would rewrite `updatedAt` every time the reader clicked
+     through a comment, and "edited just now" on a note they only looked at is a
+     small lie the panel would then have to tell. */
+  const saved = useRef(body);
+
+  const commit = () => {
+    const next = draft.trim();
+    if (next === saved.current) return;
+    saved.current = next;
+    onSave(next === "" ? null : next);
+  };
+
+  return (
+    <textarea
+      className="cmt-note"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          commit();
+          return;
+        }
+        /* Escape closes the dialog from a window listener, which would throw
+           away an uncommitted edit without warning. The first Escape puts the
+           stored words back; the second closes the panel. */
+        if (e.key === "Escape" && draft !== saved.current) {
+          e.stopPropagation();
+          setDraft(saved.current);
+        }
+      }}
+      placeholder="Add a comment…"
+      aria-label="Your comment on this passage"
+      rows={2}
+    />
+  );
 }

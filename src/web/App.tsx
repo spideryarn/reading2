@@ -30,6 +30,7 @@ import { TableView } from "./TableView.js";
 import type { TermSelection } from "./annotate.js";
 import { formsOf } from "../term-match.js";
 import { Spine } from "./Spine.js";
+import { AnnotateDialog } from "./AnnotateDialog.js";
 import { CommentDialog } from "./CommentDialog.js";
 import { Masthead } from "./Masthead.js";
 import { useSlow } from "./useSlow.js";
@@ -659,6 +660,9 @@ function Reader({
     comments,
     loaded: commentsLoaded,
     loadFailed: commentsLoadFailed,
+    create: createComment,
+    edit: editComment,
+    noteThread,
     retry,
     deepen,
     remove,
@@ -683,6 +687,17 @@ function Reader({
    */
   const [thread, setThread] = useQueryState("thread", threadParam);
   const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
+  /**
+   * The passage the reader has just selected, before they have saved anything.
+   *
+   * Component state rather than a URL parameter for the same two reasons
+   * `chatDraft` is: there is nothing to link to yet, and the quote is the
+   * reader's selection, which docs/project/logging.md says does not belong in
+   * an address.
+   */
+  const [annotating, setAnnotating] = useState<
+    { blockId: BlockId; quote: string; start: number } | null
+  >(null);
   const chatAnchors = useChatAnchors(slug);
 
   /* Memoised, and this is a performance fix rather than tidiness. Both of these
@@ -776,7 +791,7 @@ function Reader({
    * wants to live.** `useGlossary` fetches on mount and polls the job list, so
    * it has to stay inside a component that only exists in glossary mode —
    * otherwise every reader of every article pays for a list almost none of them
-   * open, which is the same reason `ChatBand` exists. But the *marks* are drawn
+   * open, which is the same reason `ConversationBand` exists. But the *marks* are drawn
    * in the prose, which is `TableView`'s, and that is here.
    *
    * So the band pushes the selection up as it changes, and clears it on the way
@@ -1292,15 +1307,14 @@ function Reader({
         onSelect={(anchor) => {
           if (!anchor) return;
           /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
-             call the reader had not asked for; now it opens a box and waits.
-             Greg's call — see docs/plans/chat-as-gateway.md. */
+             call the reader had not asked for; then it opened an ask box; since
+             2026-08-28 it opens a *comment* box, where saving is free and the
+             model is a tick-box. Greg's call — see
+             docs/plans/comments-and-bookmarks.md. */
           void setNote(null);
           void setThread(null);
-          setChatDraft({
-            kind: "draft",
-            anchor: { blockId: anchor.blockId, quote: anchor.quote, start: anchor.start },
-            opening: anchor.quote,
-          });
+          setChatDraft(null);
+          setAnnotating({ blockId: anchor.blockId, quote: anchor.quote, start: anchor.start });
           /* **The browser's selection is deliberately left alone**, which is a
              reversal. It used to be cleared because it sat on top of the mark
              we had just drawn and hid it. There is now no mark to reveal —
@@ -1310,6 +1324,46 @@ function Reader({
         }}
         onOpenComment={(id) => void setNote(id)}
       />
+      {annotating && (
+        <AnnotateDialog
+          anchor={annotating}
+          onCancel={() => setAnnotating(null)}
+          onSave={(id, body, ask) => {
+            const anchor = annotating;
+            setAnnotating(null);
+            /* **The free thing is stored first, and the paid thing waits for
+               it.** If the chat call fails, or the reader closes the panel
+               before sending, their words are already on disk. The reverse
+               order — open the chat, save afterwards — loses the comment for
+               exactly the reader who typed the most into it. */
+            void createComment({
+              id,
+              blockId: anchor.blockId,
+              quote: anchor.quote,
+              start: anchor.start,
+              ...(body ? { body } : {}),
+            }).then((stored) => {
+              if (!ask || !stored) return;
+              /* The conversation opens on the same words, pre-filled with what
+                 they wrote. `sourceComment` travels with it so the *server*
+                 can write the link once it knows the real thread id — the
+                 client's is a guess it only learns was wrong if it was. */
+              void setThread(null);
+              setChatDraft({
+                kind: "draft",
+                anchor: {
+                  blockId: anchor.blockId,
+                  quote: anchor.quote,
+                  start: anchor.start,
+                },
+                opening: anchor.quote,
+                sourceCommentId: stored.id,
+                ...(body ? { question: body } : {}),
+              });
+            });
+          }}
+        />
+      )}
       {overlay && (
         <ChatDialog
           slug={slug}
@@ -1325,6 +1379,16 @@ function Reader({
             /* The draft has become a conversation. Cleared in the same commit
                that names the thread, so the slot never holds both — the panel
                becomes the conversation rather than closing and reopening. */
+            /* **And the comment learns which conversation it started.** The
+               link itself was written by the server, which is the only place a
+               real thread id exists; this is the browser catching up, so the
+               mark and the dialog are right *now* rather than after a reload.
+               Read `chatDraft` before it is cleared — it is the only thing that
+               knows this conversation came from a comment. Fires again with the
+               server's correction if the id we guessed was overruled, and the
+               last word wins. */
+            const from = chatDraft?.kind === "draft" ? chatDraft.sourceCommentId : undefined;
+            if (from) noteThread(from, id);
             setChatDraft(null);
             void setThread(id);
           }}
@@ -1351,6 +1415,24 @@ function Reader({
           onClose={() => void setNote(null)}
           onRetry={() => retry(openComment.id)}
           onDeepen={() => deepen(openComment.id)}
+          onEdit={(body) => void editComment(openComment.id, body)}
+          /* **Offered only when the conversation is really there.** The link on
+             a comment is advisory — a reader can delete the chat and keep the
+             note — so the summary list, not the stored id, decides whether
+             there is anywhere to go. Passing a button that leads to
+             "that conversation no longer exists" would be worse than passing
+             none. */
+          onOpenThread={
+            openComment.threadId && chatAnchors.summaries.some((c) => c.id === openComment.threadId)
+              ? () => {
+                  const id = openComment.threadId;
+                  if (!id) return;
+                  setChatDraft(null);
+                  void setNote(null);
+                  void setThread(id);
+                }
+              : undefined
+          }
           onDiscuss={(question) => {
             /* **Into the floating panel, not into chat mode.** The follow-up
                box has always handed the reader to a conversation rather than
@@ -1407,7 +1489,7 @@ function Reader({
 
       {/* The mode band. Rendered only in its mode, which is what keeps the
           fetch inside it from being charged to every reader of every article —
-          see ChatBand. */}
+          see ConversationBand. */}
       {/* One component, mounted by two modes, keyed so that switching between
           them starts clean rather than carrying the other's open conversation,
           focus nonce and stance across. See ConversationBand. */}
@@ -1525,7 +1607,7 @@ function Reader({
 /**
  * Ideas, and the fetch that belongs to it.
  *
- * A component of its own for the reason `ChatBand` and `GlossaryBand` are:
+ * A component of its own for the reason `ConversationBand` and `GlossaryBand` are:
  * `useIdeas` fetches on mount, and calling it up in `Reader` would charge every
  * reader of every article a request for a list almost none of them will open.
  *
@@ -1696,7 +1778,7 @@ function IdeasBand({
  * chat mode, and reading it in `Reader` would put a parameter subscription on
  * every render of the reading view for a value only this component uses.
  */
-function ConversationBand({
+export function ConversationBand({
   slug,
   blocks,
   onJump,
@@ -1966,7 +2048,7 @@ function ConversationBand({
 /**
  * The glossary's jobs and verbs. The read itself belongs to `Reader`.
  *
- * A component of its own for the reason `ChatBand` above is — but **no longer
+ * A component of its own for the reason `ConversationBand` above is — but **no longer
  * the same reason it used to be**, and the old one is worth deleting rather
  * than leaving to mislead. It used to say: `useGlossary` fetches on mount, so
  * calling it up in `Reader` would charge every reader of every article for a
@@ -2057,7 +2139,7 @@ function GlossaryBand({
 /**
  * Search, and the fetch that belongs to it.
  *
- * A component of its own for the reason `ChatBand` and `GlossaryBand` above
+ * A component of its own for the reason `ConversationBand` and `GlossaryBand` above
  * are: **`useSearch` fetches on mount**, so calling it up in `Reader` would
  * charge every reader of every article a request for a list of saved searches
  * almost none of them will open. Hooks cannot be called conditionally, so the
@@ -2327,7 +2409,7 @@ function SearchBand({
 /**
  * The summaries, and the fetch that belongs to them.
  *
- * A component of its own for the reason `ChatBand` and `GlossaryBand` above
+ * A component of its own for the reason `ConversationBand` and `GlossaryBand` above
  * are: **`useSummaries` fetches on mount**, and calling it up in `Reader` would
  * charge every reader of every article a request for a panel almost none of
  * them will open. Hooks cannot be called conditionally, so the condition has to
@@ -2366,7 +2448,7 @@ function SummaryBand({
   /* Read, never written, and not a subscription: `?at=` is already tracked by
      useReadingPosition in the parent, so this component re-renders whenever it
      changes and `location.search` is current. Same read-at-render trick
-     ChatBand uses, and Dock.tsx for its carried query string.
+     ConversationBand uses, and Dock.tsx for its carried query string.
 
      Turned into a row index here rather than passed down as an id, because the
      panel's question is "is the reader inside this range", and a range is a

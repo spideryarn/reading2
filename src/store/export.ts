@@ -377,6 +377,12 @@ export async function exportArticle(slug: string, target: ExportTarget): Promise
         quote: row.quote,
         start: row.start,
         createdAt: row.createdAt.toISOString(),
+        /* The reader's own three. `compact` drops the nulls, so a bookmark
+           exports without a `body` key rather than with a null one — which is
+           what the filesystem store writes and what the round-trip compares. */
+        body: row.body,
+        updatedAt: row.updatedAt?.toISOString() ?? null,
+        threadId: row.threadId,
         status: row.status,
         answer: row.answer,
         citations: row.citations,

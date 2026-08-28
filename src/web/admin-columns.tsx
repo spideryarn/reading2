@@ -185,7 +185,7 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
     counted("articles", "Articles", "Articles", "How many are on their shelf", (u) => u.articles),
     counted("archived", "Archived", "Archived", "How many they have taken off it", (u) => u.archived),
     counted("uploads", "Uploads", "Uploads", "PDFs that finished uploading", (u) => u.uploads),
-    counted("questions", "Questions", "Questions", "Questions asked about a passage", (u) => u.questions),
+    counted("questions", "Comments", "Comments", "Passages they have marked", (u) => u.questions),
     counted("chats", "Chats", "Chats", "Conversations started", (u) => u.chats),
     counted("searches", "Searches", "Searches", "Meaning searches run", (u) => u.searches),
     counted("opens", "Opens", "Opens", "Times they have opened an article, summed", (u) => u.opens),

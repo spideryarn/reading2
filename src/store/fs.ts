@@ -40,7 +40,15 @@ import {
   update as updateThreads,
   withEdit,
 } from "../chat.js";
-import { createComment, deleteComment, loadComments, patchComment } from "../comments.js";
+import {
+  beginAnswer,
+  createComment,
+  deleteComment,
+  linkCommentThread,
+  loadComments,
+  patchComment,
+  patchCommentBody,
+} from "../comments.js";
 import { loadLookups, saveLookup } from "../glossary-lookups.js";
 import { searchLibrary } from "../library-search.js";
 import { log } from "../log.js";
@@ -110,6 +118,9 @@ export const fsAssertWritableGlossary = (slug: string): Promise<void> =>
 export const fsCommentStore: CommentStore = {
   load: loadComments,
   create: createComment,
+  beginAnswer,
+  patchBody: patchCommentBody,
+  linkThread: linkCommentThread,
   patch: patchComment,
   remove: deleteComment,
 

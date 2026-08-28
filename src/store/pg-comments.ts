@@ -29,9 +29,9 @@
  * the same millisecond would otherwise swap places between requests.
  */
 
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
-import type { NewComment } from "../comments.js";
+import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type NewComment } from "../comments.js";
 import { getDb } from "../db/client.js";
 import { articles, comments as commentsTable } from "../db/schema.js";
 import { isSpideryarnId, mintUniqueId } from "../ids.js";
@@ -66,6 +66,13 @@ function toComment(row: typeof commentsTable.$inferSelect): Comment {
     quote: row.quote,
     start: row.start,
     createdAt: row.createdAt.toISOString(),
+    /* Absent, not `null`, for all three of these — `exactOptionalPropertyTypes`
+       is on and tests/store-roundtrip.test.ts compares the two stores
+       structurally, so a `null` here against an absent key on the filesystem
+       side is a real failure rather than a cosmetic one. */
+    ...(row.body === null ? {} : { body: row.body }),
+    ...(row.updatedAt === null ? {} : { updatedAt: row.updatedAt.toISOString() }),
+    ...(row.threadId === null ? {} : { threadId: row.threadId }),
     status: row.status as Comment["status"],
     ...(row.answer === null ? {} : { answer: row.answer }),
     ...(row.citations === null ? {} : { citations: row.citations }),
@@ -122,16 +129,44 @@ export const pgCommentStore: CommentStore = {
    * preserves it; adding it "for completeness" would silently restart the clock
    * on a question the reader asked once.
    */
+  /**
+   * A **free** comment — the reader's mark on a passage. No model call, ever.
+   *
+   * ## Why this is no longer an upsert
+   *
+   * It used to be `on conflict (article_id, id) do update`, and that was right
+   * while the only caller was a retry of the model call: Postgres serialises
+   * the second writer on the key it is about to insert, so there was no window
+   * between looking and writing to lose. GPT Sol found that fix in review on
+   * 2026-08-26, and it is still the right shape for *that* problem — which is
+   * why the retry path keeps it, over in `beginAnswer`.
+   *
+   * It is the wrong shape here. Once making a comment is free, a colliding id
+   * is an ordinary event rather than a retry, and `do update` would rewrite the
+   * anchor and blank the answer of a comment the reader made in another tab.
+   * So: insert, and on conflict do **nothing** — then read the row back and
+   * decide. Same id, same anchor, same body ⇒ hand it back, which is what makes
+   * a double-clicked Save and a retried POST harmless. Anything else ⇒
+   * `CommentIdTaken`, and a 409.
+   *
+   * `do nothing` rather than select-then-insert for the same reason the old
+   * `do update` was: it closes the gap between looking and writing, so two
+   * simultaneous Saves under one id cannot both insert.
+   */
   async create(slug: string, input: NewComment): Promise<Comment> {
     const db = getDb();
     const articleId = await articleIdFor(slug);
     const supplied = input.id !== undefined && isSpideryarnId(input.id) ? input.id : undefined;
 
+    /* The named allowlist creation is allowed to write. Every answer column is
+       explicitly null rather than left to a default: this row has had no model
+       call, and `status: "none"` is the field that says so. */
     const fields = {
       blockId: input.blockId,
       quote: input.quote,
       start: input.start,
-      status: "pending",
+      body: input.body ?? null,
+      status: "none",
       answer: null,
       citations: null,
       searches: null,
@@ -143,28 +178,46 @@ export const pgCommentStore: CommentStore = {
       const [row] = await tx
         .insert(commentsTable)
         .values({ articleId, id, ownerId: currentOwnerId(), ...fields })
-        .onConflictDoUpdate({
-          target: [commentsTable.articleId, commentsTable.id],
-          set: fields,
-        })
+        .onConflictDoNothing({ target: [commentsTable.articleId, commentsTable.id] })
         .returning();
-      // `row!`: an insert with `returning()` yields exactly the row it wrote,
-      // and `do update` yields the row it updated. `noUncheckedIndexedAccess`
-      // cannot know that either branch always produces one.
-      return toComment(row!);
+      return row === undefined ? undefined : toComment(row);
     };
 
     if (supplied) {
-      const stored = await write(supplied);
-      /* `reset` is read off `createdAt` rather than off which branch ran,
-         because with one statement there are no branches to read. A row whose
-         `created_at` predates this call is a row that already existed. The
-         second is slack for clock skew between the app and the database; this
-         is a log field, and being approximately right about a retry is worth
-         more than a second round trip to be exactly right. */
-      const age = Date.now() - new Date(stored.createdAt).getTime();
+      const written = await write(supplied);
+      if (written) {
+        logger.info(
+          { slug, id: written.id, blockId: written.blockId, repeat: false },
+          "comment created",
+        );
+        return written;
+      }
+      /* The insert hit an existing row and did nothing. Read it and decide
+         whether this is the same Save arriving twice or a genuine collision. */
+      const [existing] = await db
+        .select()
+        .from(commentsTable)
+        .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, supplied)));
+      if (!existing) {
+        /* Inserted nothing and there is nothing there: the conflict was on some
+           other constraint, or the row went between the two statements. Either
+           way this is not the harmless case and must not be reported as one. */
+        throw new CommentIdTaken(supplied);
+      }
+      const stored = toComment(existing);
+      /* `status === "none"` is part of what "the same Save" means. A legacy
+         explanation commonly has no body, so anchor-and-body alone would hand
+         an answered row back as a freshly created free comment. GPT Sol,
+         reviewing the built code, 2026-08-28. */
+      const same =
+        stored.status === "none" &&
+        stored.blockId === input.blockId &&
+        stored.quote === input.quote &&
+        stored.start === input.start &&
+        stored.body === input.body;
+      if (!same) throw new CommentIdTaken(supplied);
       logger.info(
-        { slug, id: stored.id, blockId: stored.blockId, reset: age > 1000 },
+        { slug, id: stored.id, blockId: stored.blockId, repeat: true },
         "comment created",
       );
       return stored;
@@ -187,8 +240,14 @@ export const pgCommentStore: CommentStore = {
             .where(eq(commentsTable.articleId, articleId));
           return write(mintUniqueId(new Set(takenRows.map((r) => r.id))), tx as typeof db);
         });
+        /* `undefined` means the insert conflicted on an id we had just proved
+           was free, which is the collision the retry below is for. */
+        if (!stored) {
+          if (attempt >= 2) throw new CommentIdTaken("(minted)");
+          continue;
+        }
         logger.info(
-          { slug, id: stored.id, blockId: stored.blockId, reset: false },
+          { slug, id: stored.id, blockId: stored.blockId, repeat: false },
           "comment created",
         );
         return stored;
@@ -204,10 +263,149 @@ export const pgCommentStore: CommentStore = {
     }
   },
 
+  /**
+   * Reset a legacy explanation for another attempt at the model call.
+   *
+   * The half of the old `create` that still needs an upsert's semantics — but
+   * as an **update**, because the row must already exist. Everything the reader
+   * owns is left alone by construction: the `set` names only the answer fields,
+   * so the anchor, `created_at`, `body`, `updated_at` and `thread_id` are not
+   * in the statement at all.
+   *
+   * `status <> 'none'` in the WHERE is what refuses a bookmark, and it is one
+   * statement rather than read-then-check so two simultaneous requests cannot
+   * both pass the check.
+   */
+  async beginAnswer(slug: string, id: string): Promise<Comment> {
+    const db = getDb();
+    const articleId = await articleIdFor(slug);
+    const [row] = await db
+      .update(commentsTable)
+      .set({
+        status: "pending",
+        answer: null,
+        citations: null,
+        searches: null,
+        model: null,
+        error: null,
+      })
+      /* **`in ('done','error')` is a claim; `<> 'none'` was not.**
+         The first version excluded only bookmarks, so a row already `pending`
+         satisfied it: two presses of Try again would both "succeed", buy two
+         model calls, and race each other's terminal writes. Only a *terminal*
+         row is answerable. An abandoned `pending` becomes `error` through
+         `sweepOrphaned` and can be retried then — which is what that sweep is
+         for. GPT Sol, reviewing the built code, 2026-08-28. */
+      .where(
+        and(
+          eq(commentsTable.articleId, articleId),
+          eq(commentsTable.id, id),
+          inArray(commentsTable.status, ["done", "error"]),
+        ),
+      )
+      .returning();
+    if (!row) {
+      /* Nothing updated: no such comment, a bookmark, or one already being
+         answered. Told apart with one more read, because they are three
+         different answers to the reader — 404, 409 and 409 — and guessing
+         would make a deleted comment read as "you cannot answer that".
+
+         The read is a *diagnostic* race: the row can change between the failed
+         update and here, so the reported reason can be stale. It cannot cause
+         a wrong write, because the update above already refused. */
+      const [found] = await db
+        .select({ status: commentsTable.status })
+        .from(commentsTable)
+        .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)));
+      throw new NotAnExplanation(
+        id,
+        !found ? "missing" : found.status === "none" ? "free" : "running",
+      );
+    }
+    const stored = toComment(row);
+    logger.info({ slug, id: stored.id, blockId: stored.blockId }, "comment answer begun");
+    return stored;
+  },
+
+  /** The reader edited their words. `body` and `updated_at`, and nothing else. */
+  async patchBody(slug: string, id: string, body: string | null): Promise<Comment> {
+    const db = getDb();
+    const articleId = await articleIdFor(slug);
+    const [row] = await db
+      .update(commentsTable)
+      .set({ body, updatedAt: new Date() })
+      .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)))
+      .returning();
+    if (!row) throw new NotAnExplanation(id, "missing");
+    // Length, never the text. How much somebody wrote is a fact about the app.
+    logger.info({ slug, id, chars: body?.length ?? 0 }, "comment body edited");
+    return toComment(row);
+  },
+
+  /**
+   * Point a comment at the conversation it started. Compare-and-set from null.
+   *
+   * `thread_id is null` in the WHERE is the compare half, so two requests
+   * racing to link the same comment cannot both win. A repeat of the *same*
+   * link updates nothing and is reported as success, which is what makes the
+   * client's retry harmless.
+   */
+  async linkThread(
+    slug: string,
+    id: string,
+    threadId: string,
+    expect: { blockId: string; quote: string; start: number },
+  ): Promise<Comment> {
+    const db = getDb();
+    const articleId = await articleIdFor(slug);
+    /* The anchor and `status` are in the WHERE, not read and checked first:
+       `sourceCommentId` comes off a request and on its own names any comment
+       this reader owns on this article, so the link has to be a compare-and-set
+       on the *passage* as well as on the thread — in one statement, with no gap
+       for the row to change in. GPT Sol, reviewing the built code. */
+    const [row] = await db
+      .update(commentsTable)
+      .set({ threadId })
+      .where(
+        and(
+          eq(commentsTable.articleId, articleId),
+          eq(commentsTable.id, id),
+          eq(commentsTable.status, "none"),
+          eq(commentsTable.blockId, expect.blockId),
+          eq(commentsTable.quote, expect.quote),
+          eq(commentsTable.start, expect.start),
+          isNull(commentsTable.threadId),
+        ),
+      )
+      .returning();
+    if (row) {
+      logger.info({ slug, id, threadId }, "comment linked to a conversation");
+      return toComment(row);
+    }
+    const [existing] = await db
+      .select()
+      .from(commentsTable)
+      .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)));
+    if (!existing) throw new NotAnExplanation(id, "missing");
+    /* Already linked to this same thread is the retry, and is success. Anything
+       else that reaches here — a different thread, a comment that is not free,
+       a different passage — is a link that must not be made. */
+    if (
+      existing.threadId !== threadId ||
+      existing.status !== "none" ||
+      existing.blockId !== expect.blockId ||
+      existing.quote !== expect.quote ||
+      existing.start !== expect.start
+    ) {
+      throw new CommentIdTaken(id);
+    }
+    return toComment(existing);
+  },
+
   async patch(
     slug: string,
     id: string,
-    patch: Partial<Comment>,
+    patch: AnswerPatch,
     opts: { quiet?: boolean } = {},
   ): Promise<Comment[]> {
     const db = getDb();
@@ -220,9 +418,9 @@ export const pgCommentStore: CommentStore = {
     await db
       .update(commentsTable)
       .set({
-        ...(patch.blockId === undefined ? {} : { blockId: patch.blockId }),
-        ...(patch.quote === undefined ? {} : { quote: patch.quote }),
-        ...(patch.start === undefined ? {} : { start: patch.start }),
+        /* The anchor is no longer settable here either. `AnswerPatch` is the
+           type-level half of the same rule; this is the half that survives a
+           caller with an `as never` in it. */
         ...(patch.status === undefined ? {} : { status: patch.status }),
         ...(patch.answer === undefined ? {} : { answer: patch.answer }),
         ...(patch.citations === undefined ? {} : { citations: patch.citations }),

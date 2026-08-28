@@ -1913,6 +1913,36 @@ td.text.has-hit[data-hues="8"] {
 .cmt-followup button { font-size: 0.7rem; white-space: nowrap; }
 .cmt-followup button:disabled { opacity: 0.4; cursor: default; }
 
+/* The reader's own words on a comment, edited in place — CommentDialog's
+   `CommentBody`. Above the answer rather than below it: whose panel this is
+   shows in the order. Borrowing `.cmt-followup input`'s ground and focus ring
+   on purpose, because both boxes take the same kind of thing. */
+.cmt-note {
+  display: block;
+  width: 100%;
+  margin: 0.55rem 0 0.6rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  /* Grows with what is written, rather than scrolling a two-line window. */
+  field-sizing: content;
+  min-height: 2.6rem;
+  resize: vertical;
+}
+.cmt-note::placeholder { color: var(--ink-faint); }
+.cmt-note:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.cmt-open-thread {
+  display: block;
+  margin: 0 0 0.6rem;
+  font-size: 0.7rem;
+}
+
 .cmt-error {
   font-size: 0.78rem;
   color: var(--ink-soft);
@@ -2685,6 +2715,9 @@ td.text.has-hit[data-hues="8"] {
 }
 .dock-question-state.pending { color: var(--highlight); font-style: italic; }
 .dock-question-state.error { color: var(--danger, var(--highlight)); }
+/* The reader's own words, rather than the model's. Brighter, because in a list
+   that mixes the two the one you wrote is the one you are scanning for. */
+.dock-question-state.own { color: var(--ink-soft); }
 
 /* The placeholders' tooltips carry three lines rather than a label, so they
    need room the spine's band cards don't. */
@@ -6481,6 +6514,131 @@ line.diag-now {
   /* Same layer as the explanation panel: above the sticky bars and the spine,
      below the tooltip layer, for the reasons written on `.cmt-dialog`. */
   z-index: 70;
+}
+
+/* ------------------------------------------------------- the comment box --
+   `AnnotateDialog` — what a selection opens since 2026-08-28. Same frame as the
+   floating chat beside it, on purpose: they occupy the same corner and one
+   becomes the other when the reader ticks the box, so a different shape would
+   read as the panel jumping rather than continuing.
+   docs/plans/comments-and-bookmarks.md. */
+.annotate-dialog {
+  position: fixed;
+  right: 1.25rem;
+  bottom: calc(var(--dock-h) + 0.75rem);
+  width: min(26rem, calc(100vw - 2.5rem));
+  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-h)));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.9rem 1.1rem 0.8rem;
+  background: var(--surface-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  font-family: var(--font-ui);
+  /* The same layer as the two panels it shares a corner with. */
+  z-index: 70;
+}
+
+.annotate-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.annotate-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.annotate-close {
+  display: inline-flex;
+  padding: 0.15rem;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.annotate-close:hover { color: var(--ink); }
+
+.annotate-body { overflow-y: auto; }
+
+.annotate-quote {
+  margin: 0.55rem 0 0.6rem;
+  padding-left: 0.7rem;
+  border-left: 2px solid var(--highlight);
+  font-family: var(--font-reading);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.annotate-dialog textarea {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  field-sizing: content;
+  min-height: 3.4rem;
+  max-height: 12rem;
+  resize: vertical;
+}
+.annotate-dialog textarea::placeholder { color: var(--ink-faint); }
+.annotate-dialog textarea:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* The tick-box is the whole of the paid/free decision, so it gets a row of its
+   own rather than sitting in the button strip where it would read as a third
+   button. */
+.annotate-ask {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0.15rem;
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.annotate-ask input { cursor: pointer; }
+
+.annotate-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+}
+.annotate-actions button { font-size: 0.7rem; white-space: nowrap; }
+
+.annotate-save {
+  padding: 0.32rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+.annotate-save:hover { border-color: var(--highlight); }
+.annotate-save:disabled { opacity: 0.4; cursor: default; }
+
+.annotate-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.66rem;
+  color: var(--ink-faint);
 }
 
 /* A conversation wants a steady frame; the ask box is three controls and should

@@ -627,50 +627,26 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
     await tx.delete(searchRuns).where(eq(searchRuns.articleId, articleId));
     await tx.delete(glossaryLookups).where(eq(glossaryLookups.articleId, articleId));
 
-    // Comments anchor to the identity, so any block id they name has to exist
-    // as an identity even if this revision no longer contains it. That is the
-    // whole design: the paragraph can go, the question stays.
-    if (storedComments.length) {
-      const named = [...new Set(storedComments.map((c) => c.blockId))];
-      await tx
-        .insert(blockIdentities)
-        .values(named.map((blockId) => ({ articleId, blockId })))
-        .onConflictDoNothing();
-
-      for (const comment of storedComments) {
-        await tx
-          .insert(commentsTable)
-          .values({
-            articleId,
-            id: comment.id,
-            ownerId,
-            blockId: comment.blockId,
-            quote: comment.quote,
-            start: comment.start,
-            status: comment.status,
-            answer: comment.answer ?? null,
-            citations: comment.citations ?? null,
-            searches: comment.searches ?? null,
-            model: comment.model ?? null,
-            error: comment.error ?? null,
-            createdAt: new Date(comment.createdAt),
-          })
-          .onConflictDoNothing();
-      }
-    }
-
     /* Reader state. All three hang off the ARTICLE, never off the revision:
        a re-extraction must not delete a conversation, a saved search, or a
        looked-up term, for the same reason it must not delete a comment. */
 
-    /* An anchored conversation names a block the same way a comment does, and
-       `chat_threads_anchor_identity_fk` is just as unforgiving: import an
-       archive whose anchored paragraph is no longer in this revision and the
-       insert below takes the whole transaction down with it. Minted in one
-       statement for every thread first, exactly as the comments above do, and
-       for the same reason — the paragraph can go, the conversation stays. */
+    /* **Every block either kind of mark names, minted in one statement.**
+       A comment and an anchored conversation both point at the block IDENTITY,
+       and both foreign keys are just as unforgiving: import an archive whose
+       marked paragraph is no longer in this revision and the insert takes the
+       whole transaction down with it. That is the design — the paragraph can
+       go, the mark stays — so the identity has to exist first, whether or not
+       this revision still contains the block.
+
+       One statement over the union of the two, rather than two lists
+       maintained in parallel: the comments used to mint theirs separately a few
+       lines earlier, which is the shape that lets one of them fall behind. */
     const anchoredBlocks = [
-      ...new Set(chat.flatMap((t) => (t.anchor ? [t.anchor.blockId] : []))),
+      ...new Set([
+        ...storedComments.map((c) => c.blockId),
+        ...chat.flatMap((t) => (t.anchor ? [t.anchor.blockId] : [])),
+      ]),
     ];
     if (anchoredBlocks.length) {
       await tx
@@ -734,6 +710,44 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
           })
           .onConflictDoNothing();
       }
+    }
+
+    /* **Comments last, and that is a rule rather than a tidy-up.**
+       `Comment.threadId` names a conversation, so an archive's comments can
+       only be read against threads that are already in. There is deliberately
+       no foreign key on that column (docs/plans/comments-and-bookmarks.md § no
+       foreign key), so nothing *fails* if this runs first — which is exactly
+       why the order is written down here rather than left to a constraint to
+       enforce. GPT Sol found this block sitting before the chat inserts,
+       2026-08-28.
+
+       The identities these anchor to were minted with the chat anchors' above,
+       in one statement over the union: the paragraph can go, the mark stays. */
+    for (const comment of storedComments) {
+      await tx
+        .insert(commentsTable)
+        .values({
+          articleId,
+          id: comment.id,
+          ownerId,
+          blockId: comment.blockId,
+          quote: comment.quote,
+          start: comment.start,
+          /* The reader's own three. `?? null` on each, because absent in the
+             archive and null in the column are the same fact, and leaving
+             `undefined` would let the column default decide instead. */
+          body: comment.body ?? null,
+          updatedAt: comment.updatedAt === undefined ? null : new Date(comment.updatedAt),
+          threadId: comment.threadId ?? null,
+          status: comment.status,
+          answer: comment.answer ?? null,
+          citations: comment.citations ?? null,
+          searches: comment.searches ?? null,
+          model: comment.model ?? null,
+          error: comment.error ?? null,
+          createdAt: new Date(comment.createdAt),
+        })
+        .onConflictDoNothing();
     }
 
     for (const run of runs) {

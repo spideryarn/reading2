@@ -126,30 +126,52 @@ export interface GlossaryStore {
 }
 
 /**
- * A reader's questions about one article.
+ * A reader's marks on one article — their bookmarks, their notes, and the
+ * explanations the model wrote for them before 2026-08-28.
  *
  * **Anchored to the block identity, never to the current revision's rows.** A
- * re-extraction that drops a paragraph must not destroy the question about it —
+ * re-extraction that drops a paragraph must not destroy the mark on it —
  * `src/web/comment-nav.ts` already sorts such a comment to the end rather than
- * dropping it, because "it is still the reader's question". The Postgres
- * adapter gets this for free from the `comments_identity_fk` foreign key; the
- * filesystem one gets it for free from having no referential integrity at all.
- * Both must behave the same, and there is a test for it.
+ * dropping it, because "it is still the reader's". The Postgres adapter gets
+ * this for free from the `comments_identity_fk` foreign key; the filesystem one
+ * gets it for free from having no referential integrity at all. Both must
+ * behave the same, and there is a test for it.
+ *
+ * ## Four operations, because four fields have four different lifetimes
+ *
+ * There used to be one writer for everything — `create`, which meant both "make
+ * this" and "redo this". That was safe only while making one cost a model call
+ * and the only caller was a retry. Now that a comment is free, a colliding id
+ * is an *ordinary* event rather than a retry, and one reset would silently
+ * overwrite somebody's anchor. So the allowed writes are named:
+ *
+ * | field                                | may be written by      |
+ * |--------------------------------------|------------------------|
+ * | `blockId`, `quote`, `start`, `createdAt` | `create` only       |
+ * | `body`                               | `create`, `patchBody`  |
+ * | `updatedAt`                          | `patchBody`, server-set |
+ * | `threadId`                           | `linkThread`, once, from absent |
+ * | `status`, `answer`, `citations`, `searches`, `model`, `error` | `beginAnswer` and `patch` |
+ *
+ * Every operation writes a **named allowlist**, never a spread of whatever it
+ * was handed. GPT Sol's review of docs/plans/comments-and-bookmarks.md, which
+ * found that "insert-only" was too blunt a rule to describe three of these.
  */
 export interface CommentStore {
   load(slug: string): Promise<Comment[]>;
 
   /**
-   * Store a comment as `pending`, **before** the model is called, so a crash
-   * leaves a question that never got answered rather than a selection that
-   * quietly evaporated.
+   * Store a **free** comment — the reader's mark on a passage. No model call.
    *
-   * **Idempotent on `input.id`.** The client mints the id so the dialog and
-   * `?note=` have a real one from the first frame; a retry sends the id it
-   * already has, and that must RESET the existing comment rather than append a
-   * second one. A second row would leave the failed original behind, drawing a
-   * second mark over the same words that nothing can clear — and would make a
-   * double-clicked POST a way to spend two model calls and orphan one.
+   * `status: "none"`, which is what keeps it out of `sweepOrphaned`: a bookmark
+   * is not an answer that never arrived.
+   *
+   * **Idempotent on `input.id`, and idempotent means *return the one you have*.**
+   * The client mints the id so the dialog and `?note=` have a real one from the
+   * first frame. Same id with the same anchor and the same body ⇒ the stored
+   * row comes back, which makes a double-clicked Save and a retried POST
+   * harmless. Anything else under that id ⇒ throws `CommentIdTaken`, because
+   * the alternative is overwriting a comment the reader made in another tab.
    *
    * Returns the one comment. `patch` and `remove` return the whole list. That
    * asymmetry is inherited from src/comments.ts rather than tidied: changing it
@@ -157,6 +179,53 @@ export interface CommentStore {
    * afterwards could be either.
    */
   create(slug: string, input: NewComment): Promise<Comment>;
+
+  /**
+   * Reset a legacy explanation for another attempt at the model call.
+   *
+   * **Takes an id and nothing else.** The anchor comes from the stored row
+   * rather than from the request, which closes the hole where a retry could
+   * quietly move a comment to a different passage. `body`, `updatedAt`,
+   * `threadId`, the anchor and `createdAt` all survive; only the answer fields
+   * go, because they belong to the attempt being replaced.
+   *
+   * Throws `NotAnExplanation` for an unknown id, and for a `none` comment — a
+   * bookmark was never a question, and the retired explanation path must not be
+   * reachable from one.
+   */
+  beginAnswer(slug: string, id: string): Promise<Comment>;
+
+  /**
+   * The reader edited their words. Writes `body` and `updatedAt`, nothing else.
+   *
+   * `null` clears the body, turning a comment back into a bare bookmark. `""`
+   * never reaches here: the route trims once and turns an empty string into
+   * `null`, so "wrote nothing" has one representation across both stores.
+   */
+  patchBody(slug: string, id: string, body: string | null): Promise<Comment>;
+
+  /**
+   * Point a comment at the conversation it started. Compare-and-set from absent.
+   *
+   * A second call with the same thread id is a no-op; a different one throws.
+   * The id must be the one the **server** confirmed — `useChat.send` mints an
+   * optimistic id and may be handed a different one back, and linking the guess
+   * is a link to a thread that does not exist.
+   */
+  linkThread(
+    slug: string,
+    id: string,
+    threadId: string,
+    /**
+     * The passage the conversation is about, which the comment must match.
+     *
+     * `sourceCommentId` arrives on a request, so on its own it names *any*
+     * comment this reader owns on this article. Passing the anchor makes the
+     * link a compare-and-set on the passage as well as on the thread, in one
+     * statement rather than a read-check-write with a gap in it.
+     */
+    expect: { blockId: string; quote: string; start: number },
+  ): Promise<Comment>;
 
   /**
    * Fill in the answer, or the error.
@@ -168,7 +237,7 @@ export interface CommentStore {
   patch(
     slug: string,
     id: string,
-    patch: Partial<Comment>,
+    patch: AnswerPatch,
     opts?: { quiet?: boolean },
   ): Promise<Comment[]>;
 

@@ -523,19 +523,44 @@ export function TableView({
              one click, in that order. Following the link is the one the reader
              asked for. */
           if ((e.target as Element).closest?.("a[href]")) return;
-          /* **Chat first.** One `<mark>` can carry both classes — a reader can
-             have asked about a sentence they had already had explained — and
-             only one of them can win a click. The chat is the living artefact;
-             comments have been closed to new arrivals since 2026-08-26, so the
-             overlap is always an older explanation. The comment does not become
-             unreachable: the Dock's drawer lists every one and opens it. It
-             loses a shortcut. See annotate.ts § MarkKind. */
-          const chatMark = (e.target as Element).closest?.("mark.chat");
-          const chatId = chatMark?.getAttribute("data-chat")?.split(" ")[0];
-          if (chatId) return onOpenChat(chatId);
-          const mark = (e.target as Element).closest?.("mark.cmt");
-          const first = mark?.getAttribute("data-comment")?.split(" ")[0];
-          if (first) onOpenComment(first);
+          /* **One `<mark>` can carry both classes, and which one wins a click
+             changed on 2026-08-28.**
+
+             The old rule was chat first, and it was right for the reason it
+             gave: comments had been closed to new arrivals since 2026-08-26, so
+             an overlap was always an older explanation sitting under a living
+             conversation. Both halves of that stopped being true when a comment
+             became the reader's own free mark — and worse, **every "Save & ask"
+             now creates this overlap deliberately**, so the old rule would hide
+             the reader's own note behind the chat it started, every time. GPT
+             Sol's review of docs/plans/comments-and-bookmarks.md, finding 7.
+
+             So the comment wins when it is *this* conversation's comment — the
+             two are linked, the reader made them in one gesture, and the note
+             is the thing they wrote. The chat is one button away inside the
+             dialog. An overlap with an *unrelated* chat keeps the old
+             preference, because there the conversation really is the more
+             recent thing and the note has its own mark elsewhere.
+             See annotate.ts § MarkKind. */
+          /* **Every id on the mark, not just the first of each list.** These
+             attributes are space-separated because one `<mark>` can stand for
+             several overlapping things, and reading `[0]` off each meant a
+             linked pair anywhere further along was invisible — the reader's own
+             note stayed hidden exactly when there were two marks on the words.
+             GPT Sol, reviewing the built code, 2026-08-28. */
+          const idsOn = (el: Element | null | undefined, attr: string): string[] =>
+            el?.getAttribute(attr)?.split(" ").filter(Boolean) ?? [];
+          const chatIds = idsOn((e.target as Element).closest?.("mark.chat"), "data-chat");
+          const commentIds = idsOn((e.target as Element).closest?.("mark.cmt"), "data-comment");
+
+          // The linked pair wins wherever it is in either list.
+          const linked = commentIds.find((id) => {
+            const own = comments.find((c) => c.id === id);
+            return own?.threadId !== undefined && chatIds.includes(own.threadId);
+          });
+          if (linked) return onOpenComment(linked);
+          if (chatIds[0]) return onOpenChat(chatIds[0]);
+          if (commentIds[0]) onOpenComment(commentIds[0]);
         }}
       >
         {blocks.map((block, row) => (

@@ -118,6 +118,16 @@ export interface ChatApi {
      * silently rewrite the instruction attached to a stored turn.
      */
     stance?: ReviewStance,
+    /**
+     * The comment this conversation is being started from — **only on the send
+     * that creates the thread**, and passed straight through to the server.
+     *
+     * The link is written *there*, once the real thread id exists, because the
+     * id this function returns is minted optimistically and the client only
+     * hears about an overrule when there is one. See
+     * docs/plans/comments-and-bookmarks.md § the Save & ask choreography.
+     */
+    sourceCommentId?: string,
   ): string;
   /**
    * Answer the same question again, replacing the answer in place.
@@ -259,6 +269,63 @@ export function withServerIds(
  */
 export function withoutEmpty(threads: ChatThread[], id: string): ChatThread[] {
   return threads.filter((t) => !(t.id === id && t.messages.length === 0));
+}
+
+/**
+ * The list the server has just handed us, on top of what this tab already
+ * knows — used only for the load on arrival.
+ *
+ * The arriving list used to be written straight over `threads`, on the
+ * reasoning that there is nothing on screen when a panel has only just mounted.
+ * That is true for exactly as long as the fetch takes, and no longer: on a slow
+ * connection the reader can press `+`, type a question, send it and watch the
+ * answer arrive, all before the response to a request made at mount lands.
+ * Every one of those is in the list the snapshot then replaced, and the send is
+ * the one that costs — its rows go, and each later frame of the answer patches
+ * a row that is not there, so the answer arrives nowhere and the reader is
+ * looking at a list with no sign they ever asked. Greg hit the visible half of
+ * this on a slow connection, 2026-08-27; GPT Sol found this half while
+ * reviewing the composer under the list, which made it easy to reach.
+ *
+ * So the server's list is **added to** what is on screen and never applied over
+ * it. Two rules:
+ *
+ * - **A row already on screen wins.** Not "unless the server's is newer",
+ *   because ours is newer by construction: the mount effect empties the list
+ *   before it fetches, so everything in `prev` was put there afterwards, by
+ *   this tab, from a send this tab is watching. The server's copy of the same
+ *   conversation is at best equal and at worst the half-written one it had when
+ *   it answered — the question stored, the answer still streaming — and a
+ *   response that crawls back over a slow connection can be that stale even
+ *   after the send it is behind has finished. Preferring ours needs no timing
+ *   argument at all, which is what makes it right; a narrower rule that only
+ *   protected conversations with a send **still running** left exactly that
+ *   window open.
+ * - **Deletions win**, which `put` has always said and the arriving list did
+ *   not. A conversation the reader deleted while the fetch was out is still in
+ *   the snapshot, because the send that created it told the server; putting it
+ *   back reads as the delete button not working.
+ *
+ * Both rules are the arrival load's alone. Neither is safe for `refresh(only)`,
+ * where the screen is the thing known to be wrong and a thread the server does
+ * not have is one somebody else deleted — which is why that branch takes the
+ * server's copy, and deletes on its absence.
+ *
+ * `deleted` is passed in rather than read from `gone` here, so this stays a
+ * pure function of its arguments: it runs inside a `setThreads` updater, which
+ * React invokes twice under `StrictMode`, and this file has been bitten by an
+ * impure updater before.
+ */
+export function mergedArrival(
+  prev: ChatThread[],
+  fresh: ChatThread[],
+  deleted: ReadonlySet<string>,
+): ChatThread[] {
+  const ours = new Set(prev.map((t) => t.id));
+  /* Appended rather than merged into place, because nothing downstream reads
+     this order: ThreadList sorts by `updatedAt`, and the panel finds the open
+     conversation by id. */
+  return [...prev, ...fresh.filter((t) => !ours.has(t.id) && !deleted.has(t.id))];
 }
 
 /**
@@ -553,13 +620,31 @@ export function useChat(slug: string): ChatApi {
   const running = useRef(new Map<string, number>());
 
   /**
+   * Which load on arrival is the current one.
+   *
+   * Bumped by every `refresh()` that asks for the whole list, and read again
+   * after the await: a response whose number is no longer the latest belongs to
+   * a load something has already superseded, and it may not write.
+   *
+   * `showing.current` does not cover this, and the difference is the same one
+   * `loadFailed` was bitten by — see the note in the mount effect. That ref
+   * distinguishes **articles**; this distinguishes **loads of one article**, of
+   * which `StrictMode` deliberately starts two. Merging is no defence there,
+   * because the stale snapshot has the same conversations in it, one message
+   * shorter. Found by GPT Sol reviewing the composer under the list, 2026-08-27.
+   */
+  const load = useRef(0);
+
+  /**
    * Ask the server what this article's conversations actually are.
    *
-   * Two callers, and they want different amounts of it. On arrival there is
-   * nothing on screen worth keeping, so the whole list is replaced. After a 409
-   * the screen is not merely out of date, it is *wrong* — it is showing an edit
-   * that did not happen, with the turns it would have discarded already gone —
-   * but only for **one conversation**, and that is all that gets replaced.
+   * Two callers, and they want different amounts of it. On arrival the answer
+   * is merged over what is already there rather than written across it — see
+   * `mergedArrival`, which says what the fetch's own duration lets the reader do
+   * in the meantime. After a 409 the screen is not merely out of date, it is
+   * *wrong* — it is showing an edit that did not happen, with the turns it would
+   * have discarded already gone — but only for **one conversation**, and that is
+   * all that gets replaced.
    *
    * That narrowing is not tidiness. Replacing the whole list put a snapshot
    * taken before an unrelated send over the top of that send's optimistic rows,
@@ -580,18 +665,25 @@ export function useChat(slug: string): ChatApi {
   const refresh = useCallback(
     async (only?: string): Promise<boolean> => {
       const mine = slug;
+      /* Claimed before anything is awaited, so two loads of one article are
+         ordered by when they were *asked*, not by when they answered. */
+      const generation = only === undefined ? (load.current += 1) : load.current;
       try {
         const body = await readJson<{ threads?: ChatThread[]; error?: string }>(
           await apiFetch(`/api/chat/${encodeURIComponent(mine)}`),
         );
         if (showing.current !== mine) return false;
+        if (only === undefined && generation !== load.current) return false;
         if (body.error) {
           setError(body.error);
           return false;
         }
         const fresh = body.threads ?? [];
         if (only === undefined) {
-          setThreads(fresh);
+          /* Read here, outside the updater, so what it is handed is a value
+             rather than a ref — see `mergedArrival`. */
+          const deleted = new Set(gone.current);
+          setThreads((prev) => mergedArrival(prev, fresh, deleted));
           return true;
         }
         // More than one means somebody else is still writing here — this run is
@@ -1313,6 +1405,7 @@ export function useChat(slug: string): ChatApi {
       anchor?: ChatAnchor,
       kind?: ThreadKind,
       stance?: ReviewStance,
+      sourceCommentId?: string,
     ): string => {
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -1388,6 +1481,7 @@ export function useChat(slug: string): ChatApi {
              what keeps an old tab working. */
           ...(kind === "review" ? { kind } : {}),
           ...(stance ? { stance } : {}),
+          ...(sourceCommentId ? { sourceCommentId } : {}),
         },
         pendingId,
         onThreadId,

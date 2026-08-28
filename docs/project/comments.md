@@ -1,27 +1,97 @@
-# Comments — asking the model about a passage
+# Comments — the reader's mark on a passage
 
-> **Closed to new arrivals, 2026-08-26.** Selecting a sentence no longer creates one of these. It
-> opens a **conversation** instead, anchored to the same words and floating over the article —
-> [chat-as-gateway.md](../plans/chat-as-gateway.md). Greg's call: *"I think I'm trying to turn the
-> 'Questions' interface into more of a gateway to the general 'Chat' interface."*
+Select a sentence and it is **yours**: bookmarked, with a note on it if you want one, and an
+answer from the model only if you ask for one. Saving costs nothing.
+
+> **Reopened, and turned around, 2026-08-28.** For three days this file described a feature that was
+> closed: selecting a sentence bought an explanation until 2026-08-26, then opened a chat, and there
+> was no way to make a new comment at all. Greg:
 >
-> Everything below is still true of the explanations a reader already has. They keep their mark,
-> they still open, and both ways of asking again — *Try again* for a failed model call, *Search the
-> web* for an answer judged thin — still work. What has gone is the way to make a new one, and it
-> has gone from the **server**: `POST /api/comments/:slug` refuses an id it has not already stored,
-> because deleting the client call closes the React path and nothing else. The follow-up box now
-> opens the floating chat carrying this comment's anchor, rather than switching to chat mode.
+> *"someone might want to simply add bookmarks or comments to the text, without wanting an AI
+> response … you can select some text, and that bookmarks it. You can optionally add a comment. And
+> you can request (when you do so) whether you want an AI response (in which case it kicks off a
+> Chat)."*
 >
-> Read the rest of this file in the past tense where it describes what a selection does.
+> So a comment is now the **free** thing and the model is a tick-box.
+> [comments-and-bookmarks.md](../plans/comments-and-bookmarks.md) is the plan, and its GPT Sol
+> review is beside it.
+>
+> **Read the rest of this file with that in mind.** Everything it says about *anchoring*,
+> *streaming*, *reading order*, `?note=` and the failure modes is unchanged and still true. What
+> has changed is what a selection creates, and what a comment is allowed to hold.
 
-Select a sentence in the verbatim column and the model explains it, researching the web first if it
-needs to. The answer arrives in a floating dialog, and both the mark in the prose and the answer
-survive a reload.
+## What a comment is now
 
-This is the first of the "reading assistant" features
-[vision.md § Where this goes](vision.md#where-this-goes-after-granularity-zoom) lists — **ask in
-place**: "a question about the paragraph under the cursor, answered from the surrounding context,
-cited back to block ids".
+Three independent properties, and a comment may have any combination of them:
+
+```
+   the mark      always. blockId + quote + start, onto the permanent id spine.
+   the words     optional — `body`. Nothing written is a bare bookmark.
+   the answer    only on one made before 2026-08-28, or on a chat it started.
+```
+
+`status` says **how the model call went, and nothing else**. Every comment made from 2026-08-28
+carries `none`: no call was ever attempted. That is also what keeps a bookmark invisible to
+`sweepOrphaned`, which turns an abandoned `pending` row into an error — a bookmark is not an answer
+that never arrived, and the sweep needed no change at all to leave it alone.
+
+### The four operations, and why there are four
+
+There used to be one writer, `create`, which meant both *make this* and *redo this*. That was safe
+only while making one cost a model call, so a colliding id could only ever be a retry. **Once a
+comment is free, a collision is an ordinary event** — and a reset would silently overwrite the
+anchor and blank the answer of a comment made in another tab. GPT Sol found this reviewing the
+plan; it is the reason the store contract now names who may write what.
+
+| operation | writes | refuses |
+|---|---|---|
+| `create` | the anchor, `body`, `status: "none"` | a stored id whose anchor or body differs — **409**, never an overwrite |
+| `beginAnswer` | the answer fields only | anything not `done` or `error` — a bookmark was never a question, and a `pending` row already has an answer coming |
+| `patchBody` | `body`, `updatedAt` | — |
+| `linkThread` | `threadId`, once, from absent | a second conversation, a comment that is not free, or one about a different passage |
+
+`beginAnswer` takes an id and *nothing else*: it reads the stored passage rather than accepting one,
+so a retry cannot quietly move a comment to different words. **It claims a terminal row**, and that
+is stricter than it first looks: the first version excluded only bookmarks, which meant a row
+already `pending` passed the check, so two presses of *Try again* both succeeded and bought two
+model calls. An abandoned `pending` becomes `error` through `sweepOrphaned` and can be retried then
+— which is what that sweep is for.
+
+The legacy answer patch is `AnswerPatch`, six fields wide, not `Partial<Comment>`. A generic patch
+was what let the one remaining writer reach the anchor and the reader's words.
+
+### Asking the model, and the link back
+
+Ticking **Also ask the AI about it** saves the comment *first* — free, and on disk — and then opens
+the anchored chat that [chat-as-gateway.md](../plans/chat-as-gateway.md) built, pre-filled with
+whatever was written. If the chat call fails, the reader still has their words.
+
+The link between the two is written **on the server**, from inside the chat stream, because that is
+the only place a real thread id exists: the browser mints an optimistic one and only hears about an
+overrule when there is one, so a link written in the client is a race it cannot see it has lost.
+The chat request carries `sourceCommentId`; the route calls `linkThread` once the thread is real,
+**with the passage** — because that id comes off a request and on its own names any comment this
+reader owns on this article, so a stale one from another tab would attach the conversation to an
+unrelated mark. The browser then patches its own copy locally (`noteThread`), so the mark and the
+dialog are right before the next reload rather than after it.
+
+`threadId` is **advisory and has no foreign key**, which reverses the reflex this schema follows
+everywhere else. A deleted conversation leaves a comment that is still the reader's mark, so
+whoever offers "Open the conversation this started" checks the summary list rather than trusting
+the stored id. The full reasoning — including that a constraint Postgres can keep and the
+filesystem store cannot is exactly what `tests/store-parity.test.ts` exists to catch — is in the
+plan.
+
+### A click on a doubly-marked passage opens the comment
+
+A comment made with *Save & ask* has a `cmt` mark and a `chat` mark over identical words.
+`annotateHtml` merges them into one `<mark class="cmt chat">`, and until 2026-08-28 chat won the
+click. That rule was right when comments were closed and an overlap was always an older
+explanation under a living conversation — but **every Save & ask now creates the overlap on
+purpose**, so it would hide the reader's own note behind the chat it started, every time.
+
+So the comment wins when the comment's `threadId` names that chat. An overlap with an *unrelated*
+conversation keeps the old preference. See `MarkKind` in [`annotate.ts`](../../src/web/annotate.ts).
 
 ## Intent
 
@@ -444,20 +514,36 @@ must not be able to dress itself up as the article.
 |---|---|
 | [`src/web/selection.ts`](../../src/web/selection.ts) | mouse selection → `{ blockId, quote, start }`, clamped to one block |
 | [`src/web/annotate.ts`](../../src/web/annotate.ts) | re-find a quote, and draw the `<mark>` runs over it |
-| [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / ask / retry / delete, and the client-minted id |
-| [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | the panel: quote, spinner, answer, sources |
+| [`src/web/AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) | **what a selection opens**: the quote, a box, and the tick-box |
+| [`src/web/useComments.ts`](../../src/web/useComments.ts) | fetch / create / edit / retry / delete, and the client-minted id |
+| [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | the panel: the reader's words, then the quote, spinner, answer, sources |
+| [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) | the same four operations against Postgres |
 | [`src/explain.ts`](../../src/explain.ts) | the OpenRouter call and the system prompt |
 | [`src/comments.ts`](../../src/comments.ts) | `data/<slug>/comments.json`, and the write serialisation |
 | [`src/routes.ts`](../../src/routes.ts) | the four endpoints, mounted by [`vite.config.ts`](../../vite.config.ts) |
 | [`src/env.ts`](../../src/env.ts) | `.env.local` → `process.env` |
 
 ```
-GET    /api/comments/:slug        every stored comment
-POST   /api/comments/:slug        { id?, blockId, quote, start } → the answered comment
+GET    /api/comments/:slug              every stored comment
+POST   /api/comments/:slug              { id?, blockId, quote, start, body? } → the comment
+                                        FREE. 201, ordinary JSON, no model call.
+                                        409 if that id is a different comment.
+PATCH  /api/comments/:slug/:id          { body }  — null clears it back to a bookmark
+POST   /api/comments/:slug/:id/answer   {} or { deep: true } → **a stream**
+                                        The legacy explanation path: Try again, and
+                                        Search the web properly. 409 on a bookmark.
 DELETE /api/comments/:slug/:id
 ```
 
-The POST **is** the answer — it returns the finished comment, so there is nothing to poll.
+**Two routes, because a colliding id means opposite things to them** — a retry to the answer path,
+somebody else's comment to the create path. One route could not safely be both.
+
+There is deliberately **no route for linking a comment to its conversation**: the only place that
+knows a real thread id is the chat stream, so `POST /api/chat/:slug` carries `sourceCommentId` and
+writes the link itself.
+
+The answer POST **is** the answer — it streams and then returns the finished comment, so there is
+nothing to poll.
 
 ## Four things that fail silently here
 
