@@ -174,7 +174,11 @@ better. So the control runs, the test passes, and the green is reported as evide
 It is worse than it sounds, because the line a control edits is by definition the line you have just
 been changing — the least stable text in the file, and the thing a peer may have edited under you
 minutes ago. Two defences, both cheap: **insert a fresh line at a stable anchor** rather than editing
-an existing one, and **assert the anchor occurs exactly once** before substituting. And treat an
+an existing one, and **assert the anchor occurs exactly once** before substituting — *exactly* once,
+not at least once, and pick an anchor that identifies **the line that runs**. A control that asserted
+`>= 1` on a string appearing in both a docstring and the code renamed the comment, left the code
+alone, and passed seven tests. That is the third face of one failure: a no-op passes, a partial edit
+passes, and an edit that lands in a comment passes. All three look identical from outside. And treat an
 unexpectedly green control as broken until you have seen it red once — spideryarn, 2026-08-28, where
 four controls passed at once and the tell was that four controls passing at once is not a thing that
 happens.
