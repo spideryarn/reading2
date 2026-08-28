@@ -190,7 +190,119 @@ export const articles = spideryarn.table("articles", {
    * article, because it is not this article's state to lose.
    */
   purpose: text("purpose"),
-});
+
+  /* ---- sharing: may a stranger read this? docs/plans/public-read-only-access.md --
+
+     On `articles` rather than on `article_revisions`, and that is a decision
+     rather than the nearest column: sharing is about the *document*, not about
+     one extraction of it, so a re-extraction must not silently share or
+     silently unshare anything. Same rule as the five shelf columns above.
+
+     On `articles` rather than on the shelf PATCH, too. `PATCH /api/library/:slug`
+     edits the relationship between a reader and a document; visibility is a
+     property of the work. Stage 3 of the plan splits along exactly that line,
+     so putting them together now would mean moving the API twice. */
+
+  /**
+   * `private` or `public`, and **never `published`**.
+   *
+   * `article_revisions.status` already has a value called `published` and it
+   * means *the pipeline finished*, not *anybody may read this*. Two meanings of
+   * one word, two tables apart, is how a mistake gets made at three in the
+   * morning — so this column and its values are spelled differently on purpose.
+   *
+   * `not null default 'private'` plus the CHECK below is fail-closed twice
+   * over: a `NULL` cannot be stored, and even if one somehow existed,
+   * `visibility = 'public'` would not match it. GPT Sol confirmed that shape,
+   * 2026-08-28.
+   */
+  visibility: text("visibility").notNull().default("private"),
+  /**
+   * When it was last switched on, or null while it is private.
+   *
+   * **Not an audit log**, and it cannot be made into one: cleared on unshare it
+   * loses the history, kept on unshare it no longer says whether the document
+   * is public now. `article_visibility_changes` below is the honest version,
+   * and this column is the cheap answer to "how long has this been up" that a
+   * card can print without a join.
+   */
+  publicAt: timestamp("public_at", { withTimezone: true }),
+}, (t) => [
+  /**
+   * Two spellings, and a third is a row every public read silently ignores.
+   *
+   * The predicate is `visibility = 'public'` (src/store/public-slug.ts), so a
+   * typo fails closed — which is the safe direction and also the one nobody
+   * notices. The CHECK is what makes it loud instead.
+   */
+  check("articles_visibility", sql`${t.visibility} in ('private','public')`),
+]);
+
+/**
+ * **Who shared this, when, and had they said they were entitled to.**
+ *
+ * Append-only. One row per *actual transition* — asking to publish an article
+ * that is already public writes nothing, because "Alice pressed the button
+ * again" is not a fact about the document's history.
+ *
+ * Landed with the switch itself rather than deferred, on GPT Sol's advice
+ * (2026-08-28): the migration and the transaction were being written anyway,
+ * and the alternative — `visibility_changed_at` plus `visibility_changed_by` —
+ * preserves only the latest act. That is useful operational evidence and it is
+ * not history, so it would not be an audit substitute.
+ *
+ * What it is for is in
+ * docs/plans/public-read-only-access.md § Rights and takedown: serving a third
+ * party's full text from our origin is reproduction, and if a complaint ever
+ * arrives the question is *who turned this on, when, and did they confirm they
+ * had the right*. `public_at` alone cannot answer it.
+ *
+ * **`on delete cascade`, like every other child of `articles`.** A log row
+ * naming an article nobody holds any more answers nothing anybody would ask:
+ * the takedown question is about a document we are serving. Nothing deletes an
+ * article today either — the shelf archives (see `archivedAt` above) — so this
+ * is a choice about a path that does not exist yet rather than a live loss.
+ */
+export const articleVisibilityChanges = spideryarn.table(
+  "article_visibility_changes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /**
+     * The slug as it stood at the moment of the act.
+     *
+     * A second copy of something `articles.slug` already holds, deliberately: a
+     * log line has to be readable on its own, and the URL that was shared is
+     * the thing a complaint will name. `articles.slug` is what the article is
+     * called *now*.
+     */
+    slug: text("slug").notNull(),
+    /** Who pressed it. The owner, because only the owner can — src/routes.ts. */
+    actorOwnerId: uuid("actor_owner_id").notNull(),
+    fromVisibility: text("from_visibility").notNull(),
+    toVisibility: text("to_visibility").notNull(),
+    /**
+     * Did they confirm they had the right to share it?
+     *
+     * True only on a publish that carried `rightsConfirmed: true`, which is the
+     * only kind of publish the endpoint accepts. False on every unpublish, and
+     * that is honest rather than a gap: nobody is asked to confirm anything to
+     * take something down.
+     */
+    rightsConfirmed: boolean("rights_confirmed").notNull(),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("article_visibility_changes_from", sql`${t.fromVisibility} in ('private','public')`),
+    check("article_visibility_changes_to", sql`${t.toVisibility} in ('private','public')`),
+    /** Transitions only. A row saying private → private records nothing. */
+    check("article_visibility_changes_moved", sql`${t.fromVisibility} <> ${t.toVisibility}`),
+    /** The only question anybody asks of it: this article's history, in order. */
+    index("article_visibility_changes_article_at").on(t.articleId, t.at),
+  ],
+);
 
 /**
  * One extraction of one article. **Immutable in its text** once published.

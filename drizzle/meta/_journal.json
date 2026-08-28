@@ -169,6 +169,13 @@
       "when": 1787867857886,
       "tag": "0023_ai_calls_cost_provenance",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787899438564,
+      "tag": "0024_article_visibility",
+      "breakpoints": true
     }
   ]
 }

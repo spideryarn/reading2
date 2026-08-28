@@ -191,12 +191,19 @@ describe("compareSchema", () => {
 describe("declaredTables", () => {
   it("finds every table, keyed by DATABASE name rather than TypeScript name", () => {
     const declared = declaredTables();
-    /* The exact set, not a count. A count of 16 also passes when one table is
+    /* The exact set, not a count. A count of 17 also passes when one table is
        dropped and another added in the same change, which is precisely when
-       somebody should be made to look. GPT Sol's second review, finding 4. */
+       somebody should be made to look. GPT Sol's second review, finding 4.
+
+       `article_visibility_changes` arrived 2026-08-28 with the sharing switch
+       (drizzle/0024, docs/plans/public-read-only-access.md) — and this line
+       going red is the mechanism working rather than a chore: a table added to
+       the schema and not to a migration is exactly what the drift guard exists
+       to make somebody look at. */
     expect(declared.map((d) => d.table)).toEqual([
       "ai_calls",
       "article_revisions",
+      "article_visibility_changes",
       "articles",
       "block_identities",
       "chat_messages",
@@ -290,7 +297,7 @@ when("against a real database", () => {
     await inRollback(async (c) => {
       const report = await reportFrom(c);
       expect(report.schemaUsable).toBe(true);
-      expect(report.declaredTables).toBe(16);
+      expect(report.declaredTables).toBe(17);
       expect(driftWarnings(report)).toEqual([]);
     });
   });
