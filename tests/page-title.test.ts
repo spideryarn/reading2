@@ -68,6 +68,7 @@ describe("an article", () => {
      arriving must fail this test rather than quietly get no name. */
   it("names every other mode, by the word the Dock uses", () => {
     const named: Record<string, string> = {
+      outline: "Outline",
       summary: "Summary",
       glossary: "Glossary",
       ideas: "Ideas",

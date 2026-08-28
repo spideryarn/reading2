@@ -1,6 +1,13 @@
 # Outline mode — the whole document in one list, detailed where you are
 
-**Status: planned, not built.** An eighth mode in the band between the spine and the prose
+**Status: built, reviewed, and partly wired.** `src/web/outline.ts`,
+`src/web/OutlinePanel.tsx` and their two test suites are committed; the wiring that reaches them
+(`MODES`, the Dock pill, `visitorGap`, the App band, the stylesheet) is written and green but still
+uncommitted, because peers hold several hundred uncommitted lines in each of those files. GPT Sol
+has reviewed both the plan and the built code — see [The plan-stage review](#the-plan-stage-review)
+and [The code review](#the-code-review). **Not done:** the narrow-window interaction (jump-and-close,
+44px targets), `aria-setsize`/`aria-posinset` and Left/Right tree navigation, the churn measurement,
+and the live-doc entries this mode owes. An eighth mode in the band between the spine and the prose
 ([reading-view-overview.md](../project/reading-view-overview.md)): one nested list of the entire
 document, which never scrolls, and which spends whatever vertical room it has on the part of the
 document the reader is standing in.
@@ -493,7 +500,7 @@ every row reachable.
 
 ### The iPad, where this plan was wrong
 
-**Below 856px there is no prose beside the band: the band covers the article.** Confirmed in
+**Below 844px there is no prose beside the band: the band covers the article.** Confirmed in
 [`layout.ts`](../../src/web/layout.ts) — under `MODE_MIN + PROSE_MIN` the negotiation bottoms out,
 `modeW` goes to 0, and `styles.css § a narrow window` widens the fixed band to the whole window.
 iPad portrait is 768–834px CSS pixels, so this is not an edge case on the device this app is most
@@ -577,10 +584,10 @@ and all six of the substantive ones held:
 | Finding | Checked | Outcome |
 |---|---|---|
 | `currentEntryId` / `showsChildren` cannot express selective expansion | yes | accepted — one pure `outlineProjection` instead |
-| `?at=` is section-granular, so a paragraph can never be current | yes — [`sectionDepth`](../../src/web/position.ts) is `leafDepth - 1` | accepted, **with a cheaper remedy than either it offered**: `LiveContext.focusRow` already measures the exact row |
+| `?at=` is section-granular, so a paragraph can never be current | yes — [`sectionDepth`](../../src/web/position.ts) is `leafDepth - 1` | accepted. **My proposed remedy was wrong** — I claimed `LiveContext.focusRow` was the exact row; it is `sections[…].row`, so both routes are section-granular. The review's own second option is what is built: the mark stops at the section |
 | `buildSummaryTree` walks raw children and draws blank rows | yes — and found independently, [above](#a-leaf-can-sit-at-section-level-and-it-draws-a-blank-row) | accepted |
 | character-count fitting cannot prove the list fits | yes | accepted — measure five candidates once |
-| the band covers the prose below 856px, so the iPad design is undefined | yes — `MODE_MIN + PROSE_MIN`, and iPad portrait is 768–834px | accepted; rung 5 dropped on a narrow window |
+| the band covers the prose below 856px, so the iPad design is undefined | yes — `MODE_MIN + PROSE_MIN`, and iPad portrait is 768–834px. **844px since the rail was halved on 2026-08-28**; the conclusion is unchanged because iPad portrait is still under it | accepted; rung 5 dropped on a narrow window |
 | unfocusable rows repeat a problem Diagram mode has solved | yes — [diagram.md](../project/diagram.md#interaction) | accepted — copy the tree-view pattern |
 | noema has a 26-paragraph section; the corpus is not even | yes | accepted — the rung cap, and the churn measurement |
 | the ladder spends the arc after the paragraph labels | judgment | accepted — arc moved up |
@@ -608,3 +615,42 @@ is the design to fall back to rather than tuning hysteresis.
   from 2026-08-24 this is the first real descendant of
 - [spine-rail.md](spine-rail.md) — the rail, narrowed and given richer hover cards, in parallel
 - [silent-success.md](../reusable/silent-success.md) — most of the traps named above are instances
+
+## The code review
+
+GPT Sol, gpt-5.6-sol, 2026-08-28 — `outline-mode-code-review-sol.md`, from
+`outline-mode-code-review-prompt.md`. Verdict: **revise before commit**, and it was right to. Four
+defects in code already called done, each of which would have shipped looking correct:
+
+- **The fit granted the list the panel's padding.** `clientHeight` includes padding; the list starts
+  below it. A candidate within ~12px was chosen and then clipped at the foot — the one thing this
+  mode promises never happens.
+- **The focus ring used `--accent`**, which `tokens.css` defines as a raised dark *surface*. The
+  stylesheet's own § tokens header says anything meaning the orange says `--highlight`. The native
+  outline was suppressed, so that ring was the only focus indicator there was.
+- **Rows were never clamped to one line**, which the whole fit and churn argument assumes.
+- **A focused row's id was never cleared when the row stopped being drawn**, so it silently stole
+  focus back when it reappeared.
+
+Two of the comments were also false — one claiming the `ResizeObserver` caught font swaps, when it
+watched a `height: 0` box whose border box can never change; one claiming the fit was asserted in the
+tests, contradicting that test file's own preamble.
+
+**The most useful thing the review produced was a disagreement between my fixes and my own mutation
+check.** After fixing the padding and the tie-break I mutated both back, and the tests stayed green:
+the stub counted only `<li>`s, so rungs 2-4 reported identical heights, and jsdom supplied no padding
+to ignore. Sol had called the stub "real but narrow"; the mutation run proved it. Both are covered
+now. One of the new tests was itself wrong — it expected the tie-break to report rung 4 when the
+honest answer is 3, since without `arc.json` and without paragraphs rungs 3, 4 and 5 are the same
+list. I had written the expectation the tie-break exists to prevent.
+
+### And the browser found a bug in one of the fixes
+
+The `proseBeside` finding — that `fit.modeW > 0` is exact only while the spine is on — was fixed by
+measuring the rendered band rather than copying the 843px breakpoint into a third place. The first
+version asked whether the band was as wide as the viewport. A browser measurement at the breakpoint
+(2026-08-28) says it never could be: at 843px the band's rect is **[12, 843] — width 831 in an 843px
+window**, because it starts at the rail's right edge. `831 >= 835` is false, so the check would have
+returned "beside" while the band sat squarely on the article, doing nothing, quietly, with a green
+suite. The signal is the **right edge** — 300 against 844 when beside, 843 against 843 when covering
+— and the test is now built from those two measured rects rather than from invented numbers.

@@ -204,9 +204,19 @@ export function outlineProjection({
        whose whole promise is "this is the shape of the document" is a hole
        nothing reports. */
     if (text === null) return null;
+    const supplement = supplementOf.has(entry.node.id);
     const row: OutlineRow = {
       node: entry.node,
-      number: entry.number,
+      /**
+       * **A supplement wears no number.** `buildSummaryTree` numbers every
+       * child positionally, so the apparatus would come out as "8" beside
+       * seven parts of argument — telling the reader there is an eighth thing
+       * to read when there are seven and then the endnotes. That is the same
+       * mistake `buildArcColumn` already refuses to make with its `3 / 9` step
+       * marker, and the rule is worth keeping identical: the apparatus is in
+       * the structure and outside the numbering.
+       */
+      number: supplement ? "" : entry.number,
       level,
       blockId: entry.node.range[0],
       startRow: entry.startRow,
@@ -214,7 +224,7 @@ export function outlineProjection({
       text,
       ...(extra.sentence !== undefined && { sentence: extra.sentence }),
       ...(extra.arc !== undefined && { arc: extra.arc }),
-      supplement: supplementOf.has(entry.node.id),
+      supplement,
       here: level === 3 && PARAGRAPHS_ARE_NEVER_CURRENT ? false : contains(entry, focusRow),
       now: false,
       before: entry.endRow < focusRow,

@@ -93,9 +93,10 @@ export const SEP = " · ";
  */
 export const CLAMP = 64;
 
-/** Which of an article's eight middle-band modes, by the name the Dock uses. */
+/** Which of an article's nine middle-band modes, by the name the Dock uses. */
 const MODE_LABEL: Record<Mode, string> = {
   toc: "Contents",
+  outline: "Outline",
   summary: "Summary",
   glossary: "Glossary",
   ideas: "Ideas",

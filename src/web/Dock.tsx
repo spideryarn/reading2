@@ -98,6 +98,7 @@ import {
   BookA,
   Lightbulb,
   ChevronUp,
+  Focus,
   LoaderCircle,
   Network,
   Info,
@@ -292,6 +293,18 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
     icon: ListTree,
     label: "Contents",
     blurb: "The article's own shape, one column per level of detail",
+  },
+  /* Straight after Contents, because it answers the same question — what shape
+     is this piece, and where am I in it — with one nested list instead of
+     columns you read across. Greg set this order by hand and it runs from the
+     article's own words outwards, so the two structural views belong together
+     at the near end. docs/plans/outline-mode.md. */
+  {
+    mode: "outline",
+    icon: Focus,
+    label: "Outline",
+    blurb:
+      "The whole document in one list, with more detail on the part you are reading and less on the rest",
   },
   {
     mode: "summary",

@@ -125,6 +125,14 @@ export function visitorGap(mode: Mode, available: PublicArtefacts | null): Visit
      point of the feature and cost nothing: they are drawn from the tree in the
      payload the visitor already has. */
   if (mode === "toc") return null;
+  /* Outline is the same bargain and had to be named to get it. The fall-through
+     below is deliberately fail-closed, so a mode added later is owners-only
+     until somebody says otherwise — which meant the plan's claim that this mode
+     "costs nothing, so a visitor gets it" was the *intent* and false in the
+     code. GPT Sol's review, 2026-08-28. It draws the same tree from the same
+     payload the visitor already holds, and reaches no artefact at all: without
+     arc.json it simply skips the arc rung. */
+  if (mode === "outline") return null;
 
   const costs = COSTS[mode];
   if (costs) return { kind: "owners-only", feature: costs };

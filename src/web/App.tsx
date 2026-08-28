@@ -61,6 +61,8 @@ import {
   type Found,
 } from "./search-hits.js";
 import { useChat } from "./useChat.js";
+import { OutlinePanel } from "./OutlinePanel.js";
+import { useColumnContext } from "./useColumnContext.js";
 import { Toggle } from "@/components/ui/toggle";
 import {
   buildArcColumn,
@@ -139,6 +141,17 @@ import { useRenderCount } from "./perf.js";
  * slightly different ways. visitor.ts § markedModes.
  */
 const EVERY_MODE_AVAILABLE: ReadonlyMap<Mode, string> = new Map();
+
+/**
+ * The gist-column depths the outline band asks `useColumnContext` to measure:
+ * none, because a mode has no gist columns and the band wants only `focusRow`.
+ *
+ * Module-level so its identity is stable. A fresh `[]` each render would be a
+ * new dependency each render, which restarts the hook's effect — and that
+ * effect adds a scroll listener and a `ResizeObserver`. Same reason `layoutKey`
+ * below is a string rather than the array it describes.
+ */
+const EMPTY_DEPTHS: number[] = [];
 
 
 
@@ -1099,6 +1112,22 @@ function Reader({
     () => buildArcColumn(geometry, article.arc),
     [geometry, article.arc],
   );
+  /**
+   * Outline mode's tree — the whole thing, down to the leaves.
+   *
+   * `buildSummaryTree` with `summaries: null`, because this mode reads nothing
+   * that stage 6 writes: a title, a gist and a navLabel are all on `tree.json`
+   * already, so the mode is free, instant, and works on any article that has
+   * been through the ToC stage. Full depth rather than the default 2, since the
+   * paragraph rung renders leaves' navLabels. See docs/plans/outline-mode.md.
+   */
+  const outlineRoot = useMemo(
+    () =>
+      mode === "outline"
+        ? buildSummaryTree(article.tree, article.blocks, null, geometry.leafDepth)
+        : null,
+    [mode, article.tree, article.blocks, geometry.leafDepth],
+  );
 
   // A string, not the array: a fresh array every render would restart the scroll
   // listener every render. `modeW` is in it because entering a mode moves every
@@ -1108,6 +1137,24 @@ function Reader({
   // rewraps every paragraph in the article and every row changes height.
   const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}|${fit.spine}`;
   const { at, jumpTo } = useReadingPosition(sections, layoutKey);
+
+  /**
+   * Where the reader is, for the outline band — the same sampler the gist
+   * columns' panels use, so the two can never disagree about which section is
+   * under the focus line.
+   *
+   * `depths: []` because there are no gist columns in a mode and the band wants
+   * none of the rects; `enabled` only in this mode, so nothing is measured and
+   * no scroll listener runs while every other mode is on. It is
+   * **section-granular** — `focusRow` is a section's first row, never the exact
+   * block — which is why no paragraph in the panel is ever marked current.
+   */
+  const outlineLive = useColumnContext({
+    sections,
+    depths: EMPTY_DEPTHS,
+    enabled: mode === "outline",
+    layoutKey,
+  });
 
   /**
    * Comments: selecting prose asks a question of the model, and the answer
@@ -2068,6 +2115,25 @@ function Reader({
           read={glossaryRead}
           onJump={jumpTo}
           onSelected={setTerm}
+        />
+      )}
+      {/* No `owner &&` twin, and that is the point rather than an omission: the
+          outline is drawn from the tree in the payload every reader already
+          holds, reaches no artefact, and costs nothing — so a visitor gets the
+          whole of it, exactly as they get the table of contents. `visitorGap`
+          has to be told that explicitly, because it fails closed. */}
+      {mode === "outline" && (
+        <OutlinePanel
+          root={outlineRoot}
+          supplementOf={geometry.supplementOf}
+          arcByRow={arcCells}
+          focusRow={outlineLive.focusRow}
+          /* `modeW` is 0 exactly when the band covers the prose instead of
+             sitting beside it (layout.ts), which is iPad portrait. That is the
+             condition paragraph rows are not permissible under, so it is read
+             from the layout rather than from a width guessed here. */
+          proseBeside={fit.modeW > 0}
+          onJump={jumpTo}
         />
       )}
       {owner && mode === "summary" && (

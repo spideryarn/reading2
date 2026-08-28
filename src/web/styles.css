@@ -8859,3 +8859,165 @@ table.only-prose thead { display: none; }
   from { opacity: 0; transform: scale(0.985); }
 }
 .lightbox[open] .lightbox-panel { animation: lightbox-in 120ms ease-out; }
+
+/* -------------------------------------------------------- § outline mode ----
+   The whole document as one nested list that never scrolls, in the mode band.
+   The shell is `.mode-band` far above; everything here is what goes inside it.
+
+   Read OutlinePanel.tsx and outline.ts first, and docs/plans/outline-mode.md
+   for why the list is shaped this way. Three things here are load-bearing
+   rather than decorative:
+
+   **The panel does not scroll, and that is the feature.** `overflow: hidden`,
+   never `auto`. A wheel over it moves the article, exactly as it does over the
+   gist columns' context panels — the reader's scroll is never taken off them.
+   If the list overflows, the fit chose the wrong rung and the fade at the foot
+   says so; the answer is a lower rung, never a scrollbar.
+
+   **The tiers step in SIZE, never in length.** Which rows get more words is
+   decided in outline.ts by the ladder; what varies with distance here is only
+   the type. Discrete tiers, never a gradient — the research is in
+   docs/project/column-context.md, and the short version is that a continuously
+   shrunk periphery hits a just-legible dead zone and nobody reads it.
+
+   **Opacity does not stack.** A read row and a far row must not multiply into a
+   grey smear over the half of the list the reader has been through — the
+   mistake caught in the gist columns before it reached a screen. So `.read`
+   sets colour, the tiers set size, and nothing sets a third multiplier. */
+.mode-band.outln {
+  overflow: hidden;
+  /* The browser adjusts a scroll container's position to keep visible content
+     still when content above it resizes — which is every boundary crossing
+     here, as one branch collapses and another opens. It would quietly undo the
+     layout this panel just chose. Same fix, same reason, as ContextPanel. */
+  overflow-anchor: none;
+  /* One source of truth for the insets, because the measuring copies must be
+     laid out at EXACTLY the width the real list gets. An absolutely positioned
+     child's `width: 100%` resolves against the padding box, so it would be
+     wider than the content box by these two values — wrapping less, measuring
+     shorter, and choosing a rung that then overflows a panel that cannot
+     scroll. Nothing would error; the list would just run off the bottom. */
+  --outln-pad-l: 0.75rem;
+  --outln-pad-r: 0.5rem;
+  padding: 0.75rem var(--outln-pad-r) 0 var(--outln-pad-l);
+}
+
+.outln-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--ui-font);
+}
+/* One tab stop for the whole tree, so the rows are reachable without putting
+   forty stops in front of the prose — the pattern Diagram mode already uses.
+   The ring goes on the focused ROW, not on the list, so it says which. */
+.outln-list:focus { outline: none; }
+.outln-list:focus-visible { outline: none; }
+
+.outln-row {
+  display: block;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0.12rem 0.3rem;
+  /* Rows must not reflow when only the type changes, so the line box is set
+     from the row rather than inherited per tier. */
+  line-height: 1.35;
+}
+.outln-row.lvl-1 { margin-top: 0.5rem; font-weight: 600; }
+.outln-row.lvl-1:first-child { margin-top: 0; }
+.outln-row.lvl-2 { padding-left: 1.1rem; }
+.outln-row.lvl-3 { padding-left: 2.2rem; font-weight: 400; }
+
+.outln-num {
+  display: inline-block;
+  min-width: 1.6em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.outln-row.lvl-3 .outln-num { display: none; }
+
+/* **One line per row, which the fit's arithmetic assumes and nothing enforced
+   until now.** A wrapped title or a paragraph's navLabel silently made the
+   list taller than the row count implies and the boundary churn larger than
+   the plan's argument allows. `-webkit-line-clamp` rather than
+   `text-overflow: ellipsis`: `nowrap` + ellipsis cuts at the box's right edge,
+   which is right for a single-line box, but these rows can hold a long
+   unbroken token, and line-clamp is the mechanism the gist columns already
+   use. `overflow-wrap: anywhere` stays so a URL in a navLabel breaks rather
+   than being hard-clipped with nothing to say so. */
+.outln-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* The tiers. Size and colour only — see the header. */
+.outln-row.tier-cur  { font-size: 0.95rem; }
+.outln-row.tier-near { font-size: 0.9rem; }
+.outln-row.tier-mid  { font-size: 0.85rem; }
+.outln-row.tier-far  { font-size: 0.82rem; color: var(--muted); }
+
+/* Where the reader is. `.here` is the whole ancestor chain and `.now` is the
+   one deepest drawn row — two marks because at a shallow rung the part is the
+   honest answer to "where am I", and a stripe repeated on four nested rows is
+   not a mark anyone can find. */
+.outln-row.here { color: var(--fg); }
+.outln-row.now {
+  background: var(--panel-2, rgba(127, 127, 127, 0.12));
+  font-weight: 650;
+}
+.outln-row.read .outln-text { color: var(--muted); }
+/* The apparatus: present in the structure, outside the argument. */
+.outln-row.supplement { font-style: italic; color: var(--muted); }
+/* `--highlight`, never `--accent`: tokens.css defines `--accent` as a raised
+   dark SURFACE (shadcn's meaning), so a ring drawn in it is nearly invisible
+   against the panel — and the native outline is suppressed on the list, so
+   this ring is the only focus indicator there is. The § tokens header at the
+   top of this file says exactly this: anything meaning "the orange" says
+   `--highlight`. GPT Sol caught it, 2026-08-28. */
+.outln-row.focused { box-shadow: inset 0 0 0 2px var(--highlight, currentColor); }
+
+.outln-row:hover { background: var(--panel-2, rgba(127, 127, 127, 0.08)); }
+
+/* The sentence on the current section, and the arc sentence on the current
+   part. Prose, so they take the reading face at reading size rather than the
+   list's UI font — the mistake GPT's review caught in the gist columns, where
+   an inherited UI font left a gist a step LARGER than the title above it. */
+.outln-gist,
+.outln-arc {
+  margin: 0.2rem 0 0.1rem;
+  font-family: var(--read-font, inherit);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+.outln-arc { color: var(--muted); font-style: italic; }
+
+/* The candidates being measured. Laid out for real — same width, same styles,
+   same wrapping — and simply not painted. `visibility: hidden` rather than
+   `display: none`, which would give every candidate a height of zero and make
+   the fit choose rung 5 every time, silently. */
+.outln-measure {
+  position: absolute;
+  top: 0;
+  /* Not `width: 100%` — see the note on `--outln-pad-*` above. Insets on both
+     edges with `width: auto` is what makes the measured width the content
+     width. */
+  left: var(--outln-pad-l);
+  right: var(--outln-pad-r);
+  width: auto;
+  visibility: hidden;
+  pointer-events: none;
+  height: 0;
+  overflow: hidden;
+}
+
+.outln-card { max-width: 22rem; }
+.outln-card-crumb { font-size: 0.75rem; color: var(--muted); }
+.outln-card-title { font-weight: 600; margin-bottom: 0.2rem; }
+.outln-card-gist { margin: 0; font-family: var(--read-font, inherit); }

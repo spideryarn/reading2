@@ -247,6 +247,16 @@ export const MODES = [
      this file keeps — the closest existing thing is chat's profile checkbox,
      which is component state for the same reason. */
   "review",
+  /* The eighth, 2026-08-28: the whole document as one nested list that never
+     scrolls and expands around where the reader is. It costs this list one
+     word like the six before it, and it is the first mode that is a second
+     answer to a question an existing surface already answers — the gist
+     columns' context panels — rather than a new question. That is deliberate
+     and temporary: Greg asked for it as an eighth mode "for now, so that it
+     doesn't mess with what we have, and so that I can go back and forth to
+     compare". docs/plans/outline-mode.md § Where it sits, and what happens if
+     it wins. */
+  "outline",
 ] as const;
 export type Mode = (typeof MODES)[number];
 

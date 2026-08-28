@@ -190,14 +190,18 @@ describe("what a visitor is told, mode by mode", () => {
    * marked rather than quietly live — the fail-closed direction. Written as a
    * sweep of every member rather than a list, so the list cannot go stale.
    */
-  it("answers for every mode there is, and only `toc` is free", () => {
+  it("answers for every mode there is, and `toc` and `outline` are free", () => {
     for (const mode of MODES) {
       const gap = visitorGap(mode, EVERYTHING_BUILT);
-      if (mode === "toc") expect(gap).toBeNull();
+      /* `outline` is the second free mode, added 2026-08-28: like the table of
+         contents it draws from the tree in the payload the visitor already holds
+         and reaches no artefact, so it is named here deliberately rather than
+         falling through the fail-closed default. docs/plans/outline-mode.md. */
+      if (mode === "toc" || mode === "outline") expect(gap).toBeNull();
       else expect(gap).not.toBeNull();
     }
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      MODES.filter((m: Mode) => m !== "toc")
+      MODES.filter((m: Mode) => m !== "toc" && m !== "outline")
         .slice()
         .sort(),
     );

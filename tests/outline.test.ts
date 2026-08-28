@@ -278,6 +278,97 @@ describe("the paragraph rung", () => {
   });
 });
 
+describe("the apparatus", () => {
+  /* The footnotes get one node in the structure so a reader can jump to them,
+     with an authored title and deliberately no gist. Sol's review of the built
+     code noted no Outline fixture contained one, so removing the handling
+     entirely would have left every test green. */
+  function withSupplement(focusRow = 0) {
+    const { tree, blocks } = handTree([{ title: "A real section", paras: 2 }]);
+    /* **The apparatus is given real children.** Without them "never expands it"
+       is vacuous — a node with no children cannot expand however the code
+       behaves, so the test passes on code that would happily expand it. Found
+       by mutating the guard away and watching the suite stay green. */
+    const noteIds: string[] = [];
+    for (let n = 0; n < 3; n++) {
+      const bid = `spya-b999${n}`;
+      blocks.push({
+        id: bid,
+        tag: "p",
+        kind: "text",
+        text: `note ${n}`,
+        words: 2,
+        html: `<p>note ${n}</p>`,
+        gistable: true,
+      });
+      tree.nodes[`n-note-${n}`] = {
+        id: `n-note-${n}`,
+        depth: 2,
+        parent: "n-notes",
+        children: [],
+        range: [bid, bid],
+        title: "",
+        navLabel: `note ${n}`,
+      };
+      noteIds.push(`n-note-${n}`);
+    }
+    const notesBlock = `spya-b999${noteIds.length - 1}`;
+    tree.nodes["n-notes"] = {
+      id: "n-notes",
+      depth: 1,
+      parent: "n-root",
+      children: noteIds,
+      range: [`spya-b9990`, notesBlock],
+      title: "Notes",
+      treatment: "supplement",
+    };
+    tree.nodes["n-root"]!.children = [...tree.nodes["n-root"]!.children, "n-notes"];
+    tree.nodes["n-root"]!.range = [tree.nodes["n-root"]!.range[0], notesBlock];
+    const g = buildGeometry(tree, blocks);
+    return outlineProjection({
+      root: buildSummaryTree(tree, blocks, null, g.leafDepth),
+      supplementOf: g.supplementOf,
+      arcByRow: null,
+      focusRow,
+      rung: 5,
+      allowParagraphs: true,
+    });
+  }
+
+  it("shows the apparatus as a row, so a reader can reach the notes", () => {
+    const notes = withSupplement().rows.find((r) => r.node.id === "n-notes");
+    expect(notes).toBeDefined();
+    expect(notes!.text).toBe("Notes");
+    expect(notes!.supplement).toBe(true);
+  });
+
+  it("gives it no number, so it is not read as one more part of the argument", () => {
+    /* The same rule buildArcColumn keeps with its `3 / 9` step marker: the
+       apparatus is in the structure and outside the numbering. */
+    const rows = withSupplement().rows;
+    const notes = rows.find((r) => r.node.id === "n-notes")!;
+    expect(notes.number).toBe("");
+    /* And the parts of the argument keep theirs. */
+    const part = rows.find((r) => r.level === 1 && !r.supplement)!;
+    expect(part.number).not.toBe("");
+  });
+
+  it("never expands it, even when the reader is inside the notes", () => {
+    /* **The reader has to be INSIDE it for this to test anything.** With the
+       focus anywhere else, `!isCurrent` already stops the expansion and the
+       supplement guard is dead code the test cannot see — which is exactly how
+       this assertion passed while the guard was mutated away. The article has
+       two blocks and the notes three, so row 3 is inside the notes. */
+    const inside = withSupplement(3);
+    const notes = inside.rows.find((r) => r.node.id === "n-notes")!;
+    expect(notes.here, "the fixture must put the reader inside the notes").toBe(true);
+    expect(inside.rows.some((r) => r.node.id.startsWith("n-note-"))).toBe(false);
+
+    /* And from outside it, still nothing. */
+    expect(withSupplement(0).rows.some((r) => r.node.id.startsWith("n-note-"))).toBe(false);
+  });
+});
+
 describe("monotonicity", () => {
   it("never draws fewer rows at a higher rung", () => {
     for (const focusRow of [0, 8, 20]) {

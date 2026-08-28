@@ -7,7 +7,7 @@
  *
  * docs/plans/outline-mode.md has the intent, the ladder, and the reasoning.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import {
   outlineProjection,
@@ -62,6 +62,26 @@ export function OutlinePanel({
    * Every candidate, always built. Cheap — a few hundred objects — and building
    * all five is what lets the fit be *measured* rather than estimated.
    */
+  /**
+   * Whether the band is covering the article rather than sitting beside it,
+   * **measured rather than derived from a width.**
+   *
+   * `proseBeside` comes from `fit.modeW > 0`, and GPT Sol found that it is
+   * exact only while the spine is on: the stylesheet makes every band
+   * full-screen with a literal `@media (max-width: 843px)`, while `fitMode`
+   * compares against `windowWidth - spineWidth`. With `?spine=0` those
+   * disagree from 832px to 843px, and in that window the panel would draw
+   * paragraph rows over a hidden article.
+   *
+   * Rather than copy the breakpoint into a third place — where it would go
+   * stale the next time the rail's width changes, which happened *today* —
+   * this asks the rendered band: if it spans the viewport, nothing is beside
+   * it. Immune to the constant moving, to the spine being toggled, and to the
+   * two rules disagreeing again.
+   */
+  const [covers, setCovers] = useState(false);
+  const beside = proseBeside && !covers;
+
   const candidates = useMemo(
     () =>
       RUNGS.map((r) =>
@@ -71,10 +91,10 @@ export function OutlinePanel({
           arcByRow,
           focusRow,
           rung: r,
-          allowParagraphs: proseBeside,
+          allowParagraphs: beside,
         }),
       ),
-    [root, supplementOf, arcByRow, focusRow, proseBeside],
+    [root, supplementOf, arcByRow, focusRow, beside],
   );
 
   /**
@@ -90,34 +110,85 @@ export function OutlinePanel({
    * No measure-resize-measure loop: the hidden candidates do not depend on
    * `rung`, so choosing one never changes what is being measured.
    */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads `candidates` only through the DOM it rendered, and a new set of candidates is exactly when the measured heights stop describing what is on screen. Same shape as useColumnContext's `layoutKey`.
   useLayoutEffect(() => {
     const measure = () => {
       const panel = panelRef.current;
       const box = measureRef.current;
       if (!panel || !box) return;
-      const avail = panel.clientHeight;
+      /* **`clientHeight` includes the padding, and the list cannot use it.**
+         The panel is padded at the top, so a candidate measured against the
+         raw `clientHeight` is granted room it does not have and is clipped at
+         the foot — a direct breach of the one promise this mode makes. Found
+         by GPT Sol reviewing the built code, 2026-08-28. Read from the
+         computed style rather than from the `--outln-pad-*` values, so the two
+         cannot drift. */
+      /* **The RIGHT EDGE, not the width.** The first version of this asked
+         whether the band was as wide as the viewport, and it could never have
+         been true: the band starts at the rail's right edge, so with the spine
+         on it is always narrower than the window by the rail. Measured in a
+         browser at the breakpoint, 2026-08-28 — at 843px the band's rect is
+         [12, 843], width 831 against an innerWidth of 843, so a width test
+         with any sane tolerance says "beside" while the band is sitting
+         squarely on top of the article. It would have done nothing, quietly,
+         which is the failure this check exists to prevent.
+
+         Where the band sits beside the prose its right edge is a long way from
+         the window's (at 844px: 300 against 844). Where it covers, the two
+         meet. A few pixels of tolerance for a scrollbar or a safe-area inset.
+         Set before the height work, so a change here re-runs the whole
+         measurement through `candidates`. */
+      setCovers(panel.getBoundingClientRect().right >= window.innerWidth - 8);
+
+      const pad = getComputedStyle(panel);
+      const avail =
+        panel.clientHeight -
+        (Number.parseFloat(pad.paddingTop) || 0) -
+        (Number.parseFloat(pad.paddingBottom) || 0);
       /* Nothing to measure against yet — a band with no laid-out height would
          make every candidate "not fit" and pin the rung at 1 for ever. Leave
          it alone and wait for the observer. */
       if (avail <= 0) return;
+
+      /* **Ties go to the LOWER rung**, and that is not a detail. When the
+         section is over the paragraph cap, or paragraphs are not permitted at
+         all, candidate 5 is identical to candidate 4 — so taking the highest
+         fitting number would report `data-outline-rung="5"` for a list with no
+         paragraphs in it. The attribute exists to be read in a browser as
+         evidence of what the fit chose; a diagnostic that overstates how far
+         down the ladder it got is worse than none. */
       let best: Rung = 1;
+      let bestHeight = -1;
       for (const child of Array.from(box.children)) {
-        const r = Number((child as HTMLElement).dataset.rung) as Rung;
-        if ((child as HTMLElement).scrollHeight <= avail && r > best) best = r;
+        const el = child as HTMLElement;
+        const r = Number(el.dataset.rung) as Rung;
+        const h = el.scrollHeight;
+        if (h <= avail && h > bestHeight) {
+          best = r;
+          bestHeight = h;
+        }
       }
       setRung(best);
     };
     measure();
 
     const ro = new ResizeObserver(measure);
-    /* Two observers' worth of reasons, both learned by column-context.md: the
-       panel, because the window can change height without a scroll; and the
-       measuring box, because a font swap changes every row's height with
-       nothing else on the page moving and no prop reporting it. */
+    /* The panel, because the window can change height with no scroll — the
+       reflow-with-no-scroll case column-context.md had to add two observers
+       for. */
     if (panelRef.current) ro.observe(panelRef.current);
-    if (measureRef.current) ro.observe(measureRef.current);
-    /* `fonts.ready` as well as the observer: a swap that leaves the box's total
-       height identical while redistributing it would get past the observer. */
+    /* **Each candidate list, NOT the `.outln-measure` box around them.** The
+       box is `height: 0` so that it takes no space, which means its own border
+       box never changes size however tall its contents grow: observing it
+       would report nothing, for ever, while looking like a working observer.
+       The `<ol>`s inside it do change size, so they are what is watched. Found
+       by GPT Sol, 2026-08-28 — the previous comment here claimed the box
+       caught font swaps and it could not have. */
+    for (const child of Array.from(measureRef.current?.children ?? [])) {
+      ro.observe(child);
+    }
+    /* `fonts.ready` as well, because a swap that changes each row's height
+       while leaving a list's total identical would get past even that. */
     document.fonts?.ready.then(measure).catch(() => {});
     return () => ro.disconnect();
   }, [candidates]);
@@ -125,16 +196,44 @@ export function OutlinePanel({
   const chosen = candidates[rung - 1] ?? candidates[0];
   const rows = chosen?.rows ?? [];
 
-  /* Roving focus over one tab stop — the pattern Diagram mode already uses
-     (docs/project/diagram.md § Interaction) rather than a second invention.
-     A row per tab stop would put forty stops in front of the prose; no stops
-     at all would make the whole of a mode unreachable, which is what the first
-     draft of the plan got wrong. */
-  const [focused, setFocused] = useState(0);
-  useEffect(() => {
-    const now = rows.findIndex((r) => r.now);
-    if (now >= 0) setFocused(now);
-  }, [rows]);
+  /**
+   * Roving focus over one tab stop — the pattern Diagram mode already uses
+   * (docs/project/diagram.md § Interaction) rather than a second invention. A
+   * row per tab stop would put forty stops in front of the prose; no stops at
+   * all would make the whole of a mode unreachable.
+   *
+   * **Held as a node id and the index derived, rather than an index kept in
+   * sync by an effect.** The effect version had a bug that only appears where
+   * two of this feature's decisions meet: a paragraph row is never `now`
+   * (nothing on the page knows which paragraph the reader is on), so arrowing
+   * onto a paragraph in a *different* section changed `focusRow`, re-ran the
+   * effect, and snapped focus **backwards** onto that section's own row — the
+   * reader could not arrow past a section boundary into its paragraphs. Derived
+   * state has nothing to re-run and cannot yank the focus anywhere.
+   *
+   * A focused row that stops being drawn — its branch collapsed as the reader
+   * moved on — falls back to the row they are in, which is the only sensible
+   * place left to be.
+   */
+  const [focusedId, setFocusedId] = useState<NodeId | null>(null);
+  const kept = focusedId ? rows.findIndex((r) => r.node.id === focusedId) : -1;
+  const focused = kept >= 0 ? kept : Math.max(0, rows.findIndex((r) => r.now));
+
+  /**
+   * Forget a focused row that has stopped being drawn.
+   *
+   * The fallback above already sends focus to the row the reader is in, so
+   * without this the list *looks* right — but the id is still held, and when
+   * that row comes back (the window grows, or the reader returns to the
+   * section) it silently steals the focus again from wherever the reader had
+   * moved it. GPT Sol, 2026-08-28, with the five-step sequence.
+   *
+   * It only ever clears, never assigns, so it cannot reintroduce the yank the
+   * derived state was written to remove.
+   */
+  useLayoutEffect(() => {
+    if (focusedId !== null && kept < 0) setFocusedId(null);
+  }, [focusedId, kept]);
 
   const jump = useCallback(
     (row: OutlineRow | undefined) => {
@@ -148,7 +247,7 @@ export function OutlinePanel({
     const step = (to: number) => {
       e.preventDefault();
       const i = Math.max(0, Math.min(rows.length - 1, to));
-      setFocused(i);
+      setFocusedId(rows[i]?.node.id ?? null);
       jump(rows[i]);
     };
     switch (e.key) {
@@ -175,13 +274,18 @@ export function OutlinePanel({
       aria-label="Outline"
       ref={panelRef}
       /* Evidence about the decision, never about the fit — a browser session
-         can read which rung was chosen. The fit itself is asserted on the DOM
-         in tests/outline-panel.test.tsx. */
+         can read which rung was chosen.
+         **Whether the chosen list actually fits is NOT asserted anywhere in
+         the test suite**, and this comment used to say it was, contradicting
+         that test file's own preamble. jsdom does no layout, so
+         `scrollHeight <= clientHeight` reads `0 <= 0` there and passes on any
+         code at all. It needs a browser. docs/project/browser-testing.md. */
       data-outline-rung={rung}
     >
       <TooltipGroup delay={{ open: 150, close: 90 }} timeoutMs={400}>
         <ol
           className="outln-list"
+          /* biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: `role="tree"` on a real <ol> is the W3C tree-view pattern — the list IS the widget, owning the single tab stop and the arrow keys. Swapping in a <div> to satisfy the rule would throw away the list semantics for any AT that ignores the role. */
           role="tree"
           aria-label="The article's structure"
           tabIndex={0}
@@ -256,6 +360,8 @@ function Row({
         </div>
       }
     >
+      {/* biome-ignore lint/a11y/useFocusableInteractive: a `treeitem` in the W3C pattern is deliberately NOT focusable — the tree owns one tab stop and moves a roving `aria-activedescendant` over its items, which is the whole point (forty tab stops in front of the prose is the alternative). DiagramPanel.tsx makes the same call. */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard equivalent is on the tree, not the item — Enter and Space on the <ol> activate whatever `aria-activedescendant` names, which is where the pattern puts it. */}
       <li
         id={id}
         role="treeitem"
