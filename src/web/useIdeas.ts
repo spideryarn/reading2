@@ -21,9 +21,9 @@
  *
  * See docs/plans/ideas-mode.md and src/ideas.ts.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Ideas, IdeasResponse, Job } from "../types.js";
-import { useJobs } from "./useJobs.js";
+import { useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
@@ -63,11 +63,6 @@ export interface UseIdeas {
    */
   find(useProfile?: boolean): Promise<void>;
   cancel(id: string): void;
-}
-
-/** Is this job one that would write the ideas? */
-function writesIdeas(job: Job): boolean {
-  return job.steps.some((s) => s.name === "ideas");
 }
 
 export function useIdeas(slug: string): UseIdeas {
@@ -122,44 +117,14 @@ export function useIdeas(slug: string): UseIdeas {
     void load();
   }, [load]);
 
-  /* `onFinished` rather than watching for a status change, and the cost said
-     out loud exactly as useGlossary says it: `useJobs` polls the whole job list
-     and never stops, so sitting in ideas mode is one small request every eight
-     seconds. What it buys is that a run started in another tab or from
-     `npm run ideas` shows up here as progress rather than as a button that
-     appears to do nothing. */
-  const onFinished = useCallback(
-    (job: Job) => {
-      if (job.slug === slug && writesIdeas(job)) void load();
-    },
-    [slug, load],
-  );
-  const queue = useJobs(onFinished);
-
-  const job = useMemo(
-    () =>
-      queue.jobs
-        .filter((j) => j.slug === slug && writesIdeas(j))
-        .find((j) => j.status === "queued" || j.status === "running") ?? null,
-    [queue.jobs, slug],
-  );
-
-  const [postFailed, setPostFailed] = useState(false);
-  const [startedId, setStartedId] = useState<string | null>(null);
-  const stopped = useMemo(() => {
-    const mine = startedId ? queue.jobs.find((j) => j.id === startedId) : undefined;
-    if (!mine) return null;
-    if (mine.status === "error") return mine.error ?? "The job failed.";
-    if (mine.status === "cancelled") return "Stopped.";
-    return null;
-  }, [queue.jobs, startedId]);
+  /* The job half — the poll, the running job, and what a refused or dead run
+     says to the reader — is src/web/useStepJob.ts, shared with the glossary and
+     the summaries. It carries the reasoning that used to be copied here. */
+  const queue = useStepJob(slug, "ideas", load);
 
   const find = useCallback(
     async (useProfile = true) => {
-      setStartedId(null);
-      const started = await queue.run({
-        slug,
-        steps: ["ideas"],
+      await queue.start({
         /* **Always forced**, which is the one place this differs from
            `useGlossary.find`. There the unforced call is meaningful because the
            step's own freshness check will agree when there is nothing current;
@@ -169,37 +134,15 @@ export function useIdeas(slug: string): UseIdeas {
 
            Forcing is safe in a way it is not for the glossary: this step
            replaces rather than appends, so a forced run cannot silently
-           lengthen anything. `ideas` is in FORCE_ONLY_WHEN_NAMED, so naming it
-           here forces exactly this step and nothing else. */
-        force: ["ideas" as const],
-        /* Sent only when it is `false`, so the ordinary request is the same
-           bytes it has always been and absent goes on meaning yes. */
-        ...(useProfile ? {} : { useProfile: false }),
+           lengthen anything. `ideas` is in FORCE_ONLY_WHEN_NAMED, and
+           `useStepJob` names the step it is forcing — which is what makes that
+           true rather than a hope. */
+        force: true,
+        useProfile,
       });
-      setPostFailed(started === null);
-      if (started) setStartedId(started.id);
     },
-    [queue, slug],
+    [queue],
   );
-
-  /* Two quite different silences, one sentence. `postFailed` is having no job —
-     nothing will arrive in the list to explain it. `stopped` is a job that
-     started and died, which matters because a failed job leaves the running set
-     and the button would otherwise simply reappear as though nothing had
-     happened.
-
-     **`postFailed` does not mean the request never landed.** `queue.run`
-     returns null for any throw, and `readJson` throws on a 4xx or a 5xx
-     (src/web/useJobs.ts § `act`) — so a job the server received and refused
-     was being reported as a dead network, which is false, and the server's own
-     reason was thrown away. `queue.error` is what it said.
-
-     Read here at render and not inside `find`, where it would be the value from
-     the render that created the closure — `useJobs` sets it during the same
-     `await`, so reading it there gives you the *previous* error, or null, which
-     is how a failed request ends up reported as nothing at all. Learned on the
-     thread page, met again in the glossary, and the same trap is here. */
-  const failed = postFailed ? (queue.error ?? "Couldn't start the job.") : stopped;
 
   return {
     status,
@@ -210,8 +153,8 @@ export function useIdeas(slug: string): UseIdeas {
     profileChanged,
     hasProfile,
     error,
-    job,
-    failed,
+    job: queue.job,
+    failed: queue.failed,
     find,
     cancel: queue.cancel,
   };

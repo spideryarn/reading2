@@ -160,7 +160,18 @@ let onFinished: ((job: { slug: string; status: string; steps: { name: string }[]
 vi.mock("../src/web/useJobs.js", () => ({
   useJobs: (cb?: (job: never) => void) => {
     onFinished = (cb ?? null) as typeof onFinished;
-    return { jobs: [], loaded: true, error: null, run: async () => null, cancel: async () => {} };
+    return {
+      jobs: [],
+      loaded: true,
+      error: null,
+      /* `lastFailure` is the durable half of `error` — see src/web/useJobs.ts.
+         Nothing here presses a button that can fail, but a whole-module mock
+         that omits a field leaves `undefined` at the moment it is called, and
+         this file's note above says why that is a landmine rather than a gap. */
+      lastFailure: () => null,
+      run: async () => null,
+      cancel: async () => {},
+    };
   },
 }));
 

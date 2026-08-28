@@ -205,7 +205,38 @@ export interface UseJobs {
   jobs: Job[];
   /** False until the first poll lands, so the UI can tell "none" from "don't know yet". */
   loaded: boolean;
+  /**
+   * The most recent thing that went wrong — an action or a poll — or null.
+   *
+   * **Shared, and not durable.** The poll owns this as much as the actions do,
+   * and a successful poll clears it, so it answers *"is anything wrong right
+   * now"* and not *"why did that fail"*. See `lastFailure` below for the second
+   * question, which is the one a button asks.
+   */
   error: string | null;
+  /**
+   * Why the **most recent action** failed, or null if it worked. Read it
+   * straight after awaiting the action.
+   *
+   * A function rather than a field because the value it reads is a ref, and a
+   * field would be a snapshot taken at render — which is the wrong instant by
+   * exactly the amount that matters. The caller's `await queue.run(...)` has
+   * just returned; no render has happened yet, and the message is needed *now*
+   * so it can be kept.
+   *
+   * **This exists because `error` is not durable and three surfaces were
+   * reading it as though it were.** A refused POST puts the server's sentence
+   * in `error`, and then `act`'s own `finally` pokes the poller — so the very
+   * next successful poll, milliseconds later, wipes it. A button rendering
+   * `error` shows the reader the truth for one frame and a generic fallback
+   * afterwards, and a test with a posed queue cannot see the difference because
+   * a posed queue does not poll. `tests/refused-job-reason-survives.test.tsx`
+   * is the measure of it taken from outside.
+   *
+   * Cleared by the next action that succeeds, and by nothing else — in
+   * particular not by a poll, which is the whole point.
+   */
+  lastFailure(): string | null;
   /**
    * Queue a fresh add, and hand back the job so the caller can watch that one.
    *
@@ -418,13 +449,22 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
    * `run` below wants the job it just created, and a second POST helper beside
    * this one would be a second place that knows how a failed action is
    * reported.
+   *
+   * **Two records of the same failure, on purpose.** `error` is state and is
+   * shared with the poll, which clears it on its next success — including the
+   * poll this function's own `finally` starts, one line later. `lastFailure` is
+   * a ref only the actions touch, so it survives that. See `lastFailure` on the
+   * interface for what was going wrong before it existed.
    */
+  const lastFailure = useRef<string | null>(null);
   const act = useCallback(async <T,>(fn: () => Promise<T>): Promise<T | null> => {
     try {
       const value = await fn();
+      lastFailure.current = null;
       setError(null);
       return value;
     } catch (err) {
+      lastFailure.current = (err as Error).message;
       setError((err as Error).message);
       return null;
     } finally {
@@ -443,6 +483,7 @@ export function useJobs(onFinished?: (job: Job) => void): UseJobs {
     jobs,
     loaded,
     error,
+    lastFailure: () => lastFailure.current,
     add: (url) => act(() => post({ url })),
     addUpload: (uploadId) => act(() => post({ uploadId })),
     run: (request) => act(() => post(request)),

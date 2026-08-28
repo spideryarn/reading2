@@ -24,9 +24,9 @@
  *
  * See docs/project/summaries.md.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Job, Summaries, SummariesResponse } from "../types.js";
-import { useJobs } from "./useJobs.js";
+import { useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
@@ -71,11 +71,6 @@ export interface UseSummaries {
    */
   write(force?: boolean, guidance?: string, useProfile?: boolean): Promise<void>;
   cancel(id: string): void;
-}
-
-/** Is this job one that would write summaries? */
-function writesSummaries(job: Job): boolean {
-  return job.steps.some((s) => s.name === "summary");
 }
 
 export function useSummaries(slug: string): UseSummaries {
@@ -129,90 +124,18 @@ export function useSummaries(slug: string): UseSummaries {
     void load();
   }, [load]);
 
-  /**
-   * `onFinished` rather than watching for a status change: `useJobs` already
-   * knows which jobs it has announced and which were merely on the shelf when
-   * the mode was opened, so entering summary mode does not refetch once per
-   * historical job.
-   *
-   * **The cost, said out loud**, exactly as `useGlossary` says it: `useJobs`
-   * polls the whole job list and never stops, so sitting in this mode is one
-   * small request every eight seconds. What it buys is that a run started in
-   * another tab or from `npm run summarise` shows up here as progress rather
-   * than as a button that appears to do nothing.
-   */
-  const onFinished = useCallback(
-    (job: Job) => {
-      if (job.slug === slug && writesSummaries(job)) void load();
-    },
-    [slug, load],
-  );
-  const queue = useJobs(onFinished);
-
-  /**
-   * The job writing this article's summaries, if one is.
-   *
-   * Found in the polled list rather than remembered from the click, which is
-   * what makes a run started somewhere else show up here as progress.
-   * `enqueue` hands back the job already in flight for an identical request, so
-   * pressing the button twice cannot start a second one.
-   */
-  const job = useMemo(
-    () =>
-      queue.jobs
-        .filter((j) => j.slug === slug && writesSummaries(j))
-        .find((j) => j.status === "queued" || j.status === "running") ?? null,
-    [queue.jobs, slug],
-  );
-
-  /**
-   * What went wrong, in the two quite different ways it can.
-   *
-   * `postFailed` is the request never landing: no job exists, so nothing will
-   * arrive in the list to explain the silence. `startedId` is the other one,
-   * and it is why this is not a boolean — a job that fails leaves the running
-   * set, so without it the button would simply reappear as though nothing had
-   * happened. Scoped to the job **this session started**, so an old failure
-   * from another day is not dug up and presented as news.
-   */
-  const [postFailed, setPostFailed] = useState(false);
-  const [startedId, setStartedId] = useState<string | null>(null);
-  const stopped = useMemo(() => {
-    const mine = startedId ? queue.jobs.find((j) => j.id === startedId) : undefined;
-    if (!mine) return null;
-    if (mine.status === "error") return mine.error ?? "The job failed.";
-    if (mine.status === "cancelled") return "Stopped.";
-    return null;
-  }, [queue.jobs, startedId]);
+  /* The job half — the poll, the running job, and what a refused or dead run
+     says to the reader — is src/web/useStepJob.ts, shared with the glossary and
+     the ideas. It carries the reasoning that used to be copied here, including
+     why `guidance` is trimmed before it is sent. */
+  const queue = useStepJob(slug, "summary", load);
 
   const write = useCallback(
     async (force = false, guidance?: string, useProfile = true) => {
-      setStartedId(null);
-      const steer = guidance?.trim();
-      const started = await queue.run({
-        slug,
-        steps: ["summary"],
-        ...(force ? { force: ["summary" as const] } : {}),
-        // Trimmed to nothing is not sent at all, so a box the reader typed in
-        // and then cleared does not become an empty instruction in the prompt.
-        ...(steer ? { guidance: steer } : {}),
-        // Only when it is false, so the ordinary request is unchanged and
-        // absent goes on meaning yes — src/routes.ts § parseJobRequest.
-        ...(useProfile ? {} : { useProfile: false }),
-      });
-      setPostFailed(started === null);
-      if (started) setStartedId(started.id);
+      await queue.start({ force, guidance, useProfile });
     },
-    [queue, slug],
+    [queue],
   );
-
-  /* `queue.error` is read here at render and not inside `write`, where it would
-     be the value from the render that created the closure — the hook sets it
-     during the same `await`, so reading it there gives you the *previous*
-     error, or null, which is how a failed request ends up reported as nothing
-     at all. Learned on the thread page, met again in the glossary, and the same
-     trap is here. */
-  const failed = postFailed ? (queue.error ?? "Couldn't start the job.") : stopped;
 
   return {
     status,
@@ -222,9 +145,9 @@ export function useSummaries(slug: string): UseSummaries {
     profileChanged,
     hasProfile,
     error,
-    job,
-    failed,
+    job: queue.job,
+    failed: queue.failed,
     write,
-    cancel: (id) => void queue.cancel(id),
+    cancel: queue.cancel,
   };
 }

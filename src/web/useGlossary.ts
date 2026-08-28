@@ -22,9 +22,9 @@
  *
  * See docs/project/glossary.md.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Glossary, GlossaryEntry, GlossaryLookup, GlossaryResponse, Job } from "../types.js";
-import { useJobs } from "./useJobs.js";
+import { useStepJob } from "./useStepJob.js";
 import { apiFetch, fetchOk, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
@@ -419,11 +419,6 @@ export interface UseGlossary {
   lookFailed: string | null;
 }
 
-/** Is this job one that would write a glossary? */
-function writesGlossary(job: Job): boolean {
-  return job.steps.some((s) => s.name === "glossary");
-}
-
 /**
  * The band: the jobs and the verbs, over a read somebody else owns.
  *
@@ -455,85 +450,23 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     void reload();
   }, [reload]);
 
-  /**
-   * `onFinished` rather than watching for a status change: `useJobs` already
-   * knows which jobs it has announced and which were merely on the shelf when
-   * the mode was opened, so entering the glossary does not refetch once per
-   * historical job.
-   *
-   * **The cost, said out loud**, exactly as the thread page says it: `useJobs`
-   * polls the whole job list and never stops, so sitting in glossary mode is
-   * one small request every eight seconds. What it buys is that a run started
-   * in another tab or from `npm run glossary` shows up here as progress rather
-   * than as a button that appears to do nothing. If it ever matters, the fix is
-   * an idle switch in `useJobs`, not a private poller here.
-   */
-  const onFinished = useCallback(
-    (job: Job) => {
-      /* `refresh`, not `reload`: the job has just written a new list, and a
-         request already in flight read the old one. See `refresh` on
-         `GlossaryRead` for the sequence this gets wrong the other way. */
-      if (job.slug === slug && writesGlossary(job)) void refresh();
-    },
-    [slug, refresh],
-  );
-  const queue = useJobs(onFinished);
-
-  /**
-   * The job writing this article's glossary, if one is.
-   *
-   * Found in the polled list rather than remembered from the click, which is
-   * what makes a run started somewhere else show up here as progress.
-   * `enqueue` hands back the job already in flight for an identical request, so
-   * pressing the button twice cannot start a second one.
-   */
-  const job = useMemo(
-    () =>
-      queue.jobs
-        .filter((j) => j.slug === slug && writesGlossary(j))
-        .find((j) => j.status === "queued" || j.status === "running") ?? null,
-    [queue.jobs, slug],
-  );
-
-  /**
-   * What went wrong, in the two quite different ways it can.
-   *
-   * `postFailed` is the request never landing: no job exists, so nothing will
-   * arrive in the list to explain the silence. `startedId` is the other one,
-   * and it is why this is not a boolean — a job that fails leaves the running
-   * set, so without it the button would simply reappear as though nothing had
-   * happened. Scoped to the job **this session started**, so an old failure
-   * from another day is not dug up and presented as news.
-   */
   /* A failed DELETE is the band's own error, not the read's — `read.error` is
      about the GET and would be overwritten by the next reload. */
   const [resetFailed, setResetFailed] = useState<string | null>(null);
-  const [postFailed, setPostFailed] = useState(false);
-  const [startedId, setStartedId] = useState<string | null>(null);
-  const stopped = useMemo(() => {
-    const mine = startedId ? queue.jobs.find((j) => j.id === startedId) : undefined;
-    if (!mine) return null;
-    if (mine.status === "error") return mine.error ?? "The job failed.";
-    if (mine.status === "cancelled") return "Stopped.";
-    return null;
-  }, [queue.jobs, startedId]);
+
+  /* The job half — the poll, the running job, and what a refused or dead run
+     says to the reader — is src/web/useStepJob.ts, shared with the ideas and
+     the summaries. It carries the reasoning that used to be copied here.
+     `refresh`, not `reload`: a finished job has just written a new list, and a
+     request already in flight read the old one. See `refresh` on
+     `GlossaryRead` for the sequence this gets wrong the other way, and note
+     that this is the one thing the four copies did *not* agree about — the
+     other three have no trailing fetch to reach for. */
+  const queue = useStepJob(slug, "glossary", refresh);
 
   const run = useCallback(
-    async (force: boolean, useProfile = true) => {
-      setStartedId(null);
-      const started = await queue.run({
-        slug,
-        steps: ["glossary"],
-        ...(force ? { force: ["glossary" as const] } : {}),
-        /* Sent only when it is `false`, so the ordinary request is the same
-           bytes it has always been and absent goes on meaning yes. The server
-           reads it the same way — src/routes.ts § parseJobRequest. */
-        ...(useProfile ? {} : { useProfile: false }),
-      });
-      setPostFailed(started === null);
-      if (started) setStartedId(started.id);
-    },
-    [queue, slug],
+    (force: boolean, useProfile = true) => queue.start({ force, useProfile }),
+    [queue],
   );
 
   const find = useCallback((useProfile = true) => run(false, useProfile), [run]);
@@ -611,13 +544,6 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     [slug, looking, patchEntry],
   );
 
-  /* `queue.error` is read here at render and not inside `run`, where it would
-     be the value from the render that created the closure — the hook sets it
-     during the same `await`, so reading it there gives you the *previous*
-     error, or null, which is how a failed request ends up reported as nothing
-     at all. Learned on the thread page; the same trap is here. */
-  const failed = postFailed ? (queue.error ?? "Couldn't start the job.") : stopped;
-
   return {
     status,
     glossary,
@@ -627,12 +553,12 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     profileChanged,
     hasProfile,
     error: resetFailed ?? error,
-    job,
-    failed,
+    job: queue.job,
+    failed: queue.failed,
     find,
     more,
     reset,
-    cancel: (id) => void queue.cancel(id),
+    cancel: queue.cancel,
     look,
     looking,
     lookFailed,
