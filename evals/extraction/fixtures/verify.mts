@@ -23,10 +23,35 @@
  * code the fixtures exist to test.
  */
 import { createHash } from "node:crypto";
-import { readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { CORPUS } from "../corpus.mjs";
+
+/**
+ * Fixtures that are committed and hashed here but are **not** part of the
+ * extraction corpus — captured for some other investigation, and deliberately
+ * not in `corpus.mts` because they would change that eval's denominator.
+ *
+ * This list exists because of a real gap rather than for tidiness. This script
+ * used to walk `CORPUS` alone, so a fixture with a `hashes.json` entry and no
+ * `CORPUS` entry was **skipped in silence** while the last line still read
+ * "15 fixtures, all matching" — the check reporting success over a file it had
+ * never opened. Worse, `--write-hashes` rebuilds the manifest from what it
+ * walked, so it would have quietly deleted that fixture's committed hash.
+ * Found 2026-08-28, when the footnote investigation added the first one.
+ *
+ * The sweep below is the part that makes this durable: any `.html` here covered
+ * by neither list is a failure, so the next person to add a fixture cannot
+ * repeat it by forgetting.
+ */
+const EXTRA: { name: string; file: string; url: string }[] = [
+  {
+    name: "acx-footnotes",
+    file: "acx_footnotes.html",
+    url: "https://www.astralcodexten.com/p/your-book-review-the-pale-king",
+  },
+];
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const MANIFEST = path.join(HERE, "hashes.json");
@@ -47,7 +72,9 @@ async function main(): Promise<void> {
   let bad = 0;
   let drifted = 0;
 
-  for (const c of CORPUS) {
+  const checking = [...CORPUS, ...EXTRA];
+
+  for (const c of checking) {
     const file = path.join(HERE, c.file);
     if (!existsSync(file)) {
       console.log(`${c.name.padEnd(24)} MISSING — ${c.file} is not here`);
@@ -91,16 +118,27 @@ async function main(): Promise<void> {
     console.log(line);
   }
 
+  /* Every `.html` in this directory must be accounted for by one of the two
+     lists. A fixture nobody hashes is a fixture whose bytes can drift without
+     anything saying so — and it looks exactly like a fixture that was checked
+     and matched. See EXTRA above for the day that happened. */
+  const covered = new Set(checking.map((c) => c.file));
+  const orphans = (await readdir(HERE)).filter((f) => f.endsWith(".html") && !covered.has(f));
+  for (const f of orphans) {
+    console.log(`${f.padEnd(24)} UNCHECKED — not in CORPUS or EXTRA, so its hash is not verified`);
+    bad++;
+  }
+
   if (write) {
     await writeFile(MANIFEST, `${JSON.stringify(next, null, 2)}\n`, "utf-8");
     console.log(`\nWrote ${MANIFEST}`);
   }
-  if (refetch) console.log(`\n${drifted}/${CORPUS.length} pages have changed since capture.`);
+  if (refetch) console.log(`\n${drifted}/${checking.length} pages have changed since capture.`);
   if (bad) {
-    console.error(`\n${bad} fixture(s) are missing or do not match. See the header before "fixing" a hash.`);
+    console.error(`\n${bad} fixture(s) are missing, unchecked, or do not match. See the header before "fixing" a hash.`);
     process.exit(1);
   }
-  console.log(`\n${CORPUS.length} fixtures, all matching.`);
+  console.log(`\n${checking.length} fixtures, all matching.`);
 }
 
 void main();
