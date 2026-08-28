@@ -1219,7 +1219,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          `withEdit` are pure, so they can be run against a snapshot and thrown
          away. Whatever they would refuse, they refuse here, for free, before
          the destructive part. The authoritative run is still the one inside
-         `retryTurn` / `editTurn` — this is a gate, not a substitute. */
+         `chatStore.retry` / `chatStore.edit` below, which re-reads under the
+         store's own lock — this is a gate, not a substitute. */
       const snapshot = await chatStore.load(slug);
       if (wantsRetry) withRetry(snapshot, threadId, retry as string, "");
       else withEdit(snapshot, threadId, edit as string, (question as string).trim(), "");

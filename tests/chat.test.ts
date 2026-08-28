@@ -589,8 +589,10 @@ describe("the chat suggestions", () => {
    appends, and an append cannot lose anything.
 
    `withRetry` and `withEdit` are the whole decision, extracted from the async
-   `retryTurn`/`editTurn` around them so that the rules can be checked without a
-   `data/` directory to write into. That extraction is not only for testing —
+   `retryTurn` and `fsChatStore.edit` around them so that the rules can be
+   checked without a `data/` directory to write into. (`editTurn` was the third
+   name here until 2026-08-28, when it turned out to have no callers and to be
+   the version *missing* the `expectedTailId` tail check — src/store/fs.ts:245.) That extraction is not only for testing —
    two tests in this repo that both wrote to `data/` passed alone and failed
    together, because vitest runs files in parallel. */
 

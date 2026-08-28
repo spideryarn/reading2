@@ -3,7 +3,7 @@
  * **Two things rename a conversation, and the last one to happen must win.**
  *
  * The reader can rename from the list, and they can rename by rewriting the
- * conversation's *first question* — `editTurn` on the server applies the same
+ * conversation's *first question* — `withEdit` on the server applies the same
  * rule, and `edit` in useChat.ts mirrors it: `title: index === 0 ? …`. So an
  * edit is a title write that is not a rename operation, and there is no reason
  * a reader cannot do one and then the other.
@@ -176,7 +176,7 @@ describe("a rename and an edit of the first question", () => {
     });
     await settle();
     /* The reader rewrote the first question, which renames the conversation —
-       the same rule `editTurn` applies on the server. */
+       the same rule `withEdit` applies on the server. */
     expect(title(), "the edit's title did not reach the screen").toBe(REWRITTEN);
 
     patch.resolve(json({ ok: true }));

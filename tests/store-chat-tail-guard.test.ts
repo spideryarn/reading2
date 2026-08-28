@@ -7,8 +7,8 @@
  * edits Q1, both vanish, and A's reader saw a perfectly successful answer.
  *
  * **Putting the check one layer too high puts the bug back.** Load the threads,
- * check the tail, then call `editTurn` — which enters the mutex and re-reads —
- * and there are two reads with a gap between them. A `begin` can land, or
+ * check the tail, then call the store's `edit` — which enters the mutex and
+ * re-reads — and there are two reads with a gap between them. A `begin` can land, or
  * already be queued, in that gap: the check passes against Q1/A1, `begin`
  * writes Q2/A2, and the edit runs behind it and deletes both. GPT Sol found
  * that in the filesystem adapter on 2026-08-26, after the Postgres one had the

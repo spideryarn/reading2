@@ -38,7 +38,6 @@ import {
   type UploadStore,
   grantIsOver,
 } from "./store/uploads.js";
-import { MAX_UPLOAD_BYTES } from "./uploads.js";
 
 export type { ClaimFailure, UploadRecord } from "./store/uploads.js";
 export { isUploadId } from "./store/uploads.js";
@@ -116,8 +115,6 @@ export function asOf(record: UploadRecord, now: Date = new Date()): UploadRecord
     : record;
 }
 
-export { grantIsOver };
-
 /** Take exclusive ownership of an upload, or say who got there first. */
 export function claimUpload(
   id: string,
@@ -177,6 +174,3 @@ export function forgetUpload(id: string): Promise<void> {
 export function recordsSurviveTheRequest(): boolean {
   return STORE === "postgres" || !process.env.VERCEL;
 }
-
-/** Re-exported so a caller checking a claimed size does not import two modules to do it. */
-export { MAX_UPLOAD_BYTES };

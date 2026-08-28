@@ -244,8 +244,8 @@ export const fsChatStore: ChatStore = {
   async edit(slug, threadId, messageId, question, opts = {}) {
     /* **The tail check runs inside the mutex, with the edit.**
 
-       Checking it out here — load, check, then call `editTurn`, which enters
-       the mutex and re-reads — is checking a copy. A `begin` can land, or
+       Checking it in the route — load, check, then call this method, which
+       enters the mutex and re-reads — is checking a copy. A `begin` can land, or
        already be queued, between the two reads: the check passes against
        Q1/A1, `begin` writes Q2/A2, and the edit then runs behind it and
        deletes both. That is precisely the loss `expectedTailId` exists to

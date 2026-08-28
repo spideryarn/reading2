@@ -550,7 +550,7 @@ export function withRetry(
     messages: [...existing.messages.slice(0, -1), reply],
   };
   /* The whole message rather than its text, so that all three of `beginTurn`,
-     `retryTurn` and `editTurn` hand back the same pair — the question and the
+     `retryTurn` and `withEdit` hand back the same pair — the question and the
      answer beneath it — and the route can name both in its first frame without
      asking which kind of turn this was. The client needs the question's id to
      edit it later; see `withServerIds` in src/web/useChat.ts. */
@@ -693,32 +693,4 @@ export function withEdit(
     reply,
     discarded: existing.messages.length - index - 1,
   };
-}
-
-export async function editTurn(
-  slug: string,
-  threadId: string,
-  messageId: string,
-  question: string,
-  now: () => string = () => new Date().toISOString(),
-): Promise<{ thread: ChatThread; user: ChatMessage; reply: ChatMessage; discarded: number }> {
-  let out!: { thread: ChatThread; user: ChatMessage; reply: ChatMessage; discarded: number };
-  await update(slug, (threads) => {
-    const next = withEdit(threads, threadId, messageId, question, now());
-    out = { thread: next.thread, user: next.user, reply: next.reply, discarded: next.discarded };
-    return next.threads;
-  });
-  log("store").info(
-    {
-      slug,
-      threadId: out.thread.id,
-      messageId: out.reply.id,
-      // The number is the point of the line: an edit is the only thing in this
-      // file that destroys stored turns, and this is how many it took.
-      discarded: out.discarded,
-      turns: out.thread.messages.length,
-    },
-    "chat question edited",
-  );
-  return out;
 }

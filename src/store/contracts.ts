@@ -21,8 +21,12 @@
  * 2. `ArtifactWriter` — what the pipeline stages write. Today that is
  *    `PipelineStep.outputs(ctx): string[]`, an interface that returns **file
  *    paths**, implemented across eight stage modules. There is no single file.
- * 3. `CommentStore` and `JobStore` — reader and queue state, each with its own
- *    module and its own in-memory assumptions. Chat and searches belong to this
+ * 3. `CommentStore` and the queue's `JobStore` — reader and queue state, each
+ *    with its own module and its own in-memory assumptions. The queue's half
+ *    has since landed, and its contract lives in [jobs.ts](jobs.ts), not here:
+ *    a second `JobStore` was declared in this file and never implemented, so it
+ *    drifted into declaring a different `claim`, `get` and expiry sweep from the
+ *    real one, and it has been deleted. Chat and searches belong to this
  *    group and have **no interface here yet**: they still write straight to the
  *    filesystem, which is why `postgres` mode currently serves them from files.
  *    That is item 10 of docs/plans/postgres-storage-implementation.md, not an
@@ -52,7 +56,6 @@ import type {
   GlossaryEntry,
   GlossaryLookup,
   GlossaryFound,
-  Job,
   LibraryEntry,
   LibraryHit,
   ListOptions,
@@ -245,39 +248,6 @@ export interface CommentStore {
 
   /** For the library card and the metadata page: a count, never the comments. */
   count(slug: string): Promise<number>;
-}
-
-/**
- * The ingest queue's records.
- *
- * The interface a Postgres implementation has to satisfy is wider than the
- * filesystem one's, and the difference is the whole point: `claim` exists
- * because more than one server process can run. Today's queue is a p-queue and
- * an in-memory Map, which cannot survive a second instance — see
- * docs/project/ingest-queue.md.
- */
-export interface JobStore {
-  list(): Promise<Job[]>;
-  get(id: string): Promise<Job | undefined>;
-  create(job: Job): Promise<Job>;
-  /** Patch a job. Fenced by `attemptId` so a stale worker cannot overwrite a newer state. */
-  update(id: string, patch: Partial<Job>, attemptId?: string): Promise<Job>;
-
-  /**
-   * Take the next queued job, if this process may run one.
-   *
-   * **Concurrency 1 globally**, which `SELECT … FOR UPDATE SKIP LOCKED LIMIT 1`
-   * does NOT give you — that lets two workers claim two *different* queued
-   * jobs. The singleton `queue_state` row, locked `FOR UPDATE`, is the
-   * guarantee. Returns `undefined` when another worker holds the queue.
-   */
-  claim(attemptId: string, leaseMs: number): Promise<Job | undefined>;
-
-  /** Extend the lease of a job this process is running. */
-  heartbeat(id: string, attemptId: string, leaseMs: number): Promise<boolean>;
-
-  /** Return jobs whose lease expired mid-run to the queue, or fail them. */
-  rescueExpired(): Promise<number>;
 }
 
 /**
