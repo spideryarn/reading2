@@ -47,6 +47,7 @@ import { readHref } from "./router.js";
 import { AccountSection } from "./AccountSection.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useProfile } from "./useProfile.js";
+import { useSlow } from "./useSlow.js";
 
 const CARD = "tw:rounded-lg tw:border tw:border-border tw:bg-card";
 
@@ -125,15 +126,27 @@ export function ProfilePage() {
   useDocumentTitle(pageTitle({ kind: "profile" }));
 
   const profile = useProfile();
-  const [shelf, setShelf] = useState<LibraryEntry[] | null>(null);
+  const [shelf, setShelf] = useState<LibraryEntry[] | "error" | null>(null);
   const [models, setModels] = useState<ModelRow[] | "error" | null>(null);
+  /* The card below stands in place of the list, so it follows the same rule the
+     panels do: nothing for the first 600ms, because a line that appears and
+     vanishes reads as breakage. useSlow.ts. */
+  const slowShelf = useSlow(shelf === null);
 
   useEffect(() => {
     let live = true;
     apiFetch("/api/library")
       .then((r) => readJson<{ articles: LibraryEntry[] }>(r))
       .then((body) => live && setShelf(body.articles))
-      .catch(() => live && setShelf([]));
+      /* `[]` here said "Nothing on the shelf yet." to a reader whose shelf is
+         full and whose request simply failed — the same wrong-and-worrying
+         claim as the empty chat list, and the third state below already had the
+         fix written out beside it. What the message must not do is guess *why*:
+         this catches anything `readJson` throws, including a 500 and a
+         non-JSON 200, so it says we could not load it rather than that the
+         network was down. docs/project/web-client.md § Empty is not the same as
+         not asked yet. */
+      .catch(() => live && setShelf("error"));
     apiFetch("/api/models")
       .then((r) => readJson<{ tasks: ModelRow[] }>(r))
       .then((body) => live && setModels(body.tasks))
@@ -148,13 +161,17 @@ export function ProfilePage() {
 
   /* Most recently opened first, falling back to when it was added — a shelf
      where nothing has been opened yet must not come back empty-looking. */
-  const recent = (shelf ?? [])
+  /* The rows, once there are rows. `null` is "not asked yet" and `"error"` is
+     "asked and it failed", and neither is a shelf — so nothing below may count
+     them as one. See the fetch above. */
+  const entries = Array.isArray(shelf) ? shelf : [];
+  const recent = entries
     .filter((a) => !a.archivedAt)
     .slice()
     .sort((a, b) => (b.lastOpenedAt ?? b.addedAt ?? "").localeCompare(a.lastOpenedAt ?? a.addedAt ?? ""))
     .slice(0, RECENT);
 
-  const onShelf = (shelf ?? []).filter((a) => !a.archivedAt);
+  const onShelf = entries.filter((a) => !a.archivedAt);
   const words = onShelf.reduce((n, a) => n + (a.words ?? 0), 0);
 
   return (
@@ -222,7 +239,19 @@ export function ProfilePage() {
       <Section icon={BookOpen} label="Recently read">
         <div className={`${CARD} tw:divide-y tw:divide-border tw:overflow-hidden`}>
           {shelf === null ? (
-            <p className="tw:m-0 tw:px-4 tw:py-3 tw:text-sm tw:text-muted-foreground">Loading…</p>
+            /* `role="status"` because the sentence arrives 600ms after the
+               card does; the non-breaking space holds the line's height until
+               it does, so the card does not grow underneath the reader. */
+            <p
+              className="tw:m-0 tw:px-4 tw:py-3 tw:text-sm tw:text-muted-foreground"
+              role="status"
+            >
+              {slowShelf ? "Fetching your shelf…" : "\u00a0"}
+            </p>
+          ) : shelf === "error" ? (
+            <p className="tw:m-0 tw:px-4 tw:py-3 tw:text-sm tw:text-muted-foreground">
+              Couldn't load your shelf. Reload to try again.
+            </p>
           ) : recent.length === 0 ? (
             <p className="tw:m-0 tw:px-4 tw:py-3 tw:text-sm tw:text-muted-foreground">
               Nothing on the shelf yet.
@@ -242,7 +271,9 @@ export function ProfilePage() {
             ))
           )}
         </div>
-        {shelf !== null && (
+        {/* `Array.isArray`, not `!== null`: a failed fetch would otherwise put
+            "0 on the shelf" under the sentence saying we could not reach it. */}
+        {Array.isArray(shelf) && (
           <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-ink-faint">
             {/* The cap, said. Not "showing 8" — showing 8 *of* how many, so the
                 number you are not seeing is visible too. */}

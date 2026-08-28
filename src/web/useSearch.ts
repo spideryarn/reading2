@@ -73,6 +73,20 @@ export interface SearchApi {
    * GPT Sol review, 2026-08-26.
    */
   loaded: boolean;
+  /**
+   * Did that first fetch fail?
+   *
+   * The half `loaded` cannot carry. It is true either way on purpose — see
+   * above — so the panel dropped out of the spinner into "Nothing searched for
+   * yet" the moment a failing request gave up, which is the same claim about
+   * the article that the spinner was added to stop. Found by GPT Sol reviewing
+   * the equivalent fix in chat, 2026-08-27.
+   *
+   * Not `error !== null`: `error` also carries a failed retry or delete, long
+   * after the list arrived, and is cleared when one succeeds. Only the effect
+   * below ever sets this.
+   */
+  loadFailed: boolean;
   /** Run a new meaning-search. Returns the id it minted, so `?runs=` can name it. */
   ask(criterion: string): string;
   /** The same criterion again — for a run whose model call failed. */
@@ -100,6 +114,7 @@ function withChoice(run: SearchRun, colour: number | null | undefined): SearchRu
 export function useSearch(slug: string): SearchApi {
   const [runs, setRuns] = useState<SearchRun[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   /**
@@ -179,6 +194,7 @@ export function useSearch(slug: string): SearchApi {
        back to not-knowing, and leaving this true would show the *previous*
        article's emptiness as though it were this one's. */
     setLoaded(false);
+    setLoadFailed(false);
     setFingerprint(null);
     apiFetch(`/api/search/${encodeURIComponent(slug)}`)
       .then((r) =>
@@ -186,8 +202,13 @@ export function useSearch(slug: string): SearchApi {
       )
       .then((body) => {
         if (!live) return;
-        if (body.error) setError(body.error);
-        else {
+        /* A body with an `error` in it is a failed load as much as a thrown one
+           is — there are no runs in it, and "nothing searched for yet" read off
+           it is the same false claim. */
+        if (body.error) {
+          setError(body.error);
+          setLoadFailed(true);
+        } else {
           setRuns(body.runs ?? []);
           /* `in`, not truthiness. The server sends `sourceHash: undefined` —
              which JSON drops — for an article whose blocks it could not read,
@@ -205,6 +226,7 @@ export function useSearch(slug: string): SearchApi {
       .catch((e: Error) => {
         if (!live) return;
         setError(describeFetchFailure(e));
+        setLoadFailed(true);
         setLoaded(true);
       });
     return () => {
@@ -471,5 +493,5 @@ export function useSearch(slug: string): SearchApi {
     [runs, fingerprint],
   );
 
-  return { runs: decided, loaded, ask, retry, remove, recolour, error };
+  return { runs: decided, loaded, loadFailed, ask, retry, remove, recolour, error };
 }
