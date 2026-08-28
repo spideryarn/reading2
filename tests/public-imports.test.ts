@@ -194,3 +194,225 @@ describe("the public API's import graph", () => {
     }
   });
 });
+
+/**
+ * **Which of the seventeen tables the public surface may touch.**
+ *
+ * The block above asks which *modules* a public request can reach. This asks
+ * which *tables*, and it exists because the answer to the first question does
+ * not imply the second: `src/db/schema.ts` is legitimately in the public graph —
+ * the public reader has to name `articles` somehow — and it exports every table
+ * in the database, including `comments`, `chat_messages`, `search_runs` and
+ * `glossary_lookups`.
+ *
+ * ## The hole this closes, demonstrated before it was written
+ *
+ * Six lines added to `src/store/public-reader.ts`, 2026-08-28:
+ *
+ * ```ts
+ * export function leakLookups(db, articleId: string) {
+ *   return db.select().from(glossaryLookups).where(eq(glossaryLookups.articleId, articleId));
+ * }
+ * ```
+ *
+ * That is the owner's private glossary lookups — their requested answer, its
+ * citations, its search count, its model and its exact time — on the public
+ * reader, reachable with no owner. **Typecheck clean, and all five existing
+ * guards green: 83 tests passing.** GPT Sol pointed at the shape of it; the
+ * exhibit is what made it a fact rather than an argument.
+ *
+ * ## Why every other defence misses it, one by one
+ *
+ * This paragraph is the reason this guard exists, and it is here so that
+ * whoever finds it in six months does not delete it as redundant with the five
+ * things it looks redundant with.
+ *
+ * - **`tests/owner-isolation.test.ts`** greps for `eq(articles.slug, …)`. That
+ *   query never mentions `articles` at all — a child table is keyed by
+ *   `article_id`, and the id is one the public read already legitimately holds.
+ * - **The module graph above** forbids `api.ts`, `store/index.ts`, `pg.ts`,
+ *   `owner.ts`, the writers and the gateway. `db/schema.ts` is on none of those
+ *   lists and must not be: it is how any query names a table.
+ * - **`tests/public-dto.test.ts`** asserts the keys of what a projection
+ *   returns. It never sees a query nobody wired into a DTO.
+ * - **The zero-spend sweep** is about money. Reading a table costs nothing.
+ * - **`currentOwnerId()`**, the runtime tripwire, never runs — which is exactly
+ *   GPT Sol's closing point: the tripwire would not stop a call that reads a
+ *   child table by `article_id`, or one that spends money, because neither needs
+ *   an owner. The real defences are the closed import graph, the predicate-less
+ *   reader, and now this.
+ *
+ * The hardwired reader is the defence that *should* have covered it and cannot:
+ * its whole strength is that it accepts no predicate, and a child table needs no
+ * predicate.
+ *
+ * ## An allowlist, for the third time in this feature
+ *
+ * `PUBLIC_ROUTES` enumerates the routes; the DTOs enumerate the keys; this
+ * enumerates the tables. A denylist of reader-owned tables would have to be
+ * updated by whoever adds the eighteenth, and they will be thinking about their
+ * own feature rather than about this. Widening the four below has to be done on
+ * purpose, by somebody who then has to write down why.
+ */
+describe("the public API's tables", () => {
+  const SCHEMA = "src/db/schema.ts";
+  const CLIENT = "src/db/client.ts";
+
+  /** Every table the schema exports, read from the schema rather than listed. */
+  function everyTable(): string[] {
+    const text = readFileSync(path.join(ROOT, SCHEMA), "utf8");
+    return [...text.matchAll(/^export const (\w+) = spideryarn\.table/gm)].map((m) => m[1] ?? "");
+  }
+
+  /**
+   * The four the public surface may name.
+   *
+   * `articles` and `article_revisions` are the work itself; `revision_blocks` is
+   * its prose; `block_identities` is the spine those ids hang on. Everything a
+   * *reader* does — comments, chats, searches, lookups, profiles, uploads, jobs
+   * — is a different table by design, and docs/plans/public-read-only-access.md
+   * has the diagram: the line Greg drew between what a stranger sees and what
+   * they do not is a line the schema already draws.
+   *
+   * `article_visibility_changes` is deliberately **not** here. It is written by
+   * the owner's switch and read by nobody yet, and when something does read it
+   * that will be an owner-facing page, not this one.
+   */
+  const ALLOWED = ["articles", "articleRevisions", "revisionBlocks", "blockIdentities"];
+
+  /**
+   * **Detected through the import, not by grepping for the word.**
+   *
+   * The first version matched the identifier anywhere in the stripped source and
+   * produced four false positives immediately — `src/log.ts` names
+   * `src/comments.ts` in a trailing `//` comment that a line-leading stripper
+   * misses, and `src/messages.ts` imports `"./uploads.js"`, a *module* that
+   * shares a name with a table. Loosening the stripper would have been the wrong
+   * repair: a guard with known false positives is one people learn to wave
+   * through, and it is a short walk from there to waving through a true one.
+   *
+   * So it asks the precise question instead: **what does this file import from
+   * `db/schema.ts`?** In TypeScript a table cannot be used without being bound,
+   * so the import *is* the use, and checking the binding is strictly stronger
+   * than searching for the word — it has no false positives at all, and it
+   * catches an import that is not used yet, which is the case that matters,
+   * because an unused import today is a used one next month.
+   *
+   * A re-export cannot get round it: any module handing a table on would have to
+   * import it first, and every module in the public graph is checked here.
+   *
+   * **The known limit, said out loud rather than implied:** a table named only
+   * inside a raw `sql` template — `sql\`select … from spideryarn.glossary_lookups\``
+   * — binds no identifier and would not be caught by the import arm. So there is
+   * a second arm below for the snake_case names, which is where raw SQL would
+   * spell them.
+   */
+  it("imports only the four tables the article itself lives in", () => {
+    const tables = everyTable();
+    /* The schema really does export the dangerous ones, so this is not passing
+       for want of anything to find. */
+    expect(tables).toEqual(expect.arrayContaining(["glossaryLookups", "comments", "chatMessages"]));
+    const forbidden = tables.filter((t) => !ALLOWED.includes(t));
+
+    const offenders: string[] = [];
+    for (const file of graphFrom("src/public/routes.ts")) {
+      if (file === SCHEMA) continue;
+      const source = readFileSync(path.join(ROOT, file), "utf8");
+      const full = path.join(ROOT, file);
+
+      for (const m of source.matchAll(
+        /(?:^|\n)\s*import\s+([^;'"]*?)from\s*["']([^"']+)["']/g,
+      )) {
+        const spec = m[2] ?? "";
+        if (!spec.startsWith(".")) continue;
+        const resolved = path.relative(
+          ROOT,
+          path.resolve(path.dirname(full), spec).replace(/\.js$/, ".ts"),
+        );
+        if (resolved !== SCHEMA) continue;
+
+        const clause = (m[1] ?? "").trim();
+        /* `import * as schema` would hand this module every table at once, and
+           no allowlist over bindings could see which it then used.
+
+           **`src/db/client.ts` is the one exemption**, and it earns it: it does
+           `drizzle(pool, { schema })`, which is how every query in the repo gets
+           its column types. It runs no query of its own. The exemption is
+           narrow, and the arm below is what covers what it opens — see there. */
+        if (clause.includes("*")) {
+          if (file !== CLIENT) offenders.push(`${file} → import * from the schema`);
+          continue;
+        }
+        const braces = /\{([\s\S]*)\}/.exec(clause);
+        for (const raw of (braces?.[1] ?? "").split(",")) {
+          const name = raw.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]?.trim() ?? "";
+          if (name && forbidden.includes(name)) offenders.push(`${file} → ${name}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * **And the two routes to a table that bind no identifier at all.**
+   *
+   * The import arm above is precise but not complete, and both gaps are real
+   * rather than theoretical:
+   *
+   * - **Raw SQL.** `sql\`select … from spideryarn.glossary_lookups\`` names a
+   *   table in a template string and imports nothing.
+   * - **Drizzle's relational query API.** `getDb().query.glossaryLookups.findMany()`
+   *   needs no import either, because `src/db/client.ts` hands the *whole*
+   *   schema to `drizzle(pool, { schema })` to type it — which is exactly the
+   *   namespace import exempted above. Finding that exemption is what turned
+   *   this arm from tidiness into the half that covers the other half.
+   *
+   * **Matched by their qualified spellings**, which is what makes this precise
+   * where matching the bare name was not. The first version looked for the
+   * snake_case name anywhere and flagged `jobs`, `comments` and `uploads` in
+   * `src/log.ts` and `src/messages.ts` — because those are ordinary English
+   * words, and the reasoning that multi-word table names do not appear in prose
+   * simply does not hold for single-word ones. `spideryarn.comments` and
+   * `.query.comments` are not English.
+   */
+  it("and reaches no forbidden table through raw SQL or the relational API", () => {
+    const snake = (name: string) => name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+    const forbidden = everyTable().filter((t) => !ALLOWED.includes(t));
+    expect(forbidden).toContain("glossaryLookups");
+
+    const offenders: string[] = [];
+    for (const file of graphFrom("src/public/routes.ts")) {
+      if (file === SCHEMA) continue;
+      /* Comments stripped — this file and the public reader both discuss these
+         tables by name while explaining the rule, and a guard that fires on its
+         own documentation teaches people to delete the documentation. */
+      const code = readFileSync(path.join(ROOT, file), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/\/\/.*$/gm, "");
+      for (const table of forbidden) {
+        if (code.includes(`spideryarn.${snake(table)}`)) {
+          offenders.push(`${file} → raw sql on ${snake(table)}`);
+        }
+        if (new RegExp(`\\.query\\s*\\.\\s*${table}\\b`).test(code)) {
+          offenders.push(`${file} → db.query.${table}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * **And the four it is allowed are really being used**, which is the control.
+   *
+   * A guard that fires on everything is as useless as one that fires on nothing.
+   * If the public reader stopped naming `articleRevisions` the case above would
+   * still pass, and it would be passing over a public surface that had stopped
+   * reading anything.
+   */
+  it("and does name the four it is allowed, so the rule is not vacuous", () => {
+    const reader = readFileSync(path.join(ROOT, "src/store/public-reader.ts"), "utf8");
+    for (const table of ["articles", "articleRevisions", "revisionBlocks"]) {
+      expect(reader, table).toMatch(new RegExp(`\\b${table}\\b`));
+    }
+  });
+});
