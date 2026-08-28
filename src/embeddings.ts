@@ -40,6 +40,7 @@
  * feature happens to want a cache first. Callers that want one keep it
  * themselves — src/similar.ts is the current example, and says so.
  */
+import type { EmbeddingReason } from "./types.js";
 import { loadEnvLocal } from "./env.js";
 import { type JsonCall, ProviderRefused, openRouterJson } from "./ai-call.js";
 
@@ -126,6 +127,91 @@ export interface EmbedResult {
 export type InputType = "query" | "document" | null;
 
 /**
+ * **Whose fault an embedding failure is**, as a value rather than as a sentence.
+ *
+ * Three, because three different people have to do three different things:
+ *
+ * - `config` — **this app's account may not use this model, or has no key.**
+ *   Permanent until somebody changes a setting. Retrying cannot help, ever.
+ * - `provider` — the upstream refused, went quiet, or answered with something
+ *   that is not vectors. Another go may well work.
+ * - `busy` — *ours*, and not the provider's at all: `MAX_INFLIGHT` in
+ *   [article-vectors.ts](article-vectors.ts) refused to start a fifth article.
+ *   Another go in a moment will work.
+ *
+ * ## Why this is a type and not a prefix on a message
+ *
+ * It was a prefix. `isProviderFailure` in `article-vectors.ts` decided whether
+ * a failure was the provider's by testing whether its message began with
+ * `"embeddings "` — which meant the classification could only ever be as good
+ * as the wording, and it was not: a `fetch` that never connected threw a bare
+ * `TypeError` from here, matched nothing, and reached the route's catch-all as
+ * an unexplained 500. **The one failure the string could not describe is the
+ * ordinary one.** ⟨Sol⟩, 2026-08-28.
+ *
+ * The `message` is for whoever runs the server and goes in the log. It is never
+ * what the reader is shown: the route picks that from `src/messages.ts` by
+ * `reason`, so the two can be written for their own audiences.
+ *
+ * ## `provider` is not the same as "try again", and `status` is why
+ *
+ * The first version of this had three reasons and stopped there, and Sol caught
+ * it repeating the very mistake it was written to fix: **every refusal except
+ * the guardrail 404 came out as `provider`**, which the route reported as a
+ * transient outage. An invalid key, exhausted credit, a 403 and a payload too
+ * big are all permanent, and all four were being answered with *"waiting a few
+ * seconds and trying again usually works"*.
+ *
+ * So a refusal carries the provider's `status`, and the route hands it to
+ * `providerHttpFailure` — the function that has mapped a status to the right
+ * kind and the right sentence since before any of this existed. That is
+ * deliberately **not** a fourth reason: a reason answers "which part of this
+ * app failed", and the six-way split between busy, no-credit, bad-key,
+ * too-big, refused and blip is a question somebody already answered once.
+ *
+ * `status` is `null` when nothing answered at all — a socket that never opened,
+ * a deadline, or a 200 carrying something that is not vectors.
+ *
+ * **The union itself lives in [types.ts](types.ts)**, and not for tidiness:
+ * `messages.ts` keeps a total map of one sentence per reason, and it is one of
+ * the handful of modules the client shares — which may import only each other,
+ * `import type` included, because a shared module reaching in here would drag
+ * `node:fs` into the browser bundle and no grep can tell which imports erase.
+ * Re-exported so this file stays the one you read about embedding failures.
+ */
+export type { EmbeddingReason } from "./types.js";
+
+export class EmbeddingFailure extends Error {
+  readonly reason: EmbeddingReason;
+  /** The provider's HTTP status, or `null` when nothing answered. See above. */
+  readonly status: number | null;
+  constructor(
+    reason: EmbeddingReason,
+    message: string,
+    options?: { cause?: unknown; status?: number | null },
+  ) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
+    this.name = "EmbeddingFailure";
+    this.reason = reason;
+    this.status = options?.status ?? null;
+  }
+}
+
+/**
+ * The common case, short enough to write at a throw site.
+ *
+ * A `status` only when the provider actually answered with one — a permuted
+ * response, a short vector and a connection that never opened have no status,
+ * and inventing one would be worse than the `null` that says so.
+ */
+function providerFailed(
+  message: string,
+  extra?: { cause?: unknown; status?: number | null },
+): EmbeddingFailure {
+  return new EmbeddingFailure("provider", message, extra);
+}
+
+/**
  * One embeddings request.
  *
  * **The response is re-sorted by `index` rather than trusted in order.**
@@ -139,15 +225,25 @@ export async function embedBatch(
   input: string[],
   apiKey: string,
   inputType: InputType,
-  signal?: AbortSignal,
+  deadline?: AbortSignal,
   attempt = 1,
 ): Promise<EmbedResult> {
   /* **A deadline of our own, not just the caller's.** `fetch` has no timeout:
      a provider that accepts the connection and then says nothing holds this
      request — and, on a server, a socket and a Node handle — until something
-     else gives up. `AbortSignal.any` keeps the caller's own signal working
-     beside it, so navigating away still cancels. */
-  const deadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+     else gives up.
+
+     **`deadline` is ours, never a caller's**, and the rename on 2026-08-28 is
+     the fix rather than a tidy-up. It used to be `signal`, taken from whoever
+     called `embedAll` — which made every abort ambiguous: a reader navigating
+     away and a provider we gave up on arrived here identically, and the second
+     is a provider failure while the first is not a failure at all. Sol found
+     the misclassification; what made it safe to simply *delete* the contract is
+     that nothing has ever passed one. `article-vectors.ts` says at length why
+     it deliberately does not, `similar.ts` does not, and neither does the eval.
+     A contract nobody uses that makes every abort a lie is worth less than no
+     contract. */
+  const ownDeadline = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   /* **The request, the status check and the spend record are one operation now**
      — src/ai-call.ts. This was the last call in the app making its own `fetch`,
      and the only one whose *input is article prose*, which is why the failure
@@ -157,10 +253,22 @@ export async function embedBatch(
     call = await openRouterJson(
       "embeddings",
       inputType ? { model, input, input_type: inputType } : { model, input },
-      { signal: signal ? AbortSignal.any([signal, deadline]) : deadline, apiKey },
+      { signal: deadline ? AbortSignal.any([deadline, ownDeadline]) : ownDeadline, apiKey },
     );
   } catch (err) {
-    if (!(err instanceof ProviderRefused)) throw err;
+    /* **A connection that never opened is a provider failure too**, and until
+       2026-08-28 it was the one kind that escaped untyped — `fetch` rejects
+       with a bare `TypeError`, which matched no prefix, so a DNS failure or a
+       dropped socket reached the route as an unexplained 500 while a 502 from
+       the same provider was reported properly. An abort is included: the only
+       signals reaching here are our own deadlines (`REQUEST_TIMEOUT_MS`,
+       `TOTAL_TIMEOUT_MS`), and giving up on a slow provider is a provider
+       failure by any honest reading. ⟨Sol⟩ */
+    if (!(err instanceof ProviderRefused)) {
+      throw providerFailed(`embeddings ${model}: ${(err as Error).name ?? "the call failed"}`, {
+        cause: err,
+      });
+    }
     /**
      * "No endpoints available matching your guardrail restrictions and data
      * policy" is a 404 and reads like a bad model id. It is neither: it is
@@ -171,6 +279,14 @@ export async function embedBatch(
      * 404 on the key exported in Greg's shell and answer 200 on the key in
      * `.env.local` — two different accounts, one of which has not opted in to
      * whatever Voyage's endpoints require. See src/env.ts for which key wins.
+     *
+     * **Then the losing key was the one that got deployed**, and Drift, Trail
+     * and Force were dead in production from the day they shipped until
+     * 2026-08-28 — every request 404ing here in under a second, reported to the
+     * reader as a model that "could not be reached". Nothing in the deploy
+     * pipeline ever asks the production key to make a call, so nothing noticed.
+     * docs/plans/embedding-endpoints-refused.md, and it is the reason this
+     * failure now has a `reason` a route can act on rather than a sentence.
      *
      * Retrying cannot help — it is a setting, not a queue — so this fails fast
      * with instructions rather than backing off five times first.
@@ -184,7 +300,8 @@ export async function embedBatch(
      * See `ProviderRefused.kind`.
      */
     if (err.kind === "no-endpoints") {
-      throw new Error(
+      throw new EmbeddingFailure(
+        "config",
         `embeddings ${model}: OpenRouter has no endpoint this account may use.\n` +
           `This is an account setting, not a transient failure and not a bad model id.\n` +
           `  key in use: ${apiKey.slice(0, 12)}…\n` +
@@ -200,12 +317,16 @@ export async function embedBatch(
       /* **The sleep is abortable.** A deadline that only gets looked at between
          requests is not a deadline when the wait between them can be thirty
          seconds — the whole point is to stop *before* the platform does. */
-      await sleep(wait, signal);
-      if (signal?.aborted) throw new Error(`embeddings ${model}: gave up waiting`);
-      return embedBatch(model, input, apiKey, inputType, signal, attempt + 1);
+      await sleep(wait, deadline);
+      if (deadline?.aborted) throw providerFailed(`embeddings ${model}: gave up waiting`);
+      return embedBatch(model, input, apiKey, inputType, deadline, attempt + 1);
     }
-    /* The status, not the body — same rule, same reason as the branch above. */
-    throw new Error(`embeddings ${model}: ${err.status}`);
+    /* The status, not the body — same rule, same reason as the branch above.
+       Carried on the failure as well as written into the message, because the
+       route has to *act* on it: 401, 402, 403 and 413 are permanent and 429 and
+       5xx are not, and telling a reader to try again past a bad key is the
+       mistake this whole change exists to stop. ⟨Sol⟩ */
+    throw providerFailed(`embeddings ${model}: ${err.status}`, { status: err.status });
   }
 
   /* **Validated, not asserted.** `openRouterJson` returns `unknown` — a
@@ -214,27 +335,28 @@ export async function embedBatch(
      answers 200 with an error envelope, or with something that is not JSON at
      all, reaches `body.data.length` and throws a raw `TypeError` naming a
      property, which tells whoever reads the pipeline failure nothing about what
-     happened. Raised by a GPT Sol review. */
-  /* **Validated, not asserted.** `openRouterJson` returns `unknown` — a
-     deliberate refusal to hand back a lie in a type's clothing — and the cast
-     below is only safe because of this check. Without it a provider that
-     answers 200 with an error envelope, or with something that is not JSON at
-     all, reaches `body.data.length` and throws a raw `TypeError` naming a
-     property, which tells whoever reads the pipeline failure nothing about what
-     happened. Raised by a GPT Sol review. */
+     happened. Raised by a GPT Sol review.
+
+     **The array's *members* are `unknown` too**, and until 2026-08-28 they were
+     not: `data` being an array was checked, and then every element was asserted
+     to be `{ index, embedding }`. `{"data":[null]}` therefore reached
+     `d.index` and threw `Cannot read properties of null` — an untyped
+     `TypeError` escaping the very boundary this file had just claimed was
+     wholly typed. Found by GPT Sol reviewing that claim, which is the useful
+     kind of review. */
   if (
     call.json === null ||
     typeof call.json !== "object" ||
     !Array.isArray((call.json as { data?: unknown }).data)
   ) {
-    throw new Error(`embeddings ${model}: the response carried no vectors`);
+    throw providerFailed(`embeddings ${model}: the response carried no vectors`);
   }
   const body = call.json as {
-    data: { index: number; embedding: number[] }[];
+    data: unknown[];
     usage?: { prompt_tokens?: number; cost_details?: { upstream_inference_cost?: number } };
   };
   if (body.data.length !== input.length) {
-    throw new Error(`embeddings ${model}: asked for ${input.length}, got ${body.data.length}`);
+    throw providerFailed(`embeddings ${model}: asked for ${input.length}, got ${body.data.length}`);
   }
   const vectors = readVectors(model, body.data, input.length);
   return {
@@ -257,11 +379,7 @@ export async function embedBatch(
  * failures, read the answer" rather than as one long block with a validation
  * suite in the middle of it.
  */
-function readVectors(
-  model: string,
-  data: { index: number; embedding: number[] }[],
-  count: number,
-): number[][] {
+function readVectors(model: string, data: readonly unknown[], count: number): number[][] {
   /* **Every one of these checks guards a failure that produces a real number.**
      That is the whole reason they are here rather than in a comment saying the
      provider is well-behaved: a duplicated `index`, an out-of-range one, a
@@ -271,29 +389,40 @@ function readVectors(
      docs/reusable/silent-success.md. GPT Sol's finding, 2026-08-27. */
   const vectors: number[][] = new Array<number[]>(count);
   let dims = 0;
-  for (const d of data) {
-    if (!Number.isInteger(d.index) || d.index < 0 || d.index >= count) {
-      throw new Error(`embeddings ${model}: index ${d.index} is outside 0..${count - 1}`);
+  for (const [slot, raw] of data.entries()) {
+    /* **The member itself, before any property of it.** `data` being an array
+       says nothing about what is in it, and `{"data":[null]}` is a real thing a
+       200 can carry. Reading `.index` off it throws a `TypeError` that names a
+       property and explains nothing — and, worse, escapes this module untyped,
+       so the route reports an unexplained 500 rather than a provider that
+       answered with nonsense. The slot is named rather than the index, because
+       the index is exactly the thing we have not been able to read. ⟨Sol⟩ */
+    if (raw === null || typeof raw !== "object") {
+      throw providerFailed(`embeddings ${model}: entry ${slot} of the response is not an object`);
     }
-    if (vectors[d.index]) throw new Error(`embeddings ${model}: index ${d.index} came back twice`);
+    const d = raw as { index: number; embedding: number[] };
+    if (!Number.isInteger(d.index) || d.index < 0 || d.index >= count) {
+      throw providerFailed(`embeddings ${model}: index ${d.index} is outside 0..${count - 1}`);
+    }
+    if (vectors[d.index]) throw providerFailed(`embeddings ${model}: index ${d.index} came back twice`);
     if (!Array.isArray(d.embedding) || d.embedding.length === 0) {
-      throw new Error(`embeddings ${model}: no vector at index ${d.index}`);
+      throw providerFailed(`embeddings ${model}: no vector at index ${d.index}`);
     }
     // One dimensionality for the whole response. Mixed lengths would make
     // `cosine` compare a vector against the first N components of another.
     if (dims === 0) dims = d.embedding.length;
     else if (d.embedding.length !== dims) {
-      throw new Error(
+      throw providerFailed(
         `embeddings ${model}: index ${d.index} has ${d.embedding.length} dimensions, not ${dims}`,
       );
     }
     if (!d.embedding.every((x) => Number.isFinite(x))) {
-      throw new Error(`embeddings ${model}: index ${d.index} contains a non-finite value`);
+      throw providerFailed(`embeddings ${model}: index ${d.index} contains a non-finite value`);
     }
     vectors[d.index] = d.embedding;
   }
   for (const [i, v] of vectors.entries()) {
-    if (!v) throw new Error(`embeddings ${model}: no vector at index ${i}`);
+    if (!v) throw providerFailed(`embeddings ${model}: no vector at index ${i}`);
   }
   return vectors;
 }
@@ -311,16 +440,15 @@ export async function embedAll(
     model?: string;
     inputType: InputType;
     apiKey?: string;
-    signal?: AbortSignal;
     onProgress?: (done: number, total: number) => void;
   },
 ): Promise<EmbedResult> {
   const model = opts.model ?? EMBEDDING_MODEL;
   const apiKey = opts.apiKey ?? apiKeyFromEnv();
   /* One clock for the whole sweep, however many batches it takes. See
-     `TOTAL_TIMEOUT_MS`; combined with the caller's own signal, if it has one. */
+     `TOTAL_TIMEOUT_MS`. There is no caller's signal to combine it with, and
+     that is deliberate — see `embedBatch`'s `deadline`. */
   const overall = AbortSignal.timeout(TOTAL_TIMEOUT_MS);
-  const signal = opts.signal ? AbortSignal.any([opts.signal, overall]) : overall;
 
   const vectors: number[][] = [];
   const usage: EmbeddingUsage = { promptTokens: 0, cost: 0 };
@@ -328,11 +456,11 @@ export async function embedAll(
   let dims = 0;
   for (let i = 0; i < texts.length; i += BATCH) {
     if (overall.aborted) {
-      throw new Error(
+      throw providerFailed(
         `embeddings ${model}: ran out of time after ${vectors.length} of ${texts.length}`,
       );
     }
-    const got = await embedBatch(model, texts.slice(i, i + BATCH), apiKey, opts.inputType, signal);
+    const got = await embedBatch(model, texts.slice(i, i + BATCH), apiKey, opts.inputType, overall);
     /* **Dimensionality is checked across batches, not only within one.**
        ⟨Sol⟩ `readVectors` starts fresh each call, so a 97-passage article — two
        batches — could come back 1024-dimensional and then 1536-dimensional, and
@@ -343,7 +471,7 @@ export async function embedAll(
     const width = got.vectors[0]?.length ?? 0;
     if (dims === 0) dims = width;
     else if (width !== dims) {
-      throw new Error(
+      throw providerFailed(
         `embeddings ${model}: batch at ${i} came back ${width}-dimensional, not ${dims}`,
       );
     }
@@ -378,7 +506,12 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 function apiKeyFromEnv(): string {
   loadEnvLocal();
   const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("OPENROUTER_API_KEY is not set");
+  /* `config`, the same reason an account that may not use the model is: both
+     are somebody having to change a setting, both are permanent until they do,
+     and the reader gets the same sentence for both because there is only one
+     thing they can do about either. Which of the two it was is in this message,
+     which goes to the log and nowhere else. */
+  if (!key) throw new EmbeddingFailure("config", "OPENROUTER_API_KEY is not set");
   return key;
 }
 

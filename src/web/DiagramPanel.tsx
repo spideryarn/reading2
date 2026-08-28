@@ -1011,8 +1011,14 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
               a fixed sentence here would have reported an authentication
               failure, a network drop and a broken deploy as the embedding model
               being down. GPT Sol's finding, 2026-08-27. */}
+          {/* **The consequence first, the reason after, and the code last of
+              all.** It read the other way round until 2026-08-28, which put
+              "The picture below is the Tree instead." *after* the bracketed
+              code — so the one thing docs/project/copy.md asks of a code, that
+              it end the sentence and be skippable, was undone at the last
+              step. ⟨Sol⟩ */}
           {projection.status === "error" &&
-            `${projection.error ?? "Could not place these paragraphs, and the reason did not come back."} The picture below is the Tree instead.`}
+            `The picture below is the Tree instead. ${projection.error ?? "Could not place these paragraphs, and the reason did not come back."}`}
         </p>
       )}
 
@@ -1029,8 +1035,15 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
             (drawnSemantic > 0
               ? `${drawnSemantic} dotted ${drawnSemantic === 1 ? "link" : "links"} from ${similar.blocks} passages · ${similar.model}`
               : `${similar.blocks} passages embedded, and nothing came back that the picture does not already say`)}
+          {/* **The server's own words, for the reason the projection strip
+              above gives.** This said "Could not reach the embedding model" for
+              every failure, including the one that was actually happening for
+              the whole of this feature's life in production — an account not
+              allowed to use the model, which no amount of reaching would have
+              fixed. It also threw away a bracketed code the reader could quote.
+              ⟨Sol⟩, 2026-08-28. */}
           {similar.status === "error" &&
-            "Could not reach the embedding model, so there are no dotted lines. The rest of the picture is unaffected."}
+            `There are no dotted lines, and the rest of the picture is unaffected. ${similar.error ?? "The reason did not come back."}`}
         </p>
       )}
 

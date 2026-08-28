@@ -116,6 +116,36 @@ field six callers set independently is a field that drifts. So it is `AI_JOB_ROU
 routing policy, injected **after** the caller's body so it cannot be overridden by accident, and
 asserted on the outgoing request rather than trusted.
 
+### A key is not access, and the difference is invisible until a reader finds it
+
+**An OpenRouter key opens the door; the *account behind it* decides which models are on the other
+side.** Its privacy and data-policy guardrails remove every upstream whose stated practices they do
+not permit — and when that leaves none, the answer is
+
+> `404 No endpoints available matching your guardrail restrictions and data policy`
+
+which reads exactly like a mistyped model id and is neither. It is per account, and OpenRouter lets
+the same policy be set on an organisation and on an individual key too, so two keys that both work
+can still disagree about one model.
+
+This is not hypothetical. **Drift, Trail and Force were dead in production from the day they shipped
+until 2026-08-28**, because `OPENROUTER_API_KEY` on Vercel is a different account from the one in
+`.env.local`, and that account may not use `voyageai/voyage-4`. Every check passed throughout:
+the variable was set, spelt right, and `GET /api/health` said so. Nothing in the deploy pipeline
+ever asks the deployed key to *make a call*, which is the only question that would have caught it —
+and it has to be asked from inside the deployment, because a probe run on a laptop reads
+`.env.local` and tests the key that works.
+
+The full account, the fix, and the probe that would have caught it:
+[embedding-endpoints-refused.md](../plans/embedding-endpoints-refused.md) and
+[the-deployed-key-was-never-asked-to-do-anything.md](../postmortems/the-deployed-key-was-never-asked-to-do-anything.md).
+
+`ProviderRefused.kind === "no-endpoints"` in [`src/ai-call.ts`](../../src/ai-call.ts) classifies it
+at the boundary by matching that fixed string, so the classification survives without the provider's
+body being carried anywhere. `EmbeddingFailure` in [`src/embeddings.ts`](../../src/embeddings.ts)
+turns it into a `config` reason, which is how the reader ends up being told somebody has to fix
+something rather than to try again.
+
 ### Why the stages were not translated
 
 The obvious move — rewrite all seven into the chat/completions shape everything else already uses —

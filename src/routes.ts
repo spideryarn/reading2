@@ -105,7 +105,7 @@ import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
-import { isProviderFailure } from "./article-vectors.js";
+import { EmbeddingFailure } from "./embeddings.js";
 import { readRaw } from "./fetch.js";
 import { isSpideryarnId } from "./ids.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
@@ -113,7 +113,7 @@ import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob }
 import { describeAdminMiss, isAdmin } from "./admin.js";
 import type { Visibility } from "./store/contracts.js";
 import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
-import { UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
+import { placingFailed, UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
@@ -258,6 +258,52 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
 /** An error carrying the HTTP status it should be reported as. */
 function httpError(status: number, message: string): Error {
   return Object.assign(new Error(message), { status });
+}
+
+/**
+ * **What the two pictures that read passages for meaning answer with when they
+ * cannot** — Force's dotted lines, and Drift and Trail's dots.
+ *
+ * One function because both routes want the identical three decisions and, when
+ * they each made them separately, they disagreed: `projection` let a bug of ours
+ * fall through to the catch-all and `similar` reported it as an outage.
+ *
+ * The three decisions:
+ *
+ * 1. **Is this even about embedding?** Only an `EmbeddingFailure` is. Everything
+ *    after the model call is our own arithmetic — principal components, k-means,
+ *    the ranking in src/similar.ts — and rewriting a bug in it as "could not
+ *    reach the model" sends whoever is debugging to a status page for a fault in
+ *    this repo. Anything else is rethrown untouched, and the catch-all reports a
+ *    500 with a stack. GPT Sol's finding, 2026-08-27.
+ * 2. **Whose fault, and therefore which status.** `config` is **500**: this
+ *    server is misconfigured, and a 502 would claim it is a healthy gateway
+ *    whose upstream let it down, which is the opposite of true. ⟨Sol⟩ `busy` is
+ *    our own admission control, which is what 503 means. Only `provider` is a
+ *    real 502.
+ * 3. **What the reader is told**, from src/messages.ts — never the thrown
+ *    message. What `embedBatch` throws names the key in use and an account
+ *    setting: useful to whoever runs the server, meaningless and slightly
+ *    sensitive to a reader. The real thing goes in the log, and it goes there
+ *    with its `reason` *and* the provider's `status`, so a search for a settings
+ *    problem does not have to match on prose.
+ *
+ * The status is passed to `placingFailed` as well as used here, because a
+ * refusal the provider gave a number to gets that number's own sentence — see
+ * `placingFailed`, and the reason a 401 must not be answered with "try again".
+ */
+export function embeddingHttpError(err: unknown, slug: string): Error {
+  if (!(err instanceof EmbeddingFailure)) return err as Error;
+  log("model").error(
+    { slug, reason: err.reason, providerStatus: err.status, ...errorFields(err) },
+    err.reason === "config"
+      ? "this app is not configured to use the embedding model"
+      : err.reason === "busy"
+        ? "too many articles are being embedded at once"
+        : "the embedding provider failed",
+  );
+  const status = err.reason === "config" ? 500 : err.reason === "busy" ? 503 : 502;
+  return httpError(status, placingFailed(err.reason, err.status).message);
 }
 
 async function readBody(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<unknown> {
@@ -3665,19 +3711,13 @@ export async function serveAuthenticatedApi(
           try {
             send(res, 200, await similarBlocks(at, loaded.blocks, loaded.tree));
           } catch (err) {
-            /* **The provider's own words do not go to the browser.** The catch-all
-               below writes a thrown message straight into the 500 body, and what
-               `embedBatch` throws on a bad response is the upstream body verbatim
-               — which can carry account identifiers, model routing and whatever
-               else OpenRouter felt like saying. The real thing goes in the log,
-               where whoever runs the server can read it; the reader gets a
-               sentence. Same split docs/project/copy.md draws for every other
-               provider failure. */
-            log("model").error(
-              { slug: at, ...errorFields(err) },
-              "the embedding provider failed",
-            );
-            throw httpError(502, "Could not reach the embedding model. [emb1]");
+            /* **This used to catch everything and blame the provider**, which
+               is the bug a GPT Sol review had already found and fixed in
+               `projection` twenty lines below — and this, its sibling, was left
+               with it. A ranking bug in src/similar.ts was reported to the
+               reader, and logged, as an outage at somebody else's company.
+               ⟨Sol⟩, 2026-08-28. */
+            throw embeddingHttpError(err, at);
           }
           return;
         });
@@ -3703,18 +3743,7 @@ export async function serveAuthenticatedApi(
           try {
             send(res, 200, await projectArticle(at, loaded.blocks));
           } catch (err) {
-            /* **Only the provider's failures are reported as the provider's.**
-               Everything after the embedding call is our own arithmetic —
-               principal components, k-means — and rewriting a bug in it as "could
-               not reach the model" would send whoever is debugging to OpenRouter's
-               status page for a fault in this repo. So a non-provider error falls
-               through to the catch-all, which reports a 500 and logs a stack. GPT
-               Sol's finding, 2026-08-27. */
-            if (!isProviderFailure(err)) throw err;
-            // The provider's own words stay out of the browser — see `similar`
-            // above, which is the same split for the same reason.
-            log("model").error({ slug: at, ...errorFields(err) }, "the embedding provider failed");
-            throw httpError(502, "Could not place this article's paragraphs: the embedding model could not be reached. Everything else on the page is unaffected. [emb2]");
+            throw embeddingHttpError(err, at);
           }
           return;
         });

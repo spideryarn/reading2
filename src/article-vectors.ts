@@ -58,7 +58,7 @@
  * about $0.002 and a second or two per article.
  */
 import type { Block, BlockId, SkipCounts } from "./types.js";
-import { EMBEDDING_MODEL, embedAll } from "./embeddings.js";
+import { EMBEDDING_MODEL, EmbeddingFailure, embedAll } from "./embeddings.js";
 import { hashBlocks } from "./source-hash.js";
 import { log } from "./log.js";
 
@@ -264,9 +264,16 @@ export async function articleVectors(
   const flying = INFLIGHT.get(key);
   if (flying) return flying;
   if (INFLIGHT.size >= MAX_INFLIGHT) {
-    /* Deliberately a throw rather than a queue — see `MAX_INFLIGHT`. The message
-       is the reader's, so it says what to do rather than what happened. */
-    throw new Error("busy: too many articles are being read for the model at once");
+    /* Deliberately a throw rather than a queue — see `MAX_INFLIGHT`.
+       **`busy`, which is not `provider`**: nothing upstream has been asked
+       anything. This is our own admission control, and calling it the
+       provider's fault — which the old string-prefix classification did, by
+       matching `"busy:"` alongside `"embeddings "` — would put our own back
+       pressure on somebody else's status page. ⟨Sol⟩, 2026-08-28. */
+    throw new EmbeddingFailure(
+      "busy",
+      `busy: ${MAX_INFLIGHT} articles are already being embedded`,
+    );
   }
 
   const work = compute(slug, blocks, key).finally(() => INFLIGHT.delete(key));
@@ -348,20 +355,23 @@ function remember(key: string, answer: ArticleVectors): void {
   }
 }
 
-/**
- * Was this the provider's fault, or ours?
+/*
+ * **`isProviderFailure` used to live here, and it was a string match.**
  *
- * **The route needs to know, and it cannot guess.** Every failure inside
- * `projectArticle` used to be rewritten as "could not reach the embedding
- * model" — so a bug in the principal-components arithmetic would be logged, and
- * shown to the reader, as an upstream outage. Nobody would ever look in the
- * right place. GPT Sol's finding, 2026-08-27.
+ * The route needs to know whose fault a failure is, and it cannot guess: every
+ * failure inside `projectArticle` was once rewritten as "could not reach the
+ * embedding model", so a bug in the principal-components arithmetic would have
+ * been logged, and shown to the reader, as an upstream outage. GPT Sol's
+ * finding, 2026-08-27, and the guard it asked for was
  *
- * Matched on the prefix `embedBatch` and `embedAll` put on everything they
- * throw, and on the one refusal this module raises itself. Anything else is a
- * bug here and must be allowed to look like one.
+ *     message.startsWith("embeddings ") || message.startsWith("busy:")
+ *
+ * — right about the shape and wrong about the mechanism. A classification that
+ * depends on wording is only as good as the wording, and it was not good
+ * enough: a `fetch` that never connected threw a bare `TypeError`, matched
+ * neither prefix, and reached the catch-all as an unexplained 500. It also
+ * could not tell this module's own back pressure from the provider's.
+ *
+ * `EmbeddingFailure` in [embeddings.ts](embeddings.ts) carries a `reason`
+ * instead, so the route asks `instanceof` and reads a field. ⟨Sol⟩, 2026-08-28.
  */
-export function isProviderFailure(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err);
-  return message.startsWith("embeddings ") || message.startsWith("busy:");
-}

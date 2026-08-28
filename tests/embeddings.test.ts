@@ -12,7 +12,16 @@
  * not OpenRouter.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BATCH, cosine, dot, embedAll, embedBatch, normalise } from "../src/embeddings.js";
+import { canRetry, placingFailed } from "../src/messages.js";
+import {
+  BATCH,
+  cosine,
+  dot,
+  embedAll,
+  embedBatch,
+  EmbeddingFailure,
+  normalise,
+} from "../src/embeddings.js";
 
 type Datum = { index: number; embedding: number[] };
 
@@ -138,6 +147,127 @@ describe("embedBatch", () => {
        otherwise be lost with the body. */
     await expect(call(1)).rejects.toThrow(/embeddings m: 404/);
     await expect(call(1)).rejects.not.toThrow(/account setting/);
+  });
+});
+
+/**
+ * **Whose fault it was, as a value the route can branch on.**
+ *
+ * These are the assertions that were missing while Drift, Trail and Force were
+ * dead in production for a fortnight. The classification existed — it was a
+ * *prefix on a message*, `startsWith("embeddings ")`, which is only ever as good
+ * as the wording and was not good enough. Nothing tested it, because a test for
+ * "does this string begin with this string" reads like a test of nothing.
+ *
+ * docs/plans/embedding-endpoints-refused.md.
+ */
+describe("what an embedding failure says about itself", () => {
+  const failureOf = async (n = 1): Promise<EmbeddingFailure> => {
+    try {
+      await call(n);
+    } catch (err) {
+      expect(err, "not a typed embedding failure").toBeInstanceOf(EmbeddingFailure);
+      return err as EmbeddingFailure;
+    }
+    throw new Error("it did not fail at all, so there is no failure to read");
+  };
+  const reasonOf = async (n = 1): Promise<string> => (await failureOf(n)).reason;
+
+  it("calls the guardrail 404 a configuration problem, not the provider being down", async () => {
+    /* **The one that shipped.** Production's OpenRouter account was not allowed
+       to use the embedding model, and every reader was told the model "could
+       not be reached" — a sentence about a network, under which the only sane
+       thing to do is try again, which could never have worked. `config` is what
+       makes the route say "somebody has to fix this here" instead. */
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response("No endpoints available matching your guardrail restrictions", { status: 404 }),
+    );
+    await expect(reasonOf()).resolves.toBe("config");
+  });
+
+  it("calls a refused status the provider's fault", async () => {
+    vi.stubGlobal("fetch", async () => new Response("model not found", { status: 404 }));
+    await expect(reasonOf()).resolves.toBe("provider");
+  });
+
+  it("calls a connection that never opened the provider's fault too", async () => {
+    /* **The gap the prefix match left, and the ordinary failure.** `fetch`
+       rejects with a bare `TypeError` when DNS fails or the socket drops — no
+       status, no body, and a message that begins with nothing in particular. It
+       matched no prefix, so it escaped every embedding-aware branch and reached
+       the route's catch-all as an unexplained 500: the provider being
+       *unreachable* was the one provider failure that did not read as one.
+       ⟨Sol⟩ */
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("fetch failed");
+    });
+    await expect(reasonOf()).resolves.toBe("provider");
+  });
+
+  it("does not answer a permanent refusal with 'try again'", async () => {
+    /* **The mistake this whole change exists to stop, made one layer up.** The
+       first version of the typed reasons called every refusal except the
+       guardrail 404 `provider`, and the route reported `provider` as a
+       transient blip — so an invalid key, exhausted credit, a 403 and a payload
+       too big were all answered with "waiting a few seconds and trying again
+       usually works". Found by ⟨Sol⟩ running the statuses rather than reading
+       the claim, which is why the statuses are run here.
+
+       The reason stays `provider` — the provider is who refused — and the
+       *status* is what carries the difference, so `placingFailed` can hand it to
+       `providerHttpFailure` and get the sentence that status has always had. */
+    for (const status of [400, 401, 402, 403, 413]) {
+      vi.stubGlobal("fetch", async () => new Response("no", { status }));
+      const failure = await failureOf();
+      expect(failure.reason, `status ${status}`).toBe("provider");
+      expect(failure.status, `status ${status}`).toBe(status);
+      const shown = placingFailed(failure.reason, failure.status);
+      expect(canRetry(shown.kind), `${status}: ${shown.message}`).toBe(false);
+    }
+  });
+
+  it("still says 'try again' for the statuses where another go can work", async () => {
+    /* The other half, and the half that makes the test above mean something: a
+       check that called everything permanent would pass the first assertion and
+       be just as wrong. 429 and 503 are the provider being busy. */
+    for (const status of [429, 503]) {
+      vi.stubGlobal("fetch", async () => new Response("no", { status, headers: { "retry-after": "1" } }));
+      const failure = await failureOf();
+      expect(failure.status, `status ${status}`).toBe(status);
+      expect(canRetry(placingFailed(failure.reason, failure.status).kind), `${status}`).toBe(true);
+    }
+  }, 20_000);
+
+  it("carries no status when nothing answered, so it is not mistaken for a refusal", async () => {
+    vi.stubGlobal("fetch", async () => {
+      throw new TypeError("fetch failed");
+    });
+    await expect(failureOf().then((f) => f.status)).resolves.toBeNull();
+  });
+
+  it("refuses an entry of the response that is not an object at all", async () => {
+    /* `{"data":[null]}` is a real thing a 200 can carry, and it used to reach
+       `d.index` and throw `Cannot read properties of null` — an untyped
+       `TypeError` escaping the boundary this file had just claimed was wholly
+       typed. ⟨Sol⟩ found it by testing the claim. */
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ data: [null] }), { status: 200 }));
+    const failure = await failureOf();
+    expect(failure.reason).toBe("provider");
+    expect(failure.message).toMatch(/entry 0 of the response is not an object/);
+  });
+
+  it("does not repeat what the provider said, whatever the reason", async () => {
+    /* An embeddings request carries the article's own paragraphs, so an upstream
+       that echoes the request back would put article prose into a thrown error —
+       and this error now reaches a log with its `reason` attached, which is
+       exactly the place docs/project/logging.md forbids prose from reaching. */
+    vi.stubGlobal(
+      "fetch",
+      async () => new Response("the article said: a horse walked into a bar", { status: 400 }),
+    );
+    await expect(call(1)).rejects.not.toThrow(/horse/);
   });
 });
 
