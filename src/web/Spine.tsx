@@ -550,8 +550,26 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
                  hover's synthesised touch events — see `mouseOnly` in
                  Tooltip.tsx, without which the second tap could never land. */
               open={armed?.id === b.entry.node.id}
+              /* **A close only counts from the band that is open.** The
+                 obvious `setArmed(v ? {…} : null)` is what took the rail's
+                 hover cards away between 2026-08-27 and 2026-08-28, and it is
+                 the cost of one shared state serving fifty triggers:
+                 `useDelayGroup` enforces one-open-at-a-time by calling *every
+                 other member's* `onOpenChange(false)` the moment one opens, and
+                 `useHover` schedules a departing band's close 90ms behind the
+                 pointer without checking whether that band is still the open
+                 one. Both are correct against an uncontrolled tooltip, which
+                 clears only its own `useState`; against one shared `armed` they
+                 clear the card that just opened.
+                 docs/postmortems/spine-hover-cards.md. */
               onOpenChange={(v: boolean) =>
-                setArmed(v ? { id: b.entry.node.id, byTouch: false } : null)
+                setArmed((prev) =>
+                  v
+                    ? { id: b.entry.node.id, byTouch: false }
+                    : prev?.id === b.entry.node.id
+                      ? null
+                      : prev,
+                )
               }
               content={
                 <BandCard
