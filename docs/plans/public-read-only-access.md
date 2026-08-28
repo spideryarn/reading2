@@ -228,6 +228,17 @@ is no owner ([`src/owner.ts`](../../src/owner.ts) reads before the gate rather t
 the environment, for the same reason) — so on the public path it **stays** throwing, and any handler
 that reaches for an owner blows up loudly instead of quietly succeeding as the wrong person.
 
+**But the tripwire is not the defence, and an earlier draft of this section said it was.** Sol's
+review of the built code, 2026-08-28, put the correction plainly: `currentOwnerId()` throwing would
+**not** stop a future call that hands an explicit owner to `ownedSlug`, that queries a child table
+directly by `article_id` or `revision_id`, or that spends money — **because a paid call does not need
+an owner at all.** What actually keeps the public path safe today is two other things: the **closed
+import graph** ([`tests/public-imports.test.ts`](../../tests/public-imports.test.ts) starts at
+`src/public/routes.ts` and refuses any path to the owner stores, the writers or the gateway) and the
+**hardwired reader** that accepts no predicate. The tripwire is the third line, not the first. Any
+future work here that weakens either of the first two has removed the protection whatever
+`currentOwnerId()` still does.
+
 **The public namespace is a closed room.** Once a request is inside `/api/public/`, an unknown path
 or a wrong method **terminates there**. It never falls through into the authenticated table. That
 fallthrough is the single most likely way this feature grows a hole.
