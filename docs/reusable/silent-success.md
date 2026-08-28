@@ -191,7 +191,19 @@ Four defences, each cheap, and none of them optional once you have seen the othe
 
 And treat a control that passes as broken until you have seen **the specific failure string it
 should have produced** — not merely a red run. *"It passed"* and *"it never ran"* are the same
-observation, and only the message tells you which you are looking at. All of the above
+observation, and only the message tells you which you are looking at.
+
+**And the control can be right while the test is too narrow to see it.** This is the other half, and
+it is not about the edit at all: the mutation applied, the code really is broken, and the test stays
+green because it **reached a narrower slice of the system than the sentence describing it claimed**.
+Four instances in one afternoon, one shape: a network trace that never hovered could not see a hook
+fetching on `pointerover`; an equality check comparing two page loads could not see a divergence that
+needs a pointer; a fixture with correlated flags could not see a mode wired to the wrong one; a unit
+test handed its props by hand could not see the wiring that should have supplied them.
+
+So when a control passes, ask **what the test actually exercises** before asking what the code does.
+The gap is usually between the test's scope and the claim in its own name — and the name is what
+everybody reads. All of the above
 was collected in spideryarn on one afternoon, 2026-08-28; the tell for the first was four controls
 passing at once, which is not a thing that happens.
 
