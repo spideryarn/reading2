@@ -1567,6 +1567,42 @@ pass every id assertion there is. It is watched red on its own: making `generate
   database's single `running` slot. It cost four failures in a full-suite run before it came out.
   `store.write` for these kinds is covered by `tests/store-artefacts-pg.test.ts`.
 
+### Greg's steer, 2026-08-28 — and what it does *not* remove
+
+> **Re-fetch is fine. Or even drop it. I don't care much about the data we have so far. I just want
+> to get to the long-term-best design/state soon, and from then on we'll treat production data with
+> great care.**
+>
+> — Greg, 2026-08-28
+
+That settles `noema` and more besides, and the section below is now answering a question nobody is
+asking. **The local corpus does not need preserving.** So: no migration, no careful switchover, no
+audit of anchors before and after. The re-ingest the plan has always assumed is simply fine, and
+`noema` is re-fetched if convenient and dropped if not. Its URL was checked on the day and still
+returns 200, so either is available.
+
+**What the steer does not remove, and the distinction is the useful part.**
+
+- **The three identity fixes stay, and are more clearly right than before.** They were never really
+  about today's fifteen directories; they are about every article ingested from the demolition
+  onwards, which is exactly the data Greg has just said will be treated with great care. A pipeline
+  that re-mints every id on re-extraction cannot treat anything with care. Doing them *before* D
+  remains correct.
+- **B3 stays.** A checkpoint is not about preserving a corpus, it is about not buying the same
+  labelling and page-reading calls twice after a failure. That cost is the same whatever we think of
+  the data.
+- **The demolition's five steps stay, and it is worth being explicit about why**, because "I don't
+  care about the data" reads at first like it collapses them. It does not: those steps are about
+  **uptime and rollback**, not about the corpus. Production runs on Vercel against Postgres and
+  refuses the filesystem store at boot ([`src/store/index.ts`](../../src/store/index.ts)). Deploy the
+  column drop, roll the application back one commit, and every ingest fails on a column that no
+  longer exists — which is an outage, not a data loss, and the sequence exists to prevent it.
+  Step 5 is still the only irreversible one, and it is now dropping a column that holds nothing on
+  any revision.
+
+So the plan gets shorter by one section and none of its stages. What follows is kept because it
+records how the question was answered, not because the work is owed.
+
 ### The switchover, and what "preserve what we have" costs
 
 Greg asked, 2026-08-28, whether there is one destructive switchover and how much work it is to keep
