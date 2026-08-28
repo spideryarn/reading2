@@ -455,13 +455,18 @@ export interface ArtifactStore {
    *   run is the closest true statement, and it is the same pair of files the
    *   warning this replaced used to count.
    *
-   * **One honest limit on the filesystem side**, since it is the kind of gap
-   * this project writes postmortems about: `readOne` returns `null` both for a
-   * file that is not there and for one that will not parse, so a *corrupt*
-   * `data/<slug>/blocks.json` answers `false` here. That only matters when
-   * stage 3's own copy is missing too — otherwise the baseline reads fine and
-   * this is never asked — and in that state there is genuinely nothing left to
-   * carry. Postgres has no equivalent: a uuid column is there or it is not.
+   * **A file it cannot read answers `true`**, which is the half this got wrong
+   * until 2026-08-28 and is worth the paragraph. The filesystem adapter used to
+   * read through `readOne`, where absent and corrupt and over-the-ceiling are
+   * one answer — `null` — so a half-written `data/<slug>/blocks.json` said *no
+   * earlier run* and stage 3 minted a whole new identity set, quietly. The
+   * comment here defended that: nothing left to carry, so nothing lost. It is
+   * the wrong question. Whether the ids are recoverable is not whether to
+   * proceed — a person with a backup can put the file back, and minting removes
+   * that possibility while reporting success. So the question this method really
+   * asks is *is there earlier block history*, usable or not, and the adapter
+   * answers it from `readOutcome`. Postgres has no equivalent state: a uuid
+   * column is there or it is not.
    */
   hasEarlierBlocks(slug: string): Promise<boolean>;
   /** The artefact, or `null` if it is absent or unreadable. */

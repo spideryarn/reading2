@@ -235,9 +235,33 @@ export function pathFor(at: ArtifactLocations, step: StepName, kind: ArtifactKin
 }
 
 /**
- * Read one artefact, or `null` for the answers that mean *this cannot be used*.
+ * What a read found, with **"there is no file" kept apart from "there is a file
+ * I cannot use"**.
  *
- * **Absent, over the ceiling and unreadable are `null`; broken is thrown.**
+ * `readOne` below flattens the two into `null`, which is right for every caller
+ * that is deciding whether to re-run a step: both answers mean *do the work
+ * again*, and the work rewrites the file either way.
+ *
+ * `hasEarlierBlocks` is the one caller for which they are opposite answers. It
+ * is asking whether this article has an identity from an earlier run, and a
+ * corrupt `data/<slug>/blocks.json` says **yes, and I cannot read it** — which
+ * has to stop the run. Flattened to `null` it said *no earlier run*, and stage 3
+ * minted a fresh identity set over an article that already had one, quietly.
+ * GPT Sol, 2026-08-28.
+ *
+ * There is deliberately no reason string on `unusable`: the reason is already in
+ * the log line `readOne` writes, and a reason carried up here would be a second
+ * copy of it with nothing reading it.
+ */
+type ReadOutcome =
+  | { state: "ok"; value: unknown }
+  | { state: "absent" }
+  | { state: "unusable" };
+
+/**
+ * Read one artefact, saying which of the three things happened.
+ *
+ * **Absent, over the ceiling and unreadable are answers; broken is thrown.**
  * That line moved on 2026-08-26 and the old place was wrong: any `stat` failure
  * became a silent `null`, so a permissions error, a failing disk and a file
  * nobody has written yet were one answer. The step then reported not-done and
@@ -247,22 +271,22 @@ export function pathFor(at: ArtifactLocations, step: StepName, kind: ArtifactKin
  * propagates, because this project's rule is that a swallowed error is worse
  * than a loud one (docs/reusable/silent-success.md).
  *
- * Corruption is different again, and stays `null`: a file that will not parse
- * is a real state of the world that the next run genuinely does fix by
- * rewriting it. It is logged at `debug` — a missing or half-written artefact is
- * the ordinary state of an article nobody has finished ingesting.
+ * Corruption is different again, and is `unusable` rather than an error: a file
+ * that will not parse is a real state of the world that the next run genuinely
+ * does fix by rewriting it. It is logged at `debug` — a missing or half-written
+ * artefact is the ordinary state of an article nobody has finished ingesting.
  *
  * **One file handle for the size and the bytes**, so the two describe the same
  * inode. `stat` then `readFile` is two lookups of a name, and an atomic
  * replacement in between meant the ceiling was checked against a file that is
  * no longer the file being read.
  */
-async function readOne(
+async function readOutcome(
   at: ArtifactLocations,
   slug: string,
   step: StepName,
   kind: ArtifactKind,
-): Promise<unknown | null> {
+): Promise<ReadOutcome> {
   const file = pathFor(at, step, kind);
   const { maxBytes, decode } = DECODERS[kind];
 
@@ -270,7 +294,7 @@ async function readOne(
   try {
     handle = await open(file, "r");
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { state: "absent" };
     throw err;
   }
 
@@ -284,21 +308,36 @@ async function readOne(
         { slug, step, kind, size, maxBytes },
         `artefact over its ceiling: ${kind} for ${slug} is ${size} bytes`,
       );
-      return null;
+      return { state: "unusable" };
     }
     const body = await handle.readFile("utf-8");
     try {
-      return decode(body);
+      return { state: "ok", value: decode(body) };
     } catch (err) {
       alog.debug(
         { slug, step, kind, size, err: (err as Error).message },
         `artefact unreadable: ${kind} for ${slug}`,
       );
-      return null;
+      return { state: "unusable" };
     }
   } finally {
     await handle.close();
   }
+}
+
+/**
+ * The same read, flattened to *the artefact or nothing* — what every caller
+ * wants except `hasEarlierBlocks`. See `ReadOutcome` for why that one is
+ * different.
+ */
+async function readOne(
+  at: ArtifactLocations,
+  slug: string,
+  step: StepName,
+  kind: ArtifactKind,
+): Promise<unknown | null> {
+  const outcome = await readOutcome(at, slug, step, kind);
+  return outcome.state === "ok" ? outcome.value : null;
 }
 
 /**
@@ -406,10 +445,23 @@ export function createFsArtifactStore(
      * used to exist — stops the stage instead of warning about it after the
      * fact. The recovery is to put the file back, or to delete both if the
      * article really is being started again from nothing.
+     *
+     * **A file that will not parse counts as an earlier run**, and the whole
+     * point of `readOutcome` is being able to say so. Until 2026-08-28 this read
+     * through `readOne`, where a corrupt or over-the-ceiling file is `null`, the
+     * same as no file — so a half-written stage-4 copy answered *first ingest*
+     * and stage 3 minted a new id for every paragraph. The argument that this
+     * was harmless, because in that state there is nothing left to carry, is
+     * answering a different question: whether the ids are recoverable is not
+     * whether we should proceed. A person with a backup or a Dropbox history can
+     * put the file back; minting takes that away silently and reports success.
+     * The one thing this must not do is guess. GPT Sol, 2026-08-28.
      */
     async hasEarlierBlocks(slug) {
-      const artefact = await readOne(locate(slug), slug, "toc", "blocks");
-      const blocks = (artefact as ArtifactMap["blocks"] | null)?.blocks;
+      const outcome = await readOutcome(locate(slug), slug, "toc", "blocks");
+      if (outcome.state === "absent") return false;
+      if (outcome.state === "unusable") return true;
+      const blocks = (outcome.value as ArtifactMap["blocks"]).blocks;
       return blocks !== undefined && blocks.length > 0;
     },
 

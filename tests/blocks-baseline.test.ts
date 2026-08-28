@@ -59,6 +59,7 @@ import type { Db } from "../src/db/client.js";
 import { mintId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
+import { type AstNode, lineOf, parseSource, walkAst } from "./helpers/ts-ast.js";
 import type { Block, OwnerId } from "../src/types.js";
 
 /** The transaction type, derived the same way `src/store/artifacts-pg.ts` derives it. */
@@ -168,6 +169,58 @@ describe("the baseline, over the filesystem store", () => {
     await expect(previousBlocksFrom(store, "a")).rejects.toBeInstanceOf(BaselineMissing);
   });
 
+  /**
+   * **A file that will not parse is not a file that is not there**, and until
+   * 2026-08-28 this store gave both answers as `false`: `readOne` returns `null`
+   * for absent, corrupt and over-the-ceiling alike, so a `data/<slug>/blocks.json`
+   * truncated by a kill mid-write said *first ingest* and stage 3 minted a whole
+   * new identity set over an article that had one.
+   *
+   * The previous version of this seam argued the case was harmless because "in
+   * that state there is genuinely nothing left to carry". That is a different
+   * question. Whether the ids are *recoverable* is not whether we should
+   * *proceed*: somebody with a backup, a Dropbox history or a stash can put the
+   * file back, and minting takes that possibility away silently while reporting
+   * success. Stopping costs five minutes and keeps every anchor. GPT Sol,
+   * 2026-08-28.
+   */
+  it("refuses when stage 4's copy is there but will not parse", async () => {
+    const { dir, htmlFile, store } = await workspace();
+    await writeFile(htmlFile, EXTRACTED, "utf-8");
+    const first = await runBlocks({ htmlFile, previous: undefined });
+
+    /* Cut off halfway, which is what a `writeFile` killed in the middle leaves.
+       Every id this article has ever had is still in those bytes — that is the
+       point: the file is unusable, not empty. */
+    const whole = JSON.stringify(blocksArtefact(first.blocks));
+    await writeFile(path.join(dir, "blocks.json"), whole.slice(0, whole.length >> 1), "utf-8");
+    await rm(htmlFile.replace(/\.html$/, ".blocks.json"));
+
+    await expect(previousBlocksFrom(store, "a")).rejects.toBeInstanceOf(BaselineMissing);
+  });
+
+  it("refuses when stage 4's copy is over the size this store can read", async () => {
+    const { dir, htmlFile, store } = await workspace();
+    await writeFile(htmlFile, EXTRACTED, "utf-8");
+    const first = await runBlocks({ htmlFile, previous: undefined });
+
+    /* Valid JSON, listing the real ids, and one byte past the 32 MiB ceiling in
+       `DECODERS` — so the only thing wrong with it is that this store will not
+       read it. The other half of the same misclassification, and the one that
+       does not resolve itself: `readOne` warns and returns `null` for ever. */
+    const artefact = blocksArtefact(first.blocks);
+    const padded = {
+      ...artefact,
+      blocks: artefact.blocks.map((b, i) =>
+        i === 0 ? { ...b, text: `${b.text}${"x".repeat(32 * 1024 * 1024)}` } : b,
+      ),
+    };
+    await writeFile(path.join(dir, "blocks.json"), JSON.stringify(padded), "utf-8");
+    await rm(htmlFile.replace(/\.html$/, ".blocks.json"));
+
+    await expect(previousBlocksFrom(store, "a")).rejects.toBeInstanceOf(BaselineMissing);
+  });
+
   it("mints quietly when this really is a first ingest", async () => {
     const { store } = await workspace();
     /* Nothing on disk at all: no baseline and no earlier run to say there
@@ -252,6 +305,32 @@ describe("the runtime guard", () => {
     expect(await readFile(w.htmlFile, "utf-8")).toBe(EXTRACTED);
   });
 
+  /**
+   * **Nothing is not something that carried nothing.** The guard used to return
+   * early on an empty output, so a run whose extraction produced no blocks at
+   * all — a paywall, an error page, a fetch that came back as a shell —
+   * overwrote both artefacts with emptiness against a full baseline and reported
+   * success. Zero shared ids is zero shared ids however few there are on the
+   * other side. GPT Sol, 2026-08-28.
+   */
+  it("stops a run that produced no blocks at all against a baseline that had some", async () => {
+    const w = await aWorkspace();
+    cleanUp.push(w.root);
+    const jsonFile = w.htmlFile.replace(/\.html$/, ".blocks.json");
+    await writeFile(w.htmlFile, EXTRACTED, "utf-8");
+    const first = await runBlocks({ htmlFile: w.htmlFile, previous: undefined });
+
+    // What a paywall or an error page extracts to: a document with no prose.
+    await writeFile(w.htmlFile, "<!doctype html><html><body></body></html>", "utf-8");
+    await expect(
+      runBlocks({ htmlFile: w.htmlFile, previous: first.blocks }),
+    ).rejects.toBeInstanceOf(IdsNotCarried);
+
+    /* And it refused before writing, so the article is still the article. */
+    const after = JSON.parse(await readFile(jsonFile, "utf-8"));
+    expect(idsIn(after.blocks)).toEqual(idsIn(first.blocks));
+  });
+
   it("says nothing on a first ingest, where minting everything is correct", async () => {
     const w = await aWorkspace();
     cleanUp.push(w.root);
@@ -294,77 +373,108 @@ describe("the HTML stage 3 consumes", () => {
 
 /* --------------------------------------- the argument that must not go missing -- */
 
+/** The name this whole section is about. */
+const STAGE_THREE = "splitIntoBlocks";
+
+interface Reference {
+  line: number;
+  /**
+   * How many arguments the call passes — or `null` when the name was handed out
+   * as a *value* rather than called, which nothing that reads one file can
+   * follow and which is therefore an offence in itself.
+   */
+  args: number | null;
+}
+
 /**
- * Every `splitIntoBlocks(…)` call in one file, with its argument list.
+ * Every mention of `splitIntoBlocks` in one file that is a use of it, parsed.
  *
- * **A balanced-paren scan over the whole file, not a line regex, and the first
- * version was the line regex.** It read
- * `/\bsplitIntoBlocks\(\s*[^,()]*\)/` — no comma before the closing bracket —
- * which cannot cross a nested paren and cannot see past a newline. So it caught
- * `splitIntoBlocks(html)` and **missed the two shapes that matter**:
+ * **This was a character scan until 2026-08-28, twice, and both versions were
+ * wrong in the direction that goes quiet.** The first was a line regex
+ * (`/\bsplitIntoBlocks\(\s*[^,()]*\)/`) that could not cross a nested bracket or
+ * a newline, so it missed `splitIntoBlocks(await store.read(…))` — *the* shape a
+ * conversion to the store actually takes — while passing a red check against a
+ * toy. The second counted brackets and commas over raw characters, and GPT Sol
+ * took it apart in four lines:
  *
  * ```
- * splitIntoBlocks(await store.read(slug, "extract", "extractedHtml"))   ← missed
- * splitIntoBlocks(                                                     ← missed
- *   html,
- * )
+ * splitIntoBlocks(html ?? "missing, retry")   ← one argument, the comma in the
+ *                                               string read as a separator: missed
+ * splitIntoBlocks (html)                      ← missed; the needle glued the
+ *                                               bracket to the name
+ * const split = splitIntoBlocks; split(html)  ← missed; not a call to look at
+ * splitIntoBlocks(")", previous)              ← correct, falsely accused: the
+ *                                               `)` in the string ended the scan
  * ```
  *
- * The first of those is not a curiosity. It is *the* shape a post-D conversion
- * will take — read the HTML from the store, inline, in one call — so the guard
- * missed the exact form of the exact trap it was written for, while passing a
- * red check against the toy version. That is the failure mode this repo keeps
- * writing down: a check that agrees with the code because it shares an
- * assumption with it, and a red that proved less than it looked like.
+ * Two more turned up when those were written down as a table:
+ * `splitIntoBlocks(html,)` was read as two arguments, and a mention of the name
+ * inside a `//` comment was reported as a call. So the docstring that stood here
+ * — *the failure direction is a false positive, which somebody reads and
+ * corrects, rather than a silent miss* — asserted a safety property the code did
+ * not have, and asserting one falsely is worse than saying nothing.
  *
- * The scan takes the text from the opening bracket to its match, counting
- * depth, and then asks whether that text has a comma at depth zero.
+ * **So it parses.** `@babel/parser`, through tests/helpers/ts-ast.ts, which is
+ * also where the reason it is not the TypeScript compiler lives (this repo is on
+ * TypeScript 7 and its package no longer exposes `createSourceFile`). Strings,
+ * template literals, comments, whitespace, line breaks and nested calls stop
+ * being this function's problem, because they are not tokens.
  *
- * **What it still cannot see**, stated rather than discovered later: a bracket
- * or a comma inside a string literal or a comment is counted as code. Nothing
- * in this repo calls stage 3 that way, and the failure direction is a false
- * *positive* — a complaint about a call that is fine — which somebody reads and
- * corrects, rather than a silent miss.
+ * **What it still cannot see, and this time the list is the real one:**
+ *
+ * - a call through a value that has lost the name — the function passed to
+ *   another module, stored on an object, reached through `import()`. The direct
+ *   alias `const split = splitIntoBlocks` *is* caught, because the name appears
+ *   in a value position and that is enough to complain about; one more hop and
+ *   this is blind. It would take a type checker across the whole program, which
+ *   is a different tool from a test.
+ * - the *value* passed, as against the shape: an explicit
+ *   `splitIntoBlocks(html, undefined)` passes, deliberately — somebody wrote the
+ *   word, and the difference between an omission and a decision is the point.
+ * - anything in a file it cannot parse at all: `parse` throws and this test goes
+ *   red rather than quiet, which is the direction to fail in.
  */
-function callsIn(source: string): { line: number; args: string }[] {
-  const needle = "splitIntoBlocks(";
-  const found: { line: number; args: string }[] = [];
-
-  for (let at = source.indexOf(needle); at !== -1; at = source.indexOf(needle, at + 1)) {
-    /* The declaration is not a call. Checked on the text before it rather than
-       on the line, since the scan is no longer line-based. */
-    if (source.slice(0, at).trimEnd().endsWith("function")) continue;
-
-    const open = at + needle.length - 1;
-    let depth = 0;
-    let i = open;
-    for (; i < source.length; i++) {
-      const ch = source[i];
-      if (ch === "(") depth++;
-      else if (ch === ")" && --depth === 0) break;
+function referencesIn(source: string): Reference[] {
+  const found: Reference[] = [];
+  walkAst(parseSource(source).program, (node, parent, key) => {
+    if (node.type === "CallExpression" && calleeName(node.callee) === STAGE_THREE) {
+      found.push({ line: lineOf(node), args: (node.arguments as unknown[]).length });
+      return;
     }
-    /* An unbalanced tail means the file does not parse; that is somebody else's
-       error and not this test's to report. */
-    if (depth !== 0) continue;
-
-    found.push({
-      line: source.slice(0, at).split("\n").length,
-      args: source.slice(open + 1, i),
-    });
-  }
+    if (node.type !== "Identifier" || node.name !== STAGE_THREE) return;
+    if (NOT_A_USE.has(`${parent?.type ?? ""}.${key}`)) return;
+    found.push({ line: lineOf(node), args: null });
+  });
   return found;
 }
 
-/** Does this argument list separate two arguments, rather than merely contain a comma? */
-function hasTwoArguments(args: string): boolean {
-  let depth = 0;
-  for (const ch of args) {
-    if (ch === "(" || ch === "[" || ch === "{") depth++;
-    else if (ch === ")" || ch === "]" || ch === "}") depth--;
-    else if (ch === "," && depth === 0) return true;
+/** `f(…)` and `mod.f(…)` alike; anything else is not a call by name. */
+function calleeName(callee: unknown): string | null {
+  const c = callee as AstNode | undefined;
+  if (c?.type === "Identifier") return c.name as string;
+  if (c?.type === "MemberExpression" && c.computed !== true) {
+    const property = c.property as AstNode | undefined;
+    if (property?.type === "Identifier") return property.name as string;
   }
-  return false;
+  return null;
 }
+
+/**
+ * Where the name can appear without anybody calling anything: the callee slot of
+ * a call already counted above, the declaration's own name, an import or export
+ * specifier, the property of a member expression, and a `typeof` in a type.
+ * Every other position hands the function out as a value.
+ */
+const NOT_A_USE = new Set([
+  "CallExpression.callee",
+  "FunctionDeclaration.id",
+  "ImportSpecifier.imported",
+  "ImportSpecifier.local",
+  "ExportSpecifier.local",
+  "ExportSpecifier.exported",
+  "MemberExpression.property",
+  "TSTypeQuery.exprName",
+]);
 
 /**
  * **Nothing in `src/` may call `splitIntoBlocks` without its baseline.**
@@ -412,55 +522,132 @@ describe("the baseline argument", () => {
     const offenders: string[] = [];
     for (const file of files) {
       const source = await readFile(file, "utf-8");
-      for (const call of callsIn(source)) {
-        if (!hasTwoArguments(call.args)) {
-          offenders.push(`${path.relative(root, file)}:${call.line}`);
-        }
+      /* **A prefilter that cannot change the answer**, which is the only kind
+         worth having. `referencesIn` matches the name and nothing else, so a
+         file without those characters in it has no references by construction —
+         and parsing all ~150 files in `src/` took five seconds against the
+         hundred milliseconds the three that mention it take. */
+      if (!source.includes(STAGE_THREE)) continue;
+      for (const ref of referencesIn(source)) {
+        const where = `${path.relative(root, file)}:${ref.line}`;
+        /* The two offences are different mistakes and want different sentences:
+           one is a call that dropped its baseline, the other is the function
+           handed out as a value, where the call this cannot see is somewhere
+           else entirely. */
+        if (ref.args === null) offenders.push(`${where}: used as a value, not called`);
+        else if (ref.args < 2) offenders.push(`${where}: called with ${ref.args} argument`);
       }
     }
 
     expect(offenders).toEqual([]);
   });
 
-  it("would notice each shape a real conversion could take", () => {
-    /* A check that has never been red is not evidence, and a scan over a
-       directory that happens to be clean is exactly that — so the scanner is
-       exercised here on every shape, in this file, where it cannot rot without
-       failing.
+  /**
+   * Every shape the scanner has to get right, in one table.
+   *
+   * A check that has never been red is not evidence, and a scan over a directory
+   * that happens to be clean is exactly that — so the scanner is exercised here
+   * on every shape, in this file, where it cannot rot without failing. Anything
+   * added should be a shape somebody might really write.
+   *
+   * **One assertion over the whole table rather than a line of `expect` each**,
+   * because a sequence stops at the first failure and the four shapes GPT Sol
+   * found were four separate bugs. Reading three of them only after fixing the
+   * first is how a rewrite ends up fixing one and calling it done.
+   */
+  const SHAPES: { source: string; omits: boolean[]; why: string }[] = [
+    { why: "the plain miss", source: "const r = splitIntoBlocks(html);", omits: [true] },
+    { why: "the plain call", source: "const r = splitIntoBlocks(html, previous);", omits: [false] },
 
-       **The nested-call case is the one that matters**, because it is what a
-       post-D conversion actually looks like and because the first version of
-       this check missed it while passing its red test. Anything added here
-       should be a shape somebody might really write, not a variation that
-       happens to be easy to match. */
-    const omits = (source: string) =>
-      callsIn(source).map((call) => hasTwoArguments(call.args) === false);
-
-    expect(omits("const r = splitIntoBlocks(html);")).toEqual([true]);
-    expect(omits("const r = splitIntoBlocks(html, previous);")).toEqual([false]);
-
-    // The realistic post-D shape: the HTML read inline, in one call.
-    expect(
-      omits('const r = splitIntoBlocks(await store.read(slug, "extract", "extractedHtml"));'),
-    ).toEqual([true]);
-    // …and the same thing done correctly.
-    expect(
-      omits('const r = splitIntoBlocks(await store.read(slug, "extract", "extractedHtml"), prev);'),
-    ).toEqual([false]);
+    /* **The realistic post-D shape**: the HTML read inline, in one call. It is
+       what a conversion actually looks like, and the first version of this check
+       missed it while passing a red test against a toy. */
+    {
+      why: "read inline from the store, baseline dropped",
+      source: 'const r = splitIntoBlocks(await store.read(slug, "extract", "extractedHtml"));',
+      omits: [true],
+    },
+    {
+      why: "read inline from the store, baseline passed",
+      source: 'const r = splitIntoBlocks(await store.read(slug, "extract", "extractedHtml"), prev);',
+      omits: [false],
+    },
 
     // Split across lines, which a line-based check cannot see at all.
-    expect(omits("const r = splitIntoBlocks(\n  html,\n);")).toEqual([false]);
-    expect(omits("const r = splitIntoBlocks(\n  html\n);")).toEqual([true]);
+    { why: "one argument, wrapped", source: "const r = splitIntoBlocks(\n  html\n);", omits: [true] },
+    /* **A trailing comma is one argument, not two.** The character scan said two
+       — a silent miss nobody had noticed, because "contains a comma at depth
+       zero" is a different question from "how many arguments are there". */
+    {
+      why: "one argument, wrapped, trailing comma",
+      source: "const r = splitIntoBlocks(\n  html,\n);",
+      omits: [true],
+    },
 
     // An object or array argument holds commas that separate nothing.
-    expect(omits("const r = splitIntoBlocks(pick({ a: 1, b: 2 }));")).toEqual([true]);
-    expect(omits("const r = splitIntoBlocks(html, [a, b]);")).toEqual([false]);
+    {
+      why: "an object argument's commas separate nothing",
+      source: "const r = splitIntoBlocks(pick({ a: 1, b: 2 }));",
+      omits: [true],
+    },
+    {
+      why: "an array baseline",
+      source: "const r = splitIntoBlocks(html, [a, b]);",
+      omits: [false],
+    },
 
-    // The declaration is not a call.
-    expect(omits("export function splitIntoBlocks(html: string, previous?: Block[]) {")).toEqual([]);
+    /* Four shapes GPT Sol found the character scan getting wrong, 2026-08-28.
+       Two are silent misses — the direction the old comment swore could not
+       happen — and one is a false accusation of code that is correct. */
+    {
+      why: "a comma inside a string separates nothing (was missed)",
+      source: 'const r = splitIntoBlocks(html ?? "missing, retry");',
+      omits: [true],
+    },
+    {
+      why: "a bracket inside a string closes nothing (was falsely accused)",
+      source: 'const r = splitIntoBlocks(")", previous);',
+      omits: [false],
+    },
+    {
+      why: "a space before the bracket is still a call (was missed)",
+      source: "const r = splitIntoBlocks (html);",
+      omits: [true],
+    },
+    {
+      why: "the name handed out as a value, called under another name (was missed)",
+      source: "const split = splitIntoBlocks;\nsplit(html);",
+      omits: [true],
+    },
+
+    // Naming it is not calling it.
+    { why: "an import", source: 'import { splitIntoBlocks } from "./blocks.js";', omits: [] },
+    {
+      why: "a mention in a comment",
+      source: "// splitIntoBlocks(html) would be wrong here\nconst x = 1;",
+      omits: [],
+    },
+    {
+      why: "the declaration",
+      source: "export function splitIntoBlocks(html: string, previous?: Block[]) {}",
+      omits: [],
+    },
 
     // Two calls in one file are two answers, not one.
-    expect(omits("splitIntoBlocks(a, b);\nsplitIntoBlocks(c);")).toEqual([false, true]);
+    {
+      why: "two calls, one right and one wrong",
+      source: "splitIntoBlocks(a, b);\nsplitIntoBlocks(c);",
+      omits: [false, true],
+    },
+  ];
+
+  it("would notice each shape a real conversion could take", () => {
+    const omits = (source: string) =>
+      referencesIn(source).map((ref) => ref.args === null || ref.args < 2);
+
+    expect(SHAPES.map(({ why, source }) => ({ why, omits: omits(source) }))).toEqual(
+      SHAPES.map(({ why, omits }) => ({ why, omits })),
+    );
   });
 });
 
@@ -637,7 +824,7 @@ when("the baseline, over the Postgres store", () => {
 
     const [article] = await db
       .insert(schema.articles)
-      .values({ ownerId: admin.ADMIN_USER_ID, slug: SLUG })
+      .values({ ownerId: admin.ADMIN_USER_ID_LOCAL, slug: SLUG })
       .returning();
     if (!article) throw new Error("could not create the fixture article");
     articleId = article.id;
@@ -677,7 +864,7 @@ when("the baseline, over the Postgres store", () => {
 
     await db
       .insert(schema.articles)
-      .values({ ownerId: admin.ADMIN_USER_ID, slug: FRESH_SLUG })
+      .values({ ownerId: admin.ADMIN_USER_ID_LOCAL, slug: FRESH_SLUG })
       .onConflictDoNothing();
   }, 60_000);
 
@@ -705,7 +892,7 @@ when("the baseline, over the Postgres store", () => {
     /* `asOwnerId` is module-private, and the brand exists so an owner cannot be
        invented by accident — which is what a test fixture is doing here on
        purpose, with a uuid the migrations put in `auth.users`. */
-    const begun = await owner.runAsOwner(admin.ADMIN_USER_ID as OwnerId, () =>
+    const begun = await owner.runAsOwner(admin.ADMIN_USER_ID_LOCAL as OwnerId, () =>
       revisions.beginRevision({ slug }),
     );
     void pg;
@@ -741,7 +928,7 @@ when("the baseline, over the Postgres store", () => {
         await db.transaction(async (tx) => {
           await tx.insert(schema.jobs).values({
             id,
-            ownerId: mod.admin.ADMIN_USER_ID,
+            ownerId: mod.admin.ADMIN_USER_ID_LOCAL,
             slug,
             steps: [{ name: "blocks", label: "Splitting into blocks", status: "pending" }],
             status: "running",

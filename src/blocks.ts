@@ -1117,6 +1117,13 @@ export async function previousBlocksFrom(
  * ran — a partial loss is real but any threshold for it would be a guess, and a
  * guessed alarm gets ignored (the numbers are in the info line instead).
  *
+ * **An empty run is a failed run, not an exempt one.** This used to return early
+ * when `produced` was empty, and that is the same mistake in a smaller costume:
+ * zero shared ids is zero shared ids however few blocks are on the other side.
+ * A paywall, an error page or a fetch that came back as an empty shell all
+ * extract to nothing, and the early return let stage 3 overwrite the HTML and
+ * the blocks file with that nothing and report success. GPT Sol, 2026-08-28.
+ *
  * There is deliberately **no exemption**, because there is no operation in this
  * repo that explicitly asks for a whole-article replacement: `force` on a step
  * means *run it again*, which is the ordinary idempotent path and must keep its
@@ -1124,7 +1131,7 @@ export async function previousBlocksFrom(
  * flag somebody set on purpose rather than anything inferred from the article.
  */
 function assertIdsCarried(slug: string, previous: Block[] | undefined, produced: Block[]): void {
-  if (!previous?.length || produced.length === 0) return;
+  if (!previous?.length) return;
   const before = new Set(previous.map((b) => b.id));
   if (produced.some((b) => before.has(b.id))) return;
   throw new IdsNotCarried(slug, before.size, produced.length);

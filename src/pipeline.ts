@@ -405,6 +405,15 @@ export interface PipelineStep {
  * Raised by review 2026-08-26 and not built; see
  * docs/plans/postgres-storage-implementation.md.
  *
+ * **No ids at all is not "all of them are there".** `every` over an empty array
+ * is true, so a `blocks.json` listing nothing passed this vacuously and the step
+ * reported itself done having retained zero ids — an article the stages after it
+ * then read as having no blocks in it. Reachable on a first ingest, where the
+ * runtime guard in src/blocks.ts has no baseline to refuse against: a paywall or
+ * an error page extracts to no prose, `{"blocks":[]}` satisfies the store's
+ * shape check (`SHAPE` in src/store/artifacts.ts takes any array), and every
+ * path exists and parses. GPT Sol, 2026-08-28.
+ *
  * Cheap enough to run on every skip check: one pass of the HTML with a regex,
  * then a set lookup per block. And the cost of being wrong is small in the
  * direction it can be wrong — stage 3 makes no model call, and re-running it
@@ -413,7 +422,7 @@ export interface PipelineStep {
 async function htmlCarriesItsIds(ctx: StepContext, store: ArtifactStore): Promise<boolean> {
   const file = await store.read(ctx.slug, "blocks", "blocks");
   const html = await store.read(ctx.slug, "blocks", "stampedHtml");
-  if (!file?.blocks || !html) return false;
+  if (!file?.blocks?.length || !html) return false;
   const stamped = new Set<string>();
   for (const [, id] of html.matchAll(/\sid="(spya-[a-z0-9]{6})"/g)) stamped.add(id!);
   return file.blocks.every((block) => stamped.has(block.id));
