@@ -17,9 +17,11 @@ import { describe, expect, it } from "vitest";
 import {
   assetUrlsIn,
   bucketDrift,
+  codeMayNotHaveShipped,
   declaredBuckets,
   describeRedirect,
   findSecretsInBundle,
+  GATE_FIXTURES,
   judgeClientBuild,
   judgeDeployments,
   judgeHealth,
@@ -27,7 +29,10 @@ import {
   ledgerDivergence,
   migrationState,
   migratorUrlFrom,
+  missingGateFixtures,
+  readLogQuery,
   rollbackAdvice,
+  sawSmokeLine,
   scanSql,
   stripSqlNoise,
   type DeclaredBucket,
@@ -741,5 +746,138 @@ describe("reading the bucket blocks out of supabase/config.toml", () => {
     expect(parsed).toEqual([
       { name: "a", public: false, fileSizeLimit: null, allowedMimeTypes: null },
     ]);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* The gate's own fixtures, and the checks that run after the push     */
+/* ------------------------------------------------------------------ */
+
+describe("the fixtures the gate worktree needs before its tests mean anything", () => {
+  const has =
+    (...present: string[]) =>
+    (rel: string) =>
+      present.includes(rel);
+
+  /* The broken state first: this is what every deploy looked like until
+     2026-08-28. Copying only data/ produced 13 ENOENT failures and 202 cascade
+     skips at every commit, so --force-gate=test became the only way to ship. */
+  it("names output/ when only data/ was copied", () => {
+    expect(missingGateFixtures(has("data"))).toEqual([
+      "output",
+      "output/writes.html",
+      "output/writes.blocks.json",
+    ]);
+  });
+
+  /* A directory that exists but is empty fails exactly like one that is absent,
+     so the sentinel files are the check, not the directory. */
+  it("is not satisfied by an empty output/", () => {
+    expect(missingGateFixtures(has("data", "output"))).toEqual([
+      "output/writes.html",
+      "output/writes.blocks.json",
+    ]);
+  });
+
+  it("passes when both halves of the artefact store are there", () => {
+    expect(missingGateFixtures(has(...GATE_FIXTURES))).toEqual([]);
+  });
+});
+
+describe("the smoke line the deploy knows it caused", () => {
+  const smoke = "/api/__deploy-smoke__/dpl_THIS";
+
+  /* The bug this replaces: `includes("__deploy-smoke__")`. A smoke request from
+     the PREVIOUS deployment, sitting in the same time window, satisfied it — so
+     the check reported that this deployment had logged when it had not. The
+     whole reason the path carries a deployment id is to make that impossible. */
+  it("rejects the smoke line of a different deployment", () => {
+    const lines = [{ requestPath: "/api/__deploy-smoke__/dpl_OTHER" }];
+    expect(sawSmokeLine(lines, smoke)).toBe(false);
+  });
+
+  it("finds it on requestPath", () => {
+    expect(sawSmokeLine([{ requestPath: smoke }], smoke)).toBe(true);
+  });
+
+  /* Vercel has supplied both shapes; the path is inside our own pino line when
+     requestPath is absent. */
+  it("finds it inside the message body", () => {
+    const lines = [{ message: `{"level":"warn","path":"${smoke}","status":401}` }];
+    expect(sawSmokeLine(lines, smoke)).toBe(true);
+  });
+
+  it("does not mistake a near-miss path for it", () => {
+    expect(sawSmokeLine([{ requestPath: "/api/health" }], smoke)).toBe(false);
+  });
+});
+
+describe("what a vercel logs invocation actually told us", () => {
+  const uid = "dpl_THIS";
+
+  /* The four outcomes used to be two. A CLI that failed to authenticate, a
+     network error and a genuinely quiet deployment all arrived as "returned
+     nothing" — so a poll built on the old reading would have patiently re-run a
+     command that could never work, and called the result a quiet app. */
+  it("reports a non-zero exit as a broken check, not an empty log", () => {
+    const q = readLogQuery(1, "Error: not authenticated\n", uid);
+    expect(q.kind).toBe("commandFailed");
+    expect(q.kind === "commandFailed" && q.detail).toContain("not authenticated");
+  });
+
+  it("does not treat lines emitted before a failure as a successful read", () => {
+    const q = readLogQuery(1, `{"id":"a","deploymentId":"${uid}"}\nboom\n`, uid);
+    expect(q.kind).toBe("commandFailed");
+  });
+
+  it("reports JSON-shaped output that will not parse, rather than dropping it", () => {
+    const q = readLogQuery(0, '{"id":"a", TRUNCATED\n{"id":"b", ALSO\n', uid);
+    expect(q.kind).toBe("unparsable");
+    expect(q.kind === "unparsable" && q.detail).toContain("2");
+  });
+
+  it("calls a clean run with no rows empty", () => {
+    expect(readLogQuery(0, "Fetching logs...\n", uid).kind).toBe("empty");
+  });
+
+  it("keeps only this deployment's rows", () => {
+    const out = [
+      `{"id":"a","deploymentId":"${uid}","message":"mine"}`,
+      '{"id":"b","deploymentId":"dpl_OTHER","message":"theirs"}',
+    ].join("\n");
+    const q = readLogQuery(0, out, uid);
+    expect(q.kind).toBe("lines");
+    expect(q.kind === "lines" && q.lines.map((l) => l.message)).toEqual(["mine"]);
+  });
+
+  it("is empty, not lines, when every row belongs to another deployment", () => {
+    const out = '{"id":"b","deploymentId":"dpl_OTHER"}';
+    expect(readLogQuery(0, out, uid).kind).toBe("empty");
+  });
+});
+
+describe("whether a failure means the code might not be live", () => {
+  /* The bug: this exclusion was the single literal "errors in the log", and the
+     log-READ failure is recorded as "read this deployment's logs". So an
+     unreadable log printed SCHEMA ADVANCED; CODE MAY NOT HAVE over a deployment
+     that had just passed nine liveness checks, and offered a rollback for it. */
+  it("does not blame the code when only the log could not be read", () => {
+    expect(codeMayNotHaveShipped(["read this deployment's logs"])).toBe(false);
+  });
+
+  it("does not blame the code when the smoke line was missing from the log", () => {
+    expect(codeMayNotHaveShipped(["the log contains the request this script made"])).toBe(false);
+  });
+
+  it("does not blame the code for errors found in the log", () => {
+    expect(codeMayNotHaveShipped(["errors in the log"])).toBe(false);
+  });
+
+  it("does blame the code when a check before the push failed", () => {
+    expect(codeMayNotHaveShipped(["read this deployment's logs", "build"])).toBe(true);
+  });
+
+  it("is false for a clean run", () => {
+    expect(codeMayNotHaveShipped([])).toBe(false);
   });
 });

@@ -439,6 +439,9 @@ export function judgeClientBuild(
  * both costs nothing.
  */
 export interface LogLine {
+  /** Vercel's own row id — the stable key for de-duplicating across poll attempts. */
+  id?: string;
+  timestamp?: number;
   deploymentId?: string;
   /** Vercel's own classification, which is **not** our pino level — see below. */
   level?: string;
@@ -496,6 +499,115 @@ export function judgeLogs(lines: readonly LogLine[]): LogVerdict {
   }
 
   return { loud, byStatus };
+}
+
+/**
+ * Did the log contain the one request we know we caused?
+ *
+ * **Exact path, not `includes("__deploy-smoke__")`.** The smoke path carries the
+ * deployment id precisely so that the line cannot be confused with one from an
+ * earlier deploy, and a substring match throws that away — it would accept a
+ * smoke line from the *previous* deployment sitting in the same time window and
+ * report that this deployment logged, which is the exact false pass the check
+ * exists to prevent.
+ *
+ * The path is read from `requestPath` where Vercel supplies it, and otherwise
+ * from the message body, because the two shapes have both been seen.
+ */
+export function sawSmokeLine(lines: readonly LogLine[], smokePath: string): boolean {
+  return lines.some((l) => l.requestPath === smokePath || (l.message ?? "").includes(`"path":"${smokePath}"`));
+}
+
+/**
+ * What a `vercel logs` invocation actually told us — four outcomes, not two.
+ *
+ * The version this replaces read only stdout and treated everything that was not
+ * a parseable JSON line as absence. So a CLI that failed to authenticate, a
+ * network error, and a genuinely quiet deployment all arrived as "returned
+ * nothing", and the retry logic built on top of that would have patiently
+ * re-run a command that was never going to work. Distinguishing them is what
+ * makes a poll honest: `empty` is worth retrying, `commandFailed` is not.
+ */
+export type LogQuery =
+  | { kind: "commandFailed"; detail: string }
+  | { kind: "unparsable"; detail: string }
+  | { kind: "empty" }
+  | { kind: "lines"; lines: LogLine[] };
+
+export function readLogQuery(exitCode: number, stdout: string, deploymentId: string): LogQuery {
+  const rows = stdout.split("\n");
+  const candidates = rows.filter((l) => l.trimStart().startsWith("{"));
+
+  const lines: LogLine[] = [];
+  let unparsed = 0;
+  for (const row of candidates) {
+    try {
+      lines.push(JSON.parse(row) as LogLine);
+    } catch {
+      unparsed++;
+    }
+  }
+
+  /* Exit code first: a non-zero CLI has nothing useful to say, and any lines it
+     did emit before failing describe an incomplete window. */
+  if (exitCode !== 0) {
+    const noise = rows
+      .filter((l) => l.trim() && !l.trimStart().startsWith("{"))
+      .slice(-3)
+      .join(" / ");
+    return { kind: "commandFailed", detail: `exit ${exitCode}${noise ? `: ${noise}` : ""}` };
+  }
+
+  /* Every JSON-looking row failed to parse. Silently dropping these is how a
+     changed output format becomes "the app is quiet". */
+  if (candidates.length > 0 && lines.length === 0) {
+    return { kind: "unparsable", detail: `${unparsed} JSON-shaped line(s) would not parse` };
+  }
+
+  const mine = lines.filter((x) => !x.deploymentId || x.deploymentId === deploymentId);
+  return mine.length === 0 ? { kind: "empty" } : { kind: "lines", lines: mine };
+}
+
+/**
+ * The fixture state the gate worktree needs before the tests can mean anything.
+ *
+ * `data/` and `output/` are two halves of one filesystem artefact store
+ * (`src/store/artifacts-fs.ts`), and for a long time the deploy copied only the
+ * first. The result was not a clear error but thirteen `ENOENT`s and two hundred
+ * cascade-skips, which read like a broken commit and were nothing of the kind.
+ *
+ * Named sentinel files, not just the directories: an `output/` that exists but
+ * is empty produces exactly the same confusing failure as one that is absent.
+ */
+export const GATE_FIXTURES = ["data", "output", "output/writes.html", "output/writes.blocks.json"] as const;
+
+export function missingGateFixtures(exists: (relPath: string) => boolean): string[] {
+  return GATE_FIXTURES.filter((rel) => !exists(rel));
+}
+
+/**
+ * The checks that run *after* the deployment is live and already verified.
+ *
+ * None of them can mean the code failed to ship, so none of them should trigger
+ * the `SCHEMA ADVANCED; CODE MAY NOT HAVE` warning or the rollback advice. That
+ * exclusion used to be one inline string literal, `"errors in the log"` — and
+ * the log-*read* failure is recorded under a different name, so an unreadable
+ * log printed the scariest banner in the script over a deployment that had just
+ * passed nine liveness checks, and offered a rollback for it.
+ *
+ * The bug was a list that had to agree with names written a thousand lines away.
+ * It is here, tested, because the failure mode is silent: the banner is correct
+ * for its own condition and simply asks the wrong question.
+ */
+export const AFTER_THE_FACT_CHECKS = [
+  "errors in the log",
+  "read this deployment's logs",
+  "the log contains the request this script made",
+] as const;
+
+export function codeMayNotHaveShipped(failed: readonly string[]): boolean {
+  const afterwards = new Set<string>(AFTER_THE_FACT_CHECKS);
+  return failed.some((f) => !afterwards.has(f));
 }
 
 /* ------------------------------------------------------------------ */

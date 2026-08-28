@@ -49,6 +49,7 @@ import { LockHeldError, takeLockFile } from "./lockfile.js";
 import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
 import {
   assetUrlsIn,
+  codeMayNotHaveShipped,
   describeRedirect,
   findSecretsInBundle,
   judgeClientBuild,
@@ -58,11 +59,15 @@ import {
   ledgerDivergence,
   migratorUrlFrom,
   migrationState,
+  missingGateFixtures,
+  readLogQuery,
   rollbackAdvice,
+  sawSmokeLine,
   scanSql,
   type Expected,
   type JournalEntry,
   type LogLine,
+  type LogQuery,
   type VercelDeployment,
 } from "./deploy-checks.js";
 
@@ -583,10 +588,46 @@ function gatesAt(sha: string): void {
     /* Only the tests need the personal state, so only they get it. */
     const envLocal = path.join(ROOT, ".env.local");
     if (existsSync(envLocal)) symlinkSync(envLocal, path.join(wt, ".env.local"));
-    if (existsSync(path.join(ROOT, "data"))) {
-      cpSync(path.join(ROOT, "data"), path.join(wt, "data"), { recursive: true });
+
+    /**
+     * **Both halves of the store, or say so.** `data/` and `output/` are one
+     * filesystem artefact store split across two directories, and copying only
+     * the first made the `test` gate structurally incapable of passing: 13
+     * failures and 202 cascade-skips at every commit, so `--force-gate=test`
+     * became the only way anyone deployed. An override that is required every
+     * time is not an override.
+     *
+     * Named as its own gate rather than left to surface as `ENOENT`s, because a
+     * missing fixture and a broken commit are opposite diagnoses that produced
+     * identical output.
+     */
+    const missing = missingGateFixtures((rel) => existsSync(path.join(ROOT, rel)));
+    gate("fixtures", missing.length === 0, () =>
+      [
+        `         missing from this working tree: ${missing.join(", ")}`,
+        "         The suite is not hermetic. Both are gitignored derived artefacts, so without",
+        "         them the tests do not fail honestly — they ENOENT and cascade-skip, which reads",
+        "         exactly like a broken commit. Re-run the pipeline for a slug to rebuild them.",
+      ].join("\n"),
+    );
+
+    /* Copied rather than linked because the tests create and delete directories
+       underneath these, and a link would point that at the real one.
+
+       Retried once: several agents share this tree, and a peer's test run
+       deleting a fixture directory mid-copy crashed a whole deploy on
+       2026-08-28 with an uncatchable-looking `directory_iterator` abort. */
+    for (const dir of ["data", "output"] as const) {
+      const from = path.join(ROOT, dir);
+      if (!existsSync(from)) continue;
+      try {
+        cpSync(from, path.join(wt, dir), { recursive: true });
+      } catch (err) {
+        info(`${dir}/ moved under the copy (${(err as Error).message.slice(0, 60)}…) — retrying once`);
+        cpSync(from, path.join(wt, dir), { recursive: true, force: true });
+      }
     }
-    info("tests run with .env.local linked and data/ copied — the suite is not hermetic");
+    info("tests run with .env.local linked and data/ + output/ copied — the suite is not hermetic");
 
     const tc = run("npm", ["run", "--silent", "typecheck"], { cwd: wt, env: BUILD_ENV });
     gate("typecheck", tc.code === 0, () => tail(tc.out, 20));
@@ -1144,54 +1185,96 @@ async function verify(expected: Expected, smoke: string): Promise<void> {
  * therefore logs. Once that line is found, the absence of errors beside it is
  * worth something.
  */
-function readLogs(deployment: VercelDeployment, since: Date, smoke: string): void {
+/**
+ * How long to keep asking, and at what spacing.
+ *
+ * **This is an operator-wait budget, not a measured p95.** One deploy showed the
+ * smoke line absent at ~0s and present at ~90min, which bounds the lag to
+ * somewhere in a 90-minute interval and supports no percentile whatever.
+ * Measuring it properly needs dozens of samples across deployments and times of
+ * day, with timeouts recorded as censored observations — worth doing, not done.
+ * Until then this says what it is.
+ */
+const LOG_POLL_SECONDS = [0, 2, 5, 10, 20, 40, 70, 100, 120] as const;
+
+async function readLogs(deployment: VercelDeployment, since: Date, smoke: string): Promise<void> {
   step("Logs");
 
-  const r = run("npx", [
-    "-y",
-    LOGS_CLI,
-    "logs",
-    "--scope",
-    SCOPE,
-    "--deployment",
-    deployment.uid,
-    "--json",
-    "--since",
-    since.toISOString(),
-    "--limit",
-    "100",
-  ]);
+  const queryOnce = (): LogQuery => {
+    const r = run("npx", [
+      "-y",
+      LOGS_CLI,
+      "logs",
+      "--scope",
+      SCOPE,
+      "--deployment",
+      deployment.uid,
+      "--json",
+      "--since",
+      since.toISOString(),
+      "--limit",
+      "100",
+    ]);
+    return readLogQuery(r.code, r.out, deployment.uid);
+  };
 
-  const lines: LogLine[] = r.out
-    .split("\n")
-    .filter((l) => l.startsWith("{"))
-    .flatMap((l) => {
-      try {
-        return [JSON.parse(l) as LogLine];
-      } catch {
-        return [];
-      }
-    })
-    .filter((x) => !x.deploymentId || x.deploymentId === deployment.uid);
+  /**
+   * Poll until the line we know we caused shows up.
+   *
+   * **Rows accumulate across attempts rather than being replaced.** Vercel does
+   * not promise ingestion order, so an error visible on attempt two must not
+   * vanish because attempt five happened to return a narrower window — which
+   * would let a retry manufacture the clean result it was hoping for.
+   */
+  const seen = new Map<string, LogLine>();
+  let waited = 0;
+
+  for (const at of LOG_POLL_SECONDS) {
+    if (at > waited) {
+      await sleep((at - waited) * 1000);
+      waited = at;
+    }
+    const q = queryOnce();
+
+    if (q.kind === "commandFailed" || q.kind === "unparsable") {
+      /* Not worth retrying: the command is broken, not the timing. Saying which
+         matters — the version this replaces reported all of it as "returned
+         nothing", so a CLI that could never have worked looked like a quiet app. */
+      record("read this deployment's logs", [
+        `${LOGS_CLI} ${q.kind === "commandFailed" ? "failed" : "returned output we cannot parse"}: ${q.detail}`,
+        "That is not evidence of health — it is the check itself being broken.",
+      ]);
+      return;
+    }
+
+    if (q.kind === "lines") {
+      for (const l of q.lines) seen.set(l.id ?? `${l.timestamp ?? ""}|${l.message ?? ""}`, l);
+    }
+
+    if (sawSmokeLine([...seen.values()], smoke)) break;
+  }
+
+  const lines = [...seen.values()];
 
   if (lines.length === 0) {
     record("read this deployment's logs", [
-      `${LOGS_CLI} returned nothing for ${deployment.uid}.`,
-      "That is not evidence of health. Either the query failed, or the CLI is too old to have",
-      "history at all — and an empty log looks identical to a quiet app.",
+      `${LOGS_CLI} returned nothing for ${deployment.uid} over ${waited}s of polling.`,
+      "That is not evidence of health: an empty log looks identical to a quiet app.",
+      "The deployment itself was verified live by the checks above — this check is inconclusive,",
+      "not a reason to roll back.",
     ]);
     return;
   }
 
   const { loud, byStatus } = judgeLogs(lines);
-  info(`${lines.length} line(s): ${[...byStatus].map(([s, n]) => `${n}×${s}`).join(", ")}`);
+  info(`${lines.length} line(s) after ${waited}s: ${[...byStatus].map(([s, n]) => `${n}×${s}`).join(", ")}`);
 
   /* The line we know we caused. Without it, "no errors" is an empty set we made
      ourselves. */
-  const sawSmoke = lines.some((l) => (l.requestPath ?? l.message ?? "").includes("__deploy-smoke__"));
-  record("the log contains the request this script made", sawSmoke ? [] : [
-    `nothing in the log mentions ${smoke}, though it was made and answered 401.`,
-    "Logs may be lagging; re-run with --verify-only, or look in the dashboard before trusting the line below.",
+  record("the log contains the request this script made", sawSmokeLine(lines, smoke) ? [] : [
+    `nothing in the log is a request for ${smoke}, though it was made and answered 401.`,
+    `Ingestion may still be lagging after ${waited}s. Re-run the query by hand before trusting the line below:`,
+    `  npx -y ${LOGS_CLI} logs --scope ${SCOPE} --deployment ${deployment.uid} --json --since ${since.toISOString()}`,
   ]);
 
   if (loud.length === 0) {
@@ -1261,9 +1344,13 @@ async function main(): Promise<void> {
 
     const smoke = smokePath(deployment.uid);
     await verify({ commit: sha, deploymentId: deployment.uid }, smoke);
-    readLogs(deployment, new Date(pushedAt), smoke);
+    await readLogs(deployment, new Date(pushedAt), smoke);
 
-    return summarise(failures.length && wasServing ? `https://${wasServing.url}` : null);
+    /* Rollback is offered only when the code may not be live. An unreadable log
+       is not a reason to undo a verified deployment — and doing so silently
+       turns off production-domain auto-assignment, which is the trap the advice
+       itself warns about. */
+    return summarise(codeMayNotHaveShipped(failures) && wasServing ? `https://${wasServing.url}` : null);
   } finally {
     release();
   }
@@ -1294,7 +1381,15 @@ function summarise(previous: string | null): void {
    * and it is the moment somebody reaches for a schema rollback, which is the
    * one thing that would turn a recoverable half-deploy into an outage.
    */
-  if (schemaAdvanced > 0 && failures.some((f) => f !== "errors in the log")) {
+  /* Live and verified, and only the after-the-fact checks failed. Say that
+     plainly: the banner and the rollback advice below are both about code that
+     may not have shipped, and this is not that. */
+  if (didDeploy && !codeMayNotHaveShipped(failures)) {
+    say(`${GREEN}Deployed, and the functional checks passed.${OFF} Log verification was inconclusive —`);
+    say("the deployment is live; this is a gap in what we can see, not a reason to roll back.");
+  }
+
+  if (schemaAdvanced > 0 && codeMayNotHaveShipped(failures)) {
     say();
     say(`${RED}SCHEMA ADVANCED; CODE MAY NOT HAVE.${OFF}`);
     say(`${schemaAdvanced} migration(s) were applied to the remote before this failed.`);

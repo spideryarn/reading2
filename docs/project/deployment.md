@@ -186,6 +186,61 @@ because each one is a mistake this page already records:
   deployment three commits old. Both artefacts now carry a
   [build stamp](#the-build-stamp).
 
+### The gate needs both halves of the artefact store
+
+The test suite is **not hermetic**, and the worktree is empty of everything
+gitignored, so the gate copies `data/` **and `output/`** in and links `.env.local`.
+
+For its first day it copied only `data/`. `output/` is the other half of the same
+filesystem artefact store ([`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)),
+fourteen test files read from it, and the result was **13 failures and 202
+cascade-skips at every commit** — so the `test` gate could not go green, and
+`--force-gate=test` became the only way anybody deployed. Measured on two
+different shas: identical failure set both times; the same suite in the working
+tree passed 4820/4820; copying `output/` took it to a single failure.
+
+That single survivor was real, and is the argument for the whole design: a
+committed `docs/project/web-client.md` linking to an **untracked** test file.
+Invisible in the working tree, which has the file. Exactly the class the worktree
+exists to catch.
+
+There is now a named `fixtures` gate that says which directory or sentinel file
+is missing, because a missing fixture and a broken commit are opposite diagnoses
+that used to produce identical output. **This remains an interim repair**: the
+gate still means *"does this commit work against this laptop's declared test
+environment?"*, not *"can a fresh clone reproduce this?"* — and one consequence
+is that `doc-links` will accept a link into gitignored `output/`, which nobody
+else can follow. The debt is a small committed fixture corpus under
+`tests/fixtures/`, noted in [deploy-pipeline.md](../plans/deploy-pipeline.md).
+
+### Reading the logs is a poll, not a question
+
+The last step asks one thing: **is the line I know I caused here** — a
+`/api/__deploy-smoke__/<deployment id>` request the script makes itself. Only once
+that is found does the absence of errors beside it mean anything.
+
+It used to ask exactly once, immediately after making the request, and Vercel's
+log ingestion is slower than that — so a healthy deploy reported *"returned
+nothing"*. It now retries at 0, 2, 5, 10, 20, 40, 70, 100 and 120 seconds,
+accumulating rows across attempts so that an error seen early cannot vanish from a
+later, narrower window. **That budget is an operator's patience, not a measured
+p95**; the one observation behind it (absent at ~0s, present at ~90min) supports
+no percentile at all, and measuring it properly needs dozens of samples with
+timeouts recorded as censored observations.
+
+Two things that made the old version worse than useless, both now separated:
+
+- **A failed command is not an empty log.** The exit code was ignored and every
+  unparseable line silently dropped, so a CLI that could not authenticate, a
+  changed output format and a genuinely quiet app all arrived as "returned
+  nothing".
+- **A log-only failure cannot mean the code did not ship.** It runs *after* the
+  push and after nine passing liveness checks. It used to print
+  `SCHEMA ADVANCED; CODE MAY NOT HAVE` and offer a rollback anyway, because the
+  exclusion list held one string literal that no longer matched the name being
+  recorded. Rolling back for it would have been actively harmful — a rollback
+  silently turns off production-domain auto-assignment.
+
 ### The build stamp
 
 `dist/build.json` for the client and a `build` block on `/api/health` for the
