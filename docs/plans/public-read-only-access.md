@@ -254,6 +254,32 @@ import graph** ([`tests/public-imports.test.ts`](../../tests/public-imports.test
 future work here that weakens either of the first two has removed the protection whatever
 `currentOwnerId()` still does.
 
+**And there is a whole class of read none of that catches, demonstrated rather than argued.** After
+the review, the agent that built this slice put a function on the public reader that selects the
+owner's `glossary_lookups` — their requested answer, its citations, its search count, its model, its
+exact time — keyed only by `article_id`, which a public read legitimately holds. **Typecheck clean.
+All five guards green. Eighty-three tests passing.** Then it took the function out again.
+
+Every defence misses it, each for its own reason, and none of the misses is a bug in that defence:
+
+| Defence | Why it does not see this |
+|---|---|
+| the owner-isolation grep | looks for `eq(articles.slug, …)`; the query never mentions `articles` |
+| the closed import graph | forbids `api.ts`, `pg.ts`, `owner.ts`, the writers, the gateway — but `db/schema.ts` is legitimately in the public graph and it exports every table |
+| the DTO allowlist tests | only ever see what a projection was handed |
+| the zero-spend sweep | is about money, and this costs nothing |
+| `currentOwnerId()` throwing | never runs |
+
+Even the hardwired reader does not help, because **a child table needs no predicate**: it is keyed by
+an id the public read already holds by right. So the answer is a sixth guard, and it is the same move
+that worked three times already in this feature — enumerate the safe set, so widening it is
+deliberate. **A public module may reference `articles`, `article_revisions`, `revision_blocks` and
+`block_identities`, and no other table.** A denylist of reader-owned tables would have to be updated
+by whoever adds the ninth one, and they will be thinking about their own feature.
+
+This is not hypothetical. Sol's design input named `glossary_lookups` as the thing a public glossary
+read must never join, and **the public glossary read is the first endpoint stage 1b adds.**
+
 **The public namespace is a closed room.** Once a request is inside `/api/public/`, an unknown path
 or a wrong method **terminates there**. It never falls through into the authenticated table. That
 fallthrough is the single most likely way this feature grows a hole.
