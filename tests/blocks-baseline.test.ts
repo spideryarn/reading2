@@ -435,11 +435,23 @@ const when = reachable ? describe : describe.skip;
 /**
  * **One test that always runs, and whose name is the reason.**
  *
- * `describe.skip` hides four cases behind the word "skipped", and the console
- * warning above turned out not to survive vitest's default reporter — module-level
- * output during collection is not shown. So the state is put where it cannot be
- * missed: in a test name, which every reporter prints. A reader scanning a run
- * sees *why* the Postgres half did not execute rather than a silent count.
+ * `describe.skip` hides four cases behind the word "skipped", so the reason is
+ * put in a test name, where `--reporter=verbose` shows it beside the four that
+ * did not run.
+ *
+ * **And under the default reporter it is still invisible, which is worth saying
+ * rather than leaving somebody to discover.** An earlier version of this comment
+ * claimed a test name is printed by "every reporter". It is not. Vitest 4's
+ * default reporter prints counts and nothing else — not passing test names, and
+ * not `console.warn` either, from collection *or* from inside a test body. Both
+ * were measured, by grepping a default run for the message and getting zero.
+ *
+ * So `npm test` shows `4 skipped` and no cause, and there is no way to change
+ * that short of failing — which would redden the suite for everyone without a
+ * local Postgres, and a missing database is a fact about a laptop rather than a
+ * defect. The reason lives here and one `--reporter=verbose` away. That is the
+ * honest state of it, and the limitation is recorded in
+ * docs/project/testing.md § a suite that cannot run.
  */
 describe("the Postgres half of this file", () => {
   it(

@@ -297,3 +297,27 @@ re-extraction**, because ids are carried over by matching content and a rule has
 Nothing points at a rule today (it's `gistable: false`, so no ToC row), but a tree leaf anchored to
 one goes stale. `tests/blocks.test.ts` asserts the current behaviour so that fixing it is a
 deliberate act rather than an accident. See [block-ids.md](block-ids.md).
+
+## A suite that cannot run, and the reason you cannot see
+
+A Postgres suite that finds the database behind the code should say so. Ours can only half say it,
+and the half that fails is the half most people would meet.
+
+`tests/blocks-baseline.test.ts` skips its four Postgres cases when
+`spideryarn.revision_blocks` lacks a column that `src/store/artifacts-pg.ts` selects — an unapplied
+migration. The reason is written into a test name, so `--reporter=verbose` prints it beside the four
+that did not run, along with the command to fix it.
+
+**Under the default reporter it is invisible.** Vitest 4's default prints counts and nothing else:
+not passing test names, and not `console.warn` — from collection *or* from inside a test body. Both
+were measured rather than assumed, by grepping a default run for the message and getting zero. So
+`npm test` shows `4 skipped` with no cause.
+
+The alternative is to fail instead of skip, and that is worse: it reddens the suite for everyone
+without a local Postgres, and a missing database is a fact about a laptop rather than a defect in the
+code. So this is a limit rather than a bug, and it is written down because a silent skip is exactly
+the shape [silent-success.md](../reusable/silent-success.md) is about — the difference here being
+that the count *does* change, so something is visibly not happening, and only the why is missing.
+
+**If you see a skipped Postgres case, re-run that file with `--reporter=verbose` before believing
+anything about it.**
