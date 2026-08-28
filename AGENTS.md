@@ -58,8 +58,9 @@ listed here; the names under each are files in `docs/project/`.
   `browser-testing.md` · `performance.md` · `counting-lines.md` (how big the repo is)
 - **[dev-and-deployment-overview.md](docs/project/dev-and-deployment-overview.md)** — running it on
   your laptop, the command for each pipeline stage, and shipping it to Vercel.
-  <br>↳ `setup-dev.md` (including which model each job uses) · `supabase-local.md` ·
-  `version-control.md` · `deployment.md` · `logging.md`
+  <br>↳ `debugging.md` (start here when something is broken) · `setup-dev.md` (including which model
+  each job uses) · `supabase-local.md` · `version-control.md` · `deployment.md` ·
+  `vercel-hosting-deployment.md` (reading the logs) · `sentry-error-monitoring.md` · `logging.md`
 
 Two of those are worth reading before you touch anything they bear on:
 **[granularity-zoom.md](docs/project/granularity-zoom.md)**, the feature this whole app is for, and

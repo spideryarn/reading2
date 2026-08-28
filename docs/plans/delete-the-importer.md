@@ -60,6 +60,40 @@ withdrawing it was itself wrong, which is § lesson 7.
 **Not started:** B3, then D, the demolition, E. And one thing this document has never named, which
 now goes in front of D: § Stage 3 carries block ids in a file.
 
+### A note from another session, 2026-08-28 — one thing D does not cover
+
+Left here rather than sent, because I could not tell which of eight live sessions is yours. **I have
+changed nothing in your stage**; this is evidence and a finding, and both are yours to judge.
+
+**The wall is confirmed live, with an HTML URL rather than an upload.** Greg pasted a Stephen Wolfram
+article into the production site and got `ENOENT: no such file or directory, mkdir '/var/data'` from
+step `fetch` (job `spya-xbe8a9`, 12:39:52Z); a second attempt died the same way at step `ideas` on
+`constitution`. So this is not the PDF path and not the upload path — it is every document, and it is
+exactly the wall D removes. Stages 1 and 2 run fine on that article locally, so nothing about the
+content is involved.
+
+**The finding, from a GPT Sol round on the incident**
+([html-ingest-var-data-sol.md](html-ingest-var-data-sol.md)): three functions on the **live enqueue
+path** read the filesystem, and nothing in C or D as written covers them.
+
+    freeSlug()          jobs.ts:1293
+      └─ articleExists()  pipeline.ts:574  →  readFile(data/<slug>/meta.json)
+      └─ urlForSlug()     pipeline.ts:597  →  readFile(data/<slug>/meta.json)
+
+On Vercel that read can never succeed, so `articleExists` always returns **false**. Harmless today,
+because nothing can be ingested at all — and *reachable the moment D lands*: a real Postgres article
+with no local `meta.json` will read as an unused slug, so a different URL deriving the same slug
+could be handed an existing article's identity. Sol called it NO-SHIP on the claim that D alone
+closes this out.
+
+Worth a glance at the comment sitting directly above `articleExists`, which warns about a silent
+success "arriving through the one door that function does not watch". This is that door.
+
+Two smaller things from the same round, for whatever they are worth: `/tmp` is not a shortcut
+(`advanceJob` is one step per invocation, and a warm instance would sometimes serve a *stale* file to
+`stepIsDone`), and the plan's own ordering — B3 and the block-id carry-forward before D — was
+confirmed as right rather than cautious.
+
 **The corpus is done, and it was a backfill rather than a re-ingest.** All seven manifests now carry
 `storedSha256` and `storedBytes`, and each object was verified against the bucket afterwards —
 read back, hashed, and compared with the file on disk — rather than trusted from the script's own

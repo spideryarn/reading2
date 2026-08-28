@@ -45,9 +45,16 @@ is the one worth knowing unprompted: a bad tree draws a *wrong article* rather t
   daemon among them.
 - **[version-control.md](version-control.md)** — the remote, and why a commit can be green here and
   broken everywhere else.
+- **[debugging.md](debugging.md)** — **start here when something is broken.** A signposting page:
+  which of the three places (health, Vercel logs, Sentry) answers which question, and in what order.
 - **[deployment.md](deployment.md)** — Vercel: the domain move that never touched the registrar, the
   build that reports success and ships a function failing on every request, and who can reach the
-  app today (more people than you would think).
+  app today (more people than you would think). The *process* side.
+- **[vercel-hosting-deployment.md](vercel-hosting-deployment.md)** — the *inspection* side: the two
+  log queries and the three traps, including the one that cost an afternoon — the Vercel error
+  dashboard never shows an application failure, because the app answered 200.
+- **[sentry-error-monitoring.md](sentry-error-monitoring.md)** — it is installed and it is on, which
+  is not what a quick grep suggests. What reaches it, why a failed step is a 200, and the two gaps.
 - **[ai-gateway.md](ai-gateway.md)** — every paid call goes through one of two seams, and each one
   leaves a row behind. `npm run cost` is how you read them back.
 - **[logging.md](logging.md)** — why Pino, what the levels mean here, why path-based redaction makes

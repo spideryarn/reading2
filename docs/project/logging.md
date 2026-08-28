@@ -711,6 +711,18 @@ when the job is enqueued" — never true, and it read as permission to relax.
 If a URL ever does need logging, put the **hostname** in, not the URL. And if this project ever has
 real users, revisit this alongside [the correlation id](#the-correlation-id-not-yet).
 
+## Where to look when production breaks
+
+Moved, so there is one copy. **[debugging.md](debugging.md)** is the front door — which of the three
+places answers which question — and the recipes live with the thing they operate:
+
+- **[vercel-hosting-deployment.md](vercel-hosting-deployment.md)** — the log queries, and the three
+  traps. Two of them are about *these* lines meeting that platform: the error dashboard never sees a
+  handled failure, and filtering by `level` returns silence rather than our errors.
+- **[sentry-error-monitoring.md](sentry-error-monitoring.md)** — the 30-day half.
+
+The rest of this file is *why the lines are shaped the way they are*.
+
 ## Vercel
 
 From [Vercel's runtime logs documentation](https://vercel.com/docs/logs/runtime), page dated
@@ -767,18 +779,24 @@ question, deliberately left alone: only the logging changed.
 **`console.warn` is filed as an `error`** by Vercel in a non-streaming function — its own mapping
 table says so. Since Pino writes every level to stdout, everything we emit arrives as `info` and the
 real level lives in the JSON `level` field. So **Vercel's own level filter will not tell you our
-levels apart** — everything is `info` to it. Whether you can filter on our `level` field instead
-depends on the unresolved question in the next paragraph; until somebody checks a real deployment,
-assume you are searching raw text and that `"level":"error"` is a *string to grep for* rather than a
-facet. This mostly matters for the `console` calls that remain in CLI scripts, which never run on
-Vercel anyway.
+levels apart** — everything is `info` to it. This mostly matters for the `console` calls that remain
+in CLI scripts, which never run on Vercel anyway.
 
-**Structured fields may not be indexed.** Two Vercel pages contradict each other: the KB guide says
-structured JSON "becomes searchable in the dashboard", while the reference doc lists a fixed set of
-searchable fields and then says the feature "is limited to the `message` and `requestPath` field".
-Unresolved, and cheap to settle with one deploy. Until somebody does, **do not design around the
-optimistic reading** — put anything you will want to grep for in the `msg` string *as well as* in the
-object, which is why log messages here look redundant:
+**Both halves of this are now settled on a real deployment**, 2026-08-28, and they landed on opposite
+sides — which is why the paragraph above used to hedge:
+
+- **The level facet is useless to us, confirmed.** `get_runtime_logs` filtered to
+  `level: ["error","warning"]` returned *no logs* over a window containing two lines whose body reads
+  `"level":"error"`; Vercel had tagged both `[info/serverless]`. So `"level":"error"` is a **string
+  to grep for**, never a facet — and the cost of getting this wrong is silence that reads as health.
+- **Structured fields *are* reachable by text search.** Two Vercel pages contradict each other — the
+  KB guide says structured JSON "becomes searchable in the dashboard", the reference doc says the
+  feature "is limited to the `message` and `requestPath` field" — and the pessimistic one is wrong,
+  at least for `query`. Searching `ENOENT` matched lines carrying that string only inside the nested
+  `err` object, nowhere in the message or the path.
+
+The redundancy below stays anyway. It costs nothing, it survives whatever Vercel changes next, and
+the `msg` string is what a human actually reads in a wall of JSON:
 
 ```ts
 log("jobs").info({ slug, step, ms }, `ingest ${step} for ${slug}`);
@@ -835,33 +853,17 @@ exists is what is described above, plus the error tracker below, and nothing els
 
 ### Error tracking
 
-Logs and error tracking answer different questions. A log tells you what happened during a request
-while you are watching. An error tracker tells you something broke when you were not, groups the
-thousandth occurrence with the first, and keeps the stack trace longer than a day.
+**Built on 2026-08-27** — Sentry, free tier, errors only — and it is on. The whole of it now lives in
+**[sentry-error-monitoring.md](sentry-error-monitoring.md)**; only the part that is a rule *about
+this file* stays here:
 
-**Built on 2026-08-27** — Sentry, free tier, errors only. The trigger this section used to name was
-*"the first time you want to look at something that happened more than 24 hours ago"*, and the free
-tier's 30-day retention against Vercel's one day is most of why it is worth having.
-
-Four things about it are worth knowing from here, and the rest is in
-[error-monitoring-sentry.md](../plans/error-monitoring-sentry.md):
-
-- **It is a fifth egress, and the rules of this file apply to it.** Everything
-  [error-boundary.md](../plans/error-boundary.md) says about an `Error.message` carrying the
-  article is *more* true when the message leaves the machine. `Error.message` is dropped unless it
-  ends in a code from [`src/messages.ts`](../../src/messages.ts), the whole event is rebuilt from an
-  allowlist in [`src/monitoring-scrub.ts`](../../src/monitoring-scrub.ts), and the SDK's own
-  defaults — which include the local variables of every stack frame — are turned off one by one.
-- **It is not wired through this file, deliberately.** A log line does not become a Sentry event.
-  The two subsystems must be able to fail independently, and rule 5 here is that a log call never
-  throws. Capture is an explicit call beside the log line, at six seams:
-  [`src/routes.ts`](../../src/routes.ts)'s outer catch and its three streams, and
-  [`src/jobs.ts`](../../src/jobs.ts)'s failed step and pump.
+- **Capture is not wired through the logger, deliberately.** A log line does not become a Sentry
+  event. The two subsystems must be able to fail independently, and rule 5 here is that a log call
+  never throws. Capture is an explicit call beside the log line, at six seams.
 - **`pinoIntegration` exists and must never be added.** It would forward these lines to Sentry, and
   the whole design of this file rests on stdout being the only destination.
-- **The rule for what gets reported is the status we answered with**, `>= 500` — the same threshold
-  `logRequest` uses to choose between `warn` and `error`. So the log and the tracker cannot come to
-  disagree about what counts as a fault.
+- **It is a fifth egress, so everything under [§ what never gets logged](#what-never-gets-logged)
+  applies to it** — more so, because the message leaves the machine.
 
 Vercel's Observability Plus is still the other half of the question and is still not bought: crashes
 point at Sentry, request behaviour at Vercel. A **log drain** — which would keep these lines past 24
@@ -1048,6 +1050,11 @@ from a grep, which is the mistake that section is about.
 
 ## Related docs
 
+- [debugging.md](debugging.md) — the front door when something is broken
+- [vercel-hosting-deployment.md](vercel-hosting-deployment.md) — where these lines end up, how to
+  query them, and the two traps that turn an outage into silence
+- [sentry-error-monitoring.md](sentry-error-monitoring.md) — the other destination, and why it is
+  deliberately not fed from here
 - [architecture.md § Stage ownership](architecture.md#stage-ownership) — why the pipeline logs from
   the seam rather than from inside each stage
 - [ingest-queue.md](ingest-queue.md) — the queue whose lifecycle the `jobs` component narrates

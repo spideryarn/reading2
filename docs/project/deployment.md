@@ -779,6 +779,31 @@ writes to a local filesystem, which a serverless host does not have:
   the wall. The wall is [transactional-stage-runner.md](../plans/transactional-stage-runner.md),
   and [database.md § Writes do not](database.md) is the same fact from the
   storage side
+
+  **It is not the upload path, and it is not PDFs.** Greg pasted an ordinary
+  HTML article URL on 2026-08-28 and got the same string from step `fetch`. The
+  same wall stops every URL and every document; stages 1 and 2 run fine on that
+  article locally, so nothing about the *content* is involved. `/var/data` comes
+  from [`artifacts-fs.ts`](../../src/store/artifacts-fs.ts)'s
+  `path.resolve(import.meta.dirname, "..", "..")` — on a laptop that is the repo
+  root, and in a bundle at `/var/task/api-dist/vercel.js` it is `/var`. It
+  therefore cannot fail on anybody's machine.
+
+  **`/tmp` is not the shortcut it looks like**, and this is written down because
+  it is the first idea everybody has. `/tmp` *is* writable on Vercel, but
+  `advanceJob` runs **one step per HTTP request**, so step 2 is a different
+  invocation and finds nothing — and on a warm instance it would sometimes find
+  a *stale* file and skip real work. GPT Sol's review of the whole question,
+  with the interim options and why each is refused, is in
+  [html-ingest-var-data-sol.md](../plans/html-ingest-var-data-sol.md). It also
+  names one thing the storage fix does not cover: `articleExists` and
+  `urlForSlug` read `data/<slug>/meta.json`
+  ([`pipeline.ts`](../../src/pipeline.ts)) on the live enqueue path, so once
+  ingest works, a Postgres article with no local file reads as a free slug.
+
+  **How to find this class of failure yourself** — the route answers `200` and
+  Vercel's error dashboard stays empty, so the recipe matters:
+  [logging.md § where to look](logging.md#where-to-look-when-production-breaks)
 - **`deleteGlossary`** — still refused by `notMigrated` in
   [`src/store/index.ts`](../../src/store/index.ts), which is the right failure.
   It nulls the glossary on a *published* revision, and whether a published
@@ -912,6 +937,13 @@ Vercel.
   domain move, and the beta gate
 - [database.md](database.md) — the roles, the three hosts, and the enforced SSL
 - [architecture.md](architecture.md) — the single-process assumption this runs into
-- [logging.md](logging.md) — Vercel's one-day retention and the traps in its log view
+- [debugging.md](debugging.md) — start here when something is broken: which of the
+  three places to look, and in what order
+- [vercel-hosting-deployment.md](vercel-hosting-deployment.md) — the other half of
+  this page: how to *inspect* what is running, and why the error dashboard was
+  empty through an outage
+- [sentry-error-monitoring.md](sentry-error-monitoring.md) — the 30-day half, past
+  Vercel's one day
+- [logging.md](logging.md) — why the lines are shaped the way they are
 - [silent-success.md](../reusable/silent-success.md) — the pattern every failure
   on this page is an instance of
