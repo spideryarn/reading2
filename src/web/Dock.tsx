@@ -116,6 +116,7 @@ import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSlow } from "./useSlow.js";
+import { InstallHint } from "./InstallHint.js";
 import { VisitorNotice } from "./PublicChrome.js";
 import { COMMENTS_GAP } from "./visitor.js";
 
@@ -476,6 +477,11 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
           </div>
         </div>
       )}
+
+      {/* Above the bar rather than in it: it is a sentence, and the bar is eleven
+          icons. Renders nothing at all except on an uninstalled iOS device that
+          has not dismissed it — install-hint.ts. */}
+      <InstallHint />
 
       <div className="dock">
         {/* **The modes, as one control, and first in the bar.** Chat and
@@ -874,7 +880,7 @@ function DockLink({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § a narrow window
-          can drop all nine of the bar's labels with one rule rather than with
+          can drop all eleven of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the `title`
           above is the accessible name on both of these. */}
@@ -923,7 +929,7 @@ function DockTab({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § a narrow window
-          can drop all nine of the bar's labels with one rule rather than with
+          can drop all eleven of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the `title`
           above is the accessible name on both of these. */}

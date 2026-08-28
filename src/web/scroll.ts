@@ -11,6 +11,7 @@
  * Everything addresses the block by its stable id — never by offset or selector
  * path. See docs/project/block-ids.md.
  */
+import { safeAreaInsets } from "./safe-area.js";
 
 /**
  * Height of the fixed bar along the bottom — Dock.tsx.
@@ -28,7 +29,26 @@
  */
 export function dockOffset(): number {
   const dock = document.querySelector<HTMLElement>(".dock");
-  return dock ? dock.getBoundingClientRect().height : 0;
+  if (!dock) return 0;
+  /**
+   * **How much of the bottom of the viewport the bar is covering** — not how
+   * tall it is. The distinction is exactly `stickyOffset`'s, and it arrived
+   * here for exactly the same reason: since 2026-08-28 the bar slides out of
+   * the way on a small device scrolled down through (styles.css § a small
+   * device), by `transform`, which moves where it is drawn and **does not
+   * change what it measures**. Reading `.height` went on reporting a confident
+   * 52 for a bar that was entirely off screen, so every screenful step would
+   * have delivered a screen 52px short — of an article the reader then never
+   * sees those lines of. Raised by GPT Sol against the plan before it was
+   * built.
+   *
+   * `innerHeight - rect.top` is the whole of it, and it needs no clamp at the
+   * far end the way `stickyOffset` does: this bar is `position: fixed` and is
+   * therefore always exactly where it looks, with no "not stuck yet" state to
+   * predict around. `Math.max(0, …)` is only for the hidden case, where `top`
+   * has gone past the bottom of the window.
+   */
+  return Math.max(0, window.innerHeight - dock.getBoundingClientRect().top);
 }
 
 /**
@@ -84,8 +104,34 @@ export function stickyOffset(): number {
    * An earlier version of this comment claimed the number was current coverage.
    * It is not, and GPT Sol was right to say so — the value was already what the
    * callers want, and only the sentence describing it was wrong.
+   *
+   * **`+ safeAreaInsets().top`, since 2026-08-28.** The bar no longer rests at
+   * `top: 0`: in the installed app it rests below the status bar, so its bottom
+   * edge is a status bar's height lower than the bar is tall, and a ceiling of
+   * `rect.height` clamped the true answer away. Every deep link and every
+   * arrow-key step would have landed ~47px underneath the chrome — on the one
+   * device this whole feature is for, and nowhere else, so nothing we can run
+   * here would have shown it. GPT Sol, reviewing the plan, 2026-08-28.
+   *
+   * It is added to the *ceiling* rather than to the result, which is what keeps
+   * the stuck case honest: `rect.bottom` already includes the inset when the
+   * bar is stuck, so the `min` still picks the measurement over the prediction
+   * and the inset is only ever consulted at the top of the article, where there
+   * is nothing to measure yet.
+   *
+   * **And it is the FLOOR as well, which is the case that is easy to miss.**
+   * When the bar has slid away its `bottom` is negative, so the floor is what
+   * the expression returns — and it is not zero any more: the table head is
+   * still pinned at `--safe-top`, under the clock, so a destination must clear
+   * that even with the bar gone. A floor of `0` under-reported by a whole
+   * status bar in exactly the state a reader spends most of their time in.
+   *
+   * On every device without a notch both terms are `0` and this is the line it
+   * always was, which is why `tests/mobile-chrome.test.ts` poses an inset
+   * rather than trusting the machine it runs on.
    */
-  const covering = Math.max(0, Math.min(rect.height, rect.bottom));
+  const safeTop = safeAreaInsets().top;
+  const covering = Math.max(safeTop, Math.min(rect.height + safeTop, rect.bottom));
   return covering + head.getBoundingClientRect().height;
 }
 

@@ -10,7 +10,7 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { SearchPanel } from "./SearchPanel.js";
 import { assignSlots } from "./hit-colours.js";
-import { MODE_MIN } from "./layout.js";
+import { MODE_MIN, SPINE_W } from "./layout.js";
 import type { SavedSearch } from "./useSearch.js";
 import "./styles.css";
 import "./tailwind.css";
@@ -51,12 +51,19 @@ function Preview() {
           height: "100vh",
           background: "var(--page)",
           "--mode-w": `${MODE_MIN}px`,
-          /* The band is `top: var(--bar-h); bottom: var(--dock-h)`, and neither
-             exists here — there is no controls bar and no dock on this page. An
-             unset length is not zero, it is invalid, so the band would have no
-             top or bottom at all. */
+          /* The band is `top: var(--bar-bottom); bottom: max(var(--dock-bottom),
+             …)`, and none of it exists here — there is no controls bar and no
+             dock on this page. An unset length is not zero, it is invalid, so
+             the band would have no top or bottom at all.
+
+             All four, because the two derived tokens are computed at `:root`
+             from the values there and would go on carrying the real bar's
+             height however many times the base ones are overridden here. */
           "--bar-h": "0px",
+          "--bar-bottom": "0px",
           "--dock-h": "0px",
+          "--dock-space": "0px",
+          "--dock-bottom": "0px",
         } as React.CSSProperties
       }
     >
@@ -105,7 +112,11 @@ function Preview() {
       <pre
         id="state"
         style={{
-          marginLeft: `${MODE_MIN + 24}px`,
+          /* `SPINE_W` rather than the literal 24 it was, for the same reason
+             the line above uses `MODE_MIN`: this page is meant to show the real
+             geometry, and halving the rail on 2026-08-28 would otherwise have
+             left the dump 12px out of position with nothing saying why. */
+          marginLeft: `${MODE_MIN + SPINE_W}px`,
           color: "#bbb",
           padding: "1rem",
           fontSize: 12,

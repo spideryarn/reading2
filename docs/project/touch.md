@@ -226,6 +226,36 @@ repeating, is in [ipad-touch-scrolling.md](../research/ipad-touch-scrolling.md).
   the same length mean the same thing. That is what keeps the feature free of a timer and stops it
   behaving differently for a tired hand.
 
+## How big a thing has to be to press it
+
+> Also, make our button-bar at the bottom a bit easier to press, e.g. bigger buttons, slightly more
+> spaced out.
+>
+> — Greg, 2026-08-28
+
+The bottom bar's buttons are **52px tall and at least 40px wide on a coarse pointer**, up from
+roughly 35 × 30. `styles.css` § **a coarse pointer** — and three things about it are worth carrying
+to anything else that has to be pressed with a thumb:
+
+- **`pointer: coarse`, not `any-pointer: coarse`.** Everything else in this file keys on
+  `any-pointer`, correctly: a gesture rule has to apply to a finger on a hybrid machine. A *size*
+  rule must not, or an iPad with a trackpad and a laptop with a touchscreen get finger-sized chrome
+  they will never touch.
+- **Height was the affordable axis, and only because the bar learnt to leave.** The bar now slides
+  off the bottom while you scroll forwards, on the same `data-bars="hidden"` switch the top bars have
+  used since [mobile-reading-view.md](../plans/mobile-reading-view.md). Before that, 12px of bar was
+  12px of article at every scroll position, and the same query was *shrinking* the bar on a landscape
+  phone for exactly that reason.
+- **Eleven buttons do not fit a 390px row at a size worth pressing**, and the row scrolls sideways
+  rather than pretending otherwise. Greg chose that over hiding three of them behind a `⋯`. What it
+  costs is that Tweets and Metadata are off the right-hand edge on an iPhone until you discover the
+  bar scrolls; the two-row bar that would fix it properly is in
+  [mobile-screen-real-estate.md § Open for Greg](../plans/mobile-screen-real-estate.md).
+
+The rest of that work — the browser's own chrome, which is not ours to hide, and the Add to Home
+Screen path that is the only way to be rid of it — is
+[mobile-screen-real-estate.md](../plans/mobile-screen-real-estate.md).
+
 ## What we deliberately did not build
 
 - **A setting.** Apple Books and Kindle both ship an explicit continuous-scroll / page-turn toggle,

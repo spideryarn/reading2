@@ -336,13 +336,51 @@ Three things worth carrying to whatever is built next:
   deleting buttons: 48px of clip over a 245px control, five of six modes unpressable, no scrollbar
   and no sign anything was missing. `flex: none` on anything whose overflow is hidden, and
   `overflow-x: auto` on the bar around it.
-- **`transform` is not reliably available on `.controls`.** Moving that bar by `translateY` computes
-  to identity even when set inline from the console — proven with a control, cause not chased.
-  Everything that pins under the bar moves by `top` and reads `--bar-bottom`; do the same rather
-  than reintroducing a transform there.
+- **`.controls` moves by `transform`; everything under it moves by `top`.** A bullet here used to
+  say a transform on that bar computed to identity and could not be used. That was wrong, and it was
+  wrong for the reason [browser-testing.md § a hidden tab](browser-testing.md) now describes: a CSS
+  transition does not advance in a tab that is not frontmost, so every reading of the moved bar
+  returned the value it started from and agreed with itself. Verified with transitions disabled,
+  2026-08-27: switching `--bar-bottom` gives `matrix(1,0,0,1,0,-44)`. The split is a real one and
+  worth keeping — a transform moves only the paint, where animating a sticky element's own `top`
+  re-runs the stickiness constraint every frame — but it is a choice, not a limitation.
+- **The bottom bar moves the same way**, since 2026-08-28, driven by `--dock-bottom`: the
+  bottom-edge twin of `--bar-bottom`, `0px` while the bar is away and its resting room otherwise.
+  Anything pinned *above* the bar (the mode band, the overflow fade) reads it directly; anything
+  that must clear the bar permanently (`.reader`'s bottom padding, the dialogs) reads `--dock-space`
+  instead. **Do not tie the document's height to the moving one** — a page that grows and shrinks
+  under the finger scrolling it is worse than a bar in the way.
 
 The full account, including what the measuring harness cannot see, is
 [docs/plans/mobile-reading-view.md](../plans/mobile-reading-view.md).
+
+### The screen is bigger than the window: `env(safe-area-inset-*)`
+
+`index.html` carries `viewport-fit=cover`, so on an iPhone the document is laid out across the whole
+physical screen and the notch, the home indicator and — in the installed app — the status bar all
+overlap it. `styles.css` § **safe areas** turns each edge into a token (`--safe-top`, `--safe-bottom`,
+`--safe-left`, `--safe-right`) and every piece of fixed or sticky chrome adds the one it faces. The
+article itself does not: prose running a few pixels behind a rounded corner is what `cover` is for.
+
+Three things to know before touching any of it:
+
+- **Every one of them is `0px` on every machine we develop on**, so a rule with a mis-typed `env()`
+  name falls back to the same `0px` and looks perfect. There is nothing to see until it is on a
+  phone. To check one, set the token to `40px` at `:root` and watch the chrome move — a rule that
+  cannot be made to move that way will not move on the device either. Run a nonsense control
+  (`--zz-control`) alongside it, or you are testing your method rather than the rule.
+- **`cover` is not standalone-only.** In an ordinary Safari or Chrome tab it also opens up the notch
+  in landscape and the home indicator in portrait, and Safari's bottom inset *changes* as its
+  toolbar minimises. Only the top inset is reliably zero in a tab.
+- **Two things cannot do this arithmetic in CSS** and read the numbers through
+  [`src/web/safe-area.ts`](../../src/web/safe-area.ts): `fitView`, which divides the window's width
+  in pixels and must not spend width the notch has taken, and `stickyOffset`, which predicts where
+  the controls bar's bottom edge will be. Reading the custom property back is not an option —
+  an unregistered one is never substituted for the CSSOM, and `@property` does not survive this
+  build. So the module measures a probe instead.
+
+The plan, the review that found three of these, and the install path they exist for:
+[docs/plans/mobile-screen-real-estate.md](../plans/mobile-screen-real-estate.md).
 
 ## What is not written down yet
 

@@ -90,6 +90,42 @@
   --depth-2: oklch(0.55 0.080 46);
   --depth-3: oklch(0.44 0.045 40);
 
+  /**
+   * ------------------------------------------------------------ safe areas --
+   *
+   * **The four edges the screen has and the window does not.** `index.html`
+   * carries `viewport-fit=cover`, so the document is laid out across the whole
+   * physical screen — under the notch, under the home indicator, and (in the
+   * installed app, which asks for `black-translucent`) under the clock. These
+   * are how much of each edge is spoken for, and every piece of fixed or sticky
+   * chrome adds the one that faces it. The article itself does not: prose
+   * running behind a rounded corner for a few pixels is what `cover` is for.
+   *
+   * **They are not only about the installed app.** In an ordinary Safari or
+   * Chrome tab on an iPhone, `cover` also opens up the notch in landscape
+   * (`--safe-left` / `--safe-right`) and the home indicator in portrait
+   * (`--safe-bottom`); only `--safe-top` is reliably zero there, because the
+   * browser's own strip is already sitting in it. So the left, right and bottom
+   * terms below earn their place for every reader, and the top one earns it for
+   * whoever installs.
+   *
+   * **Every one of them is `0px` on every machine we develop on**, which is the
+   * hazard: a rule with a mis-typed `env()` name falls back to the same `0px`
+   * and looks perfect. There is nothing to see until it is on the phone. To
+   * check one, set the token to `40px` here and watch the chrome move — a rule
+   * that cannot be made to move that way will not move on the device either.
+   * docs/plans/mobile-screen-real-estate.md § How we will know.
+   *
+   * The fallback second argument is not decoration: a browser that knows
+   * `env()` but not a given keyword resolves to it, and one that knows neither
+   * drops the whole declaration — which is why these are read through `var()`
+   * in a `calc()` everywhere rather than written inline.
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
   --bar-h: 2.75rem; /* .controls */
   /**
    * **The y where the controls bar ends**, and the one name for what five
@@ -122,8 +158,37 @@
    * and each *consumer* transitions its own ordinary animatable property —
    * `transform` on the bar, `top` on everything pinned under it. They still
    * move as one thing, because they are all driven by the same switch.
+   *
+   * **It measures from the top of the SCREEN, not of the window**, which is the
+   * `--safe-top` term below. That keeps every consumer of this token — the
+   * table head, the sticky gists, the spine, the band, the fade — correct with
+   * no edit of their own, which is the whole reason to spend a token on it.
+   * The two rules that *set* it carry the term explicitly instead: `.controls`
+   * subtracts it back out of its transform (§ shell), and § a small device's
+   * hidden state falls to `var(--safe-top)` rather than to `0px`.
    */
-  --bar-bottom: var(--bar-h);
+  --bar-bottom: calc(var(--bar-h) + var(--safe-top));
+  /**
+   * **How far the controls bar itself is pushed up**, which stopped being the
+   * same question as `--bar-bottom` the day `--safe-top` entered it.
+   *
+   * `.controls` used to derive its transform from `--bar-bottom` alone, and
+   * that worked while the bar rested at `top: 0`: the token fell from `44px` to
+   * `0px` and the bar rose by exactly its own height. It rests at
+   * `top: var(--safe-top)` now, so the same arithmetic hides it by `--bar-h`
+   * and leaves it sitting *inside the status bar strip* — 44px of granularity
+   * pills drawn behind a translucent clock, directly above a table head that
+   * has already moved up to meet it. At `--safe-top: 0` it is invisible, which
+   * is to say: on every machine this can be looked at.
+   *
+   * So the bar gets its own switch. Two tokens rather than one because they are
+   * two facts — where things *under* the bar pin, and how far the bar has gone
+   * — that happened to be the same number until they weren't. Both are set
+   * together in § a small device, and `.controls` still transitions its own
+   * ordinary `transform`, so nothing here needs `@property` (see the note above
+   * for why it could not have it).
+   */
+  --bar-hide: 0px;
   /* The wordmark fixed in the top-left corner — HomeLogo.tsx. A token because
      three rules need the same number: the logo's own width, and the left
      padding the masthead and the controls bar reserve so that a narrow window
@@ -136,6 +201,48 @@
      fade, both of which have to stop above it, so it is a token rather than a
      number written out three times. */
   --dock-h: 2.5rem;
+  /**
+   * **The room the bar occupies at rest**, which is its own height plus
+   * whatever the home indicator has already claimed. Anything that must clear
+   * the bar *permanently* reads this: `.reader`'s bottom padding, and the two
+   * dialogs.
+   */
+  --dock-space: calc(var(--dock-h) + var(--safe-bottom));
+  /**
+   * **The room it occupies right now**, which is `0px` while it is slid away —
+   * the bottom-edge twin of `--bar-bottom`, and the same shape for the same
+   * reason. § a small device switches it; the bar itself turns the difference
+   * into a `translateY`, and anything pinned *above* the bar (the mode band,
+   * the overflow fade) reads it directly so no strip of article shows through
+   * where the bar used to be.
+   *
+   * **`.reader` deliberately does NOT read this.** Tying the document's height
+   * to a value that changes while you scroll is how you get a page that grows
+   * and shrinks under the finger scrolling it.
+   */
+  --dock-bottom: var(--dock-space);
+  /**
+   * **How much room the install hint is taking, and `0px` unless it is there.**
+   *
+   * The hint is `position: fixed` above the bar, so without a reservation it
+   * simply covers whatever is under it: the last lines of the article, and —
+   * the one that actually costs a reader something — the bottom of every open
+   * mode panel, where the last glossary term or search hit becomes unreachable.
+   * A `.mode-band` that stops at the bar is not enough when there is a sentence
+   * sitting on top of the bar. GPT Sol, second pass, 2026-08-28.
+   *
+   * Set by `:root:has(.install-hint)` below, so it costs nothing on the page
+   * where the strip is not rendered — which is every page, for every reader who
+   * is not on an uninstalled iPhone or has dismissed it once.
+   *
+   * **The strip is given this as a fixed `height` rather than measured**, and
+   * that is the trade: a reserved height has to be a number, and a number and a
+   * wrapping sentence can disagree. 3.5rem holds two lines of 0.75rem text at
+   * 1.4 plus its padding with room to spare, and the copy is two lines at
+   * 390px. If the sentence is ever rewritten longer, this is the number that
+   * has to move with it.
+   */
+  --hint-h: 0px;
 }
 
 * { box-sizing: border-box; }
@@ -168,7 +275,12 @@
      "no band is open"; nothing may infer that from it. The name is the width it
      costs, not the width it is. */
   --mode-w: 0px;
-  padding-left: calc(var(--spine-w) + var(--mode-w));
+  /* `--safe-left` follows the spine, which is fixed to the left edge of the
+     *screen* and therefore starts inside the notch in landscape unless it is
+     pushed clear. `--safe-right` has no rail behind it and is here only so the
+     last column does not run under the far corner. */
+  padding-left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
+  padding-right: var(--safe-right);
   /* min-width is set inline, in pixels, by App — see the note above. */
 }
 /* One rail width, since 2026-08-26: the labelled 13rem form is gone and the
@@ -210,10 +322,15 @@ body {
      Both are `100vw`-wide sticky bars, so without the `--mode-w` term the band
      would paint over their left end — and what it would cover is the article's
      own title, which is the one thing on this page you would notice missing. */
-  left: calc(var(--spine-w) + var(--mode-w));
-  width: calc(100vw - var(--spine-w) - var(--mode-w));
+  left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
+  width: calc(100vw - var(--spine-w) - var(--mode-w) - var(--safe-left) - var(--safe-right));
   background: var(--page);
-  padding: 1.25rem 1.5rem 0.9rem;
+  /* `--safe-top` because this is what sits at y=0 before you scroll, and in the
+     installed app y=0 is under the clock. It is added to the padding rather
+     than to a `top`, so the title still scrolls away completely — a masthead
+     that stopped `--safe-top` short of the edge would leave a band of page
+     colour behind it that nothing ever covers. */
+  padding: calc(1.25rem + var(--safe-top)) 1.5rem 0.9rem;
   /* Room for the corner wordmark, but only when there is not already room.
      This bar starts at `left: --spine-w + --mode-w`, so the logo reaches
      `--logo-w` minus that offset into it; once a mode band is open the term is
@@ -346,11 +463,22 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
      docs/project/browser-testing.md § a hidden tab.
 
      `getBoundingClientRect` includes transforms, so `stickyOffset()` in
-     scroll.ts reads a hidden bar's `bottom` as 0 and needs no special case. */
-  top: 0;
-  transform: translateY(calc(var(--bar-bottom) - var(--bar-h)));
-  left: calc(var(--spine-w) + var(--mode-w));
-  width: calc(100vw - var(--spine-w) - var(--mode-w));
+     scroll.ts reads a hidden bar's `bottom` as `--safe-top` and needs no
+     special case — it measures the bar rather than recomputing the token.
+
+     **`top` and the transform read different tokens, and that is the fix rather
+     than an inconsistency.** `top: var(--safe-top)` pins the bar below the
+     clock. The transform cannot be derived from `--bar-bottom` any more: that
+     token falls to `--safe-top` when the bar hides, which is right for
+     everything pinned *under* the bar and would move the bar itself only by its
+     own height — parking it inside the status-bar strip rather than off the top
+     of the screen. `--bar-hide` carries the bar's own travel, `--bar-h +
+     --safe-top`, and both tokens switch together in § a small device. See the
+     note beside `--bar-hide` in § tokens. */
+  top: var(--safe-top);
+  transform: translateY(var(--bar-hide));
+  left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
+  width: calc(100vw - var(--spine-w) - var(--mode-w) - var(--safe-left) - var(--safe-right));
   z-index: 40;
   height: var(--bar-h);
   display: flex;
@@ -529,8 +657,10 @@ td.pin-left, thead th.pin-left {
      for us, and neither does the mode band. `--mode-w` is 0 in the
      table-of-contents mode, where this rule does all its work today; the term
      is here so that a mode which keeps a pinned column cannot slide it under
-     the band. */
-  left: calc(var(--spine-w) + var(--mode-w));
+     the band. `--safe-left` for the same reason one step further out: the rail
+     itself now starts after the notch, so a column pinning to where the rail
+     used to end pins into the cut-out. GPT Sol, 2026-08-28. */
+  left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
   z-index: 15;
   box-shadow: 1px 0 0 var(--rule-strong), 8px 0 14px -8px rgb(0 0 0 / 0.75);
 }
@@ -583,8 +713,13 @@ thead th.pin-left { z-index: 35; }
   top: var(--bar-bottom);
   right: 0;
   /* Stops at the bar. Run to 0 and the gradient washes over the dock's right
-     end, which does not scroll and has nothing more to the right of it. */
-  bottom: var(--dock-h);
+     end, which does not scroll and has nothing more to the right of it.
+     `--dock-bottom` rather than `--dock-h` so it follows the bar down when the
+     bar slides away, and the fade covers the strip the bar has vacated.
+     `max(…, --safe-bottom)` so it stops at the home indicator rather than
+     running behind it — see the same expression on `.mode-band`, where it
+     matters more because that one holds controls. */
+  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-h));
   width: 2rem;
   z-index: 20;
   pointer-events: none;
@@ -987,9 +1122,15 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
    height, so the rail rescales itself on resize with no recomputation. */
 .spine {
   position: fixed;
-  left: 0;
+  /* The rail is fixed to the left edge of the SCREEN, so in landscape on a
+     notched phone `left: 0` puts it — and every band and hover target on it —
+     inside the cut-out. `--safe-left` is what `.reader`'s padding already
+     reserves for it. */
+  left: var(--safe-left);
   top: var(--bar-bottom);
-  bottom: 0;
+  /* Its bands are press targets (Spine.tsx § bandPress), so the rail stops at
+     the home indicator rather than continuing behind it. */
+  bottom: var(--safe-bottom);
   width: var(--spine-w);
   /* How much of the rail's width the search lanes may take, and how wide one
      lane may get when there are few of them — see § search marks below.
@@ -1733,13 +1874,15 @@ td.text.has-hit[data-hues="8"] {
 
 .cmt-dialog {
   position: fixed;
-  right: 1.25rem;
+  /* `--safe-right`: these are `position: fixed` against the physical screen,
+     so in landscape the gutter alone leaves them inside the notch. */
+  right: calc(1.25rem + var(--safe-right));
   /* Clear of the bottom bar. Written in terms of --dock-h rather than as a
      bigger number so that changing the bar's height cannot leave the dialog
      half underneath it — the failure would be a few pixels of the delete button
      going unclickable, which reads as a dead button rather than as a layout
      bug. */
-  bottom: calc(var(--dock-h) + 0.75rem);
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
   width: min(24rem, calc(100vw - 2.5rem));
   /* **`dvh`, not `vh`, and the difference only exists on a phone.** `100vh` is
      the *large* viewport: the height the page would have with the browser's own
@@ -1757,7 +1900,7 @@ td.text.has-hit[data-hues="8"] {
      not being made blind, so it is deferred to a real-device pass. Corrected by
      GPT Sol, 2026-08-27, after the first version of this note claimed the
      keyboard case was solved. */
-  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-h)));
+  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-space) - var(--hint-h)));
   display: flex;
   flex-direction: column;
   /* **Not `auto`, and this is half of why the ✕ used to move.** The whole box
@@ -1791,7 +1934,7 @@ td.text.has-hit[data-hues="8"] {
    Only while it arrives — a permanently constant height would put a two-line
    explanation in a 34rem box. The relax-to-fit happens when the answer settles,
    by which point the reader is not aiming at a button. */
-.cmt-dialog.busy { height: min(34rem, calc(100dvh - 8rem - var(--dock-h))); }
+.cmt-dialog.busy { height: min(34rem, calc(100dvh - 8rem - var(--dock-space) - var(--hint-h))); }
 
 /* The one part that scrolls. `min-height: 0` is load-bearing and silent: a flex
    item's default `min-height: auto` refuses to shrink below its content, so
@@ -2445,7 +2588,24 @@ td.text.has-hit[data-hues="8"] {
   left: 0;
   bottom: 0;
   width: 100vw;
-  height: var(--dock-h);
+  /* `--dock-space`, not `--dock-h`: the bar's own height plus whatever the home
+     indicator has claimed, with the extra spent as padding below the buttons so
+     they sit above it rather than under it. On anything without one both terms
+     are `--dock-h` and this is the rule it always was. */
+  height: var(--dock-space);
+  /* **The bar gets out of the way while you read**, on a small device scrolled
+     down through — the same `data-bars="hidden"` switch the controls bar, the
+     table head, the spine and the mode band have answered to since
+     docs/plans/mobile-reading-view.md, which this one never joined. § a small device does
+     the switching; this turns it into movement, and `--dock-space -
+     --dock-bottom` is `0` at rest and a bar's height when hidden.
+
+     A transform rather than `bottom`, for the reason the controls bar gives:
+     it moves the paint and nothing else. Nothing under this bar is laid out
+     against it — `.reader` reserves `--dock-space` permanently — so a hidden
+     bar reflows nothing at all. */
+  transform: translateY(calc(var(--dock-space) - var(--dock-bottom)));
+  transition: transform 0.18s ease;
   /* Above the scrim (92) and the drawer (95), not below them. The bar is how
      you switch panels and how you shut the drawer, so dimming it along with the
      article makes the live controls read as disabled — which is worse than
@@ -2456,7 +2616,16 @@ td.text.has-hit[data-hues="8"] {
   display: flex;
   align-items: stretch;
   gap: 0.15rem;
-  padding: 0 0.4rem;
+  /* The bottom term is `--safe-bottom`, and it is in the shorthand rather than
+     in a `padding-bottom` of its own on purpose: a longhand declared *before*
+     this line is silently reset by it, which is how the home indicator got its
+     padding taken away again five minutes after it was given. Biome's
+     `noShorthandPropertyOverrides` caught it; nothing on screen would have.
+
+     The two side terms are the notch, which this bar meets in landscape for the
+     same reason the spine meets it in portrait: it is `position: fixed` and
+     spans the whole screen, so `left: 0` is inside the cut-out. */
+  padding: 0 calc(0.4rem + var(--safe-right)) var(--safe-bottom) calc(0.4rem + var(--safe-left));
   background: var(--surface-raised);
   border-top: 1px solid var(--rule-strong);
   font-family: var(--font-ui);
@@ -2466,9 +2635,96 @@ td.text.has-hit[data-hues="8"] {
 /* The reader must be able to scroll to the true end of the article. Without
    this the last paragraph finishes underneath the bar, which does not look like
    a bug — it looks like the article ends there. */
-.reader { padding-bottom: var(--dock-h); }
+/* The bar's resting room plus the hint's, which is `0px` unless the hint is on
+   screen. Both are resting values on purpose — see `--dock-bottom` in § tokens
+   for why the document's height must not follow a bar that moves. */
+.reader { padding-bottom: calc(var(--dock-space) + var(--hint-h)); }
 
 .dock-gap { flex: 1; }
+
+/* ------------------------------------------------------- the install hint --
+   One line above the bar, on an iPhone, once — InstallHint.tsx, and
+   docs/plans/mobile-screen-real-estate.md § 1 for why the advice is "leave the
+   browser" rather than anything this stylesheet could do.
+
+   Pinned to the bar's *resting* room (`--dock-space`) rather than to
+   `--dock-bottom`, so it does not chase the bar down the screen when the bar
+   slides away. It is one sentence the reader is meant to read or dismiss; a
+   sentence that slid about while they scrolled would be harder to do either
+   with. */
+:root:has(.install-hint) { --hint-h: 3.5rem; }
+
+/* ------------------------------------------------------ the offline strip --
+   The connection has gone — OfflineStrip.tsx, which carries the words and the
+   colours; this is only where it sits.
+
+   **Above the bar and above the hint**, because a notice that cannot be read is
+   not a notice: at `bottom: 0` and z-index 50 it was drawn underneath the dock
+   (96) and invisible whenever the bar was on screen, and when the bar slid away
+   it emerged into the home-indicator strip instead. Reading `--dock-space` and
+   `--hint-h` rather than `--dock-bottom` keeps it still while the bar moves,
+   for the same reason the hint does: it is a sentence to be read, not chrome
+   that gets out of the way. */
+.offline-strip {
+  position: fixed;
+  left: var(--safe-left);
+  right: var(--safe-right);
+  bottom: calc(var(--dock-space) + var(--hint-h));
+  /* Above the bar (96), its drawer (95) and the drawer's dim (92). A lost
+     connection outranks everything the bar offers, because none of it is going
+     to work — and the dim exists to say "deal with this first", which is a
+     claim the drawer is not entitled to make while the server is unreachable. */
+  z-index: 97;
+}
+
+.install-hint {
+  position: fixed;
+  height: var(--hint-h);
+  left: var(--safe-left);
+  right: var(--safe-right);
+  bottom: var(--dock-space);
+  /* Under the drawer (95) and its dim (92), above the mode band (44) — it is
+     chrome about the app rather than part of the article, and a modal drawer
+     must cover it like everything else. */
+  z-index: 46;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-raised);
+  border-top: 1px solid var(--rule);
+  font-family: var(--font-ui);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  /* Leaves with the bar it sits on — § a small device sets the transform, this
+     is only how it travels, at the 0.18s everything else there uses. */
+  transition: transform 0.18s ease;
+}
+.install-hint-text { margin: 0; flex: 1; }
+.install-hint-text b { color: var(--ink); font-weight: 600; }
+/* The share glyph sits in the middle of a sentence, so it has to sit on the
+   text's baseline rather than on the line box's bottom edge. */
+.install-hint-icon { display: inline; vertical-align: -0.15em; }
+.install-hint-close {
+  flex: none;
+  /* 32px, which is smaller than the 44 § a coarse pointer gives the bar's own
+     buttons and deliberately so: this is a control the reader presses once and
+     never finds again, and a dismiss button the size of a mode button reads as
+     an equal of the things beside it. Still comfortably past the 24px CSS
+     minimum. */
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.install-hint-close:hover { color: var(--highlight); border-color: var(--highlight); }
 
 .dock-btn {
   display: inline-flex;
@@ -2557,9 +2813,14 @@ td.text.has-hit[data-hues="8"] {
 
 .dock-drawer {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: var(--dock-h);
+  /* Clear of the notch, like the bar it rises out of. */
+  left: var(--safe-left);
+  right: var(--safe-right);
+  /* Exactly on top of the bar, home indicator included — `--dock-space` and not
+     `--dock-bottom`, because an open drawer pins the bar down anyway (§ a small
+     device) and a drawer whose foot chased a sliding bar would be worse than
+     one that simply sits still. */
+  bottom: var(--dock-space);
   z-index: 95;
   max-height: min(60vh, 32rem);
   display: flex;
@@ -2616,8 +2877,10 @@ td.text.has-hit[data-hues="8"] {
    controls bar rather than floating above it. */
 .logo-home {
   position: fixed;
-  top: 0;
-  left: 0;
+  /* Fixed in the corner the phone rounds off, so both insets apply. `--safe-top`
+     matches the masthead's own padding, which is what the wordmark sits beside. */
+  top: var(--safe-top);
+  left: var(--safe-left);
   width: var(--logo-w);
   height: var(--bar-h);
   padding: 0 0.7rem;
@@ -3013,13 +3276,22 @@ td.text.has-hit[data-hues="8"] {
   position: fixed;
   /* Left of the spine's right edge, right of nothing — the band starts exactly
      where the spine ends, so the two read as one rail of chrome. */
-  left: var(--spine-w);
+  left: calc(var(--spine-w) + var(--safe-left));
   width: var(--mode-w);
   /* Below the controls bar and above the dock. NOT below the masthead: the
      masthead scrolls away, and a band that started under it would slide up to
      meet the bar and leave a gap that opens and closes as you read. */
   top: var(--bar-bottom);
-  bottom: var(--dock-h);
+  /* Follows the bar rather than its resting height: on a phone the band is the
+     whole width, so a band stopping at `--dock-h` while the bar had slid away
+     would show a 40px strip of the article through the gap.
+
+     **`max()`, and the second term is the one that keeps it usable.** A hidden
+     bar takes `--dock-bottom` to `0`, and this band is not decoration — it is
+     the glossary, the search results, the chat. Run it to the bottom of the
+     screen and its last row sits behind the home indicator, where the system
+     takes the touch. GPT Sol, 2026-08-28. */
+  bottom: calc(max(var(--dock-bottom), var(--safe-bottom)) + var(--hint-h));
   z-index: 44; /* under the spine (45), over the controls bar (40) */
   display: flex;
   flex-direction: column;
@@ -6625,10 +6897,12 @@ line.diag-now {
 
 .chat-dialog {
   position: fixed;
-  right: 1.25rem;
-  bottom: calc(var(--dock-h) + 0.75rem);
+  /* `--safe-right`: these are `position: fixed` against the physical screen,
+     so in landscape the gutter alone leaves them inside the notch. */
+  right: calc(1.25rem + var(--safe-right));
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
   width: min(26rem, calc(100vw - 2.5rem));
-  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-h)));
+  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-space) - var(--hint-h)));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -6651,10 +6925,12 @@ line.diag-now {
    docs/plans/comments-and-bookmarks.md. */
 .annotate-dialog {
   position: fixed;
-  right: 1.25rem;
-  bottom: calc(var(--dock-h) + 0.75rem);
+  /* `--safe-right`: these are `position: fixed` against the physical screen,
+     so in landscape the gutter alone leaves them inside the notch. */
+  right: calc(1.25rem + var(--safe-right));
+  bottom: calc(var(--dock-space) + var(--hint-h) + 0.75rem);
   width: min(26rem, calc(100vw - 2.5rem));
-  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-h)));
+  max-height: min(34rem, calc(100dvh - 8rem - var(--dock-space) - var(--hint-h)));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -6772,7 +7048,7 @@ line.diag-now {
    not open as a 34rem rectangle. `.chat-scroll` is `Conversation`'s own
    transcript element, so this is "there is a conversation in here" said in CSS
    rather than a second class threaded down for the stylesheet's benefit. */
-.chat-dialog:has(.chat-scroll) { height: min(34rem, calc(100dvh - 8rem - var(--dock-h))); }
+.chat-dialog:has(.chat-scroll) { height: min(34rem, calc(100dvh - 8rem - var(--dock-space) - var(--hint-h))); }
 
 .chat-dialog header,
 .chat-dialog footer { flex: 0 0 auto; }
@@ -7315,7 +7591,7 @@ tr:hover .block-chat,
  * invisible, so the margin is worth more than the two hundred pixels of text.
  *
  * This does not make the bar right at every width; it makes it *honest* at
- * every width. Whether nine or ten buttons in one row is the design is Greg's
+ * every width. Whether eleven buttons in one row is the design is Greg's
  * call — see docs/plans/ideas-mode.md § Questions. */
 @media (max-width: 1100px) {
   .dock-modes .dock-btn-label { display: none; }
@@ -7707,7 +7983,7 @@ tr:hover .block-chat,
   /* The masthead's left padding follows `--logo-w` on its own (§ shell), but its
      generous vertical padding does not, and it is the first thing between the
      reader and the article. */
-  .masthead { padding: 0.85rem 1rem 0.7rem; }
+  .masthead { padding: calc(0.85rem + var(--safe-top)) 1rem 0.7rem; }
   h1 { font-size: 1.25rem; }
 
   .dock {
@@ -7718,12 +7994,21 @@ tr:hover .block-chat,
   .dock::-webkit-scrollbar { display: none; }
   /* `.dock-gap` is `flex: 1` and would collapse to nothing in a scrolling row,
      which is exactly right — the buttons close up and the row scrolls. Every
-     other child holds its width. */
-  .dock > *:not(.dock-gap) { flex: none; }
+     other child holds its width.
+
+     **`flex-shrink: 0`, not `flex: none`**, since 2026-08-28. `none` is
+     `0 0 auto`, and the `0` that mattered here is the *shrink* — the deletion
+     machine this rule was written to stop. Pinning `flex-grow` to `0` as well
+     was incidental, and it silently outranked § a coarse pointer's attempt to
+     let the buttons share the bar (this selector is (0,2,0) against that
+     rule's (0,1,0)), leaving eleven icons huddled at the left end of a phone.
+     Nothing may shrink; growing into space that is already there costs the
+     guarantee nothing. */
+  .dock > *:not(.dock-gap) { flex-shrink: 0; }
 
   /* Every dock button drops its label, not just the six modes. The modes have
      done this below 1100px since Ideas made them six (§ the modes segment); at
-     390px the other three have to follow or nine buttons cannot share 390px.
+     390px the other three have to follow or eleven buttons cannot share 390px.
      Same argument as there: each carries its name in a tooltip and in an
      explicit `aria-label`, so this costs a sighted reader a hover and costs a
      screen-reader user nothing. */
@@ -7734,7 +8019,10 @@ tr:hover .block-chat,
      the moment the Questions count reached three digits. This leaves ~25px of
      slack, which is a badge's worth. */
   .dock .dock-btn { padding-inline: 0.45rem; }
-  .dock { padding-inline: 0.2rem; }
+  .dock {
+    padding-left: calc(0.2rem + var(--safe-left));
+    padding-right: calc(0.2rem + var(--safe-right));
+  }
   .dock-modes { margin-inline: 0.15rem; }
 
 }
@@ -7780,8 +8068,8 @@ tr:hover .block-chat,
      page does; the band is the full width *available*, which was always what
      "full width" meant here. */
   .mode-band {
-    left: var(--spine-w);
-    width: calc(100vw - var(--spine-w));
+    left: calc(var(--spine-w) + var(--safe-left));
+    width: calc(100vw - var(--spine-w) - var(--safe-left) - var(--safe-right));
     border-right: none;
   }
 
@@ -7842,7 +8130,24 @@ tr:hover .block-chat,
    `@property` version of this that could not survive the build. */
 @media (max-height: 620px), (max-width: 743px) {
   :root[data-bars="hidden"] {
-    --bar-bottom: 0px;
+    /* **`var(--safe-top)`, not `0px`.** This is the y the table head parks at
+       once the bar has gone, and in the installed app y=0 is under the clock —
+       so `0px` would put the column headings behind the time on the one kind of
+       device this whole query exists for, and look perfect everywhere else.
+       At rest `--bar-bottom` is `--bar-h + --safe-top`; hidden it falls to the
+       inset and no further. */
+    --bar-bottom: var(--safe-top);
+    /* The bar's own travel, which is NOT the change in `--bar-bottom` — see
+       `--bar-hide` in § tokens for the 44px of chrome that would otherwise be
+       left drawn behind the clock. */
+    --bar-hide: calc(-1 * (var(--bar-h) + var(--safe-top)));
+    /* The bottom bar joins the same switch, which it never did before
+       2026-08-28 — it cost 40px at every scroll position and § below shrank it
+       to 2.2rem to claw some back, which is the wrong direction for a bar you
+       have to hit with a thumb. Now it leaves entirely while you read, and can
+       afford to be 52px tall when it is there (§ a coarse pointer).
+       docs/plans/mobile-screen-real-estate.md § 3. */
+    --dock-bottom: 0px;
   }
   /* Each consumer animates its own ordinary property. `top` is animatable on a
      sticky or fixed element, and there are only ever four of these on screen at
@@ -7876,15 +8181,166 @@ tr:hover .block-chat,
      to be set where both inherit from. Specificity (0,3,0) beats the attribute
      rule above whichever order they end up in. */
   :root:has(.controls:focus-within) {
-    --bar-bottom: var(--bar-h);
+    --bar-bottom: calc(var(--bar-h) + var(--safe-top));
+    /* Both, or the bar a keyboard reader is standing in stays off the top of
+       the screen while everything under it politely moves down to make room. */
+    --bar-hide: 0px;
+  }
+  /* The same guard for the bottom bar, and it needs two conditions rather than
+     one. `:focus-within` is the keyboard half — a reader tabbing along eleven
+     icon buttons must not have the row slide out from under the one they are
+     on. `.dock-drawer` is the other: the drawer rises *out of* the bar and is
+     anchored to it, so a bar that slid away while the drawer was open would
+     take the drawer's foot with it.
+
+     On `:root` rather than on `.dock` for the reason the rule above gives:
+     `--dock-bottom` is read by the mode band and the overflow fade too, and a
+     value set on the bar alone would move the bar back up underneath a band
+     that had already closed over it.
+
+     **One `:has()` with two arguments rather than two selectors, and that is
+     about specificity rather than brevity.** `:has()` takes the specificity of
+     its most specific argument, so this is `.dock:focus-within` — (0,3,0),
+     which beats `:root[data-bars="hidden"]`'s (0,2,0) outright. Written as two
+     selectors the drawer branch would be (0,2,0), a *tie*, and would win only
+     by being further down the file: a guard that holds because of source order
+     is a guard that goes quiet the day somebody reorders the file. GPT Sol
+     caught the tie, 2026-08-28.
+
+     **The three dialogs are here on a second pass, and for a different reason
+     from the first three.** They cannot lose a control mid-press — they are
+     their own surface — but they are anchored to the bar's *resting* room
+     (`calc(var(--dock-space) + var(--hint-h) + 0.75rem)`), which is right for a
+     dialog that must not resize while you type in it and wrong the moment the
+     bar is not there: the dialog floats about 98px above the bottom of the
+     screen with nothing under it. Bringing the bar back is the cheaper of the
+     two fixes and the better one — a dialog is open because the reader stopped
+     reading, which is exactly when the chrome should come back. */
+  :root:has(
+    .dock-drawer,
+    .dock:focus-within,
+    .install-hint:focus-within,
+    .cmt-dialog,
+    .chat-dialog,
+    .annotate-dialog
+  ) {
+    --dock-bottom: var(--dock-space);
   }
   /* Tighter chrome as well, which is free and needs no state: 12px more of the
-     article at every scroll position. */
-  :root {
-    --dock-h: 2.2rem;
+     article at every scroll position.
+
+     **The dock is no longer in this list.** It used to be shrunk to 2.2rem
+     here; since it leaves the screen entirely while you scroll, its resting
+     height stopped being the scarce thing and § a coarse pointer grows it
+     instead. */
+  /* The install hint goes with the bar it sits on, or it is left floating over
+     the article with a bar-shaped hole under it. Its own height as well as the
+     bar's, because it is above the bar rather than behind it, and `100%` of a
+     one-line strip is the only way to say that without knowing the number.
+     Its `:focus-within` is in the guard above, so a reader tabbing to the
+     dismiss button does not lose it mid-press. */
+  :root[data-bars="hidden"] .install-hint {
+    transform: translateY(calc(100% + var(--dock-space)));
   }
-  .masthead { padding-top: 0.6rem; padding-bottom: 0.55rem; }
+  .masthead { padding-top: calc(0.6rem + var(--safe-top)); padding-bottom: 0.55rem; }
   .root-gist { margin-top: 0.35rem; }
+}
+
+
+/* ================================================================ § a coarse
+   pointer — the bottom bar, sized for a thumb
+   ================================================================
+
+   > Also, make our button-bar at the bottom a bit easier to press, e.g. bigger
+   > buttons, slightly more spaced out.
+   >
+   > — Greg, 2026-08-28
+
+   **`pointer: coarse`, not `any-pointer: coarse`.** `any-pointer` is true of an
+   iPad with a trackpad plugged into it and of a laptop with a touchscreen it is
+   never touched on; `pointer` asks about the input the reader is actually
+   using. Everything else in this file that keys on touch is about what a
+   gesture may do — `touch-action`, the swipe steps — and is correctly
+   `any-pointer`, because a finger on a hybrid machine still needs the rule.
+   This one is about how big a control is, so getting it wrong puts 52px of
+   chrome on a desktop.
+
+   ## Height was the affordable axis, and it only became affordable today
+
+   Height is the axis with room, and it stopped costing anything the moment the
+   bar learnt to leave the screen while you read (§ a small device). Before that
+   this query would have been taking 12px of article away permanently to make a
+   button easier to hit — which is the trade § a small device made in the *other*
+   direction when it shrank the bar to 2.2rem for a landscape phone.
+
+   So: 52px tall, past Apple's 44pt minimum in the axis that has room, and a
+   40px floor on the width, which is where the arithmetic below leaves it.
+
+   ## The arithmetic, and it does not fit on a phone
+
+   **Do the sum, do not trust a remembered count.** This note said "nine
+   buttons" when it was written, GPT Sol counted eleven the same afternoon, and
+   a ninth mode (`outline`) landed hours later making it twelve. The count is
+   `MODES_UI.length + 3` — the modes, then Comments, Tweets and Metadata — and
+   it only ever goes up.
+
+   At 390px there is 383.6px of bar after `.dock`'s own padding. **Each button
+   costs 40px** (the floor below) and each mode costs a further 1px of hairline;
+   `.dock-modes` adds a 1px frame and 0.25rem of margin each side. So with *m*
+   modes the row is roughly `40 × (m + 3) + m + 9`. At m=8 that is 457px, at m=9
+   it is 498, and the bar is 384. **A phone in portrait scrolls, and every new
+   mode makes it scroll by another 41px.**
+
+   No floor small enough to avoid it would be worth having: twelve buttons
+   sharing 384px is 32px each, which is smaller than they were before any of
+   this.
+
+   Greg was asked and chose this, 2026-08-28: *"maybe also row scrolls sideways
+   if it doesn't fit horizontally"*. So the floor is set at the size worth
+   pressing rather than at the size that would fit, and the row scrolls — which
+   § a narrow window already made it do, with the scrollbar hidden. **What this
+   query cannot claim is that a phone reader can see all eleven at once.** The
+   two-row bar that would fix that properly is written up in
+   docs/plans/mobile-screen-real-estate.md § Open for Greg; it is a design
+   change rather than a size change, and his to make.
+
+   `flex-grow` therefore does nothing at 390px and everything on a tablet, where
+   the row does fit and the buttons spread across the bar instead of huddling at
+   the left end. That is the "slightly more spaced out" half of the ask, and it
+   arrives at the width where there is space to spread into. */
+@media (pointer: coarse) {
+  :root {
+    /* 52px. Note that § a small device no longer shrinks this to 2.2rem, and
+       that these two queries overlap on every phone — this one wins because it
+       is declared later, which is exactly the kind of dependence on source
+       order worth saying out loud. */
+    --dock-h: 3.25rem;
+  }
+
+  /* **Grow to share the bar, never shrink below the floor.** The `0` in the
+     middle is the whole of `.dock-modes`'s long warning above kept intact: a
+     flex item that clips its own overflow must never be squeezed, because it
+     gets *shorter* rather than narrower and deletes buttons off its right-hand
+     end in silence. Growing has no such failure — there is nothing to clip when
+     an element is bigger than its content.
+
+     `.dock-modes` grows as eight buttons against each loose button's one, so a
+     bar with room to spare spreads it in proportion to what is inside rather
+     than handing the segment the same share as a single icon. */
+  .dock-modes { flex: 8 0 auto; }
+  .dock > .dock-btn { flex: 1 0 auto; }
+  .dock-modes .dock-btn { flex: 1 0 auto; }
+
+  /* The floor — 40px, Apple's 44pt minimum less the hairline it shares with its
+     neighbour — and the centring that makes growth look deliberate: without it
+     a button that grew would hold its icon at the left and the row would read
+     as ragged rather than as spread out. A min-width is a floor and not a cap,
+     which is what lets the Comments button carry a two-digit count without
+     anything being clipped. */
+  .dock-btn {
+    min-width: 2.5rem;
+    justify-content: center;
+  }
 }
 
 /* The bar still gets out of the way for a reader who has asked for less
@@ -7895,6 +8351,8 @@ tr:hover .block-chat,
      (see the `.controls` rule for why the two differ), so both have to be named
      here or half the chrome would still slide. */
   .controls,
+  .dock,
+  .install-hint,
   thead th,
   td.gist .sticky,
   .spine,

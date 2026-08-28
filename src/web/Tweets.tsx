@@ -85,7 +85,7 @@ import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useHasProfile } from "./useProfile.js";
 
 /** Clear of the fixed bottom bar, stated against `--dock-h`. See Metadata.tsx. */
-const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-h)_+_2rem)]";
+const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
 
 /** How long a copy button says it worked before going back to normal. */
 const COPIED_MS = 1600;
@@ -276,10 +276,12 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
 
   return (
     <>
-      {/* `pt-14` rather than `pt-10`: the corner wordmark is fixed
-          (HomeLogo.tsx), so on a window narrow enough that this centred column
-          reaches the left edge it would otherwise sit on the back-link. */}
-      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-14 tw:font-sans ${DOCK_CLEARANCE}`}>
+      {/* The corner wordmark is fixed (HomeLogo.tsx), so on a window narrow
+          enough that this centred column reaches the left edge it would
+          otherwise sit on the back-link — and the `--safe-top` term is because
+          the wordmark itself moved down by the status bar. See Metadata.tsx,
+          which carries the whole note. */}
+      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
         <Link
           href={backHref}
           className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"

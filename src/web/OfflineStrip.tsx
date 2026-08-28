@@ -28,6 +28,10 @@
  * connection dropped, which is the one moment a reader is least able to explain
  * why the text jumped. It is fixed, over the top of the page, and it does not
  * reflow anything.
+ *
+ * **Above the bottom bar, not at the bottom of the screen** — see the note on
+ * the class below for the two ways the original spelling failed once the bar
+ * learned to move. docs/plans/mobile-screen-real-estate.md § 3.
  */
 import { useOffline } from "./offline.js";
 
@@ -54,7 +58,18 @@ export function OfflineStrip() {
          out here because the two are easy to conflate. */
       role="status"
       aria-live="polite"
-      className="tw:fixed tw:bottom-0 tw:left-0 tw:right-0 tw:z-50 tw:px-4 tw:py-2 tw:text-center tw:text-sm tw:bg-amber-950/95 tw:text-amber-100 tw:border-t tw:border-amber-800/60"
+      /* `offline-strip` carries the geometry — where the bottom of the screen
+         actually is, and where the bottom bar has left off — because that is
+         three tokens' worth of arithmetic and none of it belongs in a utility
+         class. Everything visual stays here. See styles.css § the offline strip.
+
+         **It used to be `bottom-0 z-50`, and both were wrong.** The dock is
+         z-index 96, so a strip at 50 was drawn *underneath* it and simply could
+         not be read while the bar was on screen — which is most of the time.
+         And `bottom: 0` is the bottom of the physical screen: the moment the
+         dock slid away, the strip emerged into the home-indicator strip, where
+         iOS takes the touches. GPT Sol found both, 2026-08-28. */
+      className="offline-strip tw:px-4 tw:py-2 tw:text-center tw:text-sm tw:bg-amber-950/95 tw:text-amber-100 tw:border-t tw:border-amber-800/60"
     >
       {servedCopyAt === null ? (
         <>Spideryarn can’t reach its server. Anything not already open won’t load. [offline]</>

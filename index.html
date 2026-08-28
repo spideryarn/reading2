@@ -2,7 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- `viewport-fit=cover` lets the document use the whole physical screen —
+         under the notch, under the home indicator, and (installed, with the
+         status-bar style below) under the clock. It is inert on everything that
+         has no rounded corners to avoid, and the space it opens up is handed
+         back to the chrome by the `--safe-*` tokens in styles.css § tokens.
+         Nothing else may assume the viewport starts at a safe pixel.
+         docs/plans/mobile-screen-real-estate.md § 2. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <!-- Only what the tab says between the first byte and React's first paint.
          Every page sets its own from src/web/page-title.ts — see
          docs/project/page-titles.md — so this is deliberately the bare name
@@ -31,6 +38,30 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
+    <!-- **Add to Home Screen is the only way to be rid of the browser's own
+         chrome**, and on iOS that is worth more screen than any CSS: the
+         collapsed address strip in portrait and the vertical button strip in
+         landscape are both Chrome's, and no page can hide either.
+         docs/plans/mobile-screen-real-estate.md § 1.
+
+         iOS 16.4+ reads `display: standalone` out of the manifest, but older
+         iOS and several in-app browsers read only the meta tag, so both are
+         here. `mobile-web-app-capable` is the standard spelling of the same
+         thing; Chrome warns if only the `apple-` one is present.
+
+         `black-translucent` is the one value that starts the web view at y=0
+         with the clock drawn over it — Greg chose to reclaim that strip,
+         2026-08-28. It only does anything alongside `viewport-fit=cover`
+         above, and it is why every piece of fixed chrome in styles.css has a
+         `--safe-top` term. Change this to `black` and those terms go to zero on
+         their own; change it the other way with the terms missing and the
+         granularity pills end up under the time. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- The name under the icon. Without it iOS uses <title>, which is the bare
+         product name today and a page title tomorrow — see page-titles.md. -->
+    <meta name="apple-mobile-web-app-title" content="Spideryarn" />
     <meta name="theme-color" content="#0a0a0a" />
     <!-- Dark only, and said here as well as in tokens.css so the browser paints its
          canvas dark before the stylesheet loads — otherwise a white flash. -->

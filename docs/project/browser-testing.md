@@ -69,7 +69,15 @@ document.body.appendChild(f);
 // then: f.contentWindow.innerWidth === 390
 ```
 
-Two things it cannot do, and both have cost real time:
+Three things it cannot do, and all have cost real time:
+
+- **A scripted wheel event cannot be delivered into the frame.** Dispatched at a coordinate well
+  inside a 390px iframe it scrolls the *outer* page instead — confirmed twice, with `wheel`
+  listeners on both documents and neither one firing, while the outer `scrollY` simply changed.
+  So the iframe can measure a phone layout and cannot scroll one, which rules out everything
+  driven by `watchBarVisibility`. Use a real small window for those: it will not go below 605px
+  wide, so only the `max-height: 620px` half of § a small device is reachable — a 900×337 window
+  does it. Found 2026-08-28 checking the dock's hide-on-scroll.
 
 - **`@media (hover: none)` and `(any-pointer: coarse)` still match the desktop.** No touch-keyed rule
   is being exercised. On 2026-08-27 the per-paragraph chat button was found to be unreachable on any

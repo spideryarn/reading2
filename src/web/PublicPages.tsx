@@ -28,7 +28,7 @@ import { SharedNotice, VisitorNotice } from "./PublicChrome.js";
 import { markedModes, type VisitorGap } from "./visitor.js";
 
 /** Room for the bottom bar, so the last line of a page is not under it. */
-const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-h)_+_2rem)]";
+const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
 
 /**
  * What a visitor is told about the article, which is a different question from
@@ -61,7 +61,7 @@ export function PublicMetadataPage({
 
   return (
     <>
-      <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-14 tw:font-sans ${DOCK_CLEARANCE}`}>
+      <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
         <BackToArticle slug={slug} />
         <h1 className="tw:m-0 tw:mb-2 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
           {meta.title}
@@ -154,7 +154,7 @@ export function VisitorPage({
   useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view }));
   return (
     <>
-      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-14 tw:font-sans ${DOCK_CLEARANCE}`}>
+      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
         <BackToArticle slug={slug} />
         <h1 className="tw:m-0 tw:mb-4 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
           {article.meta.title}

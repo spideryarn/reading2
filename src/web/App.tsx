@@ -29,6 +29,7 @@ import { sanitizeArticle } from "./sanitize.js";
 import { TableView } from "./TableView.js";
 import type { TermSelection } from "./annotate.js";
 import { formsOf } from "../term-match.js";
+import { horizontalInset, safeAreaInsets } from "./safe-area.js";
 import { Spine } from "./Spine.js";
 import { AnnotateDialog } from "./AnnotateDialog.js";
 import { CommentDialog } from "./CommentDialog.js";
@@ -788,13 +789,32 @@ function VisitorArticle({
   );
 }
 
-/** The window width, as state, because the whole layout is computed from it. */
+/**
+ * The window width, as state, because the whole layout is computed from it.
+ *
+ * **`innerWidth` minus the notch, not `innerWidth`.** `index.html` carries
+ * `viewport-fit=cover`, so on a notched phone in landscape the window is wider
+ * than the part of it anything may be drawn in — and `.reader` spends the
+ * difference on padding (styles.css § shell). Handing `fitView` the raw width
+ * builds a table for a screen that is 47px wider than the one it has to fit in,
+ * and the page then scrolls sideways by exactly the notch. Raised by GPT Sol
+ * against the plan, 2026-08-28; see safe-area.ts for why this cannot be done in
+ * CSS.
+ *
+ * `orientationchange` as well as `resize`, because the insets swap sides on
+ * rotation and iOS has historically fired the two in either order.
+ */
 function useWindowWidth(): number {
-  const [w, setW] = useState(() => window.innerWidth);
+  const measure = () => window.innerWidth - horizontalInset(safeAreaInsets());
+  const [w, setW] = useState(measure);
   useEffect(() => {
-    const on = () => setW(window.innerWidth);
+    const on = () => setW(measure());
     window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
+    window.addEventListener("orientationchange", on);
+    return () => {
+      window.removeEventListener("resize", on);
+      window.removeEventListener("orientationchange", on);
+    };
   }, []);
   return w;
 }
@@ -1606,7 +1626,18 @@ function Reader({
          moves. See docs/reusable/css-sticky-containing-block.md. Set explicitly
          rather than with `max-content`, which a table of prose answers with a
          number in the thousands. */
-      style={{ minWidth: fit.minWidth, "--mode-w": `${fit.modeW}px` } as CSSProperties}
+      /* `+ horizontalInset(...)`: `fit.minWidth` is the spine plus the table,
+         computed from a width that already had the notch taken out of it, and
+         `box-sizing: border-box` means this number has to cover `.reader`'s
+         padding too — which now includes those same insets (styles.css § shell).
+         Without the term the table's last column is squeezed out of the content
+         box and the page scrolls sideways by the notch. */
+      style={
+        {
+          minWidth: fit.minWidth + horizontalInset(safeAreaInsets()),
+          "--mode-w": `${fit.modeW}px`,
+        } as CSSProperties
+      }
     >
       {fit.spine !== "off" && (
         <Spine

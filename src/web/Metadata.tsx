@@ -188,7 +188,14 @@ import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { ProfileBox } from "./ProfileBox.js";
 
 /**
- * Clear of the fixed bottom bar, in terms of `--dock-h` rather than a number.
+ * Clear of the fixed bottom bar, in terms of `--dock-space` rather than a number.
+ *
+ * **`--dock-space`, not `--dock-h`.** The bar's own height is no longer the room
+ * it takes: since 2026-08-28 it also carries the home indicator's inset as
+ * padding (styles.css § tokens), and on an iPhone that inset is 34px against
+ * the 2rem of slack this line adds — so the last paragraph of this page would
+ * have finished two pixels under the bar rather than clear of it. GPT Sol,
+ * 2026-08-28.
  *
  * `.reader` has its own bottom padding for this (styles.css) and is not
  * reusable here — it also applies the spine's left padding and the reading
@@ -201,7 +208,7 @@ import { ProfileBox } from "./ProfileBox.js";
    `calc(var(--dock-h)+2rem)`, which is invalid, so the browser drops the whole
    declaration — no error anywhere, just a page whose last line sits under the
    bar. */
-const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-h)_+_2rem)]";
+const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
 
 /** The card surface, said once. Same tokens as a library card, on purpose. */
 const CARD = "tw:rounded-lg tw:border tw:border-border tw:bg-card";
@@ -438,10 +445,18 @@ export function Metadata({
 
   return (
     <>
-      {/* `pt-14` rather than `pt-10`: the corner wordmark is fixed
-          (HomeLogo.tsx), so on a window narrow enough that this centred column
-          reaches the left edge it would otherwise sit on the back-link. */}
-      <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-14 tw:font-sans ${DOCK_CLEARANCE}`}>
+      {/* 3.5rem rather than 2.5: the corner wordmark is fixed (HomeLogo.tsx),
+          so on a window narrow enough that this centred column reaches the left
+          edge it would otherwise sit on the back-link.
+
+          **`+ var(--safe-top)` because the wordmark moved.** `.logo-home` rests
+          at `top: var(--safe-top)` since `viewport-fit=cover` arrived, so in the
+          installed app it occupies y=47..91 while a flat 56px of padding put the
+          back link at y=56 — 35px of overlap, on every page that is not the
+          reader. The reader shell got a top-inset audit and these pages did not.
+          GPT Sol, second pass, 2026-08-28.
+          docs/plans/mobile-screen-real-estate.md § 2. */}
+      <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
         <Link
           href={backHref}
           className="tw:mb-6 tw:inline-flex tw:items-center tw:gap-1 tw:text-xs tw:text-ink-faint tw:no-underline tw:hover:text-highlight"
