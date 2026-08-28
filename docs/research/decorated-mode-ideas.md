@@ -373,6 +373,35 @@ system"](decorated-mode/ideas-designer.md).
 
 ---
 
+## A decoration's extent decides which decoration it is
+
+Worth writing down because it cost an afternoon and is invisible in the code.
+
+The judgement pass was asked for two kinds of **point mark**: a `hedge` ("may be", "arguably")
+and a `number` ("86 billion neurons"). The spec asked for "enough words around it to read as a
+fact", and what came back were whole clauses — hedges up to **194 characters**, and "won the 2025
+annual Berggruen Prize Essay Competition" for a number.
+
+The styling was right, the data was right, the *lengths* were wrong, and the result was a different
+feature. A dotted underline with a raised query over four words marks a hedge. The same treatment
+over a 194-character clause is a highlighted sentence — which is [the thing the reading-science
+review argued hardest against](decorated-mode/ideas-reading-science.md), arriving through the back
+door, inside the layer specifically designed to avoid it. Nobody would have proposed it. It built
+itself out of a vague word in a prompt.
+
+Three consequences for any decoration pass we write later:
+
+- **Say the length in the schema**, not "enough words". A span kind is a shape as much as a meaning,
+  and a model asked for a mark will return a highlight if the wording lets it.
+- **Narrow at build time and report the count.** `build.mjs` shrinks hedge and number spans to the
+  marker plus two words, caps them at 34 characters, and prints how many it moved (33 of 36). A
+  silent narrowing would have hidden the fact that the pass systematically misjudges this.
+- **Dropping a mark is not the safe default.** The first narrowing dropped nine spans whose phrasing
+  the lexicon missed — "harder to say whether", "one possibility", "fraught with uncertainty",
+  "1950s" defeated by a plain `\b`. A mark we cannot place is worse than no mark, because it looks
+  placed. Grow the lexicon against the article until nothing is dropped, then keep the drop as the
+  alarm it was meant to be.
+
 ## Two things the playground turned up that are not about decoration
 
 Both are bugs in artefacts the live app uses, found because the builder reports every quote it
