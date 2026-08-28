@@ -115,6 +115,15 @@ const INTEGRATIONS = [
  * an official exported entry point, not a private path, and error capture is
  * all of what this file uses.
  *
+ * **`@sentry/node-core` and `@sentry/core` are declared in `package.json`, and
+ * were not until 2026-08-28.** Only `@sentry/node` was — the package nothing
+ * imports — so the two this file and src/monitoring-scrub.ts actually load were
+ * resolving as its transitive dependencies. That works right up until a Sentry
+ * release reshuffles its own tree, and then error reporting stops in production
+ * with nothing failing locally to say so. `npm run knip` names this class
+ * "unlisted dependencies"; dropping `@sentry/node` also took thirteen packages
+ * out of the lockfile, which is the 21 MB above.
+ *
  * ## `tracesSampleRate` is omitted, and that is not the same as setting it to 0
  *
  * The obvious way to turn tracing off is `tracesSampleRate: 0`. It does the
