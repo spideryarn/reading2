@@ -135,7 +135,25 @@ function runLoads(loads: number): string[][] {
   delete env.LOG_LEVEL;
   env.NODE_ENV = "development";
 
-  const child = spawnSync(TSX, ["-e", body], { cwd: repo, env, encoding: "utf8" });
+  /* The timeout goes here, not only on `beforeAll`. `spawnSync` blocks the
+     worker's event loop, so vitest's own timeout cannot fire while it waits —
+     a wedged child would hang past SETUP_MS and past anything else, and the
+     run would sit there looking busy. Found by GPT Sol, 2026-08-28. */
+  const child = spawnSync(TSX, ["-e", body], {
+    cwd: repo,
+    env,
+    encoding: "utf8",
+    timeout: SETUP_MS,
+  });
+  /* Reported before `status`, because a killed child has `status === null` and
+     would otherwise be described as "exited null" — which reads like a crash
+     rather than like the one thing that did not happen: finishing. */
+  if (child.error !== undefined || child.signal !== null) {
+    throw new Error(
+      `shelf child did not finish (signal ${child.signal}, ${child.error?.message ?? "no error"}) ` +
+        `after ${SETUP_MS}ms:\n${child.stderr}`,
+    );
+  }
   if (child.status !== 0) {
     throw new Error(`shelf child exited ${child.status}:\n${child.stderr}`);
   }

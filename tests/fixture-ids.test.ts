@@ -27,6 +27,9 @@ import { fileURLToPath } from "node:url";
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 
+/** This file, excluded from its own scan — see `claims()`. */
+const SELF = path.basename(fileURLToPath(import.meta.url));
+
 /**
  * **Every uuid literal in the file**, not the ones declared a particular way.
  *
@@ -88,8 +91,37 @@ function parse(file: string, source: string): Claim[] {
 
 function claims(): Claim[] {
   return readdirSync(DIR)
-    .filter((f) => f.endsWith(".test.ts"))
+    /* `.tsx` as well as `.ts`: vitest collects both, so a component test can
+       hold a fixture id and collide with anything else. Scanning only `.ts`
+       was a blind spot rather than a decision. */
+    .filter((f) => f.endsWith(".test.ts") || f.endsWith(".test.tsx"))
+    /* Not this file. Every uuid here is written out to be *talked about* — the
+       exempt one in NOT_A_ROW, the near-miss in the controls — and counting
+       those as claims makes the guard describe itself. It cost the staleness
+       check below its meaning: the exempt id is a literal in NOT_A_ROW, so its
+       file count could never fall below one no matter how many real users went
+       away. Found by GPT Sol, 2026-08-28. */
+    .filter((f) => f !== SELF)
     .flatMap((file) => parse(file, readFileSync(path.join(DIR, file), "utf8")));
+}
+
+/**
+ * Exemptions that no longer have two users, and so are buying nothing.
+ *
+ * Over claims rather than over the disk, for the same reason `collisions()` is:
+ * a rule that can only be run against the real tree can only be watched to
+ * pass.
+ */
+function staleExemptions(found: Claim[]): string[] {
+  return Object.keys(NOT_A_ROW)
+    .map((id) => ({ id, files: new Set(found.filter((c) => c.id === id).map((c) => c.file)) }))
+    .filter(({ files }) => files.size < 2)
+    .map(
+      ({ id, files }) =>
+        `${id} is exempted in NOT_A_ROW, but ${files.size} test file(s) declare it now. ` +
+        "One or none is not a collision, so the entry is buying nothing and is a standing " +
+        "blind spot. Delete it.",
+    );
 }
 
 /**
@@ -175,15 +207,23 @@ describe("fixture rows", () => {
        collision) and it silently forgives the next person who reaches for that
        id as a real fixture. So it has to be deleted when it stops being needed,
        which means something has to notice. */
-    const found = claims();
-    for (const id of Object.keys(NOT_A_ROW)) {
-      const files = new Set(found.filter((c) => c.id === id).map((c) => c.file));
-      expect(
-        files.size,
-        `${id} is exempted in NOT_A_ROW, but ${files.size} test file(s) declare it now. ` +
-          "One or none is not a collision, so the entry is buying nothing and is a standing " +
-          "blind spot. Delete it.",
-      ).toBeGreaterThan(1);
-    }
+    expect(staleExemptions(claims()), "see the message on each entry").toEqual([]);
+  });
+
+  it("would notice an exemption whose second user went away", () => {
+    /* The control on the control, and it is the reason `claims()` skips this
+       file. While this file scanned itself, every id in NOT_A_ROW was declared
+       here by definition, so the count could never fall to zero and the check
+       above could never fire on the case it exists for. It passed anyway,
+       which is what made it worth testing over made-up claims rather than
+       over the disk. */
+    const exempt = Object.keys(NOT_A_ROW)[0] as string;
+    const twoUsers: Claim[] = [
+      { file: "a.test.ts", name: "SENTINEL", id: exempt },
+      { file: "b.test.ts", name: "SENTINEL", id: exempt },
+    ];
+    expect(staleExemptions(twoUsers)).toEqual([]);
+    expect(staleExemptions(twoUsers.slice(0, 1)), "one user is not a collision").toHaveLength(1);
+    expect(staleExemptions([]), "no users at all").toHaveLength(1);
   });
 });
