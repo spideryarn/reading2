@@ -15,6 +15,48 @@ This plan adapts the worktree scripts from
 `~/dev/gdconsult_work/mindstone/MindstoneRebel/coding-agent-instructions`, which already solved the
 expensive half of it, and throws away the two thirds of them that are about a different repo.
 
+## Where this has got to
+
+**Status: step 1 of 7 done and committed (`96c7661`, 2026-08-28). Nothing creates a worktree yet.**
+
+Read this section and "What is left to do" at the bottom; the middle of the document is the reasoning
+behind them and can be read as needed.
+
+What exists now:
+
+| | |
+|---|---|
+| [`scripts/lockfile.ts`](../../scripts/lockfile.ts) | Atomic file lock. **Never steals a stale lock** — see step 1 below. Used by the deploy gate; step 4's database lease is the next caller. |
+| [`scripts/worktree-admin.ts`](../../scripts/worktree-admin.ts) | `forceRemoveThrowawayWorktree` (both `--force` flags, exit code returned), plus a `--porcelain -z` parser and `ghosts()` for step 5's `doctor`. |
+| [`scripts/deploy.ts`](../../scripts/deploy.ts) | Uses both. Teardown failures are now `record()`ed instead of swallowed. |
+| [`src/monitoring.ts`](../../src/monitoring.ts), [`src/web/monitoring.ts`](../../src/web/monitoring.ts) | Sentry now needs a deployment as well as a DSN. Unrelated to worktrees; found because the plan copies `.env.local` into every worktree. |
+
+Also done, outside the code: the sixteen stale worktree registrations were classified and cleared,
+and `node_modules` and `dist` are marked ignored to Dropbox.
+
+Two reviews are worth reading before continuing, because both changed the design and the second one
+overturned a fix that looked finished:
+
+- [`worktrees-review-sol.md`](worktrees-review-sol.md) — the plan review.
+- [`worktrees-code-review-sol.md`](worktrees-code-review-sol.md) — the code review. Its findings 4, 5
+  and 6 are all addressed; its finding 1 is why the lock does not steal.
+
+### Things that will waste your time if you do not know them
+
+- **Twelve or more agents work in this tree at once.** `npm test` is not reliably green and the
+  failures are usually not yours: peers mid-edit in `src/web/`, and concurrent runs colliding on the
+  one shared Postgres (a literal `duplicate key (slug)=(constitution)`). Check whether a failing test
+  imports anything you touched before believing it.
+- **Load averages of 200–400 are normal here.** Vitest's default 5 s timeout turns healthy code red.
+  Three tests in `tests/lockfile.test.ts` spawn `npx tsx` and carry a 60 s timeout for this reason.
+- **A worktree at HEAD is not a usable baseline.** One was built for this work and thrown away:
+  `tsx` crashed inside it and its Postgres suites skipped for environment reasons, so a comparison
+  would have measured the environment rather than the change.
+- **Timing numbers taken in this tree are close to worthless**; disk numbers are fine. Every timing
+  in this document is marked accordingly.
+- **`npm run typecheck` reports `rename-preview.tsx` "checked by no project".** Pre-existing,
+  untracked, Greg's. Not yours, do not fix it.
+
 ## The measurements, first
 
 Every number below is from this repo, this laptop, 2026-08-28. **Disk figures are reliable. Times
@@ -463,35 +505,160 @@ because local `main` is a hundred commits ahead of `origin/main` and that is cur
   standard, and none of them knows about our Supabase port pinning or the `data/` clone. The script
   described here is most of what they do.
 
-## Order of work
+## What is left to do
 
-Reordered after review: nothing that creates a worktree ships before the shared-database and removal
-safeguards exist, because both of those failures are silent and land on work that is not in git.
+Nothing that creates a worktree ships before the shared-database and removal safeguards exist: both
+of those failures are silent, and both land on work that is not in git.
 
-1. ~~**Fix the two `deploy.ts` bugs**~~ — **done, 2026-08-28.** `scripts/lockfile.ts` and
-   `scripts/worktree-admin.ts`, both used by `deploy.ts`, both reused later by steps 4 and 5. All
-   sixteen ghosts classified and cleared (fifteen gone, one from an interrupted run — clean, detached,
-   its commit already in `main`).
+### 1. The two `deploy.ts` bugs — done (`96c7661`)
 
-   **The lock does not steal a stale lock, and that is a deliberate change.** Review found that
-   `read it, decide it is dead, unlink, create` lets two processes both take the same leftover: the
-   second unlinks the first one's *new* lock. POSIX has no unlink-if-unchanged, so it cannot be made
-   safe with ordinary file operations. A leftover is now reported with the `rm` command to clear it.
-   Affordable because `process.on("exit")` already releases on every death except `SIGKILL`.
-   **Step 4's database lease inherits this** — it must not reintroduce stealing.
-2. **Define the deterministic install contract**: commit the install-script policy, then the minimal
-   cache — blocking atomic lock, install straight into cache staging, executing smoke test.
-3. **Ports as one unit**, because half of it is worse than none: atomic port lease, `SPIDERYARN_DEV_PORT`
-   + `strictPort` in `vite.config.ts`, the `config.toml` allow-list *with a Supabase restart and a
-   live-container check*, and an identity endpoint a browser check can assert against.
-4. **The DB lease and a `test:db` that fails closed.**
-5. **`scripts/worktree.ts`: `new`, `doctor`, `rm`** — including the ignored-file manifest that stops
-   `rm` deleting untracked `data/` and `.env.local` work.
-6. **Docs alongside each step, not batched at the end**: `CLAUDE.md`, and `docs/project/worktrees.md`
-   parented under [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md).
-7. **Later, when the tree is quiet: the Dropbox move.** Not by deleting ten useful worktrees — git
-   supports moving the main worktree and repairing the links. Quiesce first (stop agents, servers and
-   editors holding the old path), record `git worktree list --porcelain`, move, then
-   `git worktree repair` against the **recorded paths rather than a shell glob**, then verify from
-   every worktree that status, branch, common git dir and registered path are right. Take the
-   off-Dropbox backup before any of it.
+Kept here because step 4 inherits a decision from it.
+
+**The lock does not steal a stale lock.** `read it, decide it is dead, unlink, create` lets two
+processes both take the same leftover — the second unlinks the first one's *new* lock — and POSIX has
+no unlink-if-unchanged, so a bounded retry does not help. A leftover is reported with the `rm`
+command to clear it. Affordable because `process.on("exit")` already releases on every death except
+`SIGKILL`. **Step 4 must not reintroduce stealing.**
+
+Two smaller findings from the same review, both fixed and both worth not undoing: the claim links a
+fully-written temporary file into place rather than using `open(…,"wx")`, which publishes the path
+before its contents and lets a contender read an empty file and call the holder dead; and `release`
+checks inode and token before unlinking, because the exit hook outlives the lock it was made for.
+
+### 2. The deterministic install contract, and the cache
+
+Two halves, in this order.
+
+**a. Commit the install-script policy.** Five dependencies have install scripts — esbuild (three
+versions), `@sentry/cli`, `fsevents` — and npm 11 gates them behind `allowScripts`. Different policies
+produce different installed trees *while `npm ci` still exits 0*, so a cache keyed without them serves
+the wrong tree silently. Put the intended policy in `package.json`/`.npmrc`, make unreviewed scripts
+fail closed, and run installs with an explicit sanitised configuration. Then the policy is a repo fact
+that reaches the fingerprint through the files themselves. Do **not** try to hash the invoking user's
+configuration.
+
+**b. The cache**, as described in [The `node_modules` cache](#the-node_modules-cache) above. The
+shape review settled on: fingerprint → **one blocking atomic lock** → re-check for a completed entry
+→ `npm ci --offline` **straight into a cache staging directory** → smoke test → atomic rename →
+`cp -c -R` into the worktree. No non-blocking lock and no TTL prune in v1.
+
+The smoke test must **execute** `vite`, `tsx`, `vitest`, `esbuild` and `sentry-cli` and check the
+embedded fingerprint. "One `.bin` shim resolves" proves nothing — during this work `@sentry/cli` was
+wrongly reported as missing by exactly that kind of shallow check, when
+`node_modules/.bin/sentry-cli --version` prints `2.58.6`.
+
+### 3. Ports, as one unit
+
+Half of this is worse than none, because each half hides the other's failure.
+
+1. `SPIDERYARN_DEV_PORT` in [`vite.config.ts`](../../vite.config.ts) (currently hardcodes `5273`),
+   with **`strictPort: true`**.
+2. An **atomic** port lease — `scripts/lockfile.ts` is the primitive, not a scan-then-pick.
+3. The `additional_redirect_urls` range in [`supabase/config.toml`](../../supabase/config.toml),
+   **then restart Supabase and check the running container**: the file is not re-read automatically
+   ([setup-dev.md](../project/setup-dev.md)).
+4. An identity endpoint reporting worktree and commit, which browser checks assert against.
+
+Why (4) is not optional: `strictPort` only makes the *second server* refuse to start. A browser
+pointed at 5273 still reaches the *first* worktree's server and everything looks fine. Without an
+identity check, an agent can screenshot and test another worktree's work and report success.
+
+Why (3) caps concurrency: the allow-list is a list of exact ports, so the number of listed ports is
+the number of concurrent worktrees. `worktree:new` must **refuse** when the range is exhausted rather
+than allocate outside it — a port that is not on the list produces a sign-in that appears to work and
+silently drops the return path.
+
+### 4. The database lease, and a `test:db` that fails closed
+
+One shared Supabase stack, per Greg. A lease around `db:migrate`, `db:reset` and any DB-backed test
+run, built on `scripts/lockfile.ts`, **held for the whole suite** rather than per statement.
+
+It inherits no-stealing from step 1, which has a cost worth stating plainly: a `SIGKILL`ed test run
+will occasionally leave a lock that a human must `rm`. The error message says which file. This is a
+deliberate trade of convenience for never having two writers.
+
+`test:db` must fail when the database is absent or the migration head is not what the checkout
+expects. Today about a dozen Postgres suites **skip themselves silently** when the DB is down, so a
+misconfigured worktree reports green while testing nothing. `npm test` may stay usable without a
+database; schema and store work must run `test:db` before landing.
+
+### 5. `scripts/worktree.ts` — `new`, `doctor`, `rm`
+
+`new`, in order: validate the slug; **warn** if the primary is dirty (Greg explicitly does not want a
+refusal); resolve local `main` to a SHA; `git worktree add --lock --reason initialising -b agent/<slug>`;
+mark `INITIALIZING`; **assert the new worktree's `HEAD` equals the captured SHA**; `node_modules` from
+the cache; `cp -c -R` the `data/` directory; copy `.env.local` at mode 0600 with the leased port;
+`tmutil addexclusion`; mark `READY`; unlock; print the absolute path on stdout and everything else on
+stderr.
+
+Use `--no-track` explicitly and then **verify** the branch has no upstream.
+
+`rm` needs the guard that the current primitive deliberately does not have.
+`forceRemoveThrowawayWorktree` is named that way because it discards tracked modifications *and*
+untracked files. `data/` and `.env.local` are both gitignored, so a clean `git status` plus an
+ancestor check will report "safe to remove" and then delete real work. Record a manifest of ignored
+state at creation; refuse removal when it has changed, unless given an explicit discard flag.
+
+`doctor` reports ghosts (`ghosts()` already handles main, bare and `prunable`), `INITIALIZING` trees
+older than some threshold, and unexpected locks.
+
+### 6. Docs, alongside each step rather than batched
+
+`CLAUDE.md` — see [What changes in `CLAUDE.md`](#what-changes-in-claudemd); and
+`docs/project/worktrees.md`, parented under
+[dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md), or
+`tests/doc-links.test.ts` fails.
+
+### 7. Later: move the repo out of Dropbox
+
+Greg intends to; deferred while agents are working. Not by deleting worktrees — git supports moving
+the main worktree and repairing the links:
+
+1. Quiesce: stop agents, servers and editors holding the old path.
+2. Record `git worktree list --porcelain`.
+3. Move the primary.
+4. `git worktree repair` against the **recorded paths, not a shell glob**.
+5. From every worktree verify status, branch, common git dir and registered path.
+
+Take the off-Dropbox backup before any of it.
+
+## Open decisions
+
+Everything here needs Greg, and none of it blocks step 2.
+
+1. **`data/` and Dropbox.** `node_modules` and `dist` are ignored; `data/` is not. Ignoring it stops
+   27 MB syncing but **deletes Dropbox's copy**, and that is 27 MB of pipeline output that cost model
+   calls. Asked, not yet answered.
+2. **How many concurrent worktrees to list in `additional_redirect_urls`** (step 3). Ten was the
+   working assumption from "like today — 10+".
+3. **Is the manual `rm` after a `SIGKILL` acceptable** for the database lease (step 4)? The
+   alternative is a lease that can be held by two runs at once, which is worse, but it should be
+   Greg's call rather than assumed from step 1.
+4. **The Sentry gate allows preview deployments to report.** Greg asked for "only in production"; the
+   gate implemented is "not on a laptop", so previews still report and are labelled by `environment`.
+   Narrowing it to production-only is one condition if that is what he meant.
+5. **`.env.prod` is deliberately not provisioned into worktrees**, so an agent in one cannot deploy.
+   Confirm that is wanted.
+
+## Open risks this plan does not close
+
+From the ranked table above, the two with no mechanism behind them:
+
+- **Row 10** — two worktrees each paying for the same `data/` artefact. Needs a global content-hash
+  lease that does not exist. Policy only for now: treat pipeline work on one article as exclusive.
+- **Row 11** — Dropbox restoring an older-but-valid ref into the shared `.git`. `git fsck` cannot see
+  it, because every object is valid. Only step 7 really answers it. Greg has accepted this risk
+  knowingly; local `main` is roughly a hundred commits ahead of `origin/main`.
+
+## How to check you have not broken anything
+
+```bash
+npm run typecheck                     # all three projects; ignore rename-preview.tsx
+npx vitest run tests/lockfile.test.ts tests/worktree-admin.test.ts tests/monitoring-config.test.ts
+```
+
+And the rule this work kept proving: **break it on purpose first.** Every fix in step 1 was watched
+failing before it was trusted — reverting `"wx"` to `"w"` and `--force --force` to `--force` turned
+exactly four tests red, putting the stale steal back turned five red that the previous suite had
+passed blind, and removing the Sentry gate turned its test red. A suite that has only ever been green
+is not evidence ([silent-success.md](../reusable/silent-success.md)).
