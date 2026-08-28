@@ -1,6 +1,8 @@
 # The chat operation model — the build plan
 
-**Status:** planned and reviewed, 2026-08-28. Nothing built yet.
+**Status:** stage 1 built, 2026-08-28. Stages 2 and 3 written down and not built.
+What stage 1 turned out to need that this plan did not say is in
+[§ What stage 1 actually did](#what-stage-1-actually-did) at the bottom.
 
 The strategy and the evidence for it are in
 [chat-client-architecture.md](chat-client-architecture.md), which ends with steps 2–4 written down
@@ -325,6 +327,59 @@ Two more, specific to this plan:
 - **The other-tab resurrection stays open.** A slow response can still bring back a conversation
   deleted in another tab. No client state machine can refuse a deletion it has never heard of, and
   the fix is `BroadcastChannel` plus revalidate-on-visibility. Separate work.
+
+## What stage 1 actually did
+
+Built 2026-08-28. Everything above held; these are the places where the code had to decide something
+this plan did not say, and one place where the plan was wrong.
+
+- **There are four modules, not three.** `project.ts` holds the projection. It is one function with
+  one live branch in this stage, and it is separate because `reduce` and the controller both have a
+  reason not to own it: the reducer must not know what a thread looks like on screen, and the
+  controller caches what this returns.
+- **`mergedArrival` and `withoutEmpty` moved into `chat/model.ts`**, docstrings and all, and
+  `useChat.ts` re-exports both. The reducer needs them, and a module importing the module that
+  imports it is a cycle — `npm run cycles` would have caught it. Everything that referred to
+  "useChat.ts § `mergedArrival`" still lands on a real line.
+- **`write` became a module-level `writeThread`** that maps every ending onto an outcome and does not
+  throw, exactly as `askForThreads` does. The reader-facing wording — "Couldn't rename that
+  conversation: …" — is composed in the reducer, because that is what knows which operation answered.
+- **`cancelAndDiscard` no longer keeps a rollback copy, and that is what let `latest` go.** A
+  tombstoned conversation is projected away rather than removed from `base`, and no frame may write
+  to it, so it sits there exactly as the reader last saw it. Putting it back after a refused cancel
+  is removing the tombstone. `askToCancel` lost its `restore` parameter with it.
+
+  **Pinned on both sides**, which is better than it looked while it was being written:
+  `tests/chat-intent-paths.test.ts` — "puts the conversation back, and says so in error" — was
+  committed that morning against the old code and watched red by deleting the restore from
+  `askToCancel`'s catch. It passes against the new shape unchanged, which is the whole use of a
+  characterisation test: it was written to describe a rollback copy and it still holds when the
+  rollback copy is gone, because what it asserts is what the reader sees.
+- **This answers the open question at the bottom of
+  [the inventory](chat-operation-model-inventory.md)** — is `remove` structural like `begin` and
+  `discard`, or its own thing? Its own thing. `begin` and `discard` write `base` and register
+  nothing; `remove` is a `DeleteOperation` with a tombstone, registered in one transition, and never
+  rolled back. `rename` is an operation too. The plan's paragraph naming three local edits was
+  counting `rename` among them and should not have.
+- **Both of a rename's answers commit the title to `base`** — unless the operation was superseded,
+  in which case neither does. The plan says a failed rename stays on screen and does not say where
+  the title then lives; if the operation retired without committing, the title would leave the screen
+  with it, which is a rollback by accident.
+- **`load.started` does not clear the list.** A controller is made per article, so arriving at one
+  starts from an empty base already, and wiping it on a second load of the *same* article — which is
+  every `StrictMode` mount — would throw away exactly what `mergedArrival` exists to protect.
+- **The controller is latched in a `useRef`, not a `useMemo`.** React is explicitly allowed to throw
+  a `useMemo` cache away and rebuild it, and rebuilding this one would silently empty the reader's
+  conversation list. Constructing a controller has no side effects, so the latch is safe during a
+  render. This is not one of the three refs the stage removes: it holds the controller, not state
+  read from outside a render.
+
+`gone`, `latest` and `onScreen` are gone, `ChatApi` is unchanged, and `tests/chat-reduce.test.ts`
+covers the gate, supersession and purity with no React in it. The gate was watched failing: deleting
+it in a probe copy turns exactly the four tests that name it red, including a stale load's success
+and its failure separately. The two purity tripwires were watched failing too — a `Map` mutated in
+place and a thread renamed in place — because `Object.freeze` on a `Map` does nothing at all to
+`map.set`, and a freeze that cannot fail is not a check.
 
 ## Reference
 

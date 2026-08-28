@@ -11,8 +11,16 @@
  * it only issues GETs, and the question does not belong in a URL — it is
  * arbitrary length and it is the reader's private text, which would then be in
  * every access log between here and the server.
+ *
+ * **The state now lives in src/web/chat/**, and this file is on its way to
+ * being a façade over it — docs/plans/chat-operation-model.md. Stage 1 moved
+ * the load, the rename and the delete: each is an operation with an id, and
+ * its answer is admitted or refused at one gate rather than by a guard written
+ * out again at every `await`. Everything to do with a turn — `run`, the
+ * watcher, the 409 repair — is still here, writing through the temporary
+ * `legacy.apply` event, and stage 2 takes it.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type {
   ChatAnchor,
   ChatMessage,
@@ -27,6 +35,15 @@ import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
 import { ENDED_UNFINISHED, NO_RESPONSE } from "../messages.js";
 import { describeFetchFailure } from "./useComments.js";
 import { apiFetch, failure, readJson } from "./lib/api.js";
+import { ChatController, type ChatEffects } from "./chat/controller.js";
+import { asOpId, type ThreadsOutcome, type WriteOutcome } from "./chat/model.js";
+
+/* `mergedArrival` and `withoutEmpty` moved to ./chat/model.ts, where `reduce`
+   can use them: a module that imports the module importing it is a cycle. They
+   are re-exported here so that every reference to "useChat.ts § mergedArrival"
+   still lands somewhere true, and so that tests/chat-client.test.ts keeps the
+   import it has. */
+export { mergedArrival, withoutEmpty } from "./chat/model.js";
 
 export interface ChatApi {
   threads: ChatThread[];
@@ -222,7 +239,7 @@ export interface Begun {
  * pending answer, which is what a turn *is*.
  */
 export function withServerIds(
-  threads: ChatThread[],
+  threads: readonly ChatThread[],
   current: string,
   pendingId: string,
   begun: Begun,
@@ -247,85 +264,6 @@ export function withServerIds(
           }),
         },
   );
-}
-
-/**
- * Drop a conversation that never had anything said in it.
- *
- * The guard is the whole function, and it leans on an invariant that has to
- * hold on the other side of the wire: **an empty thread exists only in the tab
- * that started it.** Given that, dropping it costs nothing and touches no
- * server. A thread with a message in it is on disk, and removing it here would
- * take it off the screen while leaving it in the file — a deletion that did not
- * delete, undone by the next reload. That is why the id alone is not enough to
- * authorise this, and why `remove` (which does talk to the server) stays a
- * separate call.
- *
- * The invariant is not free: src/chat.ts had an unused `createThread` that
- * wrote an empty thread straight to disk, and one caller of it would have made
- * this function exactly the deletion-that-does-not-delete above. It was deleted
- * rather than left lying there, and the note in its place says why. Found by a
- * GPT-5.6 review, 2026-08-26.
- */
-export function withoutEmpty(threads: ChatThread[], id: string): ChatThread[] {
-  return threads.filter((t) => !(t.id === id && t.messages.length === 0));
-}
-
-/**
- * The list the server has just handed us, on top of what this tab already
- * knows — used only for the load on arrival.
- *
- * The arriving list used to be written straight over `threads`, on the
- * reasoning that there is nothing on screen when a panel has only just mounted.
- * That is true for exactly as long as the fetch takes, and no longer: on a slow
- * connection the reader can press `+`, type a question, send it and watch the
- * answer arrive, all before the response to a request made at mount lands.
- * Every one of those is in the list the snapshot then replaced, and the send is
- * the one that costs — its rows go, and each later frame of the answer patches
- * a row that is not there, so the answer arrives nowhere and the reader is
- * looking at a list with no sign they ever asked. Greg hit the visible half of
- * this on a slow connection, 2026-08-27; GPT Sol found this half while
- * reviewing the composer under the list, which made it easy to reach.
- *
- * So the server's list is **added to** what is on screen and never applied over
- * it. Two rules:
- *
- * - **A row already on screen wins.** Not "unless the server's is newer",
- *   because ours is newer by construction: the mount effect empties the list
- *   before it fetches, so everything in `prev` was put there afterwards, by
- *   this tab, from a send this tab is watching. The server's copy of the same
- *   conversation is at best equal and at worst the half-written one it had when
- *   it answered — the question stored, the answer still streaming — and a
- *   response that crawls back over a slow connection can be that stale even
- *   after the send it is behind has finished. Preferring ours needs no timing
- *   argument at all, which is what makes it right; a narrower rule that only
- *   protected conversations with a send **still running** left exactly that
- *   window open.
- * - **Deletions win**, which `put` has always said and the arriving list did
- *   not. A conversation the reader deleted while the fetch was out is still in
- *   the snapshot, because the send that created it told the server; putting it
- *   back reads as the delete button not working.
- *
- * Both rules are the arrival load's alone. Neither is safe for `refreshThread`,
- * where the screen is the thing known to be wrong and a thread the server does
- * not have is one somebody else deleted — which is why that branch takes the
- * server's copy, and deletes on its absence.
- *
- * `deleted` is passed in rather than read from `gone` here, so this stays a
- * pure function of its arguments: it runs inside a `setThreads` updater, which
- * React invokes twice under `StrictMode`, and this file has been bitten by an
- * impure updater before.
- */
-export function mergedArrival(
-  prev: ChatThread[],
-  fresh: ChatThread[],
-  deleted: ReadonlySet<string>,
-): ChatThread[] {
-  const ours = new Set(prev.map((t) => t.id));
-  /* Appended rather than merged into place, because nothing downstream reads
-     this order: ThreadList sorts by `updatedAt`, and the panel finds the open
-     conversation by id. */
-  return [...prev, ...fresh.filter((t) => !ours.has(t.id) && !deleted.has(t.id))];
 }
 
 /**
@@ -544,14 +482,6 @@ async function drainTurn(body: ReadableStream<Uint8Array>, sink: TurnSink): Prom
   }
 }
 
-/** Where the one fetch that fills the list has got to. See `phase`. */
-type LoadPhase = "loading" | "ready" | "failed";
-
-/** Either this article's conversations, or why they are not here. */
-type ThreadsOutcome =
-  | { ok: true; threads: ChatThread[] }
-  | { ok: false; error: string };
-
 /**
  * Ask the server for this article's conversations.
  *
@@ -578,77 +508,87 @@ async function askForThreads(slug: string): Promise<ThreadsOutcome> {
   }
 }
 
+/**
+ * A write whose only job is to stick — checked, not assumed.
+ *
+ * `fetch` resolves for a 404 or a 500; only a transport failure rejects. So a
+ * bare `.catch()` on these calls reported success for every error the server
+ * could return: the rename or the delete happened on screen, the server said
+ * no, and the next reload put the old state back. This app has been bitten by
+ * exactly that before — see the note on `forget` in useComments.ts, where a
+ * DELETE that 500'd removed a comment from the screen and said nothing. Found
+ * again here by a GPT-5.6 review, 2026-08-26.
+ *
+ * Like `askForThreads` above, and for the same reason, **it does not throw**:
+ * it maps every way the request can end onto one outcome and hands that back,
+ * so the decision about whether the answer is still wanted is taken once, at
+ * the gate in reduce.ts. The reader-facing wording is put on the front of it
+ * there — the reducer knows which operation this was, and the message has to
+ * name it.
+ */
+async function writeThread(
+  slug: string,
+  threadId: string,
+  init: RequestInit,
+): Promise<WriteOutcome> {
+  try {
+    const r = await apiFetch(
+      `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`,
+      init,
+    );
+    if (!r.ok) throw await failure(r);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: describeFetchFailure(e as Error) };
+  }
+}
+
+/**
+ * The three requests the controller is allowed to make in this stage.
+ *
+ * Module-level, so its identity is stable and the controller need not be
+ * rebuilt to get at it. Everything else that fetches is still in the hook
+ * below, and stage 2 moves it here.
+ */
+const chatEffects: ChatEffects = {
+  loadThreads: askForThreads,
+  renameThread: (slug, threadId, title) =>
+    writeThread(slug, threadId, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    }),
+  deleteThread: (slug, threadId) => writeThread(slug, threadId, { method: "DELETE" }),
+};
+
 export function useChat(slug: string): ChatApi {
-  const [threads, setThreads] = useState<ChatThread[]>([]);
   /**
-   * Where the one fetch that fills the list has got to.
+   * The state, the operations in flight and the tombstones — all of it, and one
+   * of it per article.
    *
-   * **One value rather than the two booleans it replaces**, and that is a
-   * safety change rather than a tidy-up. `loaded` and `loadFailed` are four
-   * combinations of which only three are legal, and the illegal one — not
-   * loaded, but failed — was reachable: a superseded load failing set
-   * `loadFailed` back to true under a list the current load had already
-   * displayed, and the panel then said it could not load a list it was showing.
-   * A value that cannot hold that combination cannot be put into it.
+   * See src/web/chat/controller.ts for why this is a controller rather than a
+   * `useReducer`. What it buys here is three refs: `onScreen` and `latest` both
+   * existed only to read the current list from outside a render, which is now
+   * `controller.threads`, and `gone` is now `controller.state.tombstones`.
    *
-   * Both of the old names are still what `ChatApi` exposes, derived at the
-   * bottom of this function. The panel needs the difference between "asked and
-   * empty" and "asked and it failed", and it should not have to learn a third
-   * word for it.
+   * **Latched in a ref rather than a `useMemo`**, because the two are not the
+   * same promise: React is explicitly allowed to throw a `useMemo` cache away
+   * and rebuild it, and rebuilding this one would silently empty the reader's
+   * conversation list. Constructing a controller has no side effects — it fills
+   * in an initial state and nothing else — so doing it during a render is safe,
+   * and the effect below is what starts the load.
+   *
+   * A new controller per slug is also what clears everything the last article
+   * left behind: its error, its tombstones, its list, its phase. The hook used
+   * to do that by hand in the effect below and missed `error` for as long as
+   * chat has existed.
    */
-  const [phase, setPhase] = useState<LoadPhase>("loading");
-  const [error, setError] = useState<string | null>(null);
-
-  /**
-   * What is on screen right now, readable from an event handler.
-   *
-   * One thing needs it: an edit has to tell the server which message this tab
-   * believes is last, so the server can refuse an edit whose discard set has
-   * changed underneath it. Without that guard a stale tab editing an old
-   * question silently deletes every turn added since it last looked, and
-   * nothing notices — see `expectedTailId` in src/store/contracts.ts.
-   *
-   * A ref written from an effect rather than a value closed over by `edit`,
-   * because `edit` deliberately has an empty-ish dependency list and closing
-   * over `threads` would make it a new function on every delta of every
-   * streaming answer. The effect runs at commit, and a click happens after a
-   * commit, so what this holds is exactly what the reader was looking at.
-   */
-  const onScreen = useRef<ChatThread[]>([]);
-  useEffect(() => {
-    onScreen.current = threads;
-  }, [threads]);
-
-  /**
-   * Threads the reader deleted while an answer was still arriving.
-   *
-   * The same tombstone useComments.ts keeps, and needed for a longer window: an
-   * answer streams for tens of seconds and the reader can delete the thread it
-   * is landing in at any point during that. Without this, the next frame of the
-   * stream puts the thread back — and it comes back one message shorter than it
-   * was, which looks like corruption rather than a race.
-   *
-   * A ref, not state: nothing renders from it, and a stale closure would defeat
-   * the point of it.
-   */
-  const gone = useRef(new Set<string>());
-
-  /**
-   * The current `threads`, readable outside a render.
-   *
-   * Only `cancelAndDiscard` needs it, and it needs it for one reason: to keep a
-   * copy of the conversation it is optimistically removing, so a 409 can put it
-   * back. Reading that from inside a `setThreads` updater would be the obvious
-   * alternative and is forbidden — an updater must be pure, React StrictMode
-   * invokes it twice, and this file has already been bitten by exactly that.
-   */
-  const latest = useRef<ChatThread[]>([]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — switching article is exactly when the tombstones stop meaning anything, and the effect deliberately reads nothing
-  useEffect(() => {
-    const forgotten = gone.current;
-    return () => forgotten.clear();
-  }, [slug]);
+  const held = useRef<ChatController | null>(null);
+  if (!held.current || held.current.slug !== slug) {
+    held.current = new ChatController(slug, chatEffects);
+  }
+  const controller = held.current;
+  const { state, threads } = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
 
   /**
    * Which article's conversations these are.
@@ -717,116 +657,81 @@ export function useChat(slug: string): ChatApi {
       const outcome = await askForThreads(mine);
       if (showing.current !== mine) return;
       if (!outcome.ok) {
-        setError(outcome.error);
+        controller.dispatch({ type: "error.set", error: outcome.error });
         return;
       }
       // More than one means somebody else is still writing here — this run is
       // counted too, and it is the one that failed.
       if ((running.current.get(only) ?? 0) > 1) return;
       const server = outcome.threads.find((t) => t.id === only);
-      setThreads((prev) =>
-        server
-          ? prev.map((t) => (t.id === only ? server : t))
-          : // The server does not have it at all: it was deleted, or it was
-            // never written down. Either way it is not a conversation.
-            prev.filter((t) => t.id !== only),
-      );
+      /* Still its own operation in this stage — see `legacy.apply`. Stage 2
+         makes the refusal and the repair one transition, which is what stops a
+         refused edit going on being projected over the copy this fetches. */
+      controller.dispatch({
+        type: "legacy.apply",
+        update: (prev) =>
+          server
+            ? prev.map((t) => (t.id === only ? server : t))
+            : // The server does not have it at all: it was deleted, or it was
+              // never written down. Either way it is not a conversation.
+              prev.filter((t) => t.id !== only),
+      });
     },
-    [slug],
+    [slug, controller],
   );
 
   /**
-   * The one fetch that fills the list — and the only place its answer is
-   * written down.
+   * The one fetch that fills the list — now an operation, and the whole reason
+   * this effect is three lines rather than fifty.
    *
-   * **That "only" is the whole design of this effect**, and it is worth saying
-   * why, because the shape it replaces looked more careful and was less safe.
-   * The load used to live in the callback above and be guarded by two refs: one
-   * naming the article, one numbering the load. Every place that wrote anything
-   * had to re-state both by hand, and twice the file got it wrong in the same
-   * way — the success path guarded and the failure path not, so a superseded
-   * load that *failed* put an error over a list that was on screen and correct.
-   * Once as `loadFailed` (GPT Sol, 2026-08-27), once as `error` in the `catch`
-   * (GPT Sol, 2026-08-28), in the same file, a day apart.
+   * **The guard is not here at all**, and that is the point of the change. The
+   * load used to be guarded by two refs — one naming the article, one numbering
+   * the load — re-stated by hand at every place that wrote anything, and twice
+   * the file got it wrong in the same way: the success path guarded and the
+   * failure path not, so a superseded load that *failed* put an error over a
+   * list that was on screen and correct. Once as `loadFailed` (GPT Sol,
+   * 2026-08-27), once as `error` in the `catch` (GPT Sol, 2026-08-28), in the
+   * same file, a day apart. Then it was one `live` flag in this effect, which
+   * fixed those two by having one place to write from.
    *
-   * So the guard is not repeated here; there is only one place it could go.
-   * `askForThreads` cannot write and cannot throw, `settle` is the only thing
-   * that writes, and every way the request can end arrives there. A guard
-   * cannot be missing from a path that does not exist.
+   * Now the load is an operation with an id, and both of its answers come back
+   * carrying that id and go through the gate in reduce.ts. Registering a second
+   * load drops the first from the map, so its success and its failure are
+   * refused by the same rule rather than by two guards that have to agree. Two
+   * loads of one article is not a contrivance: `StrictMode` starts exactly
+   * that, and production reaches it by leaving an article and coming straight
+   * back.
    *
-   * And it is `live` rather than a slug or a number, for the reason
-   * useComments.ts has always used one: it is scoped to **this run of this
-   * effect** by construction. A slug ref cannot tell two loads of one article
-   * apart — `StrictMode` starts exactly that — and a number can, but only by
-   * being read correctly at every site that writes. This is read at one.
+   * Nothing is cleared here any more either. A new article is a new controller,
+   * which is a new list, a new phase, no tombstones and no error — the last of
+   * those was missed by hand for as long as chat has existed.
    */
   useEffect(() => {
     showing.current = slug;
-    setThreads([]);
-    setPhase("loading");
-    /* **And the error, which used to outlive the article it was about.**
-       Everything that fails in this hook writes to one string — a load, a stop,
-       a delete, the repair after a 409 — and every one of those failures is
-       about *this* slug. Left behind, a dropped connection on one piece put
-       "Couldn't reach the server" over the next piece the reader opened.
+    controller.dispatch({ type: "load.started", op: { id: asOpId(mintId()), kind: "load" } });
+  }, [slug, controller]);
 
-       **Not a bug any reader has hit**, and worth saying so: `Reader` is keyed
-       on the slug and both mounts of this hook are under it, so changing
-       article remounts rather than re-running this. What it buys is the hook
-       keeping its own promise instead of leaning on a caller two files away.
-
-       And it is not the whole of that promise. `askToStop`, `askToCancel` and
-       `remove` all write to `error` from a `catch` with no slug guard, so one
-       of them failing late would still land here after this reset. Guarding
-       three more call sites by hand is the exact habit that produced the
-       four staleness vocabularies this file is trying to get rid of — the
-       operation model in docs/plans/chat-client-architecture.md closes them all
-       at once, and that is where it should happen. GPT Sol, 2026-08-28.
-       tests/chat-error-scope.test.ts. */
-    setError(null);
-    let live = true;
-    /** The only thing here that writes anything. */
-    const settle = (outcome: ThreadsOutcome) => {
-      if (!live) return;
-      if (!outcome.ok) {
-        setError(outcome.error);
-        /* `failed`, and note that this still counts as having asked — the panel
-           reads `loaded` as "we have asked", not "it worked", so that a reader
-           whose server is down can still open a conversation and watch the send
-           fail with a reason rather than face a spinner that never resolves.
-           What it may *not* do is then say the reader has asked nothing, which
-           is what the `failed` phase is for. */
-        setPhase("failed");
-        return;
-      }
-      /* Read here, outside the updater, so what it is handed is a value rather
-         than a ref — see `mergedArrival`, which also says what the fetch's own
-         duration lets the reader do in the meantime. */
-      const deleted = new Set(gone.current);
-      setThreads((prev) => mergedArrival(prev, outcome.threads, deleted));
-      setPhase("ready");
-    };
-    void askForThreads(slug)
-      /* `askForThreads` catches its own failures, so this can only fire if it
-         is later changed into something that does not. Mapped to an outcome
-         rather than handled, so that it joins the one path below instead of
-         becoming a second one. */
-      .catch((e: Error) => ({ ok: false as const, error: describeFetchFailure(e) }))
-      .then(settle);
-    return () => {
-      live = false;
-    };
-  }, [slug]);
-
-  /** Rewrite one thread in place, or append it if it is new. Deletions win. */
-  const put = useCallback((id: string, edit: (t: ChatThread) => ChatThread) => {
-    setThreads((prev) => {
-      if (gone.current.has(id)) return prev;
-      const found = prev.find((t) => t.id === id);
-      if (!found) return prev;
-      return prev.map((t) => (t.id === id ? edit(t) : t));
-    });
-  }, []);
+  /**
+   * Rewrite one thread in place. Deletions win, and a thread that is not there
+   * is left alone.
+   *
+   * The tombstone is checked here rather than inside the updater, which is
+   * where it used to be. That is not a relaxation: `dispatch` applies the event
+   * on the same line, so "now" and "when the update runs" are the same instant —
+   * where `setThreads` deferred the updater to the next render and ran it twice
+   * under `StrictMode`.
+   */
+  const put = useCallback(
+    (id: string, edit: (t: ChatThread) => ChatThread) => {
+      if (controller.state.tombstones.has(id)) return;
+      controller.dispatch({
+        type: "legacy.apply",
+        update: (prev) =>
+          prev.some((t) => t.id === id) ? prev.map((t) => (t.id === id ? edit(t) : t)) : prev,
+      });
+    },
+    [controller],
+  );
 
   /**
    * A new, empty conversation — local only.
@@ -836,41 +741,50 @@ export function useChat(slug: string): ChatApi {
    * clean up. The server's `beginTurn` accepts this id when the first message
    * arrives, which is what makes the optimistic id safe.
    */
-  const begin = useCallback((kind: ThreadKind = "chat") => {
-    const id = mintId();
-    const at = new Date().toISOString();
-    setThreads((prev) => [
-      ...prev,
-      {
-        id,
-        /* A review's placeholder title says what it is, because the list is
-           shared: "New chat" sitting in a list the reader reached by pressing
-           Review is a small lie, and it is the row they are about to type
-           into. The real title arrives with the first thing they say. */
-        title: kind === "review" ? "New review" : "New chat",
-        createdAt: at,
-        updatedAt: at,
-        /* An empty thread exists only in this tab, so this kind is a promise
-           rather than a record — the send that follows is what tells the
-           server, and the server's answer is what makes it true. But the panel
-           filters and tags on it in the meantime, so it has to be right now. */
-        kind,
-        messages: [],
-      },
-    ]);
-    return id;
-  }, []);
+  const begin = useCallback(
+    (kind: ThreadKind = "chat") => {
+      const id = mintId();
+      const at = new Date().toISOString();
+      /* Straight into `base`, with no operation over it. Starting a
+         conversation is synchronous and local — nothing leaves the tab, so
+         there is nothing that can arrive late and nothing to admit. */
+      controller.dispatch({
+        type: "thread.begun",
+        thread: {
+          id,
+          /* A review's placeholder title says what it is, because the list is
+             shared: "New chat" sitting in a list the reader reached by pressing
+             Review is a small lie, and it is the row they are about to type
+             into. The real title arrives with the first thing they say. */
+          title: kind === "review" ? "New review" : "New chat",
+          createdAt: at,
+          updatedAt: at,
+          /* An empty thread exists only in this tab, so this kind is a promise
+             rather than a record — the send that follows is what tells the
+             server, and the server's answer is what makes it true. But the panel
+             filters and tags on it in the meantime, so it has to be right now. */
+          kind,
+          messages: [],
+        },
+      });
+      return id;
+    },
+    [controller],
+  );
 
   /**
    * Forget an empty conversation the reader changed their mind about.
    *
-   * No tombstone in `gone`, unlike `remove`: nothing is in flight for a thread
-   * with no messages — a send inserts its two rows before the request leaves —
-   * so there is no late frame that could put this one back.
+   * No tombstone, unlike `remove`: nothing is in flight for a thread with no
+   * messages — a send inserts its two rows before the request leaves — so there
+   * is no late frame that could put this one back. Local, like `begin`.
    */
-  const discard = useCallback((threadId: string) => {
-    setThreads((prev) => withoutEmpty(prev, threadId));
-  }, []);
+  const discard = useCallback(
+    (threadId: string) => {
+      controller.dispatch({ type: "thread.discarded", threadId });
+    },
+    [controller],
+  );
 
   /**
    * Ids of assistant rows the reader pressed stop on before the server had
@@ -906,10 +820,11 @@ export function useChat(slug: string): ChatApi {
    */
   const attempts = useRef(new Map<string, string>());
 
-  /* Cleared when the article changes, like the tombstones above. The tokens
-     name streams in *this* server for *these* conversations; carrying them into
-     another article's threads is at best dead weight and at worst a stop that
-     names something real by accident. */
+  /* Cleared when the article changes — by hand, because this is still a ref
+     rather than state; the tombstones used to need the same effect and now go
+     with the controller. The tokens name streams in *this* server for *these*
+     conversations; carrying them into another article's threads is at best dead
+     weight and at worst a stop that names something real by accident. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads a ref, and changing article is when the tokens in it stop meaning anything
   useEffect(() => {
     const stale = attempts.current;
@@ -937,10 +852,13 @@ export function useChat(slug: string): ChatApi {
         );
         if (!r.ok) throw await failure(r);
       } catch (e) {
-        setError(`Couldn't stop that answer: ${describeFetchFailure(e as Error)}`);
+        controller.dispatch({
+          type: "error.set",
+          error: `Couldn't stop that answer: ${describeFetchFailure(e as Error)}`,
+        });
       }
     },
-    [slug],
+    [slug, controller],
   );
 
   /**
@@ -975,14 +893,20 @@ export function useChat(slug: string): ChatApi {
    * The server does the check and the delete together — see `cancelChat` in
    * src/routes.ts.
    *
-   * The row is tombstoned in `gone` **before** the request leaves. That is what
-   * stops the still-open stream's frames from putting the conversation back on
-   * screen while the delete is in flight: `setThreads` and the frame loop both
-   * already consult it. Removing it from `threads` alone would not — the reader
-   * would watch the answer they just cancelled carry on typing itself.
+   * The conversation is tombstoned **before** the request leaves. That is what
+   * stops the still-open stream's frames from putting it back on screen while
+   * the delete is in flight: `put` and the frame loop both consult the
+   * tombstones. Taking it out of `threads` alone would not — the reader would
+   * watch the answer they just cancelled carry on typing itself.
+   *
+   * **And the tombstone is now the whole of it**, which is what let `latest`
+   * go. The conversation stays in `base` untouched — a tombstoned thread is
+   * projected away rather than deleted, and no frame may write to it — so
+   * putting it back is removing the tombstone, and there is no rollback copy to
+   * keep and nothing to keep it in.
    */
   const askToCancel = useCallback(
-    async (threadId: string, messageId: string, restore: ChatThread | undefined) => {
+    async (threadId: string, messageId: string) => {
       try {
         const r = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/cancel`,
           {
@@ -1006,25 +930,23 @@ export function useChat(slug: string): ChatApi {
            that is still there. This is the one place in this hook that reverts
            an optimistic change, and it does so because the server said the
            premise was wrong, not merely because a request failed. */
-        gone.current.delete(threadId);
-        if (restore) {
-          setThreads((prev) => (prev.some((t) => t.id === threadId) ? prev : [...prev, restore]));
-        }
-        setError(`Couldn't discard that conversation: ${describeFetchFailure(e as Error)}`);
+        controller.dispatch({ type: "tombstone.removed", threadId });
+        controller.dispatch({
+          type: "error.set",
+          error: `Couldn't discard that conversation: ${describeFetchFailure(e as Error)}`,
+        });
       }
     },
-    [slug],
+    [slug, controller],
   );
 
   const cancelAndDiscard = useCallback(
     (threadId: string, messageId: string) => {
       cancelWanted.current.add(messageId);
-      gone.current.add(threadId);
-      const before = latest.current.find((t) => t.id === threadId);
-      setThreads((prev) => prev.filter((t) => t.id !== threadId));
-      void askToCancel(threadId, messageId, before);
+      controller.dispatch({ type: "tombstone.added", threadId });
+      void askToCancel(threadId, messageId);
     },
-    [askToCancel],
+    [askToCancel, controller],
   );
 
   /**
@@ -1133,10 +1055,10 @@ export function useChat(slug: string): ChatApi {
              file already follows for `showing`. A watch outlives several round
              trips, and the reader can delete the conversation or leave the
              article in any of them. */
-          if (!stillOurs() || gone.current.has(threadId)) return;
+          if (!stillOurs() || controller.state.tombstones.has(threadId)) return;
           if (showing.current !== mine) return;
           const settled = await settledAnswer(mine, threadId, messageId);
-          if (!stillOurs() || gone.current.has(threadId)) return;
+          if (!stillOurs() || controller.state.tombstones.has(threadId)) return;
           if (showing.current !== mine) return;
           if (settled) {
             /* Only this row, and only by patching it. Replacing the whole
@@ -1178,7 +1100,7 @@ export function useChat(slug: string): ChatApi {
         });
       }
     },
-    [slug, put],
+    [slug, put, controller],
   );
 
   /**
@@ -1309,7 +1231,10 @@ export function useChat(slug: string): ChatApi {
            Found by tests/use-chat-recovery.test.ts, 2026-08-26. */
         const wasThread = current;
         const wasReply = pendingId;
-        setThreads((prev) => withServerIds(prev, wasThread, wasReply, begun));
+        controller.dispatch({
+          type: "legacy.apply",
+          update: (prev) => withServerIds(prev, wasThread, wasReply, begun),
+        });
         const wanted =
           stopWanted.current.delete(pendingId) || stopWanted.current.delete(begun.messageId);
         if (begun.attempt !== undefined) {
@@ -1335,7 +1260,7 @@ export function useChat(slug: string): ChatApi {
           cancelWanted.current.delete(begun.messageId)
         ) {
           stopWanted.current.delete(begun.messageId);
-          void askToCancel(current, begun.messageId, undefined);
+          void askToCancel(current, begun.messageId);
           return;
         }
         // A stop pressed before this frame arrived. Now there is an id
@@ -1390,7 +1315,7 @@ export function useChat(slug: string): ChatApi {
                which is the only honest pair. Found by a GPT-5.6 review,
                2026-08-26. */
             if (response.status === 409) {
-              setError(why);
+              controller.dispatch({ type: "error.set", error: why });
               await refreshThread(current);
               return;
             }
@@ -1463,7 +1388,7 @@ export function useChat(slug: string): ChatApi {
         }
       })();
     },
-    [slug, put, askToStop, refreshThread],
+    [slug, put, askToStop, refreshThread, askToCancel, controller],
   );
 
   const send = useCallback(
@@ -1490,48 +1415,51 @@ export function useChat(slug: string): ChatApi {
 
          Their ids are provisional: the server mints its own and says so in the
          `begin` frame, and the ids are swapped there. */
-      setThreads((prev) => {
-        const user: ChatMessage = {
-          id: mintId(),
-          role: "user",
-          text: question,
-          createdAt: now,
-          status: "done",
-        };
-        const reply: ChatMessage = {
-          id: pendingId,
-          role: "assistant",
-          text: "",
-          createdAt: now,
-          status: "pending",
-          /* The optimistic row's own copy. The server writes the authoritative
-             one onto its pending row in the same write as the question, but the
-             client does not read that back until the next load — so without
-             this the stance tag on an answer appeared only after a reload,
-             which is precisely the state a reader is never in while they are
-             watching the answer arrive. Found in a browser pass, 2026-08-28.
+      controller.dispatch({
+        type: "legacy.apply",
+        update: (prev) => {
+          const user: ChatMessage = {
+            id: mintId(),
+            role: "user",
+            text: question,
+            createdAt: now,
+            status: "done",
+          };
+          const reply: ChatMessage = {
+            id: pendingId,
+            role: "assistant",
+            text: "",
+            createdAt: now,
+            status: "pending",
+            /* The optimistic row's own copy. The server writes the authoritative
+               one onto its pending row in the same write as the question, but the
+               client does not read that back until the next load — so without
+               this the stance tag on an answer appeared only after a reload,
+               which is precisely the state a reader is never in while they are
+               watching the answer arrive. Found in a browser pass, 2026-08-28.
 
-             A guess, like the ids and the thread's kind beside it, and
-             harmless in the same way: the refresh that follows replaces this
-             row with the stored one. */
-          ...(stance ? { stance } : {}),
-        };
-        const existing = prev.find((t) => t.id === id);
-        const thread: ChatThread = existing
-          ? { ...existing, updatedAt: now, messages: [...existing.messages, user, reply] }
-          : {
-              id,
-              title: question.slice(0, 60),
-              createdAt: now,
-              updatedAt: now,
-              /* The optimistic row's own guess, and it has to be right rather
-                 than defaulted: this thread is rendered — and filtered by kind
-                 in the panel — in the frame before the server answers. A `?? "chat"`
-                 here would flash a new review into the list as a chat. */
-              kind: kind ?? "chat",
-              messages: [user, reply],
-            };
-        return existing ? prev.map((t) => (t.id === id ? thread : t)) : [...prev, thread];
+               A guess, like the ids and the thread's kind beside it, and
+               harmless in the same way: the refresh that follows replaces this
+               row with the stored one. */
+            ...(stance ? { stance } : {}),
+          };
+          const existing = prev.find((t) => t.id === id);
+          const thread: ChatThread = existing
+            ? { ...existing, updatedAt: now, messages: [...existing.messages, user, reply] }
+            : {
+                id,
+                title: question.slice(0, 60),
+                createdAt: now,
+                updatedAt: now,
+                /* The optimistic row's own guess, and it has to be right rather
+                   than defaulted: this thread is rendered — and filtered by kind
+                   in the panel — in the frame before the server answers. A `?? "chat"`
+                   here would flash a new review into the list as a chat. */
+                kind: kind ?? "chat",
+                messages: [user, reply],
+              };
+          return existing ? prev.map((t) => (t.id === id ? thread : t)) : [...prev, thread];
+        },
       });
 
       /* The anchor rides only on the request, never into the optimistic thread
@@ -1559,7 +1487,7 @@ export function useChat(slug: string): ChatApi {
       );
       return id;
     },
-    [run],
+    [run, controller],
   );
 
   const retry = useCallback(
@@ -1609,8 +1537,14 @@ export function useChat(slug: string): ChatApi {
          this is what the reader was looking at when they pressed save, and the
          server refuses the edit if the conversation has moved past it. Absent
          only for a thread this tab has never seen the server's version of, in
-         which case there is nothing after the question to be lost. */
-      const expectedTailId = onScreen.current
+         which case there is nothing after the question to be lost.
+
+         Off the controller rather than the `onScreen` ref this used to mirror
+         `threads` into. That ref existed because `edit` must not close over
+         `threads` — it would be a new function on every delta of every
+         streaming answer — and the controller answers the same question
+         synchronously without one. */
+      const expectedTailId = controller.threads
         .find((t) => t.id === threadId)
         ?.messages.at(-1)?.id;
       put(threadId, (t) => {
@@ -1652,73 +1586,61 @@ export function useChat(slug: string): ChatApi {
         pendingId,
       );
     },
-    [put, run],
+    [put, run, controller],
   );
 
   /**
-   * A write whose only job is to stick — checked, not assumed.
+   * Give a conversation a new name.
    *
-   * `fetch` resolves for a 404 or a 500; only a transport failure rejects. So a
-   * bare `.catch()` on these calls reported success for every error the server
-   * could return: the rename or the delete happened on screen, the server said
-   * no, and the next reload put the old state back. This app has been bitten by
-   * exactly that before — see the note on `forget` in useComments.ts, where a
-   * DELETE that 500'd removed a comment from the screen and said nothing.
-   * Found again here by a GPT-5.6 review, 2026-08-26.
+   * **The new title is not written anywhere**: the operation draws it over
+   * `base` for as long as it is in flight, and the answer — either answer —
+   * commits it. That is what makes two renames of one conversation safe in
+   * either order. Registering the second supersedes the first, so the first
+   * stops drawing at once and, when it answers, has nothing left to draw; the
+   * reader does not watch the title they replaced come back.
+   *
+   * The optimistic behaviour is unchanged: a rename that fails stays on screen,
+   * with a line in `error` saying what happened. Reverting it would be a second
+   * surprise on top of the first — see the note on `writeThread`.
    */
-  const write = useCallback(
-    async (threadId: string, init: RequestInit, what: string) => {
-      try {
-        const r = await apiFetch(`/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`,
-          init,
-        );
-        if (!r.ok) throw await failure(r);
-      } catch (e) {
-        // The optimistic change stays on screen. Reverting it would be a second
-        // surprise on top of the first, and the message says what happened —
-        // the reader can reload to see the truth.
-        setError(`Couldn't ${what}: ${describeFetchFailure(e as Error)}`);
-      }
-    },
-    [slug],
-  );
-
   const rename = useCallback(
     (threadId: string, title: string) => {
-      put(threadId, (t) => ({ ...t, title }));
-      void write(
-        threadId,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title }),
-        },
-        "rename that conversation",
-      );
+      controller.dispatch({
+        type: "rename.started",
+        op: { id: asOpId(mintId()), kind: "rename", threadId, title },
+      });
     },
-    [put, write],
+    [controller],
   );
 
+  /**
+   * Delete a conversation.
+   *
+   * The tombstone goes down as the operation is registered — one transition,
+   * because they are one decision — and it is what keeps the conversation gone:
+   * a late frame of an answer that was still arriving, or a list fetched before
+   * the delete, cannot put it back. It is deliberately never rolled back, for
+   * the same reason `rename` is not.
+   */
   const remove = useCallback(
     (threadId: string) => {
-      gone.current.add(threadId);
-      setThreads((prev) => prev.filter((t) => t.id !== threadId));
-      void write(threadId, { method: "DELETE" }, "delete that conversation");
+      controller.dispatch({
+        type: "delete.started",
+        op: { id: asOpId(mintId()), kind: "delete", threadId },
+      });
     },
-    [write],
+    [controller],
   );
 
-  /* Mirrored on every render rather than written at each `setThreads`. There
-     are a dozen of those and one of this, and a mirror that is updated at
-     twelve call sites is a mirror that is stale at the thirteenth. */
-  latest.current = threads;
-
   return {
-    threads,
+    /* `ChatApi` promises a plain array and nothing mutates it — ChatPanel
+       copies before it sorts. The projection is `readonly` so that the reducer
+       cannot be handed something it might write to. */
+    threads: threads as ChatThread[],
     /* Derived, not stored. "We have asked" is true of both the answers a load
        can come back with, and only `loading` is neither. */
-    loaded: phase !== "loading",
-    loadFailed: phase === "failed",
+    loaded: state.loadPhase !== "loading",
+    loadFailed: state.loadPhase === "failed",
     recovering,
     send,
     cancelAndDiscard,
@@ -1729,6 +1651,6 @@ export function useChat(slug: string): ChatApi {
     discard,
     rename,
     remove,
-    error,
+    error: state.error,
   };
 }
