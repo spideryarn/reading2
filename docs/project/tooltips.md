@@ -176,6 +176,27 @@ pointer. The rail stops being fifty separate waits and becomes something you can
 tooltips. 90ms to close is short but not instant, so a wobble between two adjacent bands does not
 blink the panel out and back.
 
+## The pointer cannot enter a card, and that used to be exempt
+
+Every panel is `pointer-events: none` (`.tooltip-anchor` in
+[styles.css](../../src/web/styles.css)), so moving the pointer onto a card closes it: `useHover`
+sees the pointer leave the trigger, and the card is not somewhere the pointer can go. That is
+deliberate and it is right for the rail — a spine card that took hover would sit on top of the band
+you are pointing at and hold itself open. The single exception is `ProseHoverCard`, which carries
+links out and buttons in, and gets `.tooltip-anchor.interactive`.
+
+**WCAG 2.1 § 1.4.13 "Content on Hover or Focus" asks for the opposite.** Content that appears on
+hover has to stay available while the pointer moves onto it. The native `title` attribute is
+explicitly exempt from that criterion; a card we drew ourselves is not. So the masthead's three
+links were conforming by exemption while they were `title` attributes, and stopped being so on
+2026-08-28 when they became cards. It costs a reader using magnification or a large cursor the most,
+because for them the gap between trigger and panel is easy to cross by accident.
+
+Found by ⟨Sol⟩ reviewing that change. **Undecided** — [open-questions.md § Q10](open-questions.md#q10)
+carries the call, because the fix is not local: it means letting `Tooltip` take `.interactive` and a
+`safePolygon()` corridor per use, and the spine, which is most of the tooltips in the app, wants
+exactly the behaviour we have.
+
 ## Checking it in a browser
 
 [browser-testing.md](browser-testing.md) is the general how, and its warnings all apply — in
@@ -198,3 +219,39 @@ Two more, learned on 2026-08-25:
   ordinary case rather than the edge one. Getting there took two goes — `resize_window` reported
   success while `innerWidth` stayed put, the tooling limit already written up in browser-testing.md,
   and the width that finally applied did so on a later window.
+
+### The masthead links, and how to reach them at all
+
+The three links in the homepage masthead are behind the app's sign-in gate, so a browser agent
+lands on "Sign in with Google" and can go no further — it must not try to sign in, and
+[browser-testing.md](browser-testing.md) says why that costs a whole run. The way in is the one
+[performance.md](performance.md) uses: mint a one-time token with
+[`scripts/seed-local-session.ts`](../../scripts/seed-local-session.ts) against the **local**
+Supabase, then hand it to the app's own SDK instance from the page:
+
+```js
+const m = await import('/src/web/lib/supabase.ts');
+await m.supabase.auth.verifyOtp({ type: 'magiclink', token_hash: '<hashedToken>' });
+```
+
+Checked this way on 2026-08-28, at 1140px, 620px and — in a same-origin iframe, because Chrome on
+macOS will not make a window narrower than ~605px — 320px, where the link row wraps onto its own
+line:
+
+- **The card opens, below the link, and never covers a neighbour.** Its top sat 11–12px under the
+  row at every width, including wrapped, and its horizontal span crossing under the other links
+  costs nothing because the vertical clearance is what matters. At 620px the rightmost card cleared
+  the window edge by 15px, and at 320px it cleared the left edge by 14px, which is `shift`'s padding
+  doing its job.
+- **A `mousemove` on the trigger does not open it; a real `mouseenter` does.** Worth knowing before
+  concluding a card is broken — and it is the same fact the unit test is built on
+  ([§ Five things](#five-things-that-are-load-bearing), point 5).
+- **The group's instant phase is real**: moving from Profile to Design opened the second card with
+  no measurable delay.
+- **Colours, read rather than eyeballed**: panel `oklch(0.26 0 0)`, border `oklch(0.36 0 0)`, first
+  line `oklab(0.97 0 0 / 0.85)`, the address under it `oklch(0.63 0 0)` — quieter, and still well
+  clear of the ground.
+- **Focus opens the card and blur closes it**, so the keyboard gets what the pointer gets.
+- **The Admin card was not checked.** The local account is not the administrator, so that link is
+  not drawn at all — the same courtesy described in [admin.md](admin.md). Whoever next has an
+  administrator session locally can close that gap in one hover.

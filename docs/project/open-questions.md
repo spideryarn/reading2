@@ -154,3 +154,26 @@ Two things worth carrying forward rather than burying:
   Corrected in [security.md § What was wrong](security.md#what-was-wrong).
 - The linter found this (`lint/security/noDangerouslySetInnerHtml`), and the rule was deliberately
   left unsuppressed until it was really fixed. It stayed useful precisely because nobody silenced it.
+
+---
+
+## Q10 — Should a tooltip be hoverable? <a id="q10"></a>
+
+Every card in the app is `pointer-events: none`, so the pointer cannot enter one: move onto it and
+it closes. WCAG 2.1 § 1.4.13 asks for the opposite — hover content must stay available while the
+pointer moves onto it — and while the native `title` attribute is exempt from that criterion, a card
+we draw ourselves is not. The homepage masthead's three links were conforming by exemption until
+2026-08-28, when they stopped being `title` attributes. Raised by ⟨Sol⟩ reviewing that change.
+
+| Option | For | Against |
+|---|---|---|
+| **Leave it** | the rail is most of the tooltips in the app, and a spine card that took hover would sit on the band you are pointing at and hold itself open | a known 1.4.13 failure, worst for anyone using magnification or a large cursor, where crossing the gap is easy to do by accident |
+| Hoverable everywhere | one behaviour, conforming | breaks the rail, which is the surface the tooltip was built for |
+| **Per-use**: `Tooltip` takes a prop that adds `.tooltip-anchor.interactive` and a `safePolygon()` corridor | the masthead and any future prose-ish card conform; the spine keeps what it has | a second interaction mode inside a shared component, and `safePolygon` is the fiddliest part of Floating UI to get right |
+
+**Recommendation: per-use, when something needs it.** Nothing in these three cards is worth
+travelling to — no link, no button, nothing to select but a sentence and an address — so the cost
+today is the standard, not the reader. The machinery already exists (`ProseHoverCard` uses
+`.interactive` for real reasons), so this is a prop and a corridor rather than a design.
+[tooltips.md § The pointer cannot enter a card](tooltips.md#the-pointer-cannot-enter-a-card-and-that-used-to-be-exempt)
+has the detail.
