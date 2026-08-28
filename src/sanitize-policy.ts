@@ -407,6 +407,37 @@ function stripOwnApiUrls(el: Element): void {
 }
 
 export function installArticlePolicy(purify: DOMPurify): void {
+  /**
+   * MathML's machine-readable copy of a formula, removed along with its text.
+   *
+   * `<annotation encoding="application/x-tex">` holds the TeX a formula was
+   * built from, and is never meant to be read. DOMPurify refuses the tag —
+   * `semantics`, `annotation` and `annotation-xml` are all on its
+   * `mathMlDisallowed` list, and `annotation-xml` is an HTML integration point
+   * and a classic mXSS surface — but refusing a *tag* unwraps it and keeps its
+   * text. So the TeX was promoted into the formula as prose, and a reader of an
+   * equation-heavy page saw the rendered symbols followed by `\frac{1}{2}`.
+   * Wikipedia emits one on all 188 formulas of a single article; LaTeXML emits
+   * them too. Found 2026-08-28 — docs/plans/readability-repair-pass.md.
+   *
+   * **A hook rather than `FORBID_CONTENTS`, and that is the point of this
+   * comment.** Setting that key *replaces* DOMPurify's default list rather than
+   * extending it, so the obvious fix — copy their array, add one entry — was
+   * written, went green, and had silently dropped `selectedcontent` from the
+   * list. DOMPurify's own note says hoisting that element's children re-inserts
+   * a mirror target ahead of the walk, which the engine refills: an infinite
+   * loop and output amplification, which is to say a denial of service. A
+   * vendor default copied into our source is a protection that rots at their
+   * next release and says nothing when it does.
+   *
+   * Removing the node outright is strictly more restrictive than the behaviour
+   * it replaces: nothing that used to be allowed becomes allowed.
+   */
+  purify.addHook("uponSanitizeElement", (node, data) => {
+    if (data.tagName !== "annotation") return;
+    (node as unknown as { remove?: () => void }).remove?.();
+  });
+
   purify.addHook("afterSanitizeAttributes", (node) => {
     // Duck-typed, not `node instanceof Element`. There is no global `Element` in
     // Node, so the `instanceof` spelling throws ReferenceError on every call —
