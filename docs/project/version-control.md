@@ -59,6 +59,46 @@ anybody has done to it.
 Use `-F <file>` rather than `-m`. A long message in `-m` is one shell-quoting mistake away from the
 same mess.
 
+### And the other half of that, which cost us twice on 2026-08-28
+
+*"A pathspec on `git commit` bypasses the index entirely"* is true, and it is the protection above.
+It is also a **guarantee that you commit a peer's unstaged work in any file you share**, and that
+half was not written down until it had happened twice in one day.
+
+`git commit -- <path>` commits the **working-tree** content of that path. Not the index as well —
+*instead of* it. So every hunk sitting in that file goes in, whoever wrote it, however carefully you
+staged. Reproducible in four commands:
+
+```
+printf 'mine\ntheirs\n' > shared.txt && git add shared.txt && git commit -m base
+# stage a change to line 1 only, leave a change to line 2 unstaged
+git diff --cached          # shows line 1 — yours
+git diff                   # shows line 2 — theirs
+git commit -m "with pathspec" -- shared.txt
+git show                   # BOTH lines. The staging was discarded.
+```
+
+Drop the pathspec and the same setup commits line 1 alone, leaving line 2 unstaged and untouched.
+
+**The two protections are mutually exclusive**, so it is a choice per file, and the cheap check that
+decides it is `git diff <file>` — are there hunks in there that are not yours?
+
+| | |
+|---|---|
+| **Nobody else is in the file** | The recipe above. The pathspec is the right protection, and the risk it guards is real. |
+| **A peer has uncommitted hunks in it** | `git reset`, stage only your hunks (`git apply --cached` a filtered patch), confirm with `git diff --cached` **and** `git diff`, then `git commit -F <msg>` with **no pathspec** — so the index is what gets committed. |
+
+Both accidents on 2026-08-28 were this: 338 lines of public-read-only work landed under an
+error-monitoring message, and 114 lines of embeddings copy landed under a public-read-only message.
+Both were recorded in the commit message and nothing was lost — which is the outcome to aim for when
+it happens, because it will. **Commit, not destroy**, is the line that matters; a sweep is
+recoverable and an overwrite is not.
+
+The second accident is the one worth reading twice: that agent *knew* the file held a peer's hunks,
+deliberately avoided `git add`, staged one hunk through `git apply --cached`, and **verified the
+index was right** — and then ran the prescribed committing line, which threw all of that away. Doing
+the careful thing and then following the recipe was worse than either alone.
+
 Commit when a piece of work is done and working, without waiting to be asked. And don't stress if
 someone sweeps up one of your changes anyway — it happens, it's recoverable, keep going.
 
