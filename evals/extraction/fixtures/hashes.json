@@ -82,5 +82,17 @@
     "bytes": 76252,
     "url": "https://www.law.cornell.edu/uscode/text/17/107",
     "capturedAt": "2026-08-28"
+  },
+  "constitution": {
+    "sha256": "1a70f0851fc8837376952f6d8a64f8971716e0d24bd45b1986663d6dcec603ac",
+    "bytes": 673723,
+    "url": "https://www.anthropic.com/constitution",
+    "capturedAt": "2026-08-28"
+  },
+  "acx-footnotes": {
+    "sha256": "99dd76489be30c4fd4a8c6ba6a2d41ff90d4db1925fef85cf81b3e84ffd88724",
+    "bytes": 215807,
+    "url": "https://www.astralcodexten.com/p/your-book-review-the-pale-king",
+    "capturedAt": "2026-08-28"
   }
 }

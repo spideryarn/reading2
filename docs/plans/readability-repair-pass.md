@@ -57,7 +57,9 @@ with collapsible appendices and any long piece with a "read more". The failure i
 
 ### The fix, and what it costs
 
-Remove `aria-hidden="true"` (and `hidden`) before parsing:
+Remove `aria-hidden="true"` before parsing. **Shipped 2026-08-28** as
+`unhideCollapsedSections` in [`src/extract.ts`](../../src/extract.ts), after the corpus below grew
+the page that could actually exercise it.
 
 | Page | stock | un-hidden | probes found |
 |---|---:|---:|---|
@@ -68,10 +70,69 @@ Remove `aria-hidden="true"` (and `hidden`) before parsing:
 **+39,355 characters recovered, nothing lost on the pages that were already right, no model, no
 money, no latency.** The fifth probe is the author-bio block, which is arguably boilerplate.
 
-That is one page's evidence and it must not be shipped on one page's evidence — un-hiding is exactly
-the kind of change that could drag in a hidden mobile nav, an off-screen menu or a
-screen-reader-only duplicate on some other site. It is a candidate with a strong first result, and
-the eval below is what would settle it.
+#### What fifteen pages then said
+
+Three pages were not enough, and the corpus that replaced them nearly repeated the mistake in a
+worse form — see [The corpus](#the-corpus-and-the-finding-that-outranks-everything-above). Against
+the fifteen committed fixtures, run document-against-document rather than by counting characters:
+
+- **Thirteen of fifteen are byte-identical.** Not "unchanged within a threshold" — the same string.
+- **Wikipedia differs by the attribute and nothing else**: strip ` aria-hidden="true"` from the stock
+  output and it equals the un-hidden output exactly. 188 occurrences, 3,572 bytes, no text moved.
+  What it does there is narrower than it first looked. Wikipedia writes each formula twice — MathML inside
+  `style="display: none"` for assistive tech, a fallback `<img aria-hidden="true">` for eyes.
+  Readability drops the MathML (inline `display: none`, which we do not touch) and keeps the image,
+  so the attribute is left pointing at a twin that no longer exists and a screen-reader user gets
+  silence for all 188 formulas. Verified through the real sanitiser rather than inferred: 208 images
+  reach the reading view, 188 carry `alt`, and `aria-hidden` goes 188 → 0. **The claim stops there,
+  in Sol's wording: it restores non-empty accessible names to 188 retained formula images.** Not
+  "audible" and not "an accessibility win" — the `alt` is raw TeX,
+  `{\displaystyle {\text{Loss}}=-\sum …`, and no browser accessibility inspection and no screen
+  reader were run. What would falsify it: the accessibility tree not showing 188 image nodes named by
+  their `alt`, or VoiceOver/NVDA not announcing them in ordinary reading mode.
+- **The constitution is the only page whose text changes**: **+96 stage-3 blocks** (358 → 454) and
+  +39,355 characters. The runner reports **76**, and the gap is worth knowing — it counts *passages*,
+  not blocks: elements from a fixed tag list, over 40 characters, de-nested so a `<li>` wrapping a
+  `<p>` counts once. Two of the difference are headings under the floor and the rest is that
+  de-nesting. Quote it as passages; the block number is the one stage 3 will actually mint.
+
+**None of this makes the change safe in general, and the corpus cannot make it so.** GPT Sol's
+counter-example reproduces: a `<div aria-hidden="true">` of navigation hidden by external CSS,
+placed *inside* the article container, is admitted — 1,370 characters at thirty items, over the
+runner's "recovered a lot" bar. Outside the article container link density sinks it either way. None
+of the fifteen fixtures contains the pattern, so the zero-regression number is silent about it. Pinned
+as behaviour in [`tests/extract-unhide.test.ts`](../../tests/extract-unhide.test.ts) under *what this
+rule is known to let in*, so a future change to the rule shows up as a changed expectation.
+
+#### `hidden` was dropped from the fix, and this is the interesting half
+
+The first version removed `[hidden]` too. Across the same fifteen pages it changed exactly one page,
+arxiv.org/abs, by **+95 characters** — and those characters are *"View a PDF of the paper titled
+Attention Is All You Need, by Ashish Vaswani and 7 other authors"*, a screen-reader label for a link.
+The whole measured effect of that half of the fix was to insert furniture.
+
+It survived because **every number in the runner rewards recovery**. Pulling in boilerplate makes
+`droppedChars` go *down*; the `helped` flag missed it only because 95 < 1,000, and the `regressed`
+flag could not see it at all, because that flag fires on text *lost*. The fix to the instrument is
+[`gainedText`](../../evals/extraction/corpus.mts) — it does not score the added text, it **prints**
+it, and the run says READ THEM. Set side by side, *"Claude's three types of principals"* and *"View a
+PDF of the paper titled"* take a second to tell apart, and no threshold ever would.
+
+The distinction that survives: `hidden` is the HTML spec's own "not currently relevant" and authors
+mean it. `aria-hidden` is an accessibility annotation, and the visual/assistive split is exactly
+where readable text gets marked invisible to a parser. Inline `display: none` is left alone for a
+third reason — stripping it on Wikipedia would restore 188 MathML formulas *beside* the 188 images
+already rendering them.
+
+Pinned in [`tests/extract-unhide.test.ts`](../../tests/extract-unhide.test.ts), whose assertions were
+checked against three broken rules — a no-op, one that also strips `[hidden]`, one that also strips
+`display: none` — and each is caught. (An earlier draft said "each caught by *exactly one*
+assertion"; Sol checked and each is caught by two, a direct DOM assertion and a Readability one. The
+discrimination is what mattered and it holds; the count was wrong.)
+
+The file's real gap was elsewhere and Sol found it: every test called the helper by hand, so
+**deleting the one line in `runExtract` that invokes it left the whole file green**. There is now a
+test that goes through `runExtract`, and it was watched failing with that line removed.
 
 ### And the external number
 
@@ -229,13 +290,38 @@ fetched over plain HTTP with no browser spoofing and returning 200 with its text
 bytes. [`evals/extraction/corpus.mts`](../../evals/extraction/corpus.mts) runs stock Readability
 against rung 0 over all of them. No model, no money.
 
-**Un-hiding regresses nothing.** 0 of 14. It also helps 0 of 14 — the accordion pattern does not
-recur here — so the fix is *safe on this evidence and narrow*, which is a different thing from
-proven.
+#### The corpus could not judge its own arm, and said so confidently
+
+The first run printed **"un-hiding regresses 0 of 14, helps 0 of 14"** and that was true and nearly
+useless. The fourteen were chosen to fill the failure-mode table, and between them they held **not
+one collapsed accordion** — so the arm had nothing to act on, and thirteen "unchanged" rows were
+thirteen pages where the code never ran. A safety claim measured on an inert change is the shape
+[silent-success.md](../reusable/silent-success.md) is about, and it took the form here of a corpus
+that could not exercise the one thing it existed to decide.
+
+Two changes fixed it, and both were needed:
+
+1. **A fifteenth fixture** — `constitution.html`, the page the failure mode was found on, captured
+   the same way as the other fourteen. Now the arm has something to act on.
+2. **Comparing documents, not counts.** `articleHtml` is carried through the instrument so two arms
+   can be compared as strings. That is how the `[hidden]` regression surfaced: equal character
+   counts are not an unchanged page, and Wikipedia proved the point in the other direction —
+   identical text length, 3,572 fewer bytes, all of it the removed attribute.
+
+With both: **13 of 15 byte-identical, 1 attribute-only, 1 with recovered text**, and 0 pages losing
+text. Written up under [The fix](#the-fix-and-what-it-costs).
+
+**And then the same bug turned up a third time, in the fix for it.** The READ THEM warning was
+printed only when the row was *not* already flagged as helping — so a page where un-hiding dragged in
+a thousand characters of navigation would be labelled "un-hide helps" and the warning swallowed,
+because "helps" is computed from recovered characters and furniture is characters. Sol built that
+page and it reproduces. The warning is unconditional now, `helped` is renamed to `recoveredALot` and
+described in the code as a quantity rather than a verdict, and the run prints ten additions instead
+of three while claiming to print "the blocks".
 
 And then the number that reframes the whole exercise:
 
-> **12 of 14 pages lose 10% or more of some structural element.** Not prose — tables, formulas,
+> **13 of 15 pages lose 10% or more of some structural element.** Not prose — tables, formulas,
 > code, headings.
 
 | fixture | what it loses |
@@ -378,12 +464,13 @@ published, and for a web article we have no independent witness to check it agai
 spends its whole design budget on exactly this problem and it *has* a text layer to check against
 ([pdf-read.ts](../../src/pdf-read.ts)).
 
-## The instrument, and the four times it was wrong
+## The instrument, and the eight times it was wrong
 
 [`evals/extraction/inventory.mts`](../../evals/extraction/inventory.mts) — no model, no network, no
 money. It flattens the raw page into blocks and says which survived into Readability's output.
 
-It has been confidently wrong four times, and every one of them printed a tidy number:
+It has been confidently wrong **eight** times — five in `compare()`, three in `gainedText` — and
+every one of them printed a tidy number. `compare()` first:
 
 1. **A list of block tag names** found *one* block of 67 characters in PG's 3,096-character essay
    and printed `ratio 100.0%` underneath. His HTML is a `<table>` holding a `<font>` holding the
@@ -417,6 +504,31 @@ entire argument for writing the test first.
 
 There is also a `coverage` number — what fraction of the page's text the walker can see at all —
 because failure 1 is the one that cannot be caught by any check computed *from the rows*.
+
+### And three more in the half that compares two arms
+
+[`gainedText`](../../evals/extraction/corpus.mts) answers "what did un-hiding add that stock did not
+have". It was wrong three times, all in the same direction — **a number that rewards recovery being
+read as a number that rewards quality** — and Sol built all three:
+
+6. **Recovered furniture is recovered characters.** The `[hidden]` half of the fix pulled in 95
+   characters of "View a PDF of the paper titled …" on arxiv.org, and `droppedChars` went *down*, so
+   nothing fired. This function was written to fix that.
+7. **Its warning was printed only when the row was not already flagged as helping** — and "helping"
+   is recovered characters, and furniture is characters. A nav drawer inside the article container
+   clears the thousand-character bar and swallowed its own warning. The bug wearing a hat.
+8. **A duplicate is invisible to a substring test.** A hidden second copy of a paragraph the article
+   already has adds 1,700 characters, and every word of it is already in the stock text. Zero gains,
+   `droppedChars` unchanged at zero, silence. And this is not an edge case: `aria-hidden` is *the*
+   attribute publishers put on a duplicated copy of something, so a duplicate is the likeliest harm
+   this arm can do, and it was the one thing the instrument could not see.
+
+The rule counts **occurrences** now, so brand-new text is the `0 → 1` case of the same comparison
+that catches `1 → 2`. And because the pattern here is a rule that goes quiet when it is defeated,
+there is a backstop that does not depend on the rule at all: `unaccounted` is the characters of text
+the un-hidden arm has that no reported passage explains, and it fires on the change itself. All three
+are tests in [`tests/extraction-inventory.test.ts`](../../tests/extraction-inventory.test.ts),
+each watched failing against the rule it defeated.
 
 ### The better mechanism, found by the review and verified here
 
@@ -515,13 +627,18 @@ number comparable to a published one.
 
 ## Build order
 
-1. ~~The inventory harness~~ — **built**, tested, five bugs and all.
+1. ~~The inventory harness~~ — **built**, tested, eight bugs and all.
 2. Add source-id provenance beside the text matcher, and report disagreements.
-3. ~~Fixtures~~ — **14 fetched and measured**, one per failure slot, listed in
-   [`corpus.mts`](../../evals/extraction/corpus.mts). The HTML is **not committed**: 6 MB of other
-   people's pages, and whether that belongs in the repo is Greg's call. WCXB's article subset is
-   still the right thing to add for a comparable published number.
-4. ~~Rung 0 across the corpus~~ — **done: 0 regressions, 0 further wins.**
+3. ~~Fixtures~~ — **15 fetched, committed and hashed**, listed in
+   [`corpus.mts`](../../evals/extraction/corpus.mts) and described in
+   [`fixtures/README.md`](../../evals/extraction/fixtures/README.md). Greg's call, 2026-08-28: a URL
+   is not a fixture. WCXB's article subset is still the right thing to add for a comparable published
+   number.
+4. ~~Rung 0 across the corpus~~ — **done, and then done again properly.** The first answer was "0
+   regressions, 0 wins" from a corpus with no instance of the failure mode. Now: 13 of 15
+   byte-identical, 1 attribute-only, 1 with recovered text, 0 losing text. **Shipped** as
+   `unhideCollapsedSections` in [`src/extract.ts`](../../src/extract.ts), without the `[hidden]` half,
+   which was measured and is a regression.
 5. **A structural check, which is now the most valuable thing on this list.** Counting kept-over-
    present per tag is a dozen lines, costs nothing, needs no gold, and it is the only thing that
    sees the failure the corpus says is most common. It belongs in stage 2 as a warning, not in an
@@ -534,10 +651,18 @@ number comparable to a published one.
 
 ## Decisions for Greg
 
-- **Ship rung 0 now?** The corpus answers the risk half: **0 regressions in 14 pages.** It recovers a
-  quarter of an article we hold and, on this set, wins nothing else. Cheap and safe, narrow benefit.
+- ~~**Ship rung 0 now?**~~ **Shipped, 2026-08-28**, `aria-hidden` only. Recovers a quarter of an
+  article we hold, leaves 13 of 15 pages byte-identical, and restores non-empty accessible names to
+  188 retained Wikipedia formula images as a side effect.
+
+  **Not "safe", and the honest version is worth stating plainly.** The pattern that breaks it — a nav
+  drawer hidden by external CSS, inside the article container — is in none of the fifteen fixtures, so
+  the zero-regression number is silent about it. What the instrument now has is a rule that catches
+  the three ways it was previously blind, including a hidden duplicate, and a backstop that fires when
+  the article changed by more than the rule can name. Back it out by deleting one call if a page turns
+  up where it misfires.
 - **The structural check is the one I would build first**, and it was not in the original question.
-  It is free, deterministic, needs no gold, and it catches the failure 12 of 14 pages exhibit —
+  It is free, deterministic, needs no gold, and it catches the failure 13 of 15 pages exhibit —
   including one that quietly guts the granularity-zoom tree.
 - **Is a second extractor allowed?** The published gap between Readability and trafilatura on
   article pages is larger than anything a repair pass has been shown to buy. It is a new dependency,

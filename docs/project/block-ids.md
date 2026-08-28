@@ -169,6 +169,35 @@ at a diagram — they simply must not generate a row of their own. On the test a
 pull-quotes are word-for-word repeats of body sentences, so without this the ToC would grow eleven
 phantom rows quoting text it had already listed.
 
+### A bare `<svg>` gets no id, and the ToC cannot point at a diagram
+
+**Known hole, found 2026-08-28** while measuring extraction
+([readability-repair-pass.md](../plans/readability-repair-pass.md)). The sentence above says the ToC
+may well want to point at a diagram. For a `<figure>`-wrapped one it can. For a bare inline `<svg>`
+it cannot, and nothing says so:
+
+```
+<p id="spya-vrkayh">Before the diagram…</p>
+<svg viewBox="0 0 10 10">…</svg>                          ← no id, no block, no row
+<figure id="spya-vqsgvn"><svg>…</svg><figcaption>…</figcaption></figure>
+```
+
+Two things combine. [`src/blocks.ts`](../../src/blocks.ts) matches tag names in **upper case**,
+because that is what `tagName` gives for an HTML element — but `svg` and `math` are *foreign*
+elements and keep their case, so `svg` matches neither `LEAF_BLOCKS` nor `CONTAINERS`. It falls to
+the unknown-wrapper branch, which keeps an element only if it has text; a diagram usually has none.
+The element survives into the page, with no id on it and no block behind it. A `<math>` block
+escapes by accident — a formula has text.
+
+That matters because keeping inline diagrams was a deliberate choice — Greg, 2026-08-25, recorded in
+[`src/sanitize-policy.ts`](../../src/sanitize-policy.ts), knowingly accepting that foreign content is
+where most historical mXSS bypasses live. We take that risk to keep the diagram and then cannot
+address it: no ToC row, no note anchored to it, nothing for zoom to fold.
+
+The fix is small — a lower-case leaf set — and is **not** made here, because widening what gets an id
+is this document's decision and not an extraction eval's. Note if it is taken: adding `"SVG"` to
+`LEAF_BLOCKS` would look right and do nothing, for the casing reason above.
+
 ## The article's own links
 
 Stage 3 does not only *add* an id. Where the author already put one on a paragraph or a heading, it

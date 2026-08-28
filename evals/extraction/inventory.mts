@@ -31,6 +31,7 @@
  */
 import { JSDOM, VirtualConsole } from "jsdom";
 import { Readability } from "@mozilla/readability";
+import { unhideCollapsedSections } from "../../src/extract.js";
 import { readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -334,6 +335,14 @@ export interface Inventory extends Comparison {
   url: string;
   rawBytes: number;
   title: string | null;
+  /**
+   * Readability's own output, verbatim. Carried so a caller can compare two arms
+   * **as documents** rather than as character counts — which is how the `[hidden]`
+   * regression hid for a day (see `gainedText` in corpus.mts). Equal counts are
+   * not an unchanged page, and un-hiding Wikipedia proved it: identical text
+   * length, 3,572 fewer bytes, all of it the removed attribute.
+   */
+  articleHtml: string;
 }
 
 /**
@@ -490,24 +499,11 @@ export function compare(rawHtml: string, articleHtml: string, url: string): Comp
 /**
  * Rung 0 of docs/plans/readability-repair-pass.md — **un-hide before parsing.**
  *
- * Readability skips `aria-hidden="true"` and `hidden` nodes in its visibility
- * check (`Readability.js:2701`). That is right for an off-screen menu and wrong
- * for a collapsed section of the article: an accordion is *closed*, not absent,
- * and the reader would see the text by clicking. Readability cannot click.
- *
- * On data/constitution this recovers 39,355 characters and changes nothing on
- * the two pages that were already clean — which is the whole evidence for it,
- * and three pages is not enough to ship on. It is here as an ARM, so the model
- * arm can be measured against a pre-cleaned page rather than against stock. The
- * risk it carries is the obvious one and is unmeasured: some other site's hidden
- * mobile nav, modal or screen-reader duplicate coming along for the ride.
+ * Re-exported from src/extract.ts rather than reimplemented, so this eval scores
+ * the code that ships. The reasoning, the fifteen-page evidence and the reason
+ * `[hidden]` is *not* in it are all on `unhideCollapsedSections`.
  */
-export function unhide(doc: Document): void {
-  for (const el of Array.from(doc.querySelectorAll('[aria-hidden="true"]'))) {
-    el.removeAttribute("aria-hidden");
-  }
-  for (const el of Array.from(doc.querySelectorAll("[hidden]"))) el.removeAttribute("hidden");
-}
+export const unhide = unhideCollapsedSections;
 
 /**
  * Readability over one HTML file, compared with the page it came from.
@@ -532,10 +528,12 @@ function inventoryHtml(html: string, url: string, opts: { unhide?: boolean }): I
   const doc = new JSDOM(html, { url, virtualConsole: new VirtualConsole() }).window.document;
   if (opts.unhide) unhide(doc);
   const article = new Readability(doc).parse();
+  const articleHtml = article?.content ?? "";
   return {
     dir: "", url, rawBytes: Buffer.byteLength(html),
     title: article?.title ?? null,
-    ...compare(html, article?.content ?? "", url),
+    articleHtml,
+    ...compare(html, articleHtml, url),
   };
 }
 

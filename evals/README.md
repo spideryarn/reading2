@@ -21,7 +21,7 @@ next change gets compared against.
 Read [`pdf/README.md`](pdf/README.md) for what each fixture is for and the three ways choosing them
 nearly went quietly wrong.
 
-## `extraction/` — what Mozilla Readability does to fourteen hard pages
+## `extraction/` — what Mozilla Readability does to fifteen hard pages
 
 ```
 npx tsx evals/extraction/corpus.mts                     # free: no model, no network
@@ -29,18 +29,21 @@ npx tsx evals/extraction/fixtures/verify.mts --refetch  # have the pages changed
 ```
 
 **The odd one out on this page in the other direction: it calls no model at all.** It is here rather
-than in `tests/` because it is a fourteen-page corpus of other people's HTML, it takes tens of
+than in `tests/` because it is a fifteen-page corpus of other people's HTML, it takes tens of
 seconds, and its output is a judgement to read rather than an assertion to pass. `compare()`, the
 part that *is* deterministic and cheap, is tested properly in
 [`tests/extraction-inventory.test.ts`](../tests/extraction-inventory.test.ts) — one case per bug the
-instrument shipped with, and there were five.
+instrument shipped with, and there were eight: five in the matcher, three in the part that compares
+two arms, every one of them a number that rewarded *recovery* being read as a number that rewarded
+*quality*.
 
 [`extraction/rescue.mts`](extraction/rescue.mts) is the one that spends money: it asks a model which
 of the blocks Readability dropped were the article and which were the furniture, and answers with
 ids only.
 
-Read [`extraction/fixtures/README.md`](extraction/fixtures/README.md) for what each of the fourteen
-is meant to break, and why the HTML is committed rather than fetched on the day.
+Read [`extraction/fixtures/README.md`](extraction/fixtures/README.md) for what each of the fifteen
+is meant to break, why the HTML is committed rather than fetched on the day, and why the fifteenth
+had to be added before the corpus could judge its own arm.
 
 ## `prompt-caching.ts` — is the article actually being cached?
 

@@ -28,6 +28,25 @@ assumes 5273 gets a refused connection or — worse — *somebody else's* dev se
 page that looks exactly right and is running different code. Read the port off the line Vite prints
 and pass it on to anything you dispatch.
 
+### There is no `file://` shortcut — serve it
+
+**The Chrome extension refuses `file://` URLs.** `navigate` comes back with an error rather than a
+page, and the tab does not move. This costs an hour if you don't know it, because writing a
+throwaway HTML file and opening it is the obvious way to look at one page of markup, and it is the
+one way that cannot work.
+
+Serve the directory instead, on a port nothing else is using, and hand the agent an `http://`
+address:
+
+```bash
+npx http-server <dir> -p 8791 --silent    # then navigate to http://127.0.0.1:8791/page.html
+```
+
+Used on 2026-08-28 to check what four equation- and table-heavy extracted articles actually look
+like — rebuilt pages written to a scratch directory, served, and screenshotted. The related trick for getting a *real
+component* on screen without the auth gate is a throwaway Vite page, which the dev server already
+serves over HTTP and so never runs into this.
+
 ### A phone-width window does not exist, so use an iframe
 
 **Chrome on macOS will not make a window narrower than 605 CSS px.** `resize_window` returns

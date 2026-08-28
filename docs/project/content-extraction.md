@@ -74,21 +74,46 @@ relative links resolve against the wrong origin.
 
 **An accordion is closed, not absent — and Readability cannot tell.** It skips
 `aria-hidden="true"` nodes on purpose (`Readability.js:2701`, its visibility check), which is right
-for an off-screen menu and wrong for a collapsed section of the article. On
-[`data/constitution`](../../data/constitution) — Anthropic's Claude's Constitution — that loses
-**48,147 characters, 26% of the piece**, including whole named sections. Nothing throws. The article
-reaches the shelf looking complete, which is the shape
-[silent-success.md](../reusable/silent-success.md) is about.
+for an off-screen menu and wrong for a collapsed section of the article. On Anthropic's *Claude's
+Constitution* that discards three accordion bodies holding **39,355 characters — a fifth of the
+piece**, including whole named sections. Nothing throws. The article reaches the shelf looking
+complete, which is the shape [silent-success.md](../reusable/silent-success.md) is about.
+
+(The instrument scores 48,147 characters absent from that page in total; 39,355 of them are the
+accordions and come back. The rest is front matter and boilerplate that Readability drops on purpose.
+The two numbers were run together in an earlier draft of this paragraph — caught by GPT Sol's review,
+2026-08-28.)
 
 Nothing in this stage looks at its own output and asks whether it is any good. There is now an
 instrument that does — [`evals/extraction/inventory.mts`](../../evals/extraction/inventory.mts),
 which flattens the fetched page into blocks and says which survived — and it is an eval, run by
 hand, not a gate ([evals/README.md](../../evals/README.md)).
 
-The measurements, the four bugs the instrument shipped with, what a model pass would and would not
-buy, and the four-line deterministic fix that recovers 39,355 of those characters for nothing, are
-all in **[../plans/readability-repair-pass.md](../plans/readability-repair-pass.md)**. Nothing here
-has changed yet; the plan says what would have to be true first.
+**That one is fixed**, 2026-08-28: `unhideCollapsedSections` in [`src/extract.ts`](../../src/extract.ts)
+removes `aria-hidden="true"` before Readability looks at the page, recovering 39,355 of those
+characters for nothing — no model, no money, no latency. It removes `aria-hidden` and **only** that:
+`[hidden]` and inline `display: none` are stronger claims, and the measurement that says so is on the
+function.
+
+The rest is not fixed, and the largest of it is not truncation at all:
+
+> **13 of the 15 fixture pages lose 10% or more of some structural element** — tables, formulas,
+> code, headings. Wikipedia's *Transformer* article arrives with **0 of its 188 `<math>` elements**;
+> a 24,000-word ACX review keeps 19 of 134 headings.
+
+(Wikipedia is the gentler of those two: the `<math>` is inside `style="display: none"` and the
+**188 fallback images survive**, so the reader sees every formula. What is lost is the machine-readable
+copy. The ACX case has no fallback — those headings are simply gone.)
+
+That matters here more than in most reading apps, because the table of contents and the
+granularity-zoom tree are the same structure, built from headings
+([granularity-zoom.md](granularity-zoom.md#the-tree)). An article whose headings were dropped at this
+stage has no tree to build at stages 4 and 5, and nothing reports it. The character comparison barely
+notices — the prose around a discarded formula is intact.
+
+The measurements, the five bugs the instrument shipped with, the fifteen committed fixtures, and what
+a model pass would and would not buy are all in
+**[../plans/readability-repair-pass.md](../plans/readability-repair-pass.md)**.
 
 ## Where this sits
 

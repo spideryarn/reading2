@@ -161,6 +161,79 @@ export interface ExtractResult {
 }
 
 /**
+ * **Un-hide `aria-hidden="true"` before Readability looks at the page.**
+ *
+ * Readability's visibility check (`Readability.js:2701`) skips any node marked
+ * `aria-hidden="true"`, along with `[hidden]` and inline `display: none`. That
+ * is right for an off-screen menu and wrong for a **collapsed section of the
+ * article**: an accordion is closed, not absent, and a reader would see the text
+ * by clicking on it. Readability cannot click.
+ *
+ * Measured over the fifteen pages in evals/extraction/fixtures/ (run
+ * `npx tsx evals/extraction/corpus.mts`), removing the attribute does exactly
+ * two things and is byte-for-byte inert on the other thirteen:
+ *
+ * 1. **anthropic.com/constitution: 39,355 characters come back** — a quarter of
+ *    the article. Three `ExpandableSection` divs holding *Claude's three types
+ *    of principals*, the verification passage and the hard constraints. Real
+ *    body text, collapsed by default, invisible to every stage after this one.
+ * 2. **Wikipedia: non-empty accessible names come back on 188 formula images.**
+ *    Wikipedia writes each formula twice — MathML inside `style="display: none"`
+ *    for assistive tech, and a fallback `<img aria-hidden="true">` for eyes.
+ *    Readability drops the MathML (inline `display: none`, which this does NOT
+ *    touch) and keeps the image, so the attribute ends up pointing at an
+ *    accessible twin that no longer exists, leaving all 188 with no accessible
+ *    name. Checked through the real sanitiser, not inferred: 208 images
+ *    reach the reading view, 188 of them carrying `alt` text, and `aria-hidden`
+ *    goes 188 → 0. **Stated no further than that**, at GPT Sol's insistence: not
+ *    "audible", not "an accessibility win". The `alt` is raw TeX
+ *    (`{\displaystyle {\text{Loss}}=-\sum …`), and no browser accessibility
+ *    inspection and no screen reader were run.
+ *
+ * **`[hidden]` is deliberately not touched**, though the first version of this
+ * removed it too. Across the same fifteen pages it changed exactly one, arxiv.org
+ * abs, and what it added was 95 characters of *furniture*: "View a PDF of the
+ * paper titled …", a screen-reader label for a link. That is the whole measured
+ * effect, and it is a regression — caught only because the arm was compared
+ * document-against-document rather than by counting recovered characters, which
+ * scored it as a gain. The distinction that matters: `hidden` is the HTML spec's
+ * own "not currently relevant" and authors mean it, whereas `aria-hidden` is an
+ * accessibility annotation, and the visual/assistive split is exactly where
+ * readable text gets marked invisible to a parser.
+ *
+ * Inline `display: none` is left alone for the same reason — it is a stronger
+ * claim, and stripping it on Wikipedia would restore 188 MathML formulas *beside*
+ * the 188 images that already render them.
+ *
+ * **What this is known to let in, and the corpus cannot see.** A navigation
+ * drawer hidden by external CSS only — `aria-hidden="true"` on the container, no
+ * `[hidden]`, no inline `display: none` — is admitted when it sits *inside* the
+ * article container; outside it, link density sinks it either way. GPT Sol's
+ * counter-example, reproduced, and at thirty items it is 1,370 characters. None
+ * of the fifteen fixtures contains the pattern, so "byte-identical on thirteen"
+ * says nothing about how often it happens. Pinned as behaviour rather than as a
+ * safety claim in tests/extract-unhide.test.ts, so changing the rule changes an
+ * expectation instead of changing nothing. Backing this out is deleting one call.
+ *
+ * The design not taken, and the one to revisit if that pattern turns up: strip
+ * the attribute, parse, then **restore it** on surviving nodes — Sol's argument,
+ * that extraction and accessibility are separate decisions and this conflates
+ * them. Blanket restore is also wrong (it would re-hide the 39,355 recovered
+ * characters from the accessibility tree), so the real design is a three-way
+ * rule: keep the removal on recovered content regions, restore on decorative or
+ * duplicate leaves, special-case a fallback image whose accessible twin did not
+ * survive. That is more than this change is worth today.
+ *
+ * Exported because evals/extraction/inventory.mts scores this arm and must score
+ * the code that ships, not a second copy of it.
+ */
+export function unhideCollapsedSections(doc: Document): void {
+  for (const el of Array.from(doc.querySelectorAll('[aria-hidden="true"]'))) {
+    el.removeAttribute("aria-hidden");
+  }
+}
+
+/**
  * Stage 2 — Readability over already-fetched HTML, and the artefacts that fall
  * out of it.
  *
@@ -206,6 +279,7 @@ export async function runExtract(opts: {
     url: opts.url,
     virtualConsole: new VirtualConsole(),
   });
+  unhideCollapsedSections(dom.window.document);
   const article = new Readability(dom.window.document).parse();
   if (!article) {
     throw new Error("Readability could not parse this page.");

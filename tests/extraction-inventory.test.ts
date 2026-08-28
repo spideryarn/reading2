@@ -14,6 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { compare } from "../evals/extraction/inventory.mjs";
+import { gainedText } from "../evals/extraction/corpus.mjs";
 
 const URL = "https://example.invalid/article";
 
@@ -218,5 +219,85 @@ describe("what compare refuses to guess", () => {
     const scrambled = [...words].reverse().join(" ");
     const inv = compare(page([`<p>${para(3)}</p>`]), `<p>${scrambled}</p>`, URL);
     expect(inv.rows[0]?.verdict).not.toBe("kept");
+  });
+});
+
+/**
+ * `gainedText` in evals/extraction/corpus.mts — the *other* half of the
+ * instrument, and the half that was wrong three times.
+ *
+ * It answers "what did the un-hide arm add that stock did not have", and every
+ * version of it until this one could be made to answer "nothing" while a
+ * thousand characters of furniture came in. GPT Sol built all three cases; each
+ * is one test below, and each was watched failing against the version of the
+ * rule it defeated.
+ *
+ * The third one is why the rule counts occurrences rather than membership. An
+ * `aria-hidden` **duplicate** — a second copy of a paragraph the article already
+ * has — is the likeliest harm this arm can do, because `aria-hidden` is exactly
+ * the attribute publishers put on a duplicated copy of something. A substring
+ * test finds every word of it already present and reports nothing.
+ */
+describe("gainedText tells recovered article body from recovered furniture", () => {
+  const sentence = (s: string, n: number): string =>
+    `${s} — sentence ${n}, written out at a length that clears any floor the instrument applies.`;
+  const body = (): string =>
+    [1, 2, 3, 4].map((n) => `<p>${sentence("Ordinary article prose", n)}</p>`).join("");
+
+  it("reports brand-new text", () => {
+    const stock = `<div>${body()}</div>`;
+    const unhid = `<div>${body()}<p>${sentence("A section that was collapsed", 9)}</p></div>`;
+    const g = gainedText(stock, unhid);
+    expect(g.passages).toHaveLength(1);
+    expect(g.passages[0]).toContain("A section that was collapsed");
+  });
+
+  it("reports a DUPLICATE of text the article already has", () => {
+    /* **Watched failing.** The previous rule asked `before.includes(text)` and
+       returned nothing here, because every word of the duplicate is already in
+       the stock article. Un-hiding admitted 1,700 characters and the runner
+       printed "adds text on 0, loses text on 0". */
+    const dup = `<p>${sentence("A paragraph the article already contains", 1)}</p>`;
+    const stock = `<div>${dup}${body()}</div>`;
+    const unhid = `<div>${dup}${body()}${dup}</div>`;
+    const g = gainedText(stock, unhid);
+    expect(g.passages).toHaveLength(1);
+    expect(g.passages[0]).toContain("A paragraph the article already contains");
+  });
+
+  it("says nothing when the two arms are the same document", () => {
+    const same = `<div>${body()}</div>`;
+    expect(gainedText(same, same)).toEqual({ passages: [], unaccounted: 0 });
+  });
+
+  it("says nothing when only an attribute moved, which is the Wikipedia case", () => {
+    /* 188 formula images lose `aria-hidden` and no text changes. A rule that
+       fired on "the HTML differs" would cry wolf on every run of that fixture. */
+    const stock = `<div>${body()}<p aria-hidden="true">${sentence("A caption", 5)}</p></div>`;
+    const unhid = stock.replace(' aria-hidden="true"', "");
+    const g = gainedText(stock, unhid);
+    expect(g.passages).toEqual([]);
+    expect(g.unaccounted).toBe(0);
+  });
+
+  it("counts a nested list once, in its outermost container", () => {
+    const inner = [1, 2, 3].map((n) => `<li>${sentence("A nested item", n)}</li>`).join("");
+    const stock = `<div>${body()}</div>`;
+    const unhid = `<div>${body()}<ul><li>${sentence("An outer item", 0)}<ul>${inner}</ul></li></ul></div>`;
+    /* One passage, not four: the outer `<li>` contains the three inner ones.
+       Without the de-nesting this reported 94 additions on the constitution
+       where stage 3 mints 96 blocks, and the two numbers looked like each other. */
+    expect(gainedText(stock, unhid).passages).toHaveLength(1);
+  });
+
+  it("flags a change it cannot name, rather than reporting silence", () => {
+    /* The backstop. Text arrives in a tag the selector does not cover, so no
+       passage is produced — and `unaccounted` says so instead of the run looking
+       clean. This is the shape all three bugs had from the outside. */
+    const stock = `<div>${body()}</div>`;
+    const unhid = `<div>${body()}<address>${sentence("Text in a tag the list does not cover", 7)}</address></div>`;
+    const g = gainedText(stock, unhid);
+    expect(g.passages).toEqual([]);
+    expect(g.unaccounted).toBeGreaterThan(60);
   });
 });
