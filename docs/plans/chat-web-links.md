@@ -247,6 +247,34 @@ this turn"* — which is the single line standing between a linked answer and an
 block is written, as `WEB_LINKS`, and interpolated into both prompts; whoever commits that file next
 should check it went along.
 
+## The browser pass
+
+Done on 2026-08-28 against a throwaway preview page mounting the real `CitedText` with `links` on,
+inside the real `.chat-turn.model` wrapper, beside the real `ProseHoverCard` — the recipe in
+[browser-testing.md](../project/browser-testing.md), because a real answer with a link in it means a
+paid call and a web search that may not return one. Seven answers at 22rem and 16rem.
+
+What only a browser could say:
+
+- **The card opens over a model-written link and is the article's card**, unchanged: *"leaves this
+  site / not-anthropic.example / some › path"*, the full URL, and the way out. Which is the whole of
+  what Greg asked for, and it cost one selector.
+- **The Wikipedia lookup fires from a chat link too** — real title, Wikidata's one-line description
+  and the lead paragraph, arriving under a card that was already complete. So the asynchronous half
+  needed nothing.
+- **The host beside the label reads as a check rather than as prose.** Measured rather than judged
+  from the screenshot: `oklch(0.63 …)` against the answer's `oklch(0.78 …)`, at 12.5px against the
+  reading size. The failure to look for here was the opposite one — a host so quiet it is invisible,
+  or so loud the sentence stops.
+- **Every anchor is `http(s)`, `target="_blank"`, `rel="noopener noreferrer"`** — read off the DOM,
+  twelve of them, not off the source. The credentials one, the `javascript:` one and the `mailto:`
+  one are still literal text on the page, with no anchor anywhere near them.
+- **A citation chip no longer gets a card.** `BlockRef` renders `?at=spya-k3m9qt`, so under the old
+  blanket `a[href]` every chip in every answer had a panel saying `link` over a query string racing
+  its own tooltip. Hovering one now returns `null`, which is the wart in
+  [The card, and the bug that scoping it uncovered](#the-card-and-the-bug-that-scoping-it-uncovered)
+  confirmed gone rather than argued gone.
+
 ## Tests
 
 [`tests/chat-web-links.test.ts`](../../tests/chat-web-links.test.ts) — the splitter, which is where
