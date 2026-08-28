@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" class="L-seams L-arc L-gutter L-gloss L-ideas L-comments L-topography L-spine L-hedge L-numbers L-rubric">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decorated · {{TITLE}}</title>
+<style>/*CSS*/</style>
+</head>
+<body>
+
+<nav id="spine" aria-label="The article, whole"><div id="spine-inner"></div></nav>
+
+<div id="page">
+
+<header id="masthead">
+  <p class="kicker">Spideryarn · <b>Decorated mode</b> · playground</p>
+  <h1>{{TITLE}}</h1>
+  <p class="byline">Anil Seth · NOEMA · ~54 min read</p>
+  <p class="standfirst">Every word below is the author's, in their order, unaltered. Everything
+    else on this page — the headings in the margin, the ticks, the underlines, the graded ink — is
+    Spideryarn's, and is trying to earn its place. Open the panel at the bottom right and turn the
+    layers off one at a time; the ones you don't miss should not exist.</p>
+</header>
+
+<div id="arc-rail" hidden><span class="arc-label">where you are in the argument</span><p id="arc-text"></p></div>
+
+<main id="stream">
+<!--ARTICLE-->
+</main>
+
+<footer id="colophon">
+  <p>Built by <code>experiments/decorated/build.mjs</code> from the stored artefacts for
+  <code>noema-mythology-of-conscious-ai</code>. The judgement layer is
+  <code>annotations.json</code>. Notes and provenance:
+  <code>docs/research/decorated-mode-ideas.md</code>.</p>
+</footer>
+
+</div>
+
+<div id="card" popover></div>
+
+<button id="panel-toggle" aria-expanded="false">layers</button>
+<aside id="panel" hidden>
+  <header><b>Decoration layers</b><button id="panel-close" aria-label="close">×</button></header>
+  <div id="panel-body"></div>
+  <footer>
+    <button data-preset="all">all on</button>
+    <button data-preset="none">bare prose</button>
+    <button data-preset="quiet">the restrained set</button>
+    <button data-preset="loud">everything Greg asked for</button>
+  </footer>
+</aside>
+
+<script>window.DECOR = /*DATA*/;</script>
+<script>/*JS*/</script>
+</body>
+</html>

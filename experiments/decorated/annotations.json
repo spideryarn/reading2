@@ -1,0 +1,1846 @@
+{
+ "source": "three annotation passes, merged and re-verified by build",
+ "blocks": {
+  "spya-cfbkp2": {
+   "weight": 0,
+   "role": "meta",
+   "connective": "new-thread",
+   "question": "Who wrote this, and how long is it?",
+   "difficulty": 0.05,
+   "spans": []
+  },
+  "spya-gp3g6s": {
+   "weight": 0,
+   "role": "meta",
+   "connective": "and-also",
+   "question": "Why is this essay worth an hour of mine?",
+   "difficulty": 0.1,
+   "spans": [
+    {
+     "quote": "won the 2025 annual Berggruen Prize Essay Competition",
+     "kind": "number"
+    }
+   ]
+  },
+  "spya-rg493b": {
+   "weight": 0,
+   "role": "context",
+   "connective": "and-also",
+   "question": "Does he actually study consciousness for a living?",
+   "difficulty": 0.15,
+   "spans": [
+    {
+     "quote": "Seth is also the co-director of the Canadian Institute for Advanced Research Program on Brain, Mind and Consciousness.",
+     "kind": "quiet"
+    }
+   ]
+  },
+  "spya-u6w37a": {
+   "weight": 1,
+   "role": "context",
+   "connective": "new-thread",
+   "question": "Why does every new technology revive the same dream?",
+   "difficulty": 0.2,
+   "spans": [
+    {
+     "quote": "This is a dream reinvented with every breaking wave of new technology.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-gjy45p": {
+   "weight": 3,
+   "role": "question",
+   "connective": "for-example",
+   "question": "AI is clearly smart — but is it conscious?",
+   "difficulty": 0.2,
+   "spans": [
+    {
+     "quote": "are arguably already intelligent, at least in some ways",
+     "kind": "hedge"
+    },
+    {
+     "quote": "But are they, or could they ever be, conscious? And why would that matter?",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-d9a0wr": {
+   "weight": 1,
+   "role": "example",
+   "connective": "and-also",
+   "question": "What have the stories about this always warned us?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "From Yossele the Golem, to Mary Shelley’s “Frankenstein,” HAL 9000 in “2001: A Space Odyssey,” Ava in “Ex Machina,” and Klara in “Klara and The Sun,”",
+     "kind": "quiet"
+    },
+    {
+     "quote": "One thing we learn from these stories: If artificial intelligence is on a path toward real consciousness, or even toward systems that persuasively seem to be conscious, there’s plenty at stake — and not just disruption in job markets.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-cvyfqe": {
+   "weight": 2,
+   "role": "anecdote",
+   "connective": "new-thread",
+   "question": "Has anyone actually claimed an AI was conscious?",
+   "difficulty": 0.2,
+   "spans": [
+    {
+     "quote": "Some people think conscious AI is already here.",
+     "kind": "key"
+    },
+    {
+     "quote": "In a 2022 interview with The Washington Post",
+     "kind": "number"
+    }
+   ]
+  },
+  "spya-epw4h3": {
+   "weight": 2,
+   "role": "rebuttal",
+   "connective": "but",
+   "question": "Wasn’t Lemoine just a crank Google fired?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "Firing someone for breaching confidentiality is not the same as firing them for being wrong.",
+     "kind": "strong"
+    },
+    {
+     "quote": "has suggested that conscious machines may be possible in the not-too-distant future",
+     "kind": "hedge"
+    },
+    {
+     "quote": "For many leading experts in AI and neuroscience, the emergence of machine consciousness is a question of when, not if.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-e68t9h": {
+   "weight": 2,
+   "role": "implication",
+   "connective": "therefore",
+   "question": "Why would the answer matter for the machines themselves?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "How we think about the prospects for conscious AI matters.",
+     "kind": "key"
+    },
+    {
+     "quote": "the potential for suffering and, perhaps, rights",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-z2b4ny": {
+   "weight": 2,
+   "role": "implication",
+   "connective": "and-also",
+   "question": "What does believing it cost us, even if it’s false?",
+   "difficulty": 0.4,
+   "spans": [
+    {
+     "quote": "What we collectively think about consciousness in AI already carries enormous importance, regardless of the reality.",
+     "kind": "key"
+    },
+    {
+     "quote": "our minds brutalized",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-sge6a2": {
+   "weight": 2,
+   "role": "implication",
+   "connective": "and-also",
+   "question": "What does getting this wrong do to how we see ourselves?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "If we confuse ourselves too readily with our machine creations, we not only overestimate them, we also underestimate ourselves.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-q23td7": {
+   "weight": 2,
+   "role": "question",
+   "connective": "new-thread",
+   "question": "Why would metal ever be conscious the way meat is?",
+   "difficulty": 0.2,
+   "spans": [
+    {
+     "quote": "Why might we even think that AI could be conscious?",
+     "kind": "key"
+    },
+    {
+     "quote": "made of meat, not metal",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-f87ghx": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "because",
+   "question": "Why do we assume a smart thing must also feel?",
+   "difficulty": 0.25,
+   "spans": [
+    {
+     "quote": "But just because they go together in us doesn’t mean that they go together in general.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-nj888h": {
+   "weight": 3,
+   "role": "claim",
+   "connective": "zoom-in",
+   "question": "What exactly is intelligence, if it isn’t consciousness?",
+   "difficulty": 0.3,
+   "defines": "intelligence",
+   "spans": [
+    {
+     "quote": "Intelligence and consciousness are different things.",
+     "kind": "key"
+    },
+    {
+     "quote": "the ability to achieve complex goals by flexible means",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-hk6gha": {
+   "weight": 1,
+   "role": "definition",
+   "connective": "and-also",
+   "question": "What do AGI and ASI actually mean?",
+   "difficulty": 0.3,
+   "defines": "artificial general intelligence (AGI)",
+   "spans": [
+    {
+     "quote": "The concept of artificial general intelligence (AGI), by contrast, explicitly references human intelligence.",
+     "kind": "key"
+    },
+    {
+     "quote": "(There’s also artificial superintelligence, ASI, which happens when AI bootstraps itself beyond our comprehension and control. ASI tends to crop up in the more existentially fraught scenarios for our possible futures.)",
+     "kind": "quiet"
+    }
+   ]
+  },
+  "spya-j0a9rq": {
+   "weight": 2,
+   "role": "definition",
+   "connective": "contrast",
+   "question": "And what is consciousness, then?",
+   "difficulty": 0.35,
+   "defines": "consciousness",
+   "spans": [
+    {
+     "quote": "Consciousness, in contrast to intelligence, is mostly about being.",
+     "kind": "key"
+    },
+    {
+     "quote": "an organism has conscious mental states if and only if there is something it is like to be that organism",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-xm96be": {
+   "weight": 2,
+   "role": "implication",
+   "connective": "therefore",
+   "question": "So which of the two does ChatGPT have?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "it is harder to say whether",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-cvaqgs": {
+   "weight": 1,
+   "role": "transition",
+   "connective": "zoom-in",
+   "question": "Where does the habit of bundling the two come from?",
+   "difficulty": 0.2,
+   "spans": []
+  },
+  "spya-h4mwb2": {
+   "weight": 1,
+   "role": "definition",
+   "connective": "zoom-in",
+   "question": "What is anthropocentrism?",
+   "difficulty": 0.3,
+   "defines": "anthropocentrism",
+   "spans": [
+    {
+     "quote": "to take the human example as definitional, rather than as one example of how different properties might come together",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-her4zk": {
+   "weight": 1,
+   "role": "definition",
+   "connective": "and-also",
+   "question": "What are the other two biases?",
+   "difficulty": 0.35,
+   "defines": "anthropomorphism",
+   "spans": [
+    {
+     "quote": "(perhaps closer to angels and Gods than to other animals, as in the medieval Scala naturae)",
+     "kind": "quiet"
+    },
+    {
+     "quote": "This is the tendency to project humanlike qualities onto nonhuman things based on what may be only superficial similarities.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-nxxnrj": {
+   "weight": 1,
+   "role": "conclusion",
+   "connective": "therefore",
+   "question": "So what do the three biases do when they act together?",
+   "difficulty": 0.4,
+   "spans": [
+    {
+     "quote": "we naturally imbue them with other qualities we feel are characteristically or even distinctively human",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-k6fpme": {
+   "weight": 2,
+   "role": "evidence",
+   "connective": "zoom-in",
+   "question": "Why do chatbots set this off when other AI doesn’t?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "This is likely because",
+     "kind": "hedge"
+    },
+    {
+     "quote": "Nobody, as far as I know, has claimed that DeepMind’s AlphaFold is conscious, even though, under the hood, it is rather similar to an LLM.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-t29n67": {
+   "weight": 1,
+   "role": "example",
+   "connective": "and-also",
+   "question": "Does our own vocabulary smuggle consciousness in?",
+   "difficulty": 0.35,
+   "defines": "confabulation",
+   "spans": [
+    {
+     "quote": "When we say that AI systems “hallucinate,” we implicitly confer on them a capacity for experience.",
+     "kind": "key"
+    },
+    {
+     "quote": "In humans, confabulation involves making things up without realizing it.",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-cqh2pq": {
+   "weight": 2,
+   "role": "conclusion",
+   "connective": "therefore",
+   "question": "What does conflating the two actually cost us?",
+   "difficulty": 0.4,
+   "spans": [
+    {
+     "quote": "When we identify conscious experience with seemingly human qualities like intelligence and language, we become more likely to see consciousness where it doesn’t exist, and to miss seeing it where it does.",
+     "kind": "key"
+    },
+    {
+     "quote": "magically emerge at the arbitrary threshold of AGI",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-cke6sj": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Doesn’t the sheer pace of AI mean it’s nearly here?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "Crucially",
+     "kind": "hinge"
+    },
+    {
+     "quote": "But on an exponential curve, every point is an inflection point.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-v4sduf": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Why do AI’s own builders want it to be conscious?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "If we feel we’re at a techno-historical transition, and we happen to be one of its architects, then the Promethean lure must be hard to resist: the feeling of bringing to humankind that which was once the province of the divine.",
+     "kind": "key"
+    },
+    {
+     "quote": "floating off to eternity in a silicon-enabled cloud",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-mcaa4g": {
+   "weight": 0,
+   "role": "aside",
+   "connective": "therefore",
+   "question": "Who has money riding on this belief?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "Perhaps this is one reason why",
+     "kind": "hedge"
+    },
+    {
+     "quote": "Did someone say “bubble”?",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-k850tu": {
+   "weight": 2,
+   "role": "transition",
+   "connective": "and-also",
+   "question": "Is seeing minds in AI just pattern-matching gone wrong?",
+   "difficulty": 0.35,
+   "defines": "pareidolia",
+   "spans": [
+    {
+     "quote": "like a face in a piece of toast or Mother Teresa in a cinnamon bun",
+     "kind": "strong"
+    },
+    {
+     "quote": "But helping you recognize the power of our pareidolia-inducing psychological biases is just the first step in challenging the mythology of conscious AI.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-wepmnr": {
+   "weight": 3,
+   "role": "thesis",
+   "connective": "zoom-in",
+   "question": "What has to be true for conscious AI to be possible?",
+   "difficulty": 0.5,
+   "defines": "computational functionalism",
+   "spans": [
+    {
+     "quote": "The very idea of conscious AI rests on the assumption that consciousness is a matter of computation.",
+     "kind": "key"
+    },
+    {
+     "quote": "But that is what it is.",
+     "kind": "hinge"
+    },
+    {
+     "quote": "as I think it may be",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-cv97j7": {
+   "weight": 1,
+   "role": "meta",
+   "connective": "and-also",
+   "question": "How are you going to attack that assumption?",
+   "difficulty": 0.4,
+   "spans": [
+    {
+     "quote": "I’ll summarize four related arguments that undermine the idea that computation, at least of the sort implemented in standard digital computers, is sufficient for consciousness.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-a8jgf4": {
+   "weight": 3,
+   "role": "claim",
+   "connective": "new-thread",
+   "question": "But isn’t the brain just a computer made of meat?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "First, and most important, brains are not computers.",
+     "kind": "key"
+    },
+    {
+     "quote": "mind as software, brain as hardware",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-u9egtc": {
+   "weight": 1,
+   "role": "context",
+   "connective": "zoom-in",
+   "question": "Where did the brain-as-computer idea come from?",
+   "difficulty": 0.2,
+   "spans": [
+    {
+     "quote": "Back in the 1950s, he seeded the idea that machines might be intelligent",
+     "kind": "number"
+    }
+   ]
+  },
+  "spya-qcevgh": {
+   "weight": 1,
+   "role": "context",
+   "connective": "and-also",
+   "question": "What did Turing actually pin down?",
+   "difficulty": 0.2,
+   "spans": []
+  },
+  "spya-cf70dt": {
+   "weight": 2,
+   "role": "definition",
+   "connective": "zoom-in",
+   "question": "What counts as computation, exactly?",
+   "difficulty": 0.6,
+   "defines": "universal Turing machine",
+   "spans": [
+    {
+     "quote": "(though, as we’ll see, not completely)",
+     "kind": "hedge"
+    },
+    {
+     "quote": "Turing’s critical contribution was to define what became known as a universal Turing machine: another abstract device, but this time capable of simulating any specific Turing machine — any algorithm — by taking the description of the target machine as part of its input.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-dfujdu": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Why shouldn’t the hardware matter to what’s computed?",
+   "difficulty": 0.5,
+   "defines": "substrate independence",
+   "spans": [
+    {
+     "quote": "Turing computation is, in principle, substrate independent: it does not depend on any particular material basis.",
+     "kind": "key"
+    },
+    {
+     "quote": "In practice, it’s better described as substrate flexible",
+     "kind": "hinge"
+    },
+    {
+     "quote": "cheese, for instance, isn’t up to the job",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-va8qxr": {
+   "weight": 2,
+   "role": "evidence",
+   "connective": "and-also",
+   "question": "How did neurons get folded into the computing picture?",
+   "difficulty": 0.55,
+   "defines": "Turing complete",
+   "spans": [
+    {
+     "quote": "Later work, by the logician Stephen Kleene among others, demonstrated that artificial neural networks like these, when provided with a tape-like memory (as in the Turing machine), were “Turing complete” — that they could, in principle, implement any Turing machine, any algorithm.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-v5vz2t": {
+   "weight": 2,
+   "role": "implication",
+   "connective": "therefore",
+   "question": "What did we gain by treating neurons as simple switches?",
+   "difficulty": 0.4,
+   "defines": "mathematical marriage of convenience",
+   "spans": [
+    {
+     "quote": "Put these ideas together, and we have a mathematical marriage of convenience and influence, and the kind of beauty that accompanies simplicity.",
+     "kind": "key"
+    },
+    {
+     "quote": "the messy neurobiological reality of real brains",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-va72zk": {
+   "weight": 1,
+   "role": "example",
+   "connective": "for-example",
+   "question": "Where do today's neural networks come from?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "It is hardly surprising that the seductive impressiveness of the current wave of AI reinforces the idea that brains are nothing more than carbon-based versions of neural network algorithms.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-b0086e": {
+   "weight": 3,
+   "role": "claim",
+   "connective": "but",
+   "question": "So what's wrong with mind as software, brain as hardware?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "But here’s where the trouble starts.",
+     "kind": "hinge"
+    },
+    {
+     "quote": "Inside a brain, there’s no sharp separation between “mindware” and “wetware” as there is between software and hardware in a computer.",
+     "kind": "key"
+    },
+    {
+     "quote": "the dead sand of silicon",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-cf8rt8": {
+   "weight": 2,
+   "role": "evidence",
+   "connective": "because",
+   "question": "How complicated is a single neuron, really?",
+   "difficulty": 0.55,
+   "defines": "autopoiesis",
+   "spans": [
+    {
+     "quote": "a molecular storm of metabolic activity",
+     "kind": "strong"
+    },
+    {
+     "quote": "Even a single neuron is a spectacularly complicated biological machine, busy maintaining its own integrity and regenerating the conditions and material basis for its own continued existence.",
+     "kind": "key"
+    },
+    {
+     "quote": "Autopoiesis is arguably a defining and distinctive characteristic of living systems.",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-zw2m7u": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "therefore",
+   "question": "Can you separate what a brain does from what it is?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "difficult, and likely impossible,",
+     "kind": "hedge"
+    },
+    {
+     "quote": "separate what they do from what they are",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-ycpfzs": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "But why wouldn't evolution have separated software from hardware?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "From the perspective of evolution, there’s no obvious selection pressure for the kind of full separation that would allow the perfect interoperability between different brains as we enjoy between different computers.",
+     "kind": "key"
+    },
+    {
+     "quote": "In fact, the opposite is likely true",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-p4vmm0": {
+   "weight": 3,
+   "role": "implication",
+   "connective": "therefore",
+   "question": "Why does any of this touch computational functionalism?",
+   "difficulty": 0.6,
+   "spans": [
+    {
+     "quote": "This matters because",
+     "kind": "hinge"
+    },
+    {
+     "quote": "Evidence that the materiality of the brain matters for its function is evidence against the idea that digital computation is all that counts, which in turn is evidence against computational functionalism.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-jnwfxp": {
+   "weight": 1,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Could I swap one neuron for a silicon copy?",
+   "difficulty": 0.6,
+   "defines": "generative entrenchment",
+   "spans": []
+  },
+  "spya-un9fjn": {
+   "weight": 2,
+   "role": "evidence",
+   "connective": "for-example",
+   "question": "What would a real silicon neuron have to do?",
+   "difficulty": 0.4,
+   "spans": [
+    {
+     "quote": "apparently to clear waste products created by metabolism",
+     "kind": "hedge"
+    },
+    {
+     "quote": "The only way to seamlessly replace a biological neuron is with another biological neuron — and ideally, the same one.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-ahtr6e": {
+   "weight": 2,
+   "role": "rebuttal",
+   "connective": "therefore",
+   "question": "Doesn't the neural replacement argument settle this?",
+   "difficulty": 0.5,
+   "spans": [
+    {
+     "quote": "But the argument fails at its first hurdle, given the impossibility of replacing any part of the brain with a perfect silicon equivalent.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-v2q8qk": {
+   "weight": 1,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Does an algorithm care how long each step takes?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "In Turing-world, only sequence matters: A to B, 0 to 1.",
+     "kind": "key"
+    },
+    {
+     "quote": "There could be a microsecond or a million years between any state transition, and it would still be the same algorithm, the same computation.",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-v52g4f": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "contrast",
+   "question": "Why can't a brain step out of time like that?",
+   "difficulty": 0.6,
+   "spans": [
+    {
+     "quote": "This means that neurobiological activity is anchored in continuous time in ways that algorithms, by design, are not.",
+     "kind": "key"
+    },
+    {
+     "quote": "Computation exists out of time, but computers do not.",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-ecfgkp": {
+   "weight": 1,
+   "role": "evidence",
+   "connective": "and-also",
+   "question": "Does experience come in discrete states?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "It does not stutter from one state to another; it flows.",
+     "kind": "strong"
+    },
+    {
+     "quote": "Abstracting the brain into the arid sequence space of algorithms does justice neither to our biology nor to the phenomenology of the stream of consciousness.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-uwxe4h": {
+   "weight": 2,
+   "role": "conclusion",
+   "connective": "zoom-out",
+   "question": "Is the brain a Turing machine made of meat?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "Looking at the brain through “Turing glasses” underestimates its biological richness and overestimates the substrate flexibility of what it does.",
+     "kind": "strong"
+    },
+    {
+     "quote": "The brain is not a Turing machine made of meat.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-gw0hsq": {
+   "weight": 2,
+   "role": "definition",
+   "connective": "new-thread",
+   "question": "What can't a Turing machine compute?",
+   "difficulty": 0.65,
+   "defines": "halting problem",
+   "spans": [
+    {
+     "quote": "Turing algorithms are powerful, but there are many kinds of dynamics, many other kinds of functions, that go beyond this kind of computation.",
+     "kind": "key"
+    },
+    {
+     "quote": "I’ll return to this distinction later.",
+     "kind": "quiet"
+    }
+   ]
+  },
+  "spya-n393ru": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Does the brain do things algorithms can't?",
+   "difficulty": 0.5,
+   "spans": [
+    {
+     "quote": "It seems presumptuous at the very least to assume that only Turing computations matter for consciousness, or indeed for many other aspects of cognition and mind.",
+     "kind": "key"
+    },
+    {
+     "quote": "any one of them may turn out to play a critical role in consciousness",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-gamzr3": {
+   "weight": 0,
+   "role": "transition",
+   "connective": "therefore",
+   "question": "If not algorithms, then what should we look at?",
+   "difficulty": 0.25,
+   "spans": [
+    {
+     "quote": "There is a rich history here to draw on, and an exciting future too.",
+     "kind": "quiet"
+    }
+   ]
+  },
+  "spya-zg9me8": {
+   "weight": 1,
+   "role": "example",
+   "connective": "for-example",
+   "question": "Weren't the first computers digital?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "The earliest computers were not digital Turing machines but analogue devices operating in continuous time.",
+     "kind": "key"
+    },
+    {
+     "quote": "dating back to around 2,000 BCE",
+     "kind": "number"
+    }
+   ]
+  },
+  "spya-kjfjgm": {
+   "weight": 1,
+   "role": "example",
+   "connective": "and-also",
+   "question": "What kinds of computing are tied to their material?",
+   "difficulty": 0.5,
+   "defines": "mortal computation",
+   "spans": [
+    {
+     "quote": "All these alternative forms of computation are more closely tied to their material basis — are less substrate-flexible — than standard digital computation.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-sq9v5k": {
+   "weight": 2,
+   "role": "example",
+   "connective": "and-also",
+   "question": "Is everything a system does really computation?",
+   "difficulty": 0.4,
+   "spans": [
+    {
+     "quote": "Many systems do what they do without it being reasonable or useful to describe them as being computational at all.",
+     "kind": "key"
+    },
+    {
+     "quote": "Three decades ago, the cognitive scientist Tim van Gelder",
+     "kind": "number"
+    },
+    {
+     "quote": "would betray a total misunderstanding of what’s really going on",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-t54yqa": {
+   "weight": 1,
+   "role": "evidence",
+   "connective": "and-also",
+   "question": "Does anyone in cognitive science take this seriously?",
+   "difficulty": 0.65,
+   "spans": [
+    {
+     "quote": "involving concepts such as attractors, phase spaces and so on",
+     "kind": "quiet"
+    },
+    {
+     "quote": "It is at least plausible that those aspects of brain function necessary for consciousness also depend on non-computational processes like these, or perhaps on some broader notion of computation.",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-f0qxnb": {
+   "weight": 2,
+   "role": "definition",
+   "connective": "zoom-out",
+   "question": "Am I rejecting functionalism altogether?",
+   "difficulty": 0.7,
+   "defines": "functionalism",
+   "spans": [
+    {
+     "quote": "These other games in town are all still compatible with what in philosophy is known as functionalism: the idea that properties of mind (including consciousness) depend on the functional organization of the (embodied) brain.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-gr2k02": {
+   "weight": 3,
+   "role": "implication",
+   "connective": "therefore",
+   "question": "So what is the real question about machine consciousness?",
+   "difficulty": 0.5,
+   "spans": [
+    {
+     "quote": "the more deeply entangled we become in randomness, dynamics and entropy",
+     "kind": "strong"
+    },
+    {
+     "quote": "The question is no longer about which algorithms give rise to consciousness; it’s about how brain-like a system has to be to move the needle on its potential to be conscious.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-hj5y6s": {
+   "weight": 3,
+   "role": "thesis",
+   "connective": "new-thread",
+   "question": "Does being alive have anything to do with consciousness?",
+   "difficulty": 0.45,
+   "defines": "biological naturalism",
+   "spans": [
+    {
+     "quote": "My third argument is that life (probably) matters.",
+     "kind": "key"
+    },
+    {
+     "quote": "I don’t have a knock-down argument for this position, nor do I think any such argument yet exists",
+     "kind": "hedge"
+    },
+    {
+     "quote": "every candidate for consciousness that most people currently agree on as actually being conscious is also alive",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-hrydkk": {
+   "weight": 0,
+   "role": "question",
+   "connective": "zoom-in",
+   "question": "Why would life matter for consciousness?",
+   "difficulty": 0.15,
+   "spans": [
+    {
+     "quote": "( I wrote an entire book, “Being You,” and a recent research paper on the subject)",
+     "kind": "quiet"
+    }
+   ]
+  },
+  "spya-dp8sem": {
+   "weight": 2,
+   "role": "definition",
+   "connective": "zoom-in",
+   "question": "How does the brain build what I perceive?",
+   "difficulty": 0.7,
+   "defines": "predictive processing",
+   "spans": [
+    {
+     "quote": "The starting point is the idea that what we consciously perceive depends on the brain’s best guesses about what’s going on in the world, rather than on a direct readout of sensory inputs.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-xhvztm": {
+   "weight": 2,
+   "role": "definition",
+   "connective": "restates",
+   "question": "So is perception a kind of hallucination?",
+   "difficulty": 0.55,
+   "defines": "controlled hallucination",
+   "spans": [
+    {
+     "quote": "a kind of controlled hallucination",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-hzp9yz": {
+   "weight": 1,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Does this explain the experience of being me?",
+   "difficulty": 0.65,
+   "defines": "interoception",
+   "spans": [
+    {
+     "quote": "This kind of perceptual best-guessing underlies not only experiences of the world, but experiences of being a self, too — experiences of being the subject of experience.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-b59nm2": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Why do bodily feelings feel the way they do?",
+   "difficulty": 0.5,
+   "spans": [
+    {
+     "quote": "(in a call back to mid-20th century cybernetics)",
+     "kind": "quiet"
+    },
+    {
+     "quote": "When you can predict something, you can also control it.",
+     "kind": "strong"
+    },
+    {
+     "quote": "This is because the primary duty of any brain is to keep its body alive, to keep physiological quantities like heart rate and blood oxygenation where they need to be.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-b228ay": {
+   "weight": 1,
+   "role": "definition",
+   "connective": "zoom-in",
+   "question": "What makes an emotion different from seeing?",
+   "difficulty": 0.4,
+   "defines": "valence",
+   "spans": []
+  },
+  "spya-vys3vj": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "zoom-in",
+   "question": "How deep does the drive to stay alive go?",
+   "difficulty": 0.65,
+   "spans": [
+    {
+     "quote": "the molecular furnaces of metabolism",
+     "kind": "strong"
+    },
+    {
+     "quote": "A mathematical line can be drawn directly from the self-producing, autopoietic nature of biological material all the way to the Bayesian best-guessing that underpins our perceptual experiences of the world and of the self.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-da9tvt": {
+   "weight": 2,
+   "role": "implication",
+   "connective": "therefore",
+   "question": "What do these threads add up to?",
+   "difficulty": 0.6,
+   "spans": [
+    {
+     "quote": "perhaps inextricably",
+     "kind": "hedge"
+    },
+    {
+     "quote": "self-regenerating storms of life resisting the pull of entropic sameness",
+     "kind": "strong"
+    },
+    {
+     "quote": "And third, all of this is non-computational, or at least non-algorithmic.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-pfkhtt": {
+   "weight": 2,
+   "role": "conclusion",
+   "connective": "therefore",
+   "question": "So what breathes fire into experience?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "We experience the world around us and ourselves within it — with, through and because of our living bodies.",
+     "kind": "key"
+    },
+    {
+     "quote": "Perhaps it is life, rather than information processing, that breathes fire into the equations of experience.",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-fz5xq5": {
+   "weight": 2,
+   "role": "thesis",
+   "connective": "new-thread",
+   "question": "Couldn't we just simulate a brain and be done?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "Finally, simulation is not instantiation.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-cepmwf": {
+   "weight": 1,
+   "role": "claim",
+   "connective": "but",
+   "question": "Isn't a good enough simulation the same thing?",
+   "difficulty": 0.25,
+   "spans": [
+    {
+     "quote": "But we should not confuse the map with the territory",
+     "kind": "hinge"
+    },
+    {
+     "quote": "An algorithmic simulation of a continuous process is just that — a simulation, not the process itself.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-npjt4j": {
+   "weight": 3,
+   "role": "claim",
+   "connective": "for-example",
+   "question": "Why doesn't simulating something make it real?",
+   "difficulty": 0.5,
+   "spans": [
+    {
+     "quote": "Computational simulations generally lack the causal powers and intrinsic properties of the things being simulated.",
+     "kind": "hedge"
+    },
+    {
+     "quote": "A simulation of a rainstorm does not make anything actually wet.",
+     "kind": "strong"
+    },
+    {
+     "quote": "In general, a computational simulation of X does not bring X into being — does not instantiate X — unless X is a computational process (specifically, an algorithm) itself.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-pbcr03": {
+   "weight": 3,
+   "role": "claim",
+   "connective": "zoom-in",
+   "question": "Does simulating a brain, in enough detail, create a mind?",
+   "difficulty": 0.5,
+   "spans": [
+    {
+     "quote": "only give rise to consciousness if",
+     "kind": "hinge"
+    },
+    {
+     "quote": "the prospect of instantiating consciousness through some kind of whole-brain emulation, at some arbitrarily high level of detail, already assumes that computational functionalism is true",
+     "kind": "key"
+    },
+    {
+     "quote": "this assumption is likely wrong",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-jvrmrh": {
+   "weight": 1,
+   "role": "implication",
+   "connective": "zoom-out",
+   "question": "Why does the brain-as-computer picture make uploading seem plausible?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "the poverty of the brain-as-computer metaphor",
+     "kind": "strong"
+    },
+    {
+     "quote": "If you think that everything that matters about brains can be captured by abstract neural networks, then it’s natural to think that simulating the brain on a digital computer will instantiate all its properties",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-tb4wr2": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "contrast",
+   "question": "But what if the brain model is far more detailed?",
+   "difficulty": 0.55,
+   "spans": [
+    {
+     "quote": "If, instead",
+     "kind": "hinge"
+    },
+    {
+     "quote": "it really ought to be less natural to assume that simulating the brain will realize all its properties",
+     "kind": "key"
+    },
+    {
+     "quote": "likely matter too",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-xvm37k": {
+   "weight": 2,
+   "role": "implication",
+   "connective": "therefore",
+   "question": "So can I upload myself into a detailed brain simulation?",
+   "difficulty": 0.4,
+   "spans": [
+    {
+     "quote": "their dreams and their venture capital",
+     "kind": "strong"
+    },
+    {
+     "quote": "If an exquisitely detailed brain model is needed, then you are no more likely to exist in the simulation than a hailstorm is likely to arise inside the computers of the U.K. meteorological office.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-sq7un9": {
+   "weight": 1,
+   "role": "question",
+   "connective": "new-thread",
+   "question": "But what if we are inside a simulation right now?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "But buckle up.",
+     "kind": "hinge"
+    },
+    {
+     "quote": "What if everything is a simulation already?",
+     "kind": "key"
+    },
+    {
+     "quote": "technologically godlike and genealogically obsessed descendants",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-bcnvp2": {
+   "weight": 1,
+   "role": "definition",
+   "connective": "restates",
+   "question": "Does that idea have a name?",
+   "difficulty": 0.2,
+   "defines": "simulation hypothesis",
+   "spans": [
+    {
+     "quote": "and still, somehow, an influential idea among the technorati",
+     "kind": "quiet"
+    }
+   ]
+  },
+  "spya-xdy4fe": {
+   "weight": 2,
+   "role": "rebuttal",
+   "connective": "zoom-in",
+   "question": "Doesn’t the simulation argument itself assume what’s in dispute?",
+   "difficulty": 0.6,
+   "spans": [
+    {
+     "quote": "we may be more likely to exist within a simulation than within reality itself",
+     "kind": "hedge"
+    },
+    {
+     "quote": "But it is telling that",
+     "kind": "hinge"
+    },
+    {
+     "quote": "(see page 2 of his paper)",
+     "kind": "quiet"
+    },
+    {
+     "quote": "If this assumption doesn’t hold, then the simple fact that we are conscious would rule out that we exist in a simulation.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-e3cq2m": {
+   "weight": 1,
+   "role": "meta",
+   "connective": "new-thread",
+   "question": "So what has the whole argument been?",
+   "difficulty": 0.2,
+   "spans": [
+    {
+     "quote": "Let’s summarize.",
+     "kind": "hinge"
+    },
+    {
+     "quote": "Many social and psychological factors, including some well-understood cognitive biases, predispose us to overattribute consciousness to machines.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-ymbpwn": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "And why is computational functionalism looking shaky?",
+   "difficulty": 0.55,
+   "spans": [
+    {
+     "quote": "Computational functionalism — the claim that (algorithmic) computation is sufficient for consciousness — is a very strong assumption that looks increasingly shaky",
+     "kind": "key"
+    },
+    {
+     "quote": "(e.g., neuromorphic computing, synthetic biology)",
+     "kind": "quiet"
+    },
+    {
+     "quote": "(e.g., dynamical systems theory)",
+     "kind": "quiet"
+    },
+    {
+     "quote": "the less plausible it is that the relevant properties can be abstracted away",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-ps0kap": {
+   "weight": 1,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "And what if being alive is the thing that matters?",
+   "difficulty": 0.5,
+   "spans": [
+    {
+     "quote": "One possibility",
+     "kind": "hedge"
+    },
+    {
+     "quote": "consciousness is deeply tied to our nature as biological, living creatures",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-mtzbbg": {
+   "weight": 1,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "And a simulation still isn’t the real thing?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "simulating the biological mechanisms of consciousness computationally, at whatever grain of detail you might choose, will not give rise to consciousness unless computational functionalism happens anyway to be true",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-nv6tp0": {
+   "weight": 2,
+   "role": "meta",
+   "connective": "and-also",
+   "question": "Do I have to accept all four arguments?",
+   "difficulty": 0.4,
+   "spans": [
+    {
+     "quote": "Each of these lines of argument can stand up by itself.",
+     "kind": "key"
+    },
+    {
+     "quote": "But taken together",
+     "kind": "hinge"
+    }
+   ]
+  },
+  "spya-c5ve5t": {
+   "weight": 3,
+   "role": "conclusion",
+   "connective": "therefore",
+   "question": "So will consciousness arrive as AI gets smarter?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "consciousness is very unlikely to simply come along for the ride as AI gets smarter",
+     "kind": "key"
+    },
+    {
+     "quote": "may well be impossible",
+     "kind": "hedge"
+    },
+    {
+     "quote": "at least for the silicon-based digital computers we are familiar with",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-rn8y3y": {
+   "weight": 2,
+   "role": "concession",
+   "connective": "but",
+   "question": "So is artificial consciousness ruled out for good?",
+   "difficulty": 0.2,
+   "spans": [
+    {
+     "quote": "At the same time",
+     "kind": "hinge"
+    },
+    {
+     "quote": "nothing in what I’ve said rules out the possibility of artificial consciousness altogether",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-z4bud7": {
+   "weight": 1,
+   "role": "question",
+   "connective": "therefore",
+   "question": "So what should we actually do?",
+   "difficulty": 0.1,
+   "spans": []
+  },
+  "spya-ryg483": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "because",
+   "question": "Why does it matter whether an AI really is conscious?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "the fact of the matter matters",
+     "kind": "strong"
+    },
+    {
+     "quote": "Things capable of conscious experiences have ethical and moral standing that other things do not.",
+     "kind": "key"
+    },
+    {
+     "quote": "At least, claims to this kind of moral consideration are more straightforward",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-qu7j89": {
+   "weight": 2,
+   "role": "concession",
+   "connective": "therefore",
+   "question": "Might the author himself be wrong about all this?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "I’ve made a case against conscious AI, but I might be wrong.",
+     "kind": "key"
+    },
+    {
+     "quote": "(whether my version or any other)",
+     "kind": "quiet"
+    },
+    {
+     "quote": "remains a minority view",
+     "kind": "hedge"
+    },
+    {
+     "quote": "being content instead to assume it",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-zajp75": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "but",
+   "question": "Can anyone say for sure, either way?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "But this doesn’t mean they are wrong.",
+     "kind": "hinge"
+    },
+    {
+     "quote": "fraught with uncertainty",
+     "kind": "hedge"
+    },
+    {
+     "quote": "anyone who claims to know for sure what it would take to create real artificial consciousness, or for sure what it would take to avoid doing so, is overstepping what can reasonably be said",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-yverz7": {
+   "weight": 3,
+   "role": "conclusion",
+   "connective": "therefore",
+   "question": "So should anyone try to build a conscious machine?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "As redundant as it may sound",
+     "kind": "quiet"
+    },
+    {
+     "quote": "nobody should be deliberately setting out to create conscious AI",
+     "kind": "key"
+    },
+    {
+     "quote": "Creating conscious machines would be an ethical disaster.",
+     "kind": "strong"
+    },
+    {
+     "quote": "as arguably we should if they really are conscious",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-vs0vpj": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "but",
+   "question": "Which technology should actually worry us, then?",
+   "difficulty": 0.45,
+   "defines": "cerebral organoids",
+   "spans": [
+    {
+     "quote": "Even if I’m right that standard digital computers aren’t up to the job, other emerging technologies might yet be",
+     "kind": "hedge"
+    },
+    {
+     "quote": "we ought to be more worried about the accidental emergence of consciousness in cerebral organoids",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-x63ycg": {
+   "weight": 3,
+   "role": "claim",
+   "connective": "but",
+   "question": "But what about machines that only seem conscious?",
+   "difficulty": 0.3,
+   "defines": "conscious-seeming",
+   "spans": [
+    {
+     "quote": "But our worries don’t stop there.",
+     "kind": "hinge"
+    },
+    {
+     "quote": "it is essential to draw a distinction between AI systems that are actually conscious and those that persuasively seem to be conscious but are, in fact, not",
+     "kind": "key"
+    },
+    {
+     "quote": "conscious-seeming systems are much, much closer",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-p8ky7g": {
+   "weight": 1,
+   "role": "example",
+   "connective": "for-example",
+   "question": "Is that already happening to real people?",
+   "difficulty": 0.2,
+   "spans": [
+    {
+     "quote": "Machines that seem conscious pose serious ethical issues distinct from those posed by actually conscious machines.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-n0bnf9": {
+   "weight": 2,
+   "role": "implication",
+   "connective": "for-example",
+   "question": "What exactly goes wrong if we get this wrong?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "either we decide to care about conscious-seeming AI, distorting our circles of moral concern, or we decide not to, and risk brutalizing our minds",
+     "kind": "key"
+    },
+    {
+     "quote": "treating conscious-seeming things as if they lack consciousness is a psychologically unhealthy place to be",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-fdefb5": {
+   "weight": 0,
+   "role": "context",
+   "connective": "and-also",
+   "question": "Is anyone inside AI paying attention to this?",
+   "difficulty": 0.2,
+   "spans": [
+    {
+     "quote": "(CEO of Microsoft AI)",
+     "kind": "quiet"
+    },
+    {
+     "quote": "this doesn’t mean the problem is in any sense under control",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-xk9gne": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Can’t we just remind ourselves it isn’t conscious?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "even if we know, or believe, that an AI is not conscious, we still might be unable to resist feeling that it is",
+     "kind": "key"
+    },
+    {
+     "quote": "It doesn’t matter how many times you encounter the illusion; you cannot think your way out of it.",
+     "kind": "strong"
+    },
+    {
+     "quote": "might be similarly impervious to what we think or understand",
+     "kind": "hedge"
+    }
+   ]
+  },
+  "spya-kqs33c": {
+   "weight": 2,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Couldn’t we just test whether an AI is conscious?",
+   "difficulty": 0.5,
+   "defines": "Garland test",
+   "spans": [
+    {
+     "quote": "What’s more",
+     "kind": "hinge"
+    },
+    {
+     "quote": "because there’s no consensus over the necessary or sufficient conditions for consciousness, there aren’t any definitive tests for deciding whether an AI is actually conscious",
+     "kind": "key"
+    },
+    {
+     "quote": "It is a test of what it takes for a human to be persuaded that a machine is conscious.",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-mxxutn": {
+   "weight": 2,
+   "role": "objection",
+   "connective": "but",
+   "question": "Aren’t we the ones who deny minds too often?",
+   "difficulty": 0.45,
+   "spans": [
+    {
+     "quote": "our unfortunate track record of withholding moral status from those that deserve it",
+     "kind": "strong"
+    },
+    {
+     "quote": "It is reasonable to wonder whether withholding attributions of consciousness to AI may leave us once again on the wrong side of history.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-d89xf7": {
+   "weight": 2,
+   "role": "rebuttal",
+   "connective": "but",
+   "question": "But is AI really like the animals we dismissed?",
+   "difficulty": 0.4,
+   "spans": [
+    {
+     "quote": "But there are good reasons why the situation with AI is likely to be different.",
+     "kind": "hinge"
+    },
+    {
+     "quote": "Our psychological biases are more likely to lead to false positives than false negatives.",
+     "kind": "key"
+    },
+    {
+     "quote": "more similar to us in ways that do not matter for consciousness, like linguistic ability, and less similar in ways that do, like being alive",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-y4vjdg": {
+   "weight": 1,
+   "role": "claim",
+   "connective": "zoom-out",
+   "question": "Why does any of this matter urgently, right now?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "Despite the hype and the hubris",
+     "kind": "strong"
+    },
+    {
+     "quote": "developing a clear view of the prospects and pitfalls of conscious AI is both essential and urgent",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-qwvjwn": {
+   "weight": 1,
+   "role": "meta",
+   "connective": "and-also",
+   "question": "What is this essay actually trying to give me?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "Real artificial consciousness would change everything — and very much for the worse.",
+     "kind": "key"
+    },
+    {
+     "quote": "And hope for our future too.",
+     "kind": "quiet"
+    }
+   ]
+  },
+  "spya-hbueqc": {
+   "weight": 1,
+   "role": "claim",
+   "connective": "and-also",
+   "question": "Is any of this actually inevitable?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "The future history of AI is not yet written.",
+     "kind": "strong"
+    },
+    {
+     "quote": "the self-serving narrative of tech companies laboring to make it to the next financial quarter",
+     "kind": "strong"
+    },
+    {
+     "quote": "Time is short, but collectively we can still decide which kinds of AI we really want and which we really don’t.",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-vnkr36": {
+   "weight": 2,
+   "role": "implication",
+   "connective": "zoom-out",
+   "question": "What is AI doing to how we see ourselves?",
+   "difficulty": 0.5,
+   "spans": [
+    {
+     "quote": "We see ourselves in our algorithms, but we also see our algorithms in ourselves.",
+     "kind": "strong"
+    },
+    {
+     "quote": "This mechanization of the mind is perhaps the most pernicious near-term consequence of the unseemly rush toward human-like AI.",
+     "kind": "key"
+    },
+    {
+     "quote": "If we sell ourselves too cheaply to our machine creations, we overestimate them, and we underestimate ourselves.",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-zv36xq": {
+   "weight": 0,
+   "role": "transition",
+   "connective": "new-thread",
+   "question": "What has any of this to do with the soul?",
+   "difficulty": 0.3,
+   "spans": [
+    {
+     "quote": "Perhaps unexpectedly",
+     "kind": "hinge"
+    },
+    {
+     "quote": "For many people, especially modern people of science and reason, the idea of the soul might seem as outmoded as the Stone Age.",
+     "kind": "quiet"
+    }
+   ]
+  },
+  "spya-fyrb7m": {
+   "weight": 0,
+   "role": "context",
+   "connective": "but",
+   "question": "Has the soul always meant a thinking thing?",
+   "difficulty": 0.4,
+   "defines": "psychē",
+   "spans": [
+    {
+     "quote": "other games in town",
+     "kind": "hinge"
+    },
+    {
+     "quote": "the Greek concept of psychē linked the idea of a soul to breath",
+     "kind": "key"
+    }
+   ]
+  },
+  "spya-gvzuc4": {
+   "weight": 1,
+   "role": "claim",
+   "connective": "contrast",
+   "question": "So what kind of soul is mind-uploading selling?",
+   "difficulty": 0.5,
+   "spans": [
+    {
+     "quote": "The cartoon dreams of a silicon rapture, with its tropes of mind uploading, of disembodied eternal existence and of cloud-based reunions with other chosen ones, is a regression to the Cartesian soul.",
+     "kind": "key"
+    },
+    {
+     "quote": "(despite plentiful evidence linking reason to emotion)",
+     "kind": "quiet"
+    },
+    {
+     "quote": "delivering not posthuman paradise but silicon oblivion",
+     "kind": "strong"
+    }
+   ]
+  },
+  "spya-w8z40d": {
+   "weight": 2,
+   "role": "conclusion",
+   "connective": "contrast",
+   "question": "So what is the part of us that matters?",
+   "difficulty": 0.35,
+   "spans": [
+    {
+     "quote": "our innermost essence arises as an inchoate feeling of just being alive",
+     "kind": "key"
+    },
+    {
+     "quote": "more breath than thought and more meat than machine",
+     "kind": "strong"
+    },
+    {
+     "quote": "It’s about time we started to remember.",
+     "kind": "strong"
+    }
+   ]
+  }
+ }
+}

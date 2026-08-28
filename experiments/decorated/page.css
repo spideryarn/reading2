@@ -1,0 +1,823 @@
+/*
+ * Decorated mode — the playground stylesheet.
+ *
+ * ORGANISED BY CHANNEL, NOT BY FEATURE. A dozen decorations can only share one page
+ * if each owns a different channel and nothing else is allowed to touch it. The
+ * budget below came out of the design review (docs/research/decorated-mode-ideas.md
+ * § The channel budget) and every rule in this file is answerable to it:
+ *
+ *   hue           the reader's layer only — comments, bookmarks. Nothing the model
+ *                 decided is ever orange.
+ *   ink value     importance and de-emphasis. Five steps, --ink-1 … --ink-5.
+ *   weight        load-bearing sentences, and the author's own <em>. Nothing else.
+ *   size          headings. (And, behind a toggle Greg asked for, key sentences —
+ *                 see .L-size, which the reading-science review argued against and
+ *                 which is therefore off by default and labelled in the panel.)
+ *   space         passage emphasis. The quietest channel, so it does most of the work.
+ *   underline     the entity layers — glossary solid, assumption dotted. Never hue.
+ *   hairlines     structure, all on one vertical axis at the far left.
+ *   motion        one moving thing per viewport, scroll-scrubbed, off under
+ *                 prefers-reduced-motion.
+ *   background    transient only: hover, focus, target. No persistent highlighter.
+ *
+ * EVERY LAYER IS A CLASS ON <html>, named `L-*`. That is what makes this a
+ * playground rather than a design: you can turn any of them off and read what is
+ * left. If a layer only looks good because another layer is hiding its damage, the
+ * panel will find it.
+ */
+
+/* --------------------------------------------------------------- tokens -- */
+
+:root {
+  /* Lifted from styles/tokens.css so the playground reads as the same product.
+     Dark only, one accent, per Greg's 2026-08-24 call. */
+  --page: oklch(0.145 0 0);
+  --panel: oklch(0.19 0 0);
+  --raised: oklch(0.26 0 0);
+  --orange: #db8a45;
+
+  /* The ink ladder. Five steps, descending. De-emphasis moves DOWN this ladder and
+     never below --ink-5, which is still readable prose on this ground — the
+     reading-science review's objection to fading was that "faint" becomes "deleted",
+     and a floor is the answer to it. */
+  --ink-1: oklch(0.97 0 0);
+  --ink-2: oklch(0.89 0 0);
+  --ink-3: oklch(0.78 0 0);
+  --ink-4: oklch(0.66 0 0);
+  --ink-5: oklch(0.55 0 0);
+
+  --rule: oklch(0.27 0 0);
+  --rule-strong: oklch(0.36 0 0);
+
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Charter, Georgia, ui-serif, serif;
+  --sans: ui-sans-serif, -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --measure: 34rem;
+  --gutter: 13rem;
+  --margin: 11rem;
+  --leading: 1.62;
+
+  --decor: 1; /* the density dial: every optional flourish multiplies by this */
+}
+
+* { box-sizing: border-box; }
+
+html { background: var(--page); color: var(--ink-2); }
+
+body {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 1.0625rem;
+  line-height: var(--leading);
+  /* `pretty` costs a few milliseconds of layout and buys no rivers, no orphans and
+     no two-character last lines. On a page whose entire subject is the texture of
+     prose it is the cheapest win available. */
+  text-wrap: pretty;
+  hanging-punctuation: first last;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; }
+.lnk {
+  /* The author's own links, underlined in the ink ladder rather than in a hue:
+     the orange is spoken for, and a blue link on this page would be a third voice. */
+  text-decoration: underline;
+  text-decoration-color: var(--ink-5);
+  text-underline-offset: 0.16em;
+  text-decoration-thickness: 1px;
+}
+.lnk:hover { text-decoration-color: var(--ink-2); }
+
+/* ---------------------------------------------------------------- shell -- */
+
+#page { padding: 0 0 8rem 3.2rem; }
+
+#masthead {
+  max-width: calc(var(--measure) + var(--gutter) + var(--margin));
+  margin: 5rem auto 3rem;
+  padding: 0 2rem;
+}
+#masthead .kicker {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-5);
+}
+#masthead h1 {
+  font-size: clamp(2rem, 5vw, 3.1rem);
+  line-height: 1.06;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0.4rem 0 0.6rem;
+  color: var(--ink-1);
+  text-wrap: balance;
+}
+#masthead .byline { font-family: var(--sans); font-size: 0.82rem; color: var(--ink-4); margin: 0 0 2rem; }
+#masthead .standfirst {
+  font-size: 0.94rem;
+  color: var(--ink-4);
+  border-left: 2px solid var(--rule-strong);
+  padding-left: 1rem;
+  max-width: 32rem;
+}
+
+#colophon {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  color: var(--ink-5);
+  max-width: var(--measure);
+  margin: 6rem auto 0;
+  padding-left: calc(var(--gutter) + 2rem);
+}
+#colophon code { font-family: var(--mono); font-size: 0.95em; }
+
+/* ------------------------------------------------------- the block grid -- */
+/*
+ * One grid for the whole stream, and every block a `subgrid` inside it. The point
+ * is that the gutter, the measure and the margin line up down the entire article
+ * even though each block is its own element — with per-block grids they would drift
+ * apart the moment one column's content changed width.
+ */
+
+#stream {
+  display: grid;
+  grid-template-columns: [g] var(--gutter) [t] minmax(0, var(--measure)) [m] var(--margin);
+  justify-content: center;
+  column-gap: 2rem;
+  align-items: start;
+}
+
+.blk {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  position: relative;
+  /* Space is the emphasis channel that does most of the work, so it gets a variable
+     rather than a constant, and the topography layer turns the dial. */
+  margin-block: calc(0.55rem * var(--space-mult, 1));
+  scroll-margin-block-start: 6rem;
+}
+
+.blk > .gutter { grid-column: g; }
+.blk > .body   { grid-column: t; min-width: 0; }
+.blk > .margin { grid-column: m; }
+
+.prose { margin: 0; color: var(--ink-2); }
+.blk-h1 .prose, .blk-h2 .prose, .blk-h3 .prose { font-weight: 600; color: var(--ink-1); }
+.blk-caption .prose { font-family: var(--sans); font-size: 0.78rem; color: var(--ink-5); line-height: 1.45; }
+
+/* The author's own figures, images, pull-quotes and rule pass straight through. */
+.blk-media .body figure { margin: 2rem 0; }
+.blk-media .body img { max-width: 100%; height: auto; border-radius: 2px; }
+.blk-media .body iframe { max-width: 100%; aspect-ratio: 16/9; height: auto; border: 0; }
+.blk-media .body blockquote {
+  margin: 0;
+  font-size: 1.35rem;
+  line-height: 1.34;
+  color: var(--ink-1);
+  border-left: 2px solid var(--orange);
+  padding-left: 1.2rem;
+  font-style: normal;
+}
+.blk-media .body hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
+
+/* Boilerplate — credits, the "~54 min read" strip — is marked `gistable: false` by
+   the pipeline. It is still here, still selectable, still findable. It is just not
+   competing. */
+.boiler .prose { font-family: var(--sans); font-size: 0.78rem; color: var(--ink-5); }
+
+/* ============================================================== LAYERS == */
+
+/* ------------------------------------------- L-topography: the fisheye -- */
+/*
+ * Greg's seed idea, done as a continuous relief rather than a binary highlight.
+ * `weight` 0–3 from annotations.json is a judgement about how load-bearing a block
+ * is FOR THE ARGUMENT, and it is spent on three channels in order of quietness:
+ * space first, then ink, then — only for the very few 3s — weight.
+ *
+ * Size is deliberately NOT in here. It is the separate L-size layer, because
+ * varying type size within a text column disrupts saccade targeting, and because
+ * the same review pointed out that fading in a dark theme is de-facto deletion.
+ * Both objections are in the research doc; both are toggles so Greg can judge.
+ */
+.L-topography .blk.w3 { --space-mult: 2.1; }
+.L-topography .blk.w2 { --space-mult: 1.35; }
+.L-topography .blk.w1 { --space-mult: 1; }
+.L-topography .blk.w0 { --space-mult: 0.75; }
+
+.L-topography .w3 .prose { color: var(--ink-1); font-weight: 500; }
+.L-topography .w2 .prose { color: var(--ink-2); }
+.L-topography .w1 .prose { color: var(--ink-3); }
+/* The floor. Never below --ink-5 — a decoration may not quietly delete a paragraph. */
+.L-topography .w0 .prose { color: var(--ink-5); }
+
+/* The key sentence: the one sentence that carries its block. Weight and a little
+   air around it; no colour, no background, no size. */
+.L-topography .sp-key { color: var(--ink-1); font-weight: 500; }
+.L-size .sp-key { font-size: 1.14em; line-height: 1.42; }
+.L-size .w3 .prose { font-size: 1.1rem; }
+.L-size .w0 .prose { font-size: 0.94rem; }
+
+/* Hinges — the words where the argument turns. Small caps and a hairline above,
+   which is how a printed critical edition would do it. */
+.L-topography .sp-hinge {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  color: var(--ink-1);
+  box-shadow: inset 0 1px 0 0 var(--rule-strong);
+}
+
+.L-topography .sp-strong { font-style: italic; color: var(--ink-1); }
+
+/* Quiet: the parenthetical a careful reader can skip. Down one step, no further. */
+.L-quiet .sp-quiet { color: var(--ink-5); }
+
+/* --------------------------------------------------- L-hedge: the maybe -- */
+/*
+ * The essay is about what we do and don't know, and readers routinely upgrade
+ * "may be possible" into "is possible". Hedges get a dotted underline in the ink
+ * ladder — the one decoration on this page that makes the prose HARDER to read
+ * quickly, on purpose.
+ */
+.L-hedge .sp-hedge {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--ink-5);
+  text-underline-offset: 0.22em;
+}
+.L-hedge .sp-hedge::after {
+  content: "?";
+  font-family: var(--sans);
+  font-size: 0.62em;
+  vertical-align: super;
+  color: var(--ink-5);
+  margin-left: 0.05em;
+}
+
+/* ----------------------------------------- L-numbers: figures behaving -- */
+/*
+ * Old-style figures in running prose (they sit on the baseline like lower-case and
+ * stop dates shouting), lining tabular figures wherever numbers are compared. And
+ * the quantities that carry weight get a hairline box so the eye can find them
+ * again on a second pass without them being coloured.
+ */
+.L-numbers .prose { font-variant-numeric: oldstyle-nums proportional-nums; }
+.L-numbers .sp-number {
+  font-variant-numeric: lining-nums tabular-nums;
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: 1px;
+}
+
+/* --------------------------------------------------- L-gloss: the terms -- */
+/*
+ * A term is underlined everywhere it occurs, and its FIRST occurrence is marked
+ * differently — a small raised tick — because that is the only place the reader can
+ * still be taught something. Every later underline is a reminder; the first one is
+ * an offer.
+ */
+.L-gloss .gloss {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-5);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  cursor: help;
+}
+.L-gloss .gloss:hover { text-decoration-color: var(--ink-2); background: color-mix(in oklab, var(--ink-1) 7%, transparent); }
+.L-gloss .gloss-first { text-decoration-style: solid; text-decoration-color: var(--ink-3); }
+.L-gloss .gloss-first::after {
+  content: "°";
+  font-family: var(--sans);
+  font-size: 0.8em;
+  color: var(--ink-4);
+  vertical-align: super;
+}
+
+/* The Talmudic margin: on first use, the definition arrives in the left gutter,
+   unasked, at the height of the word. No click, no hover, no modal — the thing a
+   printed gloss does and a tooltip cannot. */
+.gloss-note {
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  line-height: 1.38;
+  color: var(--ink-5);
+  border-top: 1px solid var(--rule);
+  padding-top: 0.3rem;
+  margin-bottom: 0.6rem;
+  display: none;
+}
+.L-marginalia .gloss-note { display: block; }
+.gloss-note b { color: var(--ink-3); font-weight: 600; display: block; }
+
+/* --------------------------------------- L-ideas: the assumption layer -- */
+/*
+ * ideas.json is the artefact nothing else uses, and it is the most Spideryarn thing
+ * we have: the propositions the piece needs you to grant, most of them never argued
+ * for. A dotted underlay under the exact words, and a stamp in the gutter. Clicking
+ * either says WHY the argument needs it.
+ *
+ * Provenance is carried by underline style, not by hue: `assumed` is dotted (it
+ * rests on nothing), `introduced` is dashed (the piece puts it in play).
+ */
+.L-ideas .idea { text-underline-offset: 0.3em; text-decoration-thickness: 1.5px; }
+.L-ideas .idea-assumed { text-decoration: underline dotted; text-decoration-color: var(--ink-4); }
+.L-ideas .idea-introduced { text-decoration: underline dashed; text-decoration-color: var(--ink-4); }
+.L-ideas .idea:hover { background: color-mix(in oklab, var(--ink-1) 8%, transparent); cursor: help; }
+
+.idea-stamp {
+  display: none;
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-5);
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  padding: 0.12rem 0.35rem;
+  margin-top: 0.4rem;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.3;
+}
+.L-ideas .idea-stamp { display: block; }
+.idea-stamp:hover { color: var(--ink-2); border-color: var(--ink-4); }
+
+/* ------------------------------------------------- L-gutter: the machine -- */
+/*
+ * The left column is the machine's territory and it never gets a hue, never appears
+ * inline, and never reflows the prose. Three things live in it:
+ *   · the connective glyph — this block's logical relation to the one before it
+ *   · the gist — labels.json, one line per block
+ *   · the question this block answers, if the layer is on
+ *
+ * The reading-science review's objection to a label beside EVERY block is real
+ * (141 of them is a second article), so the gist is faint by default and only comes
+ * up to full ink for the block you are actually beside. See #stream:hover below.
+ */
+.gutter {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--ink-5);
+  text-align: right;
+  padding-top: 0.35rem;
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.3rem;
+}
+.L-gutter .gutter { display: flex; }
+
+.conn {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--ink-4);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  min-width: 1.5rem;
+  text-align: center;
+  padding: 0 0.2rem;
+}
+/* The three connectives that mean the argument changed direction are the only ones
+   allowed to be conspicuous. A page of identical `+` glyphs is honest and quiet;
+   that is the point. */
+.conn-but, .conn-contrast, .conn-therefore { color: var(--ink-1); border-color: var(--ink-4); }
+.conn-and-also, .conn-restates { opacity: 0.4; }
+
+.gist { display: none; max-width: 100%; }
+.L-gists .gist { display: block; }
+
+.q { display: none; font-style: italic; color: var(--ink-4); max-width: 100%; }
+.L-questions .q { display: block; }
+
+/* The block you are beside brings its own gutter up. Nothing else moves. */
+.blk.here .gutter { color: var(--ink-3); }
+.blk.here .gist { color: var(--ink-2); }
+
+/* --------------------------------------------- L-comments: the reader -- */
+/*
+ * The right margin, and the only hue on the page. A filled dot means the reader
+ * asked for an answer and got one; a hollow one is a plain bookmark.
+ */
+.margin { display: none; padding-top: 0.4rem; }
+.L-comments .margin { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.note {
+  font-size: 0.7rem;
+  line-height: 1;
+  background: none;
+  border: 0;
+  color: var(--orange);
+  cursor: pointer;
+  padding: 0.1rem;
+}
+.note:hover { transform: scale(1.4); }
+
+.L-comments .mark {
+  background: color-mix(in oklab, var(--orange) 16%, transparent);
+  box-shadow: 0 1px 0 0 color-mix(in oklab, var(--orange) 60%, transparent);
+}
+
+/* ----------------------------------------------- L-seams: our headings -- */
+/*
+ * Four author headings in 8,300 words, and twenty-two spans that needed one. So we
+ * write them — and we make them visibly ours. Author headings are set in the serif,
+ * full ink, centred over the measure. Ours are set in the sans, in the gutter, with
+ * a rule and a label saying who wrote them. A reader must never have to wonder.
+ */
+.seam { display: none; grid-column: 1 / -1; }
+.L-seams .seam { display: block; }
+/* An author-titled span gets the rule and the air; the heading itself is the next
+   block, and is the author's. Without a gist there is nothing in here but space. */
+.seam-theirs:not(:has(.seam-gist)) { padding-top: 1.4rem; }
+html:not(.L-overtures) .seam-theirs { padding-bottom: 0; }
+
+.seam-d1 {
+  margin: 4.5rem 0 1.6rem;
+  padding-left: calc(var(--gutter) + 2rem);
+  border-top: 1px solid var(--rule-strong);
+  padding-top: 1.4rem;
+  max-width: calc(var(--gutter) + var(--measure) + var(--margin) + 4rem);
+  margin-inline: auto;
+}
+.seam-d2 {
+  margin: 2.6rem 0 0.9rem;
+  padding-left: calc(var(--gutter) + 2rem);
+  max-width: calc(var(--gutter) + var(--measure) + var(--margin) + 4rem);
+  margin-inline: auto;
+}
+
+.seam-title { margin: 0; text-wrap: balance; }
+.seam-d1 .seam-title { font-size: 1.6rem; font-weight: 600; color: var(--ink-1); letter-spacing: -0.01em; }
+.seam-d2 .seam-title { font-size: 1.05rem; font-weight: 600; color: var(--ink-2); }
+
+/* Ours: sans, small caps, and it says so. */
+.seam-ours .seam-title {
+  font-family: var(--sans);
+  font-weight: 500;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.09em;
+  color: var(--ink-4);
+}
+.seam-mark {
+  font-family: var(--sans);
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-5);
+  border: 1px dashed var(--rule-strong);
+  padding: 0.05rem 0.3rem;
+  border-radius: 2px;
+  margin-left: 0.5rem;
+  vertical-align: 0.15em;
+}
+
+.seam-gist {
+  display: none;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  color: var(--ink-5);
+  max-width: 30rem;
+  margin: 0.5rem 0 0;
+}
+.L-overtures .seam-gist { display: block; }
+
+/* ------------------------------------------------- L-arc: the argument -- */
+/*
+ * One sentence, fixed at the top, saying where in the ARGUMENT you are — not what
+ * the section says. It is the cheapest external store for the representation that
+ * decays fastest on a long essay: not the facts, but the shape.
+ *
+ * It is deliberately about position rather than content, because a rail that
+ * summarised would be a way of not reading.
+ */
+#arc-rail {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in oklab, var(--page) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
+  padding: 0.6rem 2rem 0.7rem calc(var(--gutter) + 2rem);
+  margin-bottom: 1rem;
+}
+html:not(.L-arc) #arc-rail { display: none; }
+#arc-rail .arc-label {
+  font-family: var(--sans);
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-5);
+}
+#arc-rail p { margin: 0.15rem 0 0; font-size: 0.85rem; color: var(--ink-3); max-width: 46rem; }
+
+/* The turn markers left in the flow where the arc changes — a fleuron, not a box. */
+.arc-turn { display: none; grid-column: 1 / -1; text-align: center; margin: 2.4rem 0; }
+.L-turns .arc-turn { display: block; }
+.arc-turn p {
+  display: inline-block;
+  font-family: var(--sans);
+  font-size: 0.74rem;
+  color: var(--ink-5);
+  max-width: 30rem;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 0.5rem 0;
+  margin: 0;
+}
+.arc-turn p::before { content: "❧ "; color: var(--rule-strong); }
+
+/* ------------------------------------------------ L-roles: the x-ray --- */
+/*
+ * Hold a key and the prose tints by what each paragraph is DOING — claim, evidence,
+ * concession, rebuttal — rather than by what it says. Transient by construction: a
+ * background field that is only ever on while you ask for it, which is how it stays
+ * inside the "no persistent highlighter" rule.
+ */
+.L-roles .blk .body { border-left: 2px solid transparent; padding-left: 0.8rem; margin-left: -1rem; }
+.L-roles .role-thesis      .body { border-color: var(--ink-1); }
+.L-roles .role-claim       .body { border-color: var(--ink-2); }
+.L-roles .role-conclusion  .body { border-color: var(--ink-2); }
+.L-roles .role-evidence    .body { border-color: var(--ink-4); }
+.L-roles .role-example     .body { border-color: var(--ink-5); }
+.L-roles .role-objection   .body { border-color: var(--rule-strong); border-left-style: dashed; }
+.L-roles .role-concession  .body { border-color: var(--rule-strong); border-left-style: dotted; }
+.L-roles .role-rebuttal    .body { border-color: var(--ink-3); border-left-style: double; border-left-width: 4px; }
+.L-roles .blk::after {
+  content: attr(data-role-label);
+  position: absolute;
+  left: calc(var(--gutter) + 2rem - 1.4rem);
+  font-family: var(--sans);
+  font-size: 0.55rem;
+}
+
+/* ------------------------------------------- L-lineate: the thesis set as verse -- */
+/*
+ * The most audacious thing available inside "no words removed, no words changed":
+ * take the two or three sentences the essay exists to deliver and break them at
+ * their clause boundaries, with hanging indents and air. Line breaks are
+ * instructions to the reading voice. Nothing is added and nothing is taken away —
+ * only the pace.
+ */
+.L-lineate .lineated { display: block; margin: 1.2rem 0; }
+.L-lineate .lineated .lin {
+  display: block;
+  padding-left: 2.2rem;
+  text-indent: -2.2rem;
+  font-size: 1.16em;
+  line-height: 1.36;
+  color: var(--ink-1);
+}
+.L-lineate .lineated .lin + .lin { margin-top: 0.28em; }
+
+/* --------------------------------------------- L-rubric: the openings -- */
+/*
+ * Rubrication, which is what a scribe did before bold existed: the first few words
+ * of a section in a different treatment, so the eye can find where things start
+ * from across the room. Small caps rather than red — the hue is spoken for.
+ */
+.L-rubric .blk.section-open .prose::first-line { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
+.L-rubric .blk.section-open .prose::first-letter {
+  initial-letter: 2 2;
+  font-weight: 600;
+  color: var(--ink-1);
+  margin-right: 0.12em;
+}
+
+/* --------------------------------------- L-gravity: the left-field one -- */
+/*
+ * Each block leans a few pixels: toward the margin when it supports what came
+ * before, away when it pushes back, back to the measure when the argument resolves.
+ * Nothing is stated; the page just develops a slight physical tension where the
+ * argument has one. Almost certainly a bad idea. Worth seeing once.
+ */
+.L-gravity .blk[data-connective="because"]     .body,
+.L-gravity .blk[data-connective="for-example"] .body { translate: 0.9rem 0; }
+.L-gravity .blk[data-connective="zoom-in"]     .body { translate: 1.5rem 0; }
+.L-gravity .blk[data-connective="but"]         .body,
+.L-gravity .blk[data-connective="contrast"]    .body { translate: -0.9rem 0; }
+.L-gravity .blk[data-connective="therefore"]   .body { translate: 0 0; }
+.L-gravity .blk .body { transition: translate 0.4s cubic-bezier(0.2, 0, 0, 1); }
+
+/* ------------------------------------------- L-readfirst: earn the ink -- */
+/*
+ * The meta-layer, and the one answer to "a decoration must not become a way of not
+ * reading": the apparatus does not exist until you have been beside the paragraph
+ * long enough to have read it. Decorations become a SECOND reading rather than a
+ * shortcut past the first.
+ *
+ * The transition is on opacity only, so nothing reflows when a block earns its ink.
+ */
+.L-readfirst .blk:not(.read) .gutter,
+.L-readfirst .blk:not(.read) .margin,
+.L-readfirst .blk:not(.read) .idea-stamp { opacity: 0; }
+.L-readfirst .blk .gutter,
+.L-readfirst .blk .margin,
+.L-readfirst .blk .idea-stamp { transition: opacity 0.7s ease; }
+.L-readfirst .blk:not(.read) .sp-key { font-weight: inherit; color: inherit; }
+.L-readfirst .blk:not(.read) .gloss,
+.L-readfirst .blk:not(.read) .idea { text-decoration-color: transparent; }
+.L-readfirst .blk .gloss,
+.L-readfirst .blk .idea { transition: text-decoration-color 0.7s ease; }
+
+/* ------------------------------------------------ L-gate: the section gate -- */
+/*
+ * Before a section's summary will open, you say what you took from it. Free recall
+ * with feedback afterwards is the best-evidenced cheap intervention in the reading
+ * literature, and it turns our summaries from a substitute for reading into the
+ * answer key that comes AFTER the attempt.
+ */
+.gate { display: none; grid-column: 1 / -1; margin: 2rem auto; max-width: calc(var(--gutter) + var(--measure) + 4rem); padding-left: calc(var(--gutter) + 2rem); }
+.L-gate .gate { display: block; }
+.gate-prompt { font-family: var(--sans); font-size: 0.76rem; color: var(--ink-4); margin: 0 0 0.4rem; }
+.gate textarea {
+  width: 100%;
+  max-width: var(--measure);
+  font: inherit;
+  font-size: 0.9rem;
+  background: var(--panel);
+  color: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.55rem 0.7rem;
+  field-sizing: content;
+  min-height: 2.4rem;
+  max-height: 12rem;
+  resize: vertical;
+}
+.gate textarea:focus { outline: 1px solid var(--ink-4); }
+.gate-reveal {
+  margin-top: 0.5rem;
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  color: var(--ink-5);
+  background: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+}
+.gate-reveal:disabled { opacity: 0.35; cursor: not-allowed; }
+.gate-answer { display: none; margin-top: 0.7rem; font-size: 0.88rem; color: var(--ink-3); max-width: var(--measure); border-left: 2px solid var(--rule-strong); padding-left: 0.8rem; }
+.gate.open .gate-answer { display: block; }
+
+/* ------------------------------------------------ L-spine: the whole thing -- */
+/*
+ * The article as one object down the left edge, 3.2rem wide, always there. Each
+ * block is a tick: length is how load-bearing it is, so the argument's peaks are
+ * visible from the top of the page; the orange pips are the reader's own marks.
+ * Nothing here is text, so it costs no reading.
+ */
+#spine {
+  position: fixed;
+  inset-block: 0;
+  left: 0;
+  width: 3.2rem;
+  padding: 1rem 0;
+  border-right: 1px solid var(--rule);
+  background: var(--page);
+  z-index: 30;
+  display: none;
+  overflow: hidden;
+}
+.L-spine #spine { display: block; }
+#spine-inner { display: flex; flex-direction: column; height: 100%; gap: 1px; padding: 0 0.5rem; }
+.tick {
+  background: var(--rule-strong);
+  border-radius: 1px;
+  align-self: flex-start;
+  cursor: pointer;
+  flex: 1 1 auto;
+  min-height: 1px;
+}
+.tick[data-w="3"] { width: 100%; background: var(--ink-2); }
+.tick[data-w="2"] { width: 66%; background: var(--ink-4); }
+.tick[data-w="1"] { width: 40%; }
+.tick[data-w="0"] { width: 20%; }
+.tick.has-note { background: var(--orange); }
+.tick.seen { opacity: 1; }
+#spine-inner:not(:hover) .tick { opacity: 0.75; }
+.tick.now { outline: 1px solid var(--ink-1); outline-offset: 1px; }
+
+/* --------------------------------------------------------- the card ---- */
+
+#card {
+  border: 1px solid var(--rule-strong);
+  background: var(--raised);
+  color: var(--ink-2);
+  border-radius: 4px;
+  padding: 0.9rem 1rem;
+  max-width: 26rem;
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.5);
+}
+#card::backdrop { background: transparent; }
+#card h4 { margin: 0 0 0.3rem; font-size: 0.9rem; color: var(--ink-1); }
+#card .kind { font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-5); }
+#card p { margin: 0.45rem 0 0; }
+#card .why { color: var(--ink-4); border-left: 2px solid var(--rule-strong); padding-left: 0.6rem; }
+
+/* --------------------------------------------------------- the panel --- */
+
+#panel-toggle {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 60;
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--raised);
+  color: var(--ink-2);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+}
+#panel {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 61;
+  width: 21rem;
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+#panel header { display: flex; justify-content: space-between; align-items: center; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--rule); position: sticky; top: 0; background: var(--panel); }
+#panel header button { background: none; border: 0; color: var(--ink-4); font-size: 1.1rem; cursor: pointer; }
+#panel-body { padding: 0.4rem 0.9rem 0.8rem; }
+#panel footer { display: flex; gap: 0.35rem; flex-wrap: wrap; padding: 0.7rem 0.9rem; border-top: 1px solid var(--rule); position: sticky; bottom: 0; background: var(--panel); }
+#panel footer button { flex: 1 1 auto; font-family: inherit; font-size: 0.68rem; background: var(--raised); color: var(--ink-3); border: 1px solid var(--rule-strong); border-radius: 2px; padding: 0.35rem; cursor: pointer; }
+#panel footer button:hover { color: var(--ink-1); }
+
+.layer-row { display: block; padding: 0.45rem 0; border-bottom: 1px solid color-mix(in oklab, var(--rule) 60%, transparent); }
+.layer-row label { display: flex; gap: 0.5rem; align-items: baseline; cursor: pointer; }
+.layer-row input { accent-color: var(--orange); margin-top: 0.2rem; }
+.layer-row b { color: var(--ink-2); font-weight: 600; }
+.layer-row .blurb { display: block; color: var(--ink-5); font-size: 0.68rem; margin-top: 0.15rem; line-height: 1.4; }
+.layer-row .flag { color: var(--orange); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.panel-group { font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-5); margin: 1rem 0 0.2rem; }
+
+/* ------------------------------------------------ the clipboard rule --- */
+/*
+ * EVERYTHING WE ADDED IS UNSELECTABLE. A reader who selects three paragraphs and
+ * copies them must get three paragraphs of Anil Seth and nothing else — no gutter
+ * gists, no generated headings, no gate prompts, no arc sentences. Our words
+ * leaving in a quotation with the author's name on it is the same failure as
+ * editing the prose, and it is invisible until someone pastes.
+ *
+ * `user-select: none` is most of the answer, and `page.js` adds a copy handler for
+ * the rest: the verse layer sets its lines `display: block`, so without it a
+ * lineated thesis would paste with line breaks the author never wrote.
+ *
+ * The article's own text is explicitly `user-select: text` so that nothing here can
+ * accidentally make the prose uncopyable — which would be the worse bug, and a
+ * silent one.
+ */
+.gutter, .margin, .seam-title, .seam-mark, .seam-gist, .arc-turn,
+.gate, .idea-stamp, .gloss-note, #arc-rail, #spine, #panel, #panel-toggle,
+#card, #masthead .kicker, #masthead .standfirst, #colophon {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.prose, .blk-media .body { user-select: text; -webkit-user-select: text; }
+
+/* ---------------------------------------------------------- niceties --- */
+
+::selection { background: color-mix(in oklab, var(--orange) 35%, transparent); }
+:target { scroll-margin-block-start: 6rem; }
+::target-text { background: color-mix(in oklab, var(--orange) 30%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+  .L-gravity .blk .body { translate: none !important; }
+}
+
+@media (max-width: 1180px) {
+  :root { --gutter: 0rem; --margin: 0rem; }
+  #stream { column-gap: 0; }
+  .gutter, .margin { display: none !important; }
+  .seam-d1, .seam-d2, #colophon, .gate, #arc-rail { padding-left: 1.5rem; }
+  #page { padding-left: 0; }
+  .L-spine #spine { display: none; }
+}
+
+@media print {
+  /* A decorated page should print as a decorated page: the apparatus is the point.
+     What goes is the chrome — the panel, the spine, the sticky rail. */
+  #spine, #panel, #panel-toggle, #arc-rail { display: none !important; }
+  html { background: #fff; }
+  body { color: #111; }
+  .prose { color: #111 !important; }
+  .gutter { color: #666; }
+  a::after { content: " (" attr(href) ")"; font-size: 0.7em; color: #666; word-break: break-all; }
+}
