@@ -4813,7 +4813,12 @@ td.text.has-hit[data-hues="8"] {
    can take it in without going anywhere. Set in the reading face: this is the
    author's prose, not our chrome, and the card's own labels are the chrome
    around it. */
-.tooltip.prose-card.has-note { max-width: 27rem; }
+/* `min(...)`, not a flat 27rem. The base `.tooltip` rule carries
+   `calc(100vw - 1.75rem)` and this override dropped it, so on a 390px phone the
+   note card was laid out 432px wide and hung 12px past the right edge, scrolling
+   the page sideways. Measured in a 390x740 frame, 2026-08-28. A wider card is
+   the intent; a card wider than the screen is not. */
+.tooltip.prose-card.has-note { max-width: min(27rem, calc(100vw - 1.75rem)); }
 .note-preview {
   /* A long note scrolls rather than being cut. `contain` so the scroll does not
      run on into the article underneath once the note ends. */
