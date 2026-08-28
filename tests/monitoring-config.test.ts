@@ -17,7 +17,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { captureFailure, flushMonitoring, initMonitoring, resetMonitoringForTests } from "../src/monitoring.js";
+import {
+  captureFailure,
+  flushMonitoring,
+  initMonitoring,
+  isDeployed,
+  resetMonitoringForTests,
+} from "../src/monitoring.js";
 
 /**
  * A syntactically valid DSN pointing at nothing.
@@ -41,6 +47,8 @@ beforeEach(() => {
   resetMonitoringForTests();
   vi.stubEnv("SENTRY_DSN", "");
   vi.stubEnv("VERCEL_ENV", "");
+  vi.stubEnv("VERCEL", "");
+  vi.stubEnv("SENTRY_FORCE_LOCAL", "");
   vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "");
 });
 
@@ -66,9 +74,12 @@ describe("with no DSN", () => {
   });
 });
 
-describe("with a DSN", () => {
+describe("with a DSN, deployed", () => {
   beforeEach(() => {
     vi.stubEnv("SENTRY_DSN", FAKE_DSN);
+    /* A DSN alone no longer starts it — see "not on a laptop" below. These
+       tests are about the configuration, so they describe a real deployment. */
+    vi.stubEnv("VERCEL", "1");
     initMonitoring();
   });
 
@@ -113,5 +124,87 @@ describe("with a DSN", () => {
   it("keeps no breadcrumbs", async () => {
     const { getClient } = await import("@sentry/node-core/light");
     expect(getClient()?.getOptions().maxBreadcrumbs).toBe(0);
+  });
+});
+
+describe("not on a laptop", () => {
+  /**
+   * The gap this closes: for a while the only condition was "is there a DSN?",
+   * and that was true locally purely because nobody had put one in
+   * `.env.local`. Copy `.env.prod` across — or add one to debug the
+   * integration — and a laptop starts reporting into the production project.
+   * docs/plans/worktrees.md makes it worse, copying `.env.local` into every
+   * worktree.
+   */
+  /**
+   * **Identity, not presence.** `getClient()` is global to the process and an
+   * earlier describe in this file has already built one, so
+   * `expect(getClient()).toBeUndefined()` passes or fails on test *order*
+   * rather than on behaviour. Asking whether `initMonitoring` replaced the
+   * client answers the actual question: did it start?
+   */
+  it("does not start with a DSN but no deployment", async () => {
+    const { getClient } = await import("@sentry/node-core/light");
+    vi.stubEnv("SENTRY_DSN", FAKE_DSN);
+    const before = getClient();
+    initMonitoring();
+    expect(getClient()).toBe(before);
+  });
+
+  it("stays inert for capture and flush too, not just init", async () => {
+    /* Inert has to mean the whole surface. An init that returns early while
+       captureFailure still tried to send would be the same bug, one layer in. */
+    vi.stubEnv("SENTRY_DSN", FAKE_DSN);
+    initMonitoring();
+    expect(() => captureFailure(new Error("boom"))).not.toThrow();
+    await expect(flushMonitoring(1)).resolves.toBeUndefined();
+  });
+
+  it("starts on Vercel, which is the whole difference", async () => {
+    /* The control. Without this the test above would pass if `initMonitoring`
+       were broken outright, and would be proving nothing. */
+    const { getClient } = await import("@sentry/node-core/light");
+    vi.stubEnv("SENTRY_DSN", FAKE_DSN);
+    vi.stubEnv("VERCEL", "1");
+    const before = getClient();
+    initMonitoring();
+    expect(getClient()).not.toBe(before);
+  });
+
+  it("reports on preview deployments, not only production", async () => {
+    /* A preview is a real deployment a reader could reach. Gating on
+       VERCEL_ENV === "production" would have silenced it. */
+    const { getClient } = await import("@sentry/node-core/light");
+    vi.stubEnv("SENTRY_DSN", FAKE_DSN);
+    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("VERCEL_ENV", "preview");
+    const before = getClient();
+    initMonitoring();
+    expect(getClient()).not.toBe(before);
+  });
+
+  it("has an escape hatch for working on this file", async () => {
+    const { getClient } = await import("@sentry/node-core/light");
+    vi.stubEnv("SENTRY_DSN", FAKE_DSN);
+    vi.stubEnv("SENTRY_FORCE_LOCAL", "1");
+    const before = getClient();
+    initMonitoring();
+    expect(getClient()).not.toBe(before);
+  });
+});
+
+describe("isDeployed", () => {
+  it("says no on a bare laptop", () => {
+    expect(isDeployed()).toBe(false);
+  });
+
+  it("is not fooled by NODE_ENV, which any local command can set", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect(isDeployed()).toBe(false);
+  });
+
+  it("says yes on Vercel", () => {
+    vi.stubEnv("VERCEL", "1");
+    expect(isDeployed()).toBe(true);
   });
 });

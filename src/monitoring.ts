@@ -24,10 +24,25 @@
  *
  * ## The four rules
  *
- * 1. **No DSN, no Sentry.** With `SENTRY_DSN` unset every function here returns
- *    immediately and the SDK is never initialised. That is what keeps this
- *    laptop, `npm test` and `npm run dev` exactly as they were, and why no test
- *    in this repo needs a network stub.
+ * 1. **Deployed, and a DSN. Either one missing, no Sentry.** Two independent
+ *    conditions, because for a while there was only one and it was the weaker
+ *    of the two.
+ *
+ *    The DSN half is what keeps this laptop, `npm test` and `npm run dev`
+ *    exactly as they were, and why no test in this repo needs a network stub.
+ *    But it held only because nobody had put a DSN in `.env.local` yet. The day
+ *    somebody copies `.env.prod` across, or adds one to debug the integration,
+ *    a laptop starts reporting into the **production** Sentry project — and
+ *    under docs/plans/worktrees.md that `.env.local` is copied into every
+ *    worktree, so it would be ten laptops at once.
+ *
+ *    So the DSN is no longer trusted to imply "deployed". `VERCEL` is set on
+ *    every Vercel runtime and on none of ours, which is exactly the boundary
+ *    wanted: preview deployments still report (they are real deployments, and
+ *    `environment` below tells them apart), local dev never does.
+ *
+ *    Escape hatch for working on this file itself: `SENTRY_FORCE_LOCAL=1`.
+ *    Deliberately not a `.env.local` key anybody would set by accident.
  * 2. **Nothing here ever throws.** The same rule src/log.ts keeps, for the same
  *    reason: monitoring must not be able to turn a working request into a
  *    failed one. Every export is wrapped.
@@ -131,11 +146,26 @@ const INTEGRATIONS = [
  * result data" — is precisely the Drizzle leak src/store/db-errors.ts exists to
  * stop, offered back as a feature.
  */
+/**
+ * Are we running somewhere a reader could reach, rather than on a laptop?
+ *
+ * `VERCEL` is set to "1" by the Vercel runtime in every environment —
+ * production, preview and their build steps — and by nothing here. It is a
+ * better question than `NODE_ENV === "production"`, which any local command can
+ * set, and than `VERCEL_ENV === "production"`, which would silence preview
+ * deployments that are just as real.
+ */
+export function isDeployed(): boolean {
+  if (process.env.SENTRY_FORCE_LOCAL === "1") return true;
+  return Boolean(process.env.VERCEL);
+}
+
 export function initMonitoring(): void {
   try {
     if (started) return;
     const dsn = process.env.SENTRY_DSN;
     if (!dsn) return;
+    if (!isDeployed()) return;
     started = true;
 
     initWithoutDefaultIntegrations({

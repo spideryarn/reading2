@@ -61,12 +61,22 @@ let started = false;
  *
  * No DSN means every function in this file returns immediately, which is what
  * keeps `npm run dev` and every test exactly as they were.
+ *
+ * **And a DSN is no longer enough on its own.** The server's rule 1 in
+ * src/monitoring.ts explains why at length; the short version is that "no DSN
+ * locally" was true only until somebody put one in `.env.local`, and this file
+ * runs in the browser under `npm run dev` where the server's half does not.
+ * `import.meta.env.PROD` is false for the dev server and true for a built
+ * bundle, which is the boundary wanted, and unlike the server's `VERCEL` it is
+ * compiled in rather than read at runtime — so a dev bundle cannot be talked
+ * into reporting by an environment variable.
  */
 export function initClientMonitoring(): void {
   try {
     if (started) return;
     const dsn = import.meta.env.VITE_SENTRY_DSN;
     if (!dsn) return;
+    if (!import.meta.env.PROD) return;
     started = true;
 
     init({

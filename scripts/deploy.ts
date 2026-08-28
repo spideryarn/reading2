@@ -37,7 +37,7 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { closeSync, cpSync, existsSync, mkdtempSync, openSync, readFileSync, rmSync, symlinkSync, writeSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,6 +45,8 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
 import { sslDecisionFor } from "../src/db/ssl.js";
+import { LockHeldError, takeLockFile } from "./lockfile.js";
+import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
 import {
   assetUrlsIn,
   describeRedirect,
@@ -280,52 +282,29 @@ async function vercelApi<T>(pathAndQuery: string): Promise<T> {
 function takeLock(): () => void {
   const file = path.join(ROOT, ".git", "spideryarn-deploy.lock");
 
-  const claim = () => {
-    const fd = openSync(file, "w");
-    writeSync(fd, `${process.pid}\n${new Date().toISOString()}\n`);
-    closeSync(fd);
-    /* **Released on the way out, however we leave.** The first version returned
-       a function and trusted `finally`, and a `finally` does not run when the
-       process is killed — which happened within the hour, to a run piped into
-       `head`: `head` closed the pipe, the process took SIGPIPE, and the lock
-       outlived it. Every later run then refused, correctly and uselessly. */
-    process.on("exit", () => rmSync(file, { force: true }));
-    return () => rmSync(file, { force: true });
-  };
-
-  if (!existsSync(file)) return claim();
-
-  const [heldPid = "", since = ""] = readFileSync(file, "utf8").split("\n");
-  const pid = Number(heldPid);
-
-  /**
-   * **Is the holder still alive?** Signal 0 sends nothing and only asks. A stale
-   * lock and a live one look identical on disk, and the stale case is the common
-   * one — anything that kills the process leaves a file behind. Refusing to
-   * deploy because of a run that ended an hour ago is a check that has stopped
-   * being about deploying and started being about itself.
-   */
-  let alive = false;
+  /* **The claim is atomic** — see scripts/lockfile.ts. This used to be
+     `if (!existsSync(file)) return claim()` followed by an `openSync(file, "w")`
+     that never fails, so two deploys starting together both saw no file and
+     both proceeded. That is the one thing this lock exists to prevent. */
   try {
-    if (Number.isFinite(pid) && pid > 0) {
-      process.kill(pid, 0);
-      alive = true;
+    const held = takeLockFile(file);
+    return () => held.release();
+  } catch (err) {
+    if (err instanceof LockHeldError) {
+      /* Two situations, and the remedy differs. A live holder means wait; a
+         leftover from something that was SIGKILLed means delete the file. The
+         lock deliberately does not clear a leftover itself — two processes
+         finding the same one would both take it. scripts/lockfile.ts. */
+      throw new Error(
+        err.holderAlive
+          ? `Another deploy is running: pid ${err.holder.pid}, started ${err.holder.since || "?"}.\n` +
+            "  Wait for it, or stop it. Two deploys at once would each capture a different\n" +
+            "  commit and both try to apply the same pending migrations."
+          : err.message,
+      );
     }
-  } catch {
-    /* ESRCH — no such process. EPERM would mean it exists and is not ours,
-       which cannot happen for a lock this process's own user wrote. */
+    throw err;
   }
-
-  if (alive) {
-    throw new Error(
-      `Another deploy is running: pid ${pid}, started ${since}.\n` +
-        "  Wait for it, or stop it. Two deploys at once would each capture a different\n" +
-        "  commit and both try to apply the same pending migrations.",
-    );
-  }
-
-  info(`taking over a stale lock from pid ${pid || "?"} (started ${since || "?"}); that process is gone`);
-  return claim();
 }
 
 /* ------------------------------------------------------------------ */
@@ -551,6 +530,10 @@ function gatesAt(sha: string): void {
 
   const dir = mkdtempSync(path.join(tmpdir(), "spideryarn-deploy-"));
   const wt = path.join(dir, "tree");
+  /* Whether `git worktree add` got far enough for there to be anything to
+     unregister. Without it, an add that failed produced a second, invented
+     failure from the teardown below. */
+  let registered = false;
 
   try {
     const added = run("git", [
@@ -568,6 +551,7 @@ function gatesAt(sha: string): void {
       record("worktree", [tail(added.out, 8)]);
       return;
     }
+    registered = true;
 
     /**
      * Dependencies. Sharing the main tree's `node_modules` is what makes this
@@ -610,10 +594,26 @@ function gatesAt(sha: string): void {
     const t = run("npm", ["run", "--silent", "test"], { cwd: wt });
     gate("test", t.code === 0, () => tail(t.out, 30));
   } finally {
-    /* Both, in this order: `worktree remove` unregisters it (and `--force`
-       overrides the `--lock` above), `rmSync` takes the temp directory. A
-       worktree left registered makes the next run fail on a path that has gone. */
-    run("git", ["worktree", "remove", "--force", wt]);
+    /* Both, in this order: unregister, then take the temp directory. A worktree
+       left registered makes the next run fail on a path that has gone.
+
+       **Both `--force` flags.** One is refused for a locked worktree — which
+       this one deliberately is — and that refusal was neither checked nor
+       visible, so every deploy left a registration pointing at the directory
+       the next line deletes. Sixteen had accumulated against a four-day-old
+       repo. scripts/worktree-admin.ts.
+
+       `ROOT` explicitly, because unlike the `run()` helper this replaced,
+       spawnSync inherits the caller's directory. And only when the add
+       succeeded, or the failure reported below is one we invented. */
+    const removed = registered ? forceRemoveThrowawayWorktree(wt, ROOT) : { ok: true, out: "" };
+    if (!removed.ok) {
+      record("worktree teardown", [
+        "The gate worktree could not be unregistered, so a stale entry is left behind.",
+        `Clear it with: git worktree remove --force --force ${wt}`,
+        removed.out,
+      ]);
+    }
     rmSync(dir, { recursive: true, force: true });
   }
 }
