@@ -236,11 +236,16 @@ export function stripFence(raw: string): string {
  * A JSON artefact on disk, or `null` if it is missing, truncated or not JSON.
  *
  * The one thing in this module that opens a file, and the one place in it where
- * a bare `JSON.parse` is correct: **the error is discarded, not thrown**, so
- * V8's quotation is never built into a message that anything logs. That is the
- * whole justification, and it is load-bearing — if this is ever changed to
- * rethrow, or to warn, it must switch to `parseJsonFrom` in the same edit, or it
- * puts the leak this module exists to prevent straight back.
+ * a bare `JSON.parse` is correct: **the error is caught and discarded**, so
+ * V8's quotation never escapes this function and nothing can log it. Stated
+ * precisely, because the loose version — "the error is never built" — is false
+ * and would mislead somebody deciding whether a change is safe: `JSON.parse`
+ * does throw, and the message does quote the file. What holds is that it goes
+ * nowhere (GPT Sol, 2026-08-28).
+ *
+ * That is the whole justification, and it is load-bearing — if this is ever
+ * changed to rethrow, or to warn, it must switch to `parseJsonFrom` in the same
+ * edit, or it puts the leak this module exists to prevent straight back.
  *
  * "Missing" and "corrupt" deliberately give the same answer. Four stages
  * (glossary, ideas, summarise, tweets) read an artefact they are about to

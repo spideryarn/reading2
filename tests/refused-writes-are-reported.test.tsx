@@ -197,6 +197,16 @@ const STORED: Comment = {
   answer: "Because of the thing in the paragraph before.",
 };
 
+/** One saved search on the shelf, so a refused DELETE has something to remove. */
+const SAVED = {
+  id: "run-1",
+  criterion: "where he hedges",
+  createdAt: "2026-08-27T10:00:00.000Z",
+  status: "done" as const,
+  hits: [],
+  stale: false,
+};
+
 /** The one sentence the server sent, as the reader should end up seeing it. */
 const SAID = "The store would not take that. [store-no]";
 
@@ -213,8 +223,25 @@ describe("useComments, when the server refuses the write", () => {
     await settle();
   }
 
-  it("says so when a DELETE is refused, instead of letting the row look deleted", async () => {
+  /**
+   * **What this proves, and what it does not.** An earlier version of this test
+   * was called "instead of letting the row look deleted" and started from an
+   * empty list, so it could not have seen a row look deleted either way — GPT
+   * Sol, 2026-08-28. It is seeded now, and the assertion says what actually
+   * happens: `remove` takes the row off the screen straight away and **does not
+   * put it back** when the server refuses. That asymmetry with `create` below,
+   * which does roll back, is pinned here rather than described, because the next
+   * person to read `useComments.ts § remove` should find out from a test whether
+   * it is deliberate.
+   *
+   * What `fetchOk` guarantees is the other half: the reader is *told*. Before
+   * it, a 500 took the row away in silence and they found it back after a
+   * reload.
+   */
+  it("tells the reader when a DELETE is refused, though the row stays gone", async () => {
+    reads["/api/comments/"] = { comments: [STORED] };
     await mount();
+    expect(api?.comments, "the seed did not arrive, so this test proves nothing").toHaveLength(1);
     refusing.add("DELETE");
 
     await act(async () => api?.remove("cmt-1"));
@@ -222,6 +249,8 @@ describe("useComments, when the server refuses the write", () => {
 
     expect(sent.map((s) => s.method)).toContain("DELETE");
     expect(api?.error).toBe(SAID);
+    /* Optimistic and not rolled back. See the note above. */
+    expect(api?.comments).toHaveLength(0);
   });
 
   it("puts the reader's comment back when the POST is refused, and says why", async () => {
@@ -299,8 +328,11 @@ describe("useSearch, when the server refuses the write", () => {
     await settle();
   }
 
-  it("says so when a DELETE is refused, instead of letting the run look deleted", async () => {
+  /** Same shape as `useComments § remove`, same seed, same asymmetry — read the note there. */
+  it("tells the reader when a DELETE is refused, though the run stays gone", async () => {
+    reads["/api/search/"] = { runs: [SAVED] };
     await mount();
+    expect(api?.runs, "the seed did not arrive, so this test proves nothing").toHaveLength(1);
     refusing.add("DELETE");
 
     await act(async () => api?.remove("run-1"));
@@ -308,6 +340,7 @@ describe("useSearch, when the server refuses the write", () => {
 
     expect(sent.map((s) => s.method)).toContain("DELETE");
     expect(api?.error).toBe(SAID);
+    expect(api?.runs).toHaveLength(0);
   });
 
   it("says so when a colour PATCH is refused, instead of letting the swatch stand", async () => {

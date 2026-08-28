@@ -158,6 +158,14 @@ export async function pgReady(options: PgReadyOptions): Promise<PgReady> {
  * missing table or column rather than "the schema is not there" is the point:
  * the four column probes exist because a database one migration behind used to
  * fail with a confusing 42703 rather than an instruction.
+ *
+ * **`information_schema.columns` is privilege-filtered**, so a role that cannot
+ * see a column gets the right verdict — skip — with the wrong reason attached,
+ * "run npm run db:migrate", when the column is there and unreadable. Left as it
+ * is because the test role here is the local superuser and the wrong-reason case
+ * cannot arise; `pg_catalog.pg_attribute` is the fix if that ever changes,
+ * because it tells physical absence from privilege. GPT Sol raised it,
+ * 2026-08-28.
  */
 async function missingThing(pool: Pool, options: PgReadyOptions): Promise<string> {
   /* A live connection, which is all `db-transaction-errors` wants, and which

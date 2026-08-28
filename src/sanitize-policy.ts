@@ -285,10 +285,19 @@ const FUNCTIONAL_IRI = /url\(\s*['"]?([^'")]+)['"]?\s*\)/gi;
  * `ownOrigins()` returned two localhost entries and stage 3 could not recognise
  * `https://spideryarn-…vercel.app/api/library` as ours. The browser pass still
  * caught it, which is precisely the failure this file's header warns about: two
- * half-policies that read as defence in depth. Vercel sets both variables on
- * every deployment with no configuration, and src/monitoring.ts:182 already
- * reads a sibling, so they are known to arrive. They carry a bare host with no
- * scheme, which is why `https://` goes on here.
+ * half-policies that read as defence in depth.
+ *
+ * Vercel sets both variables itself — `VERCEL_URL` is the *deployment* host, so
+ * a preview gets its own, and `VERCEL_PROJECT_PRODUCTION_URL` stays the
+ * production host even on a preview. **Not unconditionally, though**, and the
+ * first version of this comment said "with no configuration" and was too broad
+ * (GPT Sol, 2026-08-28): there is a project setting, "Automatically expose
+ * System Environment Variables", which newer projects have on by default. Ours
+ * has them — `src/monitoring.ts:182` already reads a sibling, and they are in
+ * the pulled environment — but somebody turning that setting off would put the
+ * server pass back where it was, silently, so `SPIDERYARN_ORIGINS` stays.
+ *
+ * Both carry a bare host with no scheme, which is why `https://` goes on here.
  *
  * Widening this list can only make the sanitiser **stricter** — `isOwnApi`
  * returning true removes the attribute — so an origin wrongly counted as ours

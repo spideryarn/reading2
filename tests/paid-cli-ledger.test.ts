@@ -360,15 +360,32 @@ function executedCalls(branch: Node): Node[] {
 function shadowsBinding(node: unknown, name: string): boolean {
   let found = false;
   walk(node, EVERYTHING, (n) => {
-    const id = n.id as { type?: string; name?: string } | undefined;
-    if (n.type === "VariableDeclarator" && id?.type === "Identifier" && id.name === name) found = true;
+    if (n.type === "VariableDeclarator" && bindsName(n.id, name)) found = true;
+    const id = n.id as { name?: string } | undefined;
     if ((n.type === "FunctionDeclaration" || n.type === "ClassDeclaration") && id?.name === name) {
       found = true;
     }
     if (!FUNCTIONS.has(n.type as string)) return;
     for (const p of (n.params ?? []) as Node[]) {
-      if (p.type === "Identifier" && p.name === name) found = true;
+      if (bindsName(p, name)) found = true;
     }
+  });
+  return found;
+}
+
+/**
+ * **Whether this binding target introduces `name`, however it is spelled.**
+ *
+ * `const loadEnvLocal = …` was the only form the first version looked for, and
+ * `const { loadEnvLocal } = helpers` walked straight past it — GPT Sol, on the
+ * `.env.local` rule, 2026-08-28. A destructured shadow is no less a shadow, so
+ * this recurses through the patterns instead of testing one node type.
+ */
+function bindsName(target: unknown, name: string): boolean {
+  let found = false;
+  walk(target, EVERYTHING, (n) => {
+    if (n.type !== "Identifier" || n.name !== name) return;
+    found = true;
   });
   return found;
 }
@@ -465,10 +482,26 @@ function mainFunction(body: Node[]): Node | null {
  * `.env.local` through `vite.config.ts` before any stage runs, and would pull
  * `node:fs` into a path that has no use for it.
  *
- * **What the walk counts as "calls".** `{ deferred: false }` — what `main`
- * actually runs, not what it merely defines. A `loadEnvLocal` mentioned inside a
- * helper that `main` declares and never invokes reads as an offence, which is
- * the safe direction.
+ * **Three things have to hold, and the first version checked only the third.**
+ * GPT Sol beat it three ways on 2026-08-28, and none of the three needed
+ * cleverness — they are all ordinary code:
+ *
+ * 1. the call is a **statement of `main` itself**, not nested in an `if`, a
+ *    loop, a `try` or a helper. `if (false) loadEnvLocal();` runs nothing and
+ *    satisfied every check that only asked whether the call appears;
+ * 2. **nothing before it awaits or returns**, so the file cannot be read after
+ *    the money has been spent. `main() { await spend(); loadEnvLocal(); }` was
+ *    the sharpest of the three: it is in `main`, it runs, and it is useless.
+ *    All eight CLIs read `process.argv`, refuse a missing argument and then call
+ *    this, so the shape is already uniform — `src/pdf-read.ts` was moved up one
+ *    statement to join them rather than the rule being loosened to fit it;
+ * 3. the name is **bound to the `./env.js` import**, including through a
+ *    destructured shadow — `const { loadEnvLocal } = helpers` walked past the
+ *    first version of the shadow check.
+ *
+ * What it still cannot see: a spend reached without `await`, and a helper called
+ * before it that spends synchronously. Neither exists here, and both would need
+ * real dataflow. This is a tripwire, not a boundary.
  */
 export function envOffence(file: string, source: string): string | null {
   const { body, errors } = parseSource(source);
@@ -487,16 +520,41 @@ export function envOffence(file: string, source: string): string | null {
     return `${file} — ${MAIN}() declares its own ${local}, shadowing the import from ./env.js`;
   }
 
-  let called = false;
-  walk(main.body, { deferred: false }, (n) => {
-    if (n.type !== "CallExpression" && n.type !== "OptionalCallExpression") return;
-    const callee = n.callee as Node | undefined;
-    if (callee?.type === "Identifier" && callee.name === local) called = true;
-  });
-  if (!called) {
-    return `${file} — ${MAIN}() never calls ${local}(), so a key in .env.local goes unread`;
+  const statements = ((main.body as Node | undefined)?.body ?? []) as Node[];
+  const at = statements.findIndex((stmt) => isCallStatement(stmt, local));
+  if (at === -1) {
+    return `${file} — ${MAIN}() never calls ${local}() as a statement of its own, so a key in .env.local goes unread`;
+  }
+
+  /* **Everything before it must be free of `await` and of `return`.** An `await`
+     before it is a spend the file has not been read for; a `return` before it is
+     a call that does not happen. Both pass a check that asks only whether the
+     call is there. */
+  for (const stmt of statements.slice(0, at)) {
+    if (defersOrReturns(stmt)) {
+      return `${file} — ${MAIN}() awaits or returns before ${local}(), so .env.local is read after the work has started`;
+    }
   }
   return null;
+}
+
+/** `loadEnvLocal();` as a statement of the enclosing block — nothing nested. */
+function isCallStatement(stmt: Node, local: string): boolean {
+  if (stmt.type !== "ExpressionStatement") return false;
+  const expr = stmt.expression as Node | undefined;
+  const call = expr?.type === "AwaitExpression" ? (expr.argument as Node | undefined) : expr;
+  if (call?.type !== "CallExpression" && call?.type !== "OptionalCallExpression") return false;
+  const callee = call.callee as Node | undefined;
+  return callee?.type === "Identifier" && callee.name === local;
+}
+
+/** Whether this statement can suspend or leave `main` — `await` or `return`, at any depth it runs. */
+function defersOrReturns(stmt: Node): boolean {
+  let found = false;
+  walk(stmt, { deferred: false }, (n) => {
+    if (n.type === "AwaitExpression" || n.type === "ReturnStatement") found = true;
+  });
+  return found;
 }
 
 /**
@@ -1015,7 +1073,7 @@ describe("the listed stage CLIs read .env.local", () => {
       [
         "main() never calls it — src/pdf-read.ts before 2026-08-28",
         `${IMPORT}async function main(): Promise<void> {\n  await run();\n}\n`,
-        "fixture.ts — main() never calls loadEnvLocal(), so a key in .env.local goes unread",
+        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       ],
       [
         "the import missing entirely",
@@ -1033,24 +1091,63 @@ describe("the listed stage CLIs read .env.local", () => {
            anything called it, leaves the key just as unread. */
         "the call inside a helper main() declares and never invokes",
         `${IMPORT}async function main(): Promise<void> {\n  const setup = () => loadEnvLocal();\n  await run();\n}\n`,
-        "fixture.ts — main() never calls loadEnvLocal(), so a key in .env.local goes unread",
+        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       ],
       [
         "a call in a comment, which is not a call",
         `${IMPORT}async function main(): Promise<void> {\n  /* loadEnvLocal(); */\n  await run();\n}\n`,
-        "fixture.ts — main() never calls loadEnvLocal(), so a key in .env.local goes unread",
+        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       ],
       [
         /* Called at module scope instead: it runs, but on *import* as well as on
            start, which is the thing the note in src/ideas.ts refuses. */
         "called at the top level rather than in main()",
         `${IMPORT}loadEnvLocal();\nasync function main(): Promise<void> {\n  await run();\n}\n`,
-        "fixture.ts — main() never calls loadEnvLocal(), so a key in .env.local goes unread",
+        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       ],
       [
         "a module with no main() at all",
         `${IMPORT}loadEnvLocal();\n`,
         "fixture.ts — declares no top-level main() function to read .env.local in",
+      ],
+      [
+        /* **The sharpest of GPT Sol's three, 2026-08-28.** It is in `main`, it is
+           a statement, it runs — and the money has already been spent by the
+           time it does. Every check that asks only "is the call there?" passes
+           this, which is what made the first version of this rule a false
+           guarantee rather than a weak one. */
+        "the call after the spending, which is in main and useless",
+        `${IMPORT}async function main(): Promise<void> {\n  await spend();\n  loadEnvLocal();\n}\n`,
+        "fixture.ts — main() awaits or returns before loadEnvLocal(), so .env.local is read after the work has started",
+      ],
+      [
+        /* A `return` before it is the same fault reached the other way: the
+           statement is there, in order, and never runs. */
+        "the call after an early return",
+        `${IMPORT}async function main(): Promise<void> {\n  if (!process.argv[2]) return;\n  loadEnvLocal();\n}\n`,
+        "fixture.ts — main() awaits or returns before loadEnvLocal(), so .env.local is read after the work has started",
+      ],
+      [
+        /* Nested is not run. `if (false)` is the honest version of every branch
+           whose condition happens to be false on the day. */
+        "the call inside a dead branch",
+        `${IMPORT}async function main(): Promise<void> {\n  if (false) loadEnvLocal();\n  await run();\n}\n`,
+        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
+      ],
+      [
+        /* Nested in a live branch is still nested, and still not the guarantee:
+           the rule is that it happens, not that it happens on some paths. */
+        "the call inside a live branch",
+        `${IMPORT}async function main(): Promise<void> {\n  if (process.env.X) {\n    loadEnvLocal();\n  }\n  await run();\n}\n`,
+        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
+      ],
+      [
+        /* **The destructured shadow**, which the first version of the shadow
+           check walked straight past because it only looked for
+           `const loadEnvLocal = …`. */
+        "a destructured local shadowing the real import",
+        `${IMPORT}async function main(): Promise<void> {\n  const { loadEnvLocal } = helpers;\n  loadEnvLocal();\n}\n`,
+        "fixture.ts — main() declares its own loadEnvLocal, shadowing the import from ./env.js",
       ],
       [
         "a file that will not parse, which checks nothing and must not read as clean",
@@ -1084,7 +1181,7 @@ describe("the listed stage CLIs read .env.local", () => {
       const without = source.replace("\n  loadEnvLocal();", "");
       expect(without, "the mutation matched nothing").not.toBe(source);
       expect(envOffence("src/pdf-read.ts", without)).toBe(
-        "src/pdf-read.ts — main() never calls loadEnvLocal(), so a key in .env.local goes unread",
+        "src/pdf-read.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       );
     });
   });

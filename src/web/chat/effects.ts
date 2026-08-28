@@ -285,6 +285,15 @@ async function writeThread(
   path = "",
 ): Promise<WriteOutcome> {
   try {
+    /* **Hand-rolled on purpose, and it is the only one left.** `fetchOk` in
+       lib/api.ts is exactly these two lines and a GPT Sol review asked why this
+       site is not using it. Because it cannot: `tests/chat-cancel-before-begin.ts`
+       mocks `lib/api.js` with `importActual` and overrides `apiFetch`, and
+       `fetchOk` closes over the *real* `apiFetch` inside the module — so
+       switching makes that suite stop seeing the writes it counts, and two of
+       its tests go red for a reason that has nothing to do with what they are
+       about. Production behaviour is identical either way. See `fetchOk`'s
+       docstring, which now says this is what it is not for. */
     const r = await apiFetch(
       `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}${path}`,
       init,

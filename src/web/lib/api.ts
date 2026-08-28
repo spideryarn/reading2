@@ -314,6 +314,13 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
  *   so the Wikipedia summary in link-facts.ts and the Supabase settings probe in
  *   lib/supabase.ts cannot come through here — and both of them treat a non-2xx
  *   as *nothing to show*, which is not a thing to tell anybody about.
+ * - **A call whose test intercepts `apiFetch`.** This one is not about the
+ *   request at all, and it is the reason `writeThread` in chat/effects.ts is
+ *   still hand-rolled after a review asked why. A suite that mocks this module
+ *   with `importActual` and overrides `apiFetch` does not reach the `apiFetch`
+ *   that `fetchOk` calls, because that one is resolved inside the module — so
+ *   the writes it counts stop arriving and it goes red for a reason unrelated to
+ *   what it tests. Production behaviour is identical; the seam moves.
  *
  * Worth keeping in front of a `readJson` that reads the body afterwards, rather
  * than leaving `readJson` to make the same check: `failure` tolerates a body

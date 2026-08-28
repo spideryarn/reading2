@@ -41,7 +41,7 @@ import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { parseJsonFrom, stripFence } from "./parse-json.js";
-import { isStructural } from "./block-policy.js";
+import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
 import { budgetFor, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
@@ -505,6 +505,16 @@ export function renderBatch(batch: Batch, blocks: Block[], outline: string): str
          footnotes that is `isStructural`. A note announced as OTHER-SECTION
          tells the model another batch will label it, which is false. */
       const why = outside ? "CONTEXT" : isStructural(block) ? "OTHER-SECTION" : "NOT-GISTABLE";
+      /* Which was **not enough, and marking is not hiding**. The line below
+         prints the block's own text, so a footnote inside the context window —
+         and the last batch of a noted article always has one, since the notes
+         sit immediately after the body — arrived at the model in full, wearing
+         a NOT-GISTABLE label. That is the claim "automatic model calls do not
+         read footnotes" being false in the second-largest call the pipeline
+         makes. GPT Sol's review of stage 3, 2026-08-28. `isBodyEvidence` is the
+         predicate because this is exactly its question: may an automatic call
+         read this block as evidence about the piece? src/block-policy.ts. */
+      if (!isBodyEvidence(block)) continue;
       body.push(`[${why}] <${block.tag}>${kind}: ${block.text}`);
       continue;
     }
@@ -1593,16 +1603,22 @@ async function main(): Promise<void> {
     console.error("Usage: tsx src/labels.ts <dir with tree.json and blocks.json>");
     process.exit(1);
   }
+  /* At the program's edge, not inside the gateway — see `messagesClient` in
+     src/messages-stream.ts for the test that proved the difference. Without it
+     this command answers `[ai-not-set-up]` on a machine where the key is right
+     there in `.env.local`.
+
+     **Before the first `await`**, which it was not until 2026-08-28: it sat
+     below the two artefact reads. Nothing was wrong with that — neither read
+     spends — but "the file is read before the work starts" is the property, and
+     a rule that has to make an exception for which awaits are harmless is not a
+     rule. tests/paid-cli-ledger.test.ts, and GPT Sol for the case that showed
+     the old rule could not tell this shape from a genuinely late call. */
+  loadEnvLocal();
   const tree = JSON.parse(await readFile(path.join(dir, "tree.json"), "utf-8")) as Tree;
   const { blocks } = JSON.parse(await readFile(path.join(dir, "blocks.json"), "utf-8")) as {
     blocks: Block[];
   };
-
-  /* At the program's edge, not inside the gateway — see `messagesClient` in
-     src/messages-stream.ts for the test that proved the difference. Without it
-     this command answers `[ai-not-set-up]` on a machine where the key is right
-     there in `.env.local`. */
-  loadEnvLocal();
   console.log(`Labelling ${blocks.filter((b) => isStructural(b)).length} blocks with ${CAPABLE_MODEL}…`);
   const run = await generateLabels({
     tree,

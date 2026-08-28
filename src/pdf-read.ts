@@ -1311,18 +1311,21 @@ async function main() {
     console.error("Usage: tsx src/pdf-read.ts <file.pdf> [slug]");
     process.exit(1);
   }
+  /* **In `main`, and before the first `await`** — the same position as the seven
+     stage CLIs, and `tests/paid-cli-ledger.test.ts` now requires it, because a
+     call that happens after the spending passes every check that only asks
+     whether it happens at all (GPT Sol, 2026-08-28). See the note in
+     src/ideas.ts for why it does not go deeper than `main`. Without it
+     `npm run pdf x.pdf` from a shell that has not exported the key stopped at
+     "OPENROUTER_API_KEY is not set" with the key sitting unread in
+     `.env.local`, which reads as a missing credential rather than an unread
+     file. */
+  loadEnvLocal();
   const bytes = new Uint8Array(await readFile(input));
   /* The slug is a second argument rather than the output path, because every
      later stage is addressed by slug, and because the three eval fixtures are
      each called `source.pdf` and would otherwise share one. */
   const slug = process.argv[3] ?? path.basename(input, ".pdf");
-  /* **In `main`, like the seven stage CLIs** — see the note in src/ideas.ts for
-     why it does not go deeper. Without it `npm run pdf x.pdf` from a shell that
-     has not exported the key stopped at "OPENROUTER_API_KEY is not set" with
-     the key sitting unread in `.env.local`, which reads as a missing credential
-     rather than an unread file. `tests/paid-cli-ledger.test.ts` holds the rule
-     for all eight now. */
-  loadEnvLocal();
   const outFile = path.join("output", `${slug}.html`);
   const dataDir = path.join("data", slug);
   await mkdir(dataDir, { recursive: true });
