@@ -50,7 +50,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Block } from "../types.js";
 import { activeSectionIndex } from "./position.js";
 import { SCROLL_MS, scrollToBlock, stickyOffset } from "./scroll.js";
-import type { Cell } from "./tree.js";
+import { navigableItems, type Cell, type Geometry } from "./tree.js";
 
 /**
  * The attribute a zone wears to say "arrows here mean this level".
@@ -150,16 +150,24 @@ export interface NavPlan {
 }
 
 export function navPlan(
-  cells: Cell[][],
+  geometry: Geometry,
   columns: number[],
-  leafDepth: number,
   showText: boolean,
   hasArc: boolean,
 ): NavPlan {
+  const { cells, leafDepth } = geometry;
+  /* Through `navigableItems`, so ↓ steps over the whole of the apparatus in one
+     press rather than forty times through unlabelled endnote leaves — and, more
+     to the point, so the row the keys land on is the same row the fisheye calls
+     current and the same row `?at=` stores. Four consumers, one projection;
+     src/web/tree.ts § navigableItems for why fixing only the visible list is
+     what breaks them apart. */
+  const startsOf = (column: readonly Cell[]): number[] =>
+    navigableItems(column, geometry.supplementOf).map((item) => item.startRow);
   // The arc's cells are the parts' cells, by construction — so borrow the row
   // starts rather than recomputing them, and the two columns cannot drift.
   const starts: number[][] = cells.map((column, d) =>
-    itemStarts(d === 0 && hasArc ? (cells[1] ?? column) : column),
+    startsOf(d === 0 && hasArc ? (cells[1] ?? column) : column),
   );
   const visible = new Set(columns);
   // The prose column is the finest granularity there is, and it means the same

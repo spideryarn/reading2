@@ -78,6 +78,7 @@ import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
 import { isBodyEvidence } from "./block-policy.js";
+import { isSupplementNode } from "./supplement.js";
 import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -237,6 +238,14 @@ export function targetsOf(tree: Tree, blocks: Block[]): TreeNode[] {
   const out: TreeNode[] = [];
   const visit = (node: TreeNode | undefined) => {
     if (!node) return;
+    /* **The apparatus earns no summary, at any length.** A supplement node is a
+       depth-one child covering forty endnotes, so it would sail past
+       `MIN_BLOCKS` and buy a paid call to summarise a bibliography — and
+       `textOf` filters by `isBodyEvidence`, so the call would go out with an
+       empty scope and come back with a plausible paragraph about nothing.
+       Returning rather than skipping, because its leaves are not targets
+       either. src/supplement.ts. */
+    if (isSupplementNode(node)) return;
     const earns =
       node.depth === 0 || (node.depth <= MAX_DEPTH && spanOf(node, order) >= MIN_BLOCKS);
     if (earns) out.push(node);

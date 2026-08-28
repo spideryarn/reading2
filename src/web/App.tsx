@@ -1389,7 +1389,7 @@ function Reader({
    * afterwards, when you have lost your place.
    */
   const nav = useMemo(
-    () => navPlan(geometry.cells, fit.columns, geometry.leafDepth, proseOn, !!arcCells),
+    () => navPlan(geometry, fit.columns, proseOn, !!arcCells),
     [geometry, fit.columns, proseOn, arcCells],
   );
   const navDepth = useArrowNav(

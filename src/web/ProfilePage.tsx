@@ -172,6 +172,12 @@ export function ProfilePage() {
     .slice(0, RECENT);
 
   const onShelf = entries.filter((a) => !a.archivedAt);
+  /* Each entry's `words` is the **body's** words — footnotes and bibliographies
+     are excluded from the clock (`countsTowardReadingTime` in
+     src/block-policy.ts), and `LibraryEntry.words` says so. So this sum is not
+     "every word on the shelf", and the line below must not claim it is. The
+     other half is not available here to show beside it: the shelf reads stored
+     scalars, and only the body figure is stored. */
   const words = onShelf.reduce((n, a) => n + (a.words ?? 0), 0);
 
   return (
@@ -280,7 +286,7 @@ export function ProfilePage() {
             {onShelf.length > RECENT
               ? `The ${RECENT} most recent of ${onShelf.length} on the shelf`
               : `${onShelf.length} on the shelf`}
-            {words > 0 && ` · ${words.toLocaleString()} words in all`}
+            {words > 0 && ` · ${words.toLocaleString()} words, not counting notes`}
           </p>
         )}
       </Section>

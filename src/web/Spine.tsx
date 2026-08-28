@@ -467,7 +467,16 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
           return (
             <div
               key={b.entry.node.id}
-              className={`spine-part${active ? " active" : ""}`}
+              /* The apparatus keeps its true proportional height and is
+                 dimmed. That is the fix for the complaint the rail exists to
+                 answer: on a heavily noted piece you are "60% through" and the
+                 piece ends there, because the rest is endnotes. Shrinking the
+                 band would make the rail lie about pixels; dimming it says
+                 where the argument ends and leaves the notes hittable.
+                 src/supplement.ts. */
+              className={`spine-part${active ? " active" : ""}${
+                b.entry.supplement ? " supplement" : ""
+              }`}
               style={{ top: pct(b.top), height: pct(b.height) }}
             />
           );
