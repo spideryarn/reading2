@@ -413,6 +413,37 @@ function declaresMain(body: Node[]): boolean {
 }
 
 /**
+ * **The verdict on one call the entrypoint branch runs.**
+ *
+ * `null` means it is the wrapper, opened correctly — and the argument it is
+ * holding goes into `wrapped`, which is what the reach check afterwards leaves
+ * alone when it looks for `main` anywhere else.
+ */
+function callOffence(
+  call: Node,
+  file: string,
+  ledger: string,
+  wrapped: Set<unknown>,
+): string | null {
+  const { name, call: opened } = rootCall(call);
+  if (name === NOT_PLAIN) {
+    return `${file} — the entrypoint branch runs a call whose callee is not ${ledger}`;
+  }
+  if (name !== ledger) {
+    return `${file} — the entrypoint branch calls ${name}() directly rather than ${ledger}("cli", …)`;
+  }
+  const [first, second] = opened.arguments as Node[];
+  if (first?.type !== "StringLiteral" || first.value !== "cli") {
+    return `${file} — ${ledger} is not called with the "cli" scope`;
+  }
+  if (!runsMain(second)) {
+    return `${file} — ${ledger}("cli", …) is not passed ${MAIN}(), so ${MAIN}() runs outside the ledger`;
+  }
+  wrapped.add(second);
+  return null;
+}
+
+/**
  * **The whole verdict for one module**, as a function so it can be handed
  * source text directly — including source that is deliberately broken, which is
  * the only way to watch this go red. Returns `null` when the entrypoint is
@@ -456,22 +487,8 @@ export function ledgerOffence(file: string, source: string): string | null {
       return `${file} — the entrypoint branch invokes nothing directly, so nothing proves it opens the ledger`;
     }
     for (const call of calls) {
-      const { name, call: opened } = rootCall(call);
-      if (name === NOT_PLAIN) {
-        return `${file} — the entrypoint branch runs a call whose callee is not ${ledger}`;
-      }
-      if (name !== ledger) {
-        return `${file} — the entrypoint branch calls ${name}() directly rather than ${ledger}("cli", …)`;
-      }
-      const first = (opened.arguments as Node[])[0];
-      if (first?.type !== "StringLiteral" || first.value !== "cli") {
-        return `${file} — ${ledger} is not called with the "cli" scope`;
-      }
-      const second = (opened.arguments as Node[])[1];
-      if (!runsMain(second)) {
-        return `${file} — ${ledger}("cli", …) is not passed ${MAIN}(), so ${MAIN}() runs outside the ledger`;
-      }
-      wrapped.add(second);
+      const offence = callOffence(call, file, ledger, wrapped);
+      if (offence) return offence;
     }
   }
 

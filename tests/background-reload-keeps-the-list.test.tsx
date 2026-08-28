@@ -358,8 +358,15 @@ describe("the thread page", () => {
     expect(host.textContent).toContain("the first post");
     /* ...and the failure is still said out loud. It has to be said somewhere:
        the job finished, so `JobProgress` has gone quiet, and a reader who saw a
-       run complete and the page not change would have nothing to go on. */
-    expect(host.textContent).toContain("Failed to fetch");
+       run complete and the page not change would have nothing to go on.
+
+       **Matched on the code, not the sentence, and not on the raw error.** This
+       used to assert "Failed to fetch" — which is what the page was showing the
+       reader, and the thing docs/project/copy.md § the four rules exists to
+       stop. The browser's own exception now goes to the console; the code is
+       what a rewritten sentence has to keep. */
+    expect(host.textContent).toMatch(/\[rd-recheck\]/);
+    expect(host.textContent).not.toContain("Failed to fetch");
   });
 
   it("still reports a failure that leaves us with nothing", async () => {
@@ -368,6 +375,11 @@ describe("the thread page", () => {
     await settle();
     expect(host.textContent).toContain("Failed to fetch");
     expect(host.textContent).not.toContain("the first post");
+    /* **Once, not twice.** The opening read sets both the `error` branch and
+       the recheck line, and only the first may render — a reader whose very
+       first read failed is not also being told we could not check for a newer
+       version of a thread they have never seen. */
+    expect(host.textContent).not.toContain("[rd-recheck]");
   });
 });
 
