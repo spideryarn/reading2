@@ -28,7 +28,26 @@
  * running `npm run build` on a laptop asked for. Not adding the plugin says the
  * same thing with no output.
  *
- * ## What is deliberately left able to fail the build
+ * ## What the upload actually costs, measured
+
+Worth writing down because the first number is wildly unrepresentative and
+would otherwise be the one somebody optimises against. Measured 2026-08-28:
+
+| | client bundle | API bundle |
+|---|---|---|
+| first ever upload | 19 s | **114 s** |
+| every upload after, *including with changed code* | 8 s | 6 s |
+
+Sentry's chunked upload negotiates checksums before sending, so a deploy only
+transfers the chunks it does not already have. The dedup is **server-side**,
+not a local cache, so it works the same on a fresh Vercel build machine as it
+does here. Steady state is about fourteen seconds across both builds, and there
+is nothing here worth turning off to save it.
+
+The cold number is a one-off per project. If it ever reappears, the thing to
+suspect is a change that alters every chunk at once.
+
+## What is deliberately left able to fail the build
  *
  * With a token configured, an upload failure stops the build, and that is the
  * plugin's default. Keeping it is a decision: a deployment that silently ships

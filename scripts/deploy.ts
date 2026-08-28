@@ -470,6 +470,25 @@ async function preflight(): Promise<string> {
 const BUILD_ENV: NodeJS.ProcessEnv = {
   VITE_SUPABASE_URL: "https://deploy-preflight.supabase.co",
   VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_placeholder_for_the_preflight_build",
+  /* **`undefined` is back, and this is what it is for.**
+   *
+   * The preflight builds the same two bundles the deploy will, and with a
+   * Sentry token in scope those builds would upload source maps — from *this*
+   * laptop, over whatever connection it has, for a build that is thrown away.
+   * The real upload belongs to the real build, which runs on Vercel's machines
+   * and its network.
+   *
+   * Named here rather than left to chance, for the reason the header of `run`
+   * gives: the token is not exported by anything today, so the preflight
+   * happens not to upload — and "happens not to" is precisely the state this
+   * constant exists to replace. Whoever next puts `SENTRY_AUTH_TOKEN` in their
+   * shell would otherwise find the gate slower on their terminal than on
+   * anybody else's, and no line anywhere would say why.
+   *
+   * `sentryUploadEnabled()` in scripts/sentry-build.ts needs all three, so
+   * removing one is enough — and the token is the right one to remove, because
+   * it is the only one of the three that is a secret. */
+  SENTRY_AUTH_TOKEN: undefined,
 };
 
 /**
