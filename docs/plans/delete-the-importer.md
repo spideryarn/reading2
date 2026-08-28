@@ -29,7 +29,7 @@ useful kind of review.
 
 ## Where it stands, 2026-08-28
 
-Thirteen commits. **C2, C3, C4 and C5 are done and reviewed; C1 was built and withdrawn.** Four of
+Seventeen commits. **All of C is done and reviewed; C1 was built and withdrawn.** Five of
 them were live bugs found on the way, which is the pattern worth noticing: **every one came out of
 reading code near something else**, not out of the work item that was planned.
 
@@ -51,11 +51,14 @@ reading code near something else**, not out of the work item that was planned.
 | `056c46e` + `4038291` | **A live bug with nothing to do with this plan**, and the guard for its class. | [the-config-file-is-not-the-bucket.md](../postmortems/the-config-file-is-not-the-bucket.md). |
 | `85e76b0` | **The review of the built landing, acted on** — five real bugs, including one that would have refused every uploaded document. | § What the code review of C found. |
 | `5dc3b32` | **Not mine.** `src/library-scalars.ts`, committed because the commit before it had already imported it — see below. | |
+| `a635cef` | **C6's two columns**, once the schema went quiet. `raw_filename` and the manifest's stored fields — the adapter had been writing to a schema that did not have them. | § C6. |
+| `3fc74f7` | **`loadArticleIntoPg`**, the importer's replacement for tests, and the carry-forward that was faking its evidence. | § C7. |
+| `a0b2c14` | **C7 — the three suites off the importer**, the corpus wiped so the comparison means something, and a permanent data-loss bug in `db:export` found by doing the review's homework. | § C7, and [the postmortem](../postmortems/export-never-wrote-the-readers-purpose.md). |
 
-**Done:** C2, C3, C4, C5, and C6's code, all reviewed as built. **Withdrawn:** C1 — and the consequence I drew from
+**Done:** C2 through C7, all reviewed as built. **Withdrawn:** C1 — and the consequence I drew from
 withdrawing it was itself wrong, which is § lesson 7.
-**Blocked:** C6's two columns, on a migration ledger three sessions are holding at once — see below.
-**Not started:** C7 (which needs C6 committed), then B3, D, the demolition, E.
+**Not started:** B3, then D, the demolition, E. And one thing this document has never named, which
+now goes in front of D: § Stage 3 carries block ids in a file.
 
 **The corpus is done, and it was a backfill rather than a re-ingest.** All seven manifests now carry
 `storedSha256` and `storedBytes`, and each object was verified against the bucket afterwards —
@@ -1135,6 +1138,119 @@ So the answer is: logical names from `produces`, presence from the adapter, byte
 as a filesystem-specific inspection result. One thing does need fixing —
 `STEP_STORAGE.fetch = ["article_revisions.raw_bytes"]` ([`src/store/pg.ts:336`](../../src/store/pg.ts))
 would otherwise have the page advertising a dropped column.
+
+### Stage 3 carries block ids in a file — **and D takes the file away**
+
+This is not in any earlier draft, no review has seen it, and it is the largest thing D breaks.
+
+[block-ids.md](../project/block-ids.md) is the one contract everything else depends on, and ids
+survive re-extraction because stage 3 matches this run's blocks against the previous run's. It gets
+the previous run from **a file on disk**:
+
+```ts
+// If a previous run's blocks.json is sitting there, use it to carry ids
+// across a re-extraction that wiped them from the HTML.
+let previous: Block[] | undefined;
+try {
+  previous = JSON.parse(await readFile(jsonFile, "utf-8")).blocks as Block[];
+} catch {
+  previous = undefined; // first run for this article
+}
+```
+
+[`src/blocks.ts:911-918`](../../src/blocks.ts). `jsonFile` defaults to `output/<slug>.blocks.json`,
+and the pipeline's only call passes no `jsonFile` at all
+([`src/pipeline.ts:1007`](../../src/pipeline.ts)) — so that default path is the **only** channel by
+which a previous id reaches stage 3.
+
+D removes the filesystem writes. After it the read fails on every run, and the `catch` reads that
+failure as *"first run for this article"*. Every id is re-minted, on every run, and the code says so
+in a comment that used to be true. It is the same shape as everything else in § What this has taught
+us: a handler that cannot tell "there was nothing" from "I could not look".
+
+**Nothing is deleted; everything comes loose.** Re-ingesting a slug reuses the article row —
+`beginDraftIn` inserts `onConflictDoNothing` on `articles.slug` and re-reads
+([`src/store/pg-revisions.ts:490-500`](../../src/store/pg-revisions.ts)) — so comments, chat threads,
+saved searches and the shelf keep their `article_id` and stay in the database. It is their **block**
+ids that stop naming anything in the current revision. The reader does not lose their notes. They
+lose the passages the notes were attached to, all at once, and the rows that are left cannot say
+which paragraph they meant.
+
+Counted from `data/` rather than from the local database, because six sessions are writing to that
+database and its numbers moved twice in an hour: **43 comment anchors, 91 saved search hits and
+1,912 ToC entries**, over fifteen article directories.
+
+**The fix is small, and it is a prerequisite for D rather than an addition to it.** Stage 3 must take
+its previous blocks from the store instead of from a path. `splitIntoBlocks` matches on exactly four
+fields per previous block — `id`, `tag`, `text`, `html` — plus the previous document's order, because
+matching is first-come and each id is consumed once ([`src/blocks.ts:300-351`](../../src/blocks.ts)).
+`revision_blocks` already holds every one of them:
+
+| what the matcher reads | `revision_blocks` |
+|---|---|
+| `id` | `block_id` |
+| `tag` | `tag` |
+| `text` | `text` |
+| `html` | `html` |
+| the previous document's order | `ordinal` |
+
+So this is a parameter and a store read, not a schema change and not a new artefact. The thing to be
+careful about is the one the `catch` got wrong: **"no previous revision" and "I could not read the
+previous revision" must not arrive at the same branch.** The first is an ordinary first ingest; the
+second is the failure this section is about, and it has to be loud.
+
+**And the guard cannot save us, because it has the same dependency.** The pipeline does warn about
+this exact thing —
+
+```ts
+if (previousBlocks > 0 && kept === 0 && minted > 0) {
+  … `blocks ${ctx.slug}: all ${minted} ids re-minted — ${previousBlocks} previous ids lost, anchors orphaned`
+```
+
+[`src/pipeline.ts:1059-1062`](../../src/pipeline.ts) — and `previousBlocks` comes from
+`previousBlockCount`, which counts blocks in **two files on disk**
+([`src/pipeline.ts:453-457`](../../src/pipeline.ts)). After D both are gone, `previousBlocks` is `0`,
+and the condition that keeps a first ingest quiet keeps *every* ingest quiet. The warning goes silent
+at the exact moment it becomes true.
+
+So the check has to be made from outside the thing it is checking: count how many comment and search
+anchors still name a block in the current revision, before and after. A number taken from the same
+files the fix removes cannot report on the fix.
+[block-id-matching-non-latin.md](../postmortems/block-id-matching-non-latin.md) is the same failure
+from the other end — a matcher that lost every id on every re-extraction, and nobody would have seen
+it either.
+
+### The switchover, and what "preserve what we have" costs
+
+Greg asked, 2026-08-28, whether there is one destructive switchover and how much work it is to keep
+what is already there. Three things came out of answering it, and the first two correct this
+document.
+
+**Production is already Postgres.** `src/store/index.ts:162-182` refuses to boot the filesystem store
+under `NODE_ENV=production` or on Vercel, because it has no owner column. So there is no switchover
+of the deployed install to do. What is still on files is **the local development corpus** — the
+fifteen directories under `data/` — and that is the thing the re-ingest assumption is about.
+
+**The re-ingest assumption has a consequence nobody wrote down.** § What it does not delete records
+the assumption and the check behind it, and both are about *raw documents*: every source is
+recoverable, three from git and two from the web. That check is sound and it is not the whole
+question. Re-ingesting an article runs stage 3 again, and the section above is what stage 3 does once
+its file is gone. **The re-ingest is the event that orphans the anchors** — not a later accident, but
+the planned afternoon itself. Fix stage 3 first and the same afternoon costs nothing.
+
+**Only `raw_bytes` is irreversible, and it is now empty.** Measured on the local database: five
+revisions carry a source reference and **none carries `raw_bytes`**. Demolition step 5 drops a column
+holding nothing. That is the step this plan called out as the one-way door, and it has quietly become
+the cheapest one.
+
+So the work to preserve what we have is not a migration. It is:
+
+1. **Stage 3 takes its previous blocks from the store** — above, and a prerequisite for D anyway.
+2. **`db:export` fails closed** — § `db:export` must fail closed. It is the rollback tool, and on
+   2026-08-28 it was found silently dropping `shelf.purpose`
+   ([the postmortem](../postmortems/export-never-wrote-the-readers-purpose.md)). A backup nobody has
+   watched fail is not a backup.
+3. **`noema`'s raw document** — one decision, still Greg's, in § What it does not delete.
 
 ### D — the stages, **and the source route**
 
