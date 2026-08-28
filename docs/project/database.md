@@ -578,6 +578,38 @@ and a `SECURITY DEFINER` trigger that fails takes the signup down with it.
 default on a laptop and the wrong one in production — and it fails loudly, on the foreign key, rather
 than writing rows nobody owns.
 
+## A null column and an absent field are the same fact, and you must choose which
+
+Postgres carries a **null column** where the filesystem carries an **absent field**. Every artefact
+that crosses between the two stores meets this, and it bit twice on 2026-08-28 in two different
+files — which is what makes it worth a section rather than a comment.
+
+The trap is that the two places pull in **opposite directions**, so there is no single right answer
+to copy.
+
+**As a hash input, the two spellings must collapse.** `hashBlocks`
+([`src/source-hash.ts:94-105`](../../src/source-hash.ts)) uses loose `!= null`, which catches `null`
+and `undefined` in one test, and then `?? ""` so both normalise to the same bytes. They have to: the
+same article read from either store must hash identically, or every `sourceHash` comparison in the
+pipeline says "the text changed" when nothing did.
+
+**As a presence signal, the two spellings must not collapse.** `publicArticle`
+([`src/public/dto.ts:337-340`](../../src/public/dto.ts)) uses strict `!== null`, and its comment
+explains why truthiness would be worse — an artefact is always truthy, so the day one can be falsy
+while present, truthiness would report it as never built. The whole payload rests on
+present-versus-absent.
+
+The consequence of that strictness is the part to know: **an omitted key takes the *present*
+branch.** `undefined !== null` is true, so leaving a parameter out is not the same as passing `null`,
+and the value goes on to be read as though it were there. That is what failed
+`tests/block-roles.test.ts` with `Cannot read properties of undefined` inside `publicGlossary` — a
+test written before the signature grew four parameters. The reader was right; the caller was wrong.
+
+**So: decide which register you are in before choosing the operator.** Loose `!= null` where the two
+spellings are one fact and must produce identical bytes. Strict `!== null` where the distinction
+between built and not-built is the thing being transmitted — and then make callers spell `null` out,
+because the type system will not.
+
 ## Two traps recorded elsewhere, repeated here because they are expensive
 
 - **The Supabase CLI does not know about our migrations.** Ours are Drizzle's, in
