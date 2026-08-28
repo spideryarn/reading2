@@ -970,7 +970,6 @@ async function writeRawSource(
 }
 
 /**
- * Replace this revision's blocks, wholesale./**
  * Replace this revision's blocks, wholesale.
  *
  * Three statements, and the order and the conditions are all load-bearing:

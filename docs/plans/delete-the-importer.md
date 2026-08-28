@@ -837,6 +837,66 @@ be given the rest explicitly:
 `chat-anchor` gets the standalone block-identity test in § The block identity test. Green here is the
 gate on deleting the importer, and nothing before this commit removes anything.
 
+#### What the loader found, before a single suite was rewritten
+
+`tests/helpers/load-article.ts` is the replacement: a running `jobs` row → `openOrBeginJobDraft` →
+`copyArtefacts` → `publishRevision` → the job released. It is the real write path with a fixture on
+the front of it, and pointing it at all seven `data/` articles surfaced three things this document
+had not predicted. None of them is a bug in the adapter.
+
+**`constitution` cannot be published, and the refusal is correct.** `STAMP_SOURCE.toc` is `labels`,
+so `toc`'s `input_hash` is `labels.json`'s `sourceHash` — and that file predates the field:
+
+```
+constitution   sourceHash= None  keys= ['batches','generator','labels','slug','version']
+every other    sourceHash= <hex> keys= [...,'sourceHash','structureHash']
+```
+
+So the copy leaves `NO_INPUT_HASH` on the row and `reasonsNotToPublish` says *"the tree was built from
+different blocks (toc ran against unstamped …)"*. `importArticle` never met this because it wrote
+`hashBlocks(blocks)` for every step whether or not the artefact could support the claim — the exact
+dishonesty § What the decision deletes is about. Worth being clear that **only legacy filesystem data
+can reach this state**: stage 4 has written `sourceHash` for a long time, and after the demolition
+there is no path that produces a labels file without one.
+
+**`meta.fetchedAt` genuinely differs between the two stores, and always will.**
+
+```
+fowler-phrenology   meta.json 17:26:00.108Z   raw.json 17:17:48.176Z
+source              meta.json 22:04:06.043Z   raw.json 22:03:20.693Z
+writes              meta.json 11:09:34.025Z   raw.json 11:09:34.025Z   (one pipeline run)
+```
+
+[`src/extract.ts`](../../src/extract.ts) sets `meta.fetchedAt` to **its own `new Date()`**, so the
+filesystem's number is when *extraction* last ran. That is why `META_COLUMNS` excludes it — and the
+consequence, which the ownership note stopped one step short of, is that the parity suite cannot
+assert equality on that field for any article extracted in a later run than it was fetched. It has to
+be exempted and the exemption paid for: Postgres's value equals `raw.json`'s, the filesystem's equals
+`meta.json`'s, both asserted.
+
+**And the evidence for the whole exercise was contaminated, which is the most useful of the three.**
+The first sweep reported `noema-mythology-of-conscious-ai` — an article with **no `raw.json` at all**,
+whose `fetch` step is therefore skipped entirely — as byte-identical across the two stores. It cannot
+be: nothing writes `final_url` or `fetched_at` for it. The database still held what an earlier
+`importArticle` run had published, and `beginDraftIn` **carries those columns forward into the new
+draft**, so a column the artefact path never touches read back perfectly.
+
+Proved by cloning the fixture to a slug the database had never seen (`data/test-c7-clean`) rather than
+by deleting anything, which is also the cheaper experiment:
+
+```
+copied: extract, blocks, toc, arc, tweets, glossary, summary, ideas   published: true
+DIFF meta:
+  fs: {…, "fetchedAt":"2026-08-26T12:16:43.473Z", …, "url":"https://www.noemamag.com/…"}
+  pg: {…                                          }        ← no url, no fetchedAt
+```
+
+This is the third face of [lesson 1](#what-this-has-taught-us-so-far), and the sharpest: **carry-forward
+makes a fixture load look like a successful write.** Any parity or round-trip claim made against a
+database that has ever been imported into is measuring the importer as much as the adapter. Every
+suite in C7 therefore has to run against an article the database has not seen before, or prove it
+another way.
+
 **What is deliberately *not* in C:** the coordinator that opens the transaction and calls
 `write` + `finishStep` + the job transition together. That is D's, and putting it here would mean
 building the atomic boundary before there is a stage returning products to put inside it.
