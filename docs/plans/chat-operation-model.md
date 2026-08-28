@@ -1,7 +1,8 @@
 # The chat operation model — the build plan
 
-**Status:** stage 1 built, 2026-08-28. Stages 2 and 3 written down and not built.
-What stage 1 turned out to need that this plan did not say is in
+**Status:** stage 1 built as `6f35022`, reviewed by GPT Sol, and one reader-reachable regression
+fixed on top, 2026-08-28. Stages 2 and 3 written down and not built. What stage 1 turned out to need
+that this plan did not say — including what the review sent back — is in
 [§ What stage 1 actually did](#what-stage-1-actually-did) at the bottom.
 
 The strategy and the evidence for it are in
@@ -227,19 +228,46 @@ controller's state is readable synchronously at that point, so the window stays 
 Gone by the end: `legacy.apply`, `owned`, `released`, `attempts`, `watched`, `running`, `showing`,
 `recovering` as stored state, and the four mutable variables inside `run`.
 
-**Done looks like:** every existing chat suite green **unchanged**, a browser pass confirming an
-answer still streams in, a stop still stops and a cancelled conversation still disappears, and four
-tests that must exist before this stage ships. Sol moved the first two here from stage 3, and the
-reason is exact: this stage rewrites `turn.began` and moves command delivery, which *is* the
-machinery that holds those two wishes. Testing them afterwards tests the replacement, not the
-change.
+**Done looks like:** a browser pass confirming an answer still streams in, a stop still stops and a
+cancelled conversation still disappears, and four tests that must exist before this stage ships. Sol
+moved the first two here from stage 3, and the reason is exact: this stage rewrites `turn.began` and
+moves command delivery, which *is* the machinery that holds those two wishes. Testing them
+afterwards tests the replacement, not the change.
 
 - a stop pressed before `begin`, and a cancel pressed before `begin`, each producing exactly one
-  request carrying the server's thread id, answer id and attempt — **nothing in the repo covers
-  either today**, confirmed by grep;
+  request carrying the server's thread id, answer id and attempt;
 - a disconnected turn leaving exactly one recovery writer;
 - a 409 dropping the turn and gating the repair;
 - two operations in one conversation completing in reverse order.
+
+**The first of those changes an existing test, deliberately, and this plan used to claim otherwise.**
+It said "every existing chat suite green **unchanged**" and asked for exactly one early request in
+the same breath, which cannot both be true:
+[`tests/chat-intent-paths.test.ts`](../../tests/chat-intent-paths.test.ts) pins what the code does
+today — **two** `/stop` requests, the first carrying an id the server has never heard of, and a
+`/cancel` that is likewise doomed. Those are characterisation tests, written to catch an accidental
+change; this stage changes that behaviour on purpose, so those assertions move with it and the change
+is the finding. The rule that no test is rewritten *to make a stage pass* still stands, and it is a
+different rule. It also said "nothing in the repo covers either today", which was true when it was
+written and stopped being true on 2026-08-28.
+
+**Three things stage 1 turned up that belong here.**
+
+- **Rename needs ordered persistence or a server fence.** Supersession fixes the *screen* — the
+  reader sees the title they asked for last — and does nothing about the database: two PATCHes are
+  two requests, and the server writes whichever arrives last. `6f35022`'s commit message said
+  supersession made the reverse-order case right, and that overclaims by exactly the width of the
+  wire. The narrow fix is the one `expectedTailId` already uses on the destructive path: send
+  something the server can refuse.
+- **Tombstones need provenance.** They are a bare `Set<string>`, so nothing records *which*
+  operation put one down. `cancel` → `delete` → the cancel's failure removes the delete's tombstone
+  too, and a conversation the reader deleted comes back. Deletions are supposed to win over every
+  projection; here one loses to an unrelated request failing.
+- **Mixed title ownership needs designing.** An edit of the first question renames its conversation,
+  so it must supersede an earlier rename's **title** without superseding the whole turn — which the
+  current single `superseded` flag cannot express, since it is per-operation rather than per-thing-
+  it-owns. Stage 1 sidesteps it by having rename write `base` and draw nothing (see below); once a
+  turn projects, the edit's title is projected and the question comes back.
 
 ### Stage 3 — intent, and the invariants
 
@@ -361,10 +389,28 @@ this plan did not say, and one place where the plan was wrong.
   nothing; `remove` is a `DeleteOperation` with a tombstone, registered in one transition, and never
   rolled back. `rename` is an operation too. The plan's paragraph naming three local edits was
   counting `rename` among them and should not have.
-- **Both of a rename's answers commit the title to `base`** — unless the operation was superseded,
-  in which case neither does. The plan says a failed rename stays on screen and does not say where
-  the title then lives; if the operation retired without committing, the title would leave the screen
-  with it, which is a rollback by accident.
+- **A rename writes its title into `base` at registration and draws nothing.** The first version of
+  stage 1 had the operation draw the title and commit it when the PATCH answered, and that was a
+  reader-reachable regression: **an edit of the first question renames the conversation too** —
+  `editTurn` on the server says so and `edit` mirrors it — so an edit landing while the PATCH was out
+  wrote a title into `base` that the operation drew over and then overwrote. Rename from the list,
+  open the conversation on a slow connection, rewrite the first question, and the name you replaced
+  comes back. Found by GPT Sol reviewing the built stage, 2026-08-28; reproduced red first in
+  [`tests/chat-title-ownership.test.ts`](../../tests/chat-title-ownership.test.ts).
+
+  **The rule it is an instance of, and the one to apply in stage 2: an operation projects what can
+  still be withdrawn.** A refused edit's discarded turns come back because the operation never really
+  took them away — that is the whole payoff of the projection. A rename's optimistic title is
+  deliberately *never* withdrawn, even when the PATCH fails, so there is nothing for it to draw, and
+  the last writer to `base` wins, which is the reader's own order.
+
+  **The development assertion cannot police this**, which is the sharper half of the finding: it
+  looks for a represented `TurnOperation`, and the live edit is precisely a legacy turn that has not
+  been migrated. An assertion that can only see what has already been moved cannot see what has not.
+- **A superseded rename's failure says nothing.** It is still admitted — it is still in the map — but
+  the reader is looking at the newer title, and reporting the older one's failure tells them a rename
+  that succeeded, or is still in flight, has failed. Supersession is still load-bearing for rename,
+  then, but for the **error** rather than for the title.
 - **`load.started` does not clear the list.** A controller is made per article, so arriving at one
   starts from an empty base already, and wiping it on a second load of the *same* article — which is
   every `StrictMode` mount — would throw away exactly what `mergedArrival` exists to protect.

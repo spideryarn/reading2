@@ -127,10 +127,38 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
     }
     case "rename.started": {
       const { threadId, title } = event.op;
+      /* **The title goes into `base` now**, exactly as the `put` this replaced
+         did, and the operation exists only to admit its own outcome.
+
+         It used to be drawn by the operation and committed when the PATCH
+         answered, which was wrong in a way no reducer test could see: a *first
+         question* renames its conversation too — `editTurn` on the server says
+         so and `edit` mirrors it — so an edit landing while the PATCH was out
+         wrote a title into `base` that the operation then drew over and finally
+         overwrote. The reader watched the name they had just replaced come
+         back. GPT Sol, reviewing stage 1, 2026-08-28;
+         tests/chat-title-ownership.test.ts.
+
+         The rule it is an instance of: **an operation projects what can still
+         be withdrawn.** A refused edit's discarded turns come back because the
+         operation never really removed them. A rename's optimistic change is
+         deliberately never withdrawn — a failed rename stays on screen and says
+         so — so there is nothing for it to draw, and the last writer to `base`
+         wins, which is the reader's own order.
+
+         Tombstoned is left alone, which is what `put` did: a conversation the
+         reader has discarded is not renamed under them if a refused cancel
+         brings it back. */
+      const base = state.tombstones.has(threadId)
+        ? state.base
+        : rewrite(state.base, threadId, (t) => ({ ...t, title }));
       return {
         state: register<RenameOperation>(
-          state,
+          { ...state, base },
           event.op,
+          /* Still superseded, and it still matters — for the *error*, not for
+             the title. A rename that was replaced must not report its own
+             failure over the newer one's success. */
           (other) => other.kind === "rename" && other.threadId === threadId,
         ),
         commands: [{ type: "rename", opId: event.op.id, slug: state.slug, threadId, title }],
@@ -205,7 +233,13 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
  * this with it.
  */
 function assertNoTurn(state: ChatState): void {
-  if (!import.meta.env.DEV) return;
+  /* `?.` because `import.meta.env` is Vite's and does not exist under plain
+     node — and a safety net that throws a `TypeError` from the line that is
+     supposed to be catching things is worse than no net. Nothing outside
+     src/web imports this today; the optional chaining is what keeps that from
+     mattering. Vite still substitutes the object, so a production build still
+     eliminates the whole branch. */
+  if (!import.meta.env?.DEV) return;
   for (const op of state.operations.values()) {
     if (op.kind === "turn") {
       throw new Error(
@@ -246,32 +280,28 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
         commands: NOTHING,
       };
     case "rename.succeeded":
-    case "rename.failed": {
-      /* **Both outcomes commit the new title to `base`**, and the failure doing
-         so is deliberate rather than an oversight: a failed rename stays on
-         screen today and still will. Reverting it would be a second surprise on
+      /* Nothing to write. The title went into `base` when the operation was
+         registered, and this is only the entitlement to have been told. */
+      return { state: { ...state, operations: withoutOp(state, op.id) }, commands: NOTHING };
+    case "rename.failed":
+      /* The title stays on screen — reverting it would be a second surprise on
          top of the first, and the message says what happened.
 
-         Unless this operation was superseded, in which case it has nothing left
-         to draw and must not write: a newer rename of the same conversation is
-         either already committed or still in flight, and committing this one
-         over it is how the reader watches a title they replaced come back. */
-      const base =
-        op.kind === "rename" && !op.superseded
-          ? rewrite(state.base, op.threadId, (t) => ({ ...t, title: op.title }))
-          : state.base;
+         **Unless a later rename replaced this one**, in which case it has
+         nothing to say. The reader is looking at the newer title; telling them
+         the rename failed would be reporting a rename that succeeded, or is
+         still in flight, as failed. The newer operation reports its own
+         outcome. */
       return {
         state: {
           ...state,
-          base,
           operations: withoutOp(state, op.id),
-          ...(event.type === "rename.failed"
-            ? { error: `Couldn't rename that conversation: ${event.error}` }
-            : {}),
+          ...(op.superseded
+            ? {}
+            : { error: `Couldn't rename that conversation: ${event.error}` }),
         },
         commands: NOTHING,
       };
-    }
     case "delete.succeeded":
       return { state: { ...state, operations: withoutOp(state, op.id) }, commands: NOTHING };
     case "delete.failed":

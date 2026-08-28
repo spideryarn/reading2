@@ -299,28 +299,74 @@ describe("two renames of one conversation", () => {
     expect(a.operations.size).toBe(0);
   });
 
-  it("still hears the superseded one fail, and still does not let it draw", () => {
+  /**
+   * **A rename that was replaced says nothing when it fails.**
+   *
+   * It is still admitted — the gate finds it, because it is still in the map —
+   * but the reader is looking at the newer title, and a newer rename that
+   * succeeded or is still in flight must not be reported as failed by the one
+   * it replaced. This asserted the opposite until GPT Sol's review of stage 1
+   * caught it, 2026-08-28.
+   */
+  it("says nothing when the rename that failed had already been replaced", () => {
     const start = loaded(thread("spya-t1", "as it was"));
     const first = renaming(start, RENAME_A, "spya-t1", "first name");
     const second = renaming(first, RENAME_B, "spya-t1", "second name");
 
     const a = twice(second, { type: "rename.failed", opId: RENAME_A, error: "the network" }).state;
 
-    /* Admitted — its failure has something to say — with nothing left to draw. */
-    expect(a.error).toBe("Couldn't rename that conversation: the network");
+    expect(a.error).toBeNull();
     expect(titles(a)).toEqual(["second name"]);
+
+    /* And the one the reader is actually waiting on still speaks. Without this
+       the test above would pass on a reducer that never reported anything. */
+    const b = twice(a, { type: "rename.failed", opId: RENAME_B, error: "the network" }).state;
+    expect(b.error).toBe("Couldn't rename that conversation: the network");
   });
 
   it("keeps the title when a rename succeeds and the operation retires", () => {
     const start = loaded(thread("spya-t1", "as it was"));
     const renamed = renaming(start, RENAME_A, "spya-t1", "the new name");
-    expect(titles(renamed)).toEqual(["the new name"]);
+    /* In `base` from the moment the reader asked, not drawn by the operation —
+       see the note on `rename.started`. */
+    expect(renamed.base.map((t) => t.title)).toEqual(["the new name"]);
 
     const done = twice(renamed, { type: "rename.succeeded", opId: RENAME_A }).state;
     expect(done.operations.size).toBe(0);
-    /* Committed to `base` on the way out. An operation that retired without
-       committing would take the title off the screen with it. */
     expect(titles(done)).toEqual(["the new name"]);
+  });
+
+  /**
+   * **The regression, at the reducer's own level.**
+   *
+   * `legacy.apply` is how an edit writes, and an edit of the first question
+   * renames the conversation. So this is the sequence in
+   * tests/chat-title-ownership.test.ts with React taken out of it: rename,
+   * then a legacy write of another title, then the rename answering. The last
+   * writer must win, and the operation is not a writer.
+   */
+  it("does not put a rename's title back over a later legacy write", () => {
+    const start = loaded(thread("spya-t1", "as it was"));
+    const renamed = renaming(start, RENAME_A, "spya-t1", "renamed from the list");
+    const edited = twice(renamed, {
+      type: "legacy.apply",
+      update: (prev) =>
+        prev.map((t) => (t.id === "spya-t1" ? { ...t, title: "the question, rewritten" } : t)),
+    }).state;
+    expect(titles(edited)).toEqual(["the question, rewritten"]);
+
+    const done = twice(edited, { type: "rename.succeeded", opId: RENAME_A }).state;
+    expect(titles(done)).toEqual(["the question, rewritten"]);
+
+    /* And the failure path, which is the one that had two ways of being wrong:
+       it committed the title *and* reported an error. */
+    const failed = twice(edited, {
+      type: "rename.failed",
+      opId: RENAME_A,
+      error: "the network",
+    }).state;
+    expect(titles(failed)).toEqual(["the question, rewritten"]);
+    expect(failed.error).toBe("Couldn't rename that conversation: the network");
   });
 });
 

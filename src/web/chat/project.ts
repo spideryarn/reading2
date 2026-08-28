@@ -32,11 +32,17 @@ import type { ChatState, Operation } from "./model.js";
  */
 function draw(threads: readonly ChatThread[], op: Operation): readonly ChatThread[] {
   switch (op.kind) {
-    case "rename": {
-      const found = threads.find((t) => t.id === op.threadId);
-      if (!found || found.title === op.title) return threads;
-      return threads.map((t) => (t === found ? { ...t, title: op.title } : t));
-    }
+    /* **A rename draws nothing**, and that is the rule rather than an
+       exception: an operation projects what can still be **withdrawn**. A
+       refused edit's discarded turns come back because the operation never
+       really took them away; a rename's optimistic title is deliberately never
+       taken back, even when the PATCH fails, so it belongs in `base` from the
+       moment the reader asks for it.
+       Drawing it instead was a regression — an edit of the first question
+       renames the conversation too, and the operation drew over it and then
+       committed on top. tests/chat-title-ownership.test.ts, and the note in
+       reduce.ts on `rename.started`. */
+    case "rename":
     /* The load writes through `base` when it is admitted rather than drawing
        while it is in flight: what it has to say is the server's list, and until
        it answers it has nothing. */
