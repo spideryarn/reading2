@@ -22,9 +22,17 @@
  * `owned`, `released`, `watched`, `running`, `showing`, `attempts` and the
  * escape hatch they were all writing through.
  *
- * What is left here is the two intents — a stop and a cancel pressed before the
- * server has named the row — which are two `Set`s for one more stage, and then
- * become a field on the operation itself (stage 3).
+ * **And the two intents went with them**, which stage 3 was supposed to take.
+ * A stop and a cancel were two collections of row ids here, consumed by a
+ * callback this hook installed on the controller — so a panel that closed itself
+ * on the line after it pressed cancel took the only thing that could send the
+ * request with it, and the conversation the reader discarded came back on their
+ * next reload. They are operations in the state now; this file dispatches one
+ * event and reads nothing back. GPT Sol, reviewing stage 2, 2026-08-28;
+ * `IntentOperation` in ./chat/model.ts, tests/chat-unmounted-turn.test.ts.
+ *
+ * **There are no refs left holding state.** The one that remains holds the
+ * controller itself.
  */
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import type {
@@ -35,22 +43,17 @@ import type {
   ThreadKind,
 } from "../types.js";
 import { mintId } from "../ids.js";
-import { describeFetchFailure } from "./useComments.js";
-import { apiFetch, failure } from "./lib/api.js";
-import {
-  ChatController,
-  recoverUntil,
-  type ChatEffects,
-  type NamedTurn,
-} from "./chat/controller.js";
+import { ChatController, recoverUntil, type ChatEffects } from "./chat/controller.js";
 import {
   askForThreads,
+  cancelThread,
   deleteThread,
   renameThread,
   runTurn,
   settledAnswer,
+  stopAnswer,
 } from "./chat/effects.js";
-import { asOpId, writerOf, type Operation } from "./chat/model.js";
+import { asOpId, writerOf } from "./chat/model.js";
 
 /* `mergedArrival`, `withoutEmpty` and `withServerIds` live in ./chat/model.ts,
    where `reduce` can use them: a module that imports the module importing it is
@@ -233,13 +236,9 @@ const chatEffects: ChatEffects = {
   deleteThread,
   runTurn,
   settledAnswer,
+  stopAnswer,
+  cancelThread,
 };
-
-/** The attempt a writer is on, or `null` when nobody has told us. */
-function attemptOf(op: Operation | undefined): string | null {
-  if (!op) return null;
-  return op.kind === "turn" || op.kind === "recovery" ? op.attempt : null;
-}
 
 export function useChat(slug: string): ChatApi {
   /**
@@ -296,217 +295,48 @@ export function useChat(slug: string): ChatApi {
   }, [controller]);
 
   /**
-   * Ids of assistant rows the reader pressed stop on before the server had
-   * named them.
+   * The reader pressed stop.
    *
-   * The `begin` frame is what tells the client the real message id, and it is
-   * the only id `/stop` will accept. It arrives fast — it is written before the
-   * model is called — but "fast" is not "first", and a stop that lands in that
-   * window used to post a provisional id, get `{stopped: false}`, and stop
-   * nothing while the button reported that it had. So the wish is written down
-   * here and honoured **once**, the moment there is an id for it.
-   */
-  const stopWanted = useRef(new Set<string>());
-
-  /**
-   * The same wish, for the button that throws the whole conversation away.
+   * **One dispatch, and the reducer decides everything else** — whether there is
+   * yet a name the server could match, which attempt is being stopped, and
+   * therefore whether the request goes out now or at the `begin` frame. All of
+   * that used to be worked out here, from a `Set` of row ids that the hook then
+   * had to consume through a callback on the controller. The callback was
+   * cleared on unmount, so a panel that closed itself lost the wish entirely —
+   * see `IntentOperation` in ./chat/model.ts.
    *
-   * A separate collection from `stopWanted` rather than a flag on it, because the two
-   * do different things to the same row and running both would stop an answer
-   * and then delete the thread it was in — which is the stop-then-delete race a
-   * GPT-5.6 review took apart. One of them fires, ever. Stage 3 makes that an
-   * invariant the type holds rather than one a comment does.
+   * The row is not touched either way: the server answers the still-open stream
+   * with a `done` frame carrying whatever had arrived, and letting that frame be
+   * the one thing that ends a turn is what keeps the screen and the file
+   * agreeing.
    */
-  const cancelWanted = useRef(new Map<string, string>());
-
-  /**
-   * Ask the server to stop one answer.
-   *
-   * The reply is `{ stopped }`, and `false` is not a failure — it means the
-   * answer had already finished, or another tab got there first. Only a
-   * transport failure or a non-2xx is worth telling the reader about, and it is
-   * told rather than swallowed: a stop button that silently does nothing is the
-   * exact shape docs/reusable/silent-success.md is about.
-   */
-  const askToStop = useCallback(
-    async (threadId: string, messageId: string, attempt: string | null) => {
-      try {
-        const r = await apiFetch(
-          `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/stop`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messageId, ...(attempt === null ? {} : { attempt }) }),
-          },
-        );
-        if (!r.ok) throw await failure(r);
-      } catch (e) {
-        controller.dispatch({
-          type: "error.set",
-          error: `Couldn't stop that answer: ${describeFetchFailure(e as Error)}`,
-        });
-      }
+  const stop = useCallback(
+    (threadId: string, messageId: string) => {
+      controller.dispatch({
+        type: "intent.started",
+        op: { id: asOpId(mintId()), intent: "stop", threadId, messageId },
+      });
     },
-    [slug, controller],
+    [controller],
   );
 
   /**
    * Stop the first answer of a conversation, and throw the conversation away.
    *
-   * **One request, not two.** Calling `/stop` and then `DELETE` was the first
-   * design and it is a destructive race: `DELETE` has no expected-tail guard,
-   * so a second question arriving in the gap is deleted along with the first.
-   * The server does the check and the delete together — see `cancelChat` in
-   * src/routes.ts.
-   *
-   * The conversation is tombstoned **before** this is called. That is what stops
-   * the still-open stream's frames from putting it back on screen while the
-   * delete is in flight: a tombstoned conversation is projected away, so the
-   * frames land in an operation nobody is drawing. Putting it back after a
-   * refusal is lifting the tombstone, and there is no rollback copy to keep.
-   *
-   * **`by` is who laid that tombstone, and lifting it needs a match.** Without
-   * that, a cancel that failed after the reader had gone on to *delete* the
-   * conversation took the delete's tombstone off with it and the conversation
-   * came back. Deletions are supposed to win over every projection.
+   * The same dispatch, with the other intent — a field the type will not let
+   * hold both at once, which is what stops a cancel and a stop both firing at
+   * one row. The tombstone goes down in the same transition and is named after
+   * this operation, so only this operation's own refusal can lift it.
    */
-  const askToCancel = useCallback(
-    async (threadId: string, messageId: string, attempt: string | null, by: string) => {
-      try {
-        const r = await apiFetch(
-          `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/cancel`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              messageId,
-              ...(attempt === null ? {} : { attempt }),
-              /* The client names the answer it believes is last. The server
-                 refuses if the conversation has moved on since — which is the
-                 whole point of doing this in one request. */
-              expectedTailId: messageId,
-            }),
-          },
-        );
-        if (!r.ok) throw await failure(r);
-      } catch (e) {
-        /* **Put it back.** A 409 means the server refused because the
-           conversation has moved on — another tab asked something else — and
-           the reader must not be left believing they discarded a conversation
-           that is still there.
-
-           This is a refusal it is safe to read that way, and it was not before:
-           the request used to be able to go out naming a row the server had
-           never heard of, so "the server could not match that id" came back as
-           a 409 for a premise that was never wrong, or as `200 { cancelled:
-           true }` for a conversation that was about to exist. Sending once,
-           when there is an id the server minted, is what makes both answers
-           mean what they say. docs/postmortems/cancel-before-begin.md. */
-        controller.dispatch({ type: "tombstone.removed", threadId, by });
-        controller.dispatch({
-          type: "error.set",
-          error: `Couldn't discard that conversation: ${describeFetchFailure(e as Error)}`,
-        });
-      }
-    },
-    [slug, controller],
-  );
-
-  /**
-   * The reader pressed stop.
-   *
-   * **Sent once, and only when there is an id the server can match.** Until the
-   * `begin` frame the only name this row has is one this client invented, and
-   * posting it reaches a real route that answers `{stopped: false}` — a button
-   * that reported success and stopped nothing. So the wish waits, and `onNamed`
-   * below fires it the instant the row has a real name.
-   *
-   * The row is not touched here either way: the server answers the still-open
-   * stream with a `done` frame carrying whatever had arrived, and letting that
-   * frame be the one thing that ends a turn is what keeps the screen and the
-   * file agreeing.
-   */
-  const stop = useCallback(
-    (threadId: string, messageId: string) => {
-      const writer = writerOf(controller.state, messageId);
-      if (writer?.kind === "turn" && !writer.began) {
-        stopWanted.current.add(messageId);
-        return;
-      }
-      void askToStop(threadId, messageId, attemptOf(writer));
-    },
-    [controller, askToStop],
-  );
-
   const cancelAndDiscard = useCallback(
     (threadId: string, messageId: string) => {
-      /* The tombstone goes down now, whatever happens to the request: the
-         reader pressed a destructive button and the conversation leaves the
-         screen at once. `by` is this cancel's own name for it, and only this
-         cancel's failure may lift it. */
-      const by = mintId();
-      controller.dispatch({ type: "tombstone.added", threadId, by });
-      const writer = writerOf(controller.state, messageId);
-      if (writer?.kind === "turn" && !writer.began) {
-        /* Nothing the server could match yet — see `stop` above, and
-           docs/postmortems/cancel-before-begin.md, where the request that used
-           to go out here was answered `{ cancelled: true }` for a conversation
-           the server was about to write, and the reader was told they had
-           discarded something that is still there. */
-        cancelWanted.current.set(messageId, by);
-        return;
-      }
-      void askToCancel(threadId, messageId, attemptOf(writer), by);
+      controller.dispatch({
+        type: "intent.started",
+        op: { id: asOpId(mintId()), intent: "cancel", threadId, messageId },
+      });
     },
-    [controller, askToCancel],
+    [controller],
   );
-
-  /**
-   * The server has just named a turn's rows — the one instant a waiting stop or
-   * cancel can be sent.
-   *
-   * Both wishes are looked up under **both** names, the invented one and the
-   * server's, and both are cleared: the reader can have pressed the button on
-   * either side of the frame. `cancelWanted` used to be consulted with a
-   * variable that had been reassigned to the server's id four lines earlier,
-   * against a set that only ever held the invented one, so the branch could
-   * never match and never ran. It was born dead —
-   * docs/postmortems/cancel-before-begin.md — and it was the dead branch that
-   * kept the quieter bug quiet.
-   *
-   * The cancel is checked **first and returns**: cancel and stop must never both
-   * fire at the same row, and the cancel is the stronger wish — it stops the
-   * answer *and* removes the conversation, so a stop as well would be aborting
-   * something that is about to cease to exist.
-   */
-  const onNamed = useCallback(
-    (named: NamedTurn) => {
-      const { wasReplyId, replyId, threadId, attempt } = named;
-      const by = cancelWanted.current.get(wasReplyId) ?? cancelWanted.current.get(replyId);
-      cancelWanted.current.delete(wasReplyId);
-      cancelWanted.current.delete(replyId);
-      if (by !== undefined) {
-        stopWanted.current.delete(wasReplyId);
-        stopWanted.current.delete(replyId);
-        void askToCancel(threadId, replyId, attempt, by);
-        return;
-      }
-      /* Both deletes, and not `a || b`: short-circuiting would leave the second
-         wish in the map for a row that has just been renamed, where nothing
-         would ever consume it. */
-      const under = stopWanted.current.delete(wasReplyId);
-      const over = stopWanted.current.delete(replyId);
-      if (under || over) void askToStop(threadId, replyId, attempt);
-    },
-    [askToStop, askToCancel],
-  );
-
-  useEffect(() => {
-    controller.onNamed = onNamed;
-    return () => {
-      if (controller.onNamed === onNamed) controller.onNamed = null;
-    };
-  }, [controller, onNamed]);
 
   /**
    * Every `pending` answer with nobody behind it gets a recovery.

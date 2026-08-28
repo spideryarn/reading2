@@ -281,10 +281,12 @@ async function writeThread(
   slug: string,
   threadId: string,
   init: RequestInit,
+  /** Appended to the conversation's URL: `/stop`, `/cancel`, or nothing. */
+  path = "",
 ): Promise<WriteOutcome> {
   try {
     const r = await apiFetch(
-      `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`,
+      `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}${path}`,
       init,
     );
     if (!r.ok) throw await failure(r);
@@ -292,6 +294,63 @@ async function writeThread(
   } catch (e) {
     return { ok: false, error: describeFetchFailure(e as Error) };
   }
+}
+
+/**
+ * Ask the server to stop one answer.
+ *
+ * `{ stopped: false }` is **not** a failure — it means the answer had already
+ * finished, or another tab got there first — so only a transport failure or a
+ * non-2xx comes back as one. It is reported rather than swallowed: a stop button
+ * that silently does nothing is the exact shape docs/reusable/silent-success.md
+ * is about.
+ *
+ * The row is not touched either way. The server answers the still-open stream
+ * with a `done` frame carrying whatever had arrived, and letting that frame be
+ * the one thing that ends a turn is what keeps the screen and the file agreeing.
+ */
+export function stopAnswer(
+  slug: string,
+  threadId: string,
+  messageId: string,
+  attempt: string | null,
+): Promise<WriteOutcome> {
+  return writeThread(slug, threadId, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messageId, ...(attempt === null ? {} : { attempt }) }),
+  }, "/stop");
+}
+
+/**
+ * Stop the first answer of a conversation, and throw the conversation away.
+ *
+ * **One request, not two.** Calling `/stop` and then `DELETE` was the first
+ * design and it is a destructive race: `DELETE` has no expected-tail guard, so a
+ * second question arriving in the gap is deleted along with the first. The
+ * server does the check and the delete together — see `cancelChat` in
+ * src/routes.ts.
+ *
+ * `expectedTailId` is the client naming the answer it believes is last, so the
+ * server can refuse if the conversation has moved on since. That refusal is
+ * meaningful only because this request is never sent with a name the server
+ * invented nothing for — docs/postmortems/cancel-before-begin.md.
+ */
+export function cancelThread(
+  slug: string,
+  threadId: string,
+  messageId: string,
+  attempt: string | null,
+): Promise<WriteOutcome> {
+  return writeThread(slug, threadId, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messageId,
+      ...(attempt === null ? {} : { attempt }),
+      expectedTailId: messageId,
+    }),
+  }, "/cancel");
 }
 
 export function renameThread(slug: string, threadId: string, title: string): Promise<WriteOutcome> {

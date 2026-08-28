@@ -79,6 +79,75 @@ export interface LoadOperation extends Registered {
 export interface RepairOperation extends Registered {
   kind: "repair";
   threadId: string;
+  /**
+   * The rows the refused turn had already written into `base`, which the
+   * server has just said do not exist.
+   *
+   * Only a **send** has any: it writes its question and its empty answer down
+   * at registration, because nothing withdraws the reader's own words — except
+   * this, the one case where the server says the turn never happened. A retry
+   * and an edit *draw*, so dropping their operation is the whole of putting the
+   * screen back and there is nothing here for them.
+   *
+   * Named rather than implied, because the repair no longer replaces the
+   * conversation wholesale: it merges, and a merge that kept everything would
+   * keep these two rows for ever.
+   */
+  drop: readonly string[];
+}
+
+/** Stop this answer, or throw the whole conversation away. Never both. */
+export type Intent = "stop" | "cancel";
+
+/**
+ * A stop or a cancel, from the moment the reader presses the button.
+ *
+ * **It is an operation rather than a wish in a ref, and that is the fix for
+ * three separate things.** It used to be a `Set` and a `Map` in `useChat`,
+ * consumed by a callback the hook installed on the controller — so when
+ * `ChatDialog` closed itself on the same line it pressed cancel, React's effect
+ * cleanup cleared the callback and the `begin` frame arrived with nobody left to
+ * tell. The request was never sent, the server finished the answer and stored
+ * it, and the conversation the reader discarded came back on their next reload.
+ * Every test missed it because every test kept the hook mounted. GPT Sol,
+ * reviewing stage 2, 2026-08-28; tests/chat-unmounted-turn.test.ts.
+ *
+ * As an operation it is in the state, so the *reducer* decides when to send it
+ * and the *controller* sends it — neither of which React can take away. It also
+ * gets the two things every other asynchronous action here has: the admission
+ * gate in front of its answer, so a cancel refused after the reader has deleted
+ * the conversation cannot report over the delete; and supersession, so it can be
+ * taken over by something newer.
+ *
+ * `intent` is the field that cannot hold both at once, which the plan's stage 3
+ * asked for and which arrived here because stage 2 could not ship without it.
+ */
+export interface IntentOperation extends Registered {
+  kind: "intent";
+  intent: Intent;
+  threadId: string;
+  /**
+   * The answer row this is aimed at, **as the server would name it**.
+   *
+   * Provisional only while `waitingOn` is set; rewritten to the server's name in
+   * the same transition that consumes the wish.
+   */
+  messageId: string;
+  /**
+   * Which attempt at that row, so the server can refuse a stop aimed at an
+   * answer that has already finished. `null` means nobody has told us.
+   */
+  attempt: string | null;
+  /**
+   * The turn whose `begin` frame this is waiting for, or `null` if the request
+   * has already gone out.
+   *
+   * **Addressed to the operation, not looked up by row id.** A row id is not
+   * enough: it changes at `turn.began`, a retry reuses one, and a wish left
+   * behind by a turn that died before it was named then matched the *next*
+   * attempt at the same row and stopped an answer the reader had just asked for.
+   */
+  waitingOn: OpId | null;
 }
 
 /**
@@ -95,7 +164,15 @@ export interface RepairOperation extends Registered {
  * overwritten by it.
  */
 export interface Tombstone {
-  /** The operation, or the request, that laid it. */
+  /**
+   * The operation that laid it, and the only one that may lift it.
+   *
+   * A cancel lays its own as it registers and lifts it as it is refused, both
+   * inside one transition — so this is an `OpId`, and a match is proof rather
+   * than a coincidence. There were two loose events for laying and lifting one
+   * of these until 2026-08-28; they went with the last thing that sent them,
+   * because a second way of doing this is a second copy of the rule.
+   */
   by: string;
   /** A deletion. Never lifted. */
   final: boolean;
@@ -240,7 +317,8 @@ export type Operation =
   | TurnOperation
   | RecoveryOperation
   | RenameOperation
-  | DeleteOperation;
+  | DeleteOperation
+  | IntentOperation;
 
 /** An operation as its caller hands it over: the reducer adds the rest. */
 export type Registering<O extends Operation> = Omit<O, "seq" | "superseded">;
@@ -323,13 +401,24 @@ export type ChatInput =
    * the admission gate, which is for results.
    */
   | { type: "recovery.started"; op: Registering<RecoveryOperation> }
+  /**
+   * The reader pressed stop, or pressed cancel.
+   *
+   * Deliberately **not** a `Registering<IntentOperation>`: the three fields left
+   * off — `attempt`, `waitingOn` and, for a cancel, the tombstone — are all
+   * answers to "who is writing that row *now*", which is a question about the
+   * state and therefore the reducer's to answer. A caller that worked them out
+   * for itself would be the second staleness vocabulary this directory exists to
+   * remove.
+   */
+  | {
+      type: "intent.started";
+      op: { id: OpId; intent: Intent; threadId: string; messageId: string };
+    }
   /** A new, empty conversation. Local: nothing is stored until you send. */
   | { type: "thread.begun"; thread: ChatThread }
   /** Forgetting one. A no-op on anything with a message in it. */
   | { type: "thread.discarded"; threadId: string }
-  /** `by` is who is laying it, and it is what a removal has to match. */
-  | { type: "tombstone.added"; threadId: string; by: string }
-  | { type: "tombstone.removed"; threadId: string; by: string }
   | { type: "error.set"; error: string | null };
 
 /**
@@ -419,7 +508,21 @@ export type ChatResult =
   /** The window closed and the answer never settled. */
   | { type: "recovery.givenUp"; opId: OpId; error: string }
   /** Nobody is looking any more, and there is nothing to say about it. */
-  | { type: "recovery.stopped"; opId: OpId };
+  | { type: "recovery.stopped"; opId: OpId }
+  /**
+   * The stop or the cancel landed.
+   *
+   * `{ stopped: false }` is one of these, not a failure: it means the answer had
+   * already finished, or another tab got there first.
+   */
+  | { type: "intent.succeeded"; opId: OpId }
+  /**
+   * It did not. For a cancel this is the refusal that puts the conversation
+   * back, and the tombstone comes off **in the same transition** as the error is
+   * written — one decision, so there is no moment where the conversation is back
+   * with nothing said about it.
+   */
+  | { type: "intent.failed"; opId: OpId; error: string };
 
 /** What the `done` frame carries — the finished answer, and its receipts. */
 export interface TurnDone {
@@ -510,25 +613,38 @@ export type ChatCommand =
       until: number;
     }
   /**
-   * The server has named a turn's rows, and something outside the state wants
-   * to know.
+   * Stop one answer, or throw one conversation away. One request either way.
    *
-   * Two things do, and both have to happen at exactly this instant: the panel's
-   * `?thread=` when the server overruled the thread id, and a stop or a cancel
-   * the reader pressed before there was an id the server could match. A command
-   * rather than a callback on the operation, so that the reducer stays a pure
-   * function of data.
+   * Emitted either at `intent.started`, when the row already has a name the
+   * server can match, or at `turn.began`, which is the instant one that did not
+   * gets one. **Once**, either way — docs/postmortems/cancel-before-begin.md.
+   */
+  | {
+      type: "intent";
+      opId: OpId;
+      slug: string;
+      intent: Intent;
+      threadId: string;
+      messageId: string;
+      attempt: string | null;
+    }
+  /**
+   * The server has overruled a turn's thread id, and the panel's `?thread=` has
+   * to follow or a reload lands on a conversation that is not there.
+   *
+   * The only thing left outside the state that has to hear about `begin`. A stop
+   * or a cancel waiting for this frame used to be the other one, through a
+   * callback the hook installed — and losing that callback on unmount is how a
+   * discarded conversation came back. It is an `IntentOperation` now, and the
+   * command above is how it leaves.
    */
   | {
       type: "named";
       opId: OpId;
-      /** What the row was called when the reader was looking at it. */
+      /** What the conversation was called when the reader was looking at it. */
       wasThreadId: string;
-      wasReplyId: string;
       /** And what the server calls it. */
       threadId: string;
-      replyId: string;
-      attempt: string | null;
     };
 
 /** Either this article's conversations, or why they are not here. */
@@ -687,6 +803,18 @@ export function writerOf(state: ChatState, messageId: string): Operation | undef
     if (op.kind === "recovery" && op.messageId === messageId) return op;
   }
   return undefined;
+}
+
+/**
+ * Which attempt at that row the writer is on, or `null` if nobody has said.
+ *
+ * A turn and the recovery that inherits its row are the only two things that
+ * know — which is what let the `attempts` map go: an attempt is a fact about one
+ * writer, not about a row.
+ */
+export function attemptOf(op: Operation | undefined): string | null {
+  if (!op) return null;
+  return op.kind === "turn" || op.kind === "recovery" ? op.attempt : null;
 }
 
 /** Answers this tab has lost the stream of and is asking the server about. */

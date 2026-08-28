@@ -107,6 +107,12 @@ function draw(threads: readonly ChatThread[], op: Operation): readonly ChatThrea
        The panel is told the row is being chased through `recovering`, which is
        derived from this operation existing at all. */
     case "recovery":
+    /* A stop draws nothing — the answer's own `done` frame is what ends it. A
+       cancel draws by its tombstone, like a delete, which is in the state and
+       filtered out below: it has to be off the screen before the request leaves
+       and stay off while it is out, which is not something a projection over
+       `base` could express. */
+    case "intent":
       return threads;
   }
 }

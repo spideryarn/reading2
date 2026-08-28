@@ -125,18 +125,20 @@ export interface ChatEffects {
   ): Promise<void>;
   /** The server's copy of one answer, once it has stopped moving. */
   settledAnswer(slug: string, threadId: string, messageId: string): Promise<ChatMessage | null>;
-}
-
-/** The server has named a turn's rows, and this is the instant it happened. */
-export interface NamedTurn {
-  opId: OpId;
-  /** What the rows were called when the reader was looking at them. */
-  wasThreadId: string;
-  wasReplyId: string;
-  /** And what the server calls them. */
-  threadId: string;
-  replyId: string;
-  attempt: string | null;
+  /** Stop one answer. `{ stopped: false }` is a success — see the note there. */
+  stopAnswer(
+    slug: string,
+    threadId: string,
+    messageId: string,
+    attempt: string | null,
+  ): Promise<WriteOutcome>;
+  /** Stop the answer and throw the conversation away, in one request. */
+  cancelThread(
+    slug: string,
+    threadId: string,
+    messageId: string,
+    attempt: string | null,
+  ): Promise<WriteOutcome>;
 }
 
 /** What React reads: the state, and the two things derived from it. */
@@ -161,17 +163,6 @@ export class ChatController {
    * compare. Pruned when its operation retires.
    */
   #onThreadId = new Map<OpId, (id: string) => void>();
-
-  /**
-   * Told the instant a turn's rows get their real names, with the new state
-   * already applied and readable.
-   *
-   * The hook sets this, and what it does with it is consume a stop or a cancel
-   * the reader pressed before there was an id the server could match. That has
-   * to happen at exactly this instant and with the state as it is *now*, which
-   * is the whole reason this is a controller — see the note at the top.
-   */
-  onNamed: ((named: NamedTurn) => void) | null = null;
 
   /** No side effects here — the hook builds one during a render. */
   constructor(slug: string, effects: ChatEffects) {
@@ -310,15 +301,44 @@ export class ChatController {
       case "recover":
         void this.#recover(command.opId, command.slug, command.threadId, command.messageId, command.until);
         return;
-      case "named": {
+      case "intent":
+        /* **The stop and the cancel are performed here now, and that is the
+           whole of GPT Sol's finding 1.** They used to be `fetch`es in the hook,
+           fired by a callback the hook installed on this object and cleared in
+           an effect cleanup — so `ChatDialog`, which closes itself on the line
+           after it presses cancel, unmounted before the `begin` frame arrived
+           and the request was never sent at all. The controller outlives the
+           hook because the stream still holds it, and it is what the reducer
+           asks. tests/chat-unmounted-turn.test.ts. */
+        this.#settle(
+          command.intent === "cancel"
+            ? this.#effects.cancelThread(
+                command.slug,
+                command.threadId,
+                command.messageId,
+                command.attempt,
+              )
+            : this.#effects.stopAnswer(
+                command.slug,
+                command.threadId,
+                command.messageId,
+                command.attempt,
+              ),
+          (outcome) =>
+            outcome.ok
+              ? { type: "intent.succeeded", opId: command.opId }
+              : { type: "intent.failed", opId: command.opId, error: outcome.error },
+          (error) => ({ type: "intent.failed", opId: command.opId, error }),
+        );
+        return;
+      case "named":
         if (command.wasThreadId !== command.threadId) {
           // The URL is pointing at an id the server did not accept. Tell the
           // caller so `?thread=` can follow, or a reload lands on a
           // conversation that does not exist.
           this.#onThreadId.get(command.opId)?.(command.threadId);
         }
-        this.onNamed?.(command);
-      }
+        return;
     }
   }
 

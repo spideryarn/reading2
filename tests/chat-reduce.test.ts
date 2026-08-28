@@ -50,8 +50,13 @@ const OTHER_LOAD = asOpId("spya-load02");
 const RENAME_A = asOpId("spya-name01");
 const RENAME_B = asOpId("spya-name02");
 const DELETE = asOpId("spya-del001");
-/** Not an operation — a cancel's own name for the tombstone it lays. */
-const CANCEL = "spya-cancel1";
+/**
+ * A cancel registered under the **delete's own id**, which nothing real can do —
+ * `mintId()` gives every operation its own. It is how the `final` flag gets
+ * probed at all: with the ids equal, the owner check passes and `final` is the
+ * only thing left holding the tombstone down.
+ */
+const DELETE_NAME = asOpId("spya-del001");
 
 /**
  * A `Map` or a `Set` that screams if the reducer writes to it.
@@ -157,6 +162,7 @@ function renaming(state: ChatState, id: OpId, threadId: string, title: string): 
 const TURN_A = asOpId("spya-turn01");
 const TURN_B = asOpId("spya-turn02");
 const REPAIR = asOpId("spya-fix001");
+const OTHER_REPAIR = asOpId("spya-fix002");
 const RECOVER = asOpId("spya-rec001");
 
 const AT = "2026-08-27T11:00:00.000Z";
@@ -498,13 +504,20 @@ describe("deleting a conversation", () => {
 
   it("puts a cancelled conversation back when the server refuses the cancel", () => {
     const start = loaded(thread("spya-t1", "as it was"));
-    const cancelled = twice(start, { type: "tombstone.added", threadId: "spya-t1", by: CANCEL }).state;
+    const cancelled = twice(start, {
+      type: "intent.started",
+      op: { id: asOpId("spya-wish21"), intent: "cancel", threadId: "spya-t1", messageId: "a1" },
+    }).state;
     expect(titles(cancelled)).toEqual([]);
 
     /* The tombstone is the whole of the optimistic removal — the conversation
        never left `base` — so removing it is the rollback, and there is no copy
        to keep anywhere. That is what let the `latest` ref go. */
-    const back = twice(cancelled, { type: "tombstone.removed", threadId: "spya-t1", by: CANCEL }).state;
+    const back = twice(cancelled, {
+      type: "intent.failed",
+      opId: asOpId("spya-wish21"),
+      error: "Someone else has moved this on.",
+    }).state;
     expect(titles(back)).toEqual(["as it was"]);
   });
 });
@@ -634,18 +647,16 @@ describe("a turn", () => {
     // Nothing is left holding an invented name, on the operation either.
     const op = named.state.operations.get(TURN_A);
     expect(op).toMatchObject({ kind: "turn", threadId: "spya-real1", replyId: "srv-a", began: true });
-    /* And the one command it asks for is what tells the panel to move
-       `?thread=`, and what lets a waiting stop or cancel finally be sent. */
+    /* **And the one command it asks for is now only the panel's `?thread=`.**
+       It used to carry the row's two names and the attempt as well, because the
+       hook consumed a waiting stop or cancel off it through a callback — which
+       is the callback that went with the hook on unmount and lost the request
+       altogether. A wish is an `IntentOperation` now and the reducer emits its
+       own `intent` command for it beside this one, addressed to the operation
+       rather than to a row id; there is nothing left for this to carry. GPT
+       Sol's finding 1 on stage 2, and the reason this assertion changed. */
     expect(named.commands).toEqual([
-      {
-        type: "named",
-        opId: TURN_A,
-        wasThreadId: "guess-thread",
-        wasReplyId: "guess-a",
-        threadId: "spya-real1",
-        replyId: "srv-a",
-        attempt: "att-1",
-      },
+      { type: "named", opId: TURN_A, wasThreadId: "guess-thread", threadId: "spya-real1" },
     ]);
   });
 
@@ -733,9 +744,14 @@ describe("a turn", () => {
   });
 
   /**
-   * The argument is `refreshThread`'s own and it is about age rather than
-   * tidiness: anything a turn is writing into this conversation is newer than
-   * the snapshot the server just answered with.
+   * A snapshot is older than anything a turn is still writing, so it must take
+   * nothing away from one.
+   *
+   * **It used to do that by being thrown away entirely**, which is the half that
+   * changed on 2026-08-28: it now lands and merges, so the server's own turns
+   * arrive as well — see "lands the server's newer turns" below. What this pins
+   * is the part that did not change: whatever the snapshot lacks and this tab
+   * has, this tab keeps.
    */
   it("does not land a repair over a conversation another turn is still writing into", () => {
     const start = loaded(conversation());
@@ -761,6 +777,146 @@ describe("a turn", () => {
     expect(titles(repaired)).toEqual(["a conversation"]);
     expect(rows(repaired)).toContain("b-new");
     expect(repaired.operations.has(REPAIR)).toBe(false);
+  });
+
+  /**
+   * **A repair is a snapshot, and a snapshot is old the moment it is taken.**
+   *
+   * These four are GPT Sol's finding 3 on stage 2
+   * (docs/plans/chat-operation-model-stage2-review-sol.md): `repair.succeeded`
+   * used to replace the whole conversation, guarded only against a turn that was
+   * live at the instant it landed. Everything that finished in the meantime was
+   * overwritten by a copy of the conversation as it stood before it happened.
+   */
+  /** A retry of the stored answer, refused, leaving a repair in flight. */
+  function repairing(state: ChatState): ChatState {
+    const retried = twice(
+      state,
+      starting({ id: TURN_A, shape: "retry", replyId: "a1", reply: message({ id: "a1" }) }),
+    ).state;
+    return twice(retried, {
+      type: "turn.refused",
+      opId: TURN_A,
+      error: "no",
+      repair: { id: REPAIR },
+    }).state;
+  }
+
+  it("does not put a repair's older title back over a rename that has succeeded", () => {
+    const refused = repairing(loaded(conversation()));
+    const named = renaming(refused, RENAME_A, "spya-t1", "what the reader called it");
+    const stuck = twice(named, { type: "rename.succeeded", opId: RENAME_A }).state;
+
+    /* The snapshot was taken before the PATCH landed, so it carries the old
+       title. A title is never withdrawn and the last writer to `base` wins,
+       which is the reader's own order — and this is not it. */
+    const repaired = twice(stuck, {
+      type: "repair.succeeded",
+      opId: REPAIR,
+      thread: thread("spya-t1", "a conversation", [message({ id: "q1", role: "user", status: "done" })]),
+    }).state;
+
+    expect(titles(repaired)).toEqual(["what the reader called it"]);
+  });
+
+  it("does not remove a send that finished while the repair was out", () => {
+    const refused = repairing(loaded(conversation()));
+    const sent = twice(refused, sending(TURN_B, "a-new", "q-new")).state;
+    const done = twice(sent, {
+      type: "turn.done",
+      opId: TURN_B,
+      done: { text: "an answer the reader watched arrive", citations: [], searches: 0, model: "m" },
+    }).state;
+    /* Finished, so nothing is live for the old guard to notice — and the rows
+       are in `base`, which is exactly what the snapshot is about to replace. */
+    expect(rows(done)).toEqual(["q1", "a1", "q-new", "a-new"]);
+
+    const repaired = twice(done, {
+      type: "repair.succeeded",
+      opId: REPAIR,
+      thread: conversation(),
+    }).state;
+
+    expect(rows(repaired)).toEqual(["q1", "a1", "q-new", "a-new"]);
+    expect(answer(repaired, "a-new")?.text).toBe("an answer the reader watched arrive");
+  });
+
+  /**
+   * **The other half, and the reason a repair exists at all.** It used to be
+   * thrown away outright when a turn was live in the conversation, so the
+   * external turns that provoked the 409 stayed missing until the next reload.
+   * They arrive, and the live send's rows stay where they are.
+   */
+  it("lands the server's newer turns even while another send is streaming", () => {
+    const start = loaded(conversation());
+    const sent = twice(start, sending(TURN_B, "a-new", "q-new")).state;
+    const edited = twice(
+      sent,
+      starting({ id: TURN_A, shape: "edit", editing: "q1", replyId: "a-edit" }),
+    ).state;
+    const refused = twice(edited, {
+      type: "turn.refused",
+      opId: TURN_A,
+      error: "no",
+      repair: { id: REPAIR },
+    }).state;
+
+    /* What the server has: the stored turn, plus the turn from another tab that
+       made this client's edit stale in the first place. */
+    const elsewhere = thread("spya-t1", "a conversation", [
+      message({ id: "q1", role: "user", text: "why?", status: "done" }),
+      message({ id: "a1", text: "because.", status: "done" }),
+      message({ id: "q2", role: "user", text: "and in another tab?", status: "done" }),
+      message({ id: "a2", text: "this.", status: "done" }),
+    ]);
+    const repaired = twice(refused, {
+      type: "repair.succeeded",
+      opId: REPAIR,
+      thread: elsewhere,
+    }).state;
+
+    expect(rows(repaired), "the turns that caused the 409 are still missing").toEqual([
+      "q1",
+      "a1",
+      "q2",
+      "a2",
+      "q-new",
+      "a-new",
+    ]);
+    expect(repaired.operations.has(REPAIR)).toBe(false);
+    expect(repaired.operations.has(TURN_B), "the live send was retired").toBe(true);
+  });
+
+  it("does not let an older repair land over a newer one", () => {
+    const first = repairing(loaded(conversation()));
+    const second = twice(first, sending(TURN_B, "a-new", "q-new")).state;
+    const again = twice(second, {
+      type: "turn.refused",
+      opId: TURN_B,
+      error: "no again",
+      repair: { id: OTHER_REPAIR },
+    }).state;
+
+    /* The newer repair answers first, with what the server has now. */
+    const newer = twice(again, {
+      type: "repair.succeeded",
+      opId: OTHER_REPAIR,
+      thread: thread("spya-t1", "a conversation", [
+        message({ id: "q1", role: "user", text: "why?", status: "done" }),
+        message({ id: "a1", text: "because.", status: "done" }),
+        message({ id: "q2", role: "user", text: "and?", status: "done" }),
+        message({ id: "a2", text: "this.", status: "done" }),
+      ]),
+    }).state;
+    expect(rows(newer)).toEqual(["q1", "a1", "q2", "a2"]);
+
+    // And the older one, still out, answers with the conversation as it was.
+    const older = twice(newer, {
+      type: "repair.succeeded",
+      opId: REPAIR,
+      thread: conversation(),
+    }).state;
+    expect(rows(older), "an older repair overwrote a newer one").toEqual(["q1", "a1", "q2", "a2"]);
   });
 
   /**
@@ -875,7 +1031,20 @@ describe("a turn", () => {
     expect(answer(earlier, "a-two")?.text).toBe("the second answer");
   });
 
-  it("will not discard a conversation a turn is drawing into", () => {
+  /**
+   * **`thread.discarded` refuses here and `delete.started` must not**, and the
+   * two are one word apart in `ChatApi`, so both halves are asserted against the
+   * same state.
+   *
+   * A retry writes nothing to `base`, so a conversation whose only turn is being
+   * rewritten has no stored messages at all — `withoutEmpty` alone would take it
+   * off the screen while the reader was watching the answer arrive. That is what
+   * the local forget refuses. The **delete** is the reader asking the server to
+   * throw the conversation away, and a delete that quietly did nothing because
+   * something happened to be streaming would be the same silent success as the
+   * cancel that was never sent. It always goes.
+   */
+  it("will not discard a conversation a turn is drawing into, and still deletes it", () => {
     const start = loaded(thread("spya-t1", "New chat"));
     const edited = twice(
       start,
@@ -883,6 +1052,30 @@ describe("a turn", () => {
     ).state;
     const after = twice(edited, { type: "thread.discarded", threadId: "spya-t1" });
     expect(after.state).toBe(edited);
+
+    const removed = twice(edited, {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "spya-t1" },
+    });
+    expect(removed.commands, "a delete was suppressed by a live turn").toEqual([
+      { type: "delete", opId: DELETE, slug: SLUG, threadId: "spya-t1" },
+    ]);
+    expect(titles(removed.state)).toEqual([]);
+    /* And the turn cannot bring it back, whatever its stream does next: the
+       tombstone is `final` and a tombstoned conversation is projected away
+       whatever is laid over it. */
+    const arriving = twice(removed.state, {
+      type: "turn.delta",
+      opId: TURN_A,
+      text: "still writing",
+    }).state;
+    expect(titles(arriving), "a frame put a deleted conversation back").toEqual([]);
+    const finished = twice(arriving, {
+      type: "turn.done",
+      opId: TURN_A,
+      done: { text: "still writing", citations: [], searches: 0, model: "m" },
+    }).state;
+    expect(titles(finished)).toEqual([]);
   });
 });
 
@@ -957,8 +1150,333 @@ describe("a superseded operation has nothing left to write", () => {
   });
 });
 
+/**
+ * **A stop and a cancel are operations**, and this is what that bought.
+ *
+ * They were a `Set` and a `Map` of row ids in `useChat`, consumed by a callback
+ * the hook installed on the controller — which React cleared on unmount, so the
+ * one lifecycle production actually has (press cancel, panel closes, `begin`
+ * frame arrives) sent no request at all. GPT Sol's finding 1 on stage 2. Pulling
+ * the wish into the state moved the decision here, where it can be tested
+ * without a DOM, and brought two things with it that the refs could not have:
+ * the admission gate in front of the answer, and supersession.
+ *
+ * The lifecycle itself is tests/chat-unmounted-turn.test.ts; these are the
+ * transitions underneath it.
+ */
+describe("a stop or a cancel", () => {
+  const WISH = asOpId("spya-wish01");
+  const OTHER_WISH = asOpId("spya-wish02");
+
+  function pending(shape: "send" | "retry"): ChatState {
+    const start = loaded(conversation());
+    return twice(
+      start,
+      starting(
+        shape === "send"
+          ? {
+              id: TURN_A,
+              shape,
+              replyId: "a-new",
+              question: message({ id: "q-new", role: "user", text: "and?", status: "done" }),
+            }
+          : { id: TURN_A, shape, replyId: "a1", reply: message({ id: "a1" }) },
+      ),
+    ).state;
+  }
+
+  function wishing(state: ChatState, intent: "stop" | "cancel", messageId: string, id = WISH) {
+    return twice(state, {
+      type: "intent.started",
+      op: { id, intent, threadId: "spya-t1", messageId },
+    });
+  }
+
+  it("waits for the begin frame when the row has no name the server would know", () => {
+    const sent = pending("send");
+    const wished = wishing(sent, "stop", "a-new");
+    expect(wished.commands, "a stop went out under an invented id").toEqual([]);
+    expect(wished.state.operations.get(WISH)).toMatchObject({ waitingOn: TURN_A });
+
+    const named = twice(wished.state, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: {
+        threadId: "spya-t1",
+        title: "a conversation",
+        messageId: "srv-a",
+        attempt: "att-1",
+      },
+    });
+    /* Sent **once**, at the instant there is an id the server minted, with the
+       attempt it minted with it — and by the reducer, so nothing outside the
+       state has to be alive to do it. */
+    expect(named.commands).toContainEqual({
+      type: "intent",
+      opId: WISH,
+      slug: SLUG,
+      intent: "stop",
+      threadId: "spya-t1",
+      messageId: "srv-a",
+      attempt: "att-1",
+    });
+    expect(named.state.operations.get(WISH)).toMatchObject({ waitingOn: null, messageId: "srv-a" });
+  });
+
+  /**
+   * **`began` is not a sound predicate for a retry** — finding 2. A retry writes
+   * into a row the server named long ago, so a cancel of one has an id to send
+   * today. A stop still waits, because a stop is aimed at one *attempt* and the
+   * attempt is what the frame carries.
+   */
+  it("cancels a retry at once and still makes a stop of one wait", () => {
+    const retried = pending("retry");
+    const cancelled = wishing(retried, "cancel", "a1");
+    expect(cancelled.commands).toEqual([
+      {
+        type: "intent",
+        opId: WISH,
+        slug: SLUG,
+        intent: "cancel",
+        threadId: "spya-t1",
+        messageId: "a1",
+        attempt: null,
+      },
+    ]);
+    // And the conversation left the screen the moment the button was pressed.
+    expect(titles(cancelled.state)).toEqual([]);
+
+    const stopped = wishing(retried, "stop", "a1", OTHER_WISH);
+    expect(stopped.commands, "a stop was sent without an attempt to aim it at").toEqual([]);
+  });
+
+  /**
+   * **A wish its turn leaves behind is dropped, not left lying.** The stranded
+   * one used to sit in a `Set` under a row id that the *next* retry re-uses, so
+   * that attempt's `begin` frame fired it and stopped an answer the reader had
+   * just asked for.
+   */
+  it("drops a wish whose turn dies before the server names it", () => {
+    const retried = pending("retry");
+    const wished = wishing(retried, "stop", "a1").state;
+    expect(wished.operations.has(WISH)).toBe(true);
+
+    const failed = twice(wished, {
+      type: "turn.failed",
+      opId: TURN_A,
+      error: "the model is busy",
+    });
+    expect(failed.commands, "a stop was sent for a turn that never started").toEqual([]);
+    expect(failed.state.operations.has(WISH), "a wish outlived the turn it waited on").toBe(false);
+  });
+
+  it("drops one a refused turn leaves behind too, and keeps the tombstone", () => {
+    const sent = pending("send");
+    const wished = wishing(sent, "cancel", "a-new").state;
+    const refused = twice(wished, {
+      type: "turn.refused",
+      opId: TURN_A,
+      error: "no",
+      repair: { id: REPAIR },
+    }).state;
+
+    expect(refused.operations.has(WISH)).toBe(false);
+    /* The tombstone stays. The reader pressed a destructive button, and nothing
+       this tab can say to the server would name a row the server never wrote. */
+    expect(titles(refused)).toEqual([]);
+  });
+
+  /** One of them fires, ever — which used to be a comment and is now the type. */
+  it("replaces a waiting stop when the reader cancels the same row", () => {
+    const sent = pending("send");
+    const stopped = wishing(sent, "stop", "a-new").state;
+    const cancelled = wishing(stopped, "cancel", "a-new", OTHER_WISH).state;
+    expect(cancelled.operations.has(WISH), "the stop was left to fire as well").toBe(false);
+
+    const named = twice(cancelled, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: { threadId: "spya-t1", title: "a conversation", messageId: "srv-a" },
+    });
+    expect(named.commands.filter((c) => c.type === "intent")).toEqual([
+      {
+        type: "intent",
+        opId: OTHER_WISH,
+        slug: SLUG,
+        intent: "cancel",
+        threadId: "spya-t1",
+        messageId: "srv-a",
+        attempt: null,
+      },
+    ]);
+  });
+
+  /**
+   * **A refused cancel lifts its tombstone and says so in one transition** —
+   * there is no moment where the conversation is back with nothing to explain
+   * it, and no second place to remember one of the two.
+   */
+  it("puts the conversation back and reports it, together", () => {
+    const start = loaded(conversation());
+    const cancelled = wishing(start, "cancel", "a1").state;
+    expect(titles(cancelled)).toEqual([]);
+
+    const refused = twice(cancelled, {
+      type: "intent.failed",
+      opId: WISH,
+      error: "This conversation has moved on since you looked",
+    }).state;
+    expect(titles(refused)).toEqual(["a conversation"]);
+    expect(refused.error).toBe(
+      "Couldn't discard that conversation: This conversation has moved on since you looked",
+    );
+  });
+
+  /**
+   * **Finding 4.** Cancel, then delete the conversation outright while the
+   * cancel is out, then the cancel comes back refused. The delete supersedes
+   * everything for that conversation, so the obsolete refusal lifts nothing and
+   * says nothing — it used to write "Couldn't discard…" over a delete that had
+   * succeeded, from a `catch` with no gate in front of it.
+   */
+  it("says nothing when the reader has since deleted the conversation", () => {
+    const start = loaded(conversation());
+    const cancelled = wishing(start, "cancel", "a1").state;
+    const removed = twice(cancelled, {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "spya-t1" },
+    }).state;
+    const done = twice(removed, { type: "delete.succeeded", opId: DELETE }).state;
+
+    const refused = twice(done, {
+      type: "intent.failed",
+      opId: WISH,
+      error: "This conversation has moved on since you looked",
+    }).state;
+
+    expect(titles(refused), "a deleted conversation came back").toEqual([]);
+    expect(refused.error, "an obsolete cancel reported over a successful delete").toBeNull();
+  });
+
+  /**
+   * **A second cancel inherits the first one's tombstone.**
+   *
+   * Only the operation that laid a tombstone may lift it, and the first cancel
+   * is dropped when the second replaces it — so without this the tombstone would
+   * have no owner left and a refusal could never put the conversation back. The
+   * screen and the server would disagree, which is exactly what the one-request
+   * rule exists to stop.
+   */
+  it("lets a second cancel of one row lift the tombstone the first laid", () => {
+    const sent = pending("send");
+    const first = wishing(sent, "cancel", "a-new").state;
+    const second = wishing(first, "cancel", "a-new", OTHER_WISH).state;
+    expect(second.operations.has(WISH)).toBe(false);
+    expect(titles(second)).toEqual([]);
+
+    const named = twice(second, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: { threadId: "spya-t1", title: "a conversation", messageId: "srv-a" },
+    }).state;
+    const refused = twice(named, {
+      type: "intent.failed",
+      opId: OTHER_WISH,
+      error: "This conversation has moved on since you looked",
+    }).state;
+    expect(titles(refused), "nothing was left that could lift the tombstone").toEqual([
+      "a conversation",
+    ]);
+  });
+
+  /**
+   * A wish the reader has overtaken is dropped at the frame rather than sent.
+   *
+   * Deleting the conversation supersedes everything for it, the cancel
+   * included — and a wish that is neither sent nor dropped is an operation that
+   * never retires.
+   */
+  it("sends nothing at the frame for a wish something newer has taken over", () => {
+    const sent = pending("send");
+    const cancelled = wishing(sent, "cancel", "a-new").state;
+    const removed = twice(cancelled, {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "spya-t1" },
+    }).state;
+
+    const named = twice(removed, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: { threadId: "spya-t1", title: "a conversation", messageId: "srv-a" },
+    });
+    expect(named.commands.filter((c) => c.type === "intent")).toEqual([]);
+    expect(named.state.operations.has(WISH), "a wish was left waiting for ever").toBe(false);
+  });
+
+  /** And the gate, on the path this adds: a wish nobody registered is nobody's. */
+  it("refuses an answer to a wish that belongs to no operation", () => {
+    const start = loaded(conversation());
+    const stale = twice(start, { type: "intent.failed", opId: WISH, error: "too late" });
+    expect(stale.state).toBe(start);
+  });
+
+  /** `{ stopped: false }` arrives here, and it is not a failure. */
+  it("writes nothing when the stop lands", () => {
+    const retried = pending("retry");
+    const named = twice(retried, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: { threadId: "spya-t1", title: "a conversation", messageId: "a1", attempt: "att-1" },
+    }).state;
+    const wished = wishing(named, "stop", "a1").state;
+    const landed = twice(wished, { type: "intent.succeeded", opId: WISH }).state;
+    expect(landed.operations.has(WISH)).toBe(false);
+    expect(landed.error).toBeNull();
+    expect(rows(landed)).toEqual(["q1", "a1"]);
+  });
+
+  /** Everything on screen in the one conversation, by message id. */
+  function rows(state: ChatState, id = "spya-t1"): string[] {
+    return project(state).find((t) => t.id === id)?.messages.map((m) => m.id) ?? [];
+  }
+});
+
+/**
+ * **Who may lift a tombstone**, asked of the path a reader can actually reach.
+ *
+ * These used to dispatch `tombstone.added` and `tombstone.removed` directly.
+ * Those two events went on 2026-08-28 with the last thing that sent them: a
+ * cancel is an operation now, so it lays its tombstone as it registers and lifts
+ * it as it is refused, both inside one transition. Keeping the events would have
+ * left a second, unreachable vocabulary for the same rule — with the *tested*
+ * copy over there and the reachable copy untested, which is the shape this
+ * directory exists to remove.
+ */
 describe("who may lift a tombstone", () => {
-  const OTHER_CANCEL = "spya-cancel2";
+  const WISH = asOpId("spya-wish11");
+  const OTHER_WISH = asOpId("spya-wish12");
+
+  function cancelling(state: ChatState, id = WISH): ChatState {
+    return twice(state, {
+      type: "intent.started",
+      op: { id, intent: "cancel", threadId: "spya-t1", messageId: "a1" },
+    }).state;
+  }
+
+  function deleting(state: ChatState): ChatState {
+    return twice(state, {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "spya-t1" },
+    }).state;
+  }
+
+  function refusing(state: ChatState, id = WISH) {
+    return twice(state, {
+      type: "intent.failed",
+      opId: id,
+      error: "This conversation has moved on since you looked",
+    });
+  }
 
   /**
    * cancel → delete → the cancel's failure. The refusal must not take the
@@ -966,45 +1484,20 @@ describe("who may lift a tombstone", () => {
    * here one used to lose to an unrelated request failing.
    */
   it("does not let a refused cancel lift a delete's", () => {
-    const start = loaded(conversation());
-    const cancelled = twice(start, {
-      type: "tombstone.added",
-      threadId: "spya-t1",
-      by: CANCEL,
-    }).state;
-    const removed = twice(cancelled, {
-      type: "delete.started",
-      op: { id: DELETE, kind: "delete", threadId: "spya-t1" },
-    }).state;
+    const removed = deleting(cancelling(loaded(conversation())));
     expect(titles(removed)).toEqual([]);
 
-    const refused = twice(removed, {
-      type: "tombstone.removed",
-      threadId: "spya-t1",
-      by: CANCEL,
-    });
-    expect(refused.state, "a deleted conversation came back").toBe(removed);
-    expect(titles(refused.state)).toEqual([]);
+    const refused = refusing(removed);
+    expect(titles(refused.state), "a deleted conversation came back").toEqual([]);
+    /* And it says nothing either — the delete superseded it. Two halves of one
+       finding, and only the first of them used to hold. */
+    expect(refused.state.error).toBeNull();
   });
 
   /** And the other order, which is where the delete arrives on top. */
   it("does not let a cancel that arrived after a delete lift it either", () => {
-    const start = loaded(conversation());
-    const removed = twice(start, {
-      type: "delete.started",
-      op: { id: DELETE, kind: "delete", threadId: "spya-t1" },
-    }).state;
-    const cancelled = twice(removed, {
-      type: "tombstone.added",
-      threadId: "spya-t1",
-      by: CANCEL,
-    }).state;
-    const refused = twice(cancelled, {
-      type: "tombstone.removed",
-      threadId: "spya-t1",
-      by: CANCEL,
-    }).state;
-    expect(titles(refused)).toEqual([]);
+    const cancelled = cancelling(deleting(loaded(conversation())));
+    expect(titles(refusing(cancelled).state)).toEqual([]);
   });
 
   /**
@@ -1013,39 +1506,35 @@ describe("who may lift a tombstone", () => {
    * The rule the two tests above rest on, stated on its own: a deletion wins
    * over every projection, so its tombstone is `final` and the owner check is
    * not the only thing standing between a deleted conversation and the screen.
-   * Nothing in the hook sends this event today — a probe found the flag
-   * unreachable through the code — which is the reason to pin the rule here
-   * rather than leave it to be rediscovered.
+   * A cancel cannot mint a delete's id, so this reaches `final` through an
+   * `intent.failed` whose operation was registered with the delete's own name —
+   * which nothing in the hook can do, and which is the reason to pin the rule
+   * here rather than leave it to be rediscovered.
    */
   it("refuses to lift a delete's tombstone even under the delete's own name", () => {
-    const start = loaded(conversation());
-    const removed = twice(start, {
-      type: "delete.started",
-      op: { id: DELETE, kind: "delete", threadId: "spya-t1" },
+    const removed = deleting(loaded(conversation()));
+    const impostor = twice(removed, {
+      type: "intent.started",
+      op: { id: DELETE_NAME, intent: "cancel", threadId: "spya-t1", messageId: "a1" },
     }).state;
-    const after = twice(removed, { type: "tombstone.removed", threadId: "spya-t1", by: DELETE });
-    expect(after.state).toBe(removed);
-    expect(titles(after.state)).toEqual([]);
+    const after = refusing(impostor, DELETE_NAME).state;
+    expect(titles(after)).toEqual([]);
   });
 
   /** And somebody else's cancel cannot lift this one's, which is the same rule. */
   it("takes only its own off", () => {
-    const start = loaded(conversation());
-    const cancelled = twice(start, {
-      type: "tombstone.added",
-      threadId: "spya-t1",
-      by: CANCEL,
+    const cancelled = cancelling(loaded(conversation()));
+    /* A second cancel of the same row would *inherit* the tombstone — see the
+       test for that — so this is a cancel of another row in the conversation,
+       which lays nothing and therefore owns nothing. */
+    const elsewhere = twice(cancelled, {
+      type: "intent.started",
+      op: { id: OTHER_WISH, intent: "cancel", threadId: "spya-t1", messageId: "q1" },
     }).state;
-    expect(twice(cancelled, {
-      type: "tombstone.removed",
-      threadId: "spya-t1",
-      by: OTHER_CANCEL,
-    }).state).toBe(cancelled);
-    expect(titles(twice(cancelled, {
-      type: "tombstone.removed",
-      threadId: "spya-t1",
-      by: CANCEL,
-    }).state)).toEqual(["a conversation"]);
+    expect(titles(refusing(elsewhere, OTHER_WISH).state)).toEqual([]);
+
+    // And the one that laid it still can.
+    expect(titles(refusing(elsewhere, WISH).state)).toEqual(["a conversation"]);
   });
 });
 

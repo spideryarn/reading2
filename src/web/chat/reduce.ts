@@ -37,6 +37,7 @@ import type {
   ChatResult,
   ChatState,
   DeleteOperation,
+  IntentOperation,
   LoadOperation,
   Operation,
   OpId,
@@ -47,7 +48,14 @@ import type {
   Tombstone,
   TurnOperation,
 } from "./model.js";
-import { isResult, mergedArrival, withoutEmpty, withServerIds, writerOf } from "./model.js";
+import {
+  attemptOf,
+  isResult,
+  mergedArrival,
+  withoutEmpty,
+  withServerIds,
+  writerOf,
+} from "./model.js";
 import { turnMessages } from "./project.js";
 
 export interface Outcome {
@@ -97,6 +105,9 @@ function accepts(op: Operation, event: ChatResult): boolean {
     case "recovery.givenUp":
     case "recovery.stopped":
       return op.kind === "recovery";
+    case "intent.succeeded":
+    case "intent.failed":
+      return op.kind === "intent";
   }
 }
 
@@ -179,11 +190,14 @@ function tombstoned(
  * disagreed twice.
  */
 function commit(state: ChatState, op: TurnOperation): ChatState {
-  const base = rewrite(state.base, op.threadId, (t) => {
+  /* Anything still waiting on this turn is waiting for a `begin` frame that is
+     never coming — see `stranded`. */
+  const cleared = stranded(state, op.id);
+  const base = rewrite(cleared.base, op.threadId, (t) => {
     const messages = turnMessages(t.messages, op);
     return messages === t.messages ? t : { ...t, updatedAt: op.at, messages };
   });
-  return { ...state, base, operations: withoutOp(state, op.id) };
+  return { ...cleared, base, operations: withoutOp(cleared, op.id) };
 }
 
 function applyInput(state: ChatState, event: ChatInput): Outcome {
@@ -272,20 +286,10 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
     }
     case "turn.started":
       return startTurn(state, event);
-    case "recovery.started": {
-      /* **One writer per row, and this is where that is enforced.** The scan in
-         the hook runs on every render and `StrictMode` runs its effects twice,
-         so this arrives repeatedly for the same row; and `turn.disconnected`
-         registers one of its own for a row the scan is about to see. Refusing
-         the second is idempotence rather than the admission gate — the gate is
-         for results, and a registration has nothing yet to look up. */
-      if (writerOf(state, event.op.messageId)) return unchanged(state);
-      const { id, threadId, messageId, until } = event.op;
-      return {
-        state: register<RecoveryOperation>(state, event.op, () => false),
-        commands: [{ type: "recover", opId: id, slug: state.slug, threadId, messageId, until }],
-      };
-    }
+    case "intent.started":
+      return startIntent(state, event);
+    case "recovery.started":
+      return startRecovery(state, event.op);
     case "thread.begun":
       return { state: { ...state, base: [...state.base, event.thread] }, commands: NOTHING };
     case "thread.discarded": {
@@ -308,14 +312,199 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
         ? unchanged(state)
         : { state: { ...state, base }, commands: NOTHING };
     }
-    case "tombstone.added":
-    case "tombstone.removed":
-      return mark(state, event);
     case "error.set":
       return state.error === event.error
         ? unchanged(state)
         : { state: { ...state, error: event.error }, commands: NOTHING };
   }
+}
+
+/**
+ * Start looking for a `pending` answer nobody is streaming.
+ *
+ * **One writer per row, and this is the only place that is enforced.** Two
+ * things register a recovery — the hook's scan of what is on screen, which runs
+ * on every render and twice under `StrictMode`, and a turn handing its own row
+ * over as it retires — and there used to be a copy of this check on each path.
+ * Deleting either one reddened nothing, because the other still held: two
+ * copies of an invariant are one untested copy and one tested one, and the
+ * untested one is where it will next be got wrong. So both paths come through
+ * here, and the probe that deletes the check turns exactly the tests that name
+ * it red.
+ *
+ * Refusing the second is idempotence rather than the admission gate — the gate
+ * is for results, and a registration has nothing yet to look up.
+ */
+function startRecovery(state: ChatState, op: Registering<RecoveryOperation>): Outcome {
+  if (writerOf(state, op.messageId)) return unchanged(state);
+  const { id, threadId, messageId, until } = op;
+  return {
+    state: register<RecoveryOperation>(state, op, () => false),
+    commands: [{ type: "recover", opId: id, slug: state.slug, threadId, messageId, until }],
+  };
+}
+
+/**
+ * The reader pressed stop, or pressed cancel.
+ *
+ * **The question this asks is "can the server match this row's name yet?", and
+ * the answer is different for the two intents.** That is finding 2 of GPT Sol's
+ * review of stage 2, and the reason the old `began` test was not enough:
+ *
+ * - a **stop** is aimed at one *attempt*. Waiting for the `begin` frame is what
+ *   gets it the attempt id, so that a stop pressed on the answer the reader is
+ *   watching cannot land on the next one instead. It waits whenever a turn is
+ *   writing the row and has not been named;
+ * - a **cancel** destroys the whole conversation, and any name the server can
+ *   match will do. A *retry* writes into a row the server named long ago — it
+ *   came back in a load — so a cancel of one need not wait at all. It waited,
+ *   under `began`, and if that retry was refused or failed before its frame the
+ *   wish was never consumed by anything.
+ *
+ * The cancel's tombstone goes down here, in the same transition, and is named
+ * after this operation: only this operation's own refusal may lift it, which is
+ * what stops a cancel that fails after the reader has deleted the conversation
+ * from bringing it back.
+ */
+function startIntent(
+  state: ChatState,
+  event: Extract<ChatInput, { type: "intent.started" }>,
+): Outcome {
+  const { id, intent, threadId, messageId } = event.op;
+  const writer = writerOf(state, messageId);
+  const turn = writer && writer.kind === "turn" ? writer : undefined;
+  /* A send and an edit both invent the answer row's id, so only the `begin`
+     frame can give it a name the server would recognise. A retry re-uses the
+     stored row, which has had one all along. */
+  const named = !turn || turn.began || turn.shape === "retry";
+  const sendNow = intent === "stop" ? !turn || turn.began : named;
+  const waitingOn = sendNow || !turn ? null : turn.id;
+  const op: Registering<IntentOperation> = {
+    id,
+    kind: "intent",
+    intent,
+    threadId,
+    messageId,
+    attempt: attemptOf(writer),
+    waitingOn,
+  };
+  /* A wish still waiting for a name is replaced outright rather than
+     superseded: it has never been sent, so it has nothing to report and nothing
+     to draw, and leaving it in the map would let it fire later. That is the old
+     `stopWanted.current.delete(...)` a cancel used to do to a stop on the same
+     row, and it is the same rule in both directions — one of them fires, ever. */
+  const kept = new Map<OpId, Operation>();
+  const replaced = new Set<string>();
+  for (const [otherId, other] of state.operations) {
+    if (other.kind === "intent" && other.waitingOn !== null && other.messageId === messageId) {
+      replaced.add(otherId);
+      continue;
+    }
+    kept.set(otherId, other);
+  }
+  /* The conversation leaves the screen at once, whatever the server ends up
+     saying — the reader pressed a destructive button. A standing tombstone is
+     never overwritten, so a cancel arriving after a delete cannot take the
+     delete's permanence away — but one laid by a *wish this event has just
+     replaced* is inherited, because otherwise nothing left could ever lift it
+     and a refused cancel would leave the screen and the server disagreeing. */
+  const standing = state.tombstones.get(threadId);
+  const inherit = standing && !standing.final && replaced.has(standing.by);
+  const marked: ChatState =
+    intent === "cancel" && (!standing || inherit)
+      ? { ...state, tombstones: tombstoned(state, threadId, { by: id, final: false }) }
+      : state;
+  const clean: ChatState = { ...marked, operations: kept };
+  return {
+    state: register<IntentOperation>(
+      clean,
+      op,
+      /* And one already in flight is superseded, so that its answer — which is
+         now about a wish the reader has replaced — reports nothing. */
+      (other) => other.kind === "intent" && other.messageId === messageId,
+    ),
+    commands: waitingOn
+      ? NOTHING
+      : [
+          {
+            type: "intent",
+            opId: id,
+            slug: state.slug,
+            intent,
+            threadId,
+            messageId,
+            attempt: op.attempt,
+          },
+        ],
+  };
+}
+
+/**
+ * The turn has been named: send every wish that was waiting for that.
+ *
+ * **Emitted by the reducer and performed by the controller**, which is the whole
+ * of finding 1. It used to be a callback the hook installed on the controller
+ * and cleared in an effect cleanup, so a dialog that closed itself on the line
+ * after it pressed cancel took the only thing that could send the request with
+ * it — see `IntentOperation`.
+ *
+ * Addressed by `waitingOn` rather than found by row id, which is the other half:
+ * ids change here, and a retry re-uses one.
+ */
+function wishesNamed(
+  state: ChatState,
+  turn: TurnOperation,
+  threadId: string,
+  messageId: string,
+  attempt: string | null,
+): { operations: ReadonlyMap<OpId, Operation>; commands: ChatCommand[] } {
+  const operations = new Map<OpId, Operation>(state.operations);
+  const commands: ChatCommand[] = [];
+  for (const [id, op] of state.operations) {
+    if (op.kind !== "intent" || op.waitingOn !== turn.id) continue;
+    if (op.superseded) {
+      /* Something newer has taken this conversation over — a delete supersedes
+         everything for it — so there is nothing left to ask the server for, and
+         a wish that is neither sent nor dropped is an operation that never
+         retires. */
+      operations.delete(id);
+      continue;
+    }
+    operations.set(id, { ...op, threadId, messageId, attempt, waitingOn: null });
+    commands.push({
+      type: "intent",
+      opId: id,
+      slug: state.slug,
+      intent: op.intent,
+      threadId,
+      messageId,
+      attempt,
+    });
+  }
+  return { operations, commands };
+}
+
+/**
+ * A turn is retiring, and anything still waiting on it will wait for ever.
+ *
+ * A wish only ever waits for a `begin` frame, so a turn that ends without one
+ * leaves it stranded. It used to be stranded in a `Set` in the hook, under a row
+ * id that a *later* retry re-uses — so the next attempt's frame matched it and
+ * stopped an answer the reader had just asked for.
+ *
+ * Both are dropped rather than sent. There is nothing to stop: the turn is over.
+ * And there is nothing to cancel by name: the server never wrote this row down
+ * under a name this tab knows, so the tombstone — already laid, and deliberately
+ * left standing — is the whole of the discard the reader asked for.
+ */
+function stranded(state: ChatState, turnId: OpId): ChatState {
+  let dropped: Map<OpId, Operation> | null = null;
+  for (const [id, op] of state.operations) {
+    if (op.kind !== "intent" || op.waitingOn !== turnId) continue;
+    dropped ??= new Map(state.operations);
+    dropped.delete(id);
+  }
+  return dropped ? { ...state, operations: dropped } : state;
 }
 
 /**
@@ -361,40 +550,6 @@ function startTurn(
   };
 }
 
-/**
- * A tombstone going down or coming off, and who is allowed to do either.
- *
- * **Only the one who laid it may lift it, and a delete's is never lifted.**
- * Without the first half, cancel → delete → the cancel's refusal removed the
- * *delete's* tombstone and a conversation the reader had deleted came back.
- * Deletions are supposed to win over every projection; there, one lost to an
- * unrelated request failing. Without the second, the same thing happens through
- * anything that later learns to send this event with an id it did not mint.
- */
-function mark(
-  state: ChatState,
-  event: Extract<ChatInput, { type: "tombstone.added" | "tombstone.removed" }>,
-): Outcome {
-  const standing = state.tombstones.get(event.threadId);
-  if (event.type === "tombstone.added") {
-    /* A standing tombstone is never overwritten, so that a cancel arriving
-       after a delete cannot take the delete's provenance — and therefore its
-       permanence — away. */
-    if (standing) return unchanged(state);
-    return {
-      state: {
-        ...state,
-        tombstones: tombstoned(state, event.threadId, { by: event.by, final: false }),
-      },
-      commands: NOTHING,
-    };
-  }
-  if (!standing || standing.final || standing.by !== event.by) return unchanged(state);
-  const tombstones = new Map(state.tombstones);
-  tombstones.delete(event.threadId);
-  return { state: { ...state, tombstones }, commands: NOTHING };
-}
-
 /** One frame's worth of change to the answer row, and nothing else moves. */
 function moved(state: ChatState, op: TurnOperation, reply: ChatMessage): Outcome {
   return { state: { ...state, operations: withOp(state, { ...op, reply }) }, commands: NOTHING };
@@ -426,17 +581,26 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
         began: true,
         attempt: begun.attempt ?? null,
       };
+      /* **And this is the instant a waiting stop or cancel can be sent**, with
+         the id, the attempt and the tail the server itself minted. One
+         transition, so there is no moment in which the row has a name and the
+         wish has not been consumed. */
+      const wishes = wishesNamed(
+        { ...state, operations: withOp(state, named) },
+        op,
+        begun.threadId,
+        begun.messageId,
+        begun.attempt ?? null,
+      );
       return {
-        state: { ...state, base, operations: withOp(state, named) },
+        state: { ...state, base, operations: wishes.operations },
         commands: [
+          ...wishes.commands,
           {
             type: "named",
             opId: op.id,
             wasThreadId: op.threadId,
-            wasReplyId: op.replyId,
             threadId: begun.threadId,
-            replyId: begun.messageId,
-            attempt: begun.attempt ?? null,
           },
         ],
       };
@@ -513,22 +677,10 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
            watching, and this operation is the one that inherited it. */
         attempt: op.attempt,
       };
-      /* Exactly one writer, still: the turn has just retired, so the only way
-         this finds one is a recovery the scan started for the same row. */
-      if (writerOf(committed, op.replyId)) return { state: committed, commands: NOTHING };
-      return {
-        state: register<RecoveryOperation>(committed, recovery, () => false),
-        commands: [
-          {
-            type: "recover",
-            opId: recovery.id,
-            slug: state.slug,
-            threadId: recovery.threadId,
-            messageId: recovery.messageId,
-            until: recovery.until,
-          },
-        ],
-      };
+      /* Through the same door the scan comes through, so the one-writer rule
+         has one copy — `startRecovery`, which refuses this if a recovery the
+         scan started has already taken the row. */
+      return startRecovery(committed, recovery);
     }
     case "turn.refused": {
       /* **The refusal and the repair are one decision**, so they are one
@@ -541,14 +693,32 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
         id: event.repair.id,
         kind: "repair",
         threadId: op.threadId,
+        /* **Only a send has rows to drop.** It wrote its question and its empty
+           answer into `base` at registration, because nothing withdraws the
+           reader's own words — except this, the one case where the server says
+           the turn never happened. A retry and an edit drew theirs, and dropping
+           the operation has already put those back. */
+        drop:
+          op.shape === "send"
+            ? [op.replyId, ...(op.question ? [op.question.id] : [])]
+            : [],
       };
+      const cleared = stranded(state, op.id);
       const dropped: ChatState = {
-        ...state,
-        operations: withoutOp(state, op.id),
+        ...cleared,
+        operations: withoutOp(cleared, op.id),
         error: event.error,
       };
       return {
-        state: register<RepairOperation>(dropped, repair, () => false),
+        state: register<RepairOperation>(
+          dropped,
+          repair,
+          /* **Repairs supersede each other**, which they did not, so an older
+             snapshot could land over a newer one for the same conversation.
+             They are both answers to "what does the server have?" and only the
+             later question is worth an answer. */
+          (other) => other.kind === "repair" && other.threadId === op.threadId,
+        ),
         commands: [
           { type: "repair", opId: repair.id, slug: state.slug, threadId: repair.threadId },
         ],
@@ -557,6 +727,51 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
     default:
       return unchanged(state);
   }
+}
+
+/**
+ * The server's copy of one conversation, laid under what this tab knows.
+ *
+ * **A repair used to replace the conversation outright**, guarded only against a
+ * turn that was live at the instant it landed — and a snapshot is old from the
+ * moment it is taken, so everything that finished in between was overwritten by
+ * a copy of the conversation as it stood before it happened. GPT Sol's finding 3
+ * on stage 2: a rename that had already succeeded went back to its old title, a
+ * send that completed first had its rows removed, and two repairs of one
+ * conversation could land in either order. And when a turn *was* live it was
+ * thrown away instead, so the external turns that caused the 409 stayed missing
+ * until the next reload — the repair failing at the one job it has.
+ *
+ * So it merges, on three rules:
+ *
+ * - **the server's messages are the record**, because that is what the repair
+ *   went to ask for and it is the only party that knows what the 409 was about;
+ * - **a row this tab has that the server does not is kept**, and appended. It is
+ *   an optimistic row of a send in flight, or one from a turn that started after
+ *   the snapshot was taken; either way it is newer than the snapshot by
+ *   construction. This is `mergedArrival`'s rule and it holds for the same
+ *   reason — see its docstring. The exception is `drop`: the rows of the refused
+ *   send itself, which the server has just said do not exist;
+ * - **the title is never taken from the server.** A title is not withdrawn and
+ *   the last writer to `base` wins, which is the reader's own order — a rename
+ *   they made while the repair was out is that order, and the snapshot is not.
+ *   The cost, and it is deliberate: a rename made in *another* tab is not picked
+ *   up by a repair, and arrives on the next load with everything else.
+ *
+ * A live turn is no longer a reason to refuse. It draws over `base`, so the
+ * merge is re-projected under it; its rows are either the server's already or
+ * kept as this tab's own.
+ */
+function merged(mine: ChatThread, fresh: ChatThread, drop: readonly string[]): ChatThread {
+  const known = new Set(fresh.messages.map((m) => m.id));
+  const extra = mine.messages.filter((m) => !known.has(m.id) && !drop.includes(m.id));
+  return {
+    ...fresh,
+    title: mine.title,
+    /* ISO-8601, so the later string is the later moment. */
+    updatedAt: fresh.updatedAt > mine.updatedAt ? fresh.updatedAt : mine.updatedAt,
+    messages: extra.length === 0 ? fresh.messages : [...fresh.messages, ...extra],
+  };
 }
 
 function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcome {
@@ -628,19 +843,9 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
     case "repair.succeeded": {
       const retired = { ...state, operations: withoutOp(state, op.id) };
       if (op.kind !== "repair" || op.superseded) return { state: retired, commands: NOTHING };
-      /* **Not over a live turn.** The argument is `refreshThread`'s own and it
-         is about age rather than tidiness: anything a turn is writing into this
-         conversation is newer than the snapshot the server just answered with,
-         so replacing the conversation would put an older copy over rows the
-         reader is watching arrive. The turn this repair was fired *for* is
-         already gone — dropping it and registering this were one transition. */
-      for (const other of retired.operations.values()) {
-        if (other.kind === "turn" && other.threadId === op.threadId) {
-          return { state: retired, commands: NOTHING };
-        }
-      }
-      const base = event.thread
-        ? rewrite(retired.base, op.threadId, () => event.thread as ChatThread)
+      const fresh = event.thread;
+      const base = fresh
+        ? rewrite(retired.base, op.threadId, (t) => merged(t, fresh, op.drop))
         : /* The server does not have it at all: it was deleted, or it was never
              written down. Either way it is not a conversation. */
           retired.base.filter((t) => t.id !== op.threadId);
@@ -687,6 +892,44 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
          say and nothing to write; the point of the event is that the operation
          stops existing, so `recovering` stops claiming this row is being chased. */
       return { state: { ...state, operations: withoutOp(state, op.id) }, commands: NOTHING };
+    case "intent.succeeded":
+      /* `{ stopped: false }` comes back here too, and it is not a failure: the
+         answer had already finished, or another tab got there first. Nothing to
+         write either way — the still-open stream's own `done` frame is what ends
+         a stopped turn, which is what keeps the screen and the file agreeing. */
+      return { state: { ...state, operations: withoutOp(state, op.id) }, commands: NOTHING };
+    case "intent.failed": {
+      const retired = { ...state, operations: withoutOp(state, op.id) };
+      /* **Superseded, so it says nothing** — and this is the one that was
+         missing. The reader cancelled the first answer, then deleted the
+         conversation outright while the cancel was still out; the delete
+         supersedes everything for that conversation, so when the cancel came
+         back refused it had nothing to report. It used to write "Couldn't
+         discard that conversation…" over a delete that had succeeded, from a
+         `catch` in the hook with no operation behind it and therefore no gate in
+         front of it. GPT Sol's finding 4 on stage 2. */
+      if (op.kind !== "intent" || op.superseded) return { state: retired, commands: NOTHING };
+      if (op.intent === "stop") {
+        return {
+          state: { ...retired, error: `Couldn't stop that answer: ${event.error}` },
+          commands: NOTHING,
+        };
+      }
+      /* **The tombstone comes off and the error goes on, in one transition.**
+         A 409 means the server refused because the conversation has moved on —
+         another tab asked something else — and the reader must not be left
+         believing they discarded a conversation that is still there. Only this
+         operation's own tombstone, and never a delete's: `by` is this
+         operation's id, so a match is proof rather than a coincidence. */
+      const standing = retired.tombstones.get(op.threadId);
+      const error = `Couldn't discard that conversation: ${event.error}`;
+      if (!standing || standing.final || standing.by !== op.id) {
+        return { state: { ...retired, error }, commands: NOTHING };
+      }
+      const tombstones = new Map(retired.tombstones);
+      tombstones.delete(op.threadId);
+      return { state: { ...retired, tombstones, error }, commands: NOTHING };
+    }
     default:
       return applyTurn(state, event, op as TurnOperation);
   }

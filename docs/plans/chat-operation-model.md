@@ -1,10 +1,16 @@
 # The chat operation model — the build plan
 
 **Status:** stage 1 built as `6f35022`, reviewed by GPT Sol, and one reader-reachable regression
-fixed on top, 2026-08-28. **Stage 2 built 2026-08-28** and awaiting its review. Stage 3 written down
-and not built. What each stage turned out to need that this plan did not say is at the bottom:
-[§ What stage 1 actually did](#what-stage-1-actually-did) and
-[§ What stage 2 actually did](#what-stage-2-actually-did).
+fixed on top, 2026-08-28. **Stage 2 built 2026-08-28 as `852eda2`, refused by GPT Sol with three ship
+blockers, and rebuilt on top the same day.** Stage 3 is what is left of stage 3 after that, which is
+less than this plan says below. What each stage turned out to need that this plan did not say is at
+the bottom: [§ What stage 1 actually did](#what-stage-1-actually-did),
+[§ What stage 2 actually did](#what-stage-2-actually-did) and
+[§ What the review of stage 2 sent back](#what-the-review-of-stage-2-sent-back).
+
+**The boundary between stages 2 and 3 moved**, and that is the headline. Intent — the thing stage 3
+was for — is in stage 2, because the review found that the wish was lost in the one lifecycle
+production actually has and nothing short of moving it into the state fixed that.
 
 The strategy and the evidence for it are in
 [chat-client-architecture.md](chat-client-architecture.md), which ends with steps 2–4 written down
@@ -313,11 +319,16 @@ written and stopped being true on 2026-08-28.
 
 ### Stage 3 — intent, and the invariants
 
-Stop and cancel stop being two sets of message ids and become one `intent` field on the turn
-operation that the type will not let hold both at once — which is today an invariant maintained by a
-comment.
+**Intent moved into stage 2 and is built.** This section is kept as it was written, because the
+paragraph below it — the invariant tests — is still stage 3's, and because the reason it moved is
+worth more than the plan it replaced:
+[§ What the review of stage 2 sent back](#what-the-review-of-stage-2-sent-back).
 
-Gone by the end: `stopWanted`, `cancelWanted`. That is the last ref.
+~~Stop and cancel stop being two sets of message ids and become one `intent` field on the turn
+operation that the type will not let hold both at once — which is today an invariant maintained by a
+comment.~~ They are one field on an operation of their own — an `IntentOperation`, not a field on the
+turn, because a wish can outlive the turn it was waiting on and can be aimed at a row a recovery
+owns. `stopWanted` and `cancelWanted` are gone, and with them the last ref.
 
 **Done looks like:** the invariant tests Sol asked for, each permuting a small event sequence —
 
@@ -330,8 +341,13 @@ Gone by the end: `stopWanted`, `cancelWanted`. That is the last ref.
 - success and failure are admitted by the same rule.
 
 The two early-intent tests are **not** here: they ship with stage 2, which is the stage that moves
-the machinery holding those wishes. This stage folds the two sets into one field and must leave them
-green.
+the machinery holding those wishes. ~~This stage folds the two sets into one field and must leave
+them green.~~ Stage 2 did that too. What is left for this stage is the list above and nothing else,
+so it is now a stage of tests: seven invariants, each permuting a sequence, over a machine that is
+already built. Two of them — "stop and discard cannot coexist" and "every pending answer has exactly
+one writer" — have one test each already
+([`tests/chat-reduce.test.ts`](../../tests/chat-reduce.test.ts)); the permutation is what is missing.
+The one thing that is still a *change* rather than a test is the **rename fence**, below.
 
 ## Rules the code must follow
 
@@ -586,3 +602,112 @@ that turns exactly one test red.
   the same map the gate reads rather than a second vocabulary, and every *write* still goes through
   the gate — but it is a read after an `await`, which is the shape this file keeps getting wrong. It
   is the last one.
+
+## What the review of stage 2 sent back
+
+**GPT Sol refused `852eda2` — "DO NOT SHIP", three P1 blockers and one P2 —
+[chat-operation-model-stage2-review-sol.md](chat-operation-model-stage2-review-sol.md), 2026-08-28.**
+All four are fixed on top of it. The two that changed the shape of the work are first.
+
+### The wish was lost in the only lifecycle production has
+
+`cancelAndDiscard` recorded the wish and sent nothing; `ChatDialog` then called `onClose()` on the
+very next line, the dialog unmounted, React ran the effect cleanup that clears `controller.onNamed`,
+and when the `begin` frame arrived there was nobody left to send the `/cancel`. **No request ever
+went out.** The server finished the answer, stored the conversation, and it came back on the
+reader's next reload — with the screen, and every test, saying it had gone.
+
+**The finding behind the finding is the test harness.** Every chat test in this repo mounts the hook
+and keeps it mounted, so none of them could see this. That is why
+[`tests/chat-unmounted-turn.test.ts`](../../tests/chat-unmounted-turn.test.ts) is a *lifecycle* file
+rather than a bug file: mount, act, **unmount**, then let the world answer. It asserts on the
+requests that left the tab, because after the unmount there is no screen left to ask — the same
+reason [cancel-before-begin.md](../postmortems/cancel-before-begin.md) gives for
+`tests/chat-intent-paths.test.ts`.
+
+The fix is Sol's own direction: **pull the intent union forward from stage 3.** The wish is an
+`IntentOperation` in the state; the *reducer* emits the `intent` command at `turn.began`; the
+*controller* performs it. Nothing React owns is in the path, and the controller outlives the hook
+because the stream still holds it.
+
+**An operation of its own rather than a field on the turn**, which is the part Sol was explicit
+about and the plan above was not: a cancellation can outlive the turn it was waiting on, and a stop
+can be aimed at a row a *recovery* owns. So it is addressed — `waitingOn` names the operation, not
+the row — and a turn that retires without ever being named drops what was waiting on it. It used to
+be stranded in a `Set` under a row id that the **next retry re-uses**, so that attempt's `begin`
+frame fired it and stopped an answer the reader had just asked for.
+
+### `began` was not a sound cancel predicate
+
+A retry writes into a row the server named long ago — it came back in a load — but its operation
+starts `began: false` like every other turn, so a cancel of one waited for a frame it did not need.
+Waiting is necessary for an attempt-specific **stop**, because the attempt is what the frame carries;
+it is not necessary for a destructive **cancel** of a row the server can already name. Two questions,
+two answers, and one flag had been standing in for both.
+
+### A 409's repair could overwrite newer work
+
+`repair.succeeded` replaced the whole conversation and guarded only against a turn that was live at
+the instant it landed — and a snapshot is old from the moment it is taken. So it could put an older
+title back over a rename that had already succeeded, remove a send that completed while it was out,
+and land after another repair of the same conversation. And when a turn *was* live it was discarded
+outright, so the external turns that caused the 409 stayed missing locally: the repair failing at the
+one job it has.
+
+It **merges** now, on three rules — the server's messages are the record; a row this tab has and the
+server does not is kept, `mergedArrival`'s rule for `mergedArrival`'s reason; and the title is never
+taken from the server, because a title is not withdrawn and the last writer to `base` wins, which is
+the reader's own order. Repairs supersede each other. The refused turn's own optimistic rows are
+named on the repair as `drop`, because a send writes its two rows into `base` and this is the one
+case where the server says they never happened.
+
+**The live-turn guard is gone**, and that is an assertion in
+[`tests/chat-reduce.test.ts`](../../tests/chat-reduce.test.ts) that changed on purpose: the test that
+said a repair does not land over a live turn now says it lands and takes nothing away. The cost of
+the title rule is written down rather than discovered later: **a rename made in another tab is not
+picked up by a repair**, and arrives on the next load with everything else.
+
+### And the gate now covers stop and cancel
+
+Their requests were still `fetch`es in the hook, so their failures dispatched ungated `error.set` and
+`tombstone.removed`. Provenance already kept the thread deleted in `cancel → delete → late 409`, but
+the obsolete cancel still wrote "Couldn't discard…" over a delete that had succeeded. A delete
+supersedes everything for its conversation, the wish included, so a superseded wish's failure now
+lifts nothing and says nothing — and a refused cancel lifts **its own** tombstone and writes its
+error in one transition, which is what Sol asked for.
+
+### The duplicate one-writer guard
+
+Greg found, probing this stage, that `turn.disconnected` carried a second copy of the one-writer
+check that `recovery.started` already had, and that deleting either reddened nothing. It is
+reachable — retry into a row a recovery is chasing, and the turn then disconnects — but only one
+panel change away rather than today, because the retry button is offered on the last answer and a
+recovering row is `pending`. **Two copies of an invariant are one tested copy and one untested one**,
+and the untested one is where it will next be got wrong. Both paths go through `startRecovery` now,
+so there is one copy, and the probe that deletes it turns three tests red.
+
+### The gap the browser pass pointed at: deleting into a live turn
+
+**Not a bug, and now covered.** A browser pass on 2026-08-28 reported the delete button doing nothing
+when pressed twice while an answer was streaming — against a tree three agents were editing, with HMR
+failing and the dev server dying under it, so weak evidence about the code. What was real is that
+**nothing in `tests/` covered deleting a conversation while a turn was live**, in either suite.
+
+It does not reproduce. `delete.started` lays a `final` tombstone and emits its command
+unconditionally, and [`tests/chat-delete-live-turn.test.ts`](../../tests/chat-delete-live-turn.test.ts)
+now says so at the hook: the DELETE leaves the tab, the conversation goes, the still-open stream's
+later `delta` and `done` frames cannot put it back, and a second press changes neither. **Asserted on
+the request before the screen**, because a conversation vanishing is not evidence the server heard —
+that is [cancel-before-begin.md](../postmortems/cancel-before-begin.md)'s whole shape. Watched red by
+adding the refusal the browser pass implied: all three go red, as do three reducer tests.
+
+**And the neighbouring case, because the two are one word apart in `ChatApi`.** `thread.discarded`
+refuses while a turn draws into the conversation; `delete.started` deliberately does not. That is
+right: `discard` is the local forget for a conversation nobody has said anything in, and a *retry*
+writes nothing to `base`, so a conversation being rewritten can look empty while the reader watches
+it. A **delete** that quietly did nothing because something happened to be streaming would be the
+same silent success as the cancel that was never sent. Both halves are now asserted against one state
+in [`tests/chat-reduce.test.ts`](../../tests/chat-reduce.test.ts) — that is where the empty-`base`
+case can be built. The panel cannot confuse them either: `onDelete` always calls `remove`, and
+`onDiscard` is called from one place, `leave()`, only when the conversation *on screen* has no
+messages — which a drawing turn makes false.

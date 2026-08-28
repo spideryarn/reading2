@@ -296,6 +296,123 @@ describe("a cancel pressed before the begin frame", () => {
   });
 });
 
+/**
+ * **`began` is not a sound predicate for a retry**, which is GPT Sol's finding 2
+ * on stage 2 (docs/plans/chat-operation-model-stage2-review-sol.md).
+ *
+ * A retry writes into the answer row it is replacing, and that row already has
+ * the server's own name — it came back in a load. But the retry's *operation*
+ * starts `began: false` like every other turn, so asking "has the server named
+ * this row?" through the operation gave the wrong answer twice:
+ *
+ * - a **cancel** waited for a frame it did not need, when it could have named
+ *   the stored row immediately;
+ * - a **stop** waited, and if that retry died before its `begin` frame the wish
+ *   was never consumed — it sat in the hook under a row id a *later* retry
+ *   reuses, and fired at that one's `begin` frame instead.
+ */
+describe("a retry, whose row the server has already named", () => {
+  const stored: ChatThread = {
+    id: "spya-th03",
+    kind: "chat",
+    title: "a stored conversation",
+    createdAt: "2026-08-27T10:00:00.000Z",
+    updatedAt: "2026-08-27T10:00:00.000Z",
+    messages: [
+      { id: "msg-q", role: "user", text: "why?", createdAt: "2026-08-27T10:00:00.000Z", status: "done" },
+      {
+        id: "msg-a",
+        role: "assistant",
+        text: "because.",
+        createdAt: "2026-08-27T10:00:01.000Z",
+        status: "done",
+      },
+    ],
+  };
+
+  it("cancels at once rather than waiting for a frame it does not need", async () => {
+    const turn = controllableStream();
+    answer = (url, init) => {
+      const method = init?.method ?? "GET";
+      if (method === "GET") return Promise.resolve(json({ threads: [stored] }));
+      if (url.endsWith("/stop") || url.endsWith("/cancel")) {
+        recordPost(url, init);
+        return Promise.resolve(json({ cancelled: true }));
+      }
+      return Promise.resolve({ ok: true, body: turn.stream } as unknown as Response);
+    };
+    await mount();
+
+    act(() => {
+      api().retry(stored.id, "msg-a");
+    });
+    // No `begin` frame yet — and none is needed. `msg-a` is the server's own
+    // name for this row, so the destructive request can be matched today.
+    act(() => {
+      api().cancelAndDiscard(stored.id, "msg-a");
+    });
+
+    expect(posts, "the cancel waited for a name the row already had").toHaveLength(1);
+    expect(posts[0]?.url).toBe(`/api/chat/${SLUG}/${stored.id}/cancel`);
+    expect(posts[0]?.body.messageId).toBe("msg-a");
+    expect(posts[0]?.body.expectedTailId).toBe("msg-a");
+  });
+
+  /**
+   * **A wish that outlives the turn it was waiting on stops the wrong answer.**
+   *
+   * Retry, press stop before the frame, watch that retry fail. Retry again. The
+   * second attempt's `begin` frame carries the same row id — a retry reuses the
+   * row — so the stranded wish matches it and stops an answer the reader has
+   * just asked for.
+   */
+  it("does not let a stop stranded by a failed retry stop the next one", async () => {
+    let attempt = 0;
+    const second = controllableStream();
+    answer = (url, init) => {
+      const method = init?.method ?? "GET";
+      if (method === "GET") return Promise.resolve(json({ threads: [stored] }));
+      if (url.endsWith("/stop") || url.endsWith("/cancel")) {
+        recordPost(url, init);
+        return Promise.resolve(json({ stopped: true }));
+      }
+      attempt += 1;
+      if (attempt === 1) return Promise.resolve(json({ error: "the model is busy" }, 503));
+      return Promise.resolve({ ok: true, body: second.stream } as unknown as Response);
+    };
+    await mount();
+
+    act(() => {
+      api().retry(stored.id, "msg-a");
+    });
+    act(() => {
+      api().stop(stored.id, "msg-a");
+    });
+    // Nothing yet: the attempt has no name, so there is nothing to stop.
+    expect(posts).toHaveLength(0);
+
+    // That attempt dies before it is ever named.
+    await settle();
+    expect(threadIn(stored.id)?.messages.at(-1)).toMatchObject({ status: "error" });
+
+    // The reader tries again, and this one starts properly.
+    act(() => {
+      api().retry(stored.id, "msg-a");
+    });
+    act(() => {
+      second.frame("begin", {
+        threadId: stored.id,
+        title: stored.title,
+        messageId: "msg-a",
+        attempt: "att-2",
+      });
+    });
+    await settle();
+
+    expect(posts, "a stop left over from a dead retry stopped the next answer").toHaveLength(0);
+  });
+});
+
 describe("a refused cancel", () => {
   const stored: ChatThread = {
     id: "spya-th01",
@@ -417,6 +534,14 @@ describe("a cancel that fails after the reader has deleted the conversation", ()
     await settle();
 
     expect(threadIn(stored.id), "a deleted conversation came back").toBeUndefined();
+    /* **And it says nothing either**, which is GPT Sol's finding 4 on stage 2.
+       Provenance keeps the conversation deleted; the obsolete cancel still wrote
+       "Couldn't discard that conversation…" over a delete that had succeeded,
+       because its failure was dispatched from a `catch` in the hook with no
+       operation behind it and therefore no gate in front of it. The delete
+       supersedes everything for that conversation, this cancel included, and a
+       superseded operation's failure has nothing to say. */
+    expect(api().error, "an obsolete cancel reported over a successful delete").toBeNull();
   });
 });
 

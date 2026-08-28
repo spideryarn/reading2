@@ -172,14 +172,64 @@ which nothing represents.
 two checks today and of nothing that says so. A third wish, added the same way the second one was,
 reintroduces exactly this.
 
-The structural fix is in
-[chat-operation-model.md](../plans/chat-operation-model.md#stage-3-intent-and-the-invariants): stop
-and cancel stop being two `Set`s of message ids consulted against a variable that changes meaning
-mid-function, and become one `intent` field on the operation itself, set once, read once, with no
-step in between where the id it is compared against can have moved. There is no reassignment for the
-read to fall on the wrong side of, because there is no second, mutable name for the row — the
-operation carries its own identity for its own lifetime. That is what closes the class rather than
-the instance.
+**Fixed 2026-08-28, in stage 2** of
+[chat-operation-model.md](../plans/chat-operation-model.md) — a stage earlier than this file first
+said, and by a different move than the one it predicted.
+
+What it turns on is the fact every failed fix needed and nothing had: **does this row have a name the
+server would recognise yet?** `TurnOperation.began` is that fact. So `stop` and `cancelAndDiscard`
+ask it before they post. If the row has a server name, the request goes out at once, as it always
+did. If it has not, the wish waits, and the `begin` frame fires it **once** — with the id, the
+attempt and the tail the server itself minted.
+
+Both rules fall out of that, and the second one falls out for a better reason than "we read the
+status more carefully". Send once, when there is an id the server can match. And nothing has to
+decide what "the server could not match that id" *means*, because the request that provoked that
+answer is never sent: the `200 { cancelled: true }` case is out of reach from this window, and a 409
+now means what `cancelChat` says it means — somebody else moved this conversation on — so putting it
+back is right rather than accidental.
+
+None of the four rejected fixes was used. The `pendingId` reassignment they all had to reason about
+is gone with `run` itself: an operation carries its own identity for its own lifetime, so there is no
+second, mutable name for the row and no line whose position other code depends on.
+
+`tests/chat-intent-paths.test.ts` and `tests/chat-cancel-before-begin.test.ts` pin the new behaviour
+and both were watched failing against the old code first. **Stage 3 still closes the wider class**:
+stop and cancel become one `intent` field the type will not let hold both at once, which is today an
+invariant maintained by a comment.
+
+### That fix did not work in production, and the reason is worth more than the fix
+
+**Corrected 2026-08-28**, hours later, by GPT Sol's review of the built stage 2
+([chat-operation-model-stage2-review-sol.md](../plans/chat-operation-model-stage2-review-sol.md),
+finding 1). Everything above is true of the *decision* — `began` is the fact every failed fix needed
+— and false of what the reader got, because of where the wish was consumed.
+
+`cancelAndDiscard` recorded the wish and sent nothing. Then `ChatDialog` called `onClose()` on the
+very next line ([`ChatDialog.tsx:245`](../../src/web/ChatDialog.tsx#L245)), the dialog unmounted,
+React ran the effect cleanup that sets `controller.onNamed = null`, and when the `begin` frame
+arrived there was nobody left to send the request. **So the correction was dead again**, in a
+different way and for the third time in this one window: born dead, then live but unmounted.
+
+Two things follow, and the second is the general one.
+
+- **The wish must not live anywhere React can take away.** It is an `IntentOperation` in the
+  reducer's state now: the reducer emits the request as a command at `turn.began` and the controller
+  performs it. The controller outlives the hook because the stream still holds it. `began` is still
+  the fact the decision turns on — it is just no longer consulted by anything that can be unmounted.
+- **Every test in the file mounted the hook and kept it mounted.** That is the harness, not the
+  feature, and it made an entire class of bug invisible: anything whose correctness depends on what
+  happens *after* the reader closes the panel. This is the same lesson as the one above one level up
+  — that file says a test has to ask about the request rather than the screen, and this says it has
+  to ask at the moment production actually asks.
+  [`tests/chat-unmounted-turn.test.ts`](../../tests/chat-unmounted-turn.test.ts) is that lifecycle:
+  mount, act, **unmount**, then let the world answer. Both halves of this window are in it, and both
+  were watched failing first.
+
+A third correction came with it: `began` is not sound for a **retry**, whose row the server named
+long ago. A cancel of one waited for a frame it did not need, and a stop of one that died before its
+frame was left in the `Set` under a row id the *next* retry re-uses — so that attempt's `begin` frame
+fired it and stopped an answer the reader had just asked for. Both are gone with the sets.
 
 ## What would have caught this earlier, and what does now
 
@@ -226,9 +276,11 @@ one is a wrong answer with a green tick next to it. Renamed 2026-08-28 to say wh
   fix
 - [chat-operation-model-acceptance.md](../plans/chat-operation-model-acceptance.md) — the audit that
   found `cancelAndDiscard` had never been called by any test before this net was built
-- [chat-intent-paths.test.ts](../../tests/chat-intent-paths.test.ts) — the test that found this
+- [chat-intent-paths.test.ts](../../tests/chat-intent-paths.test.ts) — the test that found this, and
+  now the one that pins one request instead of two
 - [chat-cancel-before-begin.test.ts](../../tests/chat-cancel-before-begin.test.ts) — what the reader
-  is left with, for each of the two answers the route gives the doomed request
+  was left with for each of the two answers the route gives the doomed request, rewritten in stage 2
+  to ask the same two questions of the fixed client
 - [half-swapped-message-ids.md](half-swapped-message-ids.md) — the same shape one file and two days
   earlier: a value nothing renders, corrected in one place and not the other it needed
 - [silent-success.md](../reusable/silent-success.md) — the pattern this is an instance of
