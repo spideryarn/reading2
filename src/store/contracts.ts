@@ -728,6 +728,53 @@ export interface AdminStore {
   listUsersAcrossOwners(): Promise<AdminUser[]>;
 }
 
+/* ------------------------------------------------------------- sharing -- */
+
+/**
+ * `private` or `public`, and **never `published`**.
+ *
+ * `article_revisions.status` already has a value spelled `published` and it
+ * means *the pipeline finished*, not *anybody may read this*. Two meanings of
+ * one word, two tables apart, is how a mistake gets made at three in the
+ * morning. docs/plans/public-read-only-access.md.
+ */
+export type Visibility = "private" | "public";
+
+/** What the switch answers with: the whole state of the subresource. */
+export interface VisibilityState {
+  visibility: Visibility;
+  /** ISO when it was last turned on, or `null` while it is private. */
+  publicAt: string | null;
+}
+
+/**
+ * May a stranger read this article?
+ *
+ * **Not `guarded(...)` like the reads above it**, and the asymmetry is the same
+ * one `AdminStore` has: there is a Postgres implementation and a filesystem
+ * *refusal*. `data/` has one directory per slug and nowhere to record that a
+ * document is shared — so the `files` side cannot be written, only declined.
+ * See src/store/index.ts.
+ */
+export interface VisibilityStore {
+  /**
+   * Make it so, and say what is now true.
+   *
+   * **Idempotent.** Asking for the state the article is already in returns the
+   * current representation and changes nothing — no new `public_at`, no second
+   * event. That is what makes the change log a history rather than a count of
+   * button presses.
+   *
+   * `rightsConfirmed` is recorded rather than checked here: the route refuses a
+   * publish that does not carry it (src/routes.ts), and this records what the
+   * owner said, which is the thing a complaint would ask about.
+   *
+   * Throws 404 for a slug this reader does not own — never 403, which would
+   * confirm that somebody else's article exists.
+   */
+  set(slug: string, to: Visibility, rightsConfirmed: boolean): Promise<VisibilityState>;
+}
+
 /* -------------------------------------------------------- the AI ledger -- */
 
 /**

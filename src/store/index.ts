@@ -68,6 +68,7 @@ import type {
   ReaderStore,
   SearchStore,
   ShelfStore,
+  VisibilityStore,
 } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import {
@@ -91,6 +92,7 @@ import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgSearchStore } from "./pg-searches.js";
 import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
+import { pgVisibilityStore } from "./pg-visibility.js";
 
 /**
  * The flag and the refusal both live in [live.ts](live.ts), which imports
@@ -331,6 +333,45 @@ const adminOnFiles: AdminStore = {
 
 export const adminStore: AdminStore =
   STORE === "postgres" ? guardDbStore("admin", pgAdminStore) : adminOnFiles;
+
+/* ------------------------------------------------------------- sharing -- */
+
+/**
+ * May a stranger read this article — the owner's switch.
+ *
+ * Selected the same way `adminStore` is, and for the same reason: there is a
+ * Postgres implementation and a filesystem *refusal*, not two implementations
+ * and a flag. `data/` is one directory per slug and there is nowhere in it to
+ * record that a document is shared.
+ *
+ * Declined with its own sentence rather than `notMigrated`'s, which says "no
+ * Postgres implementation yet" — the opposite of what is true here, and it would
+ * send whoever read it to the wrong plan. The alternative — quietly reporting
+ * success — is the failure this whole directory keeps warning about: a toggle
+ * that flips, says nothing, and shares nothing.
+ * docs/reusable/silent-success.md.
+ *
+ * The public *reads* are deliberately not wired through this file at all. They
+ * go straight to src/store/public-reader.ts from src/public/routes.ts, because
+ * this module imports the whole read layer and the public import graph is
+ * asserted closed against it — tests/public-imports.test.ts.
+ * docs/plans/public-read-only-access.md.
+ */
+const visibilityOnFiles: VisibilityStore = {
+  set: () => {
+    throw Object.assign(
+      new Error(
+        "Sharing needs Postgres — the filesystem store has no visibility column, so " +
+          "there is nowhere to record that a document is shared. Run with " +
+          "SPIDERYARN_STORE=postgres. See docs/plans/public-read-only-access.md.",
+      ),
+      { status: 501 },
+    );
+  },
+};
+
+export const visibilityStore: VisibilityStore =
+  STORE === "postgres" ? guardDbStore("visibility", pgVisibilityStore) : visibilityOnFiles;
 
 /* -------------------------------------------------------- the AI ledger -- */
 
