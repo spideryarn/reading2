@@ -174,10 +174,12 @@ function git(...args: string[]): string {
 /**
  * `opts.env` may set a variable **or unset one**, by giving it `undefined`.
  *
- * Unsetting matters as much as setting here: the preflight build has to run in
- * an environment it fully describes, and a stray `DATABASE_URL` exported in
- * somebody's shell would otherwise reach the guards in src/store/index.ts and
- * make the gate's answer depend on whose terminal it ran in.
+ * Unsetting matters as much as setting: the preflight has to run in an
+ * environment it fully describes, or the gate's answer depends on whose terminal
+ * it ran in. **Nothing passes `undefined` today** — `BUILD_ENV` did, to keep a
+ * stray `DATABASE_URL` away from the import-time guards, and no longer needs to
+ * (see `BUILD_ENV` below). Kept because the capability is two lines and the next
+ * import-time guard will want it.
  */
 function run(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {}) {
   const env: NodeJS.ProcessEnv = { ...process.env, ...opts.env };
@@ -433,32 +435,41 @@ async function preflight(): Promise<string> {
 /**
  * The smallest environment in which this repo will build, spelled out.
  *
- * **Every value here is a placeholder and none of them is reachable.** They
- * exist because `vite.config.ts` imports `src/routes.ts`, which reaches
- * `src/store/index.ts`, which **throws at import** when the configuration it
- * sees is incoherent for production — and `vite build` sets `NODE_ENV=production`
- * whatever you are doing. Nothing in the build ever connects to any of them; the
- * guards only ask whether they are set and whether they agree with each other.
+ * **Both values are placeholders and neither is reachable.** They are compiled
+ * into the client bundle by `import.meta.env`, and `src/web/lib/supabase.ts`
+ * throws at module load without them — so a build that lacks them emits a bundle
+ * that is broken in a way no exit code reports. The preflight builds a
+ * working-shaped bundle instead. Nothing in a build ever connects to either.
  *
  * Named here rather than inherited from `.env.local` on purpose: what
  * production-parity needs should be a list somebody can read, not whatever
  * happens to be in one person's file. The cost is that the list can fall behind
- * the guards — it did, within hours, when a second guard was added requiring the
+ * the guards — it did, within hours, when a guard was added requiring the
  * Supabase Storage pair — so `explainBuildFailure` below turns that into a
  * pointer at this constant rather than an accusation against the commit.
  *
- * `DATABASE_URL: undefined` is deliberate. Left inherited it would be a real
- * connection string for a *different* project from the placeholder
- * `SUPABASE_URL` above, and `projectMismatch` would refuse the pair — correctly,
- * and for a reason that has nothing to do with the commit being gated.
+ * ## What used to be here, so nobody puts it back
+ *
+ * This list also carried `SPIDERYARN_STORE: "postgres"`, a `SUPABASE_URL` /
+ * `SUPABASE_SERVICE_ROLE_KEY` pair, and `DATABASE_URL: undefined`. **None of
+ * them was about the build.** `vite.config.ts` imported `src/routes.ts` at the
+ * top level, which reaches `src/store/index.ts`, which throws at import when the
+ * store is the filesystem one and `NODE_ENV=production` — and `vite build` sets
+ * that whatever you are doing. So the store name was here to dodge that import;
+ * the Supabase pair was here because naming a Postgres store demands it; and
+ * `DATABASE_URL` had to be *deleted* because an inherited real one would not
+ * match the placeholder `SUPABASE_URL` and `projectMismatch` would refuse the
+ * pair. Four variables, one root cause, none of it the commit's business.
+ *
+ * That import is now lazy and server-only, so a build never boots a store.
+ * Verified with the store name absent: both `npm run build` and the API build
+ * exit 0. A build proves the client resolves, bundles and parses — it is not,
+ * and never was, a check that production is configured. That assurance lives in
+ * the deployed server's own boot guard, the API smoke checks, and `db:check`.
  */
 const BUILD_ENV: NodeJS.ProcessEnv = {
-  SPIDERYARN_STORE: "postgres",
-  SUPABASE_URL: "https://deploy-preflight.supabase.co",
-  SUPABASE_SERVICE_ROLE_KEY: "placeholder-for-the-preflight-build",
   VITE_SUPABASE_URL: "https://deploy-preflight.supabase.co",
   VITE_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_placeholder_for_the_preflight_build",
-  DATABASE_URL: undefined,
 };
 
 /**
@@ -498,12 +509,15 @@ function explainBuildFailure(output: string): string {
  *
  * ## The environment, and why the gates get different amounts of it
  *
- * The build gets **one named variable**, not an inherited `.env.local`.
- * `vite.config.ts` imports `src/routes.ts`, which reaches `src/store/index.ts`,
- * which throws at import when `NODE_ENV=production` and `SPIDERYARN_STORE` is
- * not `postgres` — so a clean checkout of a perfectly good commit fails with a
- * message about the store, and the gate's first act would be to accuse an
- * innocent commit. What production-parity needs should be a documented list.
+ * The build gets **two named variables**, not an inherited `.env.local`: what
+ * production-parity needs should be a documented list, not whatever happens to
+ * be in one person's file. It used to need four more, all of them about a store
+ * a build never boots — see `BUILD_ENV` above for why they went.
+ *
+ * Note the order: the build runs **before** `.env.local` is linked in below, so
+ * `loadEnvLocal` finds no file and `BUILD_ENV` is the whole story. That is what
+ * makes the list above honest rather than decorative, and it is why the link
+ * happens where it does.
  *
  * The tests cannot have that today, and this says so rather than being quiet:
  * the suite is **not hermetic**. In a clean worktree 26 files fail — the client

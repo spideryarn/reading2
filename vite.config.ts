@@ -2,7 +2,6 @@ import { fileURLToPath } from "node:url";
 import { defineConfig, type Connect } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import { handleApi } from "./src/routes.js";
 import { loadEnvLocal } from "./src/env.js";
 import { errorFields, log } from "./src/log.js";
 import { missingClientEnv, resolveBuildStamp } from "./scripts/build-stamp.js";
@@ -13,36 +12,53 @@ import { sentrySourceMaps, sentryUploadEnabled } from "./scripts/sentry-build.js
  * rather than as a separate server so there's nothing to run in a second
  * terminal while the ideas are still moving — see src/routes.ts for the routes
  * themselves, and for the seam a standalone server slots into later.
+ *
+ * **`src/routes.js` is imported here, dynamically, and not at the top of this
+ * file.** It reaches `src/store/index.ts`, which refuses at module load when
+ * the filesystem store is selected in production — rightly, because that store
+ * has no owner column. But `vite build` sets `NODE_ENV=production`, so a
+ * top-level import made *building the client bundle* boot the server store and
+ * trip a guard that is about serving. `npm run build`, a documented gate, then
+ * failed on any machine with the default `SPIDERYARN_STORE=files`. The client
+ * bundle never consults a store; only a server does, so only a server imports
+ * one.
+ *
+ * Awaited by the hooks below rather than inside the middleware, so the refusal
+ * still lands at **server boot**. A store misconfiguration must not first show
+ * up as a 500 on somebody's first request.
  */
-const apiMiddleware: Connect.NextHandleFunction = (req, res, next) => {
-  handleApi(req, res).then(
-    (handled) => {
-      if (!handled) next();
-    },
-    (err: Error) => {
-      // handleApi answers its own expected failures; reaching here means a bug,
-      // and a hung request would look exactly like a slow model call.
-      //
-      // It also means handleApi's own `finally` never ran, so this is the only
-      // line the request will ever get — hence the stack, and hence logging
-      // before answering rather than after: `res.end` is the last thing that
-      // can go wrong, and losing the reason to it would be the worst trade
-      // here.
-      // The path without its query string, the same as `handleApi` does and for
-      // the same reason: this writes it into the message as well as the object,
-      // and redaction matches key paths, never text. A `?token=…` here would be
-      // unredactable in both places. See docs/project/logging.md.
-      const path = (req.url ?? "").split("?")[0] ?? "";
-      log("http").error(
-        { ...errorFields(err), method: req.method, path, status: 500 },
-        `${req.method} ${path} 500`,
-      );
-      res.statusCode = 500;
-      res.setHeader("Content-Type", "application/json");
-      res.end(JSON.stringify({ error: err.message }));
-    },
-  );
-};
+async function createApiMiddleware(): Promise<Connect.NextHandleFunction> {
+  const { handleApi } = await import("./src/routes.js");
+  return (req, res, next) => {
+    handleApi(req, res).then(
+      (handled) => {
+        if (!handled) next();
+      },
+      (err: Error) => {
+        // handleApi answers its own expected failures; reaching here means a
+        // bug, and a hung request would look exactly like a slow model call.
+        //
+        // It also means handleApi's own `finally` never ran, so this is the only
+        // line the request will ever get — hence the stack, and hence logging
+        // before answering rather than after: `res.end` is the last thing that
+        // can go wrong, and losing the reason to it would be the worst trade
+        // here.
+        // The path without its query string, the same as `handleApi` does and
+        // for the same reason: this writes it into the message as well as the
+        // object, and redaction matches key paths, never text. A `?token=…` here
+        // would be unredactable in both places. See docs/project/logging.md.
+        const path = (req.url ?? "").split("?")[0] ?? "";
+        log("http").error(
+          { ...errorFields(err), method: req.method, path, status: 500 },
+          `${req.method} ${path} 500`,
+        );
+        res.statusCode = 500;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: err.message }));
+      },
+    );
+  };
+}
 
 /**
  * Resolved once at config time rather than per hook, because three things now
@@ -132,10 +148,16 @@ export default defineConfig(() => {
       },
       {
         name: "spideryarn-api",
+        // `apply: "serve"` is belt-and-braces — both hooks below only ever run
+        // for a server anyway. It is here to say that this plugin has no part in
+        // a build, which is the mistake the dynamic import above exists to undo.
+        apply: "serve" as const,
         // Block body, not an arrow-with-expression: configureServer treats a
         // returned value as a post-hook, and `.use()` returns the connect app.
-        configureServer(server) {
-          server.middlewares.use(apiMiddleware);
+        // Vite awaits both hooks, so the `await` here is what keeps a store
+        // misconfiguration a boot-time refusal rather than a first-request 500.
+        async configureServer(server) {
+          server.middlewares.use(await createApiMiddleware());
         },
         /* The same API in front of the built bundle, so `vite preview` serves
            something a reader could actually use.
@@ -149,8 +171,8 @@ export default defineConfig(() => {
            hook, `vite preview` has no `/api`, the article never loads, and the
            only measurable thing is the dev server. See
            docs/project/performance.md. */
-        configurePreviewServer(server) {
-          server.middlewares.use(apiMiddleware);
+        async configurePreviewServer(server) {
+          server.middlewares.use(await createApiMiddleware());
         },
       },
       /* **Last, and the plugin's own docs are explicit about it.** It works on

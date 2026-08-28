@@ -70,12 +70,28 @@ The bug this catches — code committed that imports something still uncommitted
 has broken `main` [three times](../project/deployment.md#the-two-do-not-agree-and-git-is-the-one-telling-the-truth).
 At two seconds there is no argument left against checking it every time.
 
-**4. That build fails in a clean worktree, and the reason is not the commit.** ⚠️
-`vite.config.ts` imports `./src/routes.js`, which reaches `src/store/index.ts`, which **throws at
+**4.** ~~**That build fails in a clean worktree, and the reason is not the commit.**~~ ⚠️
+~~`vite.config.ts` imports `./src/routes.js`, which reaches `src/store/index.ts`, which **throws at
 import** when `NODE_ENV=production` and `SPIDERYARN_STORE` is not `postgres`. So `npm run build`
 on this laptop passes only because `.env.local` exists, and a clean checkout of a perfectly good
 commit fails with a message about the store. The preflight must supply that variable, and its
-failure text must say so — otherwise the gate's first act is to accuse an innocent commit.
+failure text must say so — otherwise the gate's first act is to accuse an innocent commit.~~
+
+> **Superseded, 2026-08-28 — do not restore the eager import.** The mechanism above was real, but
+> the conclusion drawn from it was the wrong way round: the fix was to stop the *build* importing a
+> *server*, not to feed the build a store. `vite.config.ts` now loads `./src/routes.js` with a lazy
+> `await import()` inside its `configureServer` / `configurePreviewServer` hooks, so a build never
+> boots a store and needs no `SPIDERYARN_STORE` at all. `BUILD_ENV` in
+> [`scripts/deploy.ts`](../../scripts/deploy.ts) lost four variables as a result.
+>
+> One detail here was also wrong when it was written: **`.env.local` does not contain
+> `SPIDERYARN_STORE`**, so `npm run build` was failing on this laptop too, not passing. It stayed
+> unnoticed because the preflight supplied the variable and nobody ran the bare gate.
+>
+> A build proves the client resolves, bundles and parses. It is not a check that production is
+> configured — that lives in the deployed server's boot guard, the API smoke checks and `db:check`.
+> The guard in [`src/store/index.ts`](../../src/store/index.ts) is **unchanged** and still refuses
+> at server boot, `vite preview` included.
 
 **5. The test suite is not hermetic.** ⚠️ In a clean worktree of HEAD, 26 test files fail: the
 client ones cannot even be collected without `VITE_SUPABASE_URL`, and the pipeline ones `ENOENT` on
@@ -213,7 +229,7 @@ Numbered because the order is the design.
 
 | | Env it needs | Why here |
 |---|---|---|
-| `npm run build` + the api build | `SPIDERYARN_STORE=postgres`, and nothing else | The three-times bug. This is the only check that can catch it |
+| `npm run build` + the api build | the `VITE_SUPABASE_*` pair, and nothing else (2026-08-28: was `SPIDERYARN_STORE=postgres` — see [fact 4](#what-we-measured-first)) | The three-times bug. This is the only check that can catch it |
 | `npm run typecheck` | same | |
 | `npm test` | plus symlinked `.env.local` and `data/` | Because the suite is not hermetic ([fact 5](#what-we-measured-first)) |
 

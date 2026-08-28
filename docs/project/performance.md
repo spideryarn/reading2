@@ -684,8 +684,19 @@ Said plainly, because the fixes above are all real and none of them has been sho
 - **Nothing here has been measured on a production build.** `npm run dev` runs `StrictMode`, which
   renders every component twice on purpose, plus `@react-refresh` and unbundled modules.
   `configurePreviewServer` in [`vite.config.ts`](../../vite.config.ts) now puts the API in front of
-  `vite preview` so a built bundle *can* be measured — but `npm run build` refuses to run against
-  the filesystem store, so it needs Postgres up ([supabase-local.md](supabase-local.md)).
+  `vite preview` so a built bundle *can* be measured. **`npm run build` works against any store** —
+  it proves the client resolves, bundles and parses, and it never boots a store at all. It is the
+  `vite preview` step that needs `SPIDERYARN_STORE=postgres` and Postgres up
+  ([supabase-local.md](supabase-local.md)), because preview really does serve API requests and Vite
+  runs it with `NODE_ENV=production`, so the boot guard in
+  [`src/store/index.ts`](../../src/store/index.ts) refuses the filesystem store — rightly, since
+  that store has no owner column.
+
+  Until 2026-08-28 the build refused too, which is why this used to say it needed Postgres:
+  `vite.config.ts` imported `src/routes.ts` at the top level, and `vite build` sets
+  `NODE_ENV=production`. That import is now lazy and only a server does it. **A build proves the
+  bundle, not the deployment** — production-store assurance lives in the deployed server's own boot
+  guard, the API smoke checks and `db:check` ([deployment.md](deployment.md)), never here.
 - **Scrolling is measurably expensive and only half-addressed.** 603ms of blocking work across 27
   seconds of scrolling, in three long tasks. The diagram fix above removes one cause;
   [`Spine.tsx`](../../src/web/Spine.tsx) still sets state on every animation frame during a scroll
