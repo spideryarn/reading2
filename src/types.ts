@@ -105,6 +105,29 @@ export interface TreeNode {
   navLabel?: string;
   summary?: string;
   sourceHeading?: string;
+  /**
+   * **Apparatus rather than argument** — the footnotes, the bibliography.
+   * Absent means the body, which is every node of every tree written before
+   * 2026-08-28.
+   *
+   * The one node the reader can see and jump to that covers the whole
+   * supplement range, appended by src/supplement.ts after the tree is built
+   * from the body alone. It carries an authored `title` and **no `gist`**,
+   * because a gist stands in place of the prose it compresses and the promise
+   * here is that the notes are shown as written.
+   *
+   * **`treatment`, not `role`**, deliberately: on a `Block`, `role` says what
+   * kind of content it is, and reusing the word here would make it mean
+   * structural exclusion as well (GPT Sol's decision 11). This mirrors
+   * `Block.treatment`, which is the axis the whole policy is stated on
+   * (src/block-policy.ts).
+   *
+   * Never infer it from a missing `gist`. `checkTree` states the rule in both
+   * directions — a supplement must not carry one, an internal body node must —
+   * so that a pipeline bug which drops a gist cannot pass as a deliberate
+   * supplement (src/tree-invariants.ts).
+   */
+  treatment?: "supplement";
 }
 
 export interface Tree {
