@@ -122,6 +122,7 @@ Date:   Fri Aug 28 15:29:22 2026 +0300
     Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
     Claude-Session: https://claude.ai/code/session_01M5tbuz57fs7M3nJAf6hzkR
 
+```diff
 diff --git a/src/labels.ts b/src/labels.ts
 index 4edbd77..c038e49 100644
 --- a/src/labels.ts
@@ -633,6 +634,7 @@ index 0000000..fa8a761
 +    }
 +  });
 +});
+```
 
 commit 47a3959c734308dd36f1c23efcee545539283f3e
 Author: Greg Detre <greg@gregdetre.com>
@@ -679,6 +681,7 @@ Date:   Fri Aug 28 15:29:40 2026 +0300
     Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
     Claude-Session: https://claude.ai/code/session_01M5tbuz57fs7M3nJAf6hzkR
 
+```diff
 diff --git a/docs/project/web-client.md b/docs/project/web-client.md
 index dc2befc..73ac2b9 100644
 --- a/docs/project/web-client.md
@@ -1302,6 +1305,7 @@ index 0000000..b47a599
 +    expect(ideasHook?.failed).toBe("Couldn't start the job.");
 +  });
 +});
+```
 
 commit ca1bf40d646cdc5df303371d3be07954a3c2f7ce
 Author: Greg Detre <greg@gregdetre.com>
@@ -1351,6 +1355,7 @@ Date:   Fri Aug 28 15:30:49 2026 +0300
     Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
     Claude-Session: https://claude.ai/code/session_01M5tbuz57fs7M3nJAf6hzkR
 
+```diff
 diff --git a/docs/project/glossary.md b/docs/project/glossary.md
 index 9e3d519..015491a 100644
 --- a/docs/project/glossary.md
@@ -1655,6 +1660,7 @@ index e237734..3be6dc1 100644
   * answered "current" too readily would show up as a stale glossary served for
   * ever — while one that answered too rarely would show up only on the bill.
   */
+```
 
 
 ===== 3806b25 The plan, and the review that found three things wrong with it before it was built

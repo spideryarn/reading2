@@ -490,7 +490,30 @@ is where these were found.
   read as two different things at 1.35rem. This page is the tool for exactly that pass. Deleting it
   would delete the instrument for an outstanding check and leave the check outstanding.
 
-  So it stays until somebody makes the pass. **A question for Greg**, not a piece of work to take.
+  Three more things a subagent found that sharpen it:
+
+  - **`tests/doc-links.test.ts` would go red.** `search-row-colour.md:324` links the file as
+    markdown, and that test checks every such link points at a file that exists. Checked against the
+    broken state rather than assumed: the test currently fails with exactly 8 entries, none of them
+    this one, and deleting would make 9.
+  - **`npm run build` would not break.** `vite.config.ts` sets no `rollupOptions.input`, so
+    `index.html` is the only build entry. The damage would have been dev-only — which is worse for
+    finding it, not better.
+  - **It is now the only intact one.** `rename-preview.html` was the other worked example of this
+    pattern and it was already dangling; it has been deleted. So the repo has exactly one page that
+    mounts a real component outside the auth gate, and it is this one. That matters more than usual
+    because dodging the auth gate is how any component gets looked at in a browser here.
+
+  So it stays until somebody makes the pass. **A question for Greg**, not a piece of work to take:
+  the pass itself is a job, and doing it would close the item properly — the file could then go, with
+  `preview-colour.html` and the markdown link, in one commit.
+- **Four `editTurn` citations are still outstanding**, and finding their owner cost more than the
+  fix will. `src/web/useChat.ts:657`, `src/web/chat/model.ts:229`, `src/web/chat/reduce.ts:231` and
+  `tests/chat-reduce.test.ts:420` all name the deleted function as "the server". Two peer sessions
+  were asked and both said the files are not theirs, so a third holds them. **Do not keep hunting:
+  wait for `git status` to go quiet on those four and fix them then.** The right names are `withEdit`
+  where the point is the rule and `chatStore.edit` where the point is the write. The mentions under
+  `docs/postmortems/` stay as they are — they are records of what was true at the time.
 - **`grantIsOver` and `MAX_UPLOAD_BYTES` re-export lines** in `upload-records.ts:119,182`. The
   functions stay; only the unreferenced re-exports go. **Do not touch `source.ts:186`'s re-export of
   `MAX_UPLOAD_BYTES`** — `pipeline.ts:41` uses it.
