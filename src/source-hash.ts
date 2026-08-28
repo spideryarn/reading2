@@ -85,11 +85,18 @@ export type BlockFingerprint = Pick<Block, "id" | "text"> & {
  * into re-running every paid stage. Any block carrying either ⇒ a versioned,
  * framed representation of all four.
  *
- * **`\u0000` between fields and `\u0001` between blocks, not tab and newline.**
- * The legacy form is ambiguous — a block whose text contains a tab is
- * indistinguishable from a different split — and while that was tolerable for
- * two fields it stops being so for four. The version prefix means the two forms
- * can never collide either.
+ * **`JSON.stringify` over fixed-position arrays, not delimiters.** The first
+ * version of this used U+0000 between fields and U+0001 between blocks, on the
+ * reasoning that the legacy tab-and-newline form was ambiguous and that control
+ * codepoints would not occur in prose. That is not a framing, it is a rarer
+ * delimiter: GPT Sol built two *different* classified articles with the same
+ * fingerprint by putting the delimiters into a block's own text, and I
+ * reproduced it (`69c5527dd4b70843` from both, before the fix). Nothing about a
+ * block's text is under our control — it is whatever the page said — so any
+ * unescaped separator is a collision waiting for a page that contains it, and a
+ * fingerprint collision means two different articles agreeing that neither has
+ * changed. JSON escapes, so the question does not arise. The version prefix
+ * means the three forms can never collide with each other either.
  */
 export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
   /* `!= null` catches both spellings of absent in one test. Deliberately not
@@ -98,9 +105,9 @@ export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
      article on the old branch. */
   const classified = blocks.some((b) => b.role != null || b.treatment != null);
   const canonical = classified
-    ? `spya-blocks/2\u0001${blocks
-        .map((b) => [b.id, b.text, b.role ?? "", b.treatment ?? ""].join("\u0000"))
-        .join("\u0001")}`
+    ? `spya-blocks/3\n${JSON.stringify(
+        blocks.map((b) => [b.id, b.text, b.role ?? "", b.treatment ?? ""]),
+      )}`
     : blocks.map((b) => `${b.id}\t${b.text}`).join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }
@@ -132,13 +139,30 @@ export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
  * as unchanged. `ideas` is the first stage to fold this in — see
  * docs/plans/ideas-mode.md § Freshness.
  */
+/*
+ * **A tree with no supplement node hashes byte for byte as it did before**, and
+ * for the same reason `hashBlocks` above has a legacy branch: today's whole
+ * corpus predates the supplement node (2026-08-28), and folding a sixth field
+ * into the canonical form unconditionally would invalidate every `labels.json`,
+ * `ideas.json` and similarity artefact on disk at once — a mass re-run of paid
+ * stages bought for nothing, since not one of those trees has apparatus in it.
+ * `5bb2ef0284bce2cd` over `example/tree.json`, computed before this stage was
+ * written and pinned in tests/supplement.test.ts.
+ *
+ * The supplemented branch is framed the way `hashBlocks` is, and for the
+ * identical reason: `title` and `gist` are model prose, so an unescaped
+ * delimiter is a collision waiting for the article that contains it. Keyed on
+ * the **tree** rather than per node, so one hash never mixes the two forms.
+ */
 export function structureHash(tree: Tree): string {
-  const canonical = Object.keys(tree.nodes)
-    .sort()
-    .map((id) => {
-      const n = tree.nodes[id]!;
-      return [id, n.parent ?? "", n.range.join(".."), n.title ?? "", n.gist ?? ""].join("\u0000");
-    })
-    .join("\n");
+  const ids = Object.keys(tree.nodes).sort();
+  const supplemented = ids.some((id) => tree.nodes[id]!.treatment != null);
+  const row = (id: string): string[] => {
+    const n = tree.nodes[id]!;
+    return [id, n.parent ?? "", n.range.join(".."), n.title ?? "", n.gist ?? ""];
+  };
+  const canonical = supplemented
+    ? `spya-tree/2\n${JSON.stringify(ids.map((id) => [...row(id), tree.nodes[id]!.treatment ?? ""]))}`
+    : ids.map((id) => row(id).join("\u0000")).join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }

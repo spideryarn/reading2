@@ -148,3 +148,51 @@ describe("the narrow fingerprint reads see the same four fields", () => {
     expect(hashBlocks(twoColumn)).not.toBe(hashBlocks(full));
   });
 });
+
+describe("the classified framing is a framing, not a rarer delimiter", () => {
+  /* GPT Sol broke the first version of this, and it is the failure that would
+     have hurt most: two *different* articles with one fingerprint means both
+     agree that nothing has changed, so every cached artefact on both stays
+     current for ever. The first version separated fields with U+0000 and blocks
+     with U+0001 on the reasoning that control codepoints do not occur in prose.
+     But a block's text is whatever the page said — none of it is ours — so an
+     unescaped separator is a collision waiting for a page that contains one.
+     docs/plans/footnotes-stage3-review-sol.md. */
+  const NUL = "\u0000";
+  const SOH = "\u0001";
+
+  it("does not collide when a block's own text contains the delimiters", () => {
+    const two = [
+      { id: "spya-aaaaaa", text: "first", role: "footnote", treatment: "supplement" },
+      { id: "spya-bbbbbb", text: "second", role: "footnote", treatment: "supplement" },
+    ];
+    /* One block whose text spells out everything the two-block version would
+       have serialised after it: the delimiters, the second id, and its fields. */
+    const one = [
+      {
+        id: "spya-aaaaaa",
+        text: `first${NUL}footnote${NUL}supplement${SOH}spya-bbbbbb${NUL}second`,
+        role: "footnote",
+        treatment: "supplement",
+      },
+    ];
+    expect(hashBlocks(one)).not.toBe(hashBlocks(two));
+  });
+
+  it("still tells two ordinary classified articles apart", () => {
+    /* The control. An implementation that returned a constant, or hashed only
+       the block count, would pass the assertion above and fail here. */
+    const a = [{ id: "spya-aaaaaa", text: "first", role: "footnote", treatment: "supplement" }];
+    const b = [{ id: "spya-aaaaaa", text: "second", role: "footnote", treatment: "supplement" }];
+    expect(hashBlocks(a)).not.toBe(hashBlocks(b));
+  });
+
+  it("keeps text and role on different sides of the seam", () => {
+    /* A block whose *text* is the role string must not hash the same as a block
+       whose role is that string — the shape a delimiter-based format gets wrong
+       in the other direction. */
+    const textCarriesIt = [{ id: "spya-aaaaaa", text: "footnote", role: null, treatment: "supplement" }];
+    const roleCarriesIt = [{ id: "spya-aaaaaa", text: "", role: "footnote", treatment: "supplement" }];
+    expect(hashBlocks(textCarriesIt)).not.toBe(hashBlocks(roleCarriesIt));
+  });
+});

@@ -1040,6 +1040,76 @@ skip themselves silently. A case pinning `deriveLibraryScalars().wordCount` and
 `articleStats().words` to the body, with a control that goes red if either returns zero, now lives
 beside the predicates.
 
+## GPT Sol's review of stage 3 — 2026-08-28
+
+[prompt](footnotes-stage3-review-prompt.md), [answer](footnotes-stage3-review-sol.md). **Verdict:
+blocker**, and it is the fourth round of this feature where a real defect sat under an entirely green
+suite. Every claim below I reproduced myself before acting on it.
+
+### The blocker: two automatic model calls still read the footnotes
+
+The stage's own commit message says notes are out of automatic model work. **That was false for the
+two largest calls in the pipeline.**
+
+- [`toc.ts` `renderBlocks`](../../src/toc.ts) sends every block's text, marking a block
+  `NOT-GISTABLE` only when `!b.gistable` — and a prose footnote *is* gistable, so a note was not even
+  marked. The model could invent sections and gists over the apparatus, and `buildTree` copies them
+  through. That contaminates arc, tweets, glossary, ideas and summaries *indirectly*, because all of
+  them consume tree titles and gists even though their own article evidence is now filtered.
+- [`labels.ts` `renderBatch`](../../src/labels.ts) prints a supplement's full text as context. The
+  `why` marker had been moved to `isStructural`, which is right and is not enough: marking apparatus
+  is not hiding it.
+
+**The test that should have caught this exists and omits exactly these two.**
+`tests/block-policy-prompts.test.ts` plants a token in a note and checks the automatic prompts — arc,
+tweets, glossary, ideas, summarise — and not the ToC, and not labels. A list of consumers written by
+hand is a list of the ones you thought of.
+
+The fix is stage 4's supplement subtree, which Sol arrived at independently: build the model's ToC
+over body blocks, append the deterministic supplement, and skip `!isBodyEvidence` in `renderBatch`
+outright.
+
+### The fingerprint was a rarer delimiter, not a framing
+
+`spya-blocks/2` separated fields with U+0000 and blocks with U+0001, on the reasoning that control
+codepoints do not occur in prose. Sol built **two different classified articles with one
+fingerprint** by putting those delimiters into a block's own text; reproduced here at
+`69c5527dd4b70843` from both. A block's text is whatever the page said — none of it is ours — so any
+unescaped separator is a collision waiting for a page that contains one, and a fingerprint collision
+means two different articles both reporting that nothing has changed.
+
+Now `spya-blocks/3` over `JSON.stringify` of fixed-position arrays, which escapes. Three tests, one
+of which was **run against the old version and goes red**.
+
+### A mutation that survives 293 tests
+
+Write `treatment: null` unconditionally in [`artifacts-pg.ts`](../../src/store/artifacts-pg.ts) and
+`store-roundtrip`, `store-artefacts-pg`, `block-roles`, `store-parity` and `store-block-reads` are
+all still green. The Postgres path could drop the column on every write for ever. The cause is the
+one this plan already names twice: **the committed corpus has no classified blocks**, so the only
+role-bearing round trip is the synthetic one, and it runs against the filesystem store alone.
+
+### Three smaller ones, all correct
+
+- `checkNoteFields` validates each field in isolation, so `role: "footnote"` with no `treatment`
+  imports cleanly — something declaring itself apparatus that every predicate treats as body, which
+  is the silent reclassification the guard exists to stop, coming through the door it left open.
+- `ProfilePage.tsx` now says **"words in all"** over a body-only number. Newly false, and
+  reader-visible.
+- **"Nothing cheaper can fix the stale `word_count`" is too strong, and this plan recorded it as
+  settled.** `article_revisions.stamped_html` is stored and carries the note stamps, so a one-off
+  repair can derive treatment and note ids from it plus the existing block ids and recompute the
+  scalar, with no refetch and no paid stage. We are still choosing to let it heal on re-extraction —
+  but that is now a choice rather than a necessity, which is a different sentence.
+
+### What the review cleared
+
+Worth recording, because a review is evidence in both directions: no asked call was wrongly filtered;
+the two `array_agg`s in `scalarInputsQuery` are genuinely aligned (`ORDER BY ordinal`, with
+`(revision_id, ordinal)` unique); the pinned legacy hash literals are real pre-change values; there
+is no fourth two-column feed into `hashBlocks`; and every remaining direct `gistable` read —
+`TableView.tsx:674`, `blocks.ts`, `pg-shelf.ts` — is correct where it stands.
+
 ## What this is deliberately not doing
 
 - **Parsing `(Smith, 2001)` into a link to its bibliography entry.** That is citation parsing, not
