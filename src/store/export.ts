@@ -47,7 +47,7 @@ import {
 import { blocksArtefact } from "../blocks.js";
 import { type DocumentKind, type RawManifest, sniffKind } from "../fetch.js";
 import { canonicalKey } from "../source.js";
-import { type RawSourceStore, blobStore } from "./blobs.js";
+import { type RawSourceStore, postgresBlobStore } from "./blobs.js";
 import { ownedByReader, ownedSlug } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
@@ -76,6 +76,32 @@ export interface ExportTarget {
 export interface ExportResult {
   readonly slug: string;
   readonly files: readonly string[];
+}
+
+/**
+ * Where the source documents come from, or a refusal — **never `data/_blobs`**.
+ *
+ * The whole of an export's difficulty is that a revision row holds a
+ * *reference* to its source document, so half the backup comes out of Postgres
+ * and half out of a bucket. `blobStore()` picks that bucket from the presence of
+ * two credentials and falls back to the filesystem when either is missing,
+ * which here means reading a directory that has never held these objects: the
+ * export omits every source document, or throws `MissingRawObject` on rows that
+ * are perfectly fine. **A backup that looks complete and is not**, in the tool
+ * you reach for after losing something.
+ *
+ * So the export asks `postgresBlobStore` (src/store/blobs.ts) instead, which
+ * refuses rather than falls back — the same constructor `src/store/index.ts`
+ * uses at boot, because there is only one such pair.
+ *
+ * One function rather than an inline default, because
+ * [`scripts/db-export.ts`](../../scripts/db-export.ts) has to call it **before**
+ * the first article is written. A default parameter fires on the first
+ * `exportArticle`, by which time an earlier slug's directory is already on disk.
+ * docs/plans/delete-the-importer.md § `db:export` must fail closed.
+ */
+export function exportBlobStore(): RawSourceStore {
+  return postgresBlobStore("db:export reads article rows out of Postgres");
 }
 
 /**
@@ -329,12 +355,12 @@ export async function exportArticle(
   slug: string,
   target: ExportTarget,
   /* **Injected, and defaulted at the call rather than inside.** The default is
-     the real bucket, so an ordinary caller writes nothing extra; a test can
-     hand in a store it controls without reaching for the environment. Not
-     optional deeper down — `writeRawDocument` takes it as a required argument,
-     so a future caller cannot forget it and silently get `blobStore()`'s
-     filesystem fallback. */
-  sources: RawSourceStore = blobStore(),
+     the bucket that matches the database, so an ordinary caller writes nothing
+     extra; a test can hand in a store it controls without reaching for the
+     environment. Not optional deeper down — `writeRawDocument` takes it as a
+     required argument, so a future caller cannot forget it and silently get
+     `blobStore()`'s filesystem fallback. */
+  sources: RawSourceStore = exportBlobStore(),
 ): Promise<ExportResult> {
   const db = getDb();
   const rows = await db

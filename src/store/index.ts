@@ -111,49 +111,42 @@ import { pgVisibilityStore } from "./pg-visibility.js";
  */
 export { type StoreName, STORE, storeFromEnv } from "./live.js";
 
-import { projectMismatch } from "./blobs.js";
+import { postgresBlobStore } from "./blobs.js";
 
 if (STORE === "postgres") {
   /**
-   * **The database and the bucket have to be the same Supabase project.**
+   * **Postgres without a matching bucket is not a configuration, it is a split
+   * brain.** Article rows would go to Postgres while their source documents
+   * went to `data/_blobs/` on whichever machine happened to run the fetch,
+   * where no other instance can reach them — or to a *different* Supabase
+   * project from the one the row is stored in, which is the same failure by a
+   * longer route. `DATABASE_URL` chooses the database and the presence of a
+   * service key chooses the blob store; two independent choices, and once a
+   * revision row holds an object key they must agree or the row points at
+   * nothing.
    *
-   * `DATABASE_URL` chooses the database; the presence of a service key chooses
-   * the blob store (src/store/blobs.ts, and deliberately not `SPIDERYARN_STORE`
-   * — blobs follow the credentials, because only Supabase can hand a browser a
-   * write grant). Two independent choices, and once a revision row holds an
-   * object key they must agree or the row points at nothing.
+   * Both refusals now live in the **constructor**, `postgresBlobStore` in
+   * [blobs.ts](blobs.ts), and this line is one of its two callers. They were
+   * written out here until 2026-08-28, and that is exactly how
+   * `scripts/db-export.ts` came to have neither: it imports `src/store/export.js`
+   * and never this file, so the rollback tool ran unchecked. A check that only
+   * one door passes through is not a check.
    *
-   * A boot-time refusal for the same reason as the one below: it would
-   * otherwise surface as a missing source document on some article, weeks
-   * later, which reads like a lost file rather than like a configuration that
-   * was never coherent. Loud, now, before anybody's data is involved.
+   * Boot-time rather than per-request, because otherwise it surfaces as a
+   * missing source document on some article weeks later, which reads like a
+   * lost file rather than like a configuration that was never coherent. Loud,
+   * now, before anybody's data is involved. Only under `postgres`, because it is
+   * only there that a reference is written down at all. GPT Sol raised the
+   * project pair, 2026-08-27, as the one way a dangling reference arrives
+   * without anybody deleting anything — and found that the credentials check I
+   * had written beside it missed the commonest case.
    *
-   * Only under `postgres`, because it is only there that a reference is written
-   * down at all. GPT Sol raised it, 2026-08-27, as the one way the dangling
-   * reference arrives without anybody deleting anything.
+   * The store itself is discarded: the fetch and upload paths call `blobStore()`
+   * for their own, deliberately following the credentials rather than
+   * `SPIDERYARN_STORE` (blobs.ts § Why selection does not read
+   * `SPIDERYARN_STORE`). Constructing one here is how the pair is checked.
    */
-  /**
-   * **Postgres without a blob store is not a configuration, it is a split
-   * brain**, and the comment below claimed a check that did not exist. Article
-   * rows would go to Postgres while their source documents went to
-   * `data/_blobs/` on whichever machine happened to run the fetch, where no
-   * other instance can reach them. `blobStore()` needs *both* the URL and the
-   * service key and falls back to the filesystem silently when either is
-   * missing, so the URL check alone let the commonest version straight through:
-   * a `.env.local` with `SUPABASE_URL` set and the key absent. GPT Sol found
-   * that the check I had written did not cover it, 2026-08-27.
-   */
-  if (!process.env.SUPABASE_URL?.trim() || !process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
-    throw new Error(
-      'SPIDERYARN_STORE is "postgres" but there is no Supabase Storage configured — ' +
-        "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must both be set. Article rows " +
-        "would land in Postgres and their source documents under data/_blobs/, where " +
-        "nothing else can find them. See src/store/index.ts.",
-    );
-  }
-
-  const mismatch = projectMismatch(process.env.DATABASE_URL, process.env.SUPABASE_URL);
-  if (mismatch) throw new Error(`${mismatch} See src/store/index.ts.`);
+  postgresBlobStore('SPIDERYARN_STORE is "postgres"');
 
   // info, not debug: which store is serving reads is the first thing anybody
   // investigating a wrong answer needs to know, and it is one line per boot.

@@ -176,6 +176,21 @@ npm run db:import       # data/<slug>/ → Postgres, idempotent
 npm run db:export -- --out /tmp/rollback   # and back out again
 ```
 
+**`db:export` needs the bucket as well as the database.** A revision row holds a *reference* to its
+source document rather than the document, so `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are as
+required as `DATABASE_URL`, and all three must name the same Supabase project. Set them and the
+export refuses on the first line, before it writes anything.
+
+That is a refusal rather than a warning because of what the alternative did:
+[`blobStore()`](../../src/store/blobs.ts) falls back to `data/_blobs/` when either credential is
+missing, so an export with the key unset read a directory that had never held those objects and
+wrote article directories with their source documents absent — **a backup that looks complete and is
+not**, in the one command anybody runs after losing something. The refusal lives in
+`postgresBlobStore` in [`src/store/blobs.ts`](../../src/store/blobs.ts), which is also what
+`src/store/index.ts` checks the pair with at boot: one pair, constructed in one place rather than
+checked in two. [silent-success.md](../reusable/silent-success.md) ·
+[delete-the-importer.md](../plans/delete-the-importer.md).
+
 | File | What it is |
 |---|---|
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | the seam — deliberately `src/api.ts`'s surface, function for function |

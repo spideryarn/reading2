@@ -244,6 +244,66 @@ export function blobStore(): RawSourceStore {
 }
 
 /**
+ * **Postgres plus the bucket that matches it** — one pair, constructed once.
+ *
+ * `blobStore()` above falls back to the filesystem whenever either credential
+ * is missing, and its comment says so cheerfully: *"Never null — the filesystem
+ * always works."* That is the right answer for a laptop with no container, and
+ * the wrong one the moment article **rows** are in Postgres, because a row
+ * holds a *reference* to its source document rather than the document. Rows in
+ * one place and bytes in another is not a degraded configuration, it is a split
+ * brain: every read of that article finds nothing.
+ *
+ * So anything that reads Postgres article rows asks for its blob store here
+ * instead, and gets a refusal rather than a fallback. Two refusals, and they are
+ * different failures:
+ *
+ * - **either credential missing** — the commonest version is a `.env.local`
+ *   with `SUPABASE_URL` set and the key absent, which the URL-only check this
+ *   replaced let straight through (GPT Sol, 2026-08-27);
+ * - **both present, naming different projects** — `projectMismatch` above. The
+ *   database and the bucket are chosen by two independent mechanisms, and
+ *   nothing else compares them.
+ *
+ * ## Why this is a constructor rather than a check
+ *
+ * Because there is only one such pair, and it should be **built** in one place
+ * rather than **checked** in two. It was checked in one place — the boot of
+ * [index.ts](index.ts) — and `scripts/db-export.ts` does not import that file,
+ * so the rollback tool ran with no check at all and read `data/_blobs` for
+ * objects that live in a bucket. It wrote article directories with their source
+ * documents missing: a backup that looks complete and is not
+ * ([silent-success.md](../../docs/reusable/silent-success.md)), in the one tool
+ * anybody reaches for after losing something.
+ * docs/plans/delete-the-importer.md § `db:export` must fail closed.
+ *
+ * @param who what is asking, as the first clause of the sentence — e.g.
+ *   `'SPIDERYARN_STORE is "postgres"'`. The two callers fail for the same
+ *   reason and arrive by different doors, and the door is the part that tells
+ *   the reader which knob to turn.
+ */
+export function postgresBlobStore(who: string): RawSourceStore {
+  /* `.trim()` on both: a `.env.local` line left as `SUPABASE_SERVICE_ROLE_KEY=`
+     gives an empty string, and a trailing space gives a key that authenticates
+     nothing. Neither is "configured". */
+  const url = process.env.SUPABASE_URL?.trim();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) {
+    throw new Error(
+      `${who}, but there is no Supabase Storage configured — SUPABASE_URL and ` +
+        "SUPABASE_SERVICE_ROLE_KEY must both be set. The article rows are in Postgres, " +
+        "and their source documents would be read from and written to data/_blobs/ on " +
+        "this machine, where nothing else can find them. See src/store/blobs.ts.",
+    );
+  }
+
+  const mismatch = projectMismatch(process.env.DATABASE_URL, url);
+  if (mismatch) throw new Error(`${mismatch} See src/store/blobs.ts.`);
+
+  return supabaseBlobs(url, key);
+}
+
+/**
  * Who can hand a browser a write grant, or `null` if nobody here can.
  *
  * Null is not an error condition to be papered over. It is the honest answer on
