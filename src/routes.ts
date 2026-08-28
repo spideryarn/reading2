@@ -99,7 +99,7 @@ import { isStorableColour } from "./searches.js";
    questions on disk while the paragraphs they point at come from Postgres puts
    the two halves in stores nothing keeps in step. */
 import { fsLocations } from "./store/artifacts-fs.js";
-import { adminStore, commentStore } from "./store/index.js";
+import { adminStore, commentStore, visibilityStore } from "./store/index.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
@@ -111,8 +111,10 @@ import { isSpideryarnId } from "./ids.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
 import { describeAdminMiss, isAdmin } from "./admin.js";
-import { requireUser, type Verifier } from "./auth.js";
+import type { Visibility } from "./store/contracts.js";
+import { assertVerifiedUser, requireUser, type VerifiedUser, type Verifier } from "./auth.js";
 import { UPLOAD_MISSING, UPLOAD_UNAVAILABLE } from "./messages.js";
+import { isPublicNamespace, servePublicApi } from "./public/routes.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
   collectSpend,
@@ -136,7 +138,7 @@ import {
   type UploadRecord,
 } from "./upload-records.js";
 import { errorFields, log, since } from "./log.js";
-import { captureFailure } from "./monitoring.js";
+import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, profileIsStale, renderProfile } from "./profile.js";
 import {
@@ -2220,6 +2222,63 @@ function checkUploadOrigin(
   if (!isUploadId(uploadId)) throw httpError(400, "That is not an upload id");
 }
 
+/**
+ * The body of `PUT /api/article/:slug/visibility`, or a 400.
+ *
+ * Two shapes, and nothing else is accepted:
+ *
+ *     { "visibility": "public", "rightsConfirmed": true }
+ *     { "visibility": "private" }
+ *
+ * **Extra keys are refused**, which is not fussiness. This endpoint decides
+ * whether a third party's full text is served from our origin, and the failure
+ * mode it has to be closed against is a client sending a field this server has
+ * never heard of and believing it took — the shape
+ * docs/reusable/silent-success.md keeps writing up, and the one a 200 is
+ * especially good at hiding (an API that ignores unknown request keys answers
+ * 200 to a request it did not honour).
+ *
+ * **`rightsConfirmed` is not accepted on an unpublish**, and that is a real
+ * rule rather than symmetry. Nobody is asked to confirm anything to take a
+ * document *down*, so accepting it would write a `true` into
+ * `article_visibility_changes` for an act about which nobody confirmed
+ * anything — and that column is precisely the one a rights complaint would ask
+ * about. docs/plans/public-read-only-access.md § Rights and takedown.
+ *
+ * **`=== true`, not truthiness.** `rightsConfirmed: "yes"` and
+ * `rightsConfirmed: 1` are shapes a hand-written client produces, and reading
+ * either as a confirmation would record a confirmation nobody gave.
+ */
+export function parseVisibilityRequest(body: unknown): {
+  visibility: Visibility;
+  rightsConfirmed: boolean;
+} {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw httpError(400, "Expected an object with a visibility");
+  }
+  const { visibility, rightsConfirmed, ...rest } = body as Record<string, unknown>;
+  const extra = Object.keys(rest);
+  if (extra.length) {
+    /* The key names are ours only in the sense that the client chose them, so
+       they are NOT interpolated: every `httpError` message in this file is
+       written to a log, and redaction matches key paths rather than text. */
+    throw httpError(400, "That request had fields this endpoint does not accept");
+  }
+  if (visibility !== "private" && visibility !== "public") {
+    throw httpError(400, 'visibility must be "private" or "public"');
+  }
+  if (visibility === "private") {
+    if (rightsConfirmed !== undefined) {
+      throw httpError(400, "rightsConfirmed is only for sharing, not for unsharing");
+    }
+    return { visibility, rightsConfirmed: false };
+  }
+  if (rightsConfirmed !== true) {
+    throw httpError(400, "Sharing needs rightsConfirmed: true");
+  }
+  return { visibility, rightsConfirmed: true };
+}
+
 export function parseJobRequest(body: unknown): {
   slug: string;
   url?: string;
@@ -3048,6 +3107,209 @@ async function serveApi(
      review. */
   const path = url.split("?")[0] ?? url;
 
+
+  /* Every response leaves by one of the ~14 `send` calls below, the catch, or
+     the 404 at the end — so the log line lives in a single `finally` rather
+     than at each of them. A branch added later cannot forget it, and there is
+     no set of call sites to keep in step. It reads `res.statusCode`, which
+     `send` has just set, so the exit points do not have to report anything. */
+  let failure: unknown;
+  try {
+    /**
+     * **The public namespace, dispatched before the gate and inside this `try`.**
+     *
+     * Before `requireUser`, obviously — the whole point is a reader with no
+     * session. Inside the `try` for the reason the gate itself is: a throw from
+     * above it escapes to the outer handler, which answers a blank 500 on Vercel,
+     * and the `finally` never runs, so the refusal is never logged.
+     *
+     * **`no-store` before the dispatch, not on the successful answers.** GPT Sol's
+     * answer 9, 2026-08-28: a cached public 404 outlives the switch being turned
+     * on, and a cached error outlives it being fixed. Setting the header here means
+     * every response out of the closed room carries it — the 200s, the 404s, the
+     * 405s and the 500s — including the ones thrown from inside it and answered by
+     * the `catch` below.
+     *
+     * Caching comes back only with an invalidation tied atomically to the
+     * visibility change, and with a deployed test that warms the edge, turns the
+     * document private, and proves the next anonymous request cannot get the body.
+     * A manual global purge is not a privacy control.
+     * docs/plans/public-read-only-access.md.
+     */
+    if (isPublicNamespace(path)) {
+      res.setHeader("Cache-Control", "no-store");
+      /* No `req`. See src/public/routes.ts — the public dispatcher is not handed
+         the request object, so "the public routes ignore `Authorization`" is not a
+         rule anybody has to keep. */
+      await servePublicApi({ res, path, method });
+      return true;
+    }
+
+    /* **The gate, and it is inside the `try` — that is the whole of this
+       comment's content.** An earlier plan put it just after the `/api/` prefix
+       check, eighty-five lines above, on the theory that this `try` would turn
+       its thrown `httpError` into the right status. It would not: a throw up
+       there escapes to the outer handler, which answers 500 with the message in
+       dev and a blank 500 on Vercel — and the `finally` below never runs, so
+       **the refusal is never logged at all**. It still fails closed, which is
+       the one mercy, but every word we have written about 401s and 403s would
+       have been false. GPT Sol found it; confirmed by reading the line numbers.
+
+       Before any body is read and before any route matches, so a malformed
+       request from a stranger is a 401 rather than a 400. We owe an
+       unauthenticated caller no diagnosis of their JSON.
+
+       `verify` is a seam rather than a hard call because six test files drive
+       this function with hand-built requests and none of them can mint a real
+       ES256 token. The default is the real verifier, so forgetting to inject
+       cannot make a production build permissive. src/auth.ts. */
+    const user = await requireUser(req, verify);
+    /* **And from here on it is a different function.** Everything the
+       authenticated API does moved into `serveAuthenticatedApi` on 2026-08-28,
+       unchanged, so that its one parameter can be a `VerifiedUser` — a type only
+       `requireUser` can produce (src/auth.ts). Before the split, "an
+       authenticated route reached without authentication" was prevented by this
+       line being above the route table and by nothing else. GPT Sol's answer 2. */
+    await serveAuthenticatedApi(user, { req, res, url, path });
+    return true;
+  } catch (err) {
+    // Anything that knows its own status says so. What is left is either a
+    // missing artefact or a genuine fault, and telling those apart matters: a
+    // blanket 404 made a corrupt comments.json and a bad request both read as
+    // "no such article", which is the wrong thing to go and investigate.
+    const status =
+      (err as { status?: number }).status ??
+      /* A retry or an edit the stored conversation will not accept — a stale
+         tab, a second window, a Back button. 409 rather than 500, because
+         nothing here is broken and the client's job is to reload and look
+         again. See `ChatConflict` in src/chat.ts. */
+      (err instanceof ChatConflict ? 409 : null) ??
+      /* Somebody else's comment already has that id, or that comment already
+         started a different conversation. 409 for the same reason as above:
+         nothing is broken, the client asked for something the stored state will
+         not allow, and reloading is the answer. `CommentIdTaken` in
+         src/comments.ts. */
+      (err instanceof CommentIdTaken ? 409 : null) ??
+      /* Two different failures under one class, and they must not share a code:
+         `missing` is a comment that is not there (404), `free` is a bookmark
+         being pushed down the retired explanation path (409). Guessing one for
+         both would make a deleted comment read as "you cannot answer that". */
+      (err instanceof NotAnExplanation ? (err.why === "missing" ? 404 : 409) : null) ??
+      ((err as NodeJS.ErrnoException).code === "ENOENT" ? 404 : 500);
+    // Handed to `logRequest`, which decides how much of it to write down — the
+    // message for a failure this file chose, the whole stack for one it did
+    // not. That is the point of the exercise: an unexpected throw used to be
+    // mapped to a status, handed to the client and forgotten, so a production
+    // 500 left nothing behind to read.
+    failure = err;
+    /* **The rule is the status we answered with, not who chose it.** If this
+       request logged at `error` level it goes to Sentry, and `logRequest` uses
+       exactly the same threshold two lines down — so the two can never drift
+       into disagreeing about what a fault is.
+
+       What that buys, case by case: a `TypeError` mapped to 500 is reported; so
+       is `src/owner.ts`'s deliberate `status: 500` invariant failure, and so is
+       an authored 502 from a provider. A 404 for a slug with no article, a 400
+       for a bad body, and `ChatConflict`'s 409 are answers rather than faults
+       and are not reported. An error tracker full of mistyped URLs is an error
+       tracker nobody reads.
+
+       src/monitoring.ts decides what may be *said* about the error. This line
+       only decides whether to say anything. */
+    if (status >= 500) captureFailure(err, { method, path, status });
+    send(res, status, { error: (err as Error).message });
+    return true;
+  } finally {
+    logRequest(method, path, res.statusCode, started, failure);
+  }
+}
+
+/**
+ * The request, as the dispatchers below take it.
+ *
+ * `path` is `url` with the query string already removed, computed once in
+ * `serveApi` and handed on — so nothing downstream has to remember which of the
+ * two it is holding. Several routes still match on `url`, which is why both are
+ * here rather than only the safe one.
+ *
+ * **The public dispatcher takes a different, smaller envelope** and in
+ * particular does not take `req` — see `PublicRequest` in src/public/routes.ts.
+ * GPT Sol sketched one shared shape for both; the public half needs no body and
+ * no header, and not handing it the request is a stronger statement of that than
+ * a sentence saying it ignores them.
+ */
+interface ApiRequest {
+  req: IncomingMessage;
+  res: ServerResponse;
+  url: string;
+  path: string;
+}
+
+/**
+ * **Everything behind the gate.** Reached only with a `VerifiedUser`, which only
+ * `requireUser` can make.
+ *
+ * This function is the old body of `serveApi`, moved on 2026-08-28 and otherwise
+ * unchanged — the route declarations and the `if` chain are the same text in the
+ * same order, so the diff reads as a move. It was deliberately **not** redesigned
+ * into a route table on the way: that is a real improvement and it is a different
+ * change, and doing both at once would have made neither reviewable.
+ *
+ * ## What the split buys, which a boolean parameter would not
+ *
+ * `docs/plans/public-read-only-access.md` asked for a check that the authenticated
+ * dispatcher cannot be reached without a user, and noted there is no route table to
+ * enumerate — only an `if` chain. This is the structural version of that check:
+ * the public dispatcher runs *before* `requireUser` and therefore cannot produce
+ * the one type this function accepts.
+ *
+ * A required `AuthedUser` parameter would have prevented omission and nothing
+ * else, because any `{ id, email }` satisfies it. GPT Sol, 2026-08-28:
+ *
+ * > A required parameter prevents omission but accepts any `{ id, email }` object.
+ * > That does not encode “came from `requireUser`”.
+ *
+ * ## Why it returns nothing
+ *
+ * Every branch below answers, and the last one 404s. There is no “I did not handle
+ * it” value, so there is nothing for a caller to fall through on — the same
+ * property `servePublicApi` has, for the same reason.
+ *
+ * ## Why it is exported
+ *
+ * For one test, and the export **is** the thing under test: the boundary is only
+ * worth having if calling it wrongly fails, so tests/public-dispatch.test.ts
+ * calls it with `undefined as never` and asserts it throws before any handler,
+ * any store call or any spy runs. A boundary nobody has watched refuse is not
+ * evidence — docs/reusable/silent-success.md. Nothing in `src/` imports it.
+ */
+export async function serveAuthenticatedApi(
+  user: VerifiedUser,
+  request: ApiRequest,
+): Promise<void> {
+  /* **The type again, at runtime.** `as never`, plain JavaScript and a stale
+     build all get past the compiler; none of them gets past this. It is the
+     first statement in the function on purpose, so it runs before any handler,
+     any store call and any spy a test has installed. src/auth.ts. */
+  assertVerifiedUser(user);
+    /* **The identity is not just checked, it is carried.** Until 2026-08-27 the
+       return value of this call was dropped on the floor: the gate proved a
+       person existed and then every store read went on using the process-wide
+       `SPIDERYARN_OWNER_ID`, so every account that got past it shared one shelf,
+       one profile, one set of chats and one wallet. GPT Sol's review of the
+       built code led with it; Greg chose the real fix over an email allowlist.
+       src/owner.ts explains why this is an AsyncLocalStorage and not forty
+       extra parameters. */
+  setRequestOwner(user.id);
+  /* And the same identity to the error tracker, so an issue says who hit it
+     rather than only what broke. Here rather than anywhere else because this is
+     the one line that holds a `VerifiedUser` — the gate's own output — so there
+     is no question of where the address came from. src/monitoring.ts explains
+     why it lands on the isolation scope and not the global one. */
+  setMonitoringUser(user);
+
+  const { req, res, url, path } = request;
+
   /* Matched on `path` rather than `url`, because the shelf now takes a query
      string (`?archived=1`). It stays an EXACT match on the path — a stray
      `/api/library/anything` must still 404 rather than quietly serve the whole
@@ -3093,6 +3355,26 @@ async function serveApi(
      for the profile boxes, which have none. src/transcribe.ts. */
   const transcribeRoute = path === "/api/transcribe";
   const article = /^\/api\/article\/([\w.%-]+)$/.exec(url);
+  /**
+   * **The sharing switch, and it is a sub-resource rather than a field.**
+   *
+   * Not a new key on `PATCH /api/library/:slug`: that route edits *shelf state*
+   * — the relationship between a reader and a document — and visibility is a
+   * property of *the work*. Stage 3 of docs/plans/public-read-only-access.md
+   * splits `articles` from `shelf_entries` along exactly that line, so putting
+   * them together now would mean moving the API twice. GPT Sol's reasoning.
+   *
+   * **`PUT`, not `PATCH`.** Visibility is a singleton sub-resource whose
+   * *complete* state is being replaced, so `PUT` makes the idempotency obvious —
+   * and idempotent it is: asking for the state the article is already in returns
+   * the current representation and changes nothing.
+   *
+   * On `path`, not `url`, like every check added since 2026-08-27. No ordering
+   * hazard against `article` above it — that pattern ends at the slug, so it
+   * cannot match a path with `/visibility` on the end — but it is declared after
+   * it so the two read in the order a person would look for them.
+   */
+  const visibility = /^\/api\/article\/([\w.%-]+)\/visibility$/.exec(path);
   // Its own endpoint rather than a field on the article payload: that one is
   // ~150KB and is fetched on every page, and stat-ing every file for it would
   // charge every reader for a page almost nobody opens.
@@ -3169,42 +3451,6 @@ async function serveApi(
   const jobAction = /^\/api\/jobs\/([\w.%-]+)\/(cancel|retry)$/.exec(url);
   const jobAdvance = /^\/api\/jobs\/([\w.%-]+)\/advance$/.exec(url);
 
-  /* Every response leaves by one of the ~14 `send` calls below, the catch, or
-     the 404 at the end — so the log line lives in a single `finally` rather
-     than at each of them. A branch added later cannot forget it, and there is
-     no set of call sites to keep in step. It reads `res.statusCode`, which
-     `send` has just set, so the exit points do not have to report anything. */
-  let failure: unknown;
-  try {
-    /* **The gate, and it is inside the `try` — that is the whole of this
-       comment's content.** An earlier plan put it just after the `/api/` prefix
-       check, eighty-five lines above, on the theory that this `try` would turn
-       its thrown `httpError` into the right status. It would not: a throw up
-       there escapes to the outer handler, which answers 500 with the message in
-       dev and a blank 500 on Vercel — and the `finally` below never runs, so
-       **the refusal is never logged at all**. It still fails closed, which is
-       the one mercy, but every word we have written about 401s and 403s would
-       have been false. GPT Sol found it; confirmed by reading the line numbers.
-
-       Before any body is read and before any route matches, so a malformed
-       request from a stranger is a 401 rather than a 400. We owe an
-       unauthenticated caller no diagnosis of their JSON.
-
-       `verify` is a seam rather than a hard call because six test files drive
-       this function with hand-built requests and none of them can mint a real
-       ES256 token. The default is the real verifier, so forgetting to inject
-       cannot make a production build permissive. src/auth.ts. */
-    const user = await requireUser(req, verify);
-    /* **The identity is not just checked, it is carried.** Until 2026-08-27 the
-       return value of this call was dropped on the floor: the gate proved a
-       person existed and then every store read went on using the process-wide
-       `SPIDERYARN_OWNER_ID`, so every account that got past it shared one shelf,
-       one profile, one set of chats and one wallet. GPT Sol's review of the
-       built code led with it; Greg chose the real fix over an email allowlist.
-       src/owner.ts explains why this is an AsyncLocalStorage and not forty
-       extra parameters. */
-    setRequestOwner(user.id);
-
     /* **The second gate, and it guards a prefix rather than a route.**
        Everything under `/api/admin/` is refused to everybody but the one
        address in src/admin.ts. Written here, above the route table, rather than
@@ -3244,7 +3490,7 @@ async function serveApi(
          response states it. GPT Sol, 2026-08-27. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, { users: await adminStore.listUsersAcrossOwners() });
-      return true;
+      return;
     }
 
     if (library && req.method === "GET") {
@@ -3252,26 +3498,26 @@ async function serveApi(
          meaning "no", and a loose check would hand them the archive. */
       const archived = new URL(url, "http://x").searchParams.get("archived") === "1";
       send(res, 200, { articles: await listArticles({ archived }) });
-      return true;
+      return;
     }
     if (librarySearchRoute && req.method === "GET") {
       send(res, 200, await searchTheLibrary(url));
-      return true;
+      return;
     }
     /* PATCH rather than PUT: both fields are optional and the client sends
        whichever the reader changed. A PUT would mean "here is the whole shelf
        record", and a client that forgot one field would silently clear it. */
     if (shelfEntry && req.method === "PATCH") {
       send(res, 200, await patchShelf(slugPart(shelfEntry, 1), await readBody(req)));
-      return true;
+      return;
     }
     if (modelsRoute && req.method === "GET") {
       send(res, 200, modelsInUse());
-      return true;
+      return;
     }
     if (transcribeRoute && req.method === "POST") {
       send(res, 200, await transcribeDictation(req, res));
-      return true;
+      return;
     }
     if (readerRoute && req.method === "GET") {
       /* **`?slug=` answers a different question, and the panels need that one.**
@@ -3292,7 +3538,7 @@ async function serveApi(
         at && isSlug(at) ? resolveProfile(at) : readerStore.readProfile(),
       ]);
       send(res, 200, { profile, hasProfile: effective !== null });
-      return true;
+      return;
     }
     /* PATCH rather than PUT, for the same reason the shelf's is: the body names
        what changed. Here that is one field, so the two spellings would mean the
@@ -3301,7 +3547,7 @@ async function serveApi(
        that had not been updated would silently clear it. */
     if (readerRoute && req.method === "PATCH") {
       send(res, 200, await patchReader(await readBody(req)));
-      return true;
+      return;
     }
     /* POST, not GET, because it writes — and it is its own route rather than a
        side effect inside `GET /api/article/:slug` for the same reason. A GET
@@ -3313,37 +3559,46 @@ async function serveApi(
       // somebody to render a counter that is one behind.
       res.statusCode = 204;
       res.end();
-      return true;
+      return;
     }
     if (article && req.method === "GET") {
       send(res, 200, await loadArticle(slugPart(article, 1)));
-      return true;
+      return;
+    }
+    if (visibility && req.method === "PUT") {
+      const asked = parseVisibilityRequest(await readBody(req));
+      send(
+        res,
+        200,
+        await visibilityStore.set(slugPart(visibility, 1), asked.visibility, asked.rightsConfirmed),
+      );
+      return;
     }
     if (source && req.method === "GET") {
       await sendSource(res, slugPart(source, 1));
-      return true;
+      return;
     }
     if (metadata && req.method === "GET") {
       send(res, 200, await articleMetadata(slugPart(metadata, 1)));
-      return true;
+      return;
     }
     if (tweets && req.method === "GET") {
       {
         const at = slugPart(tweets, 1);
         send(res, 200, await withProfileChanged<ThreadResponse>(at, () => loadTweets(at), (found) => found.thread));
       }
-      return true;
+      return;
     }
     if (glossary && req.method === "GET") {
       {
         const at = slugPart(glossary, 1);
         send(res, 200, await withProfileChanged<GlossaryResponse>(at, () => loadGlossary(at), (found) => found.glossary));
       }
-      return true;
+      return;
     }
     if (glossary && req.method === "DELETE") {
       send(res, 200, await deleteGlossary(slugPart(glossary, 1)));
-      return true;
+      return;
     }
     if (lookup && req.method === "POST") {
       send(
@@ -3353,7 +3608,7 @@ async function serveApi(
           lookUpTerm(slugPart(lookup, 1), slugPart(lookup, 2)),
         ),
       );
-      return true;
+      return;
     }
     /* Read only. There is no DELETE beside this one, unlike the glossary's:
        running the step again replaces the artefact rather than appending to it,
@@ -3366,14 +3621,14 @@ async function serveApi(
         const at = slugPart(summary, 1);
         send(res, 200, await withProfileChanged<SummariesResponse>(at, () => loadSummaries(at), (found) => found.summaries));
       }
-      return true;
+      return;
     }
     if (ideas && req.method === "GET") {
       {
         const at = slugPart(ideas, 1);
         send(res, 200, await withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas));
       }
-      return true;
+      return;
     }
     /**
      * **POST, not GET, and the method is the load-bearing part.**
@@ -3424,7 +3679,7 @@ async function serveApi(
             );
             throw httpError(502, "Could not reach the embedding model. [emb1]");
           }
-          return true;
+          return;
         });
       }
     }
@@ -3461,14 +3716,14 @@ async function serveApi(
             log("model").error({ slug: at, ...errorFields(err) }, "the embedding provider failed");
             throw httpError(502, "Could not place this article's paragraphs: the embedding model could not be reached. Everything else on the page is unaffected. [emb2]");
           }
-          return true;
+          return;
         });
       }
     }
     if (comments && req.method === "GET") {
       const slug = slugPart(comments, 1);
       send(res, 200, { comments: await sweepOrphaned(slug, await commentStore.load(slug)) });
-      return true;
+      return;
     }
     if (comments && req.method === "POST") {
       /* **Making a comment is free and answers with JSON.** Until 2026-08-28
@@ -3477,7 +3732,7 @@ async function serveApi(
          things to them — a retry to one, somebody else's comment to the other.
          docs/plans/comments-and-bookmarks.md § the store contract. */
       send(res, 201, { comment: await createFree(slugPart(comments, 1), await readBody(req)) });
-      return true;
+      return;
     }
     if (commentAnswer && req.method === "POST") {
       /* The one endpoint here that does not answer with JSON — it writes its
@@ -3489,7 +3744,7 @@ async function serveApi(
       await withSpendAttribution({ articleSlug: slug }, () =>
         answer(slug, id, answerBody, res),
       );
-      return true;
+      return;
     }
     if (one && req.method === "PATCH") {
       const [slug, id] = [slugPart(one, 1), part(one, 2)];
@@ -3497,13 +3752,13 @@ async function serveApi(
       // `tidyBody` is the one place that decides what a body may be, so the
       // route no longer keeps a second, slightly different copy of that rule.
       send(res, 200, { comment: await commentStore.patchBody(slug, id, tidyBody(body)) });
-      return true;
+      return;
     }
     if (one && req.method === "DELETE") {
       // The slug becomes a directory; the id is only ever matched against a list.
       const [slug, id] = [slugPart(one, 1), part(one, 2)];
       send(res, 200, { comments: await commentStore.remove(slug, id) });
-      return true;
+      return;
     }
     if (chat && req.method === "GET") {
       const slug = slugPart(chat, 1);
@@ -3522,10 +3777,10 @@ async function serveApi(
       const url = new URL(req.url ?? "/", "http://localhost");
       if (url.searchParams.get("summary") === "1") {
         send(res, 200, { threads: threads.map(summarise) });
-        return true;
+        return;
       }
       send(res, 200, { threads });
-      return true;
+      return;
     }
     if (chat && req.method === "POST") {
       /* The one branch that does not call `send`. It writes its own headers and
@@ -3542,18 +3797,18 @@ async function serveApi(
       await withSpendAttribution({ articleSlug: slugPart(chat, 1) }, () =>
         streamChat(slugPart(chat, 1), chatBody, res),
       );
-      return true;
+      return;
     }
     if (chatCancel && req.method === "POST") {
       const [slug, id] = [slugPart(chatCancel, 1), part(chatCancel, 2)];
       send(res, 200, await cancelChat(slug, id, await readBody(req)));
-      return true;
+      return;
     }
     if (chatStop && req.method === "POST") {
       // The slug becomes a directory; the ids are only ever matched in a Map.
       const [slug, id] = [slugPart(chatStop, 1), part(chatStop, 2)];
       send(res, 200, await stopChat(slug, id, await readBody(req)));
-      return true;
+      return;
     }
     if (oneThread && req.method === "PATCH") {
       // Slug becomes a directory; the thread id is only ever matched in a list.
@@ -3561,7 +3816,7 @@ async function serveApi(
       const { title } = (await readBody(req)) as Record<string, unknown>;
       if (typeof title !== "string") throw httpError(400, "Expected { title }");
       send(res, 200, { threads: await chatStore.rename(slug, id, title) });
-      return true;
+      return;
     }
     if (oneThread && req.method === "DELETE") {
       const [slug, id] = [slugPart(oneThread, 1), part(oneThread, 2)];
@@ -3573,12 +3828,12 @@ async function serveApi(
       send(res, 200, {
         threads: await inTurnOrder(`${slug}/${id}`, () => chatStore.remove(slug, id)),
       });
-      return true;
+      return;
     }
     if (searches && req.method === "GET") {
       const slug = slugPart(searches, 1);
       send(res, 200, { runs: await sweepSearches(slug) });
-      return true;
+      return;
     }
     if (searches && req.method === "POST") {
       /* The third endpoint in this file that does not answer with JSON — see
@@ -3589,7 +3844,7 @@ async function serveApi(
       await withSpendAttribution({ articleSlug: slugPart(searches, 1) }, () =>
         search(slugPart(searches, 1), searchBody, res),
       );
-      return true;
+      return;
     }
     if (oneRun && req.method === "PATCH") {
       // Slug becomes a directory; the run id is only ever matched against a list.
@@ -3614,23 +3869,23 @@ async function serveApi(
         throw httpError(400, "Expected { colour } to be null or a small whole number");
       }
       send(res, 200, { runs: await searchStore.recolour(slug, id, colour) });
-      return true;
+      return;
     }
     if (oneRun && req.method === "DELETE") {
       // The slug becomes a directory; the id is only ever matched against a list.
       const [slug, id] = [slugPart(oneRun, 1), part(oneRun, 2)];
       send(res, 200, { runs: await searchStore.remove(slug, id) });
-      return true;
+      return;
     }
     if (allJobs && req.method === "GET") {
       send(res, 200, { jobs: (await listJobs()).map(publicJob) });
-      return true;
+      return;
     }
     if (uploads && req.method === "POST") {
       // 201: a record now exists that did not before, and the body says where
       // to put the bytes. Nothing has been queued and nothing has been read.
       send(res, 201, await mintAnUpload(await readBody(req)));
-      return true;
+      return;
     }
     /* `GET /api/uploads/:id` — for a browser that lost its tab, and for the
        picker to confirm what landed. Read-only in the strict sense: an expired
@@ -3640,7 +3895,7 @@ async function serveApi(
       const found = await readUpload(part(upload, 1), currentOwnerId());
       if (!found) throw httpError(404, "No such upload");
       send(res, 200, publicUpload(asOf(found)));
-      return true;
+      return;
     }
     if (allJobs && req.method === "POST") {
       // 202, not 200: the work has been accepted and has not been done. The
@@ -3651,7 +3906,7 @@ async function serveApi(
         /* No other field survives `checkUploadOrigin`, so there is nothing to
            forward: an upload is always the default ingest. */
         send(res, 202, publicJob(await queueAnUpload(request.uploadId)));
-        return true;
+        return;
       }
       /* **Not for the `{ url }` shape**, and that is a correctness fix rather
          than an economy. The slug this resolves against is the one *derived*
@@ -3673,25 +3928,25 @@ async function serveApi(
           : await resolveProfile(request.slug);
       const { useProfile: _asked, ...work } = request;
       send(res, 202, publicJob(await enqueue({ ...work, ...(profile ? { profile } : {}) })));
-      return true;
+      return;
     }
     if (job && req.method === "GET") {
       const found = await getJob(part(job, 1));
       if (!found) throw httpError(404, "No such job");
       send(res, 200, publicJob(found));
-      return true;
+      return;
     }
     if (job && req.method === "DELETE") {
       if (!(await forgetJob(part(job, 1)))) throw httpError(404, "No such job");
       send(res, 200, { forgotten: part(job, 1) });
-      return true;
+      return;
     }
     if (jobAction && req.method === "POST") {
       const [id, action] = [part(jobAction, 1), part(jobAction, 2)];
       const result = action === "cancel" ? await cancelJob(id) : await retryJob(id);
       if (!result) throw httpError(404, "No such job");
       send(res, action === "cancel" ? 200 : 202, publicJob(result));
-      return true;
+      return;
     }
     /**
      * Run one step of this job, here, now, and answer when it is finished.
@@ -3717,7 +3972,7 @@ async function serveApi(
       const advanced = await advanceJob(part(jobAdvance, 1));
       if (!advanced) throw httpError(404, "No such job");
       send(res, 200, advanced);
-      return true;
+      return;
     }
 
     /**
@@ -3737,55 +3992,5 @@ async function serveApi(
      * function mountable as middleware.
      */
     send(res, 404, { error: `No API route for ${req.method} ${url}` });
-    return true;
-  } catch (err) {
-    // Anything that knows its own status says so. What is left is either a
-    // missing artefact or a genuine fault, and telling those apart matters: a
-    // blanket 404 made a corrupt comments.json and a bad request both read as
-    // "no such article", which is the wrong thing to go and investigate.
-    const status =
-      (err as { status?: number }).status ??
-      /* A retry or an edit the stored conversation will not accept — a stale
-         tab, a second window, a Back button. 409 rather than 500, because
-         nothing here is broken and the client's job is to reload and look
-         again. See `ChatConflict` in src/chat.ts. */
-      (err instanceof ChatConflict ? 409 : null) ??
-      /* Somebody else's comment already has that id, or that comment already
-         started a different conversation. 409 for the same reason as above:
-         nothing is broken, the client asked for something the stored state will
-         not allow, and reloading is the answer. `CommentIdTaken` in
-         src/comments.ts. */
-      (err instanceof CommentIdTaken ? 409 : null) ??
-      /* Two different failures under one class, and they must not share a code:
-         `missing` is a comment that is not there (404), `free` is a bookmark
-         being pushed down the retired explanation path (409). Guessing one for
-         both would make a deleted comment read as "you cannot answer that". */
-      (err instanceof NotAnExplanation ? (err.why === "missing" ? 404 : 409) : null) ??
-      ((err as NodeJS.ErrnoException).code === "ENOENT" ? 404 : 500);
-    // Handed to `logRequest`, which decides how much of it to write down — the
-    // message for a failure this file chose, the whole stack for one it did
-    // not. That is the point of the exercise: an unexpected throw used to be
-    // mapped to a status, handed to the client and forgotten, so a production
-    // 500 left nothing behind to read.
-    failure = err;
-    /* **The rule is the status we answered with, not who chose it.** If this
-       request logged at `error` level it goes to Sentry, and `logRequest` uses
-       exactly the same threshold two lines down — so the two can never drift
-       into disagreeing about what a fault is.
-
-       What that buys, case by case: a `TypeError` mapped to 500 is reported; so
-       is `src/owner.ts`'s deliberate `status: 500` invariant failure, and so is
-       an authored 502 from a provider. A 404 for a slug with no article, a 400
-       for a bad body, and `ChatConflict`'s 409 are answers rather than faults
-       and are not reported. An error tracker full of mistyped URLs is an error
-       tracker nobody reads.
-
-       src/monitoring.ts decides what may be *said* about the error. This line
-       only decides whether to say anything. */
-    if (status >= 500) captureFailure(err, { method, path, status });
-    send(res, status, { error: (err as Error).message });
-    return true;
-  } finally {
-    logRequest(method, path, res.statusCode, started, failure);
-  }
+    return;
 }
