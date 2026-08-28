@@ -183,6 +183,135 @@ makes it stronger: require the entrypoint to *be* `stageCli(import.meta.url, mai
 separately that `stageCli` opens the ledger. It has to accept both forms while the migration is
 partial, and still reject every way of getting it wrong.
 
+### What GPT Sol said about 2.2, 2.3 and 2.6 — 2026-08-28
+
+Asked as a design question rather than a review, because none of the three is built:
+[prompt](simplification-wave-2-tier2-input-prompt.md) ·
+[answer](simplification-wave-2-tier2-input-sol.md). **It narrowed all three and left none**, and the
+narrowing is the useful part in every case.
+
+**2.2 — build `articleSystem` in `article-prompt.ts`. Do not build `stage-call.ts` or `stageCall`.**
+The plan braids three different clone sets together and calls them one. Seven stages use
+`streamMessage`; **four** repeat the article invariant (arc, tweets, glossary, ideas), not five; and
+of those four, three use `articleText` and `ideas` uses `articleWithIds`. ToC puts its article in the
+*user* message, labels caches a batch prefix, and summarise embeds selected text inside a repairable
+batch prompt — *"those are not variants of the same request"*. Rule 2 again, and against the plan:
+the shared piece goes where the invariant lives, and `article-prompt.ts` is the file whose header is
+a postmortem about this exact failure.
+
+`ARTICLE_RENDERER` is confirmed unenforced: outside tests and comments the table is read only by
+`pipeline.ts:146`, to *predict* cache sharing, and nothing connects it to the call in `ideas.ts:890`.
+The existing test proves every row exists. Sol's argument for a helper over the cheaper test is the
+one that decides it — a source-level test *"must inspect syntax or mock four large generators"*,
+whereas a pure helper makes the table executable.
+
+And it refused to let this go red dishonestly: *"Because this is not a current output bug, do not
+manufacture a meaningless red by testing a missing export."* Characterise the current behaviour,
+then prove the test bites under three mutations — wrong renderer, reversed blocks, dropped or
+always-on cache marker.
+
+**2.3 — 0.4 is a genuine precondition, and it named what a unit test cannot reach.** Whether
+search's composite signal is wired to *both* clocks; whether a cancelled `ReadableStream` ends
+cleanly rather than throwing; whether activity restarts the stall timer; whether `finish_reason` and
+`[DONE]` arrive correctly; whether non-2xx keeps its `ProviderRefused` handling. A pure classifier
+tested in isolation passes while any of those is broken. It also replaced the plan's callback-driven
+`endOfStream` with a **pure** `classifyStreamEnd(...)` returning a state — reader-stop, clock-abort,
+premature-EOF, complete — each verb keeping its own decision about what to log, throw or store. That
+is what keeps this on the safe side of the `converseOrExplain()` wave 1 declined. It would change its
+answer to *leave it* the moment the helper starts taking effect callbacks or knowing what chat stores.
+
+**Only the citation extraction was cleared to happen today**, and it has.
+
+**2.6 — the race is reachable, and it is not three small guards.** The sequence: a reader opens
+Ideas, Summary or Tweets while a job for that article is already running (started earlier, in another
+tab, or from the CLI); the opening GET reads the old artefact; the job finishes and a poll calls
+`onFinished`; the completion GET returns **first**; the opening GET lands last and overwrites it
+permanently. The sharp part is about the fix rather than the bug: *"Dedupe alone recreates the
+glossary's old bug by making `onFinished` join the pre-job request."* You need both verbs and a
+trailing read, or you have moved the bug rather than fixed it.
+
+But it declined the broad `useArtefactRead`: extract only the mechanism `useGlossary` already proves
+— generations, one in-flight read, `reload()` versus `refresh()` — and leave parsing, 404s, state
+shapes and error presentation in each hook. The state-consolidation argument it called weaker:
+`useSummaries`' 404 branch really does forget `profiled` and `profileChanged`, but two setters or a
+local union fix that, and *"this does not justify making four response state machines generic"*.
+
+The test shape it gave, which is the part that was missing: extend
+`tests/background-reload-keeps-the-list.test.tsx`, hold the opening reply, change the fixture, fire
+`finishJob` before settling the opening read, then settle newest-first. **The control must name the
+stale value, not merely a request count.**
+
+**One plan claim corrected in the other direction.** This plan's standing rule is that its own counts
+come out low. This one came out **high**: `collectCitation` is called *"the largest single clone in
+the repo"*, and it is 11 lines, exactly identical, but tied — the detector's largest-token hit is the
+enclosing loop, and other clones are longer by line count. Fixed above.
+
+### What Tier 2 landed, 2026-08-28
+
+| | |
+|---|---|
+| **2.3, the citation third only** | `984464e` — `collectCitations` in `openrouter-stream.ts`. The rest of 2.3 waits for 0.4; see Sol's answer above. |
+| **2.1** `useStepJob` | `d5a4e03` — three hooks of four, `Tweets.tsx` held. Plus the `queue.error` defect, fixed with a `lastFailure()` ref in `useJobs`. |
+
+**2.1's headline number was wrong, and the correction is instructive.** The plan said *"deletes ~120
+lines of code"*. Measured with comments and blanks stripped: the three hooks go 603 → 550, so **53
+code lines**, and the *raw* line count across the four files goes **up** by about 33 because the
+merged prose is longer than any one copy was. The plan counted the three copies' 122 code lines and
+forgot the shared module's own 69. Holding `Tweets.tsx` back is worth roughly another 40 that this
+item did not get. `npm run dupes` now reports no job-half clone between the three; the four it still
+finds are all the read half, which is 2.6.
+
+That is Rule 1 in the other direction — the wave's counts have come out low four times and this is
+the second today to come out **high**, after `collectCitation`'s "largest clone in the repo". Both
+were arrived at the same way: by counting what goes away and not what arrives.
+
+**Nothing in the suite asserted the request body of those three buttons.** `force` has to be
+`force: [step]` naming the step, because all four steps are in `FORCE_ONLY_WHEN_NAMED` and an
+unnamed force leaves the step unforced *silently* — the reader watches a job start, run, and change
+nothing. A literal `force: true` would have been caught by `tsc`, but `force: []`, `force: undefined`
+or the wrong step name would all have shipped green. So the rule was carried by one comment in
+`useIdeas` and by nothing else. `tests/step-job-force.test.tsx` now pins it, and its last assertion
+runs the real `cascadeForce` over what was posted rather than comparing the array — the effect
+rather than the cause.
+
+**The `queue.error` finding was worse than "not durable".** All four copies had learned to read
+`queue.error` at render, and that is the *documented wrong answer* now: `act`'s own `finally` pokes
+the poller the instant the POST fails, the poll succeeds because the server is fine, and
+`setError(null)` wipes the sentence. The reader gets the truth for one frame. The reason is
+snapshotted in `start()` out of a new `queue.lastFailure()` — a ref only the actions write.
+`tests/refused-job-reason-survives.test.tsx` drives it with the real `useJobs`, `apiFetch` and
+`readJson` against a stubbed `fetch`, holding the poll so both readings can be asserted. Restoring
+`queue.error` fails it at the **after-the-poll** assertion and not the one before, which is the
+sequence being the bug rather than the ternary. A second case checks the message still clears on the
+next successful press — without it, "durable" and "stuck" are the same test.
+
+**What the four copies disagreed about**, which is the whole argument for the module rather than the
+line count:
+
+- **`Tweets.tsx` alone knew that forcing a step forces every step after it** (`cascadeForce`), and
+  recorded it as a fact about `tweets` being last in `STEP_ORDER`. In a hook generic over the step
+  that is a *rule*, and it is now written as one.
+- **`useIdeas` alone** carried the 0.3 paragraph about a refused POST not meaning the request never
+  landed — and alone lacked docstrings on its `job` memo and its `postFailed`/`startedId`. Both
+  directions survive, merged.
+- **`useGlossary` and `Tweets.tsx` alone** end the poll-cost paragraph with *"the fix is an idle
+  switch in `useJobs`, not a private poller here."* The other two dropped that sentence when copied.
+- **`useSummaries` alone** trims `guidance` and drops it when it trims to nothing.
+- **`useGlossary` alone passes `refresh` rather than `load`** — the one asymmetry that is not drift,
+  and the reason `onFinished` is a parameter rather than something the hook does itself. 2.6's
+  territory.
+
+**Owed, and blocked on a peer.** `docs/project/web-client.md:536` still says *"Every surface says
+`postFailed ? (queue.error ?? …) : stopped`, read at render rather than inside the click handler."*
+Three of the four no longer do, and reading `queue.error` at render is now the documented **wrong**
+answer. The file has 41 lines of another session's work in it, so `git commit -- <path>` would take
+their draft with it. Fix it when that file is quiet, and say: the reason is snapshotted out of
+`queue.lastFailure()` because `error` is shared with the poller and the failed POST's own `finally`
+starts the poll that wipes it; `Tweets.tsx` is still the old shape and still carries the bug.
+
+Also stale, and cheap: the plan cites `useIdeas.ts:156-166` for `FORCE_ONLY_WHEN_NAMED`. The set is
+`src/pipeline.ts:202`. Rule 3, as predicted.
+
 
 ### What the code review changed, and it earned its keep
 
@@ -814,7 +943,10 @@ the layer that drifted, because it belongs to neither module.
 - `endOfStream(...)` — the three post-loop guards, 22 lines × 3. **This is the one worth doing**:
   it is where the bug actually happened, and it needs only two callbacks.
 - Bundle `collectCitation()` with the first: `explain.ts:564-574` and `converse.ts:1487-1497` are
-  character-for-character identical, and are the largest single clone in the repo.
+  character-for-character identical. **"The largest single clone in the repo" was an overclaim** —
+  it is 11 lines, and jscpd's largest-token hit is the enclosing loop, which it ties with; other
+  clones are longer by line count. GPT Sol measured it, 2026-08-28. It is worth doing anyway, and
+  it is the one part of 2.3 that does not wait for 0.4.
 
 **Do 0.4 first.** Extend `openrouter-stream.ts` rather than minting a module (Rule 2); pass the
 logger in as a parameter so it stays free of `src/log.ts`.
