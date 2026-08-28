@@ -35,6 +35,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { type AuthedUser, requireUser, type VerifiedUser } from "../src/auth.js";
 import { runInRequest } from "../src/owner.js";
+import { PUBLIC_ROUTES } from "../src/public/routes.js";
 import { handleApi, serveAuthenticatedApi } from "../src/routes.js";
 import { originalUrl } from "../src/vercel.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
@@ -148,28 +149,52 @@ describe("the authenticated dispatcher's one parameter", () => {
    * `requireUser` is the only thing that can make a `VerifiedUser`, and this is
    * the proof that what it makes is accepted.
    */
-  it("accepts what requireUser produces", async () => {
+  it("accepts what requireUser produces, and routes it", async () => {
+    /**
+     * **`/api/models`, and the route matters.**
+     *
+     * This asserted `/api/library` inside a `try` that swallowed every store
+     * error, so it proved only that the *brand* check passed — inserting
+     * `return` immediately after `assertVerifiedUser` left it green, which
+     * makes it a control that had stopped controlling anything. GPT Sol's
+     * finding 5, 2026-08-28.
+     *
+     * `/api/models` is a read of two constants: no database, no store, no
+     * network, so it either answers or it does not and there is nothing to
+     * swallow. Asserting the *body* is what makes this prove a handler ran
+     * rather than that nothing threw.
+     */
     const req = Object.assign((async function* () {})(), {
       method: "GET",
-      url: "/api/library",
+      url: "/api/models",
       headers: AUTHED_HEADERS,
     }) as unknown as IncomingMessage;
     const user = await requireUser(req, acceptAny);
     expect(user.email).toBe("greg@gregdetre.com");
-    /* Typechecks without a cast, which is half the assertion — the other half
-       is that it does not throw. It reaches the shelf and either serves it or
-       fails on the store, and neither is the refusal above. */
-    await expect(
-      runInRequest(async () => {
-        try {
-          await serveAuthenticatedApi(user, envelope("/api/library"));
-        } catch (err) {
-          /* A store failure is fine here and a brand failure is not. This test
-             is about the boundary, not about the shelf. */
-          if (/did not come from requireUser/.test((err as Error).message)) throw err;
-        }
-      }),
-    ).resolves.toBeUndefined();
+
+    let status = 0;
+    let text = "";
+    const res = {
+      set statusCode(v: number) {
+        status = v;
+      },
+      get statusCode() {
+        return status;
+      },
+      setHeader() {},
+      end(chunk: string) {
+        text = chunk ?? "";
+      },
+    } as unknown as ServerResponse;
+
+    /* Typechecks without a cast, which is half the assertion. The other half is
+       below: a real response, from a real handler, behind the brand. */
+    await runInRequest(() =>
+      serveAuthenticatedApi(user, { ...envelope("/api/models"), res }),
+    );
+    expect(status).toBe(200);
+    expect(JSON.parse(text)).toEqual(expect.any(Object));
+    expect(text.length).toBeGreaterThan(2);
   });
 });
 
@@ -228,8 +253,13 @@ describe("the closed public namespace", () => {
    * stage 2 of the plan is entirely about link previews.
    */
   it("405s every method that is not a read, on every public route", async () => {
-    for (const path of ["/api/public/article/example", "/api/public/metadata/example"]) {
+    /* **From `PUBLIC_ROUTES`, not from two paths typed here.** The dispatcher
+       walks the same list, so this is a claim about every route there is rather
+       than about the two somebody remembered. Slice 1b adds four. */
+    expect(PUBLIC_ROUTES.length).toBeGreaterThan(0);
+    for (const route of PUBLIC_ROUTES) {
       for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "TRACE"]) {
+        const path = route.path("example");
         const r = await call(method, path);
         expect({ path, method, status: r.status }).toEqual({ path, method, status: 405 });
         expect(r.headers.Allow).toBe("GET, HEAD");
@@ -247,7 +277,7 @@ describe("the closed public namespace", () => {
    * The socket case is the next one; this is the one that pins our own code.
    */
   it("answers HEAD exactly as it answers GET, without a body", async () => {
-    for (const path of ["/api/public/article/example", "/api/public/metadata/example"]) {
+    for (const path of PUBLIC_ROUTES.map((route) => route.path("example"))) {
       const get = await call("GET", path);
       const head = await call("HEAD", path);
       expect({ path, status: head.status }).toEqual({ path, status: get.status });

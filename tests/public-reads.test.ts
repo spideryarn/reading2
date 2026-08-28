@@ -22,6 +22,7 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import { publicBlocksQuery, publicCurrentRevisionQuery } from "../src/store/public-reader.js";
+import { lockedArticleQuery } from "../src/store/pg-visibility.js";
 
 const articleQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "article").toSQL();
 const metadataQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "metadata").toSQL();
@@ -138,10 +139,63 @@ describe("the public blocks read", () => {
     expect(blocks).toMatch(/order by "spideryarn"\."revision_blocks"\."ordinal" asc/i);
   });
 
+  /**
+   * **And it asks for ONE revision's blocks**, which nothing else here checked.
+   *
+   * GPT Sol's finding 3, second half: the block cases assert selected columns
+   * and ordering, and both stay green with the `where` deleted — at which point
+   * every public article is served the concatenated blocks of every revision of
+   * every article in the database, in ordinal order, which would look like a
+   * rendering bug rather than the disclosure it is.
+   *
+   * The parameter as well as the clause, for the reason the revision read gives:
+   * Drizzle binds rather than inlines, so a test asserting the value as a
+   * literal would be asserting a spelling Drizzle does not use.
+   */
+  it("asks for one revision's blocks, and says which", () => {
+    const q = publicBlocksQuery(new QueryBuilder() as never, "rev-1").toSQL();
+    expect(q.sql).toMatch(/where "spideryarn"\."revision_blocks"\."revision_id" = \$1/);
+    expect(q.params).toEqual(["rev-1"]);
+  });
+
   /** And it does fetch the prose, or the three lines above prove nothing. */
   it("asks for the html and the text", () => {
     expect(blocks).toContain('"html"');
     expect(blocks).toContain('"text"');
     expect(blocks).toContain('"block_id"');
+  });
+});
+
+/**
+ * **The switch's own read, which is the one query in this feature that writes.**
+ *
+ * Its `for update` is the whole of the concurrency argument: without it two
+ * toggles both read the old value, both write, and both append an event. GPT
+ * Sol's finding 6 was that deleting it left the entire suite green.
+ *
+ * There is a behavioural test for it too (tests/public-visibility-pg.test.ts,
+ * "writes one event when two publishes race"), and this one exists because that
+ * one can only catch the bug while the window is open — measured on this laptop,
+ * two `PUT`s fired together usually do not overlap at all, and the race test
+ * passed against the unlocked code until it was rewritten to hold the row from
+ * outside. A timing test that has to be lucky is not the only evidence this
+ * should rest on.
+ */
+describe("the visibility switch's locked read", () => {
+  const q = lockedArticleQuery(new QueryBuilder() as never, "a-slug").toSQL();
+
+  it("locks the row it is about to change", () => {
+    expect(q.sql).toMatch(/for update/i);
+  });
+
+  it("and still resolves the slug by owner, never by slug alone", () => {
+    expect(q.sql).toMatch(/"slug" = \$1 and "spideryarn"\."articles"\."owner_id" = \$2/);
+    expect(q.params[0]).toBe("a-slug");
+  });
+
+  /** It reads four columns to make one decision, and no more of the row than that. */
+  it("takes only what the decision needs", () => {
+    expect(q.sql).not.toContain("title_override");
+    expect(q.sql).not.toContain('"purpose"');
   });
 });

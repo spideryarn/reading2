@@ -135,11 +135,56 @@ export function isPublicNamespace(path: string): boolean {
   return path === "/api/public" || path.startsWith("/api/public/");
 }
 
-/* The two routes, matched on `path`. The character class is the one every
-   authenticated slug route uses, so a slug that is legal there is legal here
-   and the two cannot disagree about what a slug looks like. */
-const ARTICLE = /^\/api\/public\/article\/([\w.%-]+)$/;
-const METADATA = /^\/api\/public\/metadata\/([\w.%-]+)$/;
+/**
+ * What a slug may be spelled with, in a route pattern.
+ *
+ * The character class every authenticated slug route in src/routes.ts uses, so
+ * a slug that is legal there is legal here and the two cannot disagree about
+ * what a slug looks like. It is permissive on purpose — `%` and `.` are in it —
+ * and `slugFrom` below is what makes that safe.
+ */
+const SLUG_CHARS = "[\\w.%-]+";
+
+/** One public route: how to recognise it, how to spell it, and what it reads. */
+export interface PublicRoute {
+  /** The path segment after `/api/public/`. */
+  readonly name: string;
+  readonly pattern: RegExp;
+  /** The path a request for `slug` would use. Exported so sweeps can build one. */
+  path(slug: string): string;
+  read(slug: string): Promise<unknown>;
+}
+
+function publicRoute(name: string, read: (slug: string) => Promise<unknown>): PublicRoute {
+  return {
+    name,
+    /* Built from the name rather than written out beside it. Two spellings of
+       one route is one place for them to disagree, and the disagreement would
+       be a route the dispatcher serves and the sweeps below never visit. */
+    pattern: new RegExp(`^/api/public/${name}/(${SLUG_CHARS})$`),
+    path: (slug) => `/api/public/${name}/${slug}`,
+    read,
+  };
+}
+
+/**
+ * **Every route in the closed room, in one place.**
+ *
+ * The dispatcher walks this and the tests sweep it, so "every public route
+ * refuses every non-read method" and "every public route spends nothing" are
+ * claims about *whatever is in here* rather than about two paths somebody
+ * remembered to type into a test.
+ *
+ * GPT Sol's finding 5, 2026-08-28: both sweeps hardcoded the same two paths, so
+ * the day slice 1b adds `summary`, `glossary`, `ideas` and `tweets` — four
+ * routes, which is what 1b is — the new ones would be unswept and the suite
+ * would stay green. The inventory is the fix; adding a route to it is the only
+ * way to add a route at all.
+ */
+export const PUBLIC_ROUTES: readonly PublicRoute[] = [
+  publicRoute("article", (slug) => pgPublicReader.loadArticle(slug)),
+  publicRoute("metadata", (slug) => pgPublicReader.loadMetadata(slug)),
+];
 
 /**
  * The captured slug, decoded **once**, then validated.
@@ -209,22 +254,20 @@ export async function servePublicApi(request: PublicRequest): Promise<void> {
      consulted so that a malformed request is a 400 whatever this server is
      configured with — otherwise the same request would be a 400 on one machine
      and a 501 on another, which is the sort of difference that gets discovered
-     from a bug report rather than from a test. */
-  const article = ARTICLE.exec(path);
-  if (article) {
-    requireReadMethod(res, method);
-    const slug = slugFrom(article);
-    requirePostgres();
-    send(res, 200, await pgPublicReader.loadArticle(slug), method);
-    return;
-  }
+     from a bug report rather than from a test.
 
-  const metadata = METADATA.exec(path);
-  if (metadata) {
+     A loop over `PUBLIC_ROUTES` rather than one `if` per route, so that the
+     four checks happen once and a route added later cannot be added with three
+     of them. The authenticated half is deliberately still an `if` chain — see
+     `serveAuthenticatedApi` — because it has forty routes with genuinely
+     different shapes; this has two that differ only in which read they call. */
+  for (const route of PUBLIC_ROUTES) {
+    const matched = route.pattern.exec(path);
+    if (!matched) continue;
     requireReadMethod(res, method);
-    const slug = slugFrom(metadata);
+    const slug = slugFrom(matched);
     requirePostgres();
-    send(res, 200, await pgPublicReader.loadMetadata(slug), method);
+    send(res, 200, await route.read(slug), method);
     return;
   }
 

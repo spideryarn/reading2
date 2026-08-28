@@ -51,29 +51,49 @@ function notFound(slug: string): Error {
   return Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
 }
 
+/**
+ * **The row this switch is about to change, read and locked**, taking its
+ * builder so a test can read the SQL rather than a constant beside it.
+ *
+ * The same reason `publicCurrentRevisionQuery` takes one, and here it is the
+ * only way to check the one clause the whole concurrency argument rests on.
+ * Deleting `.for("update")` left the entire suite green — GPT Sol's finding 6,
+ * 2026-08-28 — and the behavioural race test that now catches it can only catch
+ * it while the window is open, which on a fast local socket it very often is
+ * not. tests/public-reads.test.ts reads this statement instead, and that
+ * assertion fires on the mutation every time.
+ *
+ * **Through `ownedSlug`, like everything else.** The owner check and the lookup
+ * are one clause, so there is no window between "whose is it" and "change it",
+ * and no unfiltered read in this file for anybody to reuse without the question.
+ *
+ * **`for update`, because the row is read in order to decide what to write.**
+ * Without it two concurrent toggles both see the old value, both write, and both
+ * append an event — a log saying a thing happened twice, which is worse than no
+ * log. A row lock rather than an advisory one, because Supabase's transaction
+ * pooler silently does nothing with session advisory locks (src/db/client.ts).
+ */
+export function lockedArticleQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+) {
+  return db
+    .select({
+      id: articles.id,
+      slug: articles.slug,
+      visibility: articles.visibility,
+      publicAt: articles.publicAt,
+    })
+    .from(articles)
+    .where(ownedSlug(slug))
+    .for("update")
+    .limit(1);
+}
+
 export const pgVisibilityStore: VisibilityStore = {
   async set(slug: string, to: Visibility, rightsConfirmed: boolean): Promise<VisibilityState> {
     return getDb().transaction(async (tx) => {
-      const [row] = await tx
-        .select({
-          id: articles.id,
-          slug: articles.slug,
-          visibility: articles.visibility,
-          publicAt: articles.publicAt,
-        })
-        .from(articles)
-        /* **Through `ownedSlug`, like everything else.** The owner check and the
-           lookup are one clause, so there is no window between "whose is it" and
-           "change it", and no unfiltered read in this file for anybody to reuse
-           without the question. */
-        .where(ownedSlug(slug))
-        /* The row is read to decide what to write, so it is read locked. Without
-           this, two concurrent toggles both see the old value and both append an
-           event — see the header. A row lock rather than an advisory lock,
-           because Supabase's transaction pooler silently does nothing with
-           session advisory locks (src/db/client.ts). */
-        .for("update")
-        .limit(1);
+      const [row] = await lockedArticleQuery(tx, slug);
       if (!row) throw notFound(slug);
 
       const from = row.visibility as Visibility;

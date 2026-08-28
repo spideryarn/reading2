@@ -32,7 +32,7 @@
 
 import { createServer, request as httpRequest, type IncomingMessage, type ServerResponse } from "node:http";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { collectSpend } from "../src/ai-spend.js";
@@ -349,6 +349,26 @@ when("sharing one article", { timeout: 60_000 }, () => {
     expect(r.headers["Cache-Control"]).toBe("no-store");
   });
 
+  /**
+   * **The metadata endpoint is 404 before publication too**, and until 2026-08-28
+   * nothing said so.
+   *
+   * The suite only ever asked for metadata *after* the article was public, so
+   * `loadMetadata` losing its visibility clause would have been invisible here —
+   * and it was invisible in the SQL test as well, because that test exercised a
+   * helper the real query did not use. Two checks, one blind spot, and the
+   * article endpoint's own 404 covering for both. GPT Sol's finding 3.
+   */
+  it("and its metadata is 404 as well, not just its prose", async () => {
+    expect((await articleRow())?.visibility).toBe("private");
+    const r = await call("GET", `/api/public/metadata/${SLUG}`);
+    expect(r.status).toBe(404);
+    /* The same sentence the article endpoint gives, so a visitor cannot tell
+       "not shared" from "no such article" by comparing the two. */
+    expect(r.body.error).toMatch(/No article artefacts/);
+    expect(r.headers["Cache-Control"]).toBe("no-store");
+  });
+
   it("refuses to be published without the rights confirmation", async () => {
     const r = await call("PUT", `/api/article/${SLUG}/visibility`, {
       body: { visibility: "public" },
@@ -551,11 +571,16 @@ when("sharing one article", { timeout: 60_000 }, () => {
           /* No `setRequestOwner`. The box stays empty and this is what the
              public path really looks like. */
           expect(() => currentOwnerId()).toThrow(/before the request was authenticated/);
-          const { servePublicApi } = await import("../src/public/routes.js");
+          const { servePublicApi, PUBLIC_ROUTES } = await import("../src/public/routes.js");
+          /* **Every route in the inventory, not two paths typed here.** The
+             dispatcher walks the same list, so "the whole public surface spends
+             nothing" is a claim about whatever routes exist — including the four
+             slice 1b adds. GPT Sol's finding 5. Plus a miss and an unknown path,
+             because the error paths run code too. */
+          expect(PUBLIC_ROUTES.length).toBeGreaterThan(0);
           for (const path of [
-            `/api/public/article/${SLUG}`,
-            `/api/public/metadata/${SLUG}`,
-            "/api/public/article/no-such-article-anywhere",
+            ...PUBLIC_ROUTES.map((route) => route.path(SLUG)),
+            ...PUBLIC_ROUTES.map((route) => route.path("no-such-article-anywhere")),
             "/api/public/nothing",
           ]) {
             const res = {
@@ -700,6 +725,209 @@ when("sharing one article", { timeout: 60_000 }, () => {
         .where(eq(articles.id, ARTICLE_ID)),
     ).rejects.toThrow();
     expect((await articleRow())?.visibility).toBe("private");
+  });
+
+  /**
+   * **And it cannot be given none**, which this file's own header claimed was
+   * tested and which nothing tested.
+   *
+   * GPT Sol's finding 6. The case above covers the CHECK; this covers the `NOT
+   * NULL`, and they are different constraints failing with different SQLSTATEs.
+   * It has to be raw SQL: Drizzle's types will not let `visibility: null`
+   * through, which is a good property of Drizzle and the exact reason the claim
+   * went unchecked — the thing that would stop me writing the bug also stopped
+   * me testing for it.
+   *
+   * `NOT NULL` is the half that matters most, because it is what makes the
+   * default fail-closed for every row that already existed when 0024 ran.
+   */
+  it("cannot be given no visibility at all", async () => {
+    const failed = await getDb()
+      .execute(sql`update spideryarn.articles set visibility = null where id = ${ARTICLE_ID}`)
+      .then(() => null)
+      .catch((err: unknown) => err);
+    expect(failed, "a NULL visibility was accepted").not.toBeNull();
+
+    /* **Read off the `cause` chain, not off the error.** Drizzle's wrapper
+       carries neither the SQLSTATE nor the column — from the top this failure
+       looks like nothing at all — so `failed.code` is `undefined` and a test
+       asserting it would have been red for the right reason and then "fixed"
+       by deleting the assertion. src/store/db-errors.ts is emphatic about this
+       and I walked into it anyway; the first version of this test did exactly
+       that. 23502 is not_null_violation, asserted by code rather than by
+       message so a Postgres release rewording its errors does not fail it. */
+    const chain: { code?: string; column?: string }[] = [];
+    for (let link: unknown = failed, depth = 0; link && depth < 4; depth += 1) {
+      chain.push(link as { code?: string; column?: string });
+      link = (link as { cause?: unknown }).cause;
+    }
+    const violation = chain.find((link) => link.code === "23502");
+    expect(violation, `no not-null violation in the chain: ${JSON.stringify(chain)}`).toBeDefined();
+    /* And it is *this* column, not some other not-null one further along. */
+    expect(violation?.column).toBe("visibility");
+    expect((await articleRow())?.visibility).toBe("private");
+  });
+
+  /**
+   * **Two publishes at once produce one event, and that is the row lock's job.**
+   *
+   * Sol's finding 6, and it caught a real gap: removing `.for("update")` from
+   * pg-visibility.ts left the whole suite green, so the lock this feature's
+   * comment makes a point of explaining was untested.
+   *
+   * Both requests are started before either is awaited, so they are genuinely
+   * in flight together rather than one after the other — the mistake that makes
+   * most "concurrent" tests sequential and green on broken code
+   * (docs/reusable/silent-success.md, and the note on async test mocks).
+   *
+   * Both must answer 200: the loser of the race is not an error, it is somebody
+   * asking for a state that by then already holds, which is the idempotent case.
+   * What must be exactly one is the **event**, because the log is a history and
+   * "Alice pressed the button twice" is not a fact about the document.
+   */
+  it("writes one event when two publishes race", async () => {
+    /* From private, so there is a real transition for the two to contend over. */
+    await call("PUT", `/api/article/${SLUG}/visibility`, {
+      body: { visibility: "private" },
+      as: OWNER,
+    });
+    await getDb()
+      .delete(articleVisibilityChanges)
+      .where(eq(articleVisibilityChanges.articleId, ARTICLE_ID));
+    expect((await articleRow())?.visibility).toBe("private");
+
+    /**
+     * **The window is forced open from outside, rather than hoped for.**
+     *
+     * The first version of this test just fired both `PUT`s with `Promise.all`
+     * and asserted one event. It passed — and it passed with `.for("update")`
+     * deleted, which is the mutation it was written to catch. Measured on this
+     * laptop: two requests over a local socket do not overlap, the first
+     * transaction finishes before the second reads, and the concurrency the
+     * test is named for never happens. A concurrency test that has to be lucky
+     * is the shape docs/reusable/silent-success.md keeps describing, and the
+     * note on async test mocks names this exact variant.
+     *
+     * So a third connection takes the row's write lock first and holds it. Both
+     * requests then reach their own read with the row already locked, and what
+     * happens next is precisely the difference the code is making:
+     *
+     * - **with `for update`** — both block on the *read*. Releasing lets one
+     *   through; it sees `private`, writes, commits. The other then reads
+     *   `public` and no-ops. One event.
+     * - **without it** — neither read blocks, so both see `private` before the
+     *   release, and both then write and both insert. Two events.
+     *
+     * Deterministic rather than timing-dependent, and it is the lock's own
+     * semantics doing the work rather than a `setTimeout`.
+     */
+    const { Pool } = await import("pg");
+    const holder = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+    const client = await holder.connect();
+    const body = { visibility: "public", rightsConfirmed: true };
+    let race: Promise<[Reply, Reply]>;
+    try {
+      await client.query("begin");
+      await client.query("select id from spideryarn.articles where id = $1 for update", [
+        ARTICLE_ID,
+      ]);
+
+      race = Promise.all([
+        call("PUT", `/api/article/${SLUG}/visibility`, { body, as: OWNER }),
+        call("PUT", `/api/article/${SLUG}/visibility`, { body, as: OWNER }),
+      ]);
+
+      /* Long enough for both requests to have reached the database and be
+         waiting on the row. If either had *not* got that far, the release below
+         would simply let them run one after the other — which is the old,
+         useless version of this test, so the wait is what makes it the new one. */
+      await new Promise((r) => setTimeout(r, 300));
+      await client.query("commit");
+    } finally {
+      client.release();
+      await holder.end();
+    }
+
+    const [first, second] = await race;
+
+    /* Both 200: the loser of the race is not an error, it is somebody asking for
+       a state that by then already holds, which is the idempotent case. */
+    expect([first.status, second.status]).toEqual([200, 200]);
+    expect(first.body.visibility).toBe("public");
+    expect(second.body.visibility).toBe("public");
+
+    /* **The assertion.** Exactly one, because the log is a history and "Alice
+       pressed the button twice" is not a fact about the document. */
+    const rows = await events();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ fromVisibility: "private", toVisibility: "public" });
+
+    /* And both callers were told the same `public_at`, rather than one of them
+       being handed a stamp that was overwritten a millisecond later. */
+    expect(first.body.publicAt).toBe(second.body.publicAt);
+  });
+
+  /**
+   * **The whole transaction rolls back, including the update.**
+   *
+   * Sol's finding 6 again. The code updates the row and then inserts the event,
+   * and nothing checked that a failure in the second undoes the first — which
+   * is the failure that matters, because it leaves an article publicly readable
+   * with no record of anyone having shared it. That is precisely the state the
+   * audit log exists to make impossible.
+   *
+   * Forced from the database rather than by stubbing the store: the constraint
+   * that fires is `article_visibility_changes_moved`, a real rule on the real
+   * table, and it fires during the real insert. A mocked rejection would prove
+   * the `await` chain propagates and nothing about Postgres's transaction.
+   *
+   * The trigger is dropped in a `finally` whatever happens, so a failure here
+   * cannot leave the table booby-trapped for the rest of the file.
+   */
+  it("rolls the visibility back when the audit insert fails", async () => {
+    const db = getDb();
+    await call("PUT", `/api/article/${SLUG}/visibility`, {
+      body: { visibility: "private" },
+      as: OWNER,
+    });
+    expect((await articleRow())?.visibility).toBe("private");
+    const before = await events();
+
+    await db.execute(sql`
+      create or replace function spideryarn.test_break_visibility_log()
+      returns trigger language plpgsql as $$
+      begin
+        raise exception 'forced failure for the rollback test';
+      end $$`);
+    await db.execute(sql`
+      create trigger test_break_visibility_log
+      before insert on spideryarn.article_visibility_changes
+      for each row execute function spideryarn.test_break_visibility_log()`);
+    try {
+      const r = await call("PUT", `/api/article/${SLUG}/visibility`, {
+        body: { visibility: "public", rightsConfirmed: true },
+        as: OWNER,
+      });
+      /* A 500, and the reader is told nothing about the database — the message
+         is the fixed one from src/messages.ts, because `guardDbStore` wraps this
+         store. What matters here is the row, not the wording. */
+      expect(r.status).toBe(500);
+
+      /* **The assertion.** Still private: the update was rolled back with the
+         insert, so there is no publicly readable article with no record of it. */
+      expect((await articleRow())?.visibility).toBe("private");
+      expect((await articleRow())?.publicAt).toBeNull();
+      expect(await events()).toHaveLength(before.length);
+
+      /* And the public read agrees, which is the reader-facing version of the
+         same fact. */
+      expect((await call("GET", `/api/public/article/${SLUG}`)).status).toBe(404);
+    } finally {
+      await db.execute(
+        sql`drop trigger if exists test_break_visibility_log on spideryarn.article_visibility_changes`,
+      );
+      await db.execute(sql`drop function if exists spideryarn.test_break_visibility_log()`);
+    }
   });
 
   /** And the log will not take a row that records no movement. */

@@ -125,6 +125,32 @@ async function scrubbed<T>(what: string, run: () => Promise<T>): Promise<T> {
 }
 
 /**
+ * The title fallback, in SQL — the article's own first `<h1>`.
+ *
+ * `metaFrom` on the owner side is `title ?? headingTitle ?? slug`, and a public
+ * page showing a slug where the owner sees a heading would be a visible
+ * divergence for no reason. The article read has the blocks in memory and uses
+ * `headingTitleOf`; the metadata read does not, so it asks Postgres for the one
+ * row.
+ *
+ * Guarded by a `case`, so it runs for almost no articles: consulted only when
+ * nothing stored a title. Without the guard, an article with no `<h1>` at all
+ * filters every one of its block rows to find that out.
+ *
+ * **No `articles.title_override` in the guard**, unlike the owner's version of
+ * this expression. That column decides nothing here.
+ */
+const PUBLIC_HEADING_TITLE = sql<string | null>`case
+  when ${articleRevisions.title} is null then (
+    select ${revisionBlocks.text} from ${revisionBlocks}
+    where ${revisionBlocks.revisionId} = ${articleRevisions.id}
+      and ${revisionBlocks.kind} = 'heading'
+      and ${revisionBlocks.level} = 1
+    order by ${revisionBlocks.ordinal}
+    limit 1)
+end`;
+
+/**
  * The columns a public **article** read may have.
  *
  * Written out rather than derived, for the reason
@@ -161,6 +187,24 @@ const PUBLIC_PROJECTIONS = {
   metadata: {
     id: articleRevisions.id,
     title: articleRevisions.title,
+    /**
+     * **In the projection, so that the one query helper can serve both reads.**
+     *
+     * It is not a column of `article_revisions`, and on the owner's side that
+     * would matter — `REVISION_READ_POLICY` in [pg.ts](pg.ts) is keyed by that
+     * table's columns and asserted exhaustive against it, so `listArticles`
+     * has to carry its own heading-title expression *beside* the projection
+     * rather than inside it. There is no such policy here, so there is nothing
+     * to make an exception in, and putting it here is what lets `loadMetadata`
+     * go through `publicCurrentRevisionQuery` like the article read does.
+     *
+     * That mattered more than it looks. Until 2026-08-28 `loadMetadata` built
+     * its own inline `select` and the SQL test exercised the helper — so the
+     * test passed against a query production never ran, and deleting the real
+     * `where publicSlug(slug)` left the whole suite green while a private
+     * article's metadata was reachable at a public URL. GPT Sol's finding 3.
+     */
+    headingTitle: PUBLIC_HEADING_TITLE.as("heading_title"),
     hasTree: sql<boolean>`${articleRevisions.tree} is not null`.as("has_tree"),
     hasArc: sql<boolean>`${articleRevisions.arc} is not null`.as("has_arc"),
     hasTweets: sql<boolean>`${articleRevisions.tweets} is not null`.as("has_tweets"),
@@ -239,31 +283,6 @@ export function publicBlocksQuery(
     .orderBy(asc(revisionBlocks.ordinal));
 }
 
-/**
- * The title fallback, in SQL — the article's own first `<h1>`.
- *
- * `metaFrom` on the owner side is `title ?? headingTitle ?? slug`, and a public
- * page showing a slug where the owner sees a heading would be a visible
- * divergence for no reason. The article read has the blocks in memory and uses
- * `headingTitleOf`; the metadata read does not, so it asks Postgres for the one
- * row.
- *
- * Guarded by a `case`, so it runs for almost no articles: consulted only when
- * nothing stored a title. Without the guard, an article with no `<h1>` at all
- * filters every one of its block rows to find that out.
- *
- * **No `articles.title_override` in the guard**, unlike the owner's version of
- * this expression. That column decides nothing here.
- */
-const PUBLIC_HEADING_TITLE = sql<string | null>`case
-  when ${articleRevisions.title} is null then (
-    select ${revisionBlocks.text} from ${revisionBlocks}
-    where ${revisionBlocks.revisionId} = ${articleRevisions.id}
-      and ${revisionBlocks.kind} = 'heading'
-      and ${revisionBlocks.level} = 1
-    order by ${revisionBlocks.ordinal}
-    limit 1)
-end`;
 
 export const pgPublicReader: PublicArticleReader = {
   async loadArticle(slug: string): Promise<PublicArticle> {
@@ -326,16 +345,12 @@ export const pgPublicReader: PublicArticleReader = {
     requireSlug(slug);
     return scrubbed("metadata", async () => {
       const db = getDb();
-      const [found] = await db
-        .select({
-          slug: articles.slug,
-          revision: PUBLIC_PROJECTIONS.metadata,
-          headingTitle: PUBLIC_HEADING_TITLE.as("heading_title"),
-        })
-        .from(articles)
-        .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
-        .where(publicSlug(slug))
-        .limit(1);
+      /* **Through the same helper the article read uses**, which is the whole
+         of GPT Sol's finding 3: this was an inline `select` that happened to say
+         the same thing, so the test that reads the generated SQL was reading a
+         query nothing ran. One `where publicSlug(slug)` in this file, exercised
+         by tests/public-reads.test.ts, reached by both reads. */
+      const [found] = await publicCurrentRevisionQuery(db, slug, "metadata");
       if (!found) throw notShared(slug);
       /* Same bar as the article read, and it has to be the same: a metadata page
          for an article whose own page is a 404 is a page about nothing. */
@@ -344,7 +359,7 @@ export const pgPublicReader: PublicArticleReader = {
       return publicMetadata({
         slug: found.slug,
         title: found.revision.title,
-        headingTitle: found.headingTitle,
+        headingTitle: found.revision.headingTitle,
         available: {
           arc: found.revision.hasArc,
           tweets: found.revision.hasTweets,
