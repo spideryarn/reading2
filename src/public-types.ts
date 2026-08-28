@@ -92,6 +92,18 @@ export interface PublicBlock {
   words: number;
   html: string;
   gistable: boolean;
+  /**
+   * The three note fields cross in full — `Block.role`, `Block.treatment` and
+   * `Block.noteId` in types.ts.
+   *
+   * They are facts about the article rather than about us: which of its words
+   * are apparatus, and which note a paragraph of it belongs to. `noteId` is the
+   * one that would be easy to leave out and expensive to add later — the hover
+   * preview shows a note's whole *range*, and a range needs an identity.
+   */
+  role?: "footnote" | "reference" | "acknowledgment" | "credit" | "appendix";
+  treatment?: "supplement";
+  noteId?: string;
 }
 
 /**

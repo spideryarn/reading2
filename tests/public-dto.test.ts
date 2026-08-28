@@ -49,6 +49,11 @@ function keyPaths(value: unknown, prefix = ""): string[] {
  * A block carrying `note` — the field the owner's `blocksQuery` selects and a
  * visitor must never see. It says why the splitter marked a block ungistable,
  * which is our diagnostics rather than the article.
+ *
+ * And carrying all three note fields, which a visitor **must** see: the hover
+ * preview renders a note's whole range, so `noteId` is load-bearing on the
+ * public side rather than an extra. `HEADING` below carries none of them, so
+ * the assertion covers both arms.
  */
 const BLOCK: Block = {
   id: "spya-k3m9qt",
@@ -59,6 +64,9 @@ const BLOCK: Block = {
   html: "<p>The argument does not survive its own first example.</p>",
   gistable: false,
   note: "repeats the pull quote above",
+  role: "footnote",
+  treatment: "supplement",
+  noteId: "spya-note-0123456789",
 };
 
 const HEADING: Block = {
@@ -167,8 +175,11 @@ describe("the public article payload", () => {
         "blocks[].id",
         "blocks[].kind",
         "blocks[].level",
+        "blocks[].noteId",
+        "blocks[].role",
         "blocks[].tag",
         "blocks[].text",
+        "blocks[].treatment",
         "blocks[].words",
         "meta",
         "meta.byline",

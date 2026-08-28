@@ -108,6 +108,9 @@ function publicBlock(block: Block | PublicBlock): PublicBlock {
     words: block.words,
     html: block.html,
     gistable: block.gistable,
+    ...(block.role === undefined ? {} : { role: block.role }),
+    ...(block.treatment === undefined ? {} : { treatment: block.treatment }),
+    ...(block.noteId === undefined ? {} : { noteId: block.noteId }),
   };
 }
 

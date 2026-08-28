@@ -676,6 +676,27 @@ export const revisionBlocks = spideryarn.table(
     note: text("note"),
 
     /**
+     * What this text is, and how the argument machinery must treat it — two
+     * orthogonal closed axes, `Block.role` and `Block.treatment` in
+     * src/types.ts. Null on both means ordinary article content.
+     *
+     * Only `'footnote'` is written today. The other four are in the constraint
+     * because a stored role means *this revision classifies this content as X*,
+     * and narrowing the set now would make widening it a migration
+     * (docs/plans/footnotes-stage345-upfront-sol.md, decision 2).
+     */
+    role: text("role"),
+    treatment: text("treatment"),
+    /**
+     * Which note this block belongs to. **A note is a range of blocks**, so
+     * this is many-rows-to-one-value and deliberately not a key of anything: it
+     * is minted by stage 2 from the note's own text (src/notes.ts) and is
+     * unique only within a revision. No CHECK — its shape is stage 2's to
+     * decide, and `NOTE_ID_PATTERN` is where stage 3 enforces it.
+     */
+    noteId: text("note_id"),
+
+    /**
      * The block's prose, as Postgres's full-text type — the home page's search box.
      *
      * **Per block, not per article**, and that is the design rather than an
@@ -710,6 +731,20 @@ export const revisionBlocks = spideryarn.table(
     check(
       "revision_blocks_kind",
       sql`${t.kind} in ('heading','text','quote','code','media','caption','other')`,
+    ),
+    /**
+     * The two closed axes, nullable — so `is null or in (…)`, where `kind`
+     * above is `notNull` and needs no null arm. A bare `in` would be satisfied
+     * by null anyway (`null in (…)` is null, not false, and a CHECK passes on
+     * null), so writing the null arm out is documentation rather than logic.
+     */
+    check(
+      "revision_blocks_role",
+      sql`${t.role} is null or ${t.role} in ('footnote','reference','acknowledgment','credit','appendix')`,
+    ),
+    check(
+      "revision_blocks_treatment",
+      sql`${t.treatment} is null or ${t.treatment} in ('supplement')`,
     ),
     /**
      * A block cannot be attached to a revision of a different article: the

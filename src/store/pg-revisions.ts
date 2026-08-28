@@ -360,6 +360,9 @@ async function storedBlocks(tx: Tx | Db, revisionId: string): Promise<Block[]> {
       html: revisionBlocks.html,
       gistable: revisionBlocks.gistable,
       note: revisionBlocks.note,
+      role: revisionBlocks.role,
+      treatment: revisionBlocks.treatment,
+      noteId: revisionBlocks.noteId,
     })
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revisionId))
@@ -375,6 +378,9 @@ async function storedBlocks(tx: Tx | Db, revisionId: string): Promise<Block[]> {
     html: row.html,
     gistable: row.gistable,
     ...(row.note === null ? {} : { note: row.note }),
+    ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
+    ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
+    ...(row.noteId === null ? {} : { noteId: row.noteId }),
   }));
 }
 
@@ -556,7 +562,15 @@ async function beginDraftIn(
        recomputes it from the copied text. Naming it here would either fail or
        freeze a stale search vector. */
     const blockColumns = sql.join(
-      ["article_id", "block_id", "ordinal", "tag", "kind", "level", "text", "words", "html", "gistable", "note"].map(
+      /* **Nothing typechecks this list.** It is strings, and a column left out
+         of it is silently dropped from every `{ steps: ["extract"] }` draft —
+         which for `role`/`treatment`/`noteId` means a re-extracted article
+         quietly puts its bibliography back into the argument. Add here and to
+         `storedBlocks` above together. */
+      [
+        "article_id", "block_id", "ordinal", "tag", "kind", "level", "text", "words", "html",
+        "gistable", "note", "role", "treatment", "note_id",
+      ].map(
         (name) => sql.identifier(name),
       ),
       sql`, `,

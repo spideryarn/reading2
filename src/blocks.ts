@@ -15,6 +15,9 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
+/* The three strings stage 2 stamped into the DOM, from the file that writes
+   them. See noteFieldsFor. */
+import { CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN } from "./notes.js";
 import { sanitizeInPlace, sanitizeStoredBlocks } from "./sanitize.js";
 import { SANITIZER_VERSION } from "./sanitize-policy.js";
 /* `Block` and `BlockKind` come from types.ts rather than being declared here.
@@ -215,6 +218,48 @@ function describeBlock(
   }
 
   return { kind, level, gistable, note };
+}
+
+/** What `noteFieldsFor` can add to a block. All three absent for body prose. */
+type NoteFields = Pick<Block, "role" | "treatment" | "noteId">;
+
+/**
+ * Whether this block is apparatus rather than argument, read off the stamps
+ * stage 2 left in the DOM (src/notes.ts).
+ *
+ * **An ancestor lookup, not a check for the stamp itself, and that is the whole
+ * point.** A note is a *range* of blocks: gwern has 34 notes and 118
+ * block-level elements inside the notes container, so classifying only the
+ * elements carrying `data-spya-note` would leave 84 blocks of footnote prose
+ * classified as argument — summarised, embedded, and on the clock — with every
+ * count still looking plausible. Measured, docs/plans/footnotes.md.
+ *
+ * A block is a supplement because it is **inside the container**; it belongs to
+ * a note because a `[data-spya-note]` ancestor says which. The container is
+ * asked first so that a stamp somewhere else in the document — which stage 2
+ * never produces — cannot pull a paragraph out of the argument on its own.
+ *
+ * **Where the forgery defence lives, because it is not here.** These attributes
+ * are ours and therefore forgeable, and stage 3 cannot tell one of ours from a
+ * page's. The scrub is at stage 2, where the untrusted document arrives:
+ * `scrubReserved` takes every copy off before a single one of ours is written,
+ * and it runs unconditionally, before the "no candidates" early return. So the
+ * rule stage 3 depends on is that **`splitIntoBlocks` is only ever handed HTML
+ * that has been through `canonicaliseNotes`** — which today is the whole of
+ * `runExtract`, its only production caller. `NOTE_ID_PATTERN` is the belt: a
+ * value that is not the ten hex digits stage 2 mints is not carried, so nothing
+ * a page wrote can reach blocks.json, Postgres or the public payload as an id.
+ *
+ * Only `"footnote"` is assigned. See `Block.role` for why the other four exist.
+ */
+function noteFieldsFor(el: Element): NoteFields {
+  if (el.closest(`[${CONTAINER_ATTR}]`) === null) return {};
+  const noteId = el.closest(`[${NOTE_ATTR}]`)?.getAttribute(NOTE_ATTR);
+  return {
+    role: "footnote",
+    treatment: "supplement",
+    ...(noteId && NOTE_ID_PATTERN.test(noteId) ? { noteId } : {}),
+  };
 }
 
 /** A `<p>` whose only real content is an image is a media block, not prose. */
@@ -816,6 +861,10 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
       html: content.outerHTML,
       gistable,
       ...(note ? { note } : {}),
+      /* Read from `el`, which is still in the document: the note stamps are
+         `data-*`, so neither the sanitiser nor `scrubStamps` (which only takes
+         WAS_ID/WAS_NAME off) has touched them. */
+      ...noteFieldsFor(el),
     };
   });
 

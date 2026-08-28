@@ -206,6 +206,47 @@ async function blocksFingerprint(blocks: Block[]): Promise<string> {
   return hashBlocks(blocks);
 }
 
+/** The two closed axes, spelled out here because a `Block` from a file is a claim, not a type. */
+const ROLES = new Set(["footnote", "reference", "acknowledgment", "credit", "appendix"]);
+const TREATMENTS = new Set(["supplement"]);
+
+/**
+ * Refuse the whole import if any block's `role` or `treatment` is not one of
+ * ours. **Rejected, not dropped, and the choice matters.**
+ *
+ * Dropping would be the friendlier-looking option and it is the worse one: a
+ * block that arrives claiming to be apparatus and is stored as body is
+ * *silently reclassified as argument*, which is the exact failure the whole
+ * feature exists to prevent — summarised, embedded, and on the clock, with
+ * every count still looking plausible (docs/plans/footnotes.md). An import is a
+ * file somebody handed us, so a value we do not recognise means the file was
+ * written by something we do not understand, and the honest answer is to stop.
+ *
+ * The CHECK constraint would also stop it — but as a Postgres constraint
+ * violation naming `revision_blocks_role`, from inside a transaction, with no
+ * block id in it. This is the guard; the constraint is the backstop.
+ *
+ * `noteId` has no closed set to check against, so what is checked is that it is
+ * a string: the column is `text`, and a number or an object in that field is a
+ * driver error at insert time rather than an explanation.
+ */
+export function checkNoteFields(slug: string, blocks: Block[]): void {
+  for (const [index, b] of blocks.entries()) {
+    const where = `block ${index} (${b.id ?? "no id"})`;
+    if (b.role !== undefined && !ROLES.has(b.role)) {
+      throw new Error(`${slug}: ${where} has an unrecognised role ${JSON.stringify(b.role)}`);
+    }
+    if (b.treatment !== undefined && !TREATMENTS.has(b.treatment)) {
+      throw new Error(
+        `${slug}: ${where} has an unrecognised treatment ${JSON.stringify(b.treatment)}`,
+      );
+    }
+    if (b.noteId !== undefined && typeof b.noteId !== "string") {
+      throw new Error(`${slug}: ${where} has a noteId that is not a string`);
+    }
+  }
+}
+
 /**
  * Import one article's directory.
  *
@@ -228,6 +269,7 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
     );
   }
   const blocks = blocksFile.blocks;
+  checkNoteFields(slug, blocks);
 
   const meta = await readJson<Meta>(path.join(dir, "meta.json"));
   if (!meta) absent.push("meta.json");
@@ -592,6 +634,9 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
           html: b.html,
           gistable: b.gistable,
           note: b.note ?? null,
+          role: b.role ?? null,
+          treatment: b.treatment ?? null,
+          noteId: b.noteId ?? null,
         })),
       );
     }

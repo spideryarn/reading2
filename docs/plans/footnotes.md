@@ -616,6 +616,38 @@ stripped or namespaced, owning its own internal-link delegation. Which means sta
 project **`noteId`** — not just `role` and `treatment` — and add all three to `PublicBlock`, its
 query and its DTO, all three of which are explicit allow-lists.
 
+### The invisible stage-4 failure, narrowed to one entry — 2026-08-28
+
+Sol named the range-join hazard as the thing most likely to be found late. Chased into the code, it
+is **much smaller and much more specific** than the warning, and the difference matters because the
+general version has no cheap fix and the specific one does.
+
+Both joins key on a **pair of block ids**, not on indices or node ids
+([`web/tree.ts:218`](../../src/web/tree.ts), [`web/tree.ts:373`](../../src/web/tree.ts)). Appending a
+supplement node **changes no body part's range** — part 3 still runs from the same first block id to
+the same last block id. Exactly one range changes: **the root's**, whose end moves from the last body
+block to the last note. So:
+
+- **The arc is safe by construction.** `buildArcColumn` reads `geometry.cells[1]` — depth-1 only,
+  where no range moved. Every body part still matches its sentence. The supplement cell matches
+  nothing and draws empty, which is exactly what the plan asks for ("show the title, never a hole").
+  There is no root arc entry to lose, because `partsOf` is the root's *children*.
+- **One summary entry breaks: the whole-article one.** `targetsOf` includes `node.depth === 0`
+  ([`summarise.ts:239`](../../src/summarise.ts)), so a summary is written for the root, and
+  `buildSummaryTree` looks it up by the root's range. After stage 4 that key misses, and the entry is
+  *dropped without a word* — the article-level summary simply stops appearing, on every article
+  summarised before stage 4, with `sourceHash` still current because **no block changed**.
+
+**The fix is two lines and it is better than what is there.** `SummaryEntry` already carries `depth`
+([`types.ts:503`](../../src/types.ts)). The root is unique, so keying it by range is precision it
+does not need: match the root's entry by `depth === 0`, and keep range-matching for everything below,
+where the ambiguity that rule exists to prevent is real.
+
+**What must be true before stage 4 can be called done:** a test that builds a tree, writes summaries
+against it, appends a supplement, and asserts the whole-article summary is *still there*. Without
+that test this is invisible — green suites, plausible output, and a reader who notices a missing
+paragraph months later.
+
 ### Stage 3 splits in two
 
 It was one stage and it is now too big to end anywhere safe. **3a** is the field, the persistence,
@@ -869,6 +901,65 @@ changes is a block that loses its id at the next re-extraction.*
 Notes with **identical text** ("Ibid.") get order-dependent suffixes, so inserting a new identical
 note ahead of them shifts every later one's identity. Real, niche, and the same family as the marker
 renumbering trap that stage 3 fixes; revisit it there rather than inventing a second mechanism here.
+
+## Stage 3a-i, as it actually landed — 2026-08-28
+
+`Block` gains `role`, `treatment` and `noteId`; `revision_blocks` gains three nullable columns
+(`drizzle/0027_block_roles.sql`) with `is null or in (…)` CHECKs; the ten hand-written projections,
+the public allow-lists and the DTO all carry them. Nothing reads them yet — that is 3a-ii.
+
+**Classification is an ancestor lookup**, `noteFieldsFor` in [`blocks.ts`](../../src/blocks.ts):
+inside `[data-spya-notes]` ⇒ supplement, and the nearest `[data-spya-note]` ancestor names the note.
+Measured through the real pipeline, by me rather than by the agent's own tests
+(`output/verify3ai.mts`):
+
+| fixture | supplement blocks | distinct notes | supplement with no noteId | body block carrying a role |
+|---|---|---|---|---|
+| gwern | 41 | **34** | 0 | 0 |
+| wiki_transformer | 121 | 121 | 0 | 0 |
+| acx_footnotes | 18 | 18 | 0 | 0 |
+| tufte | 5 | 5 | 0 | 0 |
+| ar5iv, gutenberg, constitution | **0** | 0 | 0 | 0 |
+
+Gwern's 41-against-34 is the whole reason the field exists: had this classified the stamped
+elements instead of their range, 84 blocks of footnote prose would have stayed argument.
+
+**Three mutations, each run and reverted, none of which the agent reported:**
+
+| mutation | tests reddened |
+|---|---|
+| classify the stamp rather than its range | 4 |
+| every block becomes a supplement | 17 |
+| the `noteId` pattern gate never matches | 13 |
+
+The third was the one worth checking. `NOTE_ID_PATTERN` gates what may become a `noteId`, and a
+pattern that failed to match what `mintNoteId` produces would drop every id while `role` and
+`treatment` still landed and every count still read correctly — a guard going quiet when defeated
+([a-guard-that-goes-quiet-when-defeated](../reusable/silent-success.md)). It does not.
+
+**The forgery defence is stage 2's, and stage 3 has none of its own.** Proved rather than read: a
+page shipping our own `data-spya-note` stamps, one of them inside a `<template>`, yields **0 roles
+and 0 surviving stamps** through the real pipeline. The same HTML fed straight into
+`splitIntoBlocks`, bypassing stage 2, yields **1 role** — which is what makes the first number
+evidence instead of a vacuous pass. So the rule stage 3 rests on is that its input has been through
+`canonicaliseNotes`; `runExtract` is the only production caller, and that is now the thing to keep
+true.
+
+**An import is rejected, not repaired.** `checkNoteFields` ([`import.ts`](../../src/store/import.ts))
+throws on an unrecognised `role` or `treatment` rather than dropping it, because a block that
+arrives claiming to be apparatus and is stored as body is silently reclassified as *argument* —
+the exact failure the feature exists to prevent. The CHECK constraint is the backstop, not the guard.
+
+### Committed out of a tree two agents were writing in
+
+`src/blocks.ts` and `src/store/artifacts-pg.ts` each held this work **and** a peer's in-progress
+"landing D" work ([transactional-stage-runner.md](transactional-stage-runner.md)) — in
+`artifacts-pg.ts` the two are adjacent inside a single diff hunk. `git add <file>` would have
+committed their half-finished code under this message
+([the-pathspec-cannot-fence-a-shared-file](../reusable/silent-success.md)). Both were rebuilt as
+HEAD plus this stage's lines only, anchored on exact strings, parse-checked, and checked for the
+absence of every peer symbol; then committed through a private `GIT_INDEX_FILE` so the shared index
+was never touched.
 
 ## What this is deliberately not doing
 

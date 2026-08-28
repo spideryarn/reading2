@@ -277,6 +277,14 @@ export function publicBlocksQuery(
       words: revisionBlocks.words,
       html: revisionBlocks.html,
       gistable: revisionBlocks.gistable,
+      /* All three cross, and `noteId` in particular is not optional: the hover
+         preview has to render a note's whole *range*, and without an identity
+         it has only "the block the marker landed on" to show. None of the three
+         is about a person or about our pipeline — they are what the article
+         is. docs/plans/footnotes.md, the stage-5 trap. */
+      role: revisionBlocks.role,
+      treatment: revisionBlocks.treatment,
+      noteId: revisionBlocks.noteId,
     })
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revisionId))
@@ -321,6 +329,14 @@ export const pgPublicReader: PublicArticleReader = {
             words: row.words,
             html: row.html,
             gistable: row.gistable,
+            /* The same cast `kind` gets, and for the same reason: `role` and
+               `treatment` are `text` columns with a CHECK on them, so Postgres
+               guarantees the value and TypeScript cannot see the guarantee. */
+            ...(row.role === null ? {} : { role: row.role as NonNullable<PublicBlock["role"]> }),
+            ...(row.treatment === null
+              ? {}
+              : { treatment: row.treatment as NonNullable<PublicBlock["treatment"]> }),
+            ...(row.noteId === null ? {} : { noteId: row.noteId }),
           }),
         ),
         undefined,

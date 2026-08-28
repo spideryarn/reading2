@@ -154,14 +154,32 @@
 
 import { createHash } from "node:crypto";
 
-/** On the note's own element. The value is the noteId. */
-const NOTE_ATTR = "data-spya-note";
+/**
+ * On the note's own element. The value is the noteId.
+ *
+ * Exported because stage 3 reads it back (`src/blocks.ts`, `noteFieldsFor`) and
+ * a second spelling of the string in the reading file is how a stamp and its
+ * reader drift apart without either side going red.
+ */
+export const NOTE_ATTR = "data-spya-note";
 /** On a marker in the prose. The value is the noteId it points at. */
 const REF_ATTR = "data-spya-note-ref";
 /** On a back-link inside a note. The value is the noteId it belongs to. */
 const BACK_ATTR = "data-spya-note-back";
-/** On the one container all notes end up in. */
-const CONTAINER_ATTR = "data-spya-notes";
+/** On the one container all notes end up in. Read back by stage 3 — see NOTE_ATTR. */
+export const CONTAINER_ATTR = "data-spya-notes";
+
+/**
+ * The shape `mintNoteId` produces, and the only shape stage 3 will carry into a
+ * `Block`.
+ *
+ * Stage 2 is the trust boundary — `scrubReserved` takes every copy of our
+ * attributes off the document before we write ours, so after this pass every
+ * stamp in the document is ours. This pattern is the belt: whatever else goes
+ * wrong upstream, the string that reaches `blocks.json`, Postgres and the
+ * public payload is ten hex digits and an optional counter, not a page's text.
+ */
+export const NOTE_ID_PATTERN = /^spya-note-[0-9a-f]{10}(?:-[0-9]+)?$/;
 
 /**
  * Ours, and therefore forgeable. Scrubbed off the input before anything is

@@ -44,6 +44,31 @@ export interface Block {
   gistable: boolean;
   /** Why gistable is false, for debugging the splitter. */
   note?: string;
+  /**
+   * What this text is. Absent means ordinary article content.
+   *
+   * Two orthogonal closed axes rather than one closed set, because
+   * acknowledgments and image credits are supplements while an **appendix may
+   * be real prose worth gisting** — see docs/plans/footnotes.md#the-representation.
+   *
+   * **Only `"footnote"` is ever assigned in v1**, by stage 3 from stage 2's
+   * `data-spya-notes` container. The other four are in the union, in the CHECK
+   * constraint and in the tests, produced by nothing — deliberately. A stored
+   * role means *this revision classifies this content as X*, so narrowing the
+   * union now would make widening it a database migration
+   * (docs/plans/footnotes-stage345-upfront-sol.md, decision 2).
+   */
+  role?: "footnote" | "reference" | "acknowledgment" | "credit" | "appendix";
+  /** How the argument machinery must treat it. Absent means "body". */
+  treatment?: "supplement";
+  /**
+   * Which note this block belongs to. **A note is a RANGE of blocks, not one
+   * block** — gwern has 34 notes across 41 supplement blocks, and conflating
+   * the two counts is the bug this field exists to prevent
+   * (docs/plans/footnotes.md#a-note-is-a-range-of-blocks-not-a-block). Minted
+   * by stage 2 in src/notes.ts, carried here by an ancestor lookup.
+   */
+  noteId?: string;
 }
 
 /** A node of the granularity tree / deeply-nested ToC. Stage 4+5 output. */

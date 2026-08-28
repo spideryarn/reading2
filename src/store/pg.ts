@@ -548,6 +548,9 @@ export function blocksQuery(db: Pick<ReturnType<typeof getDb>, "select">, revisi
       html: revisionBlocks.html,
       gistable: revisionBlocks.gistable,
       note: revisionBlocks.note,
+      role: revisionBlocks.role,
+      treatment: revisionBlocks.treatment,
+      noteId: revisionBlocks.noteId,
     })
     .from(revisionBlocks)
     .where(eq(revisionBlocks.revisionId, revisionId))
@@ -569,6 +572,9 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
     html: row.html,
     gistable: row.gistable,
     ...(row.note === null ? {} : { note: row.note }),
+    ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
+    ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
+    ...(row.noteId === null ? {} : { noteId: row.noteId }),
   }));
 
   /* The same guard src/api.ts puts on the filesystem reader, because there are
