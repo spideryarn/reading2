@@ -1017,9 +1017,14 @@ browser pass runs in a Sonnet subagent against [browser-testing.md](../project/b
 
 **Stage 1a is built.** Two GPT Sol reviews of the built code, a black-box HTTP spike, and a browser
 pass, all closed. Typecheck clean across three projects; `npm test` 4884 of 4891, the one failing file
-belonging to another lane and passing in isolation. **Three decisions are Greg's and are open**: whether
-a public page may load the article's own third-party images and embeds (see below), whether the
-`VIEW ONLY` chip needs a phone-width treatment, and one clause in `CLAUDE.md`'s commit recipe.
+belonging to another lane and passing in isolation. **The three decisions it raised were made on
+2026-08-28 and all three are settled:**
+
+| Question | Greg's answer |
+|---|---|
+| May a public page load the article's own third-party images and embeds, so those hosts learn somebody is reading? | **Yes, leave it**, and ship `Referrer-Policy: no-referrer` so they cannot learn *which* article. The exposure is what the reader would get visiting the original. No proxy, no placeholders — a visitor gets the full article, same as the owner, which is decision 1 at the top of this file holding under pressure. |
+| Does the `VIEW ONLY` chip need a phone-width treatment, given the masthead is hidden below 900px? | **No. Arrival is enough.** The shared-article notice card renders at every width and tells a visitor once. Nothing to build. |
+| Should `CLAUDE.md`'s commit recipe carry the pathspec caveat? | **Yes**, added — with the check that decides it (`git diff <file>`) and a pointer to the reproduction. |
 
 **Stage 1a, the server half, is built and committed** — 2026-08-28, nineteen files, nine commits
 from `f6d5d98` to `4bbed5d`. What exists: the migration, `PUT /api/article/:slug/visibility`,

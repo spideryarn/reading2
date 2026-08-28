@@ -161,7 +161,14 @@ Locally the bar is lower, but still ask before you wipe or overwrite data you di
   Never `git add -A`, `git add .` or `git commit -a`. The trailing `--` pathspec is the load-bearing
   part: the index is shared, so without it another agent's `git reset` in the gap lands *their* work
   under *your* message — which has happened. Use `-F <file>`, not `-m`.
-  [version-control.md](docs/project/version-control.md) has the accident and the reasoning.
+
+  **Unless a peer has uncommitted changes in a file you are committing — then drop the pathspec.**
+  `git commit -- <path>` commits the *working tree* of that path and ignores the index, so it also
+  sweeps up their unfinished edits; that happened twice on 2026-08-28. Check with `git diff <file>`
+  first. If there are hunks that are not yours: `git reset`, stage only yours (`git apply --cached` a
+  filtered patch), confirm with `git diff --cached`, then `git commit -F <msg>` with **no** pathspec.
+  [version-control.md](docs/project/version-control.md) has both accidents, the reproduction and both
+  recipes.
 - **Commit when the work is done**, or when you reach a good stopping point, without being asked.
 
 ### Before you call it finished
