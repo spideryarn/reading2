@@ -58,7 +58,7 @@ line that says what to edit.
 page exists: `created_at` ("when they signed up") and `last_sign_in_at` ("when they last logged
 in"). Nothing in `spideryarn` records either.
 
-**Declared in [`src/db/auth-users.ts`](../../src/db/auth-users.ts), deliberately *not* in
+**Declared in `src/db/auth-users.ts`** — since deleted, when the accounts moved to the Auth service's Admin API ([admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md)) — **deliberately *not* in
 [`src/db/schema.ts`](../../src/db/schema.ts).** The schema file's own header says why: declaring an
 Auth-owned table there invites `drizzle-kit generate` to treat it as ours to manage, and "drizzle
 dropped auth.users" is not a mistake anyone gets to undo. `drizzle.config.ts` points at

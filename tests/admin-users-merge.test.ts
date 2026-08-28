@@ -18,7 +18,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { mergeUsers, providersOf, type AccountRow, type UserCounts } from "../src/store/pg-admin.js";
+import { providersOf } from "../src/store/admin-accounts.js";
+import { mergeUsers, type AccountRow, type UserCounts } from "../src/store/pg-admin.js";
 
 const ALICE = "aaaaaaaa-0000-4000-8000-000000000001";
 const BOB = "bbbbbbbb-0000-4000-8000-000000000002";
@@ -32,7 +33,7 @@ function account(id: string, email: string | null, over: Partial<AccountRow> = {
     createdAt: new Date("2026-08-01T10:00:00.000Z"),
     lastSignInAt: new Date("2026-08-20T10:00:00.000Z"),
     emailConfirmedAt: new Date("2026-08-01T10:01:00.000Z"),
-    meta: { provider: "google", providers: ["google"] },
+    providers: ["google"],
     ...over,
   };
 }

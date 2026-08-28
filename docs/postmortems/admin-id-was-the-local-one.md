@@ -127,12 +127,12 @@ The narrower version, worth having as a habit: **when a constant's doc comment s
 environment the value came from, that sentence is a bug report about every other environment.** The
 word "local" was sitting three lines above the id for a day.
 
-## Still broken: the page behind the link
+## The second bug: the page behind the link
 
-Fixing the link exposes the next one, and it is not fixed here because it needs a change to the
-production database.
+Fixing the link exposed the next one. It is fixed too, and it turned out not to need the database
+change it looked like it needed.
 
-`GET /api/admin/users` reads `auth.users` through [`src/db/auth-users.ts`](../../src/db/auth-users.ts)
+`GET /api/admin/users` read `auth.users` through `src/db/auth-users.ts` (since deleted)
 on the ordinary application connection. In production that connection is `spideryarn_app`, and
 [database.md](../project/database.md#the-migration-role-that-cannot-exist) records — as a *feature*,
 verified deliberately — that the role "cannot read `auth`". Checked against production on
@@ -163,5 +163,58 @@ itself, and the same sentence names the fix: the admin API, which the repo alrea
 exact question.
 
 The service-role key is already in the production server's environment — `blobs.ts` needs it for
-Storage and `vercel-health.ts` checks it is set — so that route costs no new credential. See
-[admin.md](../project/admin.md) for the four options and the choice.
+Storage and `vercel-health.ts` checks it is set — so that route costs no new credential and no DDL.
+[`src/store/admin-accounts.ts`](../../src/store/admin-accounts.ts) is the result;
+[admin.md](../project/admin.md) has the four options and why this one.
+
+**What the move brought with it**, because a fix that swaps one silent failure for another is not a
+fix:
+
+- **The service pages and truncates at fifty without saying so.** So the pagination checks itself
+  against `x-total-count` — the service's own count, the one number that comes from outside the loop
+  — and throws on a shortfall rather than returning a short list. The test runs a fake holding 120
+  accounts that hands back 50 at a time; the obvious one-request implementation was watched failing
+  it before the real one was written.
+- **An API response has no column list.** The old query could return only what the table declared,
+  which `tests/auth-users-fence.test.ts` pinned. `accountFrom` now names its six fields one at a
+  time, and the test feeds it a phone number, a full name, a password hash and two tokens and
+  asserts none of them survives.
+- **Two environment variables now have to agree.** `SUPABASE_URL` and `DATABASE_URL` could name
+  different projects, which would list one project's accounts beside another's counts and give
+  everybody zeros. `projectMismatch` from `blobs.ts` is reused rather than a second one written.
+- **The API returns deleted accounts**, where the query said `where deleted_at is null`. This one
+  was nearly missed and is the most instructive of the four: GoTrue *omits* `deleted_at` on a live
+  account, so inspecting a real response — which is what had been done — showed no such field on any
+  row and gave no hint the case existed. It was settled by making one: create an account on the
+  local stack, soft-delete it, list again. And it sets a trap, because `x-total-count` counts the
+  deleted rows too, so the shortfall check has to compare what *arrived* rather than what survived
+  filtering, or the first deletion takes the page down.
+
+  **Reading a response tells you about the data that project happens to have.** The same lesson as
+  the account id, arriving a third time in one day.
+- **Offset pagination has no snapshot**, so a sign-up between two requests shifts every later page
+  and the listing both repeats a row and loses one — while the arrival count comes out right,
+  because the duplicate made up the number. GPT Sol reproduced it on 400 accounts and it defeated
+  the first version of the count check outright. The repair is that `Link … rel="next"` decides when
+  to stop, distinct ids decide what is kept, and `x-total-count` audits the answer and never
+  terminates the loop.
+- **A response with no `users` array read as an empty list**, which turns a changed envelope or a
+  proxy's HTML into a working page saying nobody has signed up. It throws now, and so does
+  exhausting the page cap.
+
+Four of those six were found by review or by experiment rather than by the code failing, which is
+the honest summary of this whole day: **every one of them would have shipped looking fine.**
+
+## What is still open
+
+**The gate compares an id, and an email would be simpler.** Greg raised it, and the objection
+recorded against it is weaker than it reads: production has
+`mailer_secure_email_change_enabled = true`, so taking his address needs a click on a link sent to
+*his* inbox — and anyone with that inbox can sign in as him directly. `auth.users` also carries
+`users_email_partial_key`, a unique index on `email` where `is_sso_user = false`, and SAML is off on
+this project, so **addresses are unique across it**: an account that exists and is never deleted
+cannot have its address taken by a second row.
+
+Not changed, because the more useful fix is the one neither field gets for free — **a deploy-time
+check that the administrator resolves to a real account on the project being deployed to.** Either
+field can be silently wrong; only a check against the live project can say so.

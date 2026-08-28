@@ -149,23 +149,20 @@ kind of rule that gets eroded a column at a time by people who never saw it.
 Email addresses are shown, because a list of accounts that cannot name them is not a list of
 accounts.
 
-## The page cannot read `auth.users` in production
+## The accounts come from the Auth service, not from a query
 
-**Known broken, 2026-08-28.** The link now draws; the page behind it does not load.
+**This is the one part of the page that does not touch our database**, and the reason is worth
+knowing before changing it.
 
-`listUsersAcrossOwners` reads `auth.users` on the ordinary application connection. In production
-that is `spideryarn_app`, and
-[database.md § the migration role that cannot exist](database.md#the-migration-role-that-cannot-exist)
-records, as a deliberate and verified property of the role split, that it **cannot read `auth`**:
+`auth.users` belongs to Supabase. It is owned by `supabase_auth_admin`, in a schema our application
+role has no grants into — and `spideryarn_app` is what the deployed server connects as. The first
+version of this page queried it anyway, which worked on a laptop, where `DATABASE_URL` is the
+`postgres` superuser, and could never have worked in production:
 
 ```
 $ psql "$DATABASE_URL" -c "select id from auth.users limit 1"
 ERROR:  permission denied for schema auth
 ```
-
-Locally the identical query works, because `DATABASE_URL` on a laptop is the `postgres` superuser.
-So this page has never been run against a role resembling production's, which is the same mistake as
-the account id one layer down — [admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md).
 
 **And it was already known.** The header of
 [`scripts/check-owner-identity.ts`](../../scripts/check-owner-identity.ts), written the day before
@@ -175,55 +172,158 @@ this page was built, says it outright:
 > version of this script ran that query against production and got `42501 permission denied for
 > schema auth` … it is why this reaches for `SUPABASE_SERVICE_ROLE_KEY` from `.env.prod`.
 
-The fact had been measured against production, written down, and worked around — and nothing
-connected it to the new page. The same sentence names the fix.
+Measured against production, written down, worked around — and nothing connected it to the new page.
+[admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md).
 
-Four ways out:
+### Why the API rather than a grant
 
-| | What it does | Cost |
-|---|---|---|
-| **The admin API** (recommended) | ask GoTrue for the accounts, as `check-owner-identity.ts` already does; keep the five count queries and `mergeUsers` exactly as they are | **no DDL, and no new credential** — `SUPABASE_SERVICE_ROLE_KEY` is already in the production server's environment for Storage ([`blobs.ts`](../../src/store/blobs.ts), checked by [`vercel-health.ts`](../../src/vercel-health.ts)). Only the *people* query changes; needs pagination handling. Supabase's own advice is to use the Auth API rather than depend on its managed schema |
-| **Column grants** | `grant usage on schema auth` + `grant select (id, email, created_at, …) on auth.users to spideryarn_app` | one migration as `postgres`; keeps the query code; no credential column is reachable — but the app role can now see into `auth`, which the split existed to prevent |
-| **A view** | a view in `spideryarn` owned by `postgres` selecting the seven columns, `grant select` on the view | same as above and one more object. Note the mechanism is *view-owner permissions*, **not** `SECURITY DEFINER` — Postgres says those are not equivalent, and the first version of this table used the wrong name |
-| **Grant the table** | `grant select on auth.users to spideryarn_app` | works — `postgres` holds `SELECT` on `auth.users` *with* grant option, unlike `REFERENCES` — but the running server can then read every column of every account |
+Four options were weighed. The Admin API won on two counts that are not close.
 
-**The admin API is the recommendation**, and it changed on review: this table first ranked the view
-first and listed "puts a service-role key in the server's environment" as the API's cost, which is
-simply not true — the key is already there. GPT Sol, 2026-08-28. It is also the only option needing
-nothing from the production database.
+| | Cost |
+|---|---|
+| **The Admin API** ✓ | no DDL, and no new credential — `SUPABASE_SERVICE_ROLE_KEY` is already in the production environment for Storage ([`blobs.ts`](../../src/store/blobs.ts), checked by [`vercel-health.ts`](../../src/vercel-health.ts)). Needs pagination handled, which is the next section |
+| Column grants on `auth.users` | one migration as `postgres`; keeps the query code — but the application role can then see into `auth`, which the split existed to prevent |
+| A view over `auth.users` | the same, and one more object. The mechanism is *view-owner permissions*, **not** `SECURITY DEFINER` — Postgres says those are not equivalent |
+| `grant select on auth.users` | works, and the running server can then read every column of every account |
+
+**The deciding argument is that only the API is a contract.** Supabase's own guidance is that the
+`auth` schema is not a thing to build on:
+
+> Primary keys are guaranteed not to change. Columns, indices, constraints or other database objects
+> managed by Supabase may change at any time and you should be careful when referencing them
+> directly.
+
+Only the primary key is promised. Every database-side option builds on columns we were told may
+move. The Admin API is the documented, versioned surface for exactly this question, and this repo
+already reaches for it in `check-owner-identity.ts` for the same reason.
+
+The `profiles`-table-and-trigger pattern, which is what most Supabase advice points at, solves a
+different problem: joining identity to your own tables. A trigger copies what it copied at signup,
+so `last_sign_in_at` would have to be re-implemented — and this page is mostly live auth state.
+
+### The 50-row default, which truncates silently
+
+**The service pages, defaults to fifty an answer, and says nothing when it cuts you off.** No error,
+no flag on the response — just fewer accounts than exist. Somebody with seventy users saw fifty and
+had nothing to tell them (`supabase/auth-js#538`). A page listing "everyone" while missing people is
+not a visibly broken page.
+
+So [`admin-accounts.ts`](../../src/store/admin-accounts.ts) does two things rather than one:
+
+- **follows the pages**, deciding by what came back rather than by what was asked for, so a service
+  that quietly clamps the page size still yields everybody;
+- **checks its own answer against `x-total-count`**, the service's count, taken from the first
+  response — and *throws* rather than returning a short list.
+
+The second is the one that matters. A loop cannot check itself, and the count is the only number
+here that comes from outside it ([silent-success.md](../reusable/silent-success.md)). It throws only
+on a **shortfall**: someone signing up mid-listing makes the real total larger, and that is an
+ordinary event rather than a fault.
+
+`tests/admin-accounts.test.ts` runs a fake service holding 120 accounts that hands back 50 at a time
+however many are asked for. The obvious one-request implementation returns 50 and reports success;
+that test, and three others, were watched failing against it before the real one was written.
+
+### Deleted accounts, which the API hands back
+
+**The query said `where deleted_at is null`. The API has no such filter**, so moving to it would have
+put deleted people back on the page — and nothing in a healthy project would have shown it, because
+GoTrue **omits `deleted_at` entirely on a live account**. Every row of every real response looks the
+same whether or not the code handles this.
+
+Settled by experiment on the local stack, 2026-08-28: create an account, soft-delete it through
+`DELETE /admin/users/:id` with `should_soft_delete: true`, and the listing still returns it, with
+`deleted_at` set. Reading the response of a project that has never deleted anybody could not have
+answered this, and neither could reading the docs.
+
+**It also sets a trap for the count check above.** `x-total-count` counts the deleted rows too — the
+same measurement showed 8 listed and `X-Total-Count: 8` with one of them deleted. So the shortfall
+check compares **what arrived** against that total, never what survived filtering: comparing kept
+rows would take the whole page down with "the account list is short" the first time anybody deleted
+an account, on a page that was entirely correct.
+
+Two clauses, so two probes — `tests/admin-accounts.test.ts` was watched failing with each of them
+removed separately, because a test that only redddens for one is protecting one.
+
+### The fence moved, and it had to
+
+The old query could only return the columns the table *declared* — six of them, pinned by
+`tests/auth-users-fence.test.ts`, which was the ceiling on what a mistake could hand to a route.
+
+**An API response has no such ceiling.** It carries `phone`, `user_metadata`, `identities`, and
+whatever is added upstream next. So the fence is now `accountFrom`, which names the fields it keeps
+one at a time, and the test feeds it a payload containing a phone number, a full name, a password
+hash and two tokens and asserts that none of them survives.
+
+**`app_metadata` is narrowed here rather than carried.** The first version passed the whole object
+through as an opaque `meta` and let `providersOf` narrow it a layer later — and claimed in a comment
+that this was the boundary, which it was not. That object is writable by anyone with the
+service-role key, and Supabase's own examples put roles, plans and team ids in it. `AccountRow` now
+carries `providers: string[]` and nothing else from it, so the rule does not depend on every later
+reader remembering to narrow. Sol, 2026-08-28, who also noticed the test said it put a secret inside
+`app_metadata` and did not. It does now.
+
+`src/db/auth-users.ts` is gone, and with it the risk it carried: the reason that file needed two
+independent guards was that declaring a Supabase-owned table invites `drizzle-kit` to manage it, and
+*"dropping it is not a mistake we would get to undo"*. Nothing declares it now.
+`tests/auth-users-fence.test.ts` still pins both drizzle guards and now asserts the stronger thing —
+that **no** file under `src/db/` declares an `auth`-schema table — with a control that has been seen
+to fail.
+
+### The pagination is not offset arithmetic, and here is why
+
+**Offset pagination has no snapshot.** A sign-up landing between two requests shifts every later
+page by one: page two repeats the last row of page one, and the account that should have been at
+the boundary is never served. The arrival count then *matches* — the duplicate made up the number —
+so a loop that stops when enough rows have arrived stops one account short and reports success. GPT
+Sol reproduced it on 400 accounts, 2026-08-28: `rows=400, unique=399, u400 missing, u200
+duplicated`.
+
+So three signals, each doing one job:
+
+- **`Link … rel="next"` decides when to stop.** It is the service's own answer, and it is believed
+  when present. A response with no `Link` is not "no more" — the listing then runs until an empty
+  page, which costs one extra request and cannot end early.
+- **Distinct ids decide what is kept.** A row seen twice does not become two lines and does not
+  count twice.
+- **`x-total-count` audits the result and never terminates it.** That is the whole repair: using it
+  as a stopping condition is what the duplicate defeated.
+
+Exhausting the page cap throws, rather than returning what was collected. So does a response whose
+envelope has no `users` array — that read as an empty list before, which turns a changed API, an
+error body served with a 200, or a proxy's HTML into a working page saying nobody has signed up.
+
+### One thing that must stay true
+
+**The Auth project and the database must be the same project.** They are named by two independent
+environment variables and nothing else compares them: point `SUPABASE_URL` at one and
+`DATABASE_URL` at another and this page lists one project's accounts beside the other's article
+counts, giving everybody a row of zeros, with nothing raised. `listUsersAcrossOwners` reuses
+`projectMismatch` from [`blobs.ts`](../../src/store/blobs.ts) — the same check that guards the
+Storage pair — rather than growing a second opinion about what a project ref is.
 
 ## Where the numbers come from
 
-`auth.users` — Supabase's own table, and the only place either of the two dates Greg asked for
-exists. Nothing in `spideryarn` records a sign-up or a sign-in.
+**Two sources, joined in TypeScript.** The people come from the Auth service — it is the only place
+either of the two dates Greg asked for exists, since nothing in `spideryarn` records a sign-up or a
+sign-in — and every number beside them comes from our own tables.
+[The section above](#the-accounts-come-from-the-auth-service-not-from-a-query) is why the first half
+is an HTTP call rather than a join.
 
-It is declared in [`src/db/auth-users.ts`](../../src/db/auth-users.ts) and **deliberately not** in
-[`src/db/schema.ts`](../../src/db/schema.ts), whose header says why: declaring an Auth-owned table
-there invites `drizzle-kit generate` to treat it as ours to manage, and *"dropping it is not a
-mistake we would get to undo"*. `drizzle.config.ts` names one file rather than a glob, so a table
-beside it is invisible to migration generation and an ordinary table to any query.
+The seam between them is `AccountRow` ([`src/store/account-row.ts`](../../src/store/account-row.ts)),
+and it is deliberately the same shape it was when the accounts came out of a `select()`. `mergeUsers`
+and its tests never learned that the source moved, which is the point of putting it in a file of its
+own.
 
-**There are two independent barriers, and that is only one of them.** Widening the config to a glob
-would put this module into the graph the serializer reads, but `schemaFilter: ["spideryarn"]` would
-still drop an `auth`-schema table on the way out. Either alone is enough today, which is exactly why
-removing one would look harmless — so both are pinned, and both are stated in the file itself. Sol
-pointed out that an earlier version of this paragraph named the first and described the second as
-if it did not exist.
+`email_confirmed_at`, deliberately **not** `confirmed_at` — Supabase's backwards-compatibility field
+means "email *or* phone was confirmed", and the page prints "email unconfirmed" beneath an email
+address, so the wrong one labels a phone-confirmed account the opposite of the truth. Sol found that
+in the query; it is pinned again against the API.
 
-Only seven columns are declared, and that is a ceiling rather than laziness: `select()` with no
-argument returns every column a table *declares*, so no password, token or phone column is
-reachable by a mistake. `tests/auth-users-fence.test.ts` pins that list **exactly**, read off the
-table itself — it was a blacklist of five credential names first, which is a check that passes for
-every sensitive column nobody happened to think of. Sol.
-
-One of the seven is `email_confirmed_at` and deliberately **not** `confirmed_at`, which is
-Supabase's backwards-compatibility column meaning "email *or* phone was confirmed". The page prints
-"email unconfirmed" beneath an email address, so the wrong column would label a phone-confirmed
-account the opposite of the truth.
-
-The counts are **six grouped aggregates, run together and joined by a `Map`** — one per table, not
-one per user. A fixed six statements however many accounts there are, and the join is a pure
-function (`mergeUsers`) so the arithmetic can be tested with two owners and no database.
+The counts are **five grouped aggregates, run together and joined by a `Map`** — one per table, not
+one per user. A fixed five statements however many accounts there are, issued alongside the account
+listing rather than after it, and the join is a pure function (`mergeUsers`) so the arithmetic can
+be tested with two owners and no database.
 
 **One grep guards the exception.** `tests/owner-isolation.test.ts` asserts that no file under
 `src/store/` except `pg-admin.ts` writes `groupBy(….ownerId)` — the shape of a question asked
@@ -276,17 +376,25 @@ so under `SPIDERYARN_STORE=files` the endpoint answers **501** with its own sent
 [`src/store/index.ts`](../../src/store/index.ts) has the refusal, and the alternative it exists to
 avoid: an empty array, which looks exactly like a working page saying *you have no users*.
 
-**The fence around that table has two halves, and both are pinned.**
+**The fence around that table has three halves now, and all of them are pinned.**
 [`tests/auth-users-fence.test.ts`](../../tests/auth-users-fence.test.ts) asserts that
 `drizzle.config.ts` names one file rather than a glob, *and* that `schemaFilter` is `["spideryarn"]`
 — so even a table that reached the serializer would be filtered out by schema. Either alone is
-enough today, which is exactly why a test pinning only one would go green through the change that
-removed the other. Sol pointed out that the plan named only the first.
+enough, which is exactly why a test pinning only one would go green through the change that removed
+the other. Sol pointed out that the plan named only the first.
 
-Sol would have preferred a raw `sql` template over a table declaration, since a template creates no
-metadata for migration tooling to find at all. The declaration stayed, and the build then made the
-case for it: Drizzle's **column mappers** are what turn `max(last_opened_at)` into a `Date` rather
-than a non-ISO string, and a raw template is precisely what has none.
+The third is new and is the strongest: **nothing under `src/db/` declares an `auth`-schema table at
+all**, so there is no object for migration tooling to find. It is a recursive sweep matching every
+spelling of `pgSchema("auth")` — quotes, whitespace, a trailing comma — because the first version
+read one directory and one spelling, which is a guard that reports an empty list while being walked
+past. Sol again, 2026-08-28.
+
+Sol originally preferred a raw `sql` template over a table declaration, since a template creates no
+metadata for migration tooling to find. The declaration stayed at the time, for a real reason —
+Drizzle's **column mappers** are what turn `max(last_opened_at)` into a `Date` rather than a non-ISO
+string. That argument still holds for the five count queries, which is where the mappers are now;
+the accounts no longer come from a query at all, so the declaration is gone and the tooling risk
+with it.
 
 **The production role has to be able to read `auth.users`.** Today it connects as `postgres` and
 can. When the least-privilege runtime role that

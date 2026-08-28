@@ -45,33 +45,15 @@ const sqlOf = (query: { toSQL: () => { sql: string } }): string =>
   query.toSQL().sql.replaceAll('"spideryarn".', "");
 const paramsOf = (query: { toSQL: () => { params: unknown[] } }): unknown[] => query.toSQL().params;
 
-describe("the accounts query", () => {
-  it("reads auth.users, and leaves out the deleted", () => {
-    const sql = sqlOf(q.people);
-    expect(sql).toContain('"auth"."users"');
-    expect(sql).toMatch(/"deleted_at" is null/);
-  });
-
-  it("asks for the email confirmation, not the one that also answers for a phone", () => {
-    /* `confirmed_at` is Supabase's backwards-compatibility column and means
-       "email *or* phone". The page prints "email unconfirmed" beneath an email
-       address, so the wrong column labels a phone-confirmed account the
-       opposite of the truth. Sol, 2026-08-27. */
-    const sql = sqlOf(q.people);
-    expect(sql).toContain('"email_confirmed_at"');
-    expect(sql).not.toMatch(/"confirmed_at"(?!\w)/);
-  });
-
-  it("selects nothing that could be a credential", () => {
-    /* `select()` returns what it names. The table declares no password or token
-       column (tests/auth-users-fence.test.ts pins that); this is the second
-       half — that the one query which touches it names only what it needs. */
-    const sql = sqlOf(q.people);
-    for (const secret of ["password", "token", "phone"]) {
-      expect(sql, secret).not.toContain(secret);
-    }
-  });
-});
+/* **There is no accounts query any more**, and that is the point of the move.
+   The three assertions that stood here — reads `auth.users`, leaves out the
+   deleted, names no credential column — were about a `select()` that could not
+   run in production, because `spideryarn_app` has no grants into the `auth`
+   schema. The accounts now come from the Auth service's Admin API, and the same
+   three intents live in tests/admin-accounts.test.ts, where the third one
+   matters more: an API response carries far more than a named column list, so
+   the fence had to move from "the table declares six columns" to "the mapping
+   keeps six fields". docs/project/admin.md. */
 
 describe("the article counts", () => {
   it("count only what the shelf would show", () => {

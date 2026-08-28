@@ -58,28 +58,23 @@
  * choice, and it also leaves that sentence in auth.md true.
  */
 
-import { count, eq, isNull, sql } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 
 import type { Db } from "../db/client.js";
 import { getDb } from "../db/client.js";
-import { authUsers } from "../db/auth-users.js";
 import { articles, chatThreads, comments, searchRuns, uploads } from "../db/schema.js";
+import type { AccountRow } from "./account-row.js";
+import { gotruePages, listAccounts } from "./admin-accounts.js";
 import type { AdminUser } from "../admin.js";
 import type { OwnerId } from "../types.js";
 import type { AdminStore } from "./contracts.js";
+import { projectMismatch } from "./blobs.js";
 import { onTheShelf } from "./pg.js";
 
 /* ------------------------------------------------------- the pure half --- */
 
 /** One `auth.users` row, as much of it as this page reads. */
-export interface AccountRow {
-  id: string;
-  email: string | null;
-  createdAt: Date | null;
-  lastSignInAt: Date | null;
-  emailConfirmedAt: Date | null;
-  meta: unknown;
-}
+export type { AccountRow } from "./account-row.js";
 
 /** The four article-shaped numbers, per owner. */
 export interface ShelfTally {
@@ -110,21 +105,6 @@ function tally(rows: CountRow[]): Map<string, number> {
   return new Map(rows.map((r) => [r.owner, r.n]));
 }
 
-/**
- * Which providers Supabase says an account signs in with.
- *
- * The column is JSONB written by GoTrue, so it is well-formed but not typed —
- * and it is read here rather than trusted: an unexpected shape gives an empty
- * list, never a crash and never `[object Object]` in a table cell. A page that
- * exists to look at accounts must not be takeable down by one odd row.
- */
-export function providersOf(meta: unknown): string[] {
-  if (!meta || typeof meta !== "object") return [];
-  const raw = (meta as { providers?: unknown }).providers;
-  if (Array.isArray(raw)) return raw.filter((p): p is string => typeof p === "string");
-  const one = (meta as { provider?: unknown }).provider;
-  return typeof one === "string" ? [one] : [];
-}
 
 /** ISO, or nothing at all — the wire shape leaves a missing date out. */
 function iso(at: Date | null | undefined): string | undefined {
@@ -181,7 +161,7 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
         createdAt: iso(p.createdAt) ?? "",
         ...optional("lastSignInAt", iso(p.lastSignInAt)),
         ...optional("emailConfirmedAt", iso(p.emailConfirmedAt)),
-        providers: providersOf(p.meta),
+        providers: p.providers,
         articles: mine?.live ?? 0,
         archived: mine?.archived ?? 0,
         uploads: uploaded.get(p.id) ?? 0,
@@ -211,22 +191,6 @@ export function mergeUsers(people: AccountRow[], counts: UserCounts): AdminUser[
  */
 export function adminQueries(db: Db) {
   return {
-    /** Every account that could sign in. */
-    people: db
-      .select({
-        id: authUsers.id,
-        email: authUsers.email,
-        createdAt: authUsers.createdAt,
-        lastSignInAt: authUsers.lastSignInAt,
-        emailConfirmedAt: authUsers.emailConfirmedAt,
-        meta: authUsers.rawAppMetaData,
-      })
-      .from(authUsers)
-      /* Soft-deleted accounts are not accounts. The row survives a deletion in
-         Supabase's own schema; showing it would make the list quietly wrong in
-         the direction nobody thinks to check. */
-      .where(isNull(authUsers.deletedAt)),
-
     /* One statement for all four article-shaped numbers, because they come from
        one table and `filter (where …)` is what Postgres has for exactly this.
 
@@ -306,17 +270,47 @@ export function adminQueries(db: Db) {
 
 /* ------------------------------------------------------------ the store --- */
 
+/**
+ * Where the accounts come from, and the one thing that must be true of it.
+ *
+ * **The Auth project and the database must be the same project.** They are
+ * chosen by two independent environment variables, and nothing else compares
+ * them: point `SUPABASE_URL` at one project while `DATABASE_URL` names another
+ * and this page lists the accounts of one and the articles of the other, giving
+ * every person a row of zeros. Nothing errors. `projectMismatch` in blobs.ts is
+ * the same check for the same reason on the Storage pair, and this reuses it
+ * rather than growing a second opinion about what a project ref is.
+ */
+function accountSource(): ReturnType<typeof gotruePages> {
+  const url = process.env.SUPABASE_URL?.trim();
+  /* `.trim()` on both, and empty is not configured: a `.env` line left as
+     `SUPABASE_SERVICE_ROLE_KEY=` gives a string that authenticates nothing. */
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!url || !key) {
+    throw new Error(
+      "the admin page needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY: the accounts live in " +
+        "the Auth service, not in a table this server can read. See src/store/admin-accounts.ts.",
+    );
+  }
+  const mismatch = projectMismatch(process.env.DATABASE_URL, url);
+  if (mismatch) throw new Error(`the admin page would mix two projects: ${mismatch}`);
+  return gotruePages(url, key);
+}
+
 export const pgAdminStore: AdminStore = {
   async listUsersAcrossOwners(): Promise<AdminUser[]> {
     const q = adminQueries(getDb());
 
-    /* All six at once. They touch six tables and none depends on another's
-       answer, so the wall-clock cost is one round trip rather than six. The
-       pool is sized 5 by default (src/db/client.ts), so six queries queue one
-       deep — which is fine, and is a reason not to lengthen this list without
-       thinking about it. */
+    /* All six at once — five grouped aggregates and the account list. They
+       depend on none of each other, so the wall-clock cost is one round trip
+       rather than six. The pool is sized 5 by default (src/db/client.ts) and
+       only five of these are queries now, so they no longer queue.
+
+       **The accounts are asked of the Auth service over HTTP**, not of the
+       database: `auth.users` is Supabase's and `spideryarn_app` has no grants
+       into it. admin-accounts.ts has the why. */
     const [people, shelf, uploaded, questions, chats, searches] = await Promise.all([
-      q.people,
+      listAccounts(accountSource()),
       q.shelf,
       q.uploads,
       q.questions,

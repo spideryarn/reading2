@@ -124,8 +124,9 @@ export function adminColumns(now: number): SortableColumn<AdminUser>[] {
         fluid: true,
       },
       /* The address, and under it how they got in. `providers` comes straight
-         from GoTrue's own record (src/db/auth-users.ts), so it says `google`
-         or `email` rather than anything we inferred. */
+         from the Auth service's own record for the account
+         (src/store/admin-accounts.ts), so it says `google` or `email` rather
+         than anything we inferred. */
       cell: ({ row }) => (
         <div className="tw:min-w-0">
           <div className="tw:truncate tw:text-foreground" title={row.original.email}>
