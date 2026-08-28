@@ -89,11 +89,6 @@ function names(event: ChatResult): boolean {
   return event.type === "turn.began";
 }
 
-/** Has this operation asked again, and is this therefore not the last answer? */
-function waiting(op: Operation): boolean {
-  return (op.kind === "rename" || op.kind === "delete") && op.outstanding > 1;
-}
-
 /**
  * Is this answer still wanted?
  *
@@ -102,6 +97,13 @@ function waiting(op: Operation): boolean {
  * refused whether it succeeded or failed. This adds the second half — that a
  * result must belong to an operation of the matching kind, so that a
  * `rename.failed` cannot be admitted against a load that shares its id.
+ *
+ * **And that it has asked.** A held rename or delete has sent nothing — see
+ * `Held` in model.ts — so anything claiming to answer it is answering a request
+ * that does not exist, and admitting it would retire an operation whose whole
+ * job is still ahead of it. That is the shape GPT Sol reproduced against the
+ * code this replaced: the doomed first request answered, the operation retired,
+ * and the `begin` frame had nothing left to send.
  */
 function accepts(op: Operation, event: ChatResult): boolean {
   switch (event.type) {
@@ -110,10 +112,10 @@ function accepts(op: Operation, event: ChatResult): boolean {
       return op.kind === "load";
     case "rename.succeeded":
     case "rename.failed":
-      return op.kind === "rename";
+      return op.kind === "rename" && !op.held;
     case "delete.succeeded":
     case "delete.failed":
-      return op.kind === "delete";
+      return op.kind === "delete" && !op.held;
     case "turn.began":
     case "turn.delta":
     case "turn.tool":
@@ -159,23 +161,54 @@ function withOp(state: ChatState, op: Operation): ReadonlyMap<OpId, Operation> {
  */
 function register<O extends Operation>(
   state: ChatState,
-  op: Registering<O>,
+  op: Omit<O, "seq" | "superseded">,
   replaces: (other: Operation) => boolean,
 ): ChatState {
   const operations = new Map<OpId, Operation>();
   for (const [id, other] of state.operations) {
     operations.set(id, replaces(other) ? { ...other, superseded: true } : other);
   }
-  operations.set(op.id, {
-    ...op,
-    seq: state.nextSeq,
-    superseded: false,
-    /* One request, until something renames the conversation under it — see
-       `outstanding` in model.ts. Only the two kinds that ask at registration
-       carry it. */
-    ...(op.kind === "rename" || op.kind === "delete" ? { outstanding: 1 } : {}),
-  } as Operation);
+  operations.set(op.id, { ...op, seq: state.nextSeq, superseded: false } as Operation);
   return { ...state, operations, nextSeq: state.nextSeq + 1 };
+}
+
+/** The set of conversations the server has not confirmed, with one more in it. */
+function nameless(state: ChatState, threadId: string): ReadonlySet<string> {
+  const next = new Set(state.unnamed);
+  next.add(threadId);
+  return next;
+}
+
+/** And with one gone — because the server named it, or because it never will. */
+function knownAs(state: ChatState, threadId: string): ReadonlySet<string> {
+  if (!state.unnamed.has(threadId)) return state.unnamed;
+  const next = new Set(state.unnamed);
+  next.delete(threadId);
+  return next;
+}
+
+/**
+ * **The reader has named this conversation, so the `begin` frame must not.**
+ *
+ * `namesThread` says whether the server's stored title belongs on screen, and it
+ * is decided in the hook when the turn registers — which cannot know about a
+ * rename the reader has not made yet. So the opening turn's frame put a slice of
+ * the question over the name the reader had just typed, and rename success wrote
+ * nothing back because a title is never withdrawn and lives in `base`.
+ *
+ * `withServerIds` takes `namesThread` as an argument precisely because working
+ * it out for itself was a bug; this is the other half of the same rule, and it
+ * has to live here because only the state knows both facts at once. GPT Sol,
+ * 2026-08-28.
+ */
+function readerNamed(state: ChatState, threadId: string): ChatState {
+  let next: Map<OpId, Operation> | null = null;
+  for (const [id, op] of state.operations) {
+    if (op.kind !== "turn" || op.threadId !== threadId || !op.namesThread) continue;
+    next ??= new Map(state.operations);
+    next.set(id, { ...op, namesThread: false });
+  }
+  return next ? { ...state, operations: next } : state;
 }
 
 /** Rewrite one thread in `base`, or hand back the same list if it is not there. */
@@ -288,16 +321,24 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
         state.tombstones.has(threadId)
           ? state.base
           : rewrite(state.base, threadId, (t) => (t.title === title ? t : { ...t, title }));
+      /* **Held if the server has never heard of this conversation** — see `Held`
+         in model.ts. The PATCH goes out at the `begin` frame instead, which is
+         the server telling us the thread is on disk under a name it will match. */
+      const held = state.unnamed.has(threadId);
       return {
         state: register<RenameOperation>(
-          { ...state, base },
-          event.op,
+          /* And the reader owns the title from this moment, so the opening
+             turn's frame no longer names the conversation. */
+          readerNamed({ ...state, base }, threadId),
+          { ...event.op, held },
           /* Still superseded, and it still matters — for the *error*, not for
              the title. A rename that was replaced must not report its own
              failure over the newer one's success. */
           (other) => other.kind === "rename" && other.threadId === threadId,
         ),
-        commands: [{ type: "rename", opId: event.op.id, slug: state.slug, threadId, title }],
+        commands: held
+          ? NOTHING
+          : [{ type: "rename", opId: event.op.id, slug: state.slug, threadId, title }],
       };
     }
     case "delete.started": {
@@ -310,16 +351,21 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
         ...state,
         tombstones: tombstoned(state, threadId, { by: event.op.id, final: true }),
       };
+      /* Held on the same rule as a rename, and the tombstone is why holding
+         costs the reader nothing: the conversation leaves the screen the instant
+         they press the button, whether or not there is yet anything on the
+         server to delete. */
+      const held = state.unnamed.has(threadId);
       return {
         state: register<DeleteOperation>(
           marked,
-          event.op,
+          { ...event.op, held },
           /* A delete supersedes everything for that conversation: there will be
              nothing left for the others to draw on, and a recovery still
              polling for a row in it should stop looking. */
           (other) => other.kind !== "load" && other.threadId === threadId,
         ),
-        commands: [{ type: "delete", opId: event.op.id, slug: state.slug, threadId }],
+        commands: held ? NOTHING : [{ type: "delete", opId: event.op.id, slug: state.slug, threadId }],
       };
     }
     case "turn.started":
@@ -329,7 +375,18 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
     case "recovery.started":
       return startRecovery(state, event.op);
     case "thread.begun":
-      return { state: { ...state, base: [...state.base, event.thread] }, commands: NOTHING };
+      /* One of the two places this tab invents a conversation, so one of the two
+         places `unnamed` grows. Nothing is written to disk until the reader
+         actually sends something, so a rename or a delete of this has nothing to
+         name until then — see `ChatState.unnamed`. */
+      return {
+        state: {
+          ...state,
+          base: [...state.base, event.thread],
+          unnamed: nameless(state, event.thread.id),
+        },
+        commands: NOTHING,
+      };
     case "thread.discarded": {
       /* **Not while a turn is writing into it.** `withoutEmpty` asks the stored
          messages, and a send's rows are in `base` from the moment it is
@@ -348,7 +405,11 @@ function applyInput(state: ChatState, event: ChatInput): Outcome {
       const base = withoutEmpty(state.base, event.threadId);
       return base.length === state.base.length
         ? unchanged(state)
-        : { state: { ...state, base }, commands: NOTHING };
+        : /* And it stops being a conversation this tab is waiting to have named,
+             because it has stopped being a conversation. Housekeeping rather than
+             correctness — nothing can name a thread that is not in `base` — but a
+             set that only ever grows is a set nobody trusts. */
+          { state: { ...state, base, unnamed: knownAs(state, event.threadId) }, commands: NOTHING };
     }
     case "error.set":
       return state.error === event.error
@@ -566,7 +627,14 @@ function wishesNamed(
  * every test in the repo pushed back the id the client had guessed.
  */
 function renamed(state: ChatState, from: string, to: string): Outcome {
-  if (from === to) return unchanged(state);
+  /* **Not an early return when the names match, and that is a fix.** `beginTurn`
+     accepts the client's thread id whenever it is free, so `from === to` is the
+     *common* case — and it is still the moment the conversation starts existing
+     on the server, which is the whole of what a held rename or delete is waiting
+     for. The code this replaced returned here, so its compensation for a
+     mutation sent too early only ever ran on the rarer branch where the server
+     minted an id of its own. GPT Sol, 2026-08-28. */
+  const changing = from !== to;
   const operations = new Map<OpId, Operation>();
   const commands: ChatCommand[] = [];
   for (const [id, op] of state.operations) {
@@ -574,26 +642,21 @@ function renamed(state: ChatState, from: string, to: string): Outcome {
       operations.set(id, op);
       continue;
     }
-    if (op.kind !== "rename" && op.kind !== "delete") {
-      operations.set(id, { ...op, threadId: to });
+    if ((op.kind !== "rename" && op.kind !== "delete") || !op.held) {
+      operations.set(id, changing ? { ...op, threadId: to } : op);
       continue;
     }
-    /* One more answer to wait for — see `outstanding` in model.ts. Without it
-       the doomed first request, which named a conversation the server has never
-       heard of, reports its own failure over the second one that worked. */
-    operations.set(id, { ...op, threadId: to, outstanding: op.outstanding + 1 });
-    /* **And ask again**, because a request that has already gone out is the one
-       holder of a thread id that is not in this state and cannot be rewritten
-       here. A rename or a delete leaves at registration, naming a conversation
-       the server has not written down yet — and the server answers happily for a
-       conversation it has never heard of, so the reader is told it worked and
-       the real one comes back on their next reload. That is the silent-success
-       shape again, and the only fix is a second request under the name the
-       server minted. GPT Sol, 2026-08-28.
-       A turn's own POST is not re-issued: it is already in flight and it is what
-       produced this frame. A recovery cannot exist here — its row would have to
-       have been named. A wish that had been sent would have to have been sent
-       against a named row too. */
+    /* **This is the instant a held mutation can be sent** — see `Held` in
+       model.ts. The conversation is on disk under a name the server will match,
+       so the request goes out now, once, addressed to that name.
+       Unless something newer has taken it over, in which case it is dropped
+       rather than sent: a delete supersedes everything for its conversation, and
+       there is nothing to rename in one that is going. Dropped rather than left
+       held, because a request that is neither sent nor dropped is an operation
+       that never retires — `wishesNamed` says the same thing about a waiting
+       stop or cancel. */
+    if (op.superseded) continue;
+    operations.set(id, { ...op, threadId: to, held: false });
     commands.push(
       op.kind === "rename"
         ? { type: "rename", opId: id, slug: state.slug, threadId: to, title: op.title }
@@ -602,7 +665,7 @@ function renamed(state: ChatState, from: string, to: string): Outcome {
   }
   const standing = state.tombstones.get(from);
   let tombstones = state.tombstones;
-  if (standing) {
+  if (changing && standing) {
     const next = new Map(state.tombstones);
     next.delete(from);
     /* A tombstone already under the server's own id was laid by something that
@@ -612,7 +675,11 @@ function renamed(state: ChatState, from: string, to: string): Outcome {
     if (!already || standing.final) next.set(to, standing);
     tombstones = next;
   }
-  return { state: { ...state, operations, tombstones }, commands };
+  /* And the conversation has a server name now, so nothing registered from here
+     on has to wait for one. */
+  const unnamed = knownAs(state, from);
+  if (!changing && commands.length === 0 && unnamed === state.unnamed) return unchanged(state);
+  return { state: { ...state, operations, tombstones, unnamed }, commands };
 }
 
 /**
@@ -666,10 +733,25 @@ function startTurn(
     // Same reasoning as `rename.started`: an unchanged title changes nothing.
     base = rewrite(base, op.threadId, (t) => (t.title === title ? t : { ...t, title }));
   }
+  /* The other place this tab invents a conversation — see `ChatState.unnamed`.
+     A send into a thread that is already in `base` opens nothing. */
+  const unnamed = op.opening ? nameless(state, op.opening.id) : state.unnamed;
+  /**
+   * **A rename the reader made first keeps the naming right.**
+   *
+   * The hook decides `namesThread` from what is on screen — a conversation with
+   * no messages is one this turn is about to create — and that is right about
+   * the conversation and wrong about the title, because a reader can name an
+   * empty conversation before asking anything in it. `readerNamed` is the same
+   * rule from the other side, for a rename made after the turn registered.
+   */
+  const claimed = [...state.operations.values()].some(
+    (other) => other.kind === "rename" && other.threadId === op.threadId,
+  );
   return {
     state: register<TurnOperation>(
-      { ...state, base },
-      op,
+      { ...state, base, unnamed },
+      claimed && op.namesThread ? { ...op, namesThread: false } : op,
       /* **A turn supersedes nothing.** Two sends in one conversation are two
          appends and both belong on screen, and a turn that renamed the
          conversation did so by writing to `base` rather than by drawing, so it
@@ -1149,15 +1231,14 @@ export function reduce(state: ChatState, event: ChatEvent): Outcome {
      * *admitted* — that is what lets it retire rather than sit in the map for
      * ever, which is the distinction the plan draws.
      */
-    /* **An older request's answer to an operation that has asked again.** It was
-       about a name that no longer means what it did, and there is nothing on the
-       wire to tell it from the answer that matters, so the operation waits for
-       the last of them. One place, beside the rule above, rather than a check in
-       each of the four branches that could report. */
-    if (waiting(op)) {
-      const fewer = { ...op, outstanding: (op as { outstanding: number }).outstanding - 1 };
-      return { state: { ...state, operations: withOp(state, fewer as Operation) }, commands: NOTHING };
-    }
+    /* There is no "wait for the last of two answers" rule here any more, and its
+       going is the point of the change that removed it. A rename or a delete used
+       to be sent under a name the server had never heard of and then sent again
+       under the real one, so two indistinguishable answers came back under one
+       `opId` and the operation had to ignore all but the last. Nothing is sent
+       into that window now — see `Held` in model.ts — so there is one request and
+       one answer, and `accepts` refuses anything claiming to answer a request
+       that has not left the tab. */
     if (op.superseded && !names(event)) {
       /* A turn is superseded only by a delete of its conversation, and a wish
          waiting on it would then wait for ever. */

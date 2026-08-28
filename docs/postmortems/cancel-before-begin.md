@@ -273,7 +273,12 @@ one is a wrong answer with a green tick next to it. Renamed 2026-08-28 to say wh
 ## See also
 
 - [chat-operation-model.md](../plans/chat-operation-model.md) — the plan; stage 3 is the structural
-  fix
+  fix. **The two rules this file gave — send once, when there is an id the server can match, and
+  never read "the server could not match that id" as either an answer — turned out to be about the
+  window rather than about the cancel.** A rename and a delete were being sent into the same window
+  and answered `200` by a `map` and a `filter` over a list they were not in. They are held now, on
+  the same rule, and there is no doomed request left in chat at all:
+  [§ What the fourth review of stage 2 sent back](../plans/chat-operation-model.md#what-the-fourth-review-of-stage-2-sent-back)
 - [chat-operation-model-acceptance.md](../plans/chat-operation-model-acceptance.md) — the audit that
   found `cancelAndDiscard` had never been called by any test before this net was built
 - [chat-intent-paths.test.ts](../../tests/chat-intent-paths.test.ts) — the test that found this, and

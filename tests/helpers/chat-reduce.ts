@@ -52,9 +52,11 @@ export function seal(state: ChatState): ChatState {
   const mutable = state as {
     operations: ChatState["operations"];
     tombstones: ChatState["tombstones"];
+    unnamed: ChatState["unnamed"];
   };
   mutable.operations = sealed(state.operations, "operations");
   mutable.tombstones = sealed(state.tombstones, "tombstones");
+  mutable.unnamed = sealed(state.unnamed, "unnamed");
   return Object.freeze(state);
 }
 
@@ -71,6 +73,7 @@ export function spread(state: ChatState): unknown {
     ...state,
     operations: [...state.operations.entries()],
     tombstones: [...state.tombstones],
+    unnamed: [...state.unnamed],
   };
 }
 

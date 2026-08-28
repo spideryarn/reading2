@@ -1614,12 +1614,21 @@ describe("a stop or a cancel", () => {
    * And the DELETE had already gone out under that name. `deleteThread` on the
    * server answers happily for a conversation it has never heard of, so the
    * reader is told it worked and the real one comes back on their next reload —
-   * the same silent success as the cancel that was never sent. **A request
-   * issued under a name that has since changed has to be issued again**, which
-   * is the one holder of a thread id that lives outside the state. GPT Sol,
+   * the same silent success as the cancel that was never sent. GPT Sol,
    * 2026-08-28.
+   *
+   * **This test's two command assertions changed on purpose**, and the change is
+   * the finding rather than a way of making the suite pass. It was written
+   * against the first answer — send the doomed request, then send a second one
+   * under the real name — and Sol found two holes in that on the next round: the
+   * doomed request can answer first, and in the common case the id does not
+   * change at all, so there was never a second request. Nothing is sent into
+   * that window now; the DELETE leaves at the frame, once. What this test still
+   * pins, unchanged, is the half that was right: the tombstone and the operation
+   * both follow the server's name, and the superseded turn still retires without
+   * drawing.
    */
-  it("renames a delete of a conversation the server had not named, and asks again", () => {
+  it("holds a delete of a conversation the server had not named, and sends it at the frame", () => {
     const opened = twice(
       loaded(),
       starting({
@@ -1636,9 +1645,7 @@ describe("a stop or a cancel", () => {
       type: "delete.started",
       op: { id: DELETE, kind: "delete", threadId: "guess-thread" },
     });
-    expect(removed.commands).toEqual([
-      { type: "delete", opId: DELETE, slug: SLUG, threadId: "guess-thread" },
-    ]);
+    expect(removed.commands, "a DELETE named a conversation the server never had").toEqual([]);
     expect(removed.state.operations.get(TURN_A)?.superseded, "the premise").toBe(true);
 
     const named = twice(removed.state, {
@@ -1651,10 +1658,14 @@ describe("a stop or a cancel", () => {
     expect([...named.state.tombstones.keys()], "the tombstone stayed on a name nobody has").toEqual([
       "spya-real1",
     ]);
-    expect(named.state.operations.get(DELETE)).toMatchObject({ threadId: "spya-real1" });
-    /* ...and the request went again, because the first one named a conversation
-       the server had never written down. */
-    expect(named.commands, "the DELETE was never re-issued under the real id").toContainEqual({
+    expect(named.state.operations.get(DELETE)).toMatchObject({
+      threadId: "spya-real1",
+      held: false,
+    });
+    /* ...and this is where the one request goes: the frame is the server saying
+       the conversation is on disk, so it is the first moment a DELETE has
+       anything to name. */
+    expect(named.commands, "the DELETE was never sent under the real id").toContainEqual({
       type: "delete",
       opId: DELETE,
       slug: SLUG,
@@ -1916,5 +1927,263 @@ describe("the commands", () => {
        the reader or by the mount, which is what makes the gate's job the only
        job. */
     expect(twice(renamed.state, { type: "rename.succeeded", opId: RENAME_A }).commands).toEqual([]);
+  });
+});
+
+/**
+ * **A mutation of a conversation the server has not named yet is held, not sent.**
+ *
+ * The window is small and it is the one this file keeps coming back to: the
+ * reader has a conversation on screen, the server has never heard of it, and
+ * every name in it is one this tab invented. A send is what closes the window —
+ * `beginTurn` writes the thread and the `begin` frame is the server saying so —
+ * and until that frame arrives a PATCH or a DELETE names nothing.
+ *
+ * **It used to be sent anyway, and then compensated for.** `deleteThread` and
+ * `renameThread` in src/chat.ts are a `filter` and a `map` over the stored list,
+ * so a request naming a conversation that is not there changes nothing and
+ * answers `200` — the reader is told the delete worked and the real conversation
+ * comes back on their next reload. The compensation was `outstanding + 1` and a
+ * fresh command emitted from `renamed()`, and GPT Sol found two holes in it on
+ * 2026-08-28:
+ *
+ * - the doomed request can answer **first**. Its operation retires, and
+ *   `renamed()` only reissues what is still in the map, so it emits nothing;
+ * - and in the **common case there is no rename at all.** `beginTurn` accepts the
+ *   client's thread id when it is free, so `from === to` and `renamed()` returned
+ *   at its first line — the compensation only ever ran on the rarer branch where
+ *   the server minted an id of its own.
+ *
+ * So the window is closed rather than compensated for: nothing is sent into it,
+ * and the request goes out in the same transition as the frame that supplies a
+ * name the server can match. That deletes the doomed request, `outstanding`, and
+ * the reissue with it. 2026-08-28.
+ */
+describe("a mutation of a conversation the server has not named", () => {
+  const REAL = "spya-real1";
+
+  /** A send that had to invent the conversation, still waiting for its frame. */
+  function opening(threadId = "guess-thread"): ChatState {
+    return twice(
+      loaded(),
+      starting({
+        id: TURN_A,
+        shape: "send",
+        threadId,
+        replyId: "guess-a",
+        question: message({ id: "guess-q", role: "user", text: "why?", status: "done" }),
+        opening: thread(threadId, "why?"),
+        namesThread: true,
+      }),
+    ).state;
+  }
+
+  function begun(threadId: string, title = "why?") {
+    return {
+      type: "turn.began" as const,
+      opId: TURN_A,
+      begun: { threadId, title, messageId: "srv-a", questionId: "srv-q", attempt: "att-1" },
+    };
+  }
+
+  /**
+   * **The common case, and the one the old compensation could not reach.** The
+   * server keeps the id this tab guessed, so nothing is renamed — and the whole
+   * question is *when* the request goes, not what it is addressed to.
+   */
+  it("holds the DELETE until the frame says the conversation is on disk", () => {
+    const removed = twice(opening(), {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "guess-thread" },
+    });
+    expect(removed.commands, "a DELETE went out for a conversation the server has never had")
+      .toEqual([]);
+    /* Gone from the screen from the moment the reader pressed it, exactly as
+       before: the tombstone is what the reader sees, and it does not wait. */
+    expect(titles(removed.state)).toEqual([]);
+
+    const named = twice(removed.state, begun("guess-thread"));
+    expect(named.commands, "the DELETE was never sent").toEqual([
+      { type: "delete", opId: DELETE, slug: SLUG, threadId: "guess-thread" },
+    ]);
+    expect(titles(named.state)).toEqual([]);
+  });
+
+  /**
+   * **And the hold ends**, which is the half a test of the holding alone cannot
+   * see: once the frame has named the conversation, a mutation goes out at the
+   * moment the reader asks for it, exactly as it always did. A hold that never
+   * lifts is a delete button that does nothing — the same silent success from
+   * the other direction.
+   */
+  it("sends a mutation made after the frame at once", () => {
+    const named = twice(opening(), begun(REAL)).state;
+    expect(named.unnamed.has("guess-thread"), "the conversation is still waiting for a name").toBe(
+      false,
+    );
+    const removed = twice(named, {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: REAL },
+    });
+    expect(removed.commands, "a delete of a named conversation was held").toEqual([
+      { type: "delete", opId: DELETE, slug: SLUG, threadId: REAL },
+    ]);
+    /* And its answer is admitted, which a held operation's is not. */
+    expect(twice(removed.state, { type: "delete.succeeded", opId: DELETE }).state.operations.has(DELETE)).toBe(false);
+  });
+
+  /** And when the server does mint an id of its own, it is sent once, to that. */
+  it("sends it once, under the name the server minted", () => {
+    const removed = twice(opening(), {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "guess-thread" },
+    });
+    expect(removed.commands).toEqual([]);
+
+    const named = twice(removed.state, begun(REAL));
+    expect(named.commands.filter((c) => c.type === "delete")).toEqual([
+      { type: "delete", opId: DELETE, slug: SLUG, threadId: REAL },
+    ]);
+    expect([...named.state.tombstones.keys()]).toEqual([REAL]);
+  });
+
+  /**
+   * **Sol's own reproduction, and it cannot happen any more — which is why the
+   * assertion is that it changes nothing.**
+   *
+   * The DELETE answered before the frame, its operation retired, and the frame
+   * then had nothing left to reissue: `commands: []`. There is no first request
+   * to answer now, so a `delete.succeeded` arriving here belongs to nothing. It
+   * is refused at the gate rather than allowed to retire a request that has not
+   * left the tab — an operation that has not asked cannot be answered.
+   */
+  it("cannot be retired by an answer to a request that never went out", () => {
+    const held = twice(opening(), {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "guess-thread" },
+    }).state;
+
+    const stray = twice(held, { type: "delete.succeeded", opId: DELETE });
+    expect(stray.state, "an answer to nothing retired the delete").toBe(held);
+    const strayFailure = twice(held, { type: "delete.failed", opId: DELETE, error: "a 500" });
+    expect(strayFailure.state, "and its failure was admitted").toBe(held);
+
+    const named = twice(held, begun(REAL));
+    expect(named.commands.filter((c) => c.type === "delete")).toEqual([
+      { type: "delete", opId: DELETE, slug: SLUG, threadId: REAL },
+    ]);
+  });
+
+  /**
+   * **A reader's rename takes the naming right away from the opening turn.**
+   *
+   * `namesThread` is decided in the hook when the turn registers, which cannot
+   * know about a rename that has not happened yet — so the `begin` frame's
+   * title, which is a slice of the question, landed over the name the reader had
+   * just typed. That is `withServerIds` taking `namesThread` as an argument
+   * because guessing it was a bug, and then being handed a guess that went stale.
+   * GPT Sol, 2026-08-28.
+   */
+  it("keeps the reader's title, and is the title the server is told", () => {
+    const renamed = twice(opening(), {
+      type: "rename.started",
+      op: { id: RENAME_A, kind: "rename", threadId: "guess-thread", title: "mine" },
+    });
+    expect(renamed.commands, "the PATCH named a conversation the server has never had").toEqual([]);
+    expect(titles(renamed.state)).toEqual(["mine"]);
+
+    const named = twice(renamed.state, begun(REAL, "why?"));
+    expect(titles(named.state), "the begin frame overwrote the reader's own name").toEqual(["mine"]);
+    expect(named.commands.filter((c) => c.type === "rename")).toEqual([
+      { type: "rename", opId: RENAME_A, slug: SLUG, threadId: REAL, title: "mine" },
+    ]);
+  });
+
+  /**
+   * And the other order, which is the same rule from the other side: a
+   * conversation renamed before anything has been asked in it. The turn is
+   * registered *after* the rename, so the hook's `namesThread` is stale in the
+   * same way and the reducer clears it for the same reason.
+   */
+  it("keeps a title given before the first question was even asked", () => {
+    const empty = twice(loaded(), { type: "thread.begun", thread: thread("new-1", "New chat") }).state;
+    const renamed = twice(empty, {
+      type: "rename.started",
+      op: { id: RENAME_A, kind: "rename", threadId: "new-1", title: "mine" },
+    });
+    expect(renamed.commands).toEqual([]);
+    const sent = twice(renamed.state, starting({
+      id: TURN_A,
+      shape: "send",
+      threadId: "new-1",
+      replyId: "guess-a",
+      question: message({ id: "guess-q", role: "user", text: "why?", status: "done" }),
+      namesThread: true,
+    })).state;
+
+    const named = twice(sent, begun(REAL, "why?"));
+    expect(titles(named.state)).toEqual(["mine"]);
+    expect(named.commands.filter((c) => c.type === "rename")).toEqual([
+      { type: "rename", opId: RENAME_A, slug: SLUG, threadId: REAL, title: "mine" },
+    ]);
+  });
+
+  /**
+   * **A superseded held mutation is dropped rather than sent**, which is the
+   * same rule `wishesNamed` states for a waiting stop or cancel: a request that
+   * is neither sent nor dropped is an operation that never retires. A delete
+   * supersedes everything for its conversation, the rename included, and there
+   * is nothing to rename in a conversation that is going.
+   */
+  it("drops what a delete took over, and sends only the delete", () => {
+    const renamed = twice(opening(), {
+      type: "rename.started",
+      op: { id: RENAME_A, kind: "rename", threadId: "guess-thread", title: "mine" },
+    }).state;
+    const removed = twice(renamed, {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "guess-thread" },
+    }).state;
+    expect(removed.operations.get(RENAME_A)?.superseded, "the premise").toBe(true);
+
+    const named = twice(removed, begun(REAL));
+    expect(named.commands.filter((c) => c.type === "rename" || c.type === "delete")).toEqual([
+      { type: "delete", opId: DELETE, slug: SLUG, threadId: REAL },
+    ]);
+    expect(named.state.operations.has(RENAME_A), "a held rename was left in the map").toBe(false);
+  });
+
+  /**
+   * **The residue, named rather than left to be found.** A turn that dies before
+   * its frame leaves the mutation held and unsent — and that is right, because a
+   * conversation the server never wrote down has nothing to delete or rename.
+   * The reader sees what they asked for either way: the tombstone is `final` and
+   * the title is in `base`.
+   *
+   * It is held rather than dropped so that a *later* turn into the same
+   * conversation still carries it — the rename the reader made while their first
+   * question was failing is still theirs. The one case this cannot cover is a
+   * stream lost **after** `beginTurn` wrote the thread and before the frame was
+   * read; there the conversation exists on the server under a name this tab
+   * never learned, and it arrives on the next load. Sending early did not cover
+   * it either — that request raced the same write.
+   */
+  it("stays held, and silent, when the turn dies before it is named", () => {
+    const removed = twice(opening(), {
+      type: "delete.started",
+      op: { id: DELETE, kind: "delete", threadId: "guess-thread" },
+    });
+    const held = removed.state;
+    const dead = twice(held, { type: "turn.failed", opId: TURN_A, error: "the network" });
+    /* Every command the whole sequence asked for, not only the last transition's
+       — the request that must not exist is the one sent at the moment the reader
+       pressed the button. */
+    expect(
+      [...removed.commands, ...dead.commands].filter((c) => c.type === "delete"),
+      "a request went out for a conversation that was never written",
+    ).toEqual([]);
+    expect(titles(dead.state)).toEqual([]);
+    expect(dead.state.operations.has(DELETE), "the delete was dropped, so a later send cannot carry it").toBe(true);
+    expect(dead.state.error, "a delete that was never sent reported a failure").toBeNull();
   });
 });

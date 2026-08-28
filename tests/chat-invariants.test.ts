@@ -406,6 +406,16 @@ describe("turn.began changes every name in one transition", () => {
    * Asserted as a **whole-state scan for the old names** rather than as a list
    * of fields, because the failure mode is always the field nobody listed.
    *
+   * **Every order of the three things that can be in flight, and the frame is
+   * always last** — which is a narrowing of what this file's header promises, and
+   * it is stated rather than implied because GPT Sol found the words claiming
+   * more than the test did, 2026-08-28. It used to sample three of the six orders
+   * as well. The frame is last on purpose: the invariant is about names minted
+   * *before* the server supplied one, and an event arriving afterwards names the
+   * conversation the server named, which is a different sentence and true by
+   * construction. What is exercised is therefore permutations of the window, not
+   * of the frame's position in it.
+   *
    * Probes: each of the three id swaps in `withServerIds`, and each half of
    * `renamed`, turns this red on its own — five probes, one rule.
    */
@@ -460,11 +470,8 @@ describe("turn.began changes every name in one transition", () => {
       },
     };
 
-    for (const order of [
-      [...before, begun],
-      [before[2] as ChatEvent, before[0] as ChatEvent, before[1] as ChatEvent, begun],
-      [before[1] as ChatEvent, before[2] as ChatEvent, before[0] as ChatEvent, begun],
-    ]) {
+    for (const window of permutations(before)) {
+      const order = [...window, begun];
       let state = opened;
       for (const event of order) state = twice(state, event).state;
       for (const gone of ["guess-thread", "guess-a", "guess-q"]) {
@@ -590,9 +597,12 @@ describe("success and failure are admitted by the same rule", () => {
    * two endings agree about that.
    */
   it("treats both endings alike when the operation has been superseded", () => {
-    /* A rename replaced by a newer one, a repair replaced by a newer one, and a
-       cancel the reader has since overtaken with a delete — three different
-       ways to be superseded, one rule. */
+    /* A rename replaced by a newer one, and a cancel the reader has since
+       overtaken with a delete. **The repair is built separately, below**, and it
+       used to be named here and not exercised — the docstring said three ways and
+       the loop had two, which GPT Sol found on 2026-08-28. A repair is superseded
+       only by another repair of the same conversation, and reaching that needs
+       two refused turns rather than another line in this sequence. */
     let state = loaded(conversation());
     state = twice(state, { type: "rename.started", op: { id: RENAME_A, kind: "rename", threadId: THREAD, title: "first" } }).state;
     state = twice(state, { type: "intent.started", op: { id: WISH, intent: "cancel", threadId: THREAD, messageId: "a1" } }).state;
@@ -602,12 +612,31 @@ describe("success and failure are admitted by the same rule", () => {
     expect(quiet.operations.get(RENAME_A)?.superseded, "the premise: it is superseded").toBe(true);
     expect(quiet.operations.get(WISH)?.superseded).toBe(true);
 
-    for (const [kind, won, lost] of [
-      ["rename", { type: "rename.succeeded", opId: RENAME_A }, { type: "rename.failed", opId: RENAME_A, error: "no" }],
-      ["intent", { type: "intent.succeeded", opId: WISH }, { type: "intent.failed", opId: WISH, error: "no" }],
-    ] as [string, ChatEvent, ChatEvent][]) {
-      const a = twice(quiet, won).state;
-      const b = twice(quiet, lost).state;
+    /* Two turns into one conversation, each refused, so the second repair takes
+       the first one's job. That is the case the plan's stage 2 fixed and this
+       assertion is the one that was missing: a superseded repair's success was
+       silent while its failure still wrote `error`. */
+    let refused = twice(loaded(conversation()), sending(TURN_A, "a-one", "q-one")).state;
+    refused = twice(refused, sending(TURN_B, "a-two", "q-two")).state;
+    refused = twice(refused, { type: "turn.refused", opId: TURN_A, error: "no", repair: { id: REPAIR } }).state;
+    refused = twice(refused, {
+      type: "turn.refused",
+      opId: TURN_B,
+      error: "no",
+      repair: { id: asOpId("spya-fix002") },
+    }).state;
+    const settled = twice(refused, { type: "error.set", error: null }).state;
+    expect(settled.operations.get(REPAIR)?.superseded, "the premise: the repair is superseded").toBe(
+      true,
+    );
+
+    for (const [kind, from, won, lost] of [
+      ["rename", quiet, { type: "rename.succeeded", opId: RENAME_A }, { type: "rename.failed", opId: RENAME_A, error: "no" }],
+      ["intent", quiet, { type: "intent.succeeded", opId: WISH }, { type: "intent.failed", opId: WISH, error: "no" }],
+      ["repair", settled, { type: "repair.succeeded", opId: REPAIR, thread: conversation() }, { type: "repair.failed", opId: REPAIR, error: "no" }],
+    ] as [string, ChatState, ChatEvent, ChatEvent][]) {
+      const a = twice(from, won).state;
+      const b = twice(from, lost).state;
       expect(b.error, `${kind}'s superseded failure reported`).toBeNull();
       expect(a.error, `${kind}'s superseded success reported`).toBeNull();
       /* The same state, not merely two states with nothing in `error`: this is

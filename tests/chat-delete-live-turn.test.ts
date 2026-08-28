@@ -281,3 +281,112 @@ describe("deleting a conversation an answer is streaming into", () => {
     expect(threadIn(THREAD)).toBeUndefined();
   });
 });
+
+/**
+ * **And the window before the server has named the conversation at all**, which
+ * is the same button one beat earlier and a different bug.
+ *
+ * A brand-new conversation is called something this tab invented. `beginTurn`
+ * writes it to disk and the `begin` frame is the server saying so, so until that
+ * frame a DELETE or a PATCH names a conversation the server has never heard of —
+ * and `deleteThread` and `renameThread` in src/chat.ts are a `filter` and a `map`
+ * over the stored list, so the request changes nothing and answers `200`. The
+ * reader is told it worked and the conversation comes back on their next reload.
+ *
+ * The request is therefore **held** until the frame — see `Held` in
+ * src/web/chat/model.ts. Asserted here at the hook, on what left the tab, for the
+ * reason docs/postmortems/cancel-before-begin.md gives: a conversation vanishing
+ * from the screen is not evidence the server heard.
+ */
+describe("mutating a conversation before the server has named it", () => {
+  /** A send into a conversation this tab invented, with no frame back yet. */
+  async function opening(): Promise<{
+    id: string;
+    turn: ReturnType<typeof controllableStream>;
+  }> {
+    const turn = controllableStream();
+    answer = (url, init) => {
+      const method = init?.method ?? "GET";
+      if (method === "GET" && url === `/api/chat/${SLUG}`) {
+        return Promise.resolve(json({ threads: [] }));
+      }
+      if (method === "POST" && url === `/api/chat/${SLUG}`) {
+        return Promise.resolve({ ok: true, body: turn.stream } as unknown as Response);
+      }
+      sent.push({ method, url });
+      return Promise.resolve(json({}));
+    };
+    await mount();
+    let id = "";
+    act(() => {
+      id = api().send(null, "why?", null, false);
+    });
+    await settle();
+    return { id, turn };
+  }
+
+  it("sends no DELETE until the frame, then exactly one, under the server's name", async () => {
+    const { id, turn } = await opening();
+
+    await act(async () => {
+      api().remove(id);
+    });
+    await settle();
+    expect(sent, "a DELETE named a conversation the server has never had").toEqual([]);
+    /* The reader sees it go all the same — the tombstone does not wait for the
+       server, which is why holding the request costs them nothing. */
+    expect(threadIn(id), "the conversation was still on screen").toBeUndefined();
+
+    act(() => {
+      turn.frame("begin", {
+        threadId: "spya-real1",
+        title: "why?",
+        messageId: "srv-a",
+        questionId: "srv-q",
+        attempt: "att-1",
+      });
+    });
+    await settle();
+
+    expect(sent, "the DELETE was never sent at all").toEqual([
+      { method: "DELETE", url: `/api/chat/${SLUG}/spya-real1` },
+    ]);
+    expect(threadIn("spya-real1"), "the conversation came back under the server's name")
+      .toBeUndefined();
+    expect(api().error).toBeNull();
+  });
+
+  /**
+   * The same for a rename, plus the half the reader can see: the `begin` frame's
+   * title is the server's slice of the question, and it must not land over the
+   * name the reader typed while the answer was starting.
+   */
+  it("holds the rename, keeps the reader's title, and sends it once", async () => {
+    const { id, turn } = await opening();
+
+    await act(async () => {
+      api().rename(id, "mine");
+    });
+    await settle();
+    expect(sent, "a PATCH named a conversation the server has never had").toEqual([]);
+    expect(threadIn(id)?.title).toBe("mine");
+
+    act(() => {
+      turn.frame("begin", {
+        threadId: "spya-real1",
+        title: "why?",
+        messageId: "srv-a",
+        questionId: "srv-q",
+        attempt: "att-1",
+      });
+    });
+    await settle();
+
+    expect(sent, "the rename was never sent under a name the server could match").toEqual([
+      { method: "PATCH", url: `/api/chat/${SLUG}/spya-real1` },
+    ]);
+    expect(threadIn("spya-real1")?.title, "the begin frame overwrote the reader's own name").toBe(
+      "mine",
+    );
+  });
+});

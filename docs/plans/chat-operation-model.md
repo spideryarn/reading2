@@ -9,6 +9,11 @@ the bottom: [§ What stage 1 actually did](#what-stage-1-actually-did),
 [§ What stage 2 actually did](#what-stage-2-actually-did) and
 [§ What the review of stage 2 sent back](#what-the-review-of-stage-2-sent-back).
 
+**Stage 2 has now been refused four times**, and the fourth round is the one that made the code
+smaller rather than larger: the answer to "a request sent under a name the server has never heard of"
+stopped being a compensation and became a **hold** —
+[§ What the fourth review of stage 2 sent back](#what-the-fourth-review-of-stage-2-sent-back).
+
 **The boundary between stages 2 and 3 moved**, and that is the headline. Intent — the thing stage 3
 was for — is in stage 2, because the review found that the wish was lost in the one lifecycle
 production actually has and nothing short of moving it into the state fixed that.
@@ -901,6 +906,12 @@ happily for a conversation it has never heard of, so the reader is told the dele
 conversation returns on their next reload. `renamed()` therefore emits a fresh command for each, and
 that is the only repair available for a request that has already gone.
 
+> **Superseded by the fourth review, and left here because the reasoning is where the next round
+> started.** "The only repair available for a request that has already gone" is true, and the round
+> after this one asked the better question: why has it gone? Nothing is sent into that window now, so
+> there is no request to repair —
+> [§ What the fourth review of stage 2 sent back](#what-the-fourth-review-of-stage-2-sent-back).
+
 ### Supersession has to hand the tombstone on, not only replacement
 
 A wish still waiting is *replaced*; one already in flight is *superseded* and kept so its answer can
@@ -908,3 +919,105 @@ retire it. Only the first handed its tombstone to the newer wish, so two cancels
 and both failed left the conversation hidden for ever — the first's refusal silenced for being
 superseded, the second's unable to lift a tombstone it did not own. Both kinds of taking-over now
 count.
+
+## What the fourth review of stage 2 sent back
+
+**Refused a fourth time**, 2026-08-28 —
+[chat-operation-model-stage2-fourth-sol.md](chat-operation-model-stage2-fourth-sol.md). Two findings,
+and they turned out to be **one window**: a conversation the reader has named and the server has not.
+Sol also found the stage 3 suite claiming more coverage than it had, for the second time.
+
+### Stop compensating for the doomed request; stop sending it
+
+The third round's answer to "a rename or a delete leaves at registration, naming a conversation the
+server has never heard of" was to **send it anyway and repair it afterwards**: `outstanding + 1`, and
+a second command emitted from `renamed()` under the id the `begin` frame supplied. Sol found two
+holes in that, and the second is the one that matters:
+
+- the doomed request can **answer first**. Its operation retires, and `renamed()` only reissues what
+  is still in the map, so it emitted nothing — Sol's probe produced `commands: []`;
+- and **in the common case there is no rename at all.** `beginTurn` accepts the client's thread id
+  whenever it is a spideryarn id and free, so `from === to` — and `renamed()` returned at its first
+  line. The compensation only ever ran on the rarer branch where the server minted an id of its own.
+
+The call — made in this session, not by Greg, who has seen none of this round: **stop
+compensating and close the window.** A mutation of a conversation the server has not yet named
+is **held, not sent**, and goes out in the same transition as the `begin` frame — which is the
+server saying the thread is on disk under a name it will match. It deletes machinery rather
+than adding it: `outstanding`, the `Reissuable` interface, the reissue inside `renamed()` and the
+gate's "wait for the last of two answers" branch are all gone, and the whole silent-success shape —
+`deleteThread` and `renameThread` in [`src/chat.ts`](../../src/chat.ts) are a `filter` and a `map`
+over the stored list, so a request naming nothing answers `200` — stops being something the client
+has to survive. The reader sees no difference: a deleted conversation is hidden by its tombstone the
+moment they press the button, and a renamed one already shows the new title from `base`.
+
+**Recorded rather than derived, which is the one place this went beyond the brief.** The obvious
+derivation is "is there a turn for this conversation that has not begun?", and it is right for the
+case it is written for and wrong three ways: the turn can retire before its frame; two sends into one
+new conversation mean the turn you happened to pick may die while the *other* one names it; and a
+conversation renamed before anything has been asked in it has no turn at all. That is the same shape
+as `withServerIds` working `namesThread` out from the message count. So `ChatState.unnamed` is a set
+of the conversations **this tab invented and the server has not confirmed** — it grows at the two
+places a conversation is invented (`thread.begun`, and a send's `opening`) and shrinks at the one
+place the server names one (`turn.began`). A thread from a load or a repair is the server's own, so
+the default costs nothing and is recorded nowhere.
+
+**A held operation may wait for ever, and that is the choice rather than an oversight.** The brief
+proposed discarding it when the turn dies without beginning. Holding is better by one case and worse
+by none: a turn that dies leaves nothing on the server to rename or delete, so there is nothing to
+send either way — but keeping it held is what carries the reader's rename into the **next** question
+they ask in that conversation, which discarding loses. It costs one entry in a map that goes when the
+article does. A held operation that something newer supersedes is dropped rather than left, because a
+request that is neither sent nor dropped is an operation that never retires — the rule `wishesNamed`
+already states for a waiting stop or cancel.
+
+**And the residue, named rather than left to be found:** a stream lost *after* `beginTurn` wrote the
+thread and before the frame was read leaves a conversation on the server under a name this tab never
+learned, so nothing is sent and it arrives on the next load. Sending early did not cover that either
+— that request raced the same write.
+
+Two smaller consequences, both deliberate:
+
+- **`accepts` now refuses an answer to a held rename or delete.** Nothing can produce one, since
+  commands are the only way a request leaves; it is there so that a stray answer cannot retire an
+  operation whose whole job is still ahead of it, which is exactly the shape Sol reproduced.
+- **`renamed()` no longer returns early when the id is unchanged**, because that is the common case
+  and it is still the moment the conversation starts existing.
+
+**One existing test changed on purpose, and the change is the finding.**
+[`tests/chat-reduce.test.ts`](../../tests/chat-reduce.test.ts)'s "renames a delete of a conversation
+the server had not named, **and asks again**" was written against the third round's answer. Its two
+command assertions now say the DELETE is held and leaves once, at the frame. Everything else it pins
+— the tombstone and the operation both following the server's name, the superseded turn retiring
+without drawing — is unchanged and still passes.
+
+### A reader's rename takes the naming right away from the opening turn
+
+`rename.started` writes the reader's title into `base`, and the opening turn's `begin` frame then
+replaced it with `begun.title` — a 60-character slice of the question. Rename success writes nothing
+back, deliberately, because a title is never withdrawn and lives in `base`; so the reader watched the
+name they had just typed disappear.
+
+`namesThread` is decided in the hook when the turn registers ([`useChat.ts`](../../src/web/useChat.ts)),
+which cannot know about a rename that has not happened yet. `withServerIds` takes it as an argument
+precisely because working it out for itself was a bug, and it was then handed a guess that went stale.
+So the reducer clears it, **from both sides**, because the reader can name a conversation before or
+after asking the first question in it: `readerNamed` clears it on every live turn when a rename
+registers, and `startTurn` registers with it already false when a rename for that conversation is
+live. One rule, stated twice because the two orders arrive at two events.
+
+### The stage 3 suite claimed more than it exercised, twice
+
+Neither was widened to match the words; the words and the tests were made to agree, which is the rule
+this document set for itself.
+
+- **The naming permutation** sampled three of the six orders and always put `turn.began` last. It
+  runs all six now, and the docstring says the frame is deliberately last: the invariant is about
+  names minted *before* the server supplied one, and an event arriving afterwards names the
+  conversation the server named, which is a different sentence.
+- **The superseded-symmetry test** named three ways to be superseded — rename, repair, intent — and
+  exercised two. A repair is superseded only by another repair of the same conversation, which needs
+  two refused turns rather than another line in that sequence, so it is built separately and the loop
+  runs over three states now. **Watched failing:** a probe that admits a superseded `repair.failed`
+  while leaving its success silent — bug 10 and bug 12's exact shape — reddens the test with the row
+  and passes unnoticed without it.

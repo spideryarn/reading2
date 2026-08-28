@@ -319,38 +319,46 @@ export interface RecoveryOperation extends Registered {
 }
 
 /**
- * How many requests this operation has out, which is normally one.
+ * Registered, and **not sent yet**, because the server cannot match the name.
  *
- * A rename and a delete both leave at registration, naming the conversation by
- * whatever it is called then — and a conversation the server has not written
- * down yet is called something this tab invented. When the `begin` frame gives
- * it the server's name, the request has to go again under that name, because a
- * request already in flight is the one holder of a thread id that this state
- * cannot rewrite (`renamed` in reduce.ts).
+ * A rename and a delete both name a conversation, and a conversation the server
+ * has not written down is called something this tab invented — see
+ * `ChatState.unnamed`. `renameThread` and `deleteThread` in src/chat.ts are a
+ * `map` and a `filter` over the stored list, so a request naming one of those
+ * changes nothing and answers `200`: the reader is told the delete worked, and
+ * the real conversation comes back on their next reload. The silent success this
+ * repo keeps writing up — docs/reusable/silent-success.md.
  *
- * Two requests then have two answers, and they are indistinguishable: they come
- * back under one `opId` carrying nothing that says which is which. So the
- * operation waits for the **last** of them and says nothing about the others,
- * which is what stops the doomed first request — a PATCH against a conversation
- * the server has never heard of — reporting "Couldn't rename that conversation"
- * over a second one that worked.
+ * **So it is held rather than sent and compensated for.** The `begin` frame is
+ * the server saying the thread is on disk, so it is also the first moment a
+ * mutation can be addressed; the reducer emits the command there
+ * (`renamed` in reduce.ts) and the operation is ordinary from then on.
  *
- * **The residue, named rather than left to be found:** if the stale answer
- * arrives *last* it is the one that speaks. Nothing on the wire can tell them
- * apart, and the alternative — minting a second operation id inside the reducer
- * — is exactly the impurity this whole directory is built to avoid.
+ * What this replaced was an `outstanding` counter and a second request issued
+ * from `renamed()`, and GPT Sol found two holes in it on 2026-08-28: the doomed
+ * request could answer *first*, retiring the operation before there was anything
+ * left to reissue; and in the **common case there is no rename at all**, because
+ * `beginTurn` accepts the client's thread id when it is free — so `renamed()`
+ * returned at its first line and the compensation only ever ran on the rarer
+ * branch. Closing the window took both of them out.
+ *
+ * **A held operation may wait for ever, and that is deliberate.** A turn that
+ * dies before its frame leaves nothing on the server to rename or delete, so
+ * there is nothing to send; keeping it held rather than dropping it is what
+ * carries the reader's rename into the *next* question they ask in that
+ * conversation. It costs one entry in a map that goes when the article does.
  */
-interface Reissuable {
-  outstanding: number;
+interface Held {
+  held: boolean;
 }
 
-export interface RenameOperation extends Registered, Reissuable {
+export interface RenameOperation extends Registered, Held {
   kind: "rename";
   threadId: string;
   title: string;
 }
 
-export interface DeleteOperation extends Registered, Reissuable {
+export interface DeleteOperation extends Registered, Held {
   kind: "delete";
   threadId: string;
 }
@@ -378,11 +386,14 @@ export type Operation =
 /**
  * An operation as its caller hands it over: the reducer adds the rest.
  *
- * `seq`, `superseded` and `outstanding` are all answers to questions about the
+ * `seq`, `superseded` and `held` are all answers to questions about the
  * *state*, so the reducer owns them. A caller that filled one in would be the
- * second vocabulary this directory exists to remove.
+ * second vocabulary this directory exists to remove — and `held` especially:
+ * "has the server named this conversation?" is exactly the question a caller
+ * outside the state would have to guess at, which is how `namesThread` came to
+ * be wrong.
  */
-export type Registering<O extends Operation> = Omit<O, "seq" | "superseded" | "outstanding">;
+export type Registering<O extends Operation> = Omit<O, "seq" | "superseded" | "held">;
 
 /** Where the one fetch that fills the list has got to. */
 export type LoadPhase = "loading" | "ready" | "failed";
@@ -412,6 +423,28 @@ export interface ChatState {
    * render. "We have asked" is a fact about the past.
    */
   loadPhase: LoadPhase;
+  /**
+   * Conversations this tab invented that the server has not confirmed.
+   *
+   * **The one question a mutation has to ask before it leaves**: can the server
+   * match this name? A thread that arrived in a load or in a repair is the
+   * server's own, so the default — not in here — is "yes", and nothing has to be
+   * recorded for the overwhelming majority of conversations. An id enters at the
+   * two places this tab invents a conversation, `thread.begun` and a send's
+   * `opening`, and leaves at the one place the server names one, `turn.began`.
+   *
+   * **Recorded rather than inferred from a live turn, on 2026-08-28, for a
+   * reason worth keeping.** The obvious derivation — "is there
+   * a turn for this conversation that has not begun?" — is right for the case it
+   * is written for and wrong twice over: the turn can retire before the frame,
+   * and two sends into one new conversation mean the turn you happened to pick
+   * may die while the other names it. It is also blind to a conversation renamed
+   * before anything has been asked in it, which has no turn at all. That is the
+   * same shape as `withServerIds` working `namesThread` out from the message
+   * count — a rule that reads the right answer for the case its author had in
+   * mind. See `Held`.
+   */
+  unnamed: ReadonlySet<string>;
   /** A failure of the *transport*. Model failures live on the message. */
   error: string | null;
   /** The next `seq`. In the state so that the reducer stays a pure function. */
@@ -425,6 +458,7 @@ export function initialState(slug: string): ChatState {
     operations: new Map(),
     tombstones: new Map(),
     loadPhase: "loading",
+    unnamed: new Set(),
     error: null,
     nextSeq: 0,
   };
