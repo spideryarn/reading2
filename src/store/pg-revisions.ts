@@ -172,6 +172,13 @@ export const REVISION_CARRY_POLICY: Record<
   rawContentType: "carry",
   rawEncoding: "carry",
   rawSha256: "carry",
+  /* Both new on 2026-08-28, and both carry for the same reason the reference
+     does: `beginDraftIn` copies the successful `fetch` run forward, so a job
+     that does not re-fetch must keep the document's facts with it. A draft that
+     inherited the reference and lost the byte count would describe an object it
+     could no longer size. */
+  rawByteCount: "carry",
+  rawFilename: "carry",
   /**
    * The reference to the object in the `sources` bucket — carried, beside the
    * hash and the bytes it belongs with.

@@ -264,6 +264,36 @@ export const articleRevisions = spideryarn.table(
      * question convincingly. docs/project/fetching.md § `RawManifest`.
      */
     rawSha256: text("raw_sha256"),
+    /**
+     * **How many bytes the origin sent** — `RawManifest.bytes`, and not the size
+     * of anything we kept.
+     *
+     * A column rather than `length(raw_bytes)`, because `raw_bytes` is dropped
+     * at the end of docs/plans/delete-the-importer.md and this number has to
+     * outlive it. `raw_sources.bytes` is not a substitute: that describes the
+     * object at `raw_source_sha256`, which for any page that was not already
+     * UTF-8 is a *different byte string* — `writeRaw` stores the decoded text,
+     * so the stored size and the network size differ for exactly the reason the
+     * two hashes do. GPT Sol, 2026-08-28, reviewing that plan.
+     *
+     * Null for every revision written before this existed, and for one whose
+     * manifest never recorded it.
+     */
+    rawByteCount: integer("raw_byte_count"),
+    /**
+     * **The reader's own name for an uploaded file** — `RawManifest.filename`.
+     *
+     * Not `RawManifest.file`, which is `raw.html` or `raw.pdf` and is derived
+     * from the kind rather than stored. This is the name the file had on the
+     * reader's disk, and it is the name an uploaded PDF should download as, so
+     * it is reader-facing and there is nowhere else for it: `origin` is
+     * derivable from the two URLs being null and `uploadId` is already on
+     * `jobs.upload_id`, but this is homeless.
+     * docs/plans/delete-the-importer.md § The raw provenance has nowhere to go.
+     *
+     * Null for a fetched document, which never had one.
+     */
+    rawFilename: text("raw_filename"),
 
     /**
      * **Which object in the `sources` bucket this revision's document is.**
@@ -1199,6 +1229,42 @@ export const aiCalls = spideryarn.table(
     /** `ok`, `error` or `aborted`. A non-`ok` row's cost is a lower bound. */
     outcome: text("outcome").notNull(),
     /**
+     * **Which bill this call lands on** — `openrouter` or `anthropic`.
+     *
+     * Not derivable from `credential_fingerprint`, which identifies a key
+     * without saying whose. Money leaves this project from two accounts and
+     * `npm run cost --reconcile` can only read one of them, so the row has to
+     * say which side of that line it is on or the reconciliation is comparing
+     * our total against somebody else's subtotal.
+     */
+    providerAccount: text("provider_account").notNull(),
+    /**
+     * **Where the dollar figure came from**: `provider`, `computed` or `none`.
+     *
+     * `provider` is OpenRouter's own `usage.cost` and is settled. `computed` is
+     * our arithmetic over [`ANTHROPIC_PRICES`](../pricing.ts) for a call that
+     * did not go through OpenRouter and therefore has nobody to ask. `none` is a
+     * call that reported nothing and could not be priced.
+     *
+     * A column rather than an inference from which of the two nanos columns is
+     * null, because "we were told" and "we worked it out" are different claims
+     * and a total that mixes them silently is the thing this whole table exists
+     * to stop.
+     */
+    costSource: text("cost_source").notNull(),
+    /**
+     * **Our own arithmetic**, in nano-dollars — kept apart from
+     * `credits_used_nanos` on purpose, so that column keeps meaning exactly
+     * "credits OpenRouter deducted" and nothing else ever lands in it.
+     */
+    computedCostNanos: bigint("computed_cost_nanos", { mode: "number" }),
+    /**
+     * Which price table row did the arithmetic, as `checked/effective-from` —
+     * so a figure computed today and one computed in December can be told apart
+     * without guessing which prices were current. Null unless `computed`.
+     */
+    priceVersion: text("price_version"),
+    /**
      * **Credits OpenRouter deducted**, in nano-dollars — and the name says
      * credits rather than cash on purpose. Their margin is a fee on *buying*
      * credits, not a per-token markup, so a per-row x1.055 would invent a
@@ -1243,6 +1309,13 @@ export const aiCalls = spideryarn.table(
     index("ai_calls_owner_started").on(t.ownerId, t.startedAt.desc()),
     /** "What did this ingest cost", asked once per job at the end of it. */
     index("ai_calls_job").on(t.jobId),
+    /**
+     * "What did the product cost, as opposed to the measuring of it" — the
+     * split `npm run cost` leads with, because a bake-off's forty PDF pages
+     * landing in the number Greg sets a price against is how a price gets set
+     * wrong.
+     */
+    index("ai_calls_scope_started").on(t.scopeKind, t.startedAt.desc()),
   ],
 );
 

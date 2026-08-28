@@ -348,6 +348,14 @@ const REVISION_READ_POLICY: Record<
   rawEncoding: {},
   rawSourceKind: {},
   rawSourceSha256: {},
+  /* Raw-source provenance, arriving 2026-08-28 with another agent's
+     delete-the-importer work. Reached through src/store/export.ts and the
+     artefact store, never through a revision read — `rawFilename` is
+     reader-facing (it is what an uploaded PDF should download as) and will
+     want a grant here the day something serves it, which is exactly what this
+     map is for. */
+  rawByteCount: {},
+  rawFilename: {},
   /* **The library's cached scalars, and the library now reads them.**
      They are written by `deriveLibraryScalars` (src/library-scalars.ts) inside
      the same transaction that writes the blocks and the tree they describe —
