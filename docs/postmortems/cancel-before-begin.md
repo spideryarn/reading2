@@ -47,6 +47,11 @@ if (
 }
 ```
 
+*(Quoted as it stood when this was found. `askToCancel`'s third argument — the rollback copy of the
+conversation — went in stage 1, along with the `latest` ref that held it: a tombstoned conversation
+is now projected away rather than removed, so removing the tombstone is the whole of putting it back.
+Line numbers throughout this file are from before that change; the branch itself is untouched.)*
+
 Both of its clauses ask `cancelWanted` about `begun.messageId` — one directly, one through `pendingId`,
 which by this point already equals `begun.messageId`. But `cancelAndDiscard` only ever recorded the
 *provisional* id:
@@ -66,6 +71,45 @@ the provisional id, the moment it is called ([`src/web/useChat.ts:1025`](../../s
 — and that is the only request that ever goes out. A cancel pressed before `begin` removes the
 conversation from every screen and asks the server to cancel an answer under an id the server has
 never heard of, and nothing ever asks again with the id it actually recognises.
+
+## What the one request that does go out actually does
+
+**Added 2026-08-28, after stage 1**, because the paragraph above stops one step early. It says the
+cancel is never re-sent with an id the server recognises, and leaves the impression that the cost is
+a request wasted. It is not. That doomed request reaches a real route, and
+[`cancelChat`](../../src/routes.ts) has **two** answers for it, neither of them "nothing happened".
+Which one the reader gets depends on whether `beginTurn` has committed the conversation at the moment
+the button is pressed. Both are pinned in
+[`tests/chat-cancel-before-begin.test.ts`](../../tests/chat-cancel-before-begin.test.ts), read off the
+route rather than guessed.
+
+**The conversation is not on disk yet → `200 { cancelled: true }`.** The route's first line of
+defence is `if (!thread) return { cancelled: true }`, and it is deliberate — the comment names "a
+second tab, a double-press, or a reader who cancelled and reloaded". So the client is told the cancel
+worked. Nothing is aborted, because there is nothing found to abort; `beginTurn` writes the
+conversation a moment later; the answer streams to completion and is stored. **The reader is told
+they discarded something that is still there**, and finds out on their next load.
+
+This is the common case, and the ordering says why: the `begin` frame is emitted immediately after
+that write, so "no frame has arrived yet" mostly means "not written yet". It is also the worse case,
+because nothing on screen is wrong at the time — which is the exact shape of
+[silent-success.md](../reusable/silent-success.md), and the reason this half is worth more than the
+other.
+
+**The conversation is on disk, the frame is still in flight → `409`.** The tail is the server's answer
+id and the client sent its own, so `tail?.id !== messageId` and the route throws *"That is not the
+answer at the end of this conversation"*. `askToCancel`'s `catch` reads any refusal as "the server
+said the premise was wrong": it removes the tombstone, the conversation comes back on screen with an
+error under it — and because it is no longer tombstoned, the stream's frames land again, so the reader
+watches the answer they cancelled carry on typing itself. Neither is corrected afterwards, because
+the branch that would correct it is the dead one above.
+
+**So the dead branch was hiding a worse bug than itself.** That is the finding, and it inverts the
+usual reading of dead code as merely inert. Had the correction been live, the 409 case would have been
+loud — a conversation flickering back with an error on it — and someone would have chased it within a
+day, the way every other visible chat race in this file was chased. Instead the branch that would have
+made the noise never ran, so the failure that stayed was the quiet one: a `200` from a server that has
+never heard of the row. The dead code was not the bug; it was the thing keeping the bug quiet.
 
 ## Root cause
 
@@ -107,12 +151,26 @@ reassignment.
 
 ## The fix
 
-**Interim, one line:** move the cancel check to sit before `pendingId = begun.messageId;`, the same
-side the stop check is already on. That alone closes this one instance.
+**The one-line interim was considered and rejected, 2026-08-28.** Moving the cancel check to the
+correct side of `pendingId = begun.messageId;` does make the wish fire — and firing it is what turns
+the dead branch into a live one that **races** `askToCancel`'s restore. In the 409 case above, the
+re-send goes out when the `begin` frame arrives and the 409 comes back from a round trip started
+earlier, so the refusal's `catch` can land *after* the re-send has succeeded: the tombstone is
+removed, and the reader is left looking at a conversation the server has just deleted. Today the
+screen and the server at least agree with each other. A fix that trades a silent wrong state for a
+visible wrong state is not obviously an improvement, and a fix that races is not a fix.
 
-**Not the fix for the class**, because the constraint it depends on — "this check must run before
-that reassignment" — remains an unstated fact about line order, true of two checks today and of
-nothing that says so. A third wish, added the same way the second one was, reintroduces exactly this.
+Three ways to close that race without new state were tried and all fail, each for its own reason.
+They are written out in
+[chat-operation-model.md](../plans/chat-operation-model.md) because
+the next person to look at this will try all three. What matters here is that they fail for **one**
+reason: each needs to know whether this row has a server name yet, and that is a fact about the turn,
+which nothing represents.
+
+**And that is also why the one-liner is not the fix for the class.** The constraint it depends on —
+"this check must run before that reassignment" — remains an unstated fact about line order, true of
+two checks today and of nothing that says so. A third wish, added the same way the second one was,
+reintroduces exactly this.
 
 The structural fix is in
 [chat-operation-model.md](../plans/chat-operation-model.md#stage-3-intent-and-the-invariants): stop
@@ -152,6 +210,8 @@ about it directly rather than about the screen the reader sees.
 - [chat-operation-model-acceptance.md](../plans/chat-operation-model-acceptance.md) — the audit that
   found `cancelAndDiscard` had never been called by any test before this net was built
 - [chat-intent-paths.test.ts](../../tests/chat-intent-paths.test.ts) — the test that found this
+- [chat-cancel-before-begin.test.ts](../../tests/chat-cancel-before-begin.test.ts) — what the reader
+  is left with, for each of the two answers the route gives the doomed request
 - [half-swapped-message-ids.md](half-swapped-message-ids.md) — the same shape one file and two days
   earlier: a value nothing renders, corrected in one place and not the other it needed
 - [silent-success.md](../reusable/silent-success.md) — the pattern this is an instance of

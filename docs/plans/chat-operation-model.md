@@ -263,6 +263,44 @@ written and stopped being true on 2026-08-28.
   operation put one down. `cancel` → `delete` → the cancel's failure removes the delete's tombstone
   too, and a conversation the reader deleted comes back. Deletions are supposed to win over every
   projection; here one loses to an unrelated request failing.
+- **The cancel-before-`begin` window is worse than "the wish is never re-sent", and this stage is
+  where it gets fixed.** The dead branch is written up in
+  [cancel-before-begin.md](../postmortems/cancel-before-begin.md); what that did not say until it was
+  measured is that the one request which *does* go out reaches a real route, and
+  [`cancelChat`](../../src/routes.ts) has two answers for it, both wrong for the reader
+  ([`tests/chat-cancel-before-begin.test.ts`](../../tests/chat-cancel-before-begin.test.ts)):
+
+  - **Not written yet → `200 { cancelled: true }`**, from the deliberate `if (!thread)` branch. The
+    client is told it worked, nothing is aborted, `beginTurn` writes the conversation a moment later
+    and the answer runs to completion. The reader is told they discarded something that is still
+    there. **The common case** — the frame is emitted right after the write, so "no frame yet" mostly
+    means "not written yet" — and the worse one, because nothing on screen is wrong at the time.
+  - **Written, frame in flight → `409` on the tail id.** `askToCancel` reads any refusal as "the
+    premise was wrong", so the tombstone comes off, the conversation returns with an error under it,
+    and the frames start landing in it again. The reader watches the answer they cancelled carry on
+    typing.
+
+  **Two rules the fix must obey.** Send **once**, when there is an id the server can match. And never
+  read "the server could not match that id" as a refusal *or* as a success — case 1 comes back `200`,
+  so a client that trusts the status is wrong in the quiet direction.
+
+  **Three fixes that do not work**, so that they are not each rediscovered. Every one of them fails
+  for the same underlying reason — it needs to know **whether this row has a server name yet**, which
+  is a fact about the turn, and the turn is not represented until this stage:
+
+  1. *Move the cancel check to the correct side of the reassignment* — the one-liner. It fires the
+     wish, and the re-send then races `askToCancel`'s restore: the 409's `catch` can land after the
+     re-send has succeeded, leaving the reader looking at a conversation the server has deleted.
+     Today screen and server agree; this makes them disagree.
+  2. *Re-add the tombstone in `nameRow` before re-sending* — narrows that race and does not close it.
+     The `catch` can still land last and take the tombstone off again.
+  3. *Suppress the restore while `cancelWanted` still holds the id* — `cancelAndDiscard` adds to that
+     set on **every** cancel and nothing consumes it after `begin`, so it cannot tell the doomed
+     cancel from a genuine post-`begin` one; it would suppress the legitimate restore and break
+     `tests/chat-intent-paths.test.ts`. A fourth, *ask `attempts` whether the row is named*, looks
+     right and is the most dangerous: it is keyed on `begun.attempt`, which is **optional** and
+     documented as "missing means the server did not say", so a server that omits it would turn every
+     cancel into a wish nobody ever consumes — no request at all, ever.
 - **Mixed title ownership needs designing.** An edit of the first question renames its conversation,
   so it must supersede an earlier rename's **title** without superseding the whole turn — which the
   current single `superseded` flag cannot express, since it is per-operation rather than per-thing-

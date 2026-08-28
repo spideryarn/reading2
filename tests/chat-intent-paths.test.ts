@@ -172,7 +172,12 @@ describe("a stop pressed before the begin frame", () => {
 });
 
 describe("a cancel pressed before the begin frame", () => {
-  it("posts /cancel immediately and again after begin, and never posts /stop", async () => {
+  /* The name used to say "and again after begin", which is the opposite of
+     what the body asserts and of what the note below explains: there is no
+     second cancel, and that is the finding. What the reader is left with when
+     that one doomed request is answered is in
+     tests/chat-cancel-before-begin.test.ts. */
+  it("posts one /cancel with an id the server cannot match, never repeats it, and never posts /stop", async () => {
     const turn = controllableStream();
     answer = (url, init) => {
       const method = init?.method ?? "GET";
