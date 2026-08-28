@@ -596,6 +596,115 @@ describe("when the reader changes underneath the page", () => {
  * three named endpoints are the three hooks the capability seam exists to keep
  * out, and the POST is the record-open.
  */
+/**
+ * **A signed-in reader who does not own the document asks for the same things a
+ * stranger does.**
+ *
+ * This is the row in docs/plans/public-read-only-access.md § How we prove it
+ * that nothing automated has ever satisfied. The server half was measured by an
+ * end-to-end spike — three requests, SHA-256, no header versus a garbage bearer
+ * versus the real owner's token, byte-identical bodies — and a browser pass
+ * confirmed the chrome looks the same. **The client half was proved by a human
+ * looking once.**
+ *
+ * It matters more than it sounds. "Visitor" means *anyone who does not own the
+ * document*, and a signed-in one is the likeliest first real use of the feature:
+ * somebody with an account follows a colleague's link. If the client asked for
+ * anything extra in that case — or asked for the same thing with a token
+ * attached — the two readers would stop being served identically, whatever the
+ * server does with identical inputs.
+ *
+ * The existing test for this case checked **copy**, which GPT Sol named in
+ * finding 7: it says the page reads the same and nothing at all about what the
+ * page asked for.
+ *
+ * ## The one difference that is allowed, and why it is exactly one
+ *
+ * A signed-in reader's two-step asks the owned route first and falls back on a
+ * 404. So their trace carries one extra request — `GET /api/article/:slug` —
+ * and it must be **one**, and it must be the only difference. Anything else is
+ * either a hook that mounted for one reader and not the other, or a public read
+ * that quietly went through `apiFetch`.
+ */
+describe("a signed-in reader who does not own it", () => {
+  /** Every request, as a comparable line. Method included: a POST is not a GET. */
+  const lines = () => trace.map((r) => `${r.method} ${r.url}`);
+
+  /**
+   * Open a view and **use it**, then report what was asked for.
+   *
+   * The hover is not decoration. A first version compared only the requests a
+   * page load makes, and letting a signed-in visitor mount the link lookups
+   * changed **nothing** in it — because those fire on `pointerover`, and a
+   * comparison that never touches the page cannot see a divergence that needs a
+   * pointer. That is the same blind spot blocker 2 lived in, one layer up.
+   */
+  async function asksFor(view: string): Promise<string[]> {
+    await open("", view);
+    const link = host.querySelector<HTMLAnchorElement>('a[href^="https://en.wikipedia.org"]');
+    if (link) {
+      await act(async () => {
+        link.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+      });
+      await act(async () => {
+        await new Promise((go) => setTimeout(go, 400));
+      });
+      await settle();
+    }
+    return lines();
+  }
+
+  it.each([
+    ["the reading view", ""],
+    ["the metadata page", "/metadata"],
+    ["the tweets page", "/tweets"],
+  ])("asks for the same things as a stranger on %s", async (_name, view) => {
+    const stranger = await asksFor(view);
+    /* The fixture must actually make requests, or two empty lists match and
+       this proves nothing. */
+    expect(stranger.length).toBeGreaterThan(0);
+
+    await remount();
+    session.user = { id: "somebody-else", email: "else@example.com" };
+    /* Signed in and not the owner: the owned route 404s, and the two-step falls
+       through to the public one. */
+    owned = () => json({ error: "not yours" }, 404);
+    const withAnAccount = await asksFor(view);
+
+    const probe = `GET /api/article/${SLUG}`;
+    expect(withAnAccount.filter((l) => l === probe), "the owned probe, exactly once").toHaveLength(
+      1,
+    );
+    expect(withAnAccount.filter((l) => l !== probe)).toEqual(stranger);
+  });
+
+  /**
+   * **And the public reads carry no token, which is the half a request list
+   * cannot show.**
+   *
+   * Swap `publicFetch` for `apiFetch` in the loaders and every assertion above
+   * still passes — same paths, same methods, same count — while a signed-in
+   * reader's public requests go out with `Authorization` and a stranger's do
+   * not. The server ignores it today, deliberately and structurally
+   * (`servePublicApi` is never handed the request), but the client would have
+   * stopped asking the same question, and the plan's claim is about what is
+   * asked as much as what comes back.
+   */
+  it("sends no token on anything under /api/public/", async () => {
+    session.user = { id: "somebody-else", email: "else@example.com" };
+    owned = () => json({ error: "not yours" }, 404);
+    await open();
+
+    const publicCalls = trace.filter((r) => r.url.startsWith("/api/public/"));
+    expect(publicCalls.length).toBeGreaterThan(0);
+    expect(publicCalls.filter((r) => r.auth !== null)).toEqual([]);
+    /* And the probe that *is* theirs does carry one — otherwise this passes on
+       a client that had stopped authenticating anything at all. */
+    const probe = trace.find((r) => r.url === `/api/article/${SLUG}`);
+    expect(probe?.auth).toMatch(/^Bearer /);
+  });
+});
+
 describe("the same address, as the owner", () => {
   /**
    * **The control the acceptance criterion was written around**: `useJobs`
