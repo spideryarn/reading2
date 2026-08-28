@@ -1111,6 +1111,53 @@ non-mutating question available and is also the honest one, but it cannot see `p
 the page: `DiagramPanel` mounts `useSimilar` and `useProjection` for its other two, both POSTs that
 spend. Carving the free picture out of a 1700-line panel is not this slice's work.
 
+### The browser pass, 2026-08-28 — and what only eyes could find
+
+A Sonnet agent drove the finished slice in Chrome: published a real article through the real
+endpoint, read it signed out, signed in as a second unrelated account, and looked at it at phone
+width. **Verdict: it reads right to a human.** The judgement that mattered most was the one no test
+can make — *does a dimmed control read as deliberately unavailable, or as broken?* Honest first read,
+before reasoning: **deliberate**, because the marked modes keep the same shape and icon at reduced
+opacity and a first press explains rather than doing nothing. That is the payoff for keeping them
+pressable rather than disabling them, and for moving the reason out of a hover tooltip.
+
+Four things it found that every test had passed over, all of them **silent gaps rather than visibly
+broken UI** — the kind that look fine in a screenshot:
+
+- **A drawer heading that contradicted its own body.** A visitor saw *"Your comments"* directly above
+  *"Comments belong to whoever added this article."* Fixed by making the title depend on the same
+  capability everything else does: `Your` is the word that does not survive the visitor arm.
+- **Copy drift between a tooltip and the band it opens.** Two sentences for one fact, a few words
+  apart, in two places. The fix removed the second string rather than aligning it — the tooltip is
+  now a preview of the band's own sentence, and a test pins them equal.
+- **The call to action offered a free account to somebody already signed in.** The chrome keys on
+  *is this mine*; the **call to action** is the one place where *am I signed in* is the right
+  question. The *reason* is still shown to everybody, because it is a fact about the page; only the
+  ask is conditional.
+- **The "nobody has built one yet" state had never been rendered by anything but a unit test**,
+  because the test article had every artefact. Its fixture is now asymmetric on purpose — one
+  artefact present, one absent, in one article in one run — which is the only arrangement in which
+  *"these two blurred into one"* is visible at all.
+
+**And a fifth that was a real bug when the pass ran and had been fixed an hour earlier.** *"Shared
+since"* rendered only after the toggle and vanished on reload. The commit that fixed it landed at
+13:41; the pass had published at 13:34. Worth recording anyway, because the finding paid for itself:
+the card's own test mounted the component and **passed `sharing` in by hand** — which is exactly what
+the broken version could not do for itself. So the whole class of wiring bug between the page and the
+card was untested. There is now a test that mounts the page, stubs its fetch, and asserts the line on
+**the first paint after the fetch with nothing pressed** — the state a reload produces.
+
+**The open decision, and it is Greg's.** The masthead — title, byline, the `VIEW ONLY` chip, the mode
+switcher — is `display:none` below about 900px. That is the pre-existing limit
+[browser-testing.md](../project/browser-testing.md) already records rather than anything this feature
+broke. But a shared link is opened on a phone more than anywhere else, and the chip is **the only
+piece of that chrome that is a statement about permission** rather than a control reachable another
+way. The shared-article notice card still carries the fact, so nothing is lost outright — but it
+scrolls away, and the chip was put in the controls bar precisely because that bar is sticky. So the
+question is narrower than "is the mobile masthead acceptable": **does *this page is not yours to
+change* need to be visible at every scroll position, or only on arrival?** If arrival is enough,
+nothing needs building.
+
 ### Three more things the build taught us
 
 **A network trace tests where the hooks are, not what the component believes.** The client half's
