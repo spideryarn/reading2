@@ -113,23 +113,44 @@ a peer mid-commit cannot be disturbed:
 
 ```sh
 export GIT_INDEX_FILE=$(mktemp) && rm -f "$GIT_INDEX_FILE"
-git read-tree HEAD
+BASE=$(git rev-parse HEAD)                                # pin ONCE, here, and reuse it below
+git read-tree "$BASE"
 git update-index --add -- <your clean files>              # read from the working tree
-git show HEAD:src/shared.ts > /tmp/mine.ts                # then add ONLY your lines to it
+git show "$BASE:src/shared.ts" > /tmp/mine.ts             # then add ONLY your lines to it
 BLOB=$(git hash-object -w /tmp/mine.ts)
 git update-index --add --cacheinfo 100644,$BLOB,src/shared.ts
 TREE=$(git write-tree)
-OLD=$(git rev-parse HEAD)
-NEW=$(git commit-tree "$TREE" -p "$OLD" -F msg.txt)
-git update-ref refs/heads/main "$NEW" "$OLD"              # old value = refuses on a race
+NEW=$(git commit-tree "$TREE" -p "$BASE" -F msg.txt)      # $BASE, never a fresh rev-parse
+git update-ref refs/heads/main "$NEW" "$BASE"             # $BASE = refuses on a race
 git reset -q -- <every path you just committed>           # NOT optional — see below
+git diff --name-only "$BASE" "$NEW"                       # must list your files and NOTHING else
 ```
 
-Build the blob from `git show HEAD:<file>` **plus your own lines**, never from the working tree, and
+Build the blob from `git show "$BASE":<file>` **plus your own lines**, never from the working tree, and
 anchor each insertion on an exact string that occurs once. That is what guarantees none of their work
 rides along. Check afterwards that every symbol you know to be theirs appears zero times in your
 version, and parse it (`npx esbuild <file> --loader:.ts=ts --outfile=/dev/null`) — a hand-built blob
 is exactly the kind of thing that looks right and is truncated.
+
+**Pin `$BASE` once and pass that same value to all four commands**, and treat the last line as part
+of the recipe rather than a flourish. The version above this one captured `OLD=$(git rev-parse HEAD)`
+*after* `read-tree HEAD`, which reads as a race guard and is the opposite of one: if a peer commits in
+the gap, `OLD` is the **new** head while the tree was read from the old one, so `update-ref` compares
+the moved HEAD against itself, succeeds, and silently reverts everything the peer landed in between.
+The guard is defeated rather than tripped, and nothing prints.
+
+That is not hypothetical. On 2026-08-28 a session doing outline-mode work landed a commit that
+carried its own new files **and a stale-base snapshot of twenty-six files belonging to another
+session** — reverting a fully verified stage-4 commit, including deleting two test files that had
+been tracked forty minutes earlier. Nobody did anything careless: the working tree still held the
+work, the shared index still held it, and only the committed tree had lost it, which is the one place
+nobody looks. It was found because the next `git diff --cached` showed twenty-six files staged that
+should have been empty.
+
+The gap between `read-tree` and `update-ref` is normally seconds. It is **minutes** whenever you do
+the right thing and verify the commit in a detached worktree first, so the safer the process, the
+wider this window gets. `git diff --name-only "$BASE" "$NEW"` costs nothing and names every file you
+did not mean to touch; run it before you tell anyone the work has landed.
 
 **The last line is the half that bites, and it bites your peers rather than you.** `update-ref` moves
 HEAD; the shared index is still the one from before, so it is now stale against the *new* HEAD, and
