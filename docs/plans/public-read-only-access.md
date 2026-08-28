@@ -513,6 +513,33 @@ copyright posture: nothing found says whether a Readability-extracted rehost sit
 user upload sits, and [§ Rights](#rights-and-takedown-the-thing-a-canonical-tag-does-not-fix) wants a
 real legal read rather than an inference from Instapaper's policy.
 
+**Three sentences, and Notion is the worked example of collapsing them into one.** Unpublishing a
+Notion page makes every old link land on a plain 404 — *"page could not be found"* — with no
+distinction drawn between never existed, was unshared, and you may not see it. The products that get
+it right **name the cause**: Loom says *"Due to the privacy settings for this video, it cannot be
+played here at this time"* and offers Request Access, which tells you the thing exists and the
+boundary is permission; Google Docs pairs *"View only"* with *"Request edit access"*, which is the
+same move. That is the model for
+[§ "Not generated yet" is a real screen](#not-generated-yet-is-a-real-screen-not-a-gap). Our third
+sentence — *nobody has built a glossary for this piece yet* — has **no precedent at all**, because
+none of these products has a pipeline that can simply not have run. We are writing that one from
+scratch.
+
+**Our confirmation dialog is deliberately stricter than anybody else's, and that is a choice worth
+naming.** No product researched gates the moment you flip a document public behind an interstitial.
+Google Docs discloses inline — *"When you share a link to a file, your name and email will be visible
+as the owner of that file"* — and Notion, Figma and Readwise show no warning at all; Readwise's whole
+control is a menu item reading *"Enable public link on web"*. The reason we are stricter is that they
+are all publishing **the owner's own document** and we are republishing **somebody else's article**.
+The rights question in [§ Rights](#rights-and-takedown-the-thing-a-canonical-tag-does-not-fix) is
+ours and not theirs, so the norm does not transfer.
+
+**And one place we would be more candid than the whole field.** Not one product, to either the owner
+or the visitor, says that unsharing cannot claw back a page already loaded in somebody's browser.
+Every one of them describes revocation purely as the next request being refused. Saying it plainly is
+not copying a pattern — it is going further than the precedent, which is the right call and should be
+recognised as a decision rather than a default.
+
 And three that confirm rather than change:
 
 - **Do not gate the prose.** Every product that hard-walled logged-out reading either reversed it or
@@ -604,12 +631,23 @@ screenshot**: a signed-out browser must issue no request outside `/api/public/` 
 page is rather than a notification. It says three things: you are reading a shared document; the
 things you cannot do and why; sign up.
 
-**Mark the controls, do not hide them.** The predecessor's *"clear 'pro' badges on unavailable
-features"* is the better pattern and we already own the visual convention for it: the dimmed row
-with a tooltip that `Dock.tsx` and `Metadata.tsx` use for *not built yet*, saying *not yours yet*
-instead. A hidden button teaches a visitor nothing about what they would be signing up for. Each
-badge routes to signup carrying its own reason, so the pitch is specific — *"Chat with this article
-— sign up"* rather than a banner the eye stops seeing.
+**Mark the controls, do not hide them — but the reason cannot live only in a tooltip.** The
+predecessor's *"clear 'pro' badges on unavailable features"* is the better pattern and we already own
+the visual convention for it: the dimmed row that `Dock.tsx` and `Metadata.tsx` use for *not built
+yet*, saying *not yours yet* instead. A hidden button teaches a visitor nothing about what they would
+be signing up for.
+
+**The tooltip half of that convention does not carry over, and the research says so plainly.**
+Nielsen Norman's rule is that a tooltip must never be the only place information a person needs
+lives — *"Important information should always be on the screen; therefore, tooltips shouldn't be
+essential for the tasks users need to accomplish."* And the specific case of a disabled control is
+worse: a hover tooltip is not reachable by touch or by keyboard at all, so on a phone the dimmed
+control would simply be a dead thing with no explanation. For a signed-in reader meeting *not built
+yet*, a tooltip is a supplement to something they already understand. For a stranger meeting *not
+yours yet*, it is the entire message. So the reason goes in **visible text beside the control**, and
+the tooltip, if it stays, adds to it rather than carrying it. Each one routes to signup with its own
+reason, so the pitch is specific — *"Chat with this article — make a free account"* rather than a
+banner the eye stops seeing.
 
 **Keyed on "is this mine", not on "am I signed in".** A signed-in reader on somebody else's public
 document sees the same read-only chrome as a stranger.
