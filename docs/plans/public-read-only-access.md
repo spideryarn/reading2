@@ -1015,6 +1015,12 @@ browser pass runs in a Sonnet subagent against [browser-testing.md](../project/b
 
 ## Progress
 
+**Stage 1a is built.** Two GPT Sol reviews of the built code, a black-box HTTP spike, and a browser
+pass, all closed. Typecheck clean across three projects; `npm test` 4884 of 4891, the one failing file
+belonging to another lane and passing in isolation. **Three decisions are Greg's and are open**: whether
+a public page may load the article's own third-party images and embeds (see below), whether the
+`VIEW ONLY` chip needs a phone-width treatment, and one clause in `CLAUDE.md`'s commit recipe.
+
 **Stage 1a, the server half, is built and committed** — 2026-08-28, nineteen files, nine commits
 from `f6d5d98` to `4bbed5d`. What exists: the migration, `PUT /api/article/:slug/visibility`,
 `publicSlug()`, a hardwired public reader, the closed `/api/public/` namespace with
