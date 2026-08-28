@@ -107,7 +107,14 @@ export function useIdeas(slug: string): UseIdeas {
       setStatus("ready");
     } catch (err) {
       setError((err as Error).message);
-      setStatus("error");
+      /* **A failed revalidation must not take the list away.** `load` is not
+         only the opening read — `onFinished` below calls it again every time a
+         job finishes — and `IdeasPanel` renders the list only under
+         `status === "ready"`, so an unconditional `error` here made a flaky
+         connection blank a list that was still perfectly good. Only the opening
+         read has nothing to fall back on. The message is shown either way. Same
+         guard, same reason, as useGlossary.ts § `fetchNow`. */
+      setStatus((was) => (was === "loading" ? "error" : was));
     }
   }, [slug]);
 
@@ -175,6 +182,25 @@ export function useIdeas(slug: string): UseIdeas {
     [queue, slug],
   );
 
+  /* Two quite different silences, one sentence. `postFailed` is having no job —
+     nothing will arrive in the list to explain it. `stopped` is a job that
+     started and died, which matters because a failed job leaves the running set
+     and the button would otherwise simply reappear as though nothing had
+     happened.
+
+     **`postFailed` does not mean the request never landed.** `queue.run`
+     returns null for any throw, and `readJson` throws on a 4xx or a 5xx
+     (src/web/useJobs.ts § `act`) — so a job the server received and refused
+     was being reported as a dead network, which is false, and the server's own
+     reason was thrown away. `queue.error` is what it said.
+
+     Read here at render and not inside `find`, where it would be the value from
+     the render that created the closure — `useJobs` sets it during the same
+     `await`, so reading it there gives you the *previous* error, or null, which
+     is how a failed request ends up reported as nothing at all. Learned on the
+     thread page, met again in the glossary, and the same trap is here. */
+  const failed = postFailed ? (queue.error ?? "Couldn't start the job.") : stopped;
+
   return {
     status,
     ideas,
@@ -185,12 +211,7 @@ export function useIdeas(slug: string): UseIdeas {
     hasProfile,
     error,
     job,
-    /* Two quite different silences, one sentence. `postFailed` is the request
-       never landing — no job exists, so nothing will arrive in the list to
-       explain it. `stopped` is a job that started and died, which matters
-       because a failed job leaves the running set and the button would
-       otherwise simply reappear as though nothing had happened. */
-    failed: postFailed ? "The request did not reach the server." : stopped,
+    failed,
     find,
     cancel: queue.cancel,
   };

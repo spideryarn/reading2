@@ -110,7 +110,18 @@ export function useSummaries(slug: string): UseSummaries {
       setStatus("ready");
     } catch (err) {
       setError((err as Error).message);
-      setStatus("error");
+      /* **A failed revalidation must not take the artefact away.** `load` is
+         not only the opening read — `onFinished` below calls it again whenever
+         a job finishes — so an unconditional `error` here throws away an
+         artefact that is still on screen. Only the opening read has nothing to
+         fall back on. Same guard, same reason, as useGlossary.ts § `fetchNow`.
+
+         `SummaryPanel` happens to key its visibility on `summaries !== null`
+         rather than on this, deliberately and with a comment, so today the
+         reader would not have seen the panel empty. That is one edit away from
+         being untrue, and the hook's contract should not depend on which of its
+         two facts the panel chose to read. */
+      setStatus((was) => (was === "loading" ? "error" : was));
     }
   }, [slug]);
 

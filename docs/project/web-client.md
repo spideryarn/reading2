@@ -450,6 +450,59 @@ closed over by the effect's cleanup is per-run by construction; all three hooks
 use it. `tests/load-failed-flags.test.ts` mounts under a real `StrictMode` and
 asserts the double-run happened before relying on it.
 
+### A failed *reload* must not take the answer away
+
+There is a fourth state, and it is the one the rule above does not cover: **we
+asked again, over an answer we already had, and this time it failed.** The list
+on screen is still true — it is just no longer known to be the newest truth — so
+a hook that drops into `error` has taken something correct off the reader's
+screen to tell them about a request they never made.
+
+It is not a rare path. Every artefact hook reloads from `onFinished` whenever a
+job that writes its artefact completes, and the reader is sitting there watching
+when it happens.
+
+The guard is one line, and the state it protects is the one the panel renders on:
+
+```ts
+setStatus((was) => (was === "loading" ? "error" : was));
+```
+
+Only the opening read has nothing to fall back on. **The error is still
+reported** — `error` is a separate field from `status`, and the panels put it
+above the list — so this is not a swallowed failure, it is a failure said beside
+the thing it failed to replace. [`Tweets.tsx`](../../src/web/Tweets.tsx) has to
+say it in a second state (`reloadError`) because its `Loaded` union cannot hold a
+thread and a message at once.
+
+[`useGlossary`](../../src/web/useGlossary.ts) learned this from a GPT Sol review
+of the built code on 2026-08-28. **Three hooks had been copied from it before
+that** — `useSummaries` (26 Aug), `useIdeas` (27 Aug) and `Tweets.tsx` — and
+none of them inherited the fix, because a fix that lands in the original after
+the copies were taken has nothing to propagate it. Two of the three were live:
+`IdeasPanel` and the thread page both render only in their ready branch.
+[`useShelf`](../../src/web/useShelf.ts) is the one that had it right all along —
+it never nulls `articles` on a failed reload, and `Library` draws the shelf and
+the message together.
+
+`tests/background-reload-keeps-the-list.test.tsx` is the pattern, and the shape
+matters: the reload is driven through the **job-completion callback**, not by
+calling the loader directly, because calling it directly passes on a hook whose
+`onFinished` is wired to nothing. Each surface keeps a sibling test for the
+opening read, so "keeps the list" cannot pass by never reporting a failure at
+all.
+
+**And `postFailed` does not mean the request never landed.** `queue.run` returns
+`null` for *any* throw, including `readJson` on a 4xx or 5xx
+([`useJobs.ts`](../../src/web/useJobs.ts) § `act`) — so a job the server received
+and refused is one of these. Every surface says
+`postFailed ? (queue.error ?? "Couldn't start the job.") : stopped`, read at
+render rather than inside the click handler; reading it inside gives you the
+value from the render that created the closure, which is the previous error or
+none at all. `useIdeas` claimed *"The request did not reach the server."* until
+2026-08-28, which threw the server's own reason away and replaced it with a
+false one.
+
 ### The waiting state
 
 **Behind [`useSlow`](../../src/web/useSlow.ts)**, wherever the indicator *stands

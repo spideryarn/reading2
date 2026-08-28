@@ -98,6 +98,15 @@ type Loaded =
 
 export function Tweets({ slug, article }: { slug: string; article: Article }) {
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
+  /**
+   * A read that failed **while a thread was already on screen**.
+   *
+   * Separate from `loaded`, because the union cannot hold both a thread and a
+   * failure and the reader needs both: the posts are still the truth about the
+   * article, and the fact that we could not check for a newer set is worth a
+   * line rather than a silence. See the catch in `load`.
+   */
+  const [reloadError, setReloadError] = useState<string | null>(null);
   const slow = useSlow(loaded.status === "loading");
 
   /* The tab: the article first, then which of its pages this is — and `Tweets`
@@ -116,12 +125,24 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
       const res = await apiFetch(`/api/tweets/${encodeURIComponent(slug)}`);
       if (res.status === 404) {
         setLoaded({ status: "none" });
+        setReloadError(null);
         return;
       }
       const { thread, stale, profileChanged } = await readJson<ThreadResponse>(res);
       setLoaded({ status: "ready", thread, stale, profileChanged });
+      setReloadError(null);
     } catch (err) {
-      setLoaded({ status: "error", message: (err as Error).message });
+      const message = (err as Error).message;
+      /* **A failed reload must not take the thread away.** `load` is not only
+         the opening read — `onFinished` below calls it again when a job
+         finishes — and the posts render only in the `ready` branch, so
+         replacing the whole union with `{status:"error"}` left a reader who was
+         mid-thread with a message where the thread had been. Only the opening
+         read has nothing to fall back on; the rest keep what they have and say
+         so in `reloadError`. Same guard, same reason, as useGlossary.ts §
+         `fetchNow`. */
+      setLoaded((was) => (was.status === "loading" ? { status: "error", message } : was));
+      setReloadError(message);
     }
   }, [slug]);
 
@@ -259,6 +280,17 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
 
         {loaded.status === "error" && (
           <p className="tw:mt-6 tw:text-sm tw:text-destructive">{loaded.message}</p>
+        )}
+
+        {/* A reload failed behind something that is still on screen. Muted
+            rather than destructive, and below the title rather than over the
+            thread: nothing the reader is looking at is wrong, we just could not
+            check whether there is a newer one. Not shown in the `error` branch
+            above, which is the same failure said once already. */}
+        {loaded.status !== "error" && reloadError && (
+          <p className="tw:mt-6 tw:mb-0 tw:text-xs tw:text-muted-foreground">
+            Couldn't check for a newer thread — {reloadError}
+          </p>
         )}
 
         {loaded.status === "none" && (
