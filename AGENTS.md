@@ -201,6 +201,10 @@ jargon where an ordinary word will do, no hedging padding.
   weighed rather than slipped past: **Postgres** (a single writable disk is what serverless doesn't
   have) and **shadcn + Tailwind v4**. Check
   [vision.md § Principles](docs/project/vision.md#principles) before adding a third.
+- **Prefer simple over easy.** Simple means un-braided — each piece does one thing and can be read on
+  its own; easy just means quick to write. Reuse the machinery that's already here rather than adding
+  a second way to do the same thing, and when two designs work, take the one with fewer parts
+  touching each other.
 - **Every stage stays runnable on its own** against a slug, so any one can be re-run without the
   others. Cache anything expensive on a content hash — two stages of seven do; copy *their* choice
   of hash input rather than only the idea ([architecture.md](docs/project/architecture.md#conventions)).
