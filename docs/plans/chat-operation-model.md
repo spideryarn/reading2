@@ -711,3 +711,63 @@ in [`tests/chat-reduce.test.ts`](../../tests/chat-reduce.test.ts) — that is wh
 case can be built. The panel cannot confuse them either: `onDelete` always calls `remove`, and
 `onDiscard` is called from one place, `leave()`, only when the conversation *on screen* has no
 messages — which a drawing turn makes false.
+
+## What the second review of stage 2 sent back
+
+**GPT Sol refused it again**, 2026-08-28, with four more findings — two of them the same two blockers
+in narrower form, which is the thing worth recording about this round.
+
+### The tombstone was the fourth name for a conversation
+
+`turn.began` swaps the thread, the question and the answer in one transition. The **tombstone** is
+keyed by thread id too, and it was left behind: a cancel pressed before the frame laid one under the
+id this client invented, the server answered with an id of its own, and the conversation the reader
+had just discarded came back on screen under the new name — with its own refusal no longer able to
+find the tombstone to lift.
+
+**And so was every other operation.** A second question typed into a new conversation before the
+first frame arrives registers a turn naming that conversation the only way it can, by the provisional
+id; after the frame it draws into a thread that is not there, so the answer arrives nowhere. Same for
+a rename, a delete, or a recovery started in that window. There is one `renamed()` now, and the rule
+it states is the one the half-swap keeps teaching: **if a name changes, everything holding that name
+changes with it, in the same transition.**
+
+**No test in the repo could see this**, because every one of them pushed back the id the client had
+guessed. Sol said so about this exact file.
+[`tests/chat-unmounted-turn.test.ts`](../../tests/chat-unmounted-turn.test.ts) now has a case where
+the server names the conversation something else.
+
+### The repair, for the third time — and what closes it
+
+Snapshot-over-newer-projection was in `refreshThread`, then in the repair replacing the conversation,
+then in the **merge that replaced that** — which kept only rows the snapshot did not have. Every
+operation that rewrites a row *keeps its id*: a retry answers into the row it replaces, an edit keeps
+the question's id, a recovery patches the row it was chasing. So "absent from the snapshot" protected
+a later **send**, which mints ids, and nothing else. Three narrowings, one bug.
+
+The rule that closes it: **a live operation needs no protection** — it draws over `base` and is
+re-projected over whatever lands — **so the only thing at risk is what retires while the repair is
+out.** That is recorded on the repair itself, as `touched`: every write into `base` tells the repairs
+in flight for that conversation which rows moved, and the merge keeps this tab's version of those. No
+notion of time, nothing to keep in step, and it is exactly the sentence "whatever was written after
+the question was asked cannot be answered by it."
+
+### Supersession belonged at the gate
+
+A superseded repair's *success* was silent and its *failure* still wrote `error` — so the reader
+could be told a repair had failed moments after a newer one succeeded. That is bug 10 and bug 12's
+shape again: the guard on the success path, forgotten on the failure path beside it. The cause is
+that supersession was asked **branch by branch**, five times, and the branches disagreed. The gate
+was finding the operation and never asking whether it still had standing.
+
+It is asked once now, in `reduce`, for every kind: **a superseded operation retires, and does nothing
+else.** Five per-branch checks went with it.
+
+### The controller outlives the hook, and one thing must not
+
+`#onThreadId` is the panel's own `setThread`. Called from a conversation the reader has left, it
+reopens or repoints whatever they are looking at now. Unsubscribing removes the render listener and
+says nothing about this. `controller.detach()` clears the callbacks from the hook's effect cleanup —
+and only the callbacks. **What the controller decides for itself survives the unmount; what it was
+doing on somebody else's behalf does not.** That distinction is the whole of why the cancel is an
+operation and the `?thread=` correction is a callback.

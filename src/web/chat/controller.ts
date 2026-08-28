@@ -235,6 +235,28 @@ export class ChatController {
     return state;
   };
 
+  /**
+   * The consumer that owns these callbacks has gone. Stop calling it.
+   *
+   * **The controller deliberately outlives the hook** — the stream still holds
+   * it, which is what lets a cancel pressed before the `begin` frame still be
+   * sent after the dialog closed itself. That is right for everything the
+   * reducer decides, because none of it touches the screen. It is wrong for
+   * `#onThreadId`, which is the panel's `setThread`: called after the reader
+   * closed the dialog or moved to another article, it reopens or repoints
+   * whatever they are looking at *now*, because the server corrected an id in a
+   * conversation they have left. Unsubscribing removes the render listener and
+   * says nothing about this. GPT Sol, 2026-08-28.
+   *
+   * Only the callbacks go. The intent commands are the controller's own work and
+   * carry on, which is the whole distinction: what this object decides for
+   * itself survives the unmount, and what it was doing on somebody else's behalf
+   * does not.
+   */
+  detach(): void {
+    this.#onThreadId.clear();
+  }
+
   /** Forget the callbacks of turns that have finished. */
   #prune(state: ChatState): void {
     if (this.#onThreadId.size === 0) return;

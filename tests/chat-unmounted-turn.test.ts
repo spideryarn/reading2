@@ -201,6 +201,62 @@ describe("a cancel pressed before the begin frame, with the dialog then closed",
   });
 
   /**
+   * **And when the server names the conversation something else.**
+   *
+   * The test above pushes back the id the client guessed, which is the ordinary
+   * case and the one every test in this repo used — so none of them could see
+   * that the *tombstone* was not renamed with everything else. The conversation
+   * came back on screen under the server's name, and the cancel's own refusal
+   * could no longer find the tombstone to lift. GPT Sol made this exact point
+   * about this exact file, 2026-08-28.
+   *
+   * `onThreadId` is passed here too, because a reader whose thread id is
+   * overruled after they closed the dialog is finding 3's case, and it must not
+   * be called: the dialog is gone.
+   */
+  it("keeps the conversation gone when the server names it something else", async () => {
+    const turn = controllableStream();
+    serve(turn);
+    await mount();
+
+    const overruled: string[] = [];
+    let threadId = "";
+    act(() => {
+      threadId = api().send(null, "why?", null, false, (id) => overruled.push(id));
+    });
+    const provisional = api()
+      .threads.find((t) => t.id === threadId)
+      ?.messages.find((m) => m.role === "assistant")?.id;
+
+    act(() => {
+      api().cancelAndDiscard(threadId, provisional as string);
+    });
+    await unmount();
+
+    act(() => {
+      turn.frame("begin", {
+        threadId: "srv-different-thread",
+        title: "why?",
+        messageId: "srv-answer-1",
+        questionId: "srv-question-1",
+        attempt: "att-1",
+      });
+    });
+    await settle();
+
+    /* One `/cancel`, naming the conversation the server named — not the one
+       this tab guessed, which the server has never heard of. */
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.url).toBe(`/api/chat/${SLUG}/srv-different-thread/cancel`);
+    expect(posts[0]?.body.messageId).toBe("srv-answer-1");
+
+    /* **And the panel is not told**, because there is no panel: the reader
+       closed the dialog. Calling back into a view that has gone reopens or
+       repoints whatever the reader is looking at now. */
+    expect(overruled, "an unmounted dialog was told to follow the thread id").toEqual([]);
+  });
+
+  /**
    * The same for a stop, which reaches the window a different way — the composer
    * stays mounted, but a reader who presses Escape and then navigates away in
    * the same beat is the same lifecycle.

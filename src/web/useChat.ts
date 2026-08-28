@@ -292,6 +292,16 @@ export function useChat(slug: string): ChatApi {
    */
   useEffect(() => {
     controller.dispatch({ type: "load.started", op: { id: asOpId(mintId()), kind: "load" } });
+    /* **And when this hook goes, the callbacks go with it.** The controller
+       outlives it on purpose — the stream still holds it, so a cancel waiting
+       for the `begin` frame is still sent after the panel closed — but
+       `onThreadId` is the panel's own `setThread`, and calling that from a
+       conversation the reader has left reopens or repoints whatever they are
+       looking at now. What the controller decides for itself survives; what it
+       was doing on somebody else's behalf does not. */
+    return () => {
+      controller.detach();
+    };
   }, [controller]);
 
   /**

@@ -94,6 +94,27 @@ export interface RepairOperation extends Registered {
    * keep these two rows for ever.
    */
   drop: readonly string[];
+  /**
+   * Rows this tab has written **since this repair went out**, which the
+   * snapshot it is waiting for cannot know about.
+   *
+   * This is the third form of one bug, and the field that closes it rather than
+   * narrowing it again. Snapshot-over-newer-projection was in `refreshThread`,
+   * then in the repair replacing the conversation outright, then in the merge
+   * that replaced *that* — which kept only rows the snapshot did not have. Every
+   * operation that rewrites a row **keeps its id**: a retry answers into the row
+   * it replaces, an edit keeps the question's id, a recovery patches the row it
+   * was chasing. So "absent from the snapshot" protects a later *send*, which
+   * mints ids, and nothing else.
+   *
+   * A live operation needs no protection — it draws over `base`, so it is
+   * re-projected over whatever lands. It is the ones that **retire** while the
+   * repair is out whose writes are in `base` and older on the server. Recording
+   * them here says exactly that, with no notion of time and nothing to keep in
+   * step: whatever was written after the question was asked cannot be answered
+   * by it. GPT Sol, 2026-08-28.
+   */
+  touched: readonly string[];
 }
 
 /** Stop this answer, or throw the whole conversation away. Never both. */

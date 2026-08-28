@@ -887,6 +887,115 @@ describe("a turn", () => {
     expect(repaired.operations.has(TURN_B), "the live send was retired").toBe(true);
   });
 
+  /**
+   * **The same bug for the third time, and the reason a fourth narrowing is not
+   * the answer.**
+   *
+   * Snapshot-over-newer-projection is the class this whole refactor exists to
+   * remove. It was in `refreshThread`; then in the repair replacing the
+   * conversation; and then in the repair's *merge*, which kept only rows the
+   * snapshot did not have. Every operation that rewrites a row **keeps its id** —
+   * a retry answers into the row it replaces, an edit keeps the question's id,
+   * a recovery patches the row it was chasing — so a merge keyed on "absent from
+   * the snapshot" protects a later *send* (which mints ids) and nothing else.
+   * The three tests below are the three that were left. GPT Sol, 2026-08-28.
+   */
+  it("does not put a retry's old answer back when the retry finished while it was out", () => {
+    const refused = repairing(loaded(conversation()));
+    /* The reader retries the stored answer while the repair is out, and it
+       finishes first. `a1` is in the snapshot, saying what it said before. */
+    const retried = twice(
+      refused,
+      starting({ id: TURN_B, shape: "retry", replyId: "a1", reply: message({ id: "a1" }) }),
+    ).state;
+    const done = twice(retried, {
+      type: "turn.done",
+      opId: TURN_B,
+      done: { text: "a better answer", citations: [], searches: 0, model: "m" },
+    }).state;
+    expect(answer(done, "a1")?.text).toBe("a better answer");
+
+    const repaired = twice(done, {
+      type: "repair.succeeded",
+      opId: REPAIR,
+      thread: conversation(),
+    }).state;
+    expect(answer(repaired, "a1")?.text, "the snapshot put the replaced answer back").toBe(
+      "a better answer",
+    );
+  });
+
+  it("does not put an edited question back when the edit finished while it was out", () => {
+    const long = thread("spya-t1", "a conversation", [
+      message({ id: "q1", role: "user", text: "why?", status: "done" }),
+      message({ id: "a1", text: "because.", status: "done" }),
+    ]);
+    const refused = repairing(loaded(long));
+    const edited = twice(
+      refused,
+      starting({
+        id: TURN_B,
+        shape: "edit",
+        editing: "q1",
+        replyId: "a-edit",
+        /* The server keeps a rewritten question's id — `withEdit` builds
+           `{ ...target, text, editedAt }` — so this row is in the snapshot too,
+           still carrying the words the reader replaced. */
+        question: message({ id: "q1", role: "user", text: "why, really?", status: "done" }),
+      }),
+    ).state;
+    const done = twice(edited, {
+      type: "turn.done",
+      opId: TURN_B,
+      done: { text: "a new answer", citations: [], searches: 0, model: "m" },
+    }).state;
+
+    const repaired = twice(done, {
+      type: "repair.succeeded",
+      opId: REPAIR,
+      thread: long,
+    }).state;
+    expect(
+      answer(repaired, "q1")?.text,
+      "the snapshot put the question the reader rewrote back",
+    ).toBe("why, really?");
+  });
+
+  it("does not undo a recovery that adopted an answer while it was out", () => {
+    const pendingRow = thread("spya-t1", "a conversation", [
+      message({ id: "q1", role: "user", text: "why?", status: "done" }),
+      message({ id: "a1", status: "pending" }),
+    ]);
+    const refused = repairing(loaded(pendingRow));
+    const looking = twice(refused, {
+      type: "recovery.started",
+      op: {
+        id: RECOVER,
+        kind: "recovery",
+        threadId: "spya-t1",
+        messageId: "a1",
+        until: 1_000,
+        attempt: null,
+      },
+    }).state;
+    const found = twice(looking, {
+      type: "recovery.found",
+      opId: RECOVER,
+      message: message({ id: "a1", text: "it finished after all", status: "done" }),
+    }).state;
+    expect(answer(found, "a1")?.status).toBe("done");
+
+    /* The snapshot was taken while the row was still `pending`, which is the
+       state the recovery existed to get out of. */
+    const repaired = twice(found, {
+      type: "repair.succeeded",
+      opId: REPAIR,
+      thread: pendingRow,
+    }).state;
+    expect(answer(repaired, "a1")?.status, "the snapshot put the spinner back").toBe("done");
+    expect(answer(repaired, "a1")?.text).toBe("it finished after all");
+  });
+
   it("does not let an older repair land over a newer one", () => {
     const first = repairing(loaded(conversation()));
     const second = twice(first, sending(TURN_B, "a-new", "q-new")).state;
@@ -909,6 +1018,22 @@ describe("a turn", () => {
       ]),
     }).state;
     expect(rows(newer)).toEqual(["q1", "a1", "q2", "a2"]);
+
+    /* **And its failure is silent too**, which the success being silent did not
+       make true. The superseded check was written on one branch and not the one
+       beside it — bug 10 and bug 12's shape, and the shape the gate exists to
+       make impossible. Reporting here would tell the reader a repair failed
+       moments after a newer one succeeded. */
+    /* Cleared first, because the 409 that started these repairs wrote its own
+       reason into `error` and this test is about what the repair adds to it. */
+    const quiet = twice(newer, { type: "error.set", error: null }).state;
+    const failedOld = twice(quiet, {
+      type: "repair.failed",
+      opId: REPAIR,
+      error: "the network is down",
+    }).state;
+    expect(failedOld.error, "a superseded repair reported its failure").toBeNull();
+    expect(failedOld.operations.has(REPAIR), "it did not retire either").toBe(false);
 
     // And the older one, still out, answers with the conversation as it was.
     const older = twice(newer, {
@@ -1411,6 +1536,119 @@ describe("a stop or a cancel", () => {
     });
     expect(named.commands.filter((c) => c.type === "intent")).toEqual([]);
     expect(named.state.operations.has(WISH), "a wish was left waiting for ever").toBe(false);
+  });
+
+  /**
+   * **The tombstone has to be renamed with everything else.**
+   *
+   * `turn.began` swaps the thread, the question and the answer in one
+   * transition, and the tombstone was the fourth name for the same thing and was
+   * left behind. So a cancel pressed before the frame laid one under the id this
+   * client invented, the server then answered with an id of its own, and the
+   * conversation the reader had just discarded reappeared — the projection
+   * filters by key, and the key no longer matched. Its refusal could not find it
+   * either, so nothing could put it right afterwards. GPT Sol, twice: the
+   * blocker was reported against stage 2 and survived the first round of fixes
+   * because every test used the same thread id on both sides of the frame.
+   */
+  it("renames the tombstone when the server overrules the thread id", () => {
+    const sent = twice(
+      loaded(),
+      starting({
+        id: TURN_A,
+        shape: "send",
+        threadId: "guess-thread",
+        replyId: "a-new",
+        question: message({ id: "q-new", role: "user", text: "why?", status: "done" }),
+        opening: thread("guess-thread", "why?"),
+        namesThread: true,
+      }),
+    ).state;
+    const cancelled = twice(sent, {
+      type: "intent.started",
+      op: { id: WISH, intent: "cancel", threadId: "guess-thread", messageId: "a-new" },
+    }).state;
+    expect(titles(cancelled)).toEqual([]);
+
+    const named = twice(cancelled, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: {
+        threadId: "spya-real1",
+        title: "why?",
+        messageId: "srv-a",
+        questionId: "srv-q",
+        attempt: "att-1",
+      },
+    });
+    expect(titles(named.state), "a discarded conversation came back with a new name").toEqual([]);
+    /* And the wish goes out naming the conversation the server named, so its
+       refusal can find the tombstone it is being asked to lift. */
+    expect(named.commands).toContainEqual({
+      type: "intent",
+      opId: WISH,
+      slug: SLUG,
+      intent: "cancel",
+      threadId: "spya-real1",
+      messageId: "srv-a",
+      attempt: "att-1",
+    });
+
+    const refused = twice(named.state, {
+      type: "intent.failed",
+      opId: WISH,
+      error: "Someone else has moved this on.",
+    }).state;
+    expect(refused.tombstones.size, "the tombstone could not be found to lift").toBe(0);
+    expect(titles(refused)).toEqual(["why?"]);
+  });
+
+  /**
+   * Everything else keyed on the provisional id follows too, for the same
+   * reason: a name this client invented stops existing at the frame.
+   */
+  it("renames every operation that was keyed on the provisional thread id", () => {
+    const first = twice(
+      loaded(),
+      starting({
+        id: TURN_A,
+        shape: "send",
+        threadId: "guess-thread",
+        replyId: "a-one",
+        question: message({ id: "q-one", role: "user", text: "why?", status: "done" }),
+        opening: thread("guess-thread", "why?"),
+        namesThread: true,
+      }),
+    ).state;
+    /* A second question typed into the same new conversation before the first
+       one's frame came back. Its operation names the conversation the only way
+       it can — by the id this tab invented. */
+    const second = twice(
+      first,
+      starting({
+        id: TURN_B,
+        shape: "send",
+        threadId: "guess-thread",
+        replyId: "a-two",
+        question: message({ id: "q-two", role: "user", text: "and?", status: "done" }),
+      }),
+    ).state;
+
+    const named = twice(second, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: { threadId: "spya-real1", title: "why?", messageId: "srv-a", questionId: "srv-q" },
+    }).state;
+
+    expect(named.operations.get(TURN_B)).toMatchObject({ threadId: "spya-real1" });
+    // And it can still draw, which is the thing that stops being true otherwise.
+    const arriving = twice(named, { type: "turn.delta", opId: TURN_B, text: "Because " }).state;
+    expect(
+      project(arriving)
+        .find((t) => t.id === "spya-real1")
+        ?.messages.find((m) => m.id === "a-two")?.text,
+      "the second answer arrived nowhere",
+    ).toBe("Because ");
   });
 
   /** And the gate, on the path this adds: a wish nobody registered is nobody's. */

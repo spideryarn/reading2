@@ -181,6 +181,26 @@ function tombstoned(
 }
 
 /**
+ * Tell every repair in flight for this conversation that a row has moved.
+ *
+ * Called from every place that writes a message into `base` — see
+ * `RepairOperation.touched`, which is where the reasoning is. Cheap: there is
+ * almost never a repair out, and the map is only rebuilt when there is.
+ */
+function touching(state: ChatState, threadId: string, ids: readonly string[]): ChatState {
+  if (ids.length === 0) return state;
+  let operations: Map<OpId, Operation> | null = null;
+  for (const [id, op] of state.operations) {
+    if (op.kind !== "repair" || op.threadId !== threadId) continue;
+    const fresh = ids.filter((m) => !op.touched.includes(m));
+    if (fresh.length === 0) continue;
+    operations ??= new Map(state.operations);
+    operations.set(id, { ...op, touched: [...op.touched, ...fresh] });
+  }
+  return operations ? { ...state, operations } : state;
+}
+
+/**
  * What a turn has drawn, written into `base`, and the operation retired.
  *
  * **The same function the projection uses**, given the operation's final state.
@@ -192,7 +212,10 @@ function tombstoned(
 function commit(state: ChatState, op: TurnOperation): ChatState {
   /* Anything still waiting on this turn is waiting for a `begin` frame that is
      never coming — see `stranded`. */
-  const cleared = stranded(state, op.id);
+  const cleared = touching(stranded(state, op.id), op.threadId, [
+    op.replyId,
+    ...(op.question ? [op.question.id] : []),
+  ]);
   const base = rewrite(cleared.base, op.threadId, (t) => {
     const messages = turnMessages(t.messages, op);
     return messages === t.messages ? t : { ...t, updatedAt: op.at, messages };
@@ -485,6 +508,48 @@ function wishesNamed(
 }
 
 /**
+ * Every name this tab has for one conversation, moved to the server's, at once.
+ *
+ * **`turn.began` swaps the thread, the question and the answer, and there were
+ * two more names for the same thing that it left behind.** The tombstone is
+ * keyed by thread id, so a cancel pressed before the frame laid one under an id
+ * that stops existing here — and the conversation the reader had just discarded
+ * came back on screen under the server's name, with its own refusal no longer
+ * able to find the tombstone to lift. And every *other* operation is keyed by
+ * thread id too: a second question typed into a new conversation before the
+ * first frame arrives registers a turn naming it the only way it can, and that
+ * turn then draws into a conversation that is not there, so the answer arrives
+ * nowhere.
+ *
+ * The rule the half-swap keeps teaching: **if a name changes, everything
+ * holding that name changes with it, in the same transition.** The first time it
+ * was two message ids out of three and came back weeks later as "That message is
+ * not in this conversation."; this is the same lesson one level up. GPT Sol
+ * reported it against stage 2 and again after the first round of fixes, because
+ * every test in the repo pushed back the id the client had guessed.
+ */
+function renamed(state: ChatState, from: string, to: string): ChatState {
+  if (from === to) return state;
+  const operations = new Map<OpId, Operation>();
+  for (const [id, op] of state.operations) {
+    operations.set(id, op.kind !== "load" && op.threadId === from ? { ...op, threadId: to } : op);
+  }
+  const standing = state.tombstones.get(from);
+  let tombstones = state.tombstones;
+  if (standing) {
+    const next = new Map(state.tombstones);
+    next.delete(from);
+    /* A tombstone already under the server's own id was laid by something that
+       knew the real name, so it wins — unless this one is a deletion, which
+       wins over everything. */
+    const already = next.get(to);
+    if (!already || standing.final) next.set(to, standing);
+    tombstones = next;
+  }
+  return { ...state, operations, tombstones };
+}
+
+/**
  * A turn is retiring, and anything still waiting on it will wait for ever.
  *
  * A wish only ever waits for a `begin` frame, so a turn that ends without one
@@ -565,6 +630,9 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
          which is the state that shipped once and came back weeks later as "That
          message is not in this conversation." */
       const base = withServerIds(state.base, op.threadId, op.replyId, begun, op.namesThread);
+      /* Everything else keyed on the name this tab invented — the tombstone, and
+         every operation that named the conversation before the server did. */
+      const moved = renamed({ ...state, base }, op.threadId, begun.threadId);
       const named: TurnOperation = {
         ...op,
         threadId: begun.threadId,
@@ -586,14 +654,14 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
          transition, so there is no moment in which the row has a name and the
          wish has not been consumed. */
       const wishes = wishesNamed(
-        { ...state, operations: withOp(state, named) },
+        { ...moved, operations: withOp(moved, named) },
         op,
         begun.threadId,
         begun.messageId,
         begun.attempt ?? null,
       );
       return {
-        state: { ...state, base, operations: wishes.operations },
+        state: { ...moved, operations: wishes.operations },
         commands: [
           ...wishes.commands,
           {
@@ -702,6 +770,8 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
           op.shape === "send"
             ? [op.replyId, ...(op.question ? [op.question.id] : [])]
             : [],
+        /* Nothing yet: it collects what is written from now until it answers. */
+        touched: [],
       };
       const cleared = stranded(state, op.id);
       const dropped: ChatState = {
@@ -762,16 +832,30 @@ function applyTurn(state: ChatState, event: ChatResult, op: TurnOperation): Outc
  * merge is re-projected under it; its rows are either the server's already or
  * kept as this tab's own.
  */
-function merged(mine: ChatThread, fresh: ChatThread, drop: readonly string[]): ChatThread {
+function merged(mine: ChatThread, fresh: ChatThread, op: RepairOperation): ChatThread {
   const known = new Set(fresh.messages.map((m) => m.id));
-  const extra = mine.messages.filter((m) => !known.has(m.id) && !drop.includes(m.id));
+  const extra = mine.messages.filter((m) => !known.has(m.id) && !op.drop.includes(m.id));
+  /* A row this tab rewrote while the repair was out keeps this tab's version,
+     **in the server's position**, because the id is the same row and only its
+     contents are newer here. Without this the snapshot put back the answer a
+     retry had replaced, the question an edit had rewritten, and the spinner a
+     recovery had just resolved — three rows the "absent from the snapshot" rule
+     could not see, because every one of them keeps its id. */
+  const messages = op.touched.length
+    ? fresh.messages.map((m) => (op.touched.includes(m.id) ? (byId(mine, m.id) ?? m) : m))
+    : fresh.messages;
   return {
     ...fresh,
     title: mine.title,
     /* ISO-8601, so the later string is the later moment. */
     updatedAt: fresh.updatedAt > mine.updatedAt ? fresh.updatedAt : mine.updatedAt,
-    messages: extra.length === 0 ? fresh.messages : [...fresh.messages, ...extra],
+    messages: extra.length === 0 ? messages : [...messages, ...extra],
   };
+}
+
+/** One message of one thread, or nothing. */
+function byId(thread: ChatThread, id: string): ChatMessage | undefined {
+  return thread.messages.find((m) => m.id === id);
 }
 
 function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcome {
@@ -821,9 +905,7 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
         state: {
           ...state,
           operations: withoutOp(state, op.id),
-          ...(op.superseded
-            ? {}
-            : { error: `Couldn't rename that conversation: ${event.error}` }),
+          error: `Couldn't rename that conversation: ${event.error}`,
         },
         commands: NOTHING,
       };
@@ -842,10 +924,10 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
       };
     case "repair.succeeded": {
       const retired = { ...state, operations: withoutOp(state, op.id) };
-      if (op.kind !== "repair" || op.superseded) return { state: retired, commands: NOTHING };
+      if (op.kind !== "repair") return { state: retired, commands: NOTHING };
       const fresh = event.thread;
       const base = fresh
-        ? rewrite(retired.base, op.threadId, (t) => merged(t, fresh, op.drop))
+        ? rewrite(retired.base, op.threadId, (t) => merged(t, fresh, op))
         : /* The server does not have it at all: it was deleted, or it was never
              written down. Either way it is not a conversation. */
           retired.base.filter((t) => t.id !== op.threadId);
@@ -858,7 +940,7 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
       };
     case "recovery.found": {
       const retired = { ...state, operations: withoutOp(state, op.id) };
-      if (op.kind !== "recovery" || op.superseded) return { state: retired, commands: NOTHING };
+      if (op.kind !== "recovery") return { state: retired, commands: NOTHING };
       /* Only this row, and only by patching it. Replacing the whole thread with
          the server's copy is the mistake `repair` documents at length: it puts a
          snapshot taken before an unrelated send over the top of that send's
@@ -867,7 +949,8 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
          the stored row omits a field it has nothing to say about, so a spread
          alone cannot clear one left over from the attempt this watch is
          recovering. */
-      const base = rewriteMessage(retired.base, op.threadId, op.messageId, (m) => ({
+      const noted = touching(retired, op.threadId, [op.messageId]);
+      const base = rewriteMessage(noted.base, op.threadId, op.messageId, (m) => ({
         ...m,
         stopped: false,
         truncated: false,
@@ -875,17 +958,18 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
         error: "",
         ...event.message,
       }));
-      return { state: { ...retired, base }, commands: NOTHING };
+      return { state: { ...noted, base }, commands: NOTHING };
     }
     case "recovery.givenUp": {
       const retired = { ...state, operations: withoutOp(state, op.id) };
-      if (op.kind !== "recovery" || op.superseded) return { state: retired, commands: NOTHING };
-      const base = rewriteMessage(retired.base, op.threadId, op.messageId, (m) => ({
+      if (op.kind !== "recovery") return { state: retired, commands: NOTHING };
+      const noted = touching(retired, op.threadId, [op.messageId]);
+      const base = rewriteMessage(noted.base, op.threadId, op.messageId, (m) => ({
         ...m,
         status: "error" as const,
         error: event.error,
       }));
-      return { state: { ...retired, base }, commands: NOTHING };
+      return { state: { ...noted, base }, commands: NOTHING };
     }
     case "recovery.stopped":
       /* The reader deleted the conversation, or left the article. Nothing to
@@ -908,7 +992,7 @@ function applyResult(state: ChatState, event: ChatResult, op: Operation): Outcom
          discard that conversation…" over a delete that had succeeded, from a
          `catch` in the hook with no operation behind it and therefore no gate in
          front of it. GPT Sol's finding 4 on stage 2. */
-      if (op.kind !== "intent" || op.superseded) return { state: retired, commands: NOTHING };
+      if (op.kind !== "intent") return { state: retired, commands: NOTHING };
       if (op.intent === "stop") {
         return {
           state: { ...retired, error: `Couldn't stop that answer: ${event.error}` },
@@ -947,6 +1031,29 @@ export function reduce(state: ChatState, event: ChatEvent): Outcome {
   if (isResult(event)) {
     const op = state.operations.get(event.opId);
     if (!op || !accepts(op, event)) return unchanged(state);
+    /**
+     * **A superseded operation retires, and does nothing else.**
+     *
+     * This used to be asked branch by branch, and the branches disagreed: a
+     * superseded repair's *success* was silent and its *failure* still wrote
+     * `error`, so the reader could be told a repair had failed moments after a
+     * newer one succeeded. That is bug 10 and bug 12's shape exactly — the
+     * guard put on the success path and forgotten on the failure path beside
+     * it — and it is the shape this gate was built to make impossible. The gate
+     * was finding the operation and never asking whether it still had standing.
+     *
+     * So it is asked once, here, for every kind. The rule reads the same in all
+     * of them: something newer has taken over what this operation was doing, so
+     * it has nothing left to draw and nothing left to say. It is still
+     * *admitted* — that is what lets it retire rather than sit in the map for
+     * ever, which is the distinction the plan draws.
+     */
+    if (op.superseded) {
+      /* A turn is superseded only by a delete of its conversation, and a wish
+         waiting on it would then wait for ever. */
+      const cleared = op.kind === "turn" ? stranded(state, op.id) : state;
+      return { state: { ...cleared, operations: withoutOp(cleared, op.id) }, commands: NOTHING };
+    }
     return applyResult(state, event, op);
   }
   return applyInput(state, event);
