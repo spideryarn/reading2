@@ -1061,6 +1061,38 @@ non-mutating question available and is also the honest one, but it cannot see `p
 the page: `DiagramPanel` mounts `useSimilar` and `useProjection` for its other two, both POSTs that
 spend. Carving the free picture out of a 1700-line panel is not this slice's work.
 
+### Three more things the build taught us
+
+**A network trace tests where the hooks are, not what the component believes.** The client half's
+acceptance test is a network trace, and it is the right test — but when the agent building it handed
+`OwnedReader` a *visitor* capability as a red-first check, **every trace assertion still passed**,
+because the hooks are called in `OwnedReader` either way. The trace can prove no private request went
+out; it cannot prove the component knows which mode it is in. That needs a second assertion on what
+is rendered — *"View only"* appearing on the owner's page is the break that fires. Any future
+capability seam wants both.
+
+**A control can be dead on both sides of the comparison.** The acceptance criterion was *"leave
+`useJobs` mounted and watch the trace show the polling"*. `useJobs` lives inside the glossary, summary
+and ideas bands; the default address is the table of contents, which mounts no band. So the control
+ran on neither side and proved nothing, and it took a second look to notice. The fix was to open
+`?mode=glossary` as the owner and require `GET /api/jobs` in the trace. **The check that guards a
+check needs its own positive control**, which is [silent-success.md](../reusable/silent-success.md)
+one level up.
+
+**A table can be reached three ways, and only one of them is an import.** The
+[§ child-table gap](#the-seam-a-second-predicate-not-a-wider-one) above is closed by a guard over
+`src/public/` and `src/store/public-*.ts` naming the four tables a public module may touch. Building
+it turned up a third route neither the plan nor the review had named: `src/db/client.ts` does
+`import * as schema` because `drizzle(pool, { schema })` needs it, so
+`getDb().query.glossaryLookups.findMany()` reaches any table **with no import at all**. Raw SQL is the
+second. All three are now matched, by their *qualified* spellings — `spideryarn.comments` and
+`.query.comments` rather than bare `comments`, because `jobs`, `comments` and `uploads` are ordinary
+English words and a guard with known false positives is one people learn to wave through.
+
+And the way it was found is worth as much as the guard: not by thinking harder, but because exempting
+`db/client.ts` forced somebody to explain *why* that file needs the whole schema. **An exemption that
+makes you justify it is worth more than one that just unblocks the run.**
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next
