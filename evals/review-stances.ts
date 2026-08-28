@@ -47,6 +47,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { loadEnvLocal } from "../src/env.js";
 import { converse } from "../src/converse.js";
+import { withLedger } from "../src/cli-ledger.js";
 import type { Block, ChatMessage, Meta, ReviewStance } from "../src/types.js";
 import { REVIEW_STANCES } from "../src/types.js";
 
@@ -337,4 +338,9 @@ async function main(): Promise<void> {
   console.log(`\nWritten to ${path.relative(process.cwd(), out)}`);
 }
 
-await main();
+/* **`withLedger`, not a bare `main()`.** These calls already go through the
+   gateway and are already metered — what they lacked was a collector, so every
+   one of them warned "no spend collector open" and left no row. `"eval"` is the
+   scope kind, so `npm run cost` can keep this out of the number Greg sets a
+   price against while still counting it. */
+await withLedger("eval", main);

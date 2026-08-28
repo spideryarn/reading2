@@ -1189,6 +1189,12 @@ questions about it have cost since. Both halves are now measurable; neither is s
 
 **Phase 7 — the spend page in the app.**
 
+**Neither was next.** On 2026-08-28 the report was still saying *"Not counted here: anything evals/
+spends"* on every run, and a number that is knowably short should be fixed before it is displayed
+more prominently — GPT Sol agreed, unprompted: *"Phase 6 or 7 would turn today's known-short,
+ambiguously combined figure into a more authoritative-looking wrong number."* See
+[ai-spend-outside-the-gateway.md](ai-spend-outside-the-gateway.md).
+
 Not built, deliberately: any cap, any threshold, any refusal. Greg chose report-only. What phase 2
 must leave possible is the query a cap would need — hence the `(owner_id, created_at)` index. A cap
 that reads `sum()` before every call is a design problem for the day somebody wants one, and
@@ -1494,8 +1500,17 @@ column, which is phase 3's successor rather than phase 3.
 2. **The `files`-mode question above** — option 2 is my recommendation but it is a real fork.
 3. **How long before a raw response is pruned?** 14 days was my straw man. It is a
    how-far-back-do-you-ever-look question, not a technical one.
-4. **Do the evals count?** `evals/` calls real models and spends real money, from the CLI. They
-   would land under the dev owner. Worth having, or noise in the numbers?
+4. ~~**Do the evals count?**~~ **Answered on 2026-08-28, without you, and reversible by a
+   sentence: they count, and they are printed apart.** Storage and reporting turned out to be two
+   questions rather than one. A row can always be excluded from a total and can never be recovered
+   once it was not written, so every eval call is recorded, under `scope_kind = 'eval'`. But GPT Sol
+   was right that the same reasoning does not carry to the headline — *"the number Greg will use for
+   product pricing should not jump because somebody ran forty PDFs"* — so `npm run cost` has no line
+   called `Total`. It has `Product spend`, `Eval spend`, and `All recorded` only when both exist.
+
+   Finding out what evals actually spend was its own piece of work: eight sites, two accounts, and
+   the ledger saying *"not counted here"* every run about a set it could not name.
+   [ai-spend-outside-the-gateway.md](ai-spend-outside-the-gateway.md).
 5. **What does "cost" mean, for the number you set a price against?** No longer hypothetical:
    **OpenRouter's margin is a 5.5% fee on buying credits, not a per-token markup** — which is why
    the probes found `usage.cost` exactly equal to Anthropic's list price. So `usage.cost` is

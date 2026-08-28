@@ -296,3 +296,106 @@ describe("costDrift", () => {
     expect(costDrift(500, null)).toBeNull();
   });
 });
+
+describe("dated model spellings", () => {
+  /* Found by a live probe, not by reading: one real Haiku call through the
+     declared bypass came back priced at nothing, with its token counts sitting
+     on the same row. The SDK's id carries a release date and the table is keyed
+     on the undated name. */
+  it("prices the SDK's dated Haiku id the same as the undated one", () => {
+    const usage = { input_tokens: 1_000_000, output_tokens: 1_000_000 };
+    const at = new Date("2026-08-28T00:00:00Z");
+    const dated = priceAnthropicCall("claude-haiku-4-5-20251001", usage, at);
+    const plain = priceAnthropicCall("claude-haiku-4-5", usage, at);
+    expect(dated).not.toBeNull();
+    expect(dated?.totalNanos).toBe(plain?.totalNanos);
+    /* $1 in + $5 out per million. */
+    expect(dated?.totalNanos).toBe(6_000_000_000);
+  });
+
+  it("refuses an undeclared snapshot of a model that IS in the table", () => {
+    /* **The one the map exists to get right, and the case a stripper gets
+       wrong.** `claude-haiku-4-5-20991231` is a release nobody here has looked
+       at; a regular expression that cut the date off would price it at today's
+       Haiku rate and the row would look completely normal. GPT Sol asked for an
+       explicit map for exactly this. `null` means `cost_source: "none"`, which
+       is the report saying it does not know — the only honest answer. */
+    expect(
+      priceAnthropicCall(
+        "claude-haiku-4-5-20991231",
+        { input_tokens: 10, output_tokens: 10 },
+        new Date("2026-08-28T00:00:00Z"),
+      ),
+    ).toBeNull();
+  });
+
+  it("still refuses a model nobody has put in the table at all", () => {
+    expect(
+      priceAnthropicCall(
+        "some-vendor/some-model",
+        { input_tokens: 10, output_tokens: 10 },
+        new Date("2026-08-28T00:00:00Z"),
+      ),
+    ).toBeNull();
+  });
+
+  it("stamps the price version with the name the table actually used", () => {
+    const v = priceAnthropicCall(
+      "claude-haiku-4-5-20251001",
+      { input_tokens: 10, output_tokens: 10 },
+      new Date("2026-08-28T00:00:00Z"),
+    )?.priceVersion;
+    /* The id as *sent*, so a row leads back to the request; the date is the
+       price row's, so it leads back to the table. */
+    expect(v).toBe("claude-haiku-4-5-20251001@1970-01-01");
+  });
+});
+
+describe("US-only inference", () => {
+  const usage = { input_tokens: 1_000_000, output_tokens: 1_000_000 };
+  const at = new Date("2026-08-28T00:00:00Z");
+
+  it("costs a tenth more, across every category", () => {
+    /* Read off the data-residency page on 2026-08-28: "US-only inference
+       (`inference_geo: "us"`) is priced at 1.1x the standard rate across all
+       token pricing categories (input tokens, output tokens, cache writes, and
+       cache reads)." Sonnet 5 is $2 in / $10 out per million. */
+    const global = priceAnthropicCall("claude-sonnet-5", usage, at);
+    const us = priceAnthropicCall(
+      "claude-sonnet-5",
+      { ...usage, inference_geo: "us" },
+      at,
+    );
+    expect(global?.totalNanos).toBe(12_000_000_000);
+    expect(us?.totalNanos).toBe(13_200_000_000);
+    /* The components carry it too, so adding them up cannot disagree with the
+       total — the failure that would show as a rounding error nobody chases. */
+    expect((us?.inputNanos ?? 0) + (us?.outputNanos ?? 0)).toBe(us?.totalNanos);
+  });
+
+  it("says on the row whether the multiplier was applied", () => {
+    /* Otherwise two rows for one model on one day are a tenth apart with
+       nothing on either of them explaining why. */
+    expect(
+      priceAnthropicCall("claude-sonnet-5", { ...usage, inference_geo: "us" }, at)?.priceVersion,
+    ).toBe("claude-sonnet-5@1970-01-01+us");
+    expect(priceAnthropicCall("claude-sonnet-5", usage, at)?.priceVersion).toBe(
+      "claude-sonnet-5@1970-01-01",
+    );
+  });
+
+  it("leaves global routing and an absent field alone", () => {
+    /* **Gated on the reported geo alone, with no model-generation check.**
+       `inference_geo` exists only on Claude 4.6 and later — an older model
+       returns 400 if you send it and can never report `"us"` back — so the field
+       answering `"us"` *is* the condition. A version check beside it could only
+       disagree with the response. */
+    const plain = priceAnthropicCall("claude-haiku-4-5", usage, at)?.totalNanos;
+    expect(
+      priceAnthropicCall("claude-haiku-4-5", { ...usage, inference_geo: "global" }, at)?.totalNanos,
+    ).toBe(plain);
+    expect(
+      priceAnthropicCall("claude-haiku-4-5", { ...usage, inference_geo: null }, at)?.totalNanos,
+    ).toBe(plain);
+  });
+});

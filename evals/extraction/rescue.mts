@@ -29,6 +29,8 @@ import { loadEnvLocal } from "../../src/env.js";
 import { inventory } from "./inventory.mjs";
 import { QUICK_MODEL_OPENROUTER } from "../../src/models.js";
 import { writeFile } from "node:fs/promises";
+import { openRouterJson } from "../../src/ai-call.js";
+import { withLedger } from "../../src/cli-ledger.js";
 
 /* `loadEnvLocal()`, not a bare `import "../../src/env.js"`. The import has no
    side effect — the module exports a function and calls nothing — so the bare
@@ -92,38 +94,47 @@ interface Answer {
 }
 
 async function ask(prompt: string): Promise<{ answer: Answer; usage: { input: number; output: number }; ms: number }> {
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error("OPENROUTER_API_KEY is not set — see docs/project/setup-dev.md.");
   const started = performance.now();
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 8000,
-      messages: [
-        { role: "system", content: SYSTEM },
-        { role: "user", content: prompt },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: { name: "triage", strict: true, schema: SCHEMA },
-      },
-      /* Both, for the reason src/pdf-read.ts gives: OpenRouter may silently drop
-         a parameter a provider does not take, and structured output is exactly
-         the one whose absence looks like a model that suddenly writes prose. */
-      provider: { require_parameters: true, allow_fallbacks: false },
-      usage: { include: true },
-    }),
+  /* **Through the seam, since 2026-08-28.** This used to be a hand-rolled
+     `fetch` with its own key lookup and its own `provider` block, which is how
+     an eval spends real money that appears in no total — see
+     docs/plans/ai-spend-outside-the-gateway.md. Nothing about the request
+     changed: `AI_JOB_ROUTE.eval` sets the same `require_parameters` and
+     `allow_fallbacks: false` this passed by hand, and the seam adds
+     `usage: { include: true }` itself.
+
+     `job: "eval"` rather than borrowing `pdf`. This is a triage pass over a
+     mangled HTML extraction and stands in for nothing the app does; filing it
+     under a real job to save inventing one would put eval money into the number
+     that answers "what does the PDF reader cost". */
+  const { json } = await openRouterJson("eval", {
+    model: MODEL,
+    max_tokens: 8000,
+    messages: [
+      { role: "system", content: SYSTEM },
+      { role: "user", content: prompt },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "triage", strict: true, schema: SCHEMA },
+    },
   });
-  const body = await res.text();
-  if (!res.ok) throw new Error(`OpenRouter answered ${res.status}: ${body.slice(0, 300)}`);
-  const json = JSON.parse(body);
-  if (json.error) throw new Error(`OpenRouter refused: ${json.error.message}`);
-  const content = json.choices?.[0]?.message?.content ?? "";
+  const body = json as {
+    error?: { message?: string };
+    choices?: { message?: { content?: string } }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  } | null;
+  /* A 200 carrying an `error` — the seam throws on a non-2xx, but OpenRouter
+     also answers 200 with a refusal in the body, and treating that as an empty
+     transcript is how a rescue run scores a model at zero for being unavailable. */
+  if (body?.error) throw new Error(`OpenRouter refused: ${body.error.message}`);
+  const content = body?.choices?.[0]?.message?.content ?? "";
   return {
     answer: JSON.parse(content) as Answer,
-    usage: { input: json.usage?.prompt_tokens ?? 0, output: json.usage?.completion_tokens ?? 0 },
+    usage: {
+      input: body?.usage?.prompt_tokens ?? 0,
+      output: body?.usage?.completion_tokens ?? 0,
+    },
     ms: Math.round(performance.now() - started),
   };
 }
@@ -254,4 +265,10 @@ async function main(): Promise<void> {
   console.log(`\nWritten to ${out}`);
 }
 
-void main();
+/* The ledger scope. Without it every call above warns "no spend collector open"
+   and leaves no row — see docs/plans/ai-spend-outside-the-gateway.md.
+
+   **`await`, not `void`.** `collectSpend` awaits its sink writes before it
+   returns, and discarding that promise throws the guarantee away: the process
+   can reach the end of the module and exit with rows still in flight. GPT Sol. */
+await withLedger("eval", main);

@@ -100,10 +100,39 @@ export interface ModelPrice {
  * against real billing on the date below, by comparing computed cost against
  * the charge OpenRouter reported for the same call. See tests/pricing.test.ts.
  */
-export const PRICE_CHECKED = "2026-08-27";
+export const PRICE_CHECKED = "2026-08-28";
 
 /** Where the numbers came from, for whoever re-checks them. */
 export const PRICE_SOURCE = "https://platform.claude.com/docs/en/about-claude/pricing";
+
+/** Where the US multiplier came from. A second page, so a second constant. */
+export const GEO_PRICE_SOURCE =
+  "https://platform.claude.com/docs/en/manage-claude/data-residency";
+
+/**
+ * **US-only inference costs 1.1x the standard rate**, across every token
+ * category — input, output, cache writes and cache reads. Read off
+ * `GEO_PRICE_SOURCE` on 2026-08-28:
+ *
+ * > **Claude 4.6 and later models:** US-only inference (`inference_geo: "us"`)
+ * > is priced at 1.1x the standard rate across all token pricing categories
+ * > (input tokens, output tokens, cache writes, and cache reads).
+ *
+ * **Gated on the reported geo alone, with no model-generation check**, and that
+ * is not laziness — it is the safer rule. `inference_geo` exists only on Claude
+ * 4.6 and later; an older model returns a 400 if you send it and can never
+ * report `"us"` back. So the field answering `"us"` *is* the condition, and a
+ * version check beside it could only ever disagree with the response.
+ *
+ * A workspace default can select US without the request asking for it, which is
+ * why this reads what came back rather than what was sent.
+ *
+ * I refused this number twice before checking the page, on the grounds that a
+ * rate arriving from a review is exactly what this file's other comments say not
+ * to admit. That was right until the page was opened. It is opened now, and the
+ * refusal became the more expensive mistake: shipping a figure known to be low.
+ */
+export const US_INFERENCE_MULTIPLIER = 1.1;
 
 /**
  * The multipliers Anthropic applies to the input price. Written as constants
@@ -153,6 +182,26 @@ export const ANTHROPIC_PRICES: Readonly<Record<string, readonly PriceRow[]>> = {
 };
 
 /**
+ * **Dated spellings of a model already in the table.**
+ *
+ * Anthropic's SDK takes `claude-haiku-4-5-20251001`; OpenRouter takes
+ * `anthropic/claude-haiku-4.5`; the table above is keyed on the undated name.
+ * The bake-off uses the dated one because that is what the SDK answers to, and
+ * a live probe on 2026-08-28 came back `cost_source: "none"` for a call whose
+ * token counts were sitting on the same row — the price lookup had simply
+ * missed, and nothing failed.
+ *
+ * **An explicit map, not a regular expression that strips a trailing date.**
+ * GPT Sol asked for exactly this, and the reason is worth keeping: a stripper
+ * would silently price any snapshot — including one released *after* a price
+ * change — as if it were the current model. Every line here is a claim that two
+ * names are the same thing, and adding one is a decision somebody made.
+ */
+export const MODEL_ALIASES: Readonly<Record<string, string>> = {
+  "claude-haiku-4-5-20251001": "claude-haiku-4-5",
+};
+
+/**
  * A price, and the instant it started applying. **Dates are UTC**, and the row
  * applies from that instant until the next row's.
  *
@@ -198,7 +247,11 @@ export function priceAt(model: string, startedAt: Date): ModelPrice | null {
 }
 
 function rowAt(model: string, startedAt: Date): PriceRow | null {
-  const rows = ANTHROPIC_PRICES[model];
+  /* The alias first, so both spellings of one model land on one row. Applied
+     here rather than at each caller, because `priceAt`, `priceAnthropicCall`
+     and `effectiveFrom` all go through this and any one of them left out would
+     be a price that is right in the report and absent on the row. */
+  const rows = ANTHROPIC_PRICES[MODEL_ALIASES[model] ?? model];
   if (!rows) return null;
   let found: PriceRow | null = null;
   for (const row of rows) {
@@ -264,6 +317,8 @@ export interface PricedCall {
 export interface AnthropicUsageLike {
   input_tokens: number;
   output_tokens: number;
+  /** `"us"` or `"global"`. Where inference **actually ran**, not what was asked for. */
+  inference_geo?: string | null;
   cache_read_input_tokens?: number | null;
   cache_creation_input_tokens?: number | null;
   cache_creation?: {
@@ -311,13 +366,21 @@ export function priceAnthropicCall(
   const writeUsd = usd(split.m5, price.cacheWrite5m) + usd(split.h1, price.cacheWrite1h);
   const readUsd = usd(read, price.cacheRead);
 
+  /* Applied to every category, which is what the page says, and applied at the
+     end so the components on the way out carry it too — a caller adding them up
+     must not get a different answer from `totalNanos`. */
+  const geo = usage.inference_geo === "us" ? US_INFERENCE_MULTIPLIER : 1;
+
   return {
-    totalNanos: toNanos(inputUsd + outputUsd + writeUsd + readUsd),
-    inputNanos: toNanos(inputUsd),
-    outputNanos: toNanos(outputUsd),
-    cacheWriteNanos: toNanos(writeUsd),
-    cacheReadNanos: toNanos(readUsd),
-    priceVersion: `${model}@${effectiveFrom(model, startedAt)}`,
+    totalNanos: toNanos((inputUsd + outputUsd + writeUsd + readUsd) * geo),
+    inputNanos: toNanos(inputUsd * geo),
+    outputNanos: toNanos(outputUsd * geo),
+    cacheWriteNanos: toNanos(writeUsd * geo),
+    cacheReadNanos: toNanos(readUsd * geo),
+    /* **The geo is in the stamp**, so a row says whether the multiplier was
+       applied. Without it two rows for one model on one day would be a tenth
+       apart with nothing on either of them explaining why. */
+    priceVersion: `${model}@${effectiveFrom(model, startedAt)}${geo === 1 ? "" : "+us"}`,
   };
 }
 

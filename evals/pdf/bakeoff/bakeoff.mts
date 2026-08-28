@@ -20,7 +20,13 @@
  * transports (the Anthropic SDK, and OpenRouter) are one function each.
  */
 import "../../../src/env.js";
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
+import {
+  anthropicForDeclared,
+  declaredFetch,
+  withDeclaredExternalCall,
+} from "../../declared-spend.js";
+import { withLedger } from "../../../src/cli-ledger.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { PDFDocument } from "pdf-lib";
@@ -217,7 +223,15 @@ const READERS: Reader[] = [
   { label: "mistral-ocr", transport: "mistral-ocr", model: "anthropic/claude-haiku-4.5", scanOnly: true },
 ];
 
-const anthropic = new Anthropic();
+/* **Declared, not incidental.** This file is the one place in the repo that
+   talks to `api.anthropic.com` on purpose: `transport: "anthropic"` versus
+   `transport: "openrouter"` is the comparison, and forcing both onto one
+   transport would leave it reporting a winner between OpenRouter and itself.
+   `anthropicForDeclared()` keeps the money visible anyway — `maxRetries: 0`, a
+   guarded `fetch`, and a row per attempt priced from ANTHROPIC_PRICES, because
+   a call that skips OpenRouter has nobody to ask what it cost.
+   See evals/declared-spend.ts. */
+const anthropic = anthropicForDeclared();
 
 async function viaAnthropic(reader: Reader, doc: Doc, i: number, baseline: PageText[]): Promise<Result> {
   const chunk = doc.chunks[i]!;
@@ -242,14 +256,22 @@ async function viaAnthropic(reader: Reader, doc: Doc, i: number, baseline: PageT
   }
   const t0 = performance.now();
   try {
-    const stream = anthropic.messages.stream({
-      model: reader.model,
-      max_tokens: MAX_TOKENS,
-      system: reader.noCover ? SYSTEM_NO_COVER : SYSTEM,
-      messages: [{ role: "user", content }],
-      output_config: { format: { type: "json_schema", schema: SCHEMA as never } },
-    });
-    const msg = await stream.finalMessage();
+    const msg = await withDeclaredExternalCall(
+      "bakeoff-anthropic-transport",
+      { model: reader.model },
+      async ({ observe }) => {
+        const stream = anthropic.messages.stream({
+          model: reader.model,
+          max_tokens: MAX_TOKENS,
+          system: reader.noCover ? SYSTEM_NO_COVER : SYSTEM,
+          messages: [{ role: "user", content }],
+          output_config: { format: { type: "json_schema", schema: SCHEMA as never } },
+        });
+        const message = await stream.finalMessage();
+        observe.anthropic(message);
+        return message;
+      },
+    );
     const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
     return {
       reader: reader.label,
@@ -268,21 +290,43 @@ async function viaAnthropic(reader: Reader, doc: Doc, i: number, baseline: PageT
   }
 }
 
-async function openrouter(body: unknown): Promise<any> {
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
+/**
+ * The OpenRouter arm — still a hand-rolled request, and declared as such.
+ *
+ * It does not go through `openRouterJson` because the seam owns the `provider`
+ * block per job, and this bake-off's arms deliberately disagree with each other:
+ * the model arms forbid fallback, the Mistral OCR arm allows it. One policy
+ * imposed on both would silently change what two of them measure.
+ *
+ * `declaredFetch` is the guard: outside `withDeclaredExternalCall` it throws
+ * rather than spending money with nothing to show for it.
+ */
+async function openrouter(model: string, body: Record<string, unknown>): Promise<any> {
+  return withDeclaredExternalCall(
+    "bakeoff-openrouter-transport",
+    { model },
+    async ({ observe }) => {
+      const res = await declaredFetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      const text = await res.text();
+      let json: any;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        return { error: { message: `${res.status}: ${text.slice(0, 400)}` } };
+      }
+      /* Before the caller gets a chance to return early on `json.error`: a
+         refusal that still reports usage still cost money. */
+      observe.openRouter(json);
+      return json;
     },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { error: { message: `${res.status}: ${text.slice(0, 400)}` } };
-  }
+  );
 }
 
 async function viaOpenRouter(reader: Reader, doc: Doc, i: number): Promise<Result> {
@@ -290,7 +334,7 @@ async function viaOpenRouter(reader: Reader, doc: Doc, i: number): Promise<Resul
   const all = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
   const { data, sha256 } = await cut(doc.file, all);
   const t0 = performance.now();
-  const json = await openrouter({
+  const json = await openrouter(reader.model, {
     model: reader.model,
     max_tokens: MAX_TOKENS,
     messages: [
@@ -333,7 +377,7 @@ async function viaMistralOcr(reader: Reader, doc: Doc, i: number): Promise<Resul
   const all = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
   const { data, sha256 } = await cut(doc.file, all);
   const t0 = performance.now();
-  const json = await openrouter({
+  const json = await openrouter(reader.model, {
     model: reader.model,
     max_tokens: 64,
     messages: [
@@ -393,8 +437,15 @@ function safeRecords(text: string): unknown[] | undefined {
 const only = process.argv[2];
 const onlyChunk = process.argv[3] === undefined ? undefined : Number(process.argv[3]);
 const onlyReaders = process.env.READERS?.split(",").map((s) => s.trim());
-await mkdir(OUT, { recursive: true });
 const results: Result[] = [];
+
+/* **The whole run inside one ledger scope.** Both transports above are declared
+   bypasses, and a declared bypass still needs a collector open or its row has
+   nowhere to go — `recordSpend` warns and drops it. This file's header says it
+   "spends real money every time it runs"; now it says how much, and
+   `npm run cost` can see it. */
+async function run(): Promise<void> {
+await mkdir(OUT, { recursive: true });
 
 for (const doc of DOCS.filter((d) => !only || d.name === only)) {
   const { pages: baseline, isScan } = await pass0(doc.file);
@@ -433,3 +484,6 @@ for (const doc of DOCS.filter((d) => !only || d.name === only)) {
 
 await writeFile(`${OUT}/results${process.env.RUN ? "." + process.env.RUN : ""}.json`, JSON.stringify(results, null, 2));
 console.log(`\n${results.length} results → ${OUT}/`);
+}
+
+await withLedger("eval", run);

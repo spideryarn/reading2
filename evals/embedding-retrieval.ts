@@ -66,12 +66,22 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import Anthropic from "@anthropic-ai/sdk";
+/* **`import type`, so this file cannot construct a client at all.** It is used
+   only for `Anthropic` and `Anthropic.TextBlock` in signatures now; the one
+   client here comes from `anthropicForDeclared()`. A value import would leave
+   `new Anthropic()` one keystroke away and the scan unable to tell the
+   difference. */
+import type Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { loadEnvLocal } from "../src/env.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { cosine, type EmbeddingUsage, type EmbedResult, embedAll } from "../src/embeddings.js";
 import type { Block } from "../src/types.js";
+import {
+  anthropicForDeclared,
+  withDeclaredExternalCall,
+} from "./declared-spend.js";
+import { withLedger } from "../src/cli-ledger.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const RESULTS = path.join(ROOT, "evals", "results");
@@ -456,18 +466,32 @@ async function judgeQuery(
     .map((p, i) => `<passage id="${letters[i]}">\n${p.text}\n</passage>`)
     .join("\n\n");
 
-  const response = await client.messages.create({
-    model: judgeModel,
-    max_tokens: 4000,
-    thinking: { type: "adaptive" },
-    system: JUDGE_SYSTEM,
-    messages: [
-      {
-        role: "user",
-        content: `Reader's question: ${query.text}\n\n${body}`,
-      },
-    ],
-  });
+  /* **A declared bypass, not an oversight.** The judge speaks the Messages
+     shape and chooses its own model per run, and `streamMessage` owns the model
+     on purpose — see `embedding-eval-judge` in evals/declared-spend.ts for why
+     it is not simply moved onto the seam. The wrapper is what makes the money
+     appear in `npm run cost` anyway, priced from ANTHROPIC_PRICES because this
+     call does not go through OpenRouter and so has nobody to ask. */
+  const response = await withDeclaredExternalCall(
+    "embedding-eval-judge",
+    { model: judgeModel },
+    async ({ observe }) => {
+      const message = await client.messages.create({
+        model: judgeModel,
+        max_tokens: 4000,
+        thinking: { type: "adaptive" },
+        system: JUDGE_SYSTEM,
+        messages: [
+          {
+            role: "user",
+            content: `Reader's question: ${query.text}\n\n${body}`,
+          },
+        ],
+      });
+      observe.anthropic(message);
+      return message;
+    },
+  );
 
   const text = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -930,7 +954,10 @@ async function judgeAll(
   );
   if (needed.length > 0) {
     console.log(`\nJudging ${needed.length} queries (cached: ${QUERIES.length - needed.length})…`);
-    const client = new Anthropic();
+    /* `maxRetries: 0` and a guarded `fetch` — a default client turns one call
+       into up to three billable attempts and the row would then understate the
+       spend by a factor. See evals/declared-spend.ts. */
+    const client = anthropicForDeclared();
     const queue = new PQueue({ concurrency: 4 });
     await Promise.all(
       needed.map((q) =>
@@ -1245,4 +1272,7 @@ async function main(): Promise<void> {
   console.log(`\nWrote ${path.relative(ROOT, out)}`);
 }
 
-await main();
+/* See the note in evals/review-stances.ts. The embedding calls here are metered
+   by src/ai-call.ts and only ever needed a collector; the judge is a declared
+   bypass and records itself. */
+await withLedger("eval", main);

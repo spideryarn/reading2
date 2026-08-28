@@ -291,6 +291,41 @@ Both now ask whether the error **is** the abort: the signal's own `reason` by id
 `stoppedByReader` had been making the same distinction for the reader-facing message since before
 this; the bill was still using the weaker question.
 
+## The three calls allowed round the outside, and the test that keeps them to three
+
+"One seam per wire" is what lets `npm run cost` claim it has seen everything. `evals/` broke that
+claim on the morning after it was made — eight sites, on **two** accounts, spending real money into
+no total at all. Most were simply unscoped; a few were raw `fetch` calls somebody wrote in a hurry.
+Two were raw **on purpose**, and that is the case worth understanding:
+
+> the PDF bake-off exists to compare the Anthropic SDK against OpenRouter, and a bake-off forced onto
+> one transport is measuring nothing.
+
+So the rule is not *"everything uses the seam"*. It is **a bypass has to be declared, and a declared
+bypass still writes a row** — silence reads as zero, and zero is the one answer that is definitely
+wrong.
+
+- [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the register. One entry per
+  bypass: which account it bills, which file may use it, why the seam is wrong for it, and whether it
+  actually writes a row yet. `npm run cost` prints every `metered: false` entry **by name, every
+  run**, which is what makes the list finishable — the sentence it replaced ("*not counted here:
+  anything evals/ spends*") named nothing and so never could be.
+- [`evals/declared-spend.ts`](../../evals/declared-spend.ts) — the wrapper, kept under `evals/` so
+  nothing in `src/` can reach a second way of calling a model. `declaredFetch` refuses to run outside
+  a declaration, and counts attempts: a default Anthropic client retries twice, so one call can be
+  three billable requests behind one row.
+- [`tests/no-undeclared-spend.test.ts`](../../tests/no-undeclared-spend.test.ts) — fails on any file
+  that can reach a paid provider and is neither a seam, nor allow-listed with a reason, nor declared.
+  A **tripwire, not a boundary**, in the same sense as `OPENROUTER_BASE` being unexported: it caught
+  two live offenders on its first run.
+
+A declared bypass cannot be priced by OpenRouter, so its row carries `cost_source: "computed"` and a
+`price_version`, and `credits_used_nanos` stays null. That column means one thing — what OpenRouter
+deducted — and it is what `--reconcile` compares against their own running total, so an estimate must
+never land in it. The report keeps the two apart and says which half it has never checked.
+
+Written up in [ai-spend-outside-the-gateway.md](../plans/ai-spend-outside-the-gateway.md).
+
 ## The one thing still open
 
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows
@@ -315,8 +350,12 @@ clause.
 - [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) — which ledger is live, and the one place
   the totals are computed
 - [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts) — `npm run cost`
+- [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the calls allowed round the
+  outside, and why each one is
 - [ai-cost-tracking.md](../plans/ai-cost-tracking.md) — the plan this came out of, including the
   three probes that changed its mind
+- [ai-spend-outside-the-gateway.md](../plans/ai-spend-outside-the-gateway.md) — the eight sites that
+  were spending into no total, and the scan that stops a ninth
 - [openrouter-as-sole-gateway.md](../research/openrouter-as-sole-gateway.md) — the research, with the
   catalogue of ways caching breaks silently in other people's projects
 - [prompt-caching.md](prompt-caching.md) — the three caches and how to tell whether they are working

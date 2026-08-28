@@ -88,9 +88,38 @@ let writing: Promise<void> = Promise.resolve();
  * problem. Money is allowed to be `null` — that is `unpriced`, which is a
  * meaning rather than a fault.
  */
+/**
+ * **Fill in the 0023 columns on a line written before they existed.**
+ *
+ * The first version simply rejected those lines, and the count of them was
+ * right there in the report as `unreadable` — 373 of them, a whole month of real
+ * spend deleted from every total by a shape check that was meant to protect it.
+ * GPT Sol ran the reader against the existing ledger and counted them.
+ *
+ * The backfill is not a guess: it is the same one
+ * [migration 0023](../../drizzle/0023_ai_calls_cost_provenance.sql) applies to
+ * the Postgres rows, and it is deterministic for the same reason. Every line
+ * written before those columns came from a gateway that only talks to
+ * OpenRouter, and `provider` means "OpenRouter answered at all" — which is why
+ * this tests for `null` rather than for a non-zero number, since a BYOK zero is
+ * an answer and not an absence.
+ *
+ * Mutating rather than returning a copy, because the caller has just parsed this
+ * object out of one line and nothing else holds it.
+ */
+function backfillPre0023(r: Record<string, unknown>): void {
+  if (r.providerAccount === undefined) r.providerAccount = "openrouter";
+  if (r.costSource === undefined) {
+    r.costSource = r.creditsUsedNanos == null ? "none" : "provider";
+  }
+  if (r.computedCostNanos === undefined) r.computedCostNanos = null;
+  if (r.priceVersion === undefined) r.priceVersion = null;
+}
+
 function looksLikeRow(v: unknown): v is AiCallRow {
   if (!v || typeof v !== "object") return false;
   const r = v as Record<string, unknown>;
+  backfillPre0023(r);
   const money = (x: unknown) => x === null || (typeof x === "number" && Number.isFinite(x));
   return (
     typeof r.id === "string" &&
@@ -98,9 +127,37 @@ function looksLikeRow(v: unknown): v is AiCallRow {
     typeof r.ownerId === "string" &&
     typeof r.startedAt === "string" &&
     typeof r.job === "string" &&
+    (r.providerAccount === "openrouter" || r.providerAccount === "anthropic") &&
+    (r.costSource === "provider" ||
+      r.costSource === "computed" ||
+      r.costSource === "none") &&
     money(r.creditsUsedNanos) &&
-    money(r.upstreamInferenceNanos)
+    money(r.computedCostNanos) &&
+    money(r.upstreamInferenceNanos) &&
+    /* **The exclusivity the database enforces with a CHECK, enforced here by
+       reading it.** This store has no database, and `totalRows` adds
+       `computed` in one branch and `credits` in another — a line carrying both
+       would be counted twice, and one carrying neither while claiming a source
+       would be counted as money that arrived. There is nothing else standing
+       between a hand-edited JSONL line and a wrong total. */
+    agrees(r)
   );
+}
+
+/**
+ * A row's `cost_source` against the two numbers it is a claim about, and
+ * `price_version` against whether we did the arithmetic.
+ *
+ * The same three cases as `ai_calls_one_cost_source` in migration 0023, so the
+ * two stores cannot disagree about what a valid row is.
+ */
+function agrees(r: Record<string, unknown>): boolean {
+  const credits = r.creditsUsedNanos !== null && r.creditsUsedNanos !== undefined;
+  const computed = r.computedCostNanos !== null && r.computedCostNanos !== undefined;
+  const version = typeof r.priceVersion === "string";
+  if (r.costSource === "provider") return credits && !computed && !version;
+  if (r.costSource === "computed") return !credits && computed && version;
+  return !credits && !computed && !version;
 }
 
 export const fsCostStore: CostStore = {

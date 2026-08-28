@@ -822,6 +822,27 @@ export function collectingSpend(): boolean {
 }
 
 /**
+ * **True only while a collector is open that will actually write rows.**
+ *
+ * `collectingSpend()` is not enough for a caller that wants a guarantee: a
+ * collector with no `sink` reports its calls to whoever opened it and writes
+ * nothing durable, which is exactly the shape most tests use. GPT Sol drove the
+ * path — a completed declared call with `unscopedCalls() === 1` — and it is the
+ * one failure mode a declared bypass must not have, because the whole reason a
+ * bypass is allowed at all is that it still writes a row.
+ */
+export function persistingSpend(): boolean {
+  const box = store.getStore()?.box;
+  /* **`!box.closed`, because the store outlives the collector.**
+     `AsyncLocalStorage` follows into any async resource created inside the
+     callback, so work retained past `collectSpend`'s return still sees the box.
+     GPT Sol started a declared call from a callback held after the collector had
+     finished: the body ran, the money went, and `recordSpend` counted the row as
+     *late* and threw it away. An open box and a live one are different things. */
+  return box != null && !box.closed && box.sink != null;
+}
+
+/**
  * What the open collector has recorded **so far**, or `null` outside one.
  *
  * For a caller that has to report *while still inside* its own scope — which is
@@ -933,6 +954,19 @@ export function totalSpend(calls: readonly SpendRecord[]): {
          understatement one level down. */
       if (c.upstreamCostNanos === null) unpriced += 1;
       else nanos += c.upstreamCostNanos + (c.costNanos ?? 0);
+      continue;
+    }
+    /* **Our own arithmetic, for a declared bypass.** Second only to the BYOK
+       branch because a computed call has no `costNanos` at all and would
+       otherwise fall through to `unpriced` — which is precisely what it is not.
+
+       This was missed once already. The persistent report was corrected and
+       *this* function was not, so the line `npm run toc` and every eval prints
+       at the end of its own run said `$0.0000` about money it had just spent.
+       GPT Sol found it: the command that made the spend was the one output that
+       could not see it. */
+    if (c.computedCostNanos !== null) {
+      nanos += c.computedCostNanos;
       continue;
     }
     /* Not BYOK: `cost` and `cost_details.upstream_inference_cost` are the same

@@ -9,7 +9,8 @@
  * what makes the reconciliation comparable at all.
  */
 import { describe, expect, it } from "vitest";
-import { parseArgs } from "../scripts/ai-cost.js";
+import type { AiCallRow } from "../src/ai-spend.js";
+import { by, parseArgs } from "../scripts/ai-cost.js";
 
 describe("--month", () => {
   it("runs from the first instant of the month to the first instant of the next", () => {
@@ -75,5 +76,45 @@ describe("--month", () => {
 
   it("says so rather than silently ignoring a flag it does not know", () => {
     expect(() => parseArgs(["--last-week"])).toThrow("Unknown flag");
+  });
+});
+
+describe("the breakdowns", () => {
+  /** The four fields `by` actually reads; the rest of a row is irrelevant here. */
+  const row = (over: Partial<AiCallRow>): AiCallRow =>
+    ({
+      job: "pdf",
+      isByok: false,
+      costSource: "provider",
+      creditsUsedNanos: 0,
+      upstreamInferenceNanos: null,
+      computedCostNanos: null,
+      ...over,
+    }) as AiCallRow;
+
+  it("counts our own arithmetic, and not only OpenRouter's figure", () => {
+    /* **The bug this pins.** `by` summed `credits + upstream`, so every
+       breakdown printed `$0.0000` for a declared bypass — money really spent,
+       grouped by day and by model, showing as nothing at all. Found by running
+       `npm run cost` after a live probe, not by any assertion. The pocket lines
+       keep the three kinds apart deliberately; a breakdown wants the total. */
+    const groups = by(
+      [
+        row({ creditsUsedNanos: 1_000 }),
+        row({ costSource: "computed", creditsUsedNanos: null, computedCostNanos: 32_000 }),
+      ],
+      (r) => r.job,
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.nanos).toBe(33_000);
+    expect(groups[0]?.calls).toBe(2);
+  });
+
+  it("counts BYOK, whose credits are legitimately zero", () => {
+    const groups = by(
+      [row({ isByok: true, creditsUsedNanos: 0, upstreamInferenceNanos: 4_000 })],
+      (r) => r.job,
+    );
+    expect(groups[0]?.nanos).toBe(4_000);
   });
 });

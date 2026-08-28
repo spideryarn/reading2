@@ -33,7 +33,7 @@ export const costStore: CostStore =
   STORE === "postgres" ? guardDbStore("ai-calls", pgCostStore) : fsCostStore;
 
 /**
- * **What a set of ledger rows cost**, and the three ways the answer can be
+ * **What a set of ledger rows cost**, and the four ways the answer can be
  * short. One implementation, so the two stores cannot disagree.
  *
  * `credits` and `upstream` are two different pockets and are kept apart: under
@@ -42,16 +42,34 @@ export const costStore: CostStore =
  * what it is a number *of*. `unpriced` is the count of calls that reported no
  * money at all — the total is short by an unknown amount, which is a different
  * statement from "it cost nothing".
+ *
+ * **`computed` is a third pocket**, and it is not the same kind of fact as the
+ * other two. `credits` is what OpenRouter deducted and can be checked against
+ * their own running total; `computed` is our arithmetic over
+ * [`ANTHROPIC_PRICES`](../pricing.ts) for a call that went straight to Anthropic
+ * and has nobody to ask. Adding them would produce a number no reconciliation
+ * can ever match, and the day it failed to match nobody would know which half
+ * was wrong. Callers that want one figure add them deliberately and say they
+ * did.
  */
 export function totalRows(rows: readonly AiCallRow[]): {
   credits: number;
   upstream: number;
+  computed: number;
   unpriced: number;
 } {
   let credits = 0;
   let upstream = 0;
+  let computed = 0;
   let unpriced = 0;
   for (const r of rows) {
+    /* First, because a computed row has no `credits_used_nanos` at all and
+       would otherwise be counted as unpriced — which is the one thing it is
+       not. The database `CHECK` in 0023 makes these three cases exclusive. */
+    if (r.costSource === "computed") {
+      computed += r.computedCostNanos ?? 0;
+      continue;
+    }
     if (r.isByok === true) {
       if (r.upstreamInferenceNanos === null) unpriced += 1;
       else upstream += r.upstreamInferenceNanos;
@@ -61,5 +79,5 @@ export function totalRows(rows: readonly AiCallRow[]): {
     if (r.creditsUsedNanos === null) unpriced += 1;
     else credits += r.creditsUsedNanos;
   }
-  return { credits, upstream, unpriced };
+  return { credits, upstream, computed, unpriced };
 }

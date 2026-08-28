@@ -31,6 +31,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { articleWithIds, estimateTokens } from "../src/article-prompt.js";
 import { findPassages } from "../src/search.js";
 import { converse } from "../src/converse.js";
+import { withLedger } from "../src/cli-ledger.js";
 import type { Block, ChatMessage, Meta } from "../src/types.js";
 
 /**
@@ -339,7 +340,8 @@ const invokedDirectly =
   path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname);
 
 if (invokedDirectly) {
-  main().catch((err) => {
+  /* See the note at the foot of evals/review-stances.ts. */
+  withLedger("eval", main).catch((err) => {
     console.error(err);
     process.exit(1);
   });

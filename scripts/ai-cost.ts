@@ -35,6 +35,7 @@ import { formatNanos } from "../src/ai-spend.js";
 import type { AiCallRow } from "../src/ai-spend.js";
 import { loadEnvLocal } from "../src/env.js";
 import { costStore, totalRows } from "../src/store/ai-calls.js";
+import { DECLARATIONS } from "../src/spend-declarations.js";
 
 interface Args {
   since?: string;
@@ -106,7 +107,9 @@ export function parseArgs(argv: string[]): Args {
 }
 
 /** Sum by one facet, biggest first. One implementation for every breakdown. */
-function by(
+/* Exported for tests/ai-cost-cli.test.ts: the two bugs this file has had were
+   both in what a number *includes*, and neither showed up in a type. */
+export function by(
   rows: readonly AiCallRow[],
   key: (r: AiCallRow) => string | null,
 ): { name: string; calls: number; nanos: number }[] {
@@ -119,8 +122,15 @@ function by(
   }
   return [...groups.entries()]
     .map(([name, list]) => {
-      const { credits, upstream } = totalRows(list);
-      return { name, calls: list.length, nanos: credits + upstream };
+      /* **All three pockets, not just `credits`.** The first version summed
+         credits alone, so every breakdown printed `$0.0000` for the declared
+         bypasses — money really spent, itemised by day and by model, showing as
+         nothing. Found by running the report after a live probe rather than by
+         an assertion, which is the same way `formatNanos` was caught rounding a
+         real cost to zero. The pocket lines above keep them apart; a *breakdown*
+         wants the whole of what a job or a day cost. */
+      const { credits, upstream, computed } = totalRows(list);
+      return { name, calls: list.length, nanos: credits + upstream + computed };
     })
     .sort((a, b) => b.nanos - a.nanos);
 }
@@ -222,6 +232,65 @@ async function reconcile(): Promise<void> {
   );
 }
 
+/**
+ * One pocket's worth of money, with the three kinds of figure kept apart.
+ *
+ * `credits` is what OpenRouter deducted and can be checked against their own
+ * running total. `upstream` is BYOK, where their charge is legitimately zero and
+ * somebody else's key was billed. `computed` is **our arithmetic**, for the
+ * declared bypasses that do not go through OpenRouter and so have nobody to ask
+ * — it is labelled every time, because a price table drifts silently and the
+ * day a rate changes every computed figure after it is wrong with nothing
+ * failing.
+ */
+function pocket(label: string, rows: readonly AiCallRow[]): void {
+  const { credits, upstream, computed, unpriced } = totalRows(rows);
+  console.log(
+    `\n${label}:  ${formatNanos(credits + upstream + computed)} over ${rows.length} call(s)`,
+  );
+  console.log(`  credits consumed   ${formatNanos(credits)}`);
+  if (upstream > 0)
+    console.log(`  billed upstream    ${formatNanos(upstream)}  (BYOK — a different pocket)`);
+  if (computed > 0)
+    console.log(
+      `  computed by us     ${formatNanos(computed)}  (not through OpenRouter; priced from ANTHROPIC_PRICES, never reconciled)`,
+    );
+  if (unpriced > 0)
+    console.log(`  ${unpriced} call(s) reported no cost, so the figure above is short by an unknown amount.`);
+}
+
+/**
+ * **What is knowably still missing** — by name, every run.
+ *
+ * This replaced the sentence *"Not counted here: anything evals/ spends"*,
+ * which was true, useless and unfinishable: it named nothing, so no amount of
+ * work could ever delete it. Every entry below is one file with a reason, and
+ * the list empties as they are wired up. `tests/no-undeclared-spend.test.ts`
+ * fails if a way of reaching a provider exists that is not in that table, so
+ * this cannot go quietly out of date.
+ */
+function undeclared(): void {
+  const open = DECLARATIONS.filter((d) => !d.metered);
+  if (open.length === 0) {
+    console.log("\nEvery known way of spending money in this repo writes a row.");
+    return;
+  }
+  console.log(`\nNot counted here — ${open.length} known way(s) of spending that write no row:`);
+  const today = Date.now();
+  for (const d of open) {
+    /* The age, not just the entry. An admission opened this morning and one
+       that has been open since the spring read the same in a list and are not
+       the same thing at all — which is what GPT Sol meant by calling
+       `metered: false` a loophole with no expiry. No build fails on a date,
+       because a gate that trips on the calendar gets muted rather than fixed. */
+    const days = Math.floor((today - Date.parse(`${d.since}T00:00:00Z`)) / 86_400_000);
+    const age = days <= 0 ? "today" : days === 1 ? "1 day" : `${days} days`;
+    const how = d.kind === "unscoped" ? "no ledger open" : "skips the gateway";
+    console.log(`  ${d.file}\n      ${d.id} — ${how}, open ${age}`);
+  }
+  console.log("  src/spend-declarations.ts says why each one is still open.");
+}
+
 async function main(): Promise<void> {
   loadEnvLocal();
   const args = parseArgs(process.argv.slice(2));
@@ -246,16 +315,39 @@ async function main(): Promise<void> {
     /* **Not the same as "nothing was spent", and it must not read as it.** An
        empty ledger is what a misconfigured store looks like too. */
     console.log("(An empty range and an unwired ledger look identical from here.)");
+    /* **Before the early return, for the same reason the unreadable count is.**
+       A report with no rows is exactly when somebody is asking "is anything
+       being recorded at all", and the list of things that are knowably *not*
+       is the most useful thing on the page. It was after the return until GPT
+       Sol reproduced the output. */
+    undeclared();
     if (args.reconcile) await reconcile();
     return;
   }
 
-  const { credits, upstream, unpriced } = totalRows(rows);
-  console.log(`\nTotal:  ${formatNanos(credits + upstream)} over ${rows.length} call(s)`);
-  console.log(`  credits consumed   ${formatNanos(credits)}`);
-  if (upstream > 0) console.log(`  billed upstream    ${formatNanos(upstream)}  (BYOK — a different pocket)`);
-  if (unpriced > 0)
-    console.log(`  ${unpriced} call(s) reported no cost, so the total above is short by an unknown amount.`);
+  /* **Product and eval are printed apart, and there is no line called
+     "Total".** Greg's use for this number is to set a price, and a bake-off
+     over forty PDF pages landing in the figure he prices against is how a price
+     gets set wrong. Storing eval rows and separating them at the report is the
+     right way round: a scope can always be excluded from a total, and a row
+     that was never written cannot be recovered. GPT Sol, 2026-08-28, on the
+     open question Greg has not answered (ai-cost-tracking.md, question 4). */
+  const product = rows.filter((r) => r.scopeKind !== "eval");
+  const evals = rows.filter((r) => r.scopeKind === "eval");
+  /* An empty pocket is not printed as `$0.0000 over 0 call(s)`: a zero with a
+     label reads as a measurement, and "we recorded nothing here" is the one
+     thing it is not. */
+  if (product.length > 0) pocket("Product spend", product);
+  else console.log("\nProduct spend:  no calls recorded in this range.");
+  if (evals.length > 0) pocket("Eval spend", evals);
+  if (evals.length > 0 && product.length > 0) {
+    const a = totalRows(product);
+    const b = totalRows(evals);
+    console.log(
+      `\nAll recorded:  ${formatNanos(a.credits + a.upstream + a.computed + b.credits + b.upstream + b.computed)} over ${rows.length} call(s)`,
+    );
+  }
+
 
   const failed = rows.filter((r) => r.outcome !== "ok");
   if (failed.length > 0) {
@@ -265,7 +357,7 @@ async function main(): Promise<void> {
        at the last step. GPT Sol. */
     const w = totalRows(failed);
     console.log(
-      `  ${failed.length} call(s) ended in error or a cancel, having spent at least ${formatNanos(w.credits + w.upstream)}.`,
+      `  ${failed.length} call(s) ended in error or a cancel, having spent at least ${formatNanos(w.credits + w.upstream + w.computed)}.`,
     );
   }
 
@@ -284,11 +376,7 @@ async function main(): Promise<void> {
         "\n  A read that falls to zero is the cache silently switching off — docs/project/prompt-caching.md.",
     );
 
-  /* Said every time rather than only when it looks wrong. `evals/` calls models
-     outside the two gateways, so nothing it spends reaches this — and a report
-     that is silently partial is the failure this whole ledger is arranged
-     against. docs/plans/ai-cost-tracking.md, question 4. */
-  console.log("\nNot counted here: anything evals/ spends — it does not go through the gateways.");
+  undeclared();
 
   if (args.reconcile) await reconcile();
   else console.log("\n(--reconcile asks OpenRouter what it thinks this key has spent.)");

@@ -41,6 +41,10 @@ function row(over: Partial<AiCallRow> = {}): AiCallRow {
     requestedModel: "anthropic/claude-sonnet-5",
     answeredModel: "anthropic/claude-sonnet-5",
     upstream: "Anthropic",
+    providerAccount: "openrouter",
+    costSource: "provider",
+    computedCostNanos: null,
+    priceVersion: null,
     credentialFingerprint: "abcdef012345",
     startedAt: "2026-08-15T10:00:00.000Z",
     finishedAt: "2026-08-15T10:00:01.200Z",
@@ -66,6 +70,38 @@ function row(over: Partial<AiCallRow> = {}): AiCallRow {
 /* ------------------------------------------------------------ the sums -- */
 
 describe("totalRows", () => {
+  it("keeps our own arithmetic in its own pocket, and out of `unpriced`", () => {
+    /* A declared bypass does not go through OpenRouter, so there is nobody to
+       ask what it cost and the figure is ours. Two things must not happen to
+       it: being added to `credits`, which is the number `--reconcile` compares
+       against OpenRouter's own running total and would then never match; and
+       being counted as `unpriced`, which it is the opposite of. */
+    const t = totalRows([
+      row(),
+      row({
+        costSource: "computed",
+        creditsUsedNanos: null,
+        computedCostNanos: 7_000_000,
+        providerAccount: "anthropic",
+        priceVersion: "claude-sonnet-5@2026-08-01",
+      }),
+    ]);
+    expect(t.credits).toBe(21_523_500);
+    expect(t.computed).toBe(7_000_000);
+    expect(t.unpriced).toBe(0);
+  });
+
+  it("counts a declared call that reported nothing at all as unpriced", () => {
+    /* `cost_source: "none"` — the call happened, it may well have been billed,
+       and we cannot say for how much. Distinct from `computed`. */
+    const t = totalRows([
+      row({ costSource: "none", creditsUsedNanos: null, computedCostNanos: null }),
+    ]);
+    expect(t.credits).toBe(0);
+    expect(t.computed).toBe(0);
+    expect(t.unpriced).toBe(1);
+  });
+
   it("counts a call that reported nothing as unpriced rather than as free", () => {
     const t = totalRows([row(), row({ creditsUsedNanos: null })]);
     expect(t.credits).toBe(21_523_500);
@@ -189,6 +225,100 @@ describe("the filesystem ledger", () => {
     expect(after.rows.some((r) => r.id === "x")).toBe(false);
   });
 
+  it("reads a line written before the provenance columns existed", async () => {
+    /* **The regression this pins.** The shape check was tightened to require
+       `provider_account` and `cost_source`, and every line written before those
+       columns became `unreadable` — GPT Sol ran the reader over the existing
+       ledger and counted 373 rows of real spend deleted from every total by the
+       check meant to protect it.
+
+       The backfill is not a guess. It is the one migration 0023 applies to the
+       Postgres rows: those lines all came from a gateway that only talks to
+       OpenRouter, and `provider` means "OpenRouter answered at all" — hence the
+       null test rather than a non-zero one, since a BYOK zero is an answer. */
+    const { costSource, providerAccount, computedCostNanos, priceVersion, ...old } = row({
+      id: "00000000-0000-4000-8000-00000000f101",
+      jobId: "job-pre-0023",
+      creditsUsedNanos: 4_200,
+    });
+    const { costSource: _c, providerAccount: _p, computedCostNanos: _m, priceVersion: _v, ...free } =
+      row({
+        id: "00000000-0000-4000-8000-00000000f102",
+        jobId: "job-pre-0023",
+        creditsUsedNanos: null,
+      });
+    const before = (await store.read()).unreadable;
+    await writeFile(
+      store.describe(),
+      `${JSON.stringify(old)}\n${JSON.stringify(free)}\n`,
+      { flag: "a" },
+    );
+    const after = await store.read();
+    expect(after.unreadable).toBe(before);
+    const priced = after.rows.find((r) => r.id === "00000000-0000-4000-8000-00000000f101");
+    expect(priced?.providerAccount).toBe("openrouter");
+    expect(priced?.costSource).toBe("provider");
+    /* A line that reported nothing is `none` — not `provider` with a zero, which
+       would be the total claiming a call was free. */
+    expect(
+      after.rows.find((r) => r.id === "00000000-0000-4000-8000-00000000f102")?.costSource,
+    ).toBe("none");
+    /* And the money is in the total rather than silently missing from it. */
+    expect(totalRows(after.rows.filter((r) => r.jobId === "job-pre-0023")).credits).toBe(4_200);
+  });
+
+  it("refuses a row whose cost_source disagrees with its two numbers", async () => {
+    /* **The check the database does with `ai_calls_one_cost_source`, done by
+       reading.** This store has no database. `totalRows` adds `computed` in one
+       branch and `credits` in another, so a line carrying both is counted twice
+       and a line claiming `provider` with nothing in it is counted as money that
+       arrived. Nothing else stands between a hand-edited JSONL line and a wrong
+       total. */
+    const ok = JSON.stringify(
+      row({
+        id: "00000000-0000-4000-8000-00000000f001",
+        /* Its own job id: these lines land in the shared fixture ledger, and the
+           by-job test below counts rows. */
+        jobId: "job-cost-source",
+        costSource: "computed",
+        creditsUsedNanos: null,
+        computedCostNanos: 7_000,
+        priceVersion: "claude-sonnet-5@1970-01-01",
+      }),
+    );
+    const both = JSON.stringify(
+      row({
+        id: "00000000-0000-4000-8000-00000000f002",
+        /* Its own job id: these lines land in the shared fixture ledger, and the
+           by-job test below counts rows. */
+        jobId: "job-cost-source",
+        costSource: "computed",
+        creditsUsedNanos: 5,
+        computedCostNanos: 7_000,
+        priceVersion: "claude-sonnet-5@1970-01-01",
+      }),
+    );
+    const noVersion = JSON.stringify(
+      row({
+        id: "00000000-0000-4000-8000-00000000f003",
+        /* Its own job id: these lines land in the shared fixture ledger, and the
+           by-job test below counts rows. */
+        jobId: "job-cost-source",
+        costSource: "computed",
+        creditsUsedNanos: null,
+        computedCostNanos: 7_000,
+        priceVersion: null,
+      }),
+    );
+    const before = (await store.read()).unreadable;
+    await writeFile(store.describe(), `${ok}\n${both}\n${noVersion}\n`, { flag: "a" });
+    const after = await store.read();
+    expect(after.unreadable).toBe(before + 2);
+    /* And the honest one still gets through, so this is not simply rejecting
+       everything. */
+    expect(after.rows.some((r) => r.id === "00000000-0000-4000-8000-00000000f001")).toBe(true);
+  });
+
   it("does not interleave two writes racing each other", async () => {
     /* Append-only is not the same as atomic — Node says plainly that its
        promise-based fs calls are not synchronised, and nothing established that
@@ -217,10 +347,11 @@ describe("the filesystem ledger", () => {
     const found = await store.forJob("job-parted");
     expect(found.rows.map((r) => r.stepName).sort()).toEqual(["arc", "toc"]);
     /* Carried through rather than dropped: a damaged line belonging to this job
-       would otherwise make a short job total look confident. The lines the two
+       would otherwise make a short job total look confident. The lines the three
        tests above appended are still in this file, which is what makes this
-       assertion mean something. */
-    expect(found.unreadable).toBe(3);
+       assertion mean something — one unparseable, two that parse but are not
+       rows, and two whose `cost_source` disagrees with their own numbers. */
+    expect(found.unreadable).toBe(5);
   });
 });
 

@@ -42,6 +42,9 @@ function call(over: Partial<SpendRecord> = {}): SpendRecord {
     generationId: "gen-1787844432-JKwGQebcNXfkCfTX5mUq",
     upstream: "Anthropic",
     isByok: false,
+    providerAccount: "openrouter",
+    computedCostNanos: null,
+    priceVersion: null,
     credentialFingerprint: "abcdef012345",
     wire: "messages",
     inputTokens: 13,
@@ -377,6 +380,28 @@ async function rowsFrom(
 }
 
 describe("the sink", () => {
+  it("calls a BYOK zero a reported cost, because a zero is an answer", async () => {
+    /* **The mutation that found this:** `costSourceOf` asking `if (costNanos)`
+       instead of `if (costNanos !== null)` passed every test in the suite. It
+       would have put `cost_source: "computed"` on a BYOK call whose credits are
+       legitimately `0`, and migration 0023's CHECK then *rejects the insert* —
+       so the loudest symptom of a one-character slip would be a row that never
+       arrives, on exactly the traffic a per-user spend limit is made of. */
+    const rows = await rowsFrom({}, () => {
+      recordSpend(call({ costNanos: 0, upstreamCostNanos: 4_000, isByok: true }));
+    });
+    expect(rows[0]?.costSource).toBe("provider");
+    expect(rows[0]?.creditsUsedNanos).toBe(0);
+    expect(rows[0]?.computedCostNanos).toBeNull();
+  });
+
+  it("says a call nobody could price is `none`, not `computed`", async () => {
+    const rows = await rowsFrom({}, () => {
+      recordSpend(call({ costNanos: null, upstreamCostNanos: null, isByok: null }));
+    });
+    expect(rows[0]?.costSource).toBe("none");
+  });
+
   it("gets one row per recorded call, with the collector's attribution on it", async () => {
     const rows = await rowsFrom({
       attribution: {

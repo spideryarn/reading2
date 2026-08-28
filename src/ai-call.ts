@@ -155,9 +155,21 @@ export const AI_JOB_ROUTE: Record<
     provider: { require_parameters: true, allow_fallbacks: false },
   },
   embeddings: { path: "/v1/embeddings", provider: {} },
-  /* **Pins nothing, on purpose.** An eval that pinned an upstream would be
-     measuring the pin as much as the model, and none of them wants that. */
-  eval: { path: "/v1/chat/completions", provider: {} },
+  /* **Forbids fallback — and my first reason for it was wrong.** I wrote that a
+     silent fallback would substitute a different *model*; GPT Sol corrected it:
+     provider fallback picks a different **upstream** for the model you asked
+     for, and without `order` or `only` the first one is load-balanced anyway.
+     The real reason is narrower and still good: an eval reports a latency and a
+     quality number, both of which vary by upstream, so a silent backup attempt
+     makes a number belong to a provider the write-up never names.
+     `require_parameters` is the load-bearing half — it means "only upstreams
+     that support the parameters actually sent", and a provider that quietly
+     drops a JSON schema answers with prose, which every eval here scores as the
+     model having a bad day. */
+  eval: {
+    path: "/v1/chat/completions",
+    provider: { require_parameters: true, allow_fallbacks: false },
+  },
 };
 
 /**
