@@ -130,7 +130,7 @@ describe("reading a public endpoint", () => {
  *
  * The assertions above pin what the client *sends*; on their own they would go
  * on passing after a server-side rename, and the only thing left wrong would be
- * the real client. `PUBLIC_ROUTES` is the server's own inventory — the
+ * the real client. `PUBLIC_ROUTE_NAMES` is the server's own inventory — the
  * dispatcher walks it and the method and spend sweeps drive off it — so asking
  * the client to agree with *that* is what makes a unilateral rename on either
  * side a red test rather than a 404 in a stranger's browser.
