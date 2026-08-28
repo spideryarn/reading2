@@ -21,6 +21,27 @@ next change gets compared against.
 Read [`pdf/README.md`](pdf/README.md) for what each fixture is for and the three ways choosing them
 nearly went quietly wrong.
 
+## `extraction/` — what Mozilla Readability does to fourteen hard pages
+
+```
+npx tsx evals/extraction/corpus.mts                     # free: no model, no network
+npx tsx evals/extraction/fixtures/verify.mts --refetch  # have the pages changed under us?
+```
+
+**The odd one out on this page in the other direction: it calls no model at all.** It is here rather
+than in `tests/` because it is a fourteen-page corpus of other people's HTML, it takes tens of
+seconds, and its output is a judgement to read rather than an assertion to pass. `compare()`, the
+part that *is* deterministic and cheap, is tested properly in
+[`tests/extraction-inventory.test.ts`](../tests/extraction-inventory.test.ts) — one case per bug the
+instrument shipped with, and there were five.
+
+[`extraction/rescue.mts`](extraction/rescue.mts) is the one that spends money: it asks a model which
+of the blocks Readability dropped were the article and which were the furniture, and answers with
+ids only.
+
+Read [`extraction/fixtures/README.md`](extraction/fixtures/README.md) for what each of the fourteen
+is meant to break, and why the HTML is committed rather than fetched on the day.
+
 ## `prompt-caching.ts` — is the article actually being cached?
 
 ```

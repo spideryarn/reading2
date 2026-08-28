@@ -1,0 +1,86 @@
+{
+  "pg-greatwork": {
+    "sha256": "168f8051ddbc0f02302bb95c1acd17137b03cec6390c360b189e213b51c75db0",
+    "bytes": 79767,
+    "url": "https://www.paulgraham.com/greatwork.html",
+    "capturedAt": "2026-08-28"
+  },
+  "man-open": {
+    "sha256": "20a7a2aaf1f34612ea1d1b9bf8f3b79a8abdba488a5b4badabaaa6e045d1c661",
+    "bytes": 76504,
+    "url": "https://man7.org/linux/man-pages/man2/open.2.html",
+    "capturedAt": "2026-08-28"
+  },
+  "rfc9110": {
+    "sha256": "d431760660ea44e130f6e919dab216df2d0b3a490567a98089267523368fe1e5",
+    "bytes": 1187554,
+    "url": "https://www.rfc-editor.org/rfc/rfc9110.html",
+    "capturedAt": "2026-08-28"
+  },
+  "whatwg-parsing": {
+    "sha256": "0fb117614eee02980335ec83818b42b436291b7f305c288ec7105a5f34b44679",
+    "bytes": 787451,
+    "url": "https://html.spec.whatwg.org/multipage/parsing.html",
+    "capturedAt": "2026-08-28"
+  },
+  "wikipedia-transformer": {
+    "sha256": "af6754180eceb727bf657dcee2a3ec7a4bdca10b6bd6200c9cbf6a9667839591",
+    "bytes": 1086388,
+    "url": "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)",
+    "capturedAt": "2026-08-28"
+  },
+  "ar5iv-attention": {
+    "sha256": "0c54ea2f265d4f7a24111c8703d51acdcfc0ae8b0c559e36a98e21cf62ce4e19",
+    "bytes": 167302,
+    "url": "https://ar5iv.labs.arxiv.org/html/1706.03762",
+    "capturedAt": "2026-08-28"
+  },
+  "arxiv-abs": {
+    "sha256": "29e42a996471db9c019f1122825cdac0e6d64c96767d9ee5c0b8891de6204bee",
+    "bytes": 43644,
+    "url": "https://arxiv.org/abs/1706.03762",
+    "capturedAt": "2026-08-28"
+  },
+  "aaronson": {
+    "sha256": "0dedd2560db1d1d48aa6cd4f33a99b419313c21a9249d453f77b23c22e88921f",
+    "bytes": 483699,
+    "url": "https://scottaaronson.blog/?p=7784",
+    "capturedAt": "2026-08-28"
+  },
+  "acx": {
+    "sha256": "681c49f0c40576a21686ba53d4cb2d3b85c4c50bd5381f3f2ed8b235a6cf5ed3",
+    "bytes": 703950,
+    "url": "https://www.astralcodexten.com/p/your-book-review-the-educated-mind",
+    "capturedAt": "2026-08-28"
+  },
+  "gwern-scaling": {
+    "sha256": "4a2564b8da9689f11afab5c99b621930defad2f305aaa0da7ff2e80152086f18",
+    "bytes": 290410,
+    "url": "https://gwern.net/scaling-hypothesis",
+    "capturedAt": "2026-08-28"
+  },
+  "tufte-css": {
+    "sha256": "5096d0c54d572f157c25643a7bc8ab4bbe7ce1479184d11348b221f3fa3f1764",
+    "bytes": 19922,
+    "url": "https://edwardtufte.github.io/tufte-css/",
+    "capturedAt": "2026-08-28"
+  },
+  "mdn-cache-control": {
+    "sha256": "c72d06ab856db5b0190f48b2d690180d7e371d4671cba4b08da4d88ea01e376b",
+    "bytes": 248397,
+    "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control",
+    "capturedAt": "2026-08-28"
+  },
+  "gutenberg-pride": {
+    "sha256": "6ac95942895963da67dc62f8bf9e6e0090b2e745a27f68940946c427fee3848a",
+    "bytes": 852578,
+    "url": "https://www.gutenberg.org/cache/epub/1342/pg1342-images.html",
+    "capturedAt": "2026-08-28"
+  },
+  "cornell-17-107": {
+    "sha256": "dbc63d850d1f35cb8171f4431c5b8fe04a4235f9ae1e6308a43b682f102a8736",
+    "bytes": 76252,
+    "url": "https://www.law.cornell.edu/uscode/text/17/107",
+    "capturedAt": "2026-08-28"
+  }
+}

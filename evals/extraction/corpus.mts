@@ -17,9 +17,15 @@
  * screen-reader-only duplicate, and a fix measured only on the page it was
  * invented for is a fix measured on nothing.
  *
- * **The fixture HTML is not committed** — 6 MB of other people's pages, and the
- * corpus decision is Greg's (see the plan). The manifest below is, so the set
- * is reproducible from the URLs.
+ * **The fixture HTML is committed**, under `fixtures/`, with a sha256 apiece —
+ * Greg's call, 2026-08-28, and the right one: a URL is not a fixture. Every page
+ * here can be edited, paywalled or deleted by somebody else, and an eval whose
+ * inputs move is an eval whose old numbers mean nothing. 5.8 MB buys the ability
+ * to compare a number next year against the same document.
+ *
+ * `fixtures/verify.mts` hashes them, and with `--refetch` asks the web whether
+ * the pages still serve those bytes. **A mismatch is a new fixture version,
+ * never a quietly updated hash.**
  */
 import { inventoryFile } from "./inventory.mjs";
 import { existsSync } from "node:fs";
@@ -33,7 +39,7 @@ import path from "node:path";
  * Every one was fetched over plain HTTP with no browser spoofing and returned
  * 200 with its article text in the initial bytes.
  */
-const CORPUS: { name: string; file: string; url: string; slot: string }[] = [
+export const CORPUS: { name: string; file: string; url: string; slot: string }[] = [
   { name: "pg-greatwork", file: "pg_greatwork.html", slot: "N/S/T",
     url: "https://www.paulgraham.com/greatwork.html" },
   { name: "man-open", file: "man_open.html", slot: "S/B",
@@ -102,11 +108,8 @@ function notable(a: Arm, rawChars: number): boolean {
 }
 
 async function main(): Promise<void> {
-  const dir = process.env.CORPUS;
-  if (!dir) {
-    console.error("Set CORPUS=<dir holding the fetched .html files>. See the header.");
-    process.exit(1);
-  }
+  /* Defaults to the committed fixtures; CORPUS overrides it for a scratch set. */
+  const dir = process.env.CORPUS ?? path.join(path.dirname(new URL(import.meta.url).pathname), "fixtures");
   const rows: Record<string, unknown>[] = [];
   console.log(
     `${"fixture".padEnd(22)} ${"slot".padEnd(6)} ${"raw ch".padStart(8)} ` +
@@ -169,4 +172,13 @@ async function main(): Promise<void> {
   console.log(`\nWritten to ${out}`);
 }
 
-void main();
+/* **Compared as resolved paths, not by suffix**, and this file needed it the
+   moment it grew an importer: `fixtures/verify.mts` imports CORPUS to know what
+   to hash, and with a bare `void main()` the import RAN the whole fourteen-page
+   corpus first. Nothing failed and nothing looked wrong — it just did several
+   seconds of Readability before printing a hash table. Exactly the accident
+   src/extract.ts and src/blocks.ts both carry a note about. */
+const isMain =
+  process.argv[1] !== undefined &&
+  new URL(import.meta.url).pathname === path.resolve(process.argv[1]);
+if (isMain) void main();
