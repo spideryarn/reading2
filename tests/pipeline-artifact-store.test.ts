@@ -588,10 +588,10 @@ describe("sameStamp", () => {
 /**
  * `glossary` is the first step whose freshness goes through `stamp` +
  * `sameStamp` rather than through a `…IsCurrent` function of its own, so these
- * are `glossaryIsCurrent`'s own conditions asserted against the new path.
+ * were `glossaryIsCurrent`'s own conditions, and since that function was deleted
+ * on 2026-08-28 this is now the only place they are asserted at all.
  *
- * Worth writing out rather than trusting: the mechanism is new, the old
- * function is still there and still passing its own tests, and a `stamp` that
+ * Worth writing out rather than trusting: the mechanism is new, and a `stamp` that
  * answered "current" too readily would show up as a stale glossary served for
  * ever — while one that answered too rarely would show up only on the bill.
  */

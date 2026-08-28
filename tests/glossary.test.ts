@@ -15,16 +15,12 @@
  * nondeterministic part is one function call, and everything around it has a
  * right answer. See docs/project/testing.md.
  */
-import { afterAll, describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { describe, expect, it } from "vitest";
 import {
   BATCH_SIZE,
   buildGlossary,
   dedupe,
   findOccurrences,
-  glossaryIsCurrent,
   PROMPT_VERSION,
   inDocumentOrder,
   isStale,
@@ -381,18 +377,7 @@ describe("suggestedCount", () => {
   });
 });
 
-describe("isStale / glossaryIsCurrent", () => {
-  const dirs: string[] = [];
-  afterAll(async () => {
-    for (const dir of dirs) await rm(dir, { recursive: true, force: true });
-  });
-
-  async function scratch(): Promise<string> {
-    const dir = await mkdtemp(path.join(tmpdir(), "spya-gloss-"));
-    dirs.push(dir);
-    return dir;
-  }
-
+describe("isStale", () => {
   function glossary(over: Partial<Glossary> = {}): Glossary {
     return {
       version: PROMPT_VERSION,
@@ -411,38 +396,14 @@ describe("isStale / glossaryIsCurrent", () => {
     expect(isStale(glossary(), BLOCKS)).toBe(false);
     expect(isStale(glossary(), [...BLOCKS, block("spya-dddddd", "A new paragraph.")])).toBe(true);
   });
-
-  it("is current when the blocks, the prompt and the model all still hold", async () => {
-    const dir = await scratch();
-    await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks: BLOCKS }));
-    await writeFile(path.join(dir, "glossary.json"), JSON.stringify(glossary()));
-    expect(await glossaryIsCurrent(dir)).toBe(true);
-  });
-
-  it("is not current when the prompt version or the model changed", async () => {
-    const dir = await scratch();
-    await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks: BLOCKS }));
-    await writeFile(
-      path.join(dir, "glossary.json"),
-      JSON.stringify(glossary({ version: "glossary/0" })),
-    );
-    expect(await glossaryIsCurrent(dir)).toBe(false);
-    await writeFile(
-      path.join(dir, "glossary.json"),
-      JSON.stringify(glossary({ generator: "some-other-model" })),
-    );
-    expect(await glossaryIsCurrent(dir)).toBe(false);
-  });
-
-  it("answers false for anything it cannot read", async () => {
-    // Not-current is the safe way to be wrong: the cost is one model call,
-    // where the other way round is a stale glossary served for ever.
-    const dir = await scratch();
-    expect(await glossaryIsCurrent(dir)).toBe(false);
-    await writeFile(path.join(dir, "glossary.json"), "{ not json");
-    expect(await glossaryIsCurrent(dir)).toBe(false);
-  });
 });
+
+/* The three `glossaryIsCurrent` cases that stood here were deleted with the
+   function on 2026-08-28. It had no caller outside this file: the pipeline
+   moved to `stamp` and src/pipeline.ts kept a comment saying the CLI still used
+   it, which was not true. The conditions those tests covered — blocks, prompt
+   version, model — are asserted against the live path in
+   tests/pipeline-artifact-store.test.ts. See docs/plans/simplification-wave-2.md § 0.5. */
 
 describe("sortEntries", () => {
   const list = [

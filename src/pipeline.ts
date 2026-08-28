@@ -1254,9 +1254,10 @@ export const STEPS: Record<StepName, PipelineStep> = {
     /* The first step through the new seam, and the shape the other two follow.
        Three values — the blocks it would be written from, the prompt that would
        write it, the model that would run — where `glossaryIsCurrent` was a
-       function doing the same three comparisons by hand. That function is still
-       exported from src/glossary.ts because its CLI uses it; nothing in the
-       pipeline calls it any more.
+       function doing the same three comparisons by hand. That function was
+       deleted on 2026-08-28. This comment used to say it survived "because its
+       CLI uses it"; glossary's `main()` never called it, and only its own tests
+       did, so the sentence was keeping dead code alive. docs/plans/simplification-wave-2.md § 0.5.
 
        `stamp` rather than `isDone` because the *comparison* belongs in one
        place (`sameStamp`) and only the four values belong to the stage. It is

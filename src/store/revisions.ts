@@ -21,16 +21,45 @@
  * and every other method takes `null` and returns immediately. The handle being
  * nullable is what keeps the branch out of the caller.
  *
- * ## What is wired, and what is still only half-connected
+ * ## Nothing is wired. Checked 2026-08-28.
  *
- * Wired: a job opens a draft, records each step it runs against it, and
- * publishes or fails it. Real rows, real carry-forward, real publication guard.
+ * **This section used to open "Wired: a job opens a draft…". That was false, and
+ * the paragraphs under it described an ingest that cannot happen.** No
+ * production file imports this module. `revisionLifecycle` below is referenced
+ * by exactly one thing in the repo, `tests/store-guarded.test.ts`, and
+ * [`src/jobs.ts`](../jobs.ts) contains the word "draft" once, in a comment about
+ * something else. So no job opens a draft, and none of the outcomes described
+ * below — the empty draft, the refused publish, the one `warn` line — has ever
+ * occurred.
  *
- * **Not wired: the artefacts.** The pipeline stages still write
+ * The sting is that this file was *written* to fix precisely that
+ * (`457fa74`, "Give the revision adapter a seam, because nothing was calling
+ * it"), and its own commit message names the failure exactly: *"That is the
+ * worst state in this migration: the work looks finished from the outside and
+ * the running code has never once gone through it."* The commit is one file, 259
+ * insertions, and no change to `jobs.ts` — so the seam repeated, one level up,
+ * the thing it was written to end. **Do not write "wired" here again until
+ * `git grep` shows a caller outside `tests/`.**
+ *
+ * `sweepAbandonedDrafts` is in the same position, and it is the one with teeth:
+ * `ABANDONED_DRAFT_MS` below explains that each abandoned draft carries a full
+ * copy of the article's `revision_blocks`. Nothing calls `sweep()`. That is not
+ * a leak today, because nothing creates drafts — **it becomes one the moment
+ * `begin()` becomes reachable, so the first production `begin()`, the artefact
+ * wiring, a scheduled `sweep()` and a test proving drafts are removed have to
+ * land together.** Recorded as an acceptance condition on step 11, not as a
+ * separate fix. See docs/plans/simplification-wave-2.md § 0.6.
+ *
+ * ## What the artefact half would still need
+ *
+ * **Also not wired: the artefacts.** The pipeline stages still write
  * `data/<slug>/blocks.json` and the rest with their own `writeFile` calls
- * (step 11 half B stage 5 is what moves them), so nothing fills the draft the
- * job just opened. The consequence is deliberate and visible rather than
- * papered over:
+ * (step 11 half B stage 5 is what moves them), and
+ * [`src/jobs.ts`](../jobs.ts) binds them to `fsArtifacts` unconditionally — with
+ * no `SPIDERYARN_STORE` switch, though the *job* store two lines away does
+ * switch on it. So even once a draft is opened, nothing would fill it. The
+ * consequences below are what the guards are designed to produce when that day
+ * comes, and are written in the future tense on purpose:
  *
  * - A **fresh article** gets an empty draft, and `publishRevision` refuses it —
  *   *"it has no blocks; it has no tree"*. Correct: the pipeline did not produce
@@ -42,12 +71,16 @@
  *   is refused — *"the tree was built from different blocks"*. Also correct,
  *   and it is the guard catching exactly the divergence it was written for.
  *
- * So under `SPIDERYARN_STORE=postgres` an ingest today ends with one `warn`
- * line and a failed draft, and the reader stays on the revision they had. That
- * is the honest state of a half-finished seam, and it is preferable to the
- * alternative, which is a republished copy of the old revision under a green
- * tick. When stage 5 lands and the artefacts arrive as values, publication
- * starts succeeding here with no change to this file.
+ * So once `begin()` is reached, an ingest under `SPIDERYARN_STORE=postgres`
+ * will end with one `warn` line and a failed draft, and the reader will stay on
+ * the revision they had. That is the honest state of a half-finished seam, and
+ * it is preferable to the alternative, which is a republished copy of the old
+ * revision under a green tick. When stage 5 lands and the artefacts arrive as
+ * values, publication starts succeeding here with no change to this file.
+ *
+ * **Today none of that runs**, because nothing calls `begin()` — see the top of
+ * this comment. An ingest under `SPIDERYARN_STORE=postgres` writes files and
+ * says nothing about revisions at all.
  *
  * ## What this file may log
  *

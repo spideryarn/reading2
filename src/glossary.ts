@@ -700,8 +700,8 @@ export function buildGlossary(
  *
  * Pure, and used at both ends, exactly as the thread's is: `GET
  * /api/glossary/:slug` puts the answer in the response so the panel can say the
- * list is out of date, and `glossaryIsCurrent` below wraps it so the pipeline
- * will not skip a step whose artefact has gone stale.
+ * list is out of date, and the pipeline's `stamp` (src/pipeline.ts) compares the
+ * same `sourceHash` so it will not skip a step whose artefact has gone stale.
  */
 export function isStale(glossary: Glossary, blocks: BlockFingerprint[]): boolean {
   return glossary.sourceHash !== hashBlocks(blocks);
@@ -718,28 +718,6 @@ async function readJson<T>(file: string): Promise<T | null> {
 /** The glossary on disk, or null. Exported so the step and the API read it one way. */
 export async function readGlossary(dir: string): Promise<Glossary | null> {
   return readJson<Glossary>(path.join(dir, "glossary.json"));
-}
-
-/**
- * Is the glossary on disk one we would write again today?
- *
- * The step's `isDone`, and the same three conditions the thread checks: the
- * blocks it was written from, the prompt that wrote it, and the model that ran.
- * Change any one and it regenerates by itself, with no `force` and nobody
- * having to remember.
- *
- * Anything unreadable answers **false**, which is the safe way to be wrong: the
- * cost is one model call, where the other way round is a stale glossary served
- * for ever.
- */
-export async function glossaryIsCurrent(dir: string): Promise<boolean> {
-  const glossary = await readGlossary(dir);
-  if (!glossary) return false;
-  if (glossary.version !== PROMPT_VERSION) return false;
-  if (glossary.generator !== CAPABLE_MODEL) return false;
-  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
-  if (!blocksFile?.blocks) return false;
-  return !isStale(glossary, blocksFile.blocks);
 }
 
 /* ------------------------------------------------------------- the prompt --

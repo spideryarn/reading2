@@ -665,12 +665,18 @@ wrong.
 
 ## Staleness, and the force cascade
 
-`glossaryIsCurrent` is the step's `isDone`, and it checks the three things
+The step's freshness check is its `stamp` in [`src/pipeline.ts`](../../src/pipeline.ts), compared
+by `sameStamp`. It checks the three things
 [architecture.md § Storage](architecture.md#storage) has always specified for a cached artefact: the
 blocks it was written from (`sourceHash`), the prompt version, and the model id. Change any one and
 it regenerates by itself, with no `force` and nobody having to remember. Anything unreadable answers
 **false**, which is the safe way round: the cost is one model call, where the other way is a stale
 glossary served for ever.
+
+Until 2026-08-28 this was a hand-written `glossaryIsCurrent` in `src/glossary.ts` doing the same
+three comparisons. `stamp` replaced it, the function kept only its own tests alive, and a comment in
+`pipeline.ts` wrongly said the CLI still needed it — so it was deleted. `isStale` stays: it is the
+pure half, and the API response uses it to tell the panel the list is out of date.
 
 `hashBlocks` moved out of `src/tweets.ts` into [`src/source-hash.ts`](../../src/source-hash.ts) for
 this, and that is not tidying: two stages computing "the same" fingerprint two ways can only ever

@@ -18,8 +18,10 @@
  * 2. **Current** — was it made from this article, by this prompt, by this
  *    model? A comparison of the recorded `StepStamp` against the stamp the step
  *    would produce now. That comparison is `sameStamp`, once, rather than
- *    `threadIsCurrent` / `glossaryIsCurrent` / `summariesAreCurrent` — the same
- *    three lines written three times.
+ *    `threadIsCurrent` / `summariesAreCurrent` and the `glossaryIsCurrent` that
+ *    used to sit beside them — the same three lines written three times.
+ *    `glossaryIsCurrent` was deleted on 2026-08-28 once `stamp` had replaced it;
+ *    the other two are still their steps' `isDone` and are next.
  *
  * This file is types and one pure function. The file-backed adapter is
  * src/store/artifacts-fs.ts; the Postgres one is not written yet.
