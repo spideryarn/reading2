@@ -28,6 +28,7 @@ import { currentOwnerId } from "../src/owner.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { MAX_RUNS } from "../src/searches.js";
 import { pgSearchStore } from "../src/store/pg-searches.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -54,29 +55,10 @@ const FIXTURE_IDS = [
   "spya-zzz002",
 ] as const;
 
-let reachable = false;
-
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  let why = "";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.search_runs') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-}
+const { reachable } = await pgReady({
+  suite: "tests/store-searches-pg.test.ts",
+  tables: ["spideryarn.search_runs"],
+});
 
 const when = reachable ? describe : describe.skip;
 

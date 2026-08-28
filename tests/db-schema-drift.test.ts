@@ -17,7 +17,7 @@
  * See docs/plans/schema-drift-guard.md.
  */
 
-import { Pool, type PoolClient } from "pg";
+import type { PoolClient } from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 
 import {
@@ -31,6 +31,7 @@ import {
 } from "../src/db/schema-drift.js";
 import { isLocalDatabaseUrl } from "../src/db/ssl.js";
 import { loadEnvLocal } from "../src/env.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -241,22 +242,14 @@ describe("declaredTables", () => {
 
 const url = process.env.DATABASE_URL;
 
-let pool: Pool | undefined;
-let reachable = false;
-
-if (url) {
-  pool = new Pool({ connectionString: url, max: 1, connectionTimeoutMillis: 2000 });
-  try {
-    const probe = await pool.query("select to_regclass('spideryarn.jobs') is not null as ready");
-    reachable = probe.rows[0]?.ready === true;
-  } catch {
-    reachable = false;
-  }
-}
-
-if (url && !reachable) {
-  console.warn("\n  ⚠ DATABASE_URL is set but the drift tests are skipping: no reachable schema\n");
-}
+/* Was on a **two-second** connect timeout, which is the drift the helper
+   exists to stop. `keepPool` because the DDL half drops a real column through
+   this pool and rolls it back. */
+const { reachable, pool } = await pgReady({
+  suite: "tests/db-schema-drift.test.ts",
+  tables: ["spideryarn.jobs"],
+  keepPool: true,
+});
 
 afterAll(async () => {
   await pool?.end();

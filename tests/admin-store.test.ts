@@ -27,37 +27,23 @@
  * no fixture to clean up. It reads whatever is in the database it is pointed
  * at, which is why it asserts shapes and never values.
  */
-import { Pool } from "pg";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { loadEnvLocal } from "../src/env.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
-const url = process.env.DATABASE_URL;
+/* Both halves matter: our own schema has to be migrated, and the role has to be
+   able to read `auth.users` at all — which is a grant rather than a migration,
+   and is the thing most likely to differ in production.
 
-let pool: Pool | undefined;
-let reachable = false;
-
-if (url) {
-  pool = new Pool({ connectionString: url, max: 1, connectionTimeoutMillis: 2000 });
-  try {
-    /* Both halves matter: our own schema has to be migrated, and the role has
-       to be able to read `auth.users` at all — which is a grant rather than a
-       migration, and is the thing most likely to differ in production. */
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.articles') is not null and " +
-        "to_regclass('auth.users') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (reachable) await pool.query("select 1 from auth.users limit 1");
-  } catch {
-    reachable = false;
-  }
-}
-
-afterAll(async () => {
-  await pool?.end();
+   Until the shared helper this probe was on a **two-second** connect timeout
+   and skipped **silently**; the helper's header records what each cost. */
+const { reachable } = await pgReady({
+  suite: "tests/admin-store.test.ts",
+  tables: ["spideryarn.articles", "auth.users"],
+  readable: ["auth.users"],
 });
 
 const dbIt = it.skipIf(!reachable);

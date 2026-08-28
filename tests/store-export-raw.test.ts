@@ -50,6 +50,7 @@ import type { RawSourceStore } from "../src/store/blobs.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { RawManifest } from "../src/fetch.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -60,31 +61,10 @@ const FROM = "writes";
 /** Ours, and `test-`-prefixed so the other suites' `data/` scans skip it. */
 const SLUG = "test-export-raw";
 
-let reachable = false;
-let why = "";
-
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.raw_sources') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) {
-    console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-  }
-}
+const { reachable } = await pgReady({
+  suite: "tests/store-export-raw.test.ts",
+  tables: ["spideryarn.raw_sources"],
+});
 
 const when = reachable ? describe : describe.skip;
 

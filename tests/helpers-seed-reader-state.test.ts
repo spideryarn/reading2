@@ -42,6 +42,7 @@ import { articles, blockIdentities, comments as commentsTable, jobs } from "../s
 import { loadEnvLocal } from "../src/env.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
 import { seedCommentsFromFiles, seedShelfFromFiles } from "./helpers/seed-reader-state.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -51,28 +52,10 @@ const FROM = "writes";
 /** A block id that is not in `writes`'s text, and never was. */
 const VANISHED = "spya-zzzzzz";
 
-let reachable = false;
-
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.revision_blocks') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-  } catch {
-    reachable = false;
-  }
-  await pool.end();
-  if (!reachable) {
-    console.warn("\n  ⚠ DATABASE_URL is set but these tests are skipping: no spideryarn schema\n");
-  }
-}
+const { reachable } = await pgReady({
+  suite: "tests/helpers-seed-reader-state.test.ts",
+  tables: ["spideryarn.revision_blocks"],
+});
 
 const when = reachable ? describe : describe.skip;
 

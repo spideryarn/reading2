@@ -100,6 +100,7 @@ import { pgArticleReader } from "../src/store/pg.js";
 import type { Article, LibraryEntry, Meta } from "../src/types.js";
 import { releaseCorpusLock, takeCorpusLock } from "./helpers/corpus-lock.js";
 import { forgetRevisions } from "./helpers/forget-revisions.js";
+import { pgReady } from "./helpers/pg-ready.js";
 import { type LoadedArticle, loadArticleIntoPg } from "./helpers/load-article.js";
 import { seedCommentsFromFiles, seedShelfFromFiles } from "./helpers/seed-reader-state.js";
 
@@ -183,51 +184,24 @@ async function completeArticles(): Promise<string[]> {
   return slugs;
 }
 
-/**
- * The probe runs at MODULE LOAD so the skip is a real vitest skip, and the run
- * reports "skipped" rather than a green tick for having checked nothing.
- */
-let reachable = false;
 /** Everything on disk, the legacy article included. */
 let onDiskSlugs: readonly string[] = [];
 /** The publishable corpus: everything except the legacy article. */
 let slugs: readonly string[] = [];
 
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  /* 10 seconds, not 2. At 2s this probe timed out under nothing worse than a
-     dev server holding connections, and the whole suite skipped — inside a run
-     that still printed a green "1103 passed". A parity suite that opts itself
-     out when the machine is busy is worse than one that fails, because the
-     signal it gives is indistinguishable from success. */
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  let why = "";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.revision_blocks') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
+/* The `await` is at MODULE LOAD so the skip is a real vitest skip, and the run
+   reports "skipped" rather than a green tick for having checked nothing. The
+   ten-second connect timeout and the warning both live in the helper now; its
+   header quotes the paragraph this file used to carry, because this is the
+   suite that learned it. */
+const { reachable } = await pgReady({
+  suite: "tests/store-parity.test.ts",
+  tables: ["spideryarn.revision_blocks"],
+});
 
-  /* Said out loud. DATABASE_URL being SET and the database being unreachable is
-     a different situation from having no database at all, and only the first
-     one means somebody's Docker is off while they believe these ran. */
-  if (!reachable) {
-    console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-  }
-  if (reachable) {
-    onDiskSlugs = await completeArticles();
-    slugs = onDiskSlugs.filter((slug) => slug !== LEGACY_SLUG);
-  }
+if (reachable) {
+  onDiskSlugs = await completeArticles();
+  slugs = onDiskSlugs.filter((slug) => slug !== LEGACY_SLUG);
 }
 
 const when = reachable ? describe : describe.skip;

@@ -51,6 +51,7 @@ import { currentOwnerId } from "../src/owner.js";
 import { deriveLibraryScalars } from "../src/library-scalars.js";
 import { pgArticleReader } from "../src/store/pg.js";
 import { pgLibrarySearch, pgShelfStore } from "../src/store/pg-shelf.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -95,45 +96,14 @@ const B = {
   old: "spya-pgaaqe",
 } as const;
 
-/**
- * The probe runs at MODULE LOAD so the skip is a real vitest skip. Copied in
- * shape from tests/store-parity.test.ts, including its ten-second timeout —
- * at two seconds it timed out under nothing worse than a dev server holding
- * connections, and the whole suite opted itself out inside a green run.
- */
-let reachable = false;
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  let why = "";
-  try {
-    /* Probes for the **fts column specifically**, not merely for the schema.
-       Migration 0004 is the thing under test, and a database that is one
-       migration behind would otherwise fail these with a confusing column
-       error rather than saying "run npm run db:migrate". */
-    const probe = await pool.query(
-      `select exists (
-         select 1 from information_schema.columns
-         where table_schema = 'spideryarn'
-           and table_name = 'revision_blocks'
-           and column_name = 'fts'
-       ) as ready`,
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "revision_blocks.fts is missing — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) {
-    console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-  }
-}
+/* Probes for the **fts column specifically**, not merely for the schema.
+   Migration 0004 is the thing under test, and a database that is one migration
+   behind would otherwise fail these with a confusing column error rather than
+   saying "run npm run db:migrate". */
+const { reachable } = await pgReady({
+  suite: "tests/store-shelf-pg.test.ts",
+  columns: [{ table: "spideryarn.revision_blocks", column: "fts" }],
+});
 
 const when = reachable ? describe : describe.skip;
 

@@ -22,6 +22,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AiCallRow } from "../src/ai-spend.js";
 import { loadEnvLocal } from "../src/env.js";
 import { totalRows } from "../src/store/ai-calls.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -357,39 +358,16 @@ describe("the filesystem ledger", () => {
 
 /* ------------------------------------------------------ the Postgres store -- */
 
-let reachable = false;
-
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 4,
-    connectionTimeoutMillis: 10_000,
-  });
-  let why = "";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.ai_calls') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (reachable) {
-      /* The table has existed since 0000 with a different shape. A probe that
-         only asks whether it exists would let this suite run against the old
-         columns and fail in a way that reads like a bug in the store. */
-      const shaped = await pool.query(
-        "select count(*) as n from information_schema.columns " +
-          "where table_schema='spideryarn' and table_name='ai_calls' and column_name='credits_used_nanos'",
-      );
-      reachable = Number(shaped.rows[0]?.n) === 1;
-      if (!reachable) why = "ai_calls is the pre-0021 shape — run npm run db:migrate";
-    } else why = "the spideryarn schema is not there — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-}
+/* Both, and in that order. The table has existed since 0000 with a different
+   shape, so a probe that only asks whether it exists would let this suite run
+   against the old columns and fail in a way that reads like a bug in the
+   store. */
+const { reachable } = await pgReady({
+  suite: "tests/store-ai-calls.test.ts",
+  tables: ["spideryarn.ai_calls"],
+  columns: [{ table: "spideryarn.ai_calls", column: "credits_used_nanos" }],
+  max: 4,
+});
 
 const when = reachable ? describe : describe.skip;
 

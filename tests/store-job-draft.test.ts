@@ -32,30 +32,18 @@ import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
 import { NotTheLiveAttempt, openOrBeginJobDraft } from "../src/store/pg-revisions.js";
 import type { JobStep } from "../src/types.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 const SLUG = "test-job-draft";
 const OTHER_SLUG = "test-job-draft-other";
 
 /* ---------------------------------------------------- is there a database -- */
 
-let reachable = false;
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.article_revisions') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-  } catch {
-    reachable = false;
-  }
-  await pool.end();
-}
+const { reachable } = await pgReady({
+  suite: "tests/store-job-draft.test.ts",
+  tables: ["spideryarn.article_revisions"],
+});
+
 const when = reachable ? describe : describe.skip;
 
 const STEPS: JobStep[] = [{ name: "fetch", label: "Fetching the page", status: "pending" }];

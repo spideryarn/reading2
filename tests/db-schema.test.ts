@@ -20,17 +20,16 @@
  */
 
 import { afterAll, describe, expect, it } from "vitest";
-import { Pool, type PoolClient } from "pg";
+import type { PoolClient } from "pg";
 
 import { loadEnvLocal } from "../src/env.js";
 import { UPLOAD_STATUSES } from "../src/source.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
-const url = process.env.DATABASE_URL;
-
 /**
- * The probe runs at MODULE LOAD, not in `beforeAll`, so that the skip is a real
+ * The `await` is at MODULE LOAD, not in `beforeAll`, so that the skip is a real
  * vitest skip and the run reports "9 skipped" rather than "9 passed".
  *
  * The first version of this file did it the obvious way — a flag set in
@@ -38,21 +37,16 @@ const url = process.env.DATABASE_URL;
  * database that reported **9 passed**, which is a green tick for having checked
  * nothing at all. See docs/reusable/silent-success.md; this file was one of its
  * examples within about four minutes of being written.
+ *
+ * It kept the probe but not the lesson: until the shared helper it was on a
+ * **two-second** connect timeout and skipped **silently**. `keepPool` because
+ * every test below runs its own SQL through this pool.
  */
-let pool: Pool | undefined;
-let reachable = false;
-
-if (url) {
-  pool = new Pool({ connectionString: url, max: 1, connectionTimeoutMillis: 2000 });
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.block_identities') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-  } catch {
-    reachable = false;
-  }
-}
+const { reachable, pool } = await pgReady({
+  suite: "tests/db-schema.test.ts",
+  tables: ["spideryarn.block_identities"],
+  keepPool: true,
+});
 
 afterAll(async () => {
   await pool?.end();

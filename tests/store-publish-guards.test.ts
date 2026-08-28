@@ -51,6 +51,7 @@ import {
 } from "../src/store/pg-revisions.js";
 import { PIPELINE_RUN } from "../src/store/revisions.js";
 import type { Block, Tree } from "../src/types.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -58,31 +59,10 @@ const SLUG = "test-publish-guards";
 
 /* ---------------------------------------------------- is there a database -- */
 
-let reachable = false;
-
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  let why = "";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.article_revisions') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) {
-    console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-  }
-}
+const { reachable } = await pgReady({
+  suite: "tests/store-publish-guards.test.ts",
+  tables: ["spideryarn.article_revisions"],
+});
 
 const when = reachable ? describe : describe.skip;
 

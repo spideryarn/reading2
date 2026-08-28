@@ -56,6 +56,7 @@ import {
   runInRequest,
   setRequestOwner,
 } from "../src/owner.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -389,41 +390,13 @@ describe("every article lookup names an owner", () => {
  */
 const OUTSIDER = "00000000-0000-4000-8000-0000000000b1" as OwnerId;
 
-/**
- * The probe runs at MODULE LOAD so the skip is a real vitest skip and the run
- * reports "skipped" rather than a green tick for having checked nothing. Same
- * shape and same ten-second timeout as tests/store-shelf-pg.test.ts, which
- * explains why two seconds was not enough.
- */
-let reachable = false;
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  let why = "";
-  try {
-    const probe = await pool.query(
-      `select exists (
-         select 1 from information_schema.columns
-         where table_schema = 'spideryarn'
-           and table_name = 'articles'
-           and column_name = 'owner_id'
-       ) as ready`,
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "spideryarn.articles.owner_id is missing — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) {
-    console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-  }
-}
+/* Probes for `owner_id` and not merely for the schema: the migration that
+   added it is what this suite is about, and a database one behind should be
+   told to migrate rather than fail with a column error. */
+const { reachable } = await pgReady({
+  suite: "tests/owner-isolation.test.ts",
+  columns: [{ table: "spideryarn.articles", column: "owner_id" }],
+});
 
 const when = reachable ? describe : describe.skip;
 

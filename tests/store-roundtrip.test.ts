@@ -41,6 +41,7 @@ import { releaseCorpusLock, takeCorpusLock } from "./helpers/corpus-lock.js";
 import { forgetRevisions } from "./helpers/forget-revisions.js";
 import { loadArticleIntoPg } from "./helpers/load-article.js";
 import { seedReaderStateFromFiles } from "./helpers/seed-reader-state.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -216,88 +217,60 @@ async function readJsonIfPresent(file: string): Promise<unknown | undefined> {
   }
 }
 
-let reachable = false;
 let slugs: readonly string[] = [];
 /** Articles in `data/` the publication gate refuses — see the scan below. */
 const unpublishable: string[] = [];
 
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  /* 10 seconds, not 2. At 2s this probe timed out under nothing worse than a
-     dev server holding connections, and the whole suite skipped — inside a run
-     that still printed a green "1103 passed". A parity suite that opts itself
-     out when the machine is busy is worse than one that fails, because the
-     signal it gives is indistinguishable from success. */
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  let why = "";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.revision_blocks') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
+/* The ten-second connect timeout and the warning both live in the helper. */
+const { reachable } = await pgReady({
+  suite: "tests/store-roundtrip.test.ts",
+  tables: ["spideryarn.revision_blocks"],
+});
 
-  /* Said out loud. DATABASE_URL being SET and the database being unreachable is
-     a different situation from having no database at all, and only the first
-     one means somebody's Docker is off while they believe these ran. */
-  if (!reachable) {
-    console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-  }
-
-  if (reachable) {
-    const { readdir } = await import("node:fs/promises");
-    const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
-    const found: string[] = [];
-    for (const entry of entries) {
-      // `_` is the queue's; `test-` is another test file's fixture, created and
-      // removed concurrently — see tests/store-parity.test.ts for the full note.
-      if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith("test-")) {
-        continue;
-      }
-      const files: string[] = await readdir(path.join(ROOT, "data", entry.name)).catch(
-        () => [] as string[],
-      );
-      if (!files.includes("blocks.json") || !files.includes("tree.json")) continue;
-      /* **An article that cannot be published cannot be exported**, and there is
-         one in `data/`. `labels.json` is stage 4's output, and one written
-         before it recorded a `sourceHash` gives the publication gate nothing to
-         check the ToC against — so `publishRevision` refuses, correctly, and
-         `exportArticle` then finds no current revision. `db:import` never met
-         this because it wrote `hashBlocks(blocks)` into every step row whether
-         or not the artefact could support the claim.
-
-         Excluded by asking the question rather than by naming `constitution`,
-         so a regenerated fixture rejoins the corpus on its own. What was
-         excluded, and why, is asserted below. */
-      /* **A missing `labels.json` is a different fact from a legacy one**, and
-         collapsing them would report an accidental deletion as "predates
-         sourceHash". An article with a tree and no labels file is broken and
-         should fail loudly rather than be quietly dropped from the corpus, so
-         it stays in and whatever reads it says so. GPT Sol, 2026-08-28. */
-      if (!files.includes("labels.json")) {
-        found.push(entry.name);
-        continue;
-      }
-      const labels = (await readJsonIfPresent(
-        path.join(ROOT, "data", entry.name, "labels.json"),
-      )) as { sourceHash?: string } | undefined;
-      if (!labels?.sourceHash) {
-        unpublishable.push(entry.name);
-        continue;
-      }
-      found.push(entry.name);
+if (reachable) {
+  const { readdir } = await import("node:fs/promises");
+  const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
+  const found: string[] = [];
+  for (const entry of entries) {
+    // `_` is the queue's; `test-` is another test file's fixture, created and
+    // removed concurrently — see tests/store-parity.test.ts for the full note.
+    if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith("test-")) {
+      continue;
     }
-    slugs = found;
+    const files: string[] = await readdir(path.join(ROOT, "data", entry.name)).catch(
+      () => [] as string[],
+    );
+    if (!files.includes("blocks.json") || !files.includes("tree.json")) continue;
+    /* **An article that cannot be published cannot be exported**, and there is
+       one in `data/`. `labels.json` is stage 4's output, and one written
+       before it recorded a `sourceHash` gives the publication gate nothing to
+       check the ToC against — so `publishRevision` refuses, correctly, and
+       `exportArticle` then finds no current revision. `db:import` never met
+       this because it wrote `hashBlocks(blocks)` into every step row whether
+       or not the artefact could support the claim.
+
+       Excluded by asking the question rather than by naming `constitution`,
+       so a regenerated fixture rejoins the corpus on its own. What was
+       excluded, and why, is asserted below. */
+    /* **A missing `labels.json` is a different fact from a legacy one**, and
+       collapsing them would report an accidental deletion as "predates
+       sourceHash". An article with a tree and no labels file is broken and
+       should fail loudly rather than be quietly dropped from the corpus, so
+       it stays in and whatever reads it says so. GPT Sol, 2026-08-28. */
+    if (!files.includes("labels.json")) {
+      found.push(entry.name);
+      continue;
+    }
+    const labels = (await readJsonIfPresent(
+      path.join(ROOT, "data", entry.name, "labels.json"),
+    )) as { sourceHash?: string } | undefined;
+    if (!labels?.sourceHash) {
+      unpublishable.push(entry.name);
+      continue;
+    }
+    found.push(entry.name);
   }
+  slugs = found;
 }
 
 const when = reachable ? describe : describe.skip;

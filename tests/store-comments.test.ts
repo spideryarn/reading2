@@ -33,6 +33,7 @@ import { articles, blockIdentities, comments as commentsTable } from "../src/db/
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import { pgCommentStore } from "../src/store/pg-comments.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -42,29 +43,10 @@ const BLOCK_ID = "spya-aaa222";
 /** A block id that exists as an identity but is in no revision — see the last test. */
 const ORPHAN_BLOCK_ID = "spya-bbb333";
 
-let reachable = false;
-
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  let why = "";
-  try {
-    const probe = await pool.query("select to_regclass('spideryarn.comments') is not null as ready");
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) {
-    console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-  }
-}
+const { reachable } = await pgReady({
+  suite: "tests/store-comments.test.ts",
+  tables: ["spideryarn.comments"],
+});
 
 const when = reachable ? describe : describe.skip;
 

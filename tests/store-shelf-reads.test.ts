@@ -82,6 +82,7 @@ const { currentOwnerId } = await import("../src/owner.js");
 const { pgArticleReader } = await import("../src/store/pg.js");
 const { deriveLibraryScalars } = await import("../src/library-scalars.js");
 import type { Block, Glossary, Tree } from "../src/types.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 /* ------------------------------------------------------------- the fixture -- */
 
@@ -210,32 +211,12 @@ async function clean(): Promise<void> {
   await db.delete(articles).where(inArray(articles.id, [...ALL_ARTICLES]));
 }
 
-/* The probe runs at MODULE LOAD so the skip is a real vitest skip. Same shape
-   and same ten-second timeout as tests/store-shelf-pg.test.ts, which explains
-   why two seconds was not enough. */
-let reachable = false;
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1, connectionTimeoutMillis: 10_000 });
-  let why = "";
-  try {
-    const probe = await pool.query(
-      `select exists (
-         select 1 from information_schema.columns
-         where table_schema = 'spideryarn'
-           and table_name = 'article_revisions'
-           and column_name = 'word_count'
-       ) as ready`,
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "article_revisions.word_count is missing — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-}
+/* Probes for `word_count` and not merely for the schema — the scalars this
+   suite reads are what that migration added. */
+const { reachable } = await pgReady({
+  suite: "tests/store-shelf-reads.test.ts",
+  columns: [{ table: "spideryarn.article_revisions", column: "word_count" }],
+});
 
 const when = reachable ? describe : describe.skip;
 

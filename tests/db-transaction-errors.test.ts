@@ -26,26 +26,13 @@ import { afterAll, describe, expect, it } from "vitest";
 import { ChatConflict } from "../src/chat.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
-let reachable = false;
-
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  try {
-    await pool.query("select 1");
-    reachable = true;
-  } catch (err) {
-    console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${(err as Error).message}\n`);
-  }
-  await pool.end();
-}
+/* No table named: this suite wants a live connection and nothing else, and
+   `pgReady` runs `select 1` before it asks about anything. */
+const { reachable } = await pgReady({ suite: "tests/db-transaction-errors.test.ts" });
 
 const when = reachable ? describe : describe.skip;
 

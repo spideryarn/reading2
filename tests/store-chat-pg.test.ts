@@ -28,6 +28,7 @@ import { articles, chatMessages, chatThreads } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId } from "../src/owner.js";
 import { pgChatStore } from "../src/store/pg-chat.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -42,29 +43,11 @@ const THREAD = "spya-thread";
 const OTHER = "spya-secnd2";
 const NONE: ReadonlySet<string> = new Set();
 
-let reachable = false;
-
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 4,
-    connectionTimeoutMillis: 10_000,
-  });
-  let why = "";
-  try {
-    const probe = await pool.query(
-      "select to_regclass('spideryarn.chat_messages') is not null as ready",
-    );
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-}
+const { reachable } = await pgReady({
+  suite: "tests/store-chat-pg.test.ts",
+  tables: ["spideryarn.chat_messages"],
+  max: 4,
+});
 
 const when = reachable ? describe : describe.skip;
 

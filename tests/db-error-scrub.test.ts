@@ -61,6 +61,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { kindOfMessage, STORAGE_BUSY, STORAGE_FAILED, worthRetrying } from "../src/messages.js";
 import { guardDbStore } from "../src/store/db-errors.js";
 import { currentOwnerId } from "../src/owner.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -90,27 +91,10 @@ const SENTINEL = "SENTINEL-e7f2-the-readers-own-words";
  */
 const NUL = "\u0000";
 
-let reachable = false;
-
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  let why = "";
-  try {
-    const probe = await pool.query("select to_regclass('spideryarn.comments') is not null as ready");
-    reachable = probe.rows[0]?.ready === true;
-    if (!reachable) why = "the spideryarn schema is not there — run npm run db:migrate";
-  } catch (err) {
-    reachable = false;
-    why = `could not reach it: ${(err as Error).message}`;
-  }
-  await pool.end();
-  if (!reachable) console.warn(`\n  ⚠ DATABASE_URL is set but these tests are skipping: ${why}\n`);
-}
+const { reachable } = await pgReady({
+  suite: "tests/db-error-scrub.test.ts",
+  tables: ["spideryarn.comments"],
+});
 
 const when = reachable ? describe : describe.skip;
 

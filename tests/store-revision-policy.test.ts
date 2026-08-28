@@ -43,6 +43,7 @@ import { loadEnvLocal } from "../src/env.js";
    file imports it from its real address. */
 import { deriveLibraryScalars } from "../src/library-scalars.js";
 import { REVISION_CARRY_POLICY } from "../src/store/pg-revisions.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
@@ -139,24 +140,24 @@ describe("deriveLibraryScalars", () => {
 
 /* ------------------------------------------------- against the real table -- */
 
+/* This one wants the probe's ROWS, not just its verdict, so it keeps the pool
+   and reads the column list through it. The old version had a silent hole: an
+   empty result left `liveColumns` null and the suite skipped with nothing on
+   stderr, because only the `catch` warned. */
 let liveColumns: string[] | null = null;
 
-if (process.env.DATABASE_URL) {
-  const { Pool } = await import("pg");
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  try {
-    const probe = await pool.query<{ column_name: string }>(
-      `select column_name from information_schema.columns
-       where table_schema = 'spideryarn' and table_name = 'article_revisions'`,
-    );
-    if (probe.rowCount) liveColumns = probe.rows.map((r) => r.column_name);
-  } catch (err) {
-    console.warn(`\n  ⚠ DATABASE_URL is set but this test is skipping: ${(err as Error).message}\n`);
-  }
+const { reachable, pool } = await pgReady({
+  suite: "tests/store-revision-policy.test.ts",
+  tables: ["spideryarn.article_revisions"],
+  keepPool: true,
+});
+
+if (reachable && pool) {
+  const probe = await pool.query<{ column_name: string }>(
+    `select column_name from information_schema.columns
+     where table_schema = 'spideryarn' and table_name = 'article_revisions'`,
+  );
+  liveColumns = probe.rows.map((r) => r.column_name);
   await pool.end();
 }
 

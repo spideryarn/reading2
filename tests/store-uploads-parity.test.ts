@@ -23,7 +23,6 @@
  * See docs/plans/durable-queue-and-uploads.md.
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { Pool } from "pg";
 
 import { loadEnvLocal } from "../src/env.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
@@ -31,29 +30,18 @@ import { closeDb } from "../src/db/client.js";
 import type { UploadRecord, UploadStore } from "../src/store/uploads.js";
 import { fsUploadStore } from "../src/store/uploads-fs.js";
 import { pgUploadStore } from "../src/store/pg-uploads.js";
+import { pgReady } from "./helpers/pg-ready.js";
 
 loadEnvLocal();
 
-/**
- * The probe runs at MODULE LOAD so the skip is a real vitest skip and the run
- * says "skipped" rather than showing a green tick for having checked nothing.
- * docs/reusable/silent-success.md.
- */
-let pgReachable = false;
-if (process.env.DATABASE_URL) {
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    max: 1,
-    connectionTimeoutMillis: 10_000,
-  });
-  try {
-    const probe = await pool.query("select to_regclass('spideryarn.uploads') is not null as ready");
-    pgReachable = probe.rows[0]?.ready === true;
-  } catch {
-    pgReachable = false;
-  }
-  await pool.end();
-}
+/* The `await` is at MODULE LOAD so the skip is a real vitest skip and the run
+   says "skipped" rather than showing a green tick for having checked nothing.
+   docs/reusable/silent-success.md. Until this used the shared helper it also
+   skipped **silently**, which is the same failure one step earlier. */
+const { reachable: pgReachable } = await pgReady({
+  suite: "tests/store-uploads-parity.test.ts",
+  tables: ["spideryarn.uploads"],
+});
 
 /**
  * The dev owner, **imported rather than written out**, because
