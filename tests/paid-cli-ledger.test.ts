@@ -157,6 +157,9 @@ const SKIP_KEYS = new Set([
 /** The name every one of these modules gives its entry function. */
 const MAIN = "main";
 
+/** The export in src/env.ts that reads `.env.local`, by its name at the source. */
+const LOAD_ENV = "loadEnvLocal";
+
 /** Nodes whose body is code the surrounding statement *defines* rather than runs. */
 const FUNCTIONS = new Set([
   "FunctionDeclaration",
@@ -253,26 +256,33 @@ function mentionsAnyName(node: unknown, names: ReadonlySet<string>): boolean {
 }
 
 /**
- * The local name `withLedger` was imported under, or `null`.
+ * The local name a given export was imported under, or `null`.
  *
  * **By binding, not by spelling.** A file that defines its own `withLedger` and
  * calls it has satisfied every text matcher and opened no ledger; this is the
- * check that tells the two apart.
+ * check that tells the two apart. `envOffence` needs exactly the same question
+ * asked about `loadEnvLocal`, which is why this takes the module and the export
+ * rather than hard-coding one pair.
  */
-function ledgerLocalName(body: Node[]): string | null {
+function importedLocalName(body: Node[], moduleSuffix: string, exported: string): string | null {
   for (const stmt of body) {
     if (stmt.type !== "ImportDeclaration") continue;
     const spec = (stmt.source as { value?: string } | undefined)?.value ?? "";
-    if (!spec.endsWith("/cli-ledger.js")) continue;
+    if (!spec.endsWith(moduleSuffix)) continue;
     if (stmt.importKind === "type") continue;
     for (const sp of (stmt.specifiers ?? []) as Node[]) {
       if (sp.type !== "ImportSpecifier" || sp.importKind === "type") continue;
-      if ((sp.imported as { name?: string } | undefined)?.name === "withLedger") {
+      if ((sp.imported as { name?: string } | undefined)?.name === exported) {
         return (sp.local as { name: string }).name;
       }
     }
   }
   return null;
+}
+
+/** The local name `withLedger` was imported under, or `null`. */
+function ledgerLocalName(body: Node[]): string | null {
+  return importedLocalName(body, "/cli-ledger.js", "withLedger");
 }
 
 /**
@@ -410,6 +420,83 @@ function declaresMain(body: Node[]): boolean {
     }
   }
   return false;
+}
+
+/**
+ * **The function `main` is, if it is a function at all.**
+ *
+ * `declaresMain` above answers whether the name exists, which is all the ledger
+ * rule needs. This one hands back the body, because the `.env.local` rule is
+ * about what happens *inside* it.
+ */
+function mainFunction(body: Node[]): Node | null {
+  for (const raw of body) {
+    const stmt =
+      raw.type === "ExportNamedDeclaration" || raw.type === "ExportDefaultDeclaration"
+        ? ((raw.declaration as Node | undefined) ?? raw)
+        : raw;
+    const id = stmt.id as { name?: string } | undefined;
+    if (stmt.type === "FunctionDeclaration" && id?.name === MAIN) return stmt;
+    if (stmt.type !== "VariableDeclaration") continue;
+    for (const d of (stmt.declarations ?? []) as Node[]) {
+      const declared = d.id as { type?: string; name?: string } | undefined;
+      if (declared?.type !== "Identifier" || declared.name !== MAIN) continue;
+      const init = d.init as Node | undefined;
+      if (init && FUNCTIONS.has(init.type as string)) return init;
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * **Every paid CLI reads `.env.local` before it spends.**
+ *
+ * The gap this closes is not money, it is a lie about the machine. Seven of the
+ * eight call `loadEnvLocal()` at the top of `main`; `src/pdf-read.ts` did not,
+ * so `npm run pdf x.pdf` from a shell with no exported key failed with
+ * "OPENROUTER_API_KEY is not set" while the key sat in `.env.local` — a missing
+ * credential, apparently, rather than an unread file. `src/ideas.ts` carried a
+ * comment calling that a real gap across the other stages; by the time this was
+ * written the comment was true of one file and named none of them.
+ *
+ * **In `main`, and it is checked there on purpose.** That same comment says why:
+ * doing it inside the generator would be a no-op under the server, which loads
+ * `.env.local` through `vite.config.ts` before any stage runs, and would pull
+ * `node:fs` into a path that has no use for it.
+ *
+ * **What the walk counts as "calls".** `{ deferred: false }` — what `main`
+ * actually runs, not what it merely defines. A `loadEnvLocal` mentioned inside a
+ * helper that `main` declares and never invokes reads as an offence, which is
+ * the safe direction.
+ */
+export function envOffence(file: string, source: string): string | null {
+  const { body, errors } = parseSource(source);
+  if (errors > 0) {
+    return `${file} — could not be parsed (${errors} error(s)), so nothing here was checked`;
+  }
+  const local = importedLocalName(body, "/env.js", LOAD_ENV);
+  if (!local) return `${file} — imports no ${LOAD_ENV} from ./env.js`;
+
+  const main = mainFunction(body);
+  if (!main) return `${file} — declares no top-level ${MAIN}() function to read .env.local in`;
+
+  /* Same trap as the ledger rule: a local of the same spelling satisfies every
+     matcher that reads the callee's text and reads no file. */
+  if (shadowsBinding(main.body, local)) {
+    return `${file} — ${MAIN}() declares its own ${local}, shadowing the import from ./env.js`;
+  }
+
+  let called = false;
+  walk(main.body, { deferred: false }, (n) => {
+    if (n.type !== "CallExpression" && n.type !== "OptionalCallExpression") return;
+    const callee = n.callee as Node | undefined;
+    if (callee?.type === "Identifier" && callee.name === local) called = true;
+  });
+  if (!called) {
+    return `${file} — ${MAIN}() never calls ${local}(), so a key in .env.local goes unread`;
+  }
+  return null;
 }
 
 /**
@@ -879,5 +966,126 @@ describe("the listed stage CLIs open the ledger", () => {
         );
       });
     }
+  });
+});
+
+/**
+ * **The same eight CLIs read `.env.local` before they spend.**
+ *
+ * A sibling rule rather than part of the one above, because it is about a
+ * different failure. The ledger rule is about money going missing; this one is
+ * about a working machine reporting itself broken: `npm run pdf x.pdf` from a
+ * shell with no exported key answered "OPENROUTER_API_KEY is not set" while the
+ * key was sitting in `.env.local`, unread.
+ *
+ * It shares the list, the parser and the binding check, which is the reason it
+ * lives here. `PAID_CLIS` is already the set of modules that spend, and a CLI
+ * that spends is exactly a CLI that needs a key.
+ *
+ * **The edge of this, in the same spirit as the header.** It checks the eight
+ * named above and nothing else — `src/embeddings.ts`, `src/converse.ts` and
+ * `src/explain.ts` also call `loadEnvLocal()` and are outside the list because
+ * they are outside `PAID_CLIS`. And it cannot see a CLI that reads a key some
+ * other way.
+ */
+describe("the listed stage CLIs read .env.local", () => {
+  it("calls loadEnvLocal() inside main(), in every one of them", () => {
+    const offenders = Object.keys(PAID_CLIS)
+      .map((file) => envOffence(file, read(file)))
+      .filter((o): o is string => o !== null);
+
+    expect(
+      offenders,
+      "These CLIs spend money and never read .env.local, so running one from a shell\n" +
+        "that has not exported the key fails as though the credential were missing\n" +
+        "rather than unread. Call loadEnvLocal() at the top of main() — src/env.ts,\n" +
+        "and see the note in src/ideas.ts on why it belongs in main and not deeper.\n",
+    ).toEqual([]);
+  });
+
+  /**
+   * **Proved against the broken state**, the same way the ledger rule is.
+   * docs/reusable/silent-success.md — a rule nobody has watched fail is not
+   * evidence, and this one had eight green files the moment it was written,
+   * which is the most convincing way for a new check to be doing nothing.
+   */
+  describe("the detector goes red when it should", () => {
+    const IMPORT = 'import { loadEnvLocal } from "./env.js";\n';
+    const bad: [string, string, string][] = [
+      [
+        "main() never calls it — src/pdf-read.ts before 2026-08-28",
+        `${IMPORT}async function main(): Promise<void> {\n  await run();\n}\n`,
+        "fixture.ts — main() never calls loadEnvLocal(), so a key in .env.local goes unread",
+      ],
+      [
+        "the import missing entirely",
+        "async function main(): Promise<void> {\n  loadEnvLocal();\n}\n",
+        "fixture.ts — imports no loadEnvLocal from ./env.js",
+      ],
+      [
+        /* The binding trap again: right spelling, no import behind it. */
+        "a local loadEnvLocal shadowing the real import",
+        `${IMPORT}async function main(): Promise<void> {\n  const loadEnvLocal = () => {};\n  loadEnvLocal();\n}\n`,
+        "fixture.ts — main() declares its own loadEnvLocal, shadowing the import from ./env.js",
+      ],
+      [
+        /* Defining is not running. A helper that would have read the file, had
+           anything called it, leaves the key just as unread. */
+        "the call inside a helper main() declares and never invokes",
+        `${IMPORT}async function main(): Promise<void> {\n  const setup = () => loadEnvLocal();\n  await run();\n}\n`,
+        "fixture.ts — main() never calls loadEnvLocal(), so a key in .env.local goes unread",
+      ],
+      [
+        "a call in a comment, which is not a call",
+        `${IMPORT}async function main(): Promise<void> {\n  /* loadEnvLocal(); */\n  await run();\n}\n`,
+        "fixture.ts — main() never calls loadEnvLocal(), so a key in .env.local goes unread",
+      ],
+      [
+        /* Called at module scope instead: it runs, but on *import* as well as on
+           start, which is the thing the note in src/ideas.ts refuses. */
+        "called at the top level rather than in main()",
+        `${IMPORT}loadEnvLocal();\nasync function main(): Promise<void> {\n  await run();\n}\n`,
+        "fixture.ts — main() never calls loadEnvLocal(), so a key in .env.local goes unread",
+      ],
+      [
+        "a module with no main() at all",
+        `${IMPORT}loadEnvLocal();\n`,
+        "fixture.ts — declares no top-level main() function to read .env.local in",
+      ],
+      [
+        "a file that will not parse, which checks nothing and must not read as clean",
+        `${IMPORT}async function main(): Promise<void> {\n  const ) = ;\n}\n`,
+        "",
+      ],
+    ];
+
+    for (const [name, source, expected] of bad) {
+      it(name, () => {
+        const offence = envOffence("fixture.ts", source);
+        expect(offence, "the detector said this fixture was fine").not.toBeNull();
+        if (expected === "") {
+          expect(offence).toMatch(/could not be parsed/);
+        } else {
+          expect(offence).toBe(expected);
+        }
+      });
+    }
+
+    /**
+     * **And on the real file**, so the rule is anchored to the tree rather than
+     * to fixtures. The mutation has to match exactly once, for the same reason
+     * the ledger controls insist on it: an anchor that also matched the comment
+     * above the line would edit prose and leave the code running.
+     */
+    it("goes red on src/pdf-read.ts the moment the call is taken out", () => {
+      const source = read("src/pdf-read.ts");
+      expect(envOffence("src/pdf-read.ts", source)).toBeNull();
+      expect(source.split("\n  loadEnvLocal();").length - 1).toBe(1);
+      const without = source.replace("\n  loadEnvLocal();", "");
+      expect(without, "the mutation matched nothing").not.toBe(source);
+      expect(envOffence("src/pdf-read.ts", without)).toBe(
+        "src/pdf-read.ts — main() never calls loadEnvLocal(), so a key in .env.local goes unread",
+      );
+    });
   });
 });

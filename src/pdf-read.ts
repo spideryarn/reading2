@@ -53,6 +53,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PDFDocument } from "pdf-lib";
 import { withLedger } from "./cli-ledger.js";
+import { loadEnvLocal } from "./env.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
 import { PDF_READER_MODEL } from "./models.js";
@@ -1315,6 +1316,13 @@ async function main() {
      later stage is addressed by slug, and because the three eval fixtures are
      each called `source.pdf` and would otherwise share one. */
   const slug = process.argv[3] ?? path.basename(input, ".pdf");
+  /* **In `main`, like the seven stage CLIs** — see the note in src/ideas.ts for
+     why it does not go deeper. Without it `npm run pdf x.pdf` from a shell that
+     has not exported the key stopped at "OPENROUTER_API_KEY is not set" with
+     the key sitting unread in `.env.local`, which reads as a missing credential
+     rather than an unread file. `tests/paid-cli-ledger.test.ts` holds the rule
+     for all eight now. */
+  loadEnvLocal();
   const outFile = path.join("output", `${slug}.html`);
   const dataDir = path.join("data", slug);
   await mkdir(dataDir, { recursive: true });
