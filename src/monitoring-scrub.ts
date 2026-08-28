@@ -91,6 +91,25 @@ function safeFrame(frame: StackFrame): StackFrame {
 }
 
 /**
+ * Who was signed in, and nothing else about them.
+ *
+ * `User` has an index signature — anything may be hung on it — so this is a
+ * reduction rather than a passthrough, exactly like `safeFrame`. Two fields:
+ * the owner id, which is what joins an issue to a row, and the email, which is
+ * what makes the issue list mean something to a person reading it.
+ *
+ * **`ip_address` is deliberately not among them.** Sentry infers one from the
+ * connection unless told not to; `{{auto}}` is the opt-in and this never sends
+ * it. An email is what Greg asked for and a home address is not.
+ */
+function safeUser(user: NonNullable<ErrorEvent["user"]>): NonNullable<ErrorEvent["user"]> {
+  return {
+    ...(typeof user.id === "string" && { id: user.id }),
+    ...(typeof user.email === "string" && { email: user.email }),
+  };
+}
+
+/**
  * The whole event, rebuilt from an allowlist. **Rule 3.**
  *
  * Note what this has to defend against, because none of it comes from
@@ -102,9 +121,24 @@ function safeFrame(frame: StackFrame): StackFrame {
  *
  * Dropped by construction, every time: `request` (the RequestData integration
  * attaches the full request URL and there is no `dataCollection` switch that
- * turns it off), `user`, `extra`, `contexts` (the SystemError integration
- * copies an error's enumerable own properties into it), `breadcrumbs`,
- * `message`, `logentry`, `transaction`, `threads`, `server_name`, `modules`.
+ * turns it off), `extra`, `contexts` (the SystemError integration copies an
+ * error's enumerable own properties into it), `breadcrumbs`, `message`,
+ * `logentry`, `transaction`, `threads`, `server_name`, `modules`.
+ *
+ * **`user` is the one exception, and it is a deliberate reversal.** Greg asked
+ * on 2026-08-28 for the signed-in reader's email address on every error:
+ *
+ * > Make sure we send up the user's email address (if logged-in) as part of
+ * > every error.
+ * >
+ * > — Greg, 2026-08-28
+ *
+ * So it passes — but reduced to `id` and `email` and nothing else, by the same
+ * rule as everything else here. The distinction that keeps this honest is that
+ * the field is *set by us*, at one seam, from the gate's own `VerifiedUser`
+ * (src/auth.ts) — it is not `dataCollection.userInfo`, which stays `false`,
+ * because that lets *instrumentation* populate `user.*` from whatever it finds
+ * and there is no telling in advance what it would find.
  *
  * `debug_meta` is kept, and it is the one entry here that is *not* obviously
  * safe-by-inspection — it carries the debug ids that match an event to an
@@ -149,6 +183,7 @@ export function safeEvent(event: ErrorEvent): ErrorEvent {
     ...(event.sdk !== undefined && { sdk: event.sdk }),
     ...(event.debug_meta !== undefined && { debug_meta: event.debug_meta }),
     ...(event.fingerprint !== undefined && { fingerprint: event.fingerprint }),
+    ...(event.user === undefined ? {} : { user: safeUser(event.user) }),
     level: event.level ?? "error",
     tags: event.tags ?? {},
     exception: { values },

@@ -155,7 +155,14 @@ describe("safeEvent", () => {
       transaction: `GET /read/${SENTINEL}`,
       extra: { body: SENTINEL },
       contexts: { runtime: { name: "node" }, leaked: { value: SENTINEL } },
-      user: { id: SENTINEL, email: `${SENTINEL}@example.com` },
+      user: {
+        id: "owner-123",
+        email: "reader@example.com",
+        /* The two that must not travel: an inferred IP address, and whatever
+           else somebody hangs on `User`, which has an index signature. */
+        ip_address: "203.0.113.9",
+        note: SENTINEL,
+      },
       request: { url: `https://x/api/article/${SENTINEL}?token=${SENTINEL}` },
       breadcrumbs: [{ category: "console", message: SENTINEL }],
       tags: { route: "chat" },
@@ -190,6 +197,17 @@ describe("safeEvent", () => {
 
   it("drops every field the sentinel was hidden in", () => {
     assertClean(safeEvent(loadedEvent()));
+  });
+
+  it("keeps the signed-in reader's id and email, and nothing else about them", () => {
+    /* A deliberate reversal, on Greg's ask of 2026-08-28: an issue should say
+       who hit it. `user` is the one field allowed through that carries a
+       person — reduced to two keys, because `User` has an index signature and
+       `ip_address` is inferred by Sentry unless refused. */
+    expect(safeEvent(loadedEvent()).user).toEqual({
+      id: "owner-123",
+      email: "reader@example.com",
+    });
   });
 
   it("keeps what an issue needs to be readable", () => {

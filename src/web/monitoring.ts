@@ -30,6 +30,7 @@
 import {
   captureException,
   dedupeIntegration,
+  getIsolationScope,
   globalHandlersIntegration,
   init,
   withScope,
@@ -111,6 +112,44 @@ export function initClientMonitoring(): void {
        to start. Same rule as the server half, and it matters more here: this
        runs before React does, so a throw would be the blank page it exists to
        report. */
+  }
+}
+
+/**
+ * Say who is reading, so an issue names a person rather than a browser.
+ *
+ * > Make sure we send up the user's email address (if logged-in) as part of
+ * > every error.
+ * >
+ * > — Greg, 2026-08-28
+ *
+ * `null` clears it, which is what a sign-out must do: the next error on this
+ * tab belongs to nobody, and leaving the old address on the scope would attach
+ * it to whoever picks the iPad up next.
+ *
+ * ## Why this is called from `lib/api.ts` and not from here
+ *
+ * The obvious version subscribes to `supabase.auth.onAuthStateChange` in this
+ * file. That would be a bug, and an expensive one: this module is imported by
+ * [boot.tsx](boot.tsx), so importing `lib/supabase.js` here would pull Supabase
+ * into the **entry chunk** — where it is evaluated *before* boot.tsx's first
+ * statement runs, because static imports always are. And `lib/supabase.ts`
+ * throws at module load when its two build-time variables are missing, which is
+ * precisely the blank-page failure boot.tsx exists to report. So the obvious
+ * placement would have moved that throw to before the reporter was armed, and
+ * quietly undone the one thing boot.tsx is for.
+ *
+ * `lib/api.ts` already has an `onAuthStateChange` listener, lives in the main
+ * chunk, and is evaluated well after Sentry is running. It calls this.
+ */
+export function setClientMonitoringUser(user: { id: string; email?: string } | null): void {
+  try {
+    if (!started) return;
+    getIsolationScope().setUser(
+      user === null ? null : { id: user.id, ...(user.email && { email: user.email }) },
+    );
+  } catch {
+    // As below.
   }
 }
 

@@ -66,6 +66,7 @@ import {
   writeCached,
 } from "./offline-store.js";
 import { noteNoConnection, noteReachedServer, noteServedCopy } from "../offline.js";
+import { setClientMonitoringUser } from "../monitoring.js";
 import { supabase } from "./supabase.js";
 
 /** How much of an unexpected body reaches the console. Enough to recognise it. */
@@ -625,6 +626,22 @@ supabase.auth.onAuthStateChange((_event, session) => {
      Signing out drops that reader's copies. Not the database — somebody else
      may share this iPad, and their saved articles are not ours to throw away. */
   const id = session?.user?.id ?? null;
+
+  /* **And the same identity to the error tracker**, so a Sentry issue says who
+     hit it. Here rather than inside src/web/monitoring.ts, and that placement
+     is load-bearing rather than convenient — that module is in the entry chunk,
+     so a `supabase` import from it would evaluate this file before Sentry is
+     armed and undo the whole point of boot.tsx. Its doc comment has the rest.
+
+     `null` on sign-out, deliberately: somebody else may pick this iPad up, and
+     an email left on the scope would ride out on their error. */
+  const signedIn = session?.user;
+  setClientMonitoringUser(
+    signedIn
+      ? { id: signedIn.id, ...(signedIn.email !== undefined && { email: signedIn.email }) }
+      : null,
+  );
+
   if (id) {
     rememberUser(id);
   } else {

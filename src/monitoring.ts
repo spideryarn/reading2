@@ -42,6 +42,7 @@
  */
 import {
   captureException,
+  getIsolationScope,
   dedupeIntegration,
   flush,
   initWithoutDefaultIntegrations,
@@ -189,6 +190,43 @@ export function captureFailure(err: unknown, context?: Fields): void {
       }
       captureException(error);
     });
+  } catch {
+    // Rule 2.
+  }
+}
+
+/**
+ * Say who is signed in, for every error this request goes on to raise.
+ *
+ * > Make sure we send up the user's email address (if logged-in) as part of
+ * > every error.
+ * >
+ * > — Greg, 2026-08-28
+ *
+ * Called once per request, from the authenticated dispatcher in src/routes.ts,
+ * beside `setRequestOwner` — because that is the one line in the codebase that
+ * has a `VerifiedUser` and knows the gate produced it, and putting this
+ * anywhere else would mean either passing an email around or reading one from
+ * somewhere less certain.
+ *
+ * **On the isolation scope, not the global one, and this is the whole reason
+ * this is a function rather than a `Sentry.setUser` at the call site.** Fluid
+ * Compute serves several requests concurrently in one instance; the global
+ * scope is shared between them, so a global `setUser` would put one reader's
+ * email on another reader's error — intermittently, and invisibly, and on the
+ * one field where being wrong is worst. `withMonitoringScope` opens the
+ * isolation scope in src/vercel.ts, and this writes inside it.
+ *
+ * Note what is *not* turned on to achieve this: `dataCollection.userInfo` stays
+ * `false`. That option lets instrumentation populate `user.*` from whatever it
+ * can find, which is a different and much wider promise than "the address of
+ * the person the gate just let in". `safeUser` in monitoring-scrub.ts reduces
+ * whatever arrives to `id` and `email` regardless.
+ */
+export function setMonitoringUser(user: { id: string; email: string }): void {
+  try {
+    if (!started) return;
+    getIsolationScope().setUser({ id: user.id, email: user.email });
   } catch {
     // Rule 2.
   }
