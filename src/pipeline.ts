@@ -1147,6 +1147,12 @@ export const STEPS: Record<StepName, PipelineStep> = {
           slug: ctx.slug,
           step: "toc",
           model: run.model,
+          /* Three counts, not one, and `strandedSupplement` is the one that
+             matters: it is how an operator learns the apparatus was left out of
+             the structure on a run that otherwise reports success. */
+          supplementNodes: run.supplementNodes,
+          supplementBlocks: run.supplementBlocks,
+          strandedSupplement: run.strandedSupplement,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
           cacheReadTokens: run.cacheReadTokens,

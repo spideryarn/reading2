@@ -313,6 +313,22 @@ export function checkNoteFields(slug: string, blocks: Block[]): void {
           `would read it as argument`,
       );
     }
+    /* **A footnote must say which note it belongs to.** Stage 3 considered a
+       `noteId` rule and left it out, in the other direction (`noteId` present ⇒
+       supplement) and for two reasons that were good at the time. This is the
+       implication that actually bites, and stage 5a is what made it bite:
+       `noteIndex` in src/web/notes-view.ts keys on a non-empty `noteId`, so a
+       footnote stored without one is removed from the argument *and* absent
+       from the index — its marker opens nothing. Neither of the stage-3
+       reasons covers it: the five-role fixture's `appendix` carries a `noteId`
+       without the footnote role, and a marker's own block is body. GPT Sol's
+       review of stage 4, 2026-08-28. */
+    if (b.role === "footnote" && b.noteId === undefined) {
+      throw new Error(
+        `${slug}: ${where} is a footnote with no noteId — stage 5 resolves a marker to its ` +
+          `note by that id, so the note would be stored but unreachable`,
+      );
+    }
     if (b.noteId !== undefined && !NOTE_ID_PATTERN.test(b.noteId)) {
       throw new Error(
         `${slug}: ${where} has a noteId ${JSON.stringify(b.noteId)} that stage 2 could not have ` +

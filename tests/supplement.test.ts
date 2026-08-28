@@ -387,6 +387,31 @@ describe("the whole-article summary", () => {
     expect(rootKey).not.toBe(oldKey);
   });
 
+  it("still drops a root summary when an ordinary body paragraph is appended", () => {
+    /* **The guarantee the new match nearly gave away.** Keyed on range, an
+       entry written against a different shape of the article missed and was
+       dropped. Keyed on `depth === 0` and the start id alone, it comes back:
+       appending an ordinary paragraph moves the root's end for a reason that
+       has nothing to do with the apparatus, the start is unchanged, and a stale
+       whole-article summary is shown as current. GPT Sol's review of stage 4.
+
+       So the stored end must be the root's own end, or the last body block —
+       the one shift a supplement causes. Anything else is a body edit. */
+    const grown = structuredClone(bodyTree);
+    const extraId = "spya-zzzzzz";
+    const grownBlocks = [...bodyBlocks, { ...bodyBlocks[bodyBlocks.length - 1]!, id: extraId }];
+    grown.nodes[grown.rootId]!.range = [grown.nodes[grown.rootId]!.range[0], extraId];
+
+    const built = buildSummaryTree(grown, grownBlocks, written(writtenBefore));
+    expect(built).not.toBeNull();
+    /* Dropped, not re-attached. The control below proves the entry is otherwise
+       a perfectly good match — same depth, same start — so this is the end
+       check doing the work and not some unrelated miss. */
+    expect(built!.short).toBeUndefined();
+    expect(writtenBefore[0]!.depth).toBe(0);
+    expect(writtenBefore[0]!.range[0]).toBe(grown.nodes[grown.rootId]!.range[0]);
+  });
+
   it("is never written for the apparatus", () => {
     const targets = targetsOf(tree, blocks);
     expect(targets.some((n) => isSupplementNode(n))).toBe(false);

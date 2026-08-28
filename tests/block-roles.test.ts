@@ -459,6 +459,27 @@ describe("all five roles", () => {
     }
   });
 
+  it("refuses a footnote with no noteId, which stage 5 could never open", () => {
+    /* Stored but unreachable: removed from the argument by `treatment`, and
+       absent from `noteIndex` (src/web/notes-view.ts) because that keys on a
+       non-empty `noteId`. The marker would open nothing at all. Stage 3
+       deferred a `noteId` rule in the *other* direction; this is the one stage
+       5a made load-bearing. GPT Sol's review of stage 4. */
+    const { noteId: _dropped, ...mute } = SYNTHETIC[1]!;
+    expect(mute.role).toBe("footnote");
+    expect(mute.treatment).toBe("supplement");
+    expect(() => checkNoteFields("roles", [mute])).toThrow(/footnote with no noteId/);
+  });
+
+  it("still allows an appendix with no noteId, which is why the rule names one role", () => {
+    /* The control. A rule written as "any supplement needs a noteId" would pass
+       the test above and refuse an appendix, which is prose rather than a note
+       and has nothing to be a member of. */
+    const appendix = SYNTHETIC.find((b) => b.role === "appendix")!;
+    const { noteId: _also, ...bare } = appendix;
+    expect(() => checkNoteFields("roles", [bare])).not.toThrow();
+  });
+
   it("accepts the two shapes stage 2 really mints", () => {
     /* The control: `NOTE_ID_PATTERN` allows an optional `-<n>` suffix, and a
        validator that rejected it would refuse an ordinary Wikipedia article

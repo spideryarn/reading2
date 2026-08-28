@@ -274,6 +274,57 @@ describe("the automatic stages never see the note", () => {
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
+
+  it("summaries — and the apparatus is not offered as a part of the argument", async () => {
+    /* **Withholding the prose was not enough, and the test above cannot see
+       it.** That one runs against the fixture's own *pre*-stage-4 tree, which
+       has no supplement node in it — so it says nothing about the shape stage 4
+       actually produces. With a supplement appended, `skeletonOf` walked
+       `root.children` and printed
+
+           PART 4: Notes
+             gist: (none)
+
+       into the whole-article prompt: the model is told the apparatus is a part
+       it must account for, and invited to explain the empty one. The note text
+       was absent the whole time, which is exactly why a NOTE_WORD assertion
+       stays green through it. GPT Sol's review of stage 4, 2026-08-28. */
+    const dir = await mkdtemp(path.join(tmpdir(), "block-policy-prompts-skeleton-"));
+    try {
+      await cp(path.join(ROOT, "example"), dir, { recursive: true });
+      await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks }));
+
+      const { splitBlocks, appendSupplement, isSupplementNode } = await import(
+        "../src/supplement.js"
+      );
+      const { groups } = splitBlocks(blocks);
+      /* The precondition, asserted rather than assumed: without a supplement
+         node in the tree this test is the one above wearing a second hat. */
+      expect(groups.length).toBe(1);
+      const base = JSON.parse(await readFile(path.join(dir, "tree.json"), "utf8")) as Tree;
+      const withNotes = appendSupplement(base, groups);
+      const supplement = Object.values(withNotes.nodes).find((n) => isSupplementNode(n));
+      expect(supplement).toBeDefined();
+      await writeFile(path.join(dir, "tree.json"), JSON.stringify(withNotes));
+
+      const { generateSummaries } = await import("../src/summarise.js");
+      const prompt = await promptOf(() => generateSummaries({ dir }));
+
+      expect(prompt).toContain(BODY_WORD);
+      expect(prompt).not.toContain(NOTE_WORD);
+      /* The node's own title, as the skeleton would print it. Matched with the
+         PART prefix rather than bare, because "Notes" is an ordinary word that
+         may legitimately appear in an article's prose. */
+      expect(prompt).not.toMatch(
+        new RegExp(`PART \\d+: ${supplement!.title!.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}`),
+      );
+      // And no part is offered with an empty gist, which is the same fact from
+      // the other side and does not depend on the title.
+      expect(prompt).not.toContain("gist: (none)");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("the asked stages still see the note", () => {

@@ -511,8 +511,38 @@ export function buildSummaryTree(
    * start id fixes the supplement case and keeps the stale case dropped, which
    * is strictly better than either rule alone.
    */
-  const rootStart = tree.nodes[tree.rootId]?.range[0];
-  const rootEntry = entries.find((e) => e.depth === 0 && e.range[0] === rootStart);
+  /**
+   * **And the end has to be accounted for, or the rule is looser than the one
+   * it replaced.** Start-plus-depth alone re-attaches a stored root summary
+   * after an ordinary body paragraph is appended: the start is unchanged, the
+   * end has moved for a reason that has nothing to do with the apparatus, and
+   * the summary is shown as current. The old range key dropped that entry.
+   * Losing it is not a fair trade for the supplement case, and the stale banner
+   * is a mitigation rather than an answer. GPT Sol's review of stage 4.
+   *
+   * So the stored end must be either the root's own end (nothing moved) or the
+   * last **body** block (a supplement was appended behind it, which is the one
+   * shift this exists to absorb). Any other end is a body edit, and drops.
+   */
+  const root = tree.nodes[tree.rootId];
+  const rootStart = root?.range[0];
+  /* The block before the apparatus begins. A supplement node's own range start
+     *is* the boundary, so there is nothing to scan for. */
+  const lastBody = ((): BlockId | undefined => {
+    if (!root) return undefined;
+    const supplement = root.children
+      .map((id) => tree.nodes[id])
+      .find((n): n is TreeNode => !!n && n.treatment === "supplement");
+    if (!supplement) return root.range[1];
+    const firstNote = order.get(supplement.range[0]);
+    return firstNote === undefined || firstNote === 0 ? undefined : blocks[firstNote - 1]?.id;
+  })();
+  const rootEntry = entries.find(
+    (e) =>
+      e.depth === 0 &&
+      e.range[0] === rootStart &&
+      (e.range[1] === root?.range[1] || e.range[1] === lastBody),
+  );
 
   const build = (node: TreeNode | undefined, number: string): SummaryNode | null => {
     if (!node) return null;

@@ -78,6 +78,7 @@ import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
 import { isBodyEvidence } from "./block-policy.js";
+import { partsOf } from "./arc.js";
 import { isSupplementNode } from "./supplement.js";
 import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
@@ -428,13 +429,24 @@ attempt — an omission is a hole in the reader's view.
 
 ${PROFILE_RULES}`;
 
-/** The article's shape, so a section can be summarised knowing what surrounds it. */
+/**
+ * The article's shape, so a section can be summarised knowing what surrounds it.
+ *
+ * **The supplement is not in it.** Withholding the note *prose* is not enough
+ * here: this skeleton goes into the whole-article prompt, and a supplement left
+ * in prints `PART 4: Notes` with `gist: (none)` — which tells the model the
+ * apparatus is a part of the argument it should account for, and invites it to
+ * explain the empty one. Present in the structure, absent from the argument
+ * means absent from this string too. GPT Sol's review of stage 4, 2026-08-28.
+ *
+ * `partsOf` rather than a local filter, because that function is already the
+ * definition of "the parts of the argument" and a second copy of the rule is
+ * the thing src/supplement.ts exists to prevent (src/arc.ts § partsOf).
+ */
 function skeletonOf(tree: Tree): string {
   const root = tree.nodes[tree.rootId];
   if (!root) return "";
-  return root.children
-    .map((id) => tree.nodes[id])
-    .filter((p): p is TreeNode => !!p)
+  return partsOf(tree)
     .map((p, i) => {
       const subs = p.children
         .map((cid) => tree.nodes[cid])

@@ -885,6 +885,18 @@ async function main(): Promise<void> {
         ? ` (${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`
         : ""),
   );
+  /* **Said out loud, every run, including when it is zero.** `strandedSupplement`
+     is the count of apparatus blocks the split refused to place — non-zero means
+     no supplement node was built and the tree is exactly what it would have been
+     without this stage: a correct article with the feature silently absent. A
+     number computed and never printed is the same as no number
+     (docs/reusable/silent-success.md). GPT Sol's review of stage 4, 2026-08-28. */
+  console.log(
+    run.strandedSupplement > 0
+      ? `Notes:     NOT GROUPED — ${run.strandedSupplement} supplement block(s) are not one ` +
+          `trailing run, so no Notes node was built`
+      : `Notes:     ${run.supplementNodes} node(s) over ${run.supplementBlocks} block(s)`,
+  );
   console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
   console.log(`\nWrote:     ${path.resolve(run.outDir)}/tree.json`);
