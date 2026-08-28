@@ -158,13 +158,47 @@ about either box. An earlier version of this paragraph said it without the quali
 review, 2026-08-26.
 
 `profileIsStale` in [`src/profile.ts`](../../src/profile.ts) is the one place those rules live.
-`GET /api/{glossary,summary,tweets}/:slug` answers it as `profileChanged`, a third boolean beside
+`GET /api/{glossary,summary,tweets,ideas}/:slug` answers it as `profileChanged`, a third boolean beside
 `stale` and `outdated`, because it needs a third sentence: *stale* means the article moved,
 *outdated* means we would write it differently now, *profileChanged* means you are not who you were.
 
 **A hash rather than a `usedProfile: true`**, because a boolean cannot tell "written for the profile
 you have now" from "written for the profile you had last week", and from every surface in this app
 those two look identical.
+
+### Reading the stamp no longer waits for the artefact
+
+Answering `profileChanged` means reading the reader's profile, which is two queries of its own and
+has nothing to do with the artefact being fetched. The four routes used to await the artefact and
+*then* call `withProfileChanged`, so a reader waiting on a panel waited for both in series. They now
+start together.
+
+`withProfileChanged` takes a **thunk** — `() => Promise<T>` — rather than the artefact or a promise
+of it. That is the whole design: a promise parameter would leave the overlap a caller convention,
+and every route could go on awaiting first and hand over something already settled, with a test of
+the helper passing regardless. Taking the thunk moves the responsibility into the one function where
+it can be proved, and `tests/route-profile-concurrency.test.ts` proves it by holding both reads and
+asserting the profile was asked for while the artefact was still outstanding.
+
+**Neither `Promise.all` nor `Promise.allSettled`**, and both were tried. `all` rejects with whichever
+failed soonest, so a reader asking for an article that does not exist could be told their profile
+store fell over instead of getting a 404 — the error would name the wrong thing. `allSettled` picks
+the right error but waits for both before looking at either, so a profile read that hung would hold
+up a 404 the old serial code answered at once, and the reader would see a timeout instead.
+
+What it does is start both, `await` the artefact, and `await` the profile only after that. The
+artefact's failure arrives at exactly the moment it always did; a profile failure still surfaces when
+the artefact was fine, rather than being swallowed into `profileChanged: false`, which would be a
+wrong answer nobody could see. A bare `void profile.catch(() => {})` before the awaits keeps the
+both-failed case from reporting an unhandled rejection for the error we deliberately drop.
+
+**It overlaps work rather than removing it, and that has a price.** One request's peak concurrent
+queries go from two to four against a pool whose default `max` is 5: `resolveProfile` fans out to
+the reader's profile and the article's shelf row, and the Postgres glossary read fans out to the
+block hashes and the stored lookups. So under enough load this moves latency rather than removing
+it. Worth it for the single reader waiting on a panel, which is the case that matters; nobody has
+measured the loaded case. The full reasoning is in
+[library-read-latency.md § 8](../plans/library-read-latency.md).
 
 ### `existingFor` is the sharp edge
 
@@ -460,6 +494,7 @@ The measurements, both reviews and the two bugs the tests found after the review
 | [`src/store/pg-reader.ts`](../../src/store/pg-reader.ts) | the Postgres half; `reader_profiles`, one row per owner |
 | [`src/routes.ts`](../../src/routes.ts) | `GET`/`PATCH /api/reader`, `resolveProfile`, `withProfileChanged` |
 | [`tests/profile.test.ts`](../../tests/profile.test.ts) | the pure rules, including the staleness table exhaustively |
+| [`tests/route-profile-concurrency.test.ts`](../../tests/route-profile-concurrency.test.ts) | that the profile read really starts before the artefact read has finished, and that the artefact's error still wins |
 | [`tests/profile-prompts.test.ts`](../../tests/profile-prompts.test.ts) | the batch prompts — which `article-prompt.test.ts` never covered |
 | [`tests/article-prompt.test.ts`](../../tests/article-prompt.test.ts) | that the cached prefix is untouched by any profile |
 | [`src/web/ProfileBox.tsx`](../../src/web/ProfileBox.tsx) | the textarea, the hint and the counter — shared by `/profile` and the metadata page. The microphone moved out of it on 2026-08-27 |

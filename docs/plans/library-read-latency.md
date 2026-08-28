@@ -423,24 +423,76 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
 ): Promise<R>
 ```
 
-**The error semantics are why this was parked, and `Promise.allSettled` is the answer.**
-`Promise.all` would reject with whichever failed first, so a reader asking for an article that does
-not exist could get a profile error instead of a 404 — a real change, and a confusing one. Settling
-both and rethrowing the artefact's rejection first preserves today's ordering exactly, while still
-letting a profile failure through rather than swallowing it into `profileChanged: false`. Attaching
-the `allSettled` immediately is also what keeps the losing rejection from going unhandled.
+**The error semantics are why this was parked, and both obvious answers are wrong.**
+`Promise.all` rejects with whichever failed first, so a reader asking for an article that does not
+exist could get a profile error instead of a 404 — a real change, and a confusing one, because the
+error names the wrong thing. `Promise.allSettled` picks the right error but waits for **both** before
+looking at either, so a profile read that hangs holds up a 404 the serial version answered at once —
+and what the reader sees then is a client or proxy timeout, which is a worse failure than the one it
+fixed. That second one is GPT Sol's first finding on the built code, 2026-08-28; the plan had
+`allSettled` and it was wrong.
+
+What is right is neither: start both, `await` the artefact, and `await` the profile only afterwards.
+A rejecting artefact throws at the first `await`, exactly when it always did, and a profile failure
+still surfaces when the artefact was fine — rather than being swallowed into `profileChanged: false`,
+which would be a silent wrong answer. The one non-obvious line is a bare `void profile.catch(() => {})`
+before the awaits: without it, the case where *both* fail throws before anything has looked at the
+profile promise, and Node reports an unhandled rejection for a failure we deliberately chose not to
+report.
 
 Starting `resolveProfile` for a slug that turns out not to exist is harmless: its shelf read already
-catches, and it returns null.
+catches, and the **global** half of the profile still renders and is returned — it does not come back
+null, which is what an earlier draft of this paragraph said. Sol's second finding on the re-review.
 
 **This is a separate commit from Parts 1–7**, per Sol's fifth finding, and it deserves its
 reservation stated rather than buried. Parts 1–7 remove work. This one only *overlaps* work, and it
-raises a single request's peak concurrent queries from two to three against a pool whose default
+raises a single request's peak concurrent queries **from two to four** against a pool whose default
 `max` is 5 — so under enough load it can move latency from one place to another rather than remove
-it. It is worth doing because a reader waiting on a panel is the case that matters and the pool is
-not the bottleneck for one reader; it is worth keeping separable because nobody has measured the
-loaded case. It also touches `src/routes.ts`, which carries **+194/−68 lines of another agent's
-uncommitted work**, so it may have to wait for that to land regardless.
+it. Two, not one, on each side: `resolveProfile` fans out to the reader's profile and the article's
+shelf row, and the Postgres glossary read fans out to the block hashes and the stored lookups
+([`src/store/pg.ts`](../../src/store/pg.ts)). An earlier draft said three, having counted only one
+side of it — Sol's first finding on the re-review.
+
+It is worth doing because a reader waiting on a panel is the case that matters and the pool is not
+the bottleneck for one reader; it is worth keeping separable because nobody has measured the loaded
+case.
+
+**What actually happened to the separate commit**, since it is the second time and worth writing
+down. `src/routes.ts` is one of the busiest files in this tree, and while this waited for a place to
+land, another agent committed the whole file — including the `allSettled` version of this change,
+under their own message and without the test. So the mechanism was live on `main`, unproven, in its
+wrong form. This commit therefore does two things at once: it corrects the shape to the one Sol's
+review arrived at, and it brings the test that should have gone with it.
+
+The commit was built through a **temporary index** (`GIT_INDEX_FILE`, `hash-object`, `write-tree`,
+`commit-tree`, `update-ref` with the expected old value), because by then the same file had picked
+up another agent's public-access work and the pathspec form of `git commit` cannot fence part of a
+file — it commits whatever the working tree holds. Nothing in the shared index or the working tree
+was touched, and the reconstructed blob was verified two ways before the ref moved: it differs from
+`HEAD` by exactly the four hunks of this change, and `HEAD` plus that blob plus the new test is green
+in a throwaway worktree.
+
+**Every claim above has been watched to fail.** A concurrency test built out of mocks is the
+easiest kind of test in this repo to write green and worthless — see
+[silent-success.md](../reusable/silent-success.md) — and a mock that resolved instantly would have
+hidden every one of these. So `tests/route-profile-concurrency.test.ts` drives the real routes
+through `handleApi` with both reads **held**, and runs its four cases against **all four routes**
+rather than one. Each mutation below was actually applied, in a detached worktree at `HEAD`, and the
+named test actually went red:
+
+| what was broken | which tests went red | what it said |
+| --- | --- | --- |
+| the serial version — the shape that was on `main` | asks for the profile while the artefact read is still outstanding, ×4 | `expected [ 'glossary' ] to deeply equal [ 'glossary', 'profile' ]` |
+| one call site pre-awaits and hands over an already-settled promise — the thunk defeated at `tweets` only | the same test, ×1, and it is the `tweets` one | the same message |
+| `Promise.all` | reports the article's own failure, even when the profile fails first, ×4 | `{ status: 500, error: "the profile store fell over" }` where `{ status: 404, … }` was expected — the reader told about their profile when the article is what is missing |
+| `Promise.allSettled` — **the shape this plan originally specified** | answers the article's own 404 without waiting for the profile, ×4 | `answeredWithProfileStillOutstanding: false`, in 3–33 ms. The first version of this test had no such flag and simply awaited the reply, so a wrong implementation hung until vitest killed it at 5004 ms — true evidence, but slow and silent about why. Sol's second point on the re-review |
+| the profile's rejection swallowed to `null` | still reports a profile failure when the artefact was fine, ×4 | `expected 200 to be 500` |
+| the bare `void profile.catch(() => {})` deleted | **none** — 16 passed | 8 unhandled rejections, and `EXIT=1`. Worth knowing what this looks like: the summary says "Tests 16 passed" and "Test Files 1 passed", and only the exit code disagrees. |
+
+Two of those are worth more than the rest. The `allSettled` row is the plan's own prescription
+failing a test written after Sol pointed at it — the plan was wrong and the check caught it. And the
+single-call-site row is why the tests run over all four routes: with the earlier glossary-only
+version, `tweets` going back to awaiting first would have stayed green.
 
 ## Deliberately not in this change
 
@@ -478,7 +530,7 @@ anyway**. Sol's fourth finding rewrote most of this list; the "stays green" colu
 | 7 | The SQL rule and the TS rule agree | Change only the SQL to `level = 2`, or to `order by block_id` | Changing both; and a corpus where no article distinguishes the two orders. This one is worth the least of the twelve — I wrote both spellings — so it runs over the real `data/` corpus and says in the file that it is a consistency check, not a correctness one. |
 | 8 | The null-scalar fallback | Remove the fallback (count goes wrong), or remove the warning (silent) | A falsy-zero bug; and **a legitimately null `root_gist` triggering it**, which is Sol's first finding. So there are two tests: one that nulls `word_count` and expects the fallback, and one with `wordCount: 0`, `partCount: 0`, `sectionCount: 0`, `rootGist: null` that expects **no** fallback and **no** warning. |
 | 9 | `describeArticle`'s new shape | Swap `partCount` and `sectionCount`; break one rung of the gist chain | **The `summary` rung is untested today** — `tests/library.test.ts` covers root gist and total absence only. All four outcomes get a case: gist, root summary, excerpt, null. |
-| 10 | The routes overlap, and the error order | Make the profile reject first, then swap `allSettled` for `all` | A helper test passing while the routes still `await` first — which is why Part 8 takes a **thunk**, so the helper starts both and the test can prove it. |
+| 10 | The routes overlap, the error order, and the moment the error arrives | Make the profile reject first and swap to `Promise.all`; or hold the profile open and reject the artefact | A helper test passing while the routes still `await` first — which is why Part 8 takes a **thunk**. And a test of *one* route passing while the other three serialise, which is why it runs over all four. **Six mutations were applied and watched**; the table is in § 8. |
 | 11 | The measurement moved — [`scripts/bench-shelf-reads.ts`](../../scripts/bench-shelf-reads.ts), run again after | Restore the old reads | The bench fail-opening: it shrugged if it could not find the pool to wrap, and reported 0. It throws now — as it does on an empty shelf, and on zero statements counted. And its "bytes decoded" was `JSON.stringify(rows).length` — not wire bytes, not memory — so it is `rowJsonBytesPerCall` now. |
 | 12 | Everything else | A type error or a failing assertion | Behavioural regressions outside these twelve. `npm test` and `npm run typecheck` whole; `npm run lint` on the touched files. |
 

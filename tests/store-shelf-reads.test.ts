@@ -804,7 +804,12 @@ when("the title fallback, in SQL and in TypeScript", { timeout: 30_000 }, () => 
       .from(articles)
       .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
       .where(isNull(articleRevisions.title));
-    const real = untitled.filter((r) => !r.slug.startsWith("test-shelf-reads-"));
+    /* **Real articles only**, for the same reason as the test above: another
+       suite's fixture can be created, renamed or torn down between these two
+       reads, and asserting that a row we do not own is still on the shelf is
+       not a test of this code. `test-reader-state-parity` cost a run before the
+       filter went from this file's own prefix to every fixture's. */
+    const real = untitled.filter((r) => !r.slug.startsWith("test-"));
     if (!real.length) {
       console.warn("\n  ⚠ no article in data/ has a null title — the corpus half of this proves nothing\n");
       return;

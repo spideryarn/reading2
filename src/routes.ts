@@ -2494,7 +2494,7 @@ async function jobForSlug(slug: string): Promise<Job | null> {
 }
 
 /**
- * Decorate an artefact response with "your profile changed since this".
+ * An artefact, and whether the reader has changed since it was written.
  *
  * **In the route rather than in the store adapters**, and that placement is not
  * tidiness. Answering it needs the reader's current profile, which lives behind
@@ -2506,9 +2506,6 @@ async function jobForSlug(slug: string): Promise<Job | null> {
  * is what they are for: `stale` and `outdated` are properties of the artefact
  * against the piece, and this one is a property of the artefact against the
  * person.
- */
-/**
- * An artefact, and whether the reader has changed since it was written.
  *
  * ## It takes a thunk, and that is the whole design
  *
@@ -2524,19 +2521,30 @@ async function jobForSlug(slug: string): Promise<Job | null> {
  * Sol's fifth finding on docs/plans/library-read-latency.md. Taking the thunk
  * moves the responsibility in here, where it can be proved.
  *
- * ## `allSettled`, and why not `all`
+ * ## Why not `Promise.all`, and why not `allSettled` either
  *
- * `Promise.all` rejects with whichever failed *first*, so a reader asking for an
- * article that does not exist could be told about a profile failure instead of
- * getting a 404 — a real change in behaviour, and a confusing one, because the
- * error would name the wrong thing. Settling both and rethrowing the artefact's
- * rejection first preserves exactly the order the serial version had.
+ * Three shapes were tried, and the two obvious ones are both wrong:
  *
- * The profile's rejection is rethrown after, rather than swallowed: a profile
- * that could not be read is not the same as a profile that has not changed, and
- * reporting `profileChanged: false` for it would be a silent wrong answer.
- * Attaching `allSettled` immediately is also what keeps the losing rejection
- * from surfacing as an unhandled one.
+ * - **`Promise.all`** rejects with whichever failed *first*, so a reader asking
+ *   for an article that does not exist could be told about a profile failure
+ *   instead of getting a 404. The error would name the wrong thing.
+ * - **`Promise.allSettled`** picks the right error, but it waits for *both*
+ *   before looking at either. A profile read that hangs would then hold up a
+ *   404 that the serial version answered at once, and what the reader would see
+ *   is a client or proxy timeout — a worse failure than the one it fixed. GPT
+ *   Sol's first finding on the built code, 2026-08-28.
+ *
+ * So: start both, await the artefact, and await the profile only after the
+ * artefact is in hand. A rejecting artefact throws at the first `await`, as it
+ * always did, and the profile's own rejection still surfaces when the artefact
+ * was fine — because a profile that could not be read is not the same as a
+ * profile that has not changed, and reporting `profileChanged: false` for it
+ * would be a silent wrong answer.
+ *
+ * The bare `.catch` is load-bearing rather than decorative. Without it, the
+ * artefact-fails-and-profile-fails-too case throws before anything has ever
+ * looked at the profile promise, and Node reports an unhandled rejection for a
+ * failure we deliberately chose not to report.
  *
  * Starting `resolveProfile` for a slug that turns out not to exist is harmless:
  * its shelf read already catches, and the global half still counts.
@@ -2547,12 +2555,14 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
   stampOf: (found: Omit<R, "profileChanged">) => { profileHash?: string | null },
 ): Promise<R> {
   /* Both started before either is awaited — that is the point of the thunk. */
-  const settled = await Promise.allSettled([load(), resolveProfile(slug)] as const);
-  const [artefact, profile] = settled;
-  if (artefact.status === "rejected") throw artefact.reason;
-  if (profile.status === "rejected") throw profile.reason;
-  const found = artefact.value as Omit<R, "profileChanged">;
-  const now = profile.value as string | null;
+  const artefact = load();
+  const profile = resolveProfile(slug);
+  /* Handled here so that throwing below cannot leave this one unhandled; the
+     `await` further down is what actually reports it. */
+  void profile.catch(() => {});
+
+  const found = await artefact;
+  const now = await profile;
   return {
     ...found,
     profileChanged: profileIsStale(stampOf(found).profileHash, now ? hashProfile(now) : null),
