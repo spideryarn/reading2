@@ -104,6 +104,29 @@ describe("the public revision read", () => {
   });
 
   /**
+   * **The four artefacts slice 1b carries, in the same statement.**
+   *
+   * The point of Greg's "no new endpoints" decision is that they ride on the
+   * row the article read already fetches — so what has to be true is not that
+   * four columns are selected somewhere, but that they are selected **by this
+   * query**, which is the one carrying `where visibility = 'public'`. A second
+   * read that fetched them without the predicate would serve a private
+   * article's glossary at a public URL, and every DTO test would stay green
+   * because a projection only ever sees what it was handed. That is GPT Sol's
+   * finding 3 on slice 1a, one slice later, and it is why this assertion is on
+   * the same `articleQuery` object the predicate case above reads.
+   */
+  it("asks for the four artefacts on the row it already filtered", () => {
+    for (const column of ["glossary", "summary", "ideas", "tweets"]) {
+      expect(article, column).toContain(`"${column}"`);
+    }
+    /* The predicate, restated against this same statement rather than trusted
+       from the case above — the two facts are only worth anything together. */
+    expect(articleQuery.sql).toMatch(/"visibility" = \$2/);
+    expect(articleQuery.params).toEqual(["a-slug", "public", 1]);
+  });
+
+  /**
    * The metadata read asks whether an artefact exists, in SQL — not by dragging
    * the JSONB document across the wire to compare it with null. That mistake
    * was two days of docs/plans/library-read-latency.md on the owner's shelf.

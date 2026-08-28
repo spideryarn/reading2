@@ -49,7 +49,16 @@
  * it.
  */
 
-import type { Arc, BlockId, BlockKind, Tree } from "./types.js";
+import type {
+  Arc,
+  BlockId,
+  BlockKind,
+  GlossaryKind,
+  Idea,
+  SummaryEntry,
+  Tree,
+  Tweet,
+} from "./types.js";
 
 /**
  * The masthead, for somebody who is not the owner.
@@ -116,11 +125,141 @@ export interface PublicBlock {
  * them into public twins would fork the whole granularity-zoom client for no
  * field's sake.
  */
-export interface PublicArticle {
+export interface PublicArticle extends PublicArtefactSet {
   meta: PublicMeta;
   blocks: PublicBlock[];
   tree: Tree;
   arc?: Arc;
+}
+
+/**
+ * **The four artefacts a shared link carries, and the one rule about them:
+ * a key that is present exists, and a key that is absent was never built.**
+ *
+ * Slice 1b, and the shape is Greg's decision of 2026-08-28 over GPT Sol's
+ * design. Sol specified four new endpoints, a tagged `{status: "ready" |
+ * "not-generated"}` wire result and a four-state client read union. All four of
+ * these are JSONB columns on the same `article_revisions` row
+ * `GET /api/public/article/:slug` already fetches, so folding them into that one
+ * payload removes the second request, the twelve wire states it could be in, and
+ * every way the two answers could disagree. docs/plans/public-read-only-access.md
+ * § Slice 1b.
+ *
+ * **Absent is the only "no".** Not `null`, not an empty object, not a tagged
+ * `not-generated` — because the client's question is *does this piece have a
+ * glossary*, and a stored `{entries: []}` is a **ready but empty** artefact
+ * rather than a missing one. Somebody ran the step and it found nothing, which
+ * is a different sentence from nobody having run it. A truthiness or a length
+ * test here would collapse the two.
+ *
+ * ## What is not here, and it is the most important paragraph in this file
+ *
+ * **No `stale`, no `outdated`.** Both are computed by `isStale` in
+ * `src/glossary.ts`, `src/summarise.ts`, `src/tweets.ts` and `src/ideas.ts` —
+ * the writer modules, which tests/public-imports.test.ts forbids the public
+ * graph from reaching because they pull in the model machinery. Carrying them
+ * would mean extracting four freshness functions into import-free leaves across
+ * four writer modules. And a visitor could not act on either: both mean *the
+ * owner might want to regenerate this*, and the owner is the only person who
+ * can.
+ *
+ * **No `profileHash`, no `profileChanged`, no `personalised`.** The first is
+ * provenance about a person; the second cannot be computed without a reader at
+ * all; the third was put to Greg on 2026-08-28 and deferred — one field and one
+ * sentence, addable any time.
+ *
+ * **No `guidance` on the summaries**, which is the owner's free-text steer and
+ * the single most private thing in any of these four artefacts.
+ *
+ * **No `entry.lookup` on a glossary entry.** A lookup is the owner's requested
+ * answer, its citations, its search count, its model and its exact time — and
+ * the Postgres read seam attaches them to the glossary deliberately, which is
+ * correct for the owner and is the leak this projection exists to stop.
+ * `glossary_lookups` stays unreachable from the public graph, and the
+ * four-table guard in tests/public-imports.test.ts is what makes that a fact
+ * rather than an intention.
+ *
+ * **No generator, version, slug, sourceHash, passes, generatedAt or elapsedMs**
+ * on any of the four. Facts about our pipeline and its timings.
+ */
+export interface PublicArtefactSet {
+  glossary?: PublicGlossary;
+  summary?: PublicSummaries;
+  ideas?: PublicIdeas;
+  tweets?: PublicTweets;
+}
+
+/**
+ * One glossary entry, minus the reader's lookup.
+ *
+ * Structurally assignable to `GlossaryEntry`, exactly as `PublicBlock` is to
+ * `Block` and for the same reason: the glossary panel is one panel, and a
+ * visitor's entry has to render through the same component. What differs is
+ * what was fetched, not how it is drawn.
+ *
+ * **The id crosses**, and it has to: `?term=` links, the prose underlines and
+ * entry-to-block navigation all need a stable identity, and a client left to
+ * invent one would invent an unstable one. Carrying an id does not carry a
+ * lookup — nothing public can reach the table lookups live in.
+ *
+ * **`gloss`, `detail` and `fromOutside` cross although all three were
+ * superseded on 2026-08-26**, because artefacts written before that date still
+ * carry them and the panel still renders them. Dropping them here would make
+ * older shared articles render as entries with nothing in them.
+ */
+export interface PublicGlossaryEntry {
+  id: string;
+  name: string;
+  kind: GlossaryKind;
+  aliases: string[];
+  senseHere?: string;
+  background?: string;
+  gloss?: string;
+  detail?: string;
+  url?: string;
+  difficulty?: number;
+  centrality?: number;
+  fromOutside?: boolean;
+  blocks: BlockId[];
+}
+
+/** The list, and nothing about when or how it was written. */
+export interface PublicGlossary {
+  entries: PublicGlossaryEntry[];
+}
+
+/**
+ * The summary ladder.
+ *
+ * `SummaryEntry` is carried whole — `range`, `depth`, `short?`, `long?` is all
+ * there is of it — and rebuilt field by field on the way out anyway, so a field
+ * added to it next month is absent from a public response until somebody adds a
+ * line to the projection.
+ *
+ * **`missing` crosses.** It is the reader's only sign that an apparently
+ * complete summary is partial: some nodes' batches came back unusable and were
+ * written without text. Withholding it would make a gap look like a whole.
+ */
+export interface PublicSummaries {
+  entries: SummaryEntry[];
+  missing: number;
+}
+
+/** The propositions the piece assumes or introduces. `Idea` carries nothing about a person. */
+export interface PublicIdeas {
+  ideas: Idea[];
+}
+
+/**
+ * The article as a numbered thread.
+ *
+ * `limit` crosses because the count on every post is against it: a thread
+ * written under an older limit reports itself honestly, and a page that
+ * re-judged it under today's number would flag posts nobody wrote wrong.
+ */
+export interface PublicTweets {
+  limit: number;
+  tweets: Tweet[];
 }
 
 /**

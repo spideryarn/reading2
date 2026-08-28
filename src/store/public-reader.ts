@@ -174,6 +174,33 @@ const PUBLIC_PROJECTIONS = {
     excerpt: articleRevisions.excerpt,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
+    /**
+     * **The four artefacts slice 1b carries, off the same row.**
+     *
+     * They are JSONB columns on `article_revisions` — the row this query is
+     * already fetching — so a visitor gets the glossary, the summaries, the
+     * ideas and the tweet thread for no extra query and no extra round trip.
+     * That is the whole of what Greg's "no new endpoints" decision buys, and it
+     * is why there is no `PublicArtefactReader` beside this one.
+     *
+     * Read what is **not** here, because it is a longer list than usual and the
+     * absences are the projection. No `glossary_lookups` join, which is what
+     * the owner's `loadGlossary` does at the read seam and is the leak this
+     * feature was most exposed on. No freshness: `stale` and `outdated` are
+     * computed by `isStale` in the writer modules, which the public graph
+     * cannot reach at all (tests/public-imports.test.ts) — and a visitor could
+     * not act on either, since both mean *the owner might want to regenerate
+     * this*. The provenance inside each document — `profileHash`, `guidance`,
+     * `generatedAt`, `elapsedMs`, `generator`, `version`, `sourceHash`,
+     * `passes` — comes across the wire from Postgres inside the JSONB and is
+     * dropped by [dto.ts](../public/dto.ts), which is the one place in this
+     * feature where a projection is doing the work rather than the `select`.
+     * There is no column-level alternative: a JSONB document is one column.
+     */
+    glossary: articleRevisions.glossary,
+    summary: articleRevisions.summary,
+    ideas: articleRevisions.ideas,
+    tweets: articleRevisions.tweets,
   },
   /**
    * **Five booleans and a title, and not one document.**
@@ -353,6 +380,10 @@ export const pgPublicReader: PublicArticleReader = {
         blocks,
         tree,
         arc: found.revision.arc,
+        glossary: found.revision.glossary,
+        summary: found.revision.summary,
+        ideas: found.revision.ideas,
+        tweets: found.revision.tweets,
       });
     });
   },

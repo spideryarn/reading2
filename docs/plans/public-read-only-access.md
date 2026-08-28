@@ -946,9 +946,11 @@ one of the other four: `arc` is already public, `diagram` and Search and Chat an
 sentence waiting to be shown by mistake.
 
 `tests/visitor-gaps.test.ts` deliberately does not assert the union's member count — a union can grow
-a member that says nothing new — so it asserts **policy** instead: a known-true artefact returns
-`null`, a known-false one returns `not-built`, an unknown one returns `availability-unknown`, a cost
-mode always returns `owners-only`, and `markedModes()` excludes what a visitor can now have.
+a member that says nothing new — so it asserts **policy** instead: an artefact the piece has returns
+`null`, one nobody built returns `not-built`, a cost mode always returns `owners-only`, and
+`markedModes()` excludes what a visitor can now have. *(Written before the build. The draft of this
+sentence also said "an unknown one returns `availability-unknown`", which was a member the same slice
+deletes — see [§ 1b, as built](#slice-1b-as-built-2026-08-28) for what the tests ended up asserting.)*
 
 #### Attribution is open again, and it is not a display change
 
@@ -1337,6 +1339,85 @@ twice.
 the page: `DiagramPanel` mounts `useSimilar` and `useProjection` for its other two, both POSTs that
 spend. Carving the free picture out of a 1700-line panel is not this slice's work.
 
+### Slice 1b, as built, 2026-08-28
+
+**Everything the section above specifies is built**, plus the two deletions. Fifteen files: five of
+source on the server and client each, one new module, and the tests. `npm run typecheck` is clean
+across all three projects for everything in this slice; the tree has other lanes' errors in it.
+
+What the build changed about the plan, in the order it will matter to the next person:
+
+**`tweetsGap` is gone, and `notBuiltGap` replaced it.** The plan has the tweets page asking a policy
+function which of two sentences to show. That was right while the page only ever showed a sentence;
+now it shows the **thread**, so it has to branch on whether the artefact is there — and TypeScript
+will not narrow `artefacts.tweets` from the return value of a function. A `tweetsGap` beside that
+branch would have been a second answer to a question already decided, which is exactly the shape Sol
+caught in slice 1a when a constant claimed a thread the wire said was absent. So the page branches on
+the payload key and takes its sentence from `notBuiltGap(what)`, whose noun table is shared with the
+three modes. One fact, one wording, and the branch and the sentence are about the same object.
+
+**The panels take a nullable `owner` group, and that is the whole client design.** The plan asked for
+*"one presentational band per mode with its data injected"*. What that meant in practice: each of
+`GlossaryPanel`, `SummaryPanel` and `IdeasPanel` now takes the list as one prop and an
+`owner: UseX | null` as another. `null` is a visitor — no status, no job, no verbs, no lookup button —
+and the same components draw the same list either way. `Thread` in `Tweets.tsx` went the same way,
+split into a shared `ThreadCounts` and `ThreadPosts` with the owner's stale banner, provenance footer
+and rewrite button left in the owner's page.
+
+**But the bands really are two components each**, and the plan should have said so plainly rather than
+leaving it to *"only the hooks need two components"*. `GlossaryBand` calls `useGlossary`;
+`VisitorGlossaryBand` calls nothing. What stops them drifting is that everything between the hook and
+the panel — three query parameters, the selection push, the resolved-occurrence effects — lives in a
+`useGlossaryMode` / `useSummaryMode` / `useIdeasMode` hook that both bands call. The duplication is
+six lines of wiring per mode, and the panel is one.
+
+**A visitor's glossary terms are underlined in the prose.** Not called out anywhere in the plan, and
+it falls straight out of the payload: `terms` in `Reader` reads the public glossary where the owner's
+read would be, so a shared article carries its dotted underlines and its hover cards exactly as the
+owner's does. It is the biggest visible win of the slice and nobody asked for it.
+
+**An artefact that is empty needed a sentence.** *Absent* means nobody ran the step; a stored
+`{entries: []}` means somebody ran it and it found nothing. Slice 1a could not reach that state —
+everything was withheld — and slice 1b can, so `builtButEmpty` is a fifth reader-facing sentence in
+[`src/messages.ts`](../../src/messages.ts). The rule that keeps the two apart is *presence of the
+key*, never truthiness and never a length: a length test collapses them, and
+`tests/visitor-gaps.test.ts` runs that mutation as its control.
+
+**`availability-unknown` was checked before it was deleted, and the claim holds.** The narrow version
+is: *there is no path on which a visitor is rendering a mode and does not know whether its artefact
+exists.* A visitor reaches a mode only through `VisitorArticle`, which `ArticlePage` renders only for
+`access.kind === "public"`, which requires the article payload to have arrived. A failed fetch is
+`kind: "error"`; a 404 is `kind: "not-shared"`. Neither renders a mode. The two other visitor pages
+take the same derived flags. `visitorGap` and `markedModes` take a non-optional `PublicArtefacts`
+now, so the compiler asks the same question of every future caller.
+
+**"Absent by default" is safe and it is not the same as correct, so both
+projections grew a total-fixture guard.** `publicBlock` and `publicTree` drop
+every field nobody named, which is why a field added to `Block` or `TreeNode`
+next month cannot leak. What that reasoning does not cover is the field the
+client *needs*: without `treatment` a visitor's copy numbers the apparatus as
+part of the argument, so silently dropping it is wrong in a way "it fails
+closed" cannot fix. `tests/public-dto.test.ts` now types its fixtures
+`Required<Block>` and `Required<TreeNode>`, which stop compiling the moment
+either type gains **any** field, optional or not, until somebody sets it — and
+the recursive key-set assertion then says at once whether it crossed. The same
+move `FIXED_BY_AN_ACCOUNT` makes in [`visitor.ts`](../../src/web/visitor.ts).
+
+The `TreeNode` half looked impossible and is worth writing down. That type was
+mid-flight in the footnotes lane — `treatment?` in the working tree, absent from
+HEAD — so a `Required<TreeNode>` **literal** is red in both directions at once:
+missing the field against one state of the repo, carrying an excess one against
+the other. TypeScript's excess-property check fires on a fresh object literal
+and not on a variable, so assigning the fields to a variable first keeps the
+half that matters in both states: a new field not set is *missing* and is
+refused; a stale name that the type no longer has is merely extra and passes.
+That is the right way round — a stale fixture name is a tidy-up, an
+unconsidered field in a public payload is a leak.
+
+**One thing the slice fixed that was not in its scope.** `VisitorPage` passed `available={null}` to
+its dock, hardcoded — so every dimmed button on the tweets page said *we could not check* about an
+article the page had in hand. There is no `null` to pass now.
+
 ### The browser pass, 2026-08-28 — and what only eyes could find
 
 A Sonnet agent drove the finished slice in Chrome: published a real article through the real
@@ -1460,6 +1541,78 @@ English words and a guard with known false positives is one people learn to wave
 And the way it was found is worth as much as the guard: not by thinking harder, but because exempting
 `db/client.ts` forced somebody to explain *why* that file needs the whole schema. **An exemption that
 makes you justify it is worth more than one that just unblocks the run.**
+
+### Slice 1b, the server half, built 2026-08-28
+
+Four allowlist projections — `publicGlossary`, `publicSummaries`, `publicIdeas`, `publicTweets` —
+four more columns on the public reader's `select`, and four optional keys on `PublicArticle`. No new
+route, no change to the route inventory, no new client fetch state, because there is no new request.
+
+**The client half is written and is deliberately not in this commit.** It is entangled in
+`src/web/App.tsx` with two other lanes' uncommitted work, and App.tsx imports two files —
+`safe-area.ts` and `public-artefacts.ts` — that are untracked. See below: committing it would have
+made the tree's existing breakage worse rather than better.
+
+**Four controls run rather than reasoned about**, after the building agent went idle four times
+without reporting and its checks had to be re-run rather than believed:
+
+| Mutation | Result |
+|---|---|
+| `import { glossaryLookups }` in `public-reader.ts` | `public-imports` red — *"→ glossaryLookups"* |
+| `sql\`… from spideryarn.glossary_lookups\`` | red — *"→ raw sql on glossary_lookups"* |
+| `getDb().query.glossaryLookups` | red — *"→ db.query.glossaryLookups"* |
+| `publicSlug(slug)` → `eq(articles.slug, slug)`, all five call sites | `public-reads` red on the missing `visibility = $2` |
+
+All three routes to the owner's private lookups are caught **independently**, which is the property
+the guard was built for and the first time all three have been watched firing in one run.
+
+**A new guard, and the reason it exists.** `publicBlock` and `publicTree` drop what they are not
+told about, which is the safe default and the reason they rebuild rather than pass through. But
+*safe* and *correct* diverge for a field the client needs: without `Block.treatment` a visitor's copy
+of an article numbers the apparatus as part of the argument. So the DTO fixtures are now typed
+`Required<Block>` and `Required<TreeNode>` — a fixture that stops compiling the moment the type gains
+**any** field, until somebody sets it and the key-set assertion tells them whether it crosses. Same
+move as `FIXED_BY_AN_ACCOUNT` in [`visitor.ts`](../../src/web/visitor.ts), for the reason that file
+gives: a new member should be a red compile rather than a silent default.
+
+Watched failing three ways: dropping `treatment` from `publicBlock` reddens the key-set assertion,
+copying `note` fires the canary, and adding a field to `Block` produces
+`TS2741: Property 'spyaTempControlField' is missing … but required in type 'Required<Block>'`.
+
+`Required<TreeNode>` is assigned through a named const rather than a fresh object literal, which
+skips TypeScript's excess-property check and is what lets it compile against **both** HEAD and a
+working tree in which the footnotes lane has added `TreeNode.treatment`. `publicTree` does not copy
+`treatment`, and that omission is now an asserted decision — *"drops a tree node's treatment, which
+is a decision rather than an oversight"* — so whoever lands the footnotes tree work meets it and
+chooses.
+
+### `npm run typecheck` cannot see that a commit is incomplete
+
+Found while checking whether this slice was safe to commit, and it is much larger than this slice.
+**HEAD did not compile**, with 16 errors across four files and three unrelated lanes:
+
+| Broken at HEAD | Cause |
+|---|---|
+| `src/web/TableView.tsx` (11) | imports `./Lightbox.js` and `./zoomable.js`; neither file was committed |
+| `src/web/App.tsx` (2) | imports `./safe-area.js`; not committed |
+| `src/source-hash.ts` (2) | reads `TreeNode.treatment`; the `types.ts` hunk was not committed |
+| `tests/block-roles.test.ts` (1) | passes `glossary` to `publicArticle`; `158467c` swept up this slice's test edit without the `dto.ts` change that makes it legal |
+
+Every one is the same mistake and **every lane's gate was green when it committed**, because
+`npm run typecheck` checks the *working tree*, and in a tree several agents share the working tree is
+the union of everybody's unfinished work. The file a commit is missing is sitting untracked beside
+it. So the gate agrees with the code for the same reason the code is wrong —
+[silent-success.md](../reusable/silent-success.md) — and `git status` listing an untracked file is
+the only signal, which is the line everyone is trained to scroll past.
+
+This was found by checking HEAD out into a clean worktree and typechecking *that*, which is the only
+version of the gate that answers the question actually being asked: **not "does my tree compile" but
+"does what I am about to commit compile".**
+
+The cheap check that would have caught three of the four, and that this commit was held against
+before landing: for every file being committed, resolve its relative imports and refuse any that
+`git ls-files` does not know. Run against `TableView.tsx` and `App.tsx` it names all three missing
+modules immediately; run against this slice's server files it says nothing.
 
 ## Open questions
 

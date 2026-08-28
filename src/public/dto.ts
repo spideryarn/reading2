@@ -24,13 +24,14 @@
  * one careless `...spread` away from being widened; a column that was never
  * selected has to be put back on purpose, in SQL, where a reviewer sees it.
  *
- * ## Four of these are not exported, deliberately
+ * ## Only two of these are exported, deliberately
  *
- * `publicMeta`, `publicBlock`, `publicTree` and `publicArc` are the pieces
- * `publicArticle` is built from, and nothing outside this file assembles a
- * public response by hand — which is the property worth keeping. Slice 1b adds
- * four more endpoints and will want some of them; exporting one then, for a
- * caller that exists, is better than exporting four now for callers that do not.
+ * `publicMeta`, `publicBlock`, `publicTree`, `publicArc` and the four artefact
+ * projections slice 1b added are the pieces `publicArticle` is built from, and
+ * nothing outside this file assembles a public response by hand — which is the
+ * property worth keeping. Slice 1b was expected to want some of them exported
+ * for four sibling endpoints; Greg's decision that there are no sibling
+ * endpoints means there is still nothing to export them to.
  *
  * ## What is NOT here
  *
@@ -46,16 +47,28 @@ import type {
   ArcEntry,
   Block,
   BlockKind,
+  Glossary,
+  Idea,
+  Ideas,
   NodeId,
+  SummaryEntry,
+  Summaries,
   Tree,
   TreeNode,
+  Tweet,
+  TweetThread,
 } from "../types.js";
 import type {
   PublicArticle,
   PublicArtefacts,
   PublicBlock,
+  PublicGlossary,
+  PublicGlossaryEntry,
+  PublicIdeas,
   PublicMeta,
   PublicMetadata,
+  PublicSummaries,
+  PublicTweets,
 } from "../public-types.js";
 
 /**
@@ -171,7 +184,130 @@ function publicArc(arc: Arc): Arc {
   };
 }
 
-/** `GET /api/public/article/:slug`, assembled. */
+/**
+ * The glossary, rebuilt entry by entry — **and `lookup` is not among the
+ * fields.**
+ *
+ * This is the projection GPT Sol's design input named as the hazardous one, and
+ * it is worth saying why in the file that does it rather than only in the plan.
+ * `loadGlossary` on the owner's side attaches `glossary_lookups` to each entry
+ * at the read seam, on purpose and with a comment saying why
+ * ([pg.ts](../store/pg.ts)): a lookup is what came back when *that reader*
+ * pressed "check the web", and it carries their requested answer, its
+ * citations, how many searches it ran, which model answered and the exact
+ * minute. Correct for the owner; somebody's private research here.
+ *
+ * Two things stop it, and neither is this function on its own. The public
+ * reader selects the `glossary` column off `article_revisions` and joins
+ * nothing, and tests/public-imports.test.ts refuses any public module that can
+ * name the `glossary_lookups` table by import, by raw SQL or through Drizzle's
+ * relational API. This is the third: even handed an entry that carried one, the
+ * field is not copied.
+ */
+function publicGlossary(glossary: Glossary): PublicGlossary {
+  return {
+    entries: glossary.entries.map(
+      (entry): PublicGlossaryEntry => ({
+        id: entry.id,
+        name: entry.name,
+        kind: entry.kind,
+        aliases: [...entry.aliases],
+        /* Conditional spreads throughout, because `exactOptionalPropertyTypes`
+           is on and absent is a meaningful answer for most of these — an entry
+           with no `background` is one the model did not claim to know about,
+           which is visibly different from an invented one. */
+        ...(entry.senseHere === undefined ? {} : { senseHere: entry.senseHere }),
+        ...(entry.background === undefined ? {} : { background: entry.background }),
+        ...(entry.gloss === undefined ? {} : { gloss: entry.gloss }),
+        ...(entry.detail === undefined ? {} : { detail: entry.detail }),
+        ...(entry.url === undefined ? {} : { url: entry.url }),
+        ...(entry.difficulty === undefined ? {} : { difficulty: entry.difficulty }),
+        ...(entry.centrality === undefined ? {} : { centrality: entry.centrality }),
+        ...(entry.fromOutside === undefined ? {} : { fromOutside: entry.fromOutside }),
+        blocks: [...entry.blocks],
+      }),
+    ),
+  };
+}
+
+/**
+ * The summaries — **and `guidance` is not among the fields.**
+ *
+ * That is the owner's free-text steer: what *they* asked these summaries to
+ * lean towards. Sol's payload table put it in bold and the plan repeats it,
+ * because it is the one field here that is a sentence somebody wrote about
+ * themselves rather than about the article.
+ *
+ * The honest limit, stated where somebody might otherwise think this closed it:
+ * the summary *text* is derived from the steer, so dropping the field stops
+ * direct disclosure and cannot make the prose neutral. That is Greg's settled
+ * stage-1 position — publish the artefact the owner has — and it is
+ * docs/plans/public-read-only-access.md § The leak that no projection fixes.
+ *
+ * `missing` crosses: it is the reader's only sign that an apparently complete
+ * ladder is partial.
+ */
+function publicSummaries(summaries: Summaries): PublicSummaries {
+  return {
+    entries: summaries.entries.map(
+      (entry): SummaryEntry => ({
+        range: [entry.range[0], entry.range[1]],
+        depth: entry.depth,
+        ...(entry.short === undefined ? {} : { short: entry.short }),
+        ...(entry.long === undefined ? {} : { long: entry.long }),
+      }),
+    ),
+    missing: summaries.missing,
+  };
+}
+
+/** The ideas, rebuilt idea by idea and occurrence by occurrence. */
+function publicIdeas(ideas: Ideas): PublicIdeas {
+  return {
+    ideas: ideas.ideas.map(
+      (idea): Idea => ({
+        id: idea.id,
+        name: idea.name,
+        provenance: idea.provenance,
+        statement: idea.statement,
+        ...(idea.whyYouNeedIt === undefined ? {} : { whyYouNeedIt: idea.whyYouNeedIt }),
+        ...(idea.analogy === undefined ? {} : { analogy: idea.analogy }),
+        occurrences: idea.occurrences.map((at) => ({
+          blockId: at.blockId,
+          quote: at.quote,
+          reasoning: at.reasoning,
+          ...(at.start === undefined ? {} : { start: at.start }),
+        })),
+      }),
+    ),
+  };
+}
+
+/** The thread, rebuilt post by post. `limit` crosses; the provenance does not. */
+function publicTweets(thread: TweetThread): PublicTweets {
+  return {
+    limit: thread.limit,
+    tweets: thread.tweets.map((tweet): Tweet => ({ text: tweet.text, chars: tweet.chars })),
+  };
+}
+
+/**
+ * `GET /api/public/article/:slug`, assembled.
+ *
+ * **The four artefacts are keys of this one response, and that is Greg's
+ * decision rather than the design Sol gave.** Four sibling endpoints would each
+ * have needed a route, a projection, a reader method, a client hook and a
+ * tagged wire result saying whether the artefact exists; folding them in here
+ * makes existence a property of the payload — a key that is present exists —
+ * with no second request to be in flight, to fail, or to disagree with the
+ * first. docs/plans/public-read-only-access.md § Slice 1b.
+ *
+ * `null` in, absent out. The reader hands `null` for a column Postgres had
+ * nothing in, and an absent key is what the client reads as *nobody built one*.
+ * An artefact that exists and is **empty** — a glossary whose step ran and
+ * found no terms — is a present key holding an empty list, and the two must
+ * stay different.
+ */
 export function publicArticle(row: {
   slug: string;
   title: string | null;
@@ -183,12 +319,25 @@ export function publicArticle(row: {
   blocks: (Block | PublicBlock)[];
   tree: Tree;
   arc: Arc | null;
+  glossary: Glossary | null;
+  summary: Summaries | null;
+  ideas: Ideas | null;
+  tweets: TweetThread | null;
 }): PublicArticle {
   return {
     meta: publicMeta(row),
     blocks: row.blocks.map(publicBlock),
     tree: publicTree(row.tree),
     ...(row.arc ? { arc: publicArc(row.arc) } : {}),
+    /* `!== null` rather than truthiness, on all four. An artefact is an object
+       and so always truthy, so the two agree today — but the day one of these
+       becomes a value that can be falsy while present, truthiness silently
+       reports it as never built. The distinction this payload rests on is
+       present-versus-absent, and the test is written to say so. */
+    ...(row.glossary !== null ? { glossary: publicGlossary(row.glossary) } : {}),
+    ...(row.summary !== null ? { summary: publicSummaries(row.summary) } : {}),
+    ...(row.ideas !== null ? { ideas: publicIdeas(row.ideas) } : {}),
+    ...(row.tweets !== null ? { tweets: publicTweets(row.tweets) } : {}),
   };
 }
 

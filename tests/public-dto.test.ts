@@ -28,7 +28,33 @@
 import { describe, expect, it } from "vitest";
 
 import { publicArticle, publicMetadata } from "../src/public/dto.js";
-import type { Arc, Block, Tree } from "../src/types.js";
+import type {
+  Arc,
+  Block,
+  BlockId,
+  Glossary,
+  Ideas,
+  NodeId,
+  Summaries,
+  Tree,
+  TreeNode,
+  TweetThread,
+} from "../src/types.js";
+
+/**
+ * An article whose four slice-1b columns are all empty, for the cases that are
+ * about the meta, the blocks and the tree.
+ *
+ * Spelled out rather than defaulted in the DTO: `publicArticle` takes them as
+ * required arguments, so a fifth artefact added next year cannot be forgotten
+ * at a call site — it stops compiling instead.
+ */
+const NO_ARTEFACTS = {
+  glossary: null,
+  summary: null,
+  ideas: null,
+  tweets: null,
+} as const;
 
 /** Every key path in a value, dotted, with array elements collapsed to `[]`. */
 function keyPaths(value: unknown, prefix = ""): string[] {
@@ -54,6 +80,10 @@ function keyPaths(value: unknown, prefix = ""): string[] {
  * preview renders a note's whole range, so `noteId` is load-bearing on the
  * public side rather than an extra. `HEADING` below carries none of them, so
  * the assertion covers both arms.
+ *
+ * Left as a plain `Block` on purpose: `EVERY_BLOCK_FIELD` below is the
+ * `Required<Block>` guard, and two of them would be one fixture to update and
+ * one to forget.
  */
 const BLOCK: Block = {
   id: "spya-k3m9qt",
@@ -80,6 +110,62 @@ const HEADING: Block = {
   gistable: true,
 };
 
+/**
+ * **Every field a `TreeNode` has** — the other half of the guard
+ * `EVERY_BLOCK_FIELD` below sets out at length, and the reasoning there is the
+ * whole of the reasoning here: `publicTree` drops what it does not name, which
+ * is safe and is not the same as correct, so a new field has to stop compiling
+ * until somebody decides about it.
+ *
+ * ## Why it is assigned through a variable rather than written as a literal
+ *
+ * TypeScript's excess-property check fires on a **fresh object literal** and
+ * not on a variable, and that difference is load-bearing here rather than
+ * stylistic. `TreeNode` is a contended type: on 2026-08-28 the footnotes lane
+ * added a `treatment?` to it in a working tree that is not committed yet, and a
+ * literal listing `treatment` would fail to compile the moment that hunk lands
+ * or is dropped — this file would be red in one half of the repo's two states
+ * whichever way it was written.
+ *
+ * Through a variable, the half that matters still holds in both: a field added
+ * to `TreeNode` and not set here is a **missing** property, and
+ * `Required<TreeNode>` refuses it. A field listed here that `TreeNode` no
+ * longer has is merely extra, and passes quietly — which is the right way round,
+ * because a stale name in a fixture is a tidy-up and an unconsidered field in a
+ * public payload is a leak.
+ */
+const NODE_FIELDS = {
+  id: "n1" as NodeId,
+  depth: 1,
+  parent: "n0" as NodeId | null,
+  children: [] as NodeId[],
+  range: ["spya-k3m9qt", "spya-k3m9qt"] as [BlockId, BlockId],
+  title: "The example",
+  navLabel: "Example",
+  summary: "A longer restatement.",
+  sourceHeading: "The example",
+  gist: "The one worked example, and what it costs the argument.",
+  /**
+   * **Apparatus rather than argument**, and the one field here that is not
+   * merely provenance.
+   *
+   * `publicTree` does **not** copy it, deliberately and for a reason that is
+   * about this tree rather than about privacy: the field exists only in the
+   * footnotes lane's uncommitted `src/types.ts`, so a public projection reading
+   * it would compile against one agent's working copy and not against the
+   * commit. When that lane lands, whoever lands it meets this fixture, sets
+   * this key, watches the key-set assertion below report the field as dropped,
+   * and decides — which is exactly the decision a visitor's spine depends on,
+   * since a client that cannot tell apparatus from argument numbers the
+   * footnotes as a part of the piece.
+   */
+  treatment: "supplement" as const,
+};
+
+/* **No `as` on this line, and that is the guard.** A cast would suppress
+   exactly the error this exists to produce. */
+const FULL_NODE: Required<TreeNode> = NODE_FIELDS;
+
 const TREE: Tree = {
   version: "1",
   generator: "test",
@@ -95,17 +181,7 @@ const TREE: Tree = {
       title: "The whole piece",
       gist: "It argues one thing and demonstrates another.",
     },
-    n1: {
-      id: "n1",
-      depth: 1,
-      parent: "n0",
-      children: [],
-      range: ["spya-k3m9qt", "spya-k3m9qt"],
-      title: "The example",
-      navLabel: "Example",
-      summary: "A longer restatement.",
-      sourceHeading: "The example",
-    },
+    n1: FULL_NODE,
   },
 };
 
@@ -157,6 +233,7 @@ describe("the public article payload", () => {
     blocks: [HEADING, BLOCK],
     tree: TREE,
     arc: ARC,
+    ...NO_ARTEFACTS,
   });
 
   it("has exactly the keys it is allowed, all the way down", () => {
@@ -202,6 +279,11 @@ describe("the public article payload", () => {
         "tree.nodes.n1",
         "tree.nodes.n1.children",
         "tree.nodes.n1.depth",
+        /* `n1` is the `Required<TreeNode>` fixture, so it carries every field
+           the type has — and this list is where each one's fate is recorded.
+           `treatment` is the absence to read: it is set on the fixture and it
+           is not here, which is `publicTree` dropping what it does not name. */
+        "tree.nodes.n1.gist",
         "tree.nodes.n1.id",
         "tree.nodes.n1.navLabel",
         "tree.nodes.n1.parent",
@@ -241,9 +323,115 @@ describe("the public article payload", () => {
     expect(JSON.stringify(built)).not.toContain("repeats the pull quote");
   });
 
+  /**
+   * **The field the `Required<TreeNode>` fixture exists for**, asserted rather
+   * than left to the key list above.
+   *
+   * `treatment` is set on the fixture and dropped by `publicTree`. That is the
+   * safe default doing its job — but *safe* and *correct* are different here,
+   * and this is the case that shows it: a client that cannot tell apparatus
+   * from argument numbers the footnotes as a part of the piece. Whoever lands
+   * the footnotes lane's `TreeNode.treatment` meets this test and decides.
+   */
+  it("drops a tree node's treatment, which is a decision rather than an oversight", () => {
+    expect(NODE_FIELDS.treatment).toBe("supplement");
+    expect(keyPaths(built)).not.toContain("tree.nodes.n1.treatment");
+    expect(JSON.stringify(built.tree)).not.toContain("supplement");
+  });
+
   it("has none of the meta fields the payload table forbids", () => {
     const keys = Object.keys(built.meta);
     expect(keys.filter((k) => FORBIDDEN_ON_META.includes(k))).toEqual([]);
+  });
+
+  /**
+   * **A field added to `Block` next month does not compile until somebody has
+   * decided about it.**
+   *
+   * The test above proves the projection *drops* what it was not told about,
+   * which is the safe default and the reason `publicBlock` rebuilds rather than
+   * passes through. But safe and correct are different things, and slice 1b
+   * found the gap between them the hard way: `role`, `treatment` and `noteId`
+   * arrived on `Block` from the footnotes work, and they are fields the client
+   * *needs* — without `treatment` a visitor's copy of an article numbers the
+   * apparatus as part of the argument. Silently dropping those is wrong in a way
+   * that no amount of "it fails closed" reasoning fixes.
+   *
+   * So this fixture is typed `Required<Block>`, and that is the whole mechanism:
+   * it stops compiling the moment `Block` gains **any** field, optional or not,
+   * until somebody sets it here — and the assertion below then tells them at
+   * once whether it crosses into the public payload. *Absent by default* stays
+   * true; *absent without anybody noticing* stops being possible.
+   *
+   * The same move as `FIXED_BY_AN_ACCOUNT` in src/web/visitor.ts, which is a
+   * total `Record<VisitorGap["kind"], boolean>` for the same reason it gives:
+   * a fifth kind is then "a red compile rather than a silent `false`".
+   *
+   * **`TreeNode` has the identical guard now** — `FULL_NODE` at the top of this
+   * file — and the reason this paragraph used to say it could not is worth
+   * keeping, because the way round it is not obvious.
+   *
+   * The objection was real: on 2026-08-28 that type was mid-flight in the
+   * footnotes lane, `TreeNode.treatment` was in the working tree and not in
+   * HEAD, and a `Required<TreeNode>` **literal** is red in both directions at
+   * once — missing the field against one state of the repo and carrying an
+   * excess one against the other. What resolves it is that TypeScript's
+   * excess-property check fires on a fresh object literal and not on a
+   * variable. Assign the fields to a variable first, and the half that matters
+   * still holds in both states: a field added to `TreeNode` and not set is a
+   * *missing* property, which `Required<TreeNode>` refuses. A field set that
+   * `TreeNode` no longer has is merely extra, and passes — which is the right
+   * way round, since a stale name in a fixture is a tidy-up and an
+   * unconsidered field in a public payload is a leak.
+   */
+  const EVERY_BLOCK_FIELD: Required<Block> = {
+    id: "spya-zzzzzz",
+    tag: "p",
+    kind: "text",
+    level: 2,
+    text: "Every field set, so that the projection has something to drop.",
+    words: 11,
+    html: "<p>Every field set, so that the projection has something to drop.</p>",
+    gistable: true,
+    /* The one that must not survive, carrying a canary rather than plausible
+       prose so that a leak is greppable in the serialised output. */
+    note: "PRIVATE-EDITORIAL-NOTE-CANARY",
+    role: "footnote",
+    treatment: "supplement",
+    noteId: "spya-note-0123456789",
+  };
+
+  it("carries every Block field that crosses, and drops the one that does not", () => {
+    const out = publicArticle({
+      slug: "noema",
+      title: "t",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      blocks: [EVERY_BLOCK_FIELD],
+      tree: TREE,
+      arc: null,
+      ...NO_ARTEFACTS,
+    });
+
+    /* Exact rather than `toContain`, in both directions at once: a field that
+       stopped crossing fails here just as loudly as one that started. */
+    expect(keyPaths(out).filter((k) => k.startsWith("blocks[]")).sort()).toEqual([
+      "blocks[].gistable",
+      "blocks[].html",
+      "blocks[].id",
+      "blocks[].kind",
+      "blocks[].level",
+      "blocks[].noteId",
+      "blocks[].role",
+      "blocks[].tag",
+      "blocks[].text",
+      "blocks[].treatment",
+      "blocks[].words",
+    ]);
+    expect(JSON.stringify(out)).not.toContain("PRIVATE-EDITORIAL-NOTE-CANARY");
   });
 
   /**
@@ -273,6 +461,7 @@ describe("the public article payload", () => {
       blocks: [BLOCK],
       tree: withExtra,
       arc: null,
+      ...NO_ARTEFACTS,
     });
     expect(JSON.stringify(out)).not.toContain("whoAsked");
   });
@@ -290,6 +479,7 @@ describe("the public article payload", () => {
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
+      ...NO_ARTEFACTS,
     });
     expect(Object.keys(bare.meta)).toEqual(["slug", "title"]);
     expect(bare.meta.title).toBe("From the article's own h1");
@@ -309,8 +499,294 @@ describe("the public article payload", () => {
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
+      ...NO_ARTEFACTS,
     });
     expect(bare.meta.title).toBe("noema");
+  });
+});
+
+/**
+ * **The four artefacts slice 1b carries**, each fed an input that is
+ * deliberately over-full.
+ *
+ * Every fixture below carries the private field as well as the public one —
+ * `guidance` on the summaries, a `lookup` on a glossary entry, `profileHash` on
+ * all four, the generator and the timings — so a projection that copied its
+ * argument, spread it, or filtered a denylist would fail here rather than pass
+ * for want of anything to leak. A fixture with nothing forbidden in it proves
+ * nothing at all, which is the mistake the top of this file exists to name.
+ */
+describe("the four artefacts a shared link carries", () => {
+  /**
+   * A glossary with **a lookup on one of its entries**, which is the single
+   * most private thing in any of these four.
+   *
+   * `glossary_lookups` is the owner's own research — their requested answer,
+   * its citations, how many web searches it ran, which model answered and the
+   * exact minute — and `loadGlossary` attaches it to the entry at the read
+   * seam, deliberately, for the owner. GPT Sol's design input named it by name
+   * as the thing a public glossary read must never carry.
+   */
+  const GLOSSARY: Glossary = {
+    version: "glossary/2",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    profileHash: "profile-of-a-person",
+    passes: 3,
+    generatedAt: "2026-08-28T10:00:00.000Z",
+    elapsedMs: 41_000,
+    entries: [
+      {
+        id: "spya-term01",
+        name: "Integrated information theory",
+        kind: "concept",
+        aliases: ["IIT"],
+        senseHere: "The author uses it as a stand-in for any measure-first account.",
+        background: "A theory of consciousness proposed by Giulio Tononi.",
+        gloss: "A superseded blended field, still rendered for older artefacts.",
+        detail: "Its superseded partner.",
+        url: "https://example.com/iit",
+        difficulty: 0.8,
+        centrality: 0.9,
+        fromOutside: true,
+        blocks: ["spya-k3m9qt"],
+        lookup: {
+          answer: "What the owner asked the web, and what it said back.",
+          citations: [{ url: "https://example.com/source", title: "A source" }],
+          searches: 4,
+          model: "some-search-model",
+          at: "2026-08-28T11:00:00.000Z",
+        },
+      },
+      /* A second entry with every optional absent, so the assertions below
+         cover both arms rather than only the full one. */
+      {
+        id: "spya-term02",
+        name: "Lamport",
+        kind: "person",
+        aliases: [],
+        blocks: [],
+      },
+    ],
+  };
+
+  /** Summaries carrying **`guidance`** — the owner's free-text steer. */
+  const SUMMARIES: Summaries = {
+    version: "summary/1",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    profileHash: "profile-of-a-person",
+    guidance: "I am reading this for the argument about measurement, skip the history.",
+    missing: 2,
+    generatedAt: "2026-08-28T10:00:00.000Z",
+    elapsedMs: 62_000,
+    entries: [
+      {
+        range: ["spya-h1aaaa", "spya-k3m9qt"],
+        depth: 0,
+        short: "A few sentences.",
+        long: "A paragraph.",
+      },
+      { range: ["spya-k3m9qt", "spya-k3m9qt"], depth: 1 },
+    ],
+  };
+
+  const IDEAS: Ideas = {
+    version: "ideas/1",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    profileHash: "profile-of-a-person",
+    generatedAt: "2026-08-28T10:00:00.000Z",
+    elapsedMs: 30_000,
+    ideas: [
+      {
+        id: "spya-idea01",
+        name: "Measurement precedes theory",
+        provenance: "assumed",
+        statement: "You cannot theorise about what you have no way to measure.",
+        whyYouNeedIt: "The middle section's objection collapses without it.",
+        analogy: "Like arguing about temperature before the thermometer.",
+        occurrences: [
+          {
+            blockId: "spya-k3m9qt",
+            quote: "does not survive its own first example",
+            reasoning: "The example is offered as a measurement.",
+            start: 17,
+          },
+        ],
+      },
+    ],
+  };
+
+  const THREAD: TweetThread = {
+    version: "tweets/1",
+    generator: "some-model",
+    slug: "noema",
+    sourceHash: "abc123",
+    profileHash: "profile-of-a-person",
+    limit: 280,
+    tweets: [{ text: "The first post.", chars: 15 }],
+    generatedAt: "2026-08-28T10:00:00.000Z",
+    elapsedMs: 12_000,
+  };
+
+  const built = publicArticle({
+    slug: "noema",
+    title: "The mythology of conscious AI",
+    byline: null,
+    siteName: null,
+    lang: null,
+    excerpt: null,
+    headingTitle: null,
+    blocks: [BLOCK],
+    tree: TREE,
+    arc: null,
+    glossary: GLOSSARY,
+    summary: SUMMARIES,
+    ideas: IDEAS,
+    tweets: THREAD,
+  });
+
+  /** Everything under one key, deeply, against the allowlist for that artefact. */
+  function pathsUnder(key: string): string[] {
+    return keyPaths((built as unknown as Record<string, unknown>)[key]);
+  }
+
+  it("carries a glossary entry's fields and never its lookup", () => {
+    expect(pathsUnder("glossary")).toEqual(
+      [
+        "entries",
+        "entries[].aliases",
+        "entries[].background",
+        "entries[].blocks",
+        "entries[].centrality",
+        "entries[].detail",
+        "entries[].difficulty",
+        "entries[].fromOutside",
+        "entries[].gloss",
+        "entries[].id",
+        "entries[].kind",
+        "entries[].name",
+        "entries[].senseHere",
+        "entries[].url",
+      ].sort(),
+    );
+    /* Said twice on purpose: the key set above would also pass if `lookup` were
+       renamed, and the owner's answer is the thing that must not travel. */
+    expect(JSON.stringify(built.glossary)).not.toContain("What the owner asked the web");
+    expect(JSON.stringify(built.glossary)).not.toContain("some-search-model");
+    /* And the provenance the plan's table forbids. */
+    for (const forbidden of ["profileHash", "passes", "generatedAt", "elapsedMs", "sourceHash"]) {
+      expect(pathsUnder("glossary"), forbidden).not.toContain(forbidden);
+    }
+  });
+
+  it("carries the summary ladder and never the owner's steer", () => {
+    expect(pathsUnder("summary")).toEqual(
+      ["entries", "entries[].depth", "entries[].long", "entries[].range", "entries[].short", "missing"].sort(),
+    );
+    expect(JSON.stringify(built.summary)).not.toContain("skip the history");
+  });
+
+  it("carries the ideas and none of their provenance", () => {
+    expect(pathsUnder("ideas")).toEqual(
+      [
+        "ideas",
+        "ideas[].analogy",
+        "ideas[].id",
+        "ideas[].name",
+        "ideas[].occurrences",
+        "ideas[].occurrences[].blockId",
+        "ideas[].occurrences[].quote",
+        "ideas[].occurrences[].reasoning",
+        "ideas[].occurrences[].start",
+        "ideas[].provenance",
+        "ideas[].statement",
+        "ideas[].whyYouNeedIt",
+      ].sort(),
+    );
+  });
+
+  it("carries the thread and the limit it was counted against", () => {
+    expect(pathsUnder("tweets")).toEqual(["limit", "tweets", "tweets[].chars", "tweets[].text"].sort());
+  });
+
+  /**
+   * **And the artefacts are really there**, which every assertion above passes
+   * without. A DTO returning `{}` for all four satisfies every key set and
+   * every "does not contain", and it is the failure this repo keeps writing up:
+   * a check agreeing with the code because both are empty.
+   */
+  it("still contains the artefacts, which is the point of the slice", () => {
+    expect(built.glossary?.entries).toHaveLength(2);
+    expect(built.glossary?.entries[0]?.name).toBe("Integrated information theory");
+    expect(built.glossary?.entries[0]?.blocks).toEqual(["spya-k3m9qt"]);
+    expect(built.summary?.entries[0]?.long).toBe("A paragraph.");
+    expect(built.summary?.missing).toBe(2);
+    expect(built.ideas?.ideas[0]?.statement).toContain("no way to measure");
+    expect(built.ideas?.ideas[0]?.occurrences[0]?.quote).toContain("first example");
+    expect(built.tweets?.tweets[0]?.text).toBe("The first post.");
+    expect(built.tweets?.limit).toBe(280);
+  });
+
+  /**
+   * **An artefact nobody built is an absent key. An artefact that is empty is a
+   * present one.**
+   *
+   * This is the distinction the whole client half rests on now that there is no
+   * second request: *does this piece have a glossary* is answered by the
+   * payload, and a stored `{entries: []}` means somebody ran the step and it
+   * found nothing — a **ready but empty** artefact, which is a different
+   * sentence from *nobody has built one yet*. A truthiness test on the document
+   * agrees with `!== null` today and stops agreeing the moment an artefact can
+   * be falsy while present; a length test on the entries collapses the two
+   * outright.
+   */
+  it("tells an empty artefact from an absent one", () => {
+    const empty = publicArticle({
+      slug: "noema",
+      title: "t",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      blocks: [BLOCK],
+      tree: TREE,
+      arc: null,
+      glossary: { ...GLOSSARY, entries: [] },
+      summary: null,
+      ideas: { ...IDEAS, ideas: [] },
+      tweets: null,
+    });
+    expect("glossary" in empty).toBe(true);
+    expect(empty.glossary?.entries).toEqual([]);
+    expect("ideas" in empty).toBe(true);
+    expect(empty.ideas?.ideas).toEqual([]);
+    expect("summary" in empty).toBe(false);
+    expect("tweets" in empty).toBe(false);
+  });
+
+  it("leaves every artefact out when the row carried none", () => {
+    const bare = publicArticle({
+      slug: "noema",
+      title: "t",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      blocks: [BLOCK],
+      tree: TREE,
+      arc: null,
+      ...NO_ARTEFACTS,
+    });
+    for (const key of ["glossary", "summary", "ideas", "tweets"]) {
+      expect(key in bare, key).toBe(false);
+    }
   });
 });
 
