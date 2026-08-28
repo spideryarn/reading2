@@ -1,7 +1,13 @@
 # Drift and Trail are dead in production, and the message says the wrong thing
 
-**Status:** diagnosed; the code half is built and verified; the operational half is Greg's and
-the deploy-time probe is still open. 2026-08-28.
+**Status:** **fixed, and verified in production 2026-08-28.** The code half is built and reviewed
+twice; the key was replaced and the site redeployed. The deploy-time probe is the one thing still
+open, and it is the one that would have caught this.
+
+`POST /api/projection/constitution` answers **200** at `dpl_3WV6SMuAqWrSXNG1uVefUkmD3Two`: 276
+blocks embedded, `voyageai/voyage-4`, 25,507 tokens, $0.00153, about three seconds. Drift and Trail
+draw dots and Force draws its dotted links, checked on the live site after a full reload so it is
+not stale client state, with no bracketed code anywhere. Three days of 502s, then a 200.
 
 Greg, 2026-08-28:
 
@@ -74,12 +80,21 @@ and the key has never been called. So the value that reached Vercel came from so
 different OpenRouter login. It is a live key (it authenticates; the failure is a routing 404, not a
 401), and that other account has a restriction this one does not.
 
-**The fix is therefore to put a key from `greg@gregdetre.com` on Vercel**, not to change any
-setting. That account has every restrictive toggle off, its single guardrail has nothing configured
+**The fix was therefore to put a key from `greg@gregdetre.com` on Vercel**, not to change any
+setting — done 2026-08-28. That account has every restrictive toggle off, its single guardrail has nothing configured
 at all, and it has already paid for `voyage-4` embeddings — $0.05 of them, including the calls that
 verified this diagnosis. OpenRouter shows a key's secret only once at creation, so the existing
-prod key's value is probably unrecoverable: make a fresh one, name it for production, and paste
-that.
+prod key's value was unrecoverable and a fresh one was made.
+
+**What "tested" meant before it was set**, because a key that authenticates is not a key that
+works — that is the whole lesson of this document. Every job's *real model* with its *real
+`provider` block* from `AI_JOB_ROUTE`, not a bare call: embeddings/`voyage-4` 200, chat/`sonnet-5`
+with `order+require_parameters` 200, dictation/`gemini-3.1-flash-lite` with `zdr+require_parameters`
+200, PDF/`gpt-5.6-luna` with `require_parameters+allow_fallbacks:false` 200. Then the app's own
+`embedAll` on a real article: 34 paragraphs, 1024 dimensions, $0.000247. And after setting it, the
+value was **pulled back from Vercel and compared** rather than trusted — 73 characters, identical.
+(`vercel env pull` overwrites `.env.local` by default, which holds the *other* key; pull somewhere
+else.)
 
 **What the account looked like**, so nobody re-checks it: ZDR off for all five scopes (Non-frontier,
 Anthropic, OpenAI, Google, SpaceXAI); all four data-training toggles off; Allowed Providers and
