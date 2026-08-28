@@ -101,36 +101,51 @@ function response(slug: string): GlossaryResponse {
   } as unknown as GlossaryResponse;
 }
 
-vi.mock("../src/web/lib/api.js", () => ({
-  apiFetch: async (input: string) => {
-    asked.push(input);
-    /* **The body is decided when the request arrives, not when it is answered.**
-       That is what a server does — it reads the database at the moment it is
-       asked — and getting it wrong made two of the tests below tautologies:
-       a request issued before a change was answered with the state *after* it,
-       so joining a stale request and running a fresh one were indistinguishable
-       and both passed. Snapshot here, hold, then reply. */
-    if (input.endsWith("/lookup")) {
-      /* What `lookUpTerm` returns: the entry **as it was before** the model call
-         it just spent thirty seconds on, with the answer attached
-         (src/term-lookup.ts). The stale name is the point of the fixture. */
-      return new Response(JSON.stringify({ entry: staleLookupEntry }), {
+vi.mock("../src/web/lib/api.js", () => {
+  const api = {
+    apiFetch: async (input: string) => {
+      asked.push(input);
+      /* **The body is decided when the request arrives, not when it is answered.**
+         That is what a server does — it reads the database at the moment it is
+         asked — and getting it wrong made two of the tests below tautologies:
+         a request issued before a change was answered with the state *after* it,
+         so joining a stale request and running a fresh one were indistinguishable
+         and both passed. Snapshot here, hold, then reply. */
+      if (input.endsWith("/lookup")) {
+        /* What `lookUpTerm` returns: the entry **as it was before** the model call
+           it just spent thirty seconds on, with the answer attached
+           (src/term-lookup.ts). The stale name is the point of the fixture. */
+        return new Response(JSON.stringify({ entry: staleLookupEntry }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      const body = JSON.stringify(response(input.split("/").pop() ?? ""));
+      const dead = fails;
+      await new Promise<void>((go) => held.push(go));
+      if (dead) throw new TypeError("Failed to fetch");
+      return new Response(body, {
         status: 200,
         headers: { "content-type": "application/json" },
       });
-    }
-    const body = JSON.stringify(response(input.split("/").pop() ?? ""));
-    const dead = fails;
-    await new Promise<void>((go) => held.push(go));
-    if (dead) throw new TypeError("Failed to fetch");
-    return new Response(body, {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    });
-  },
-  readJson: async (res: Response) => res.json(),
-  failure: async (res: Response) => new Error(String(res.status)),
-}));
+    },
+    readJson: async (res: Response) => res.json(),
+    failure: async (res: Response) => new Error(String(res.status)),
+    /* **A whole-module mock, so anything `useGlossary` imports and this omits is
+       `undefined` at the moment it is called** — which TypeScript cannot see
+       through a `vi.mock` factory, and no test here reaches. `reset()` calls
+       `fetchOk`; nothing below presses reset, so leaving it out would have been a
+       landmine set for whoever writes that test.
+       `tests/refused-writes-are-reported.test.tsx` is the one that exercises the
+       real `fetchOk`, and it mocks none of this module for that reason. */
+    fetchOk: async (input: string) => {
+      const res = await api.apiFetch(input);
+      if (!res.ok) throw new Error(String(res.status));
+      return res;
+    },
+  };
+  return api;
+});
 
 /**
  * The job poller, posed by the test rather than polling.

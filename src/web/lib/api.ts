@@ -283,6 +283,50 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
 }
 
 /**
+ * `apiFetch`, and the response only if the server said yes.
+ *
+ *     await fetchOk(`/api/comments/${slug}/${id}`, { method: "DELETE" });
+ *
+ * The same two lines as `const r = await apiFetch(…); if (!r.ok) throw await
+ * failure(r);` — and the point is not the line. **It makes asking and checking
+ * one act**, so the failure it exists to stop cannot be reached by forgetting.
+ * That failure has already happened twice here, from the same omission in two
+ * hooks: a DELETE that 500'd took the row off the screen and said nothing, and
+ * the reader found it back after a reload (`forget` in useComments.ts, `forget`
+ * in useSearch.ts). `readJson` has that property for a call whose body you go on
+ * to read; this is it for the calls whose body you do not.
+ *
+ * ## What it is not for
+ *
+ * - **A response you are about to stream.** `if (!r.ok || !r.body)` asks a
+ *   second question, and a stream can end by simply stopping, which looks
+ *   exactly like finishing — a different failure from a status code, and not one
+ *   this helper knows anything about. useComments.ts § `answer`, useSearch.ts §
+ *   `run` and chat/effects.ts keep their own check for that reason.
+ * - **A status that is an answer rather than a failure.** A 404 from
+ *   `/api/ideas/:slug` means nobody has asked for ideas yet; a 409 from the chat
+ *   stream means somebody else is already answering; `/api/public/…` answers 404
+ *   for a piece that is simply not shared. Those callers read the status
+ *   *before* deciding, and throwing there would report an ordinary state as a
+ *   fault. useIdeas.ts, useSummaries.ts, useGlossary.ts, public-api.ts,
+ *   App.tsx.
+ * - **A fetch that is not ours.** `apiFetch` refuses anything outside `/api/`,
+ *   so the Wikipedia summary in link-facts.ts and the Supabase settings probe in
+ *   lib/supabase.ts cannot come through here — and both of them treat a non-2xx
+ *   as *nothing to show*, which is not a thing to tell anybody about.
+ *
+ * Worth keeping in front of a `readJson` that reads the body afterwards, rather
+ * than leaving `readJson` to make the same check: `failure` tolerates a body
+ * that dies mid-read and `readJson` does not, so a 500 on a cut connection keeps
+ * its status message instead of surfacing as a `TypeError` about the network.
+ */
+export async function fetchOk(input: string, init: RequestInit = {}): Promise<Response> {
+  const res = await apiFetch(input, init);
+  if (!res.ok) throw await failure(res);
+  return res;
+}
+
+/**
  * Run a request, and fall back to a saved copy if the *transport* failed.
  *
  * The distinction this function exists to hold is between **no answer** and

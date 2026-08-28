@@ -35,7 +35,7 @@ import { mintId } from "../ids.js";
 import { isStale } from "../search-stale.js";
 import { describeFetchFailure } from "./useComments.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
-import { apiFetch, failure, readJson } from "./lib/api.js";
+import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
 
 /**
  * A saved run, plus the one thing about it that is not on the run.
@@ -247,13 +247,13 @@ export function useSearch(slug: string): SearchApi {
   const forget = useCallback(
     async (id: string) => {
       try {
-        const r = await apiFetch(`/api/search/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
-          { method: "DELETE" },
-        );
         // A DELETE that 500s used to remove the row from the screen and say
         // nothing, so the reader saw it gone and found it back after a reload.
-        // Same line, same reason, as useComments.ts.
-        if (!r.ok) throw await failure(r);
+        // Same call, same reason, as useComments.ts § `forget` — and it is
+        // `fetchOk` in both because the omission happened twice.
+        await fetchOk(`/api/search/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
+          { method: "DELETE" },
+        );
       } catch (e) {
         setError(describeFetchFailure(e as Error));
       }
@@ -432,7 +432,10 @@ export function useSearch(slug: string): SearchApi {
 
       const send = async () => {
         try {
-          const r = await apiFetch(
+          // Same call, same reason, as `forget` above: a PATCH that 500s used
+          // to change the colour on screen and say nothing, so the reader saw
+          // their choice take and found it gone after a reload.
+          await fetchOk(
             `/api/search/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
             {
               method: "PATCH",
@@ -440,10 +443,6 @@ export function useSearch(slug: string): SearchApi {
               body: JSON.stringify({ colour }),
             },
           );
-          // Same line, same reason, as `forget` above: a PATCH that 500s used
-          // to change the colour on screen and say nothing, so the reader saw
-          // their choice take and found it gone after a reload.
-          if (!r.ok) throw await failure(r);
         } catch (e) {
           setError(describeFetchFailure(e as Error));
         }

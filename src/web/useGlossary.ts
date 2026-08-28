@@ -25,7 +25,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Glossary, GlossaryEntry, GlossaryLookup, GlossaryResponse, Job } from "../types.js";
 import { useJobs } from "./useJobs.js";
-import { apiFetch, failure, readJson } from "./lib/api.js";
+import { apiFetch, fetchOk, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
 type GlossaryStatus = "loading" | "none" | "ready" | "error";
@@ -552,8 +552,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    */
   const reset = useCallback(async () => {
     try {
-      const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`, { method: "DELETE" });
-      if (!res.ok) throw await failure(res);
+      await fetchOk(`/api/glossary/${encodeURIComponent(slug)}`, { method: "DELETE" });
     } catch (err) {
       /* **This is where production stops**, and it is not a bug in this hook:
          deleting a glossary under `postgres` would null a column on a published

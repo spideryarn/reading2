@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { BlockId, Comment } from "../types.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "./lib/sse.js";
 import { wentQuiet } from "../messages.js";
-import { apiFetch, failure, readJson } from "./lib/api.js";
+import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
 
 /**
  * What to say when the request never reached the server.
@@ -230,12 +230,12 @@ export function useComments(slug: string): CommentsApi {
   const forget = useCallback(
     async (id: string) => {
       try {
-        const r = await apiFetch(`/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
-          { method: "DELETE" },
-        );
         // A DELETE that 500s used to remove the comment from the screen and say
         // nothing, so the reader saw it gone and found it back after a reload.
-        if (!r.ok) throw await failure(r);
+        // `fetchOk` is that check made unforgettable — lib/api.ts.
+        await fetchOk(`/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
+          { method: "DELETE" },
+        );
       } catch (e) {
         setError(describeFetchFailure(e as Error));
       }
@@ -455,7 +455,7 @@ export function useComments(slug: string): CommentsApi {
       });
       setError(null);
       try {
-        const r = await apiFetch(`/api/comments/${encodeURIComponent(slug)}`, {
+        const r = await fetchOk(`/api/comments/${encodeURIComponent(slug)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -466,7 +466,6 @@ export function useComments(slug: string): CommentsApi {
             ...(input.body ? { body: input.body } : {}),
           }),
         });
-        if (!r.ok) throw await failure(r);
         const { comment } = await readJson<{ comment: Comment }>(r);
         /* The server may have minted a different id. Drop the row we invented
            before putting the real one, or `put` appends it and the reader has
@@ -501,7 +500,7 @@ export function useComments(slug: string): CommentsApi {
     async (id: string, body: string | null): Promise<void> => {
       setError(null);
       try {
-        const r = await apiFetch(
+        const r = await fetchOk(
           `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
           {
             method: "PATCH",
@@ -509,7 +508,6 @@ export function useComments(slug: string): CommentsApi {
             body: JSON.stringify({ body }),
           },
         );
-        if (!r.ok) throw await failure(r);
         const { comment } = await readJson<{ comment: Comment }>(r);
         /* **The server's comment replaces the stored one; it is not merged
            over it.** A merge cannot express a *removal*: clearing the body

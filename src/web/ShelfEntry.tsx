@@ -29,7 +29,7 @@ import { readHref } from "./router.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
 import type { useShelf } from "./useShelf.js";
-import { apiFetch, failure } from "./lib/api.js";
+import { fetchOk } from "./lib/api.js";
 
 export type Shelf = ReturnType<typeof useShelf>;
 
@@ -292,16 +292,17 @@ export function Actions({
   const rerun = useCallback(async () => {
     setRerunning(true);
     try {
-      const r = await apiFetch("/api/jobs", {
+      /* `fetchOk`, so the check cannot be dropped. The first version ignored the
+         response entirely, so a refused job — a bad slug, a queue that would not
+         take it, a 501 — left the button spinning briefly and then looking as
+         though it had worked. That is the silent success this repo keeps writing
+         up, and lib/api.ts § `fetchOk` is where it stopped being possible to
+         write it again by forgetting a line. */
+      await fetchOk("/api/jobs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ slug: entry.slug, force: ["fetch"] }),
       });
-      /* Checked. The first version ignored the response entirely, so a refused
-         job — a bad slug, a queue that would not take it, a 501 — left the
-         button spinning briefly and then looking as though it had worked. That
-         is the silent success this repo keeps writing up. */
-      if (!r.ok) throw await failure(r);
     } catch (e) {
       shelf.report(`Couldn't queue a rebuild: ${(e as Error).message}`);
     } finally {
