@@ -203,6 +203,23 @@ whether the server ever heard about it. The lesson matches
 earlier, in the same file: the thing that silently fails here is not rendered, so a test has to ask
 about it directly rather than about the screen the reader sees.
 
+### Two more, from finding the 200 case a day later
+
+**The dead branch is why nobody found the 200 case, and that is the general shape.** A dead branch is
+usually read as inert — it does nothing, so it costs nothing but confusion. This one was load-bearing
+in reverse: the noisy failure it would have caused was the *only* thing that would have sent anybody
+looking, and by never running it left the quiet failure in place. When you find dead code, the
+question is not only "what was it supposed to do" but "what would have gone wrong loudly if it had,
+and is that thing going wrong quietly now?" Here it was: a `200` from a server that had never heard
+of the row.
+
+**A test whose name says the opposite of its body is worse than no test.** The test that pinned this
+window was called *"posts /cancel immediately and again after begin"* while its body asserted
+`toHaveLength(1)` — no second cancel — with a long note explaining why. The name is what anybody
+skims: a reader scanning the file for whether this case was covered would have read "and again after
+begin", believed the correction fired, and moved on. An absent test is honestly absent; a misnamed
+one is a wrong answer with a green tick next to it. Renamed 2026-08-28 to say what it pins.
+
 ## See also
 
 - [chat-operation-model.md](../plans/chat-operation-model.md) — the plan; stage 3 is the structural
