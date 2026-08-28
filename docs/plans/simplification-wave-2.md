@@ -77,19 +77,80 @@ migration should absorb the stage writes — but the reason for declining it is 
 
 ## Status, 2026-08-28
 
+Seven commits. Four live defects fixed, each red-first with the control checked against the broken
+state.
+
 | | |
 |---|---|
-| **0.5** `glossaryIsCurrent` deleted | Function gone from `glossary.ts`; its three test cases gone from `glossary.test.ts` (the `isStale` case stays — it is the pure half, and the API response uses it); the false comment in `pipeline.ts` corrected; `store/artifacts.ts` and `pipeline-artifact-store.test.ts` headers updated; `docs/project/glossary.md` and `testing.md` corrected. Typecheck clean, 75 tests pass. |
-| **0.6** the revision seam header | Rewritten to say what is true — nothing is wired, `revisionLifecycle` is referenced only by one test, and the ingest behaviour the old text described in the present tense cannot occur. `sweep()` recorded as an acceptance condition on step 11 rather than a separate fix. No code touched. |
+| **0.1** two paid CLIs outside the ledger | `a1d397a` — `await withLedger("cli", main)` in `labels.ts` and `pdf-read.ts`, plus a new AST gate. Hardened again in `b2992a9`, see below. |
+| **0.2 + 0.3** the reader's list, and a false failure | `47a3959` — the revalidation guard in `useIdeas`, `useSummaries` and `Tweets.tsx`; `useIdeas`'s "did not reach the server" replaced with `queue.error`. Eight tests. |
+| **0.5 + 0.6** a dead function, two false headers | `ca1bf40` — `glossaryIsCurrent` deleted with six references corrected; `store/revisions.ts` rewritten to say nothing is wired. |
+| the plan and its first review | `3806b25` |
+| **0.6 again** | `02933b5` — the header was still wrong a third way; see below. |
+| **the Tweets copy** | `7468327` — `THREAD_RECHECK_FAILED` in `messages.ts`; the raw error goes to the console. |
+| **0.1's gate, hardened** | `b2992a9` — it could be beaten three ways. |
 
-Both were doc-and-delete work with no behaviour change, which is why they went first.
+**Not done, and deliberately so:** 0.4 (the three streaming tests) and all of Tier 1 and Tier 2.
 
-**A note worth keeping from 0.5.** Deleting one test-only function meant correcting **six** other
-places that named it, two of them project docs asserting it was the live mechanism
-(`glossary.md:668` said *"`glossaryIsCurrent` is the step's `isDone`"*). The function had been dead
-since the `stamp` migration, and every one of those six had gone on describing it as live. `npm run
-typecheck` then caught four now-unused imports in the test file. **A deletion is never one edit**,
-and the thing that made it safe was running the gate rather than reading the diff.
+### What the code review changed, and it earned its keep
+
+The project weights the second review higher than the plan review because a plan-stage review cannot
+catch a fix that is wrong in the code. That is exactly what happened.
+
+**The gate I wrote to catch a bug that hides could itself be beaten three ways.** It checked the
+wrapper's spelling and first argument, never the second argument or the binding. So
+`withLedger("cli", async () => {}).then(main)` passed it — the money leaves, `main` runs outside the
+collector, the gate goes green. I reproduced that against the committed gate before changing
+anything.
+
+**And the way it looked caught is the part worth keeping.** Running the bypass *did* turn one test
+red — but that was the mutation control noticing its own string-replace had stopped matching, not
+the gate. "Something went red" is not "the gate caught it", and only reading *which* test failed
+showed the difference.
+
+**Its header overclaimed**, in a commit whose subject was headers that overclaim.
+`npm run eval:dictation-vocab` spends through `transcribeWith` → `openRouterJson` with no ledger —
+declared `unscoped`, so not a leak, but the sentence was false. The header now names the eight it
+checks, says what it cannot see, and cross-checks the `unscoped` declarations.
+
+**`revisions.ts` was wrong a third time.** My rewrite said publication would start succeeding "with
+no change to this file". `begin` takes `opts.job` and `RevisionHandle` drops it, so `publish` and
+both failure paths have no token to fence on and a failed draft keeps `jobs.draft_revision_id`. The
+step 11 acceptance condition now includes carrying the fence through publish/fail and clearing that
+pointer atomically.
+
+**The Tweets copy violated `copy.md`** by interpolating `"Failed to fetch"` into reader-facing text.
+
+### Two findings from the review that are NOT fixed, and feed Tier 2
+
+- **The reload tests serialize away the same-slug race.** All three loaders can have an opening GET
+  and an `onFinished` GET in flight together; if the post-job response lands first, the older
+  opening response overwrites it permanently. Every new test settles the opening request before
+  firing the job. `useGlossary` solves this with `generation`/trailing fetches and the other three
+  have none of it. **This is 2.6, and it means the Tier 0 verification is narrower than it looks.**
+- **`queue.error` is not durable.** It is shared polling state: the failed POST sets it, then
+  `finally` starts a poll and any successful poll clears it, so 0.3's fix can fall back to
+  "Couldn't start the job" before the server's reason paints. The test's static mock has no poll, so
+  it proves the ternary and not the sequence. **Fold into 2.1.**
+
+### Three times I was wrong in the same way
+
+Worth recording together, because it is one habit rather than three slips, and it is the same habit
+this whole wave is about.
+
+1. **"Four guards never fire."** Greped for the setup symbols, found none, inferred all four. Three.
+   *Absence of the setup I expected is not absence of coverage.*
+2. **"29 readiness probes."** Greped one spelling of the genre. It is 34.
+3. **"Every paid CLI opens the ledger."** Shipped a header claiming more than the check does.
+
+Each is a claim that agrees with itself and was never asked to fail.
+
+### One outstanding edit, held back on purpose
+
+`src/store/artifacts.ts` still says the Postgres artefact adapter "is not written yet", though
+`artifacts-pg.ts` exists. The fix is written but not committed: a peer has an unfinished
+`hasEarlierBlocks` in that file, and `git commit -- <path>` commits the working tree of that path
+and would take their work with it. Land it once their refactor settles.
 
 ---
 
