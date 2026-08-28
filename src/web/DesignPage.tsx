@@ -82,6 +82,17 @@ const SWATCHES: { group: string; names: string[] }[] = [
   },
   { group: "Ink", names: ["--ink", "--ink-soft", "--ink-faint"] },
   {
+    /* The one deliberately LIGHT surface in a dark-only app, and the one whose
+       contrast figure is meaningless as printed: the ratio measured beside it is
+       against our ink, and nothing of ours is ever drawn on it. What sits there
+       is a stranger's picture, whose ink we do not choose and cannot see (the
+       images are cross-origin, so a canvas drawn from one is tainted). It is on
+       this page because a token nobody can look at is a token that drifts —
+       design-css-overview.md § the light sheet under a figure. */
+    group: "The sheet an article's figures are printed on",
+    names: ["--figure-sheet"],
+  },
+  {
     group: "The orange",
     names: ["--highlight", "--highlight-ink", "--highlight-wash"],
   },

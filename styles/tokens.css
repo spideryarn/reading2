@@ -75,6 +75,29 @@
        else entirely. */
     --hit-wash: rgb(var(--hit-wash-rgb));
 
+    /* The sheet an article's pictures are printed on, and the one deliberately
+       LIGHT surface in a dark-only app.
+
+       Article images are routinely PNGs with an alpha channel carrying
+       near-black ink — equations, line diagrams, and data tables rendered as
+       pictures. Every one of Wolfram's seven images in the sample article is
+       one. They were drawn for a white page, and on ours the ink lands on
+       black: docs/plans/figures-in-the-prose.md has the alpha extrema.
+
+       Nothing can tell those apart from an opaque photograph. Not CSS, which
+       cannot see an alpha channel; and not JavaScript either, because the
+       images are hot-linked cross-origin with no `crossorigin` attribute, so a
+       canvas drawn from one is tainted and `getImageData` throws. So the sheet
+       is unconditional, which is where Wikipedia's night mode also ended up
+       after two years of trying to be clever about it — their `skin-invert` is
+       scoped by hand to images an editor has certified as pure black, precisely
+       because `filter: invert()` wrecks anything with a real hue.
+
+       An opaque photograph covers its own sheet exactly, so the only visible
+       cost is the mat around it. Off-white rather than white: a pure #fff
+       rectangle on a near-black page glares. */
+    --figure-sheet: #f4f3f0;
+
     /* ---- surfaces and text (dark only; see the header) ---------------- */
     /* Not literally #000 on #fff inverted: the page is all-but-black and the text is off-white,
        because pure white on pure black haloes at reading sizes. That was first noticed in Georgia,
@@ -202,11 +225,17 @@
        if the article wants more or less air**, and changing it here moves the heading spacing
        with it, because those are written as multiples of this rather than of --rhythm.
 
-       A third of a unit rather than a half: the gap between paragraphs went from one unit to
-       two thirds on 2026-08-27, when Greg asked for less (it had been a full unit since the
-       column was built). The ratios are untouched — a heading still gets twice the space above
-       it that it gets below, which is the part that carries meaning. */
-    --block-pad: calc(var(--rhythm) / 3);
+       A quarter of a unit. The gap between paragraphs has now come down twice on Greg's
+       asking: a full unit until 2026-08-27, two thirds until 2026-08-28, half a unit
+       (11.9px) now. The ratios are untouched both times — a heading still gets twice the
+       space above it that it gets below, which is the part that carries meaning.
+
+       There is a floor somewhere below this and it is not arithmetic. The prose is 17px at
+       1.6, so the whitespace *between two lines of one paragraph* is around 10px; once the
+       gap between paragraphs stops clearly exceeding that, the column reads as one
+       undifferentiated block and the paragraph stops being a unit the eye can see. At a
+       quarter we are at 11.9 against ~10, which is close. A fifth would be past it. */
+    --block-pad: calc(var(--rhythm) / 4);
 }
 
 /* The article column. Every zoom level renders into this, so the measure never changes

@@ -39,6 +39,15 @@ import { BlockRange, BlockRef } from "./BlockRef.js";
 import { MessageSquare } from "lucide-react";
 import { SWIPE_ATTR } from "./swipe.js";
 import type { AnchoredThread } from "./useChatAnchors.js";
+import { Lightbox } from "./Lightbox.js";
+import {
+  addZoomHandles,
+  figureFor,
+  ZOOM_BTN_CLASS,
+  ZOOM_WRAP_CLASS,
+  zoomTargetOf,
+  type ZoomedFigure,
+} from "./zoomable.js";
 
 interface Props {
   article: Article;
@@ -186,6 +195,14 @@ export function TableView({
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   /** The panel entry under the pointer, if any — see activeChain below. */
   const [hoveredNode, setHoveredNode] = useState<NodeId | null>(null);
+  /**
+   * The figure the reader asked to see larger, or null. A *copy* of the html
+   * rather than the node itself, because the node belongs to injected markup
+   * that React replaces wholesale on the next re-annotation — holding a
+   * reference would leave the overlay pointing at a detached element, which is
+   * the bug useHoverCard.ts records having had twice.
+   */
+  const [zoomed, setZoomed] = useState<ZoomedFigure | null>(null);
   const bodyRef = useRef<HTMLTableSectionElement>(null);
 
   /**
@@ -406,7 +423,14 @@ export function TableView({
       /* The unmarked majority never reaches the parser at all. `annotateHtml`
          has this test too; doing it here as well is what keeps an unmarked
          block out of the Map's churn as well as out of the parse. */
-      if (marks.length > 0) byBlock.set(block.id, annotateHtml(block.html, marks));
+      const marked = marks.length > 0 ? annotateHtml(block.html, marks) : block.html;
+      /* The enlarge buttons go on LAST, and `addZoomHandles` returns its input
+         unchanged when there is no figure in it — so the Map still holds only
+         the blocks that differ from their own html, and a paragraph of plain
+         prose costs one regex. See zoomable.ts § the four load-bearing things,
+         the third of which is this ordering. */
+      const withHandles = addZoomHandles(marked);
+      if (withHandles !== block.html) byBlock.set(block.id, withHandles);
     }
     return byBlock;
   }, [blocks, marksByBlock, termMarksByBlock, hitMarks, openTerm]);
@@ -533,7 +557,47 @@ export function TableView({
           // would break the one case where the browser's own answer is right.
           if (e.defaultPrevented || e.button !== 0) return;
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          /* Enlarge, before anything else looks at this press.
+             Ahead of the link test on purpose: a picture inside a link gets
+             both a button and a link, and pressing the *button* has to mean the
+             button. The link keeps the picture itself — see below. */
+          const target = e.target as Element;
+          /* `button.zoom-btn`, not `.zoom-btn`. The sanitiser strips both of our
+             class names from article markup (src/sanitize-policy.ts), so a
+             forged one cannot reach here — but naming the tag as well means the
+             handler does not depend on that being true, and `<button>` is
+             itself forbidden in article HTML. Two independent reasons this can
+             only ever be ours. GPT Sol, 2026-08-28. */
+          const zoomButton = target.closest?.(`.prose button.${ZOOM_BTN_CLASS}`);
+          if (zoomButton) {
+            e.preventDefault();
+            const figure = zoomTargetOf(zoomButton);
+            if (figure) setZoomed(figureFor(figure));
+            return;
+          }
           const link = (e.target as Element).closest?.("a[href]");
+          /* A picture is its own button. There is nothing to select inside an
+             `<img>`, so a plain click on one is unambiguous — which is why this
+             is offered for pictures and not for tables or code, where a click is
+             someone starting a selection.
+
+             A picture inside a link is left to the link: following it is what
+             the author wrote, and the ⤢ beside it is still there for the reader
+             who wanted the other thing.
+
+             What is enlarged is the WRAPPER'S element, not the node under the
+             pointer — they are the same thing for a loose `<img>` and different
+             for one inside a `<picture>` or a `<figure>`, and enlarging the
+             `<img>` out of a `<picture>` would show the fallback file rather
+             than the one the reader is looking at. */
+          if (!link && target.closest?.(`.prose .${ZOOM_WRAP_CLASS} :is(img, svg)`)) {
+            const figure = zoomTargetOf(target);
+            if (figure) {
+              e.preventDefault();
+              setZoomed(figureFor(figure));
+              return;
+            }
+          }
           if (!link) return;
           /* A drag that ended inside a link is a selection, and the mouse-up
              handler below has already turned it into a question. Stopping the
@@ -850,6 +914,19 @@ export function TableView({
         onHoverNode={setHoveredNode}
       />
     )}
+    {/* One overlay for the whole article, always mounted and empty until a
+        figure is pressed. Mounted rather than conditionally rendered because
+        `showModal()` has to be called on an element that is already in the
+        document, and a `<dialog>` that is not open occupies no space and paints
+        nothing. */}
+    <Lightbox
+      figure={zoomed}
+      onClose={() => setZoomed(null)}
+      /* The same jump every gist, spine segment and arrow key uses. The cast is
+         the one `internalTarget` forces on every caller — it reads an id out of
+         a stranger's href and returns a string. */
+      onJump={(blockId) => onJump(blockId as BlockId)}
+    />
     </>
   );
 }

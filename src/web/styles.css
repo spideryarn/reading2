@@ -996,6 +996,131 @@ tr.row-active .block-ref { opacity: 0.95; }
   text-underline-offset: 2px;
 }
 .prose img { max-width: 100%; height: auto; }
+
+/* ---- figures, and the light sheet under them ------------------------
+   **An article's pictures are printed on a light sheet, in a dark-only app.**
+
+   Greg, 2026-08-28, on Wolfram's *What If We Had Bigger Brains?*: "tables,
+   equations … seem to be being displayed in dark text on a black background."
+   They were, and it was not a colour bug — the block is a `<p>` containing one
+   `<img>`, and all seven of that article's images are PNGs with an alpha
+   channel carrying near-black ink. Drawn for a white page; served onto ours.
+
+   The sheet is unconditional because **nothing here can tell those apart from
+   an opaque photograph.** CSS cannot see an alpha channel, and JavaScript
+   cannot either: the images are hot-linked cross-origin with no `crossorigin`
+   attribute, so a canvas drawn from one is tainted and `getImageData` throws.
+   The colour, and where Wikipedia's night mode landed after trying to be
+   cleverer than this, are on --figure-sheet in styles/tokens.css.
+
+   **Scoped to `.zoomable >`, and that is what keeps it off a tracking pixel.**
+   A 1x1 transparent GIF given this rule is a 12px light square in the middle of
+   a paragraph. `zoomable.ts` already decides what counts as a figure — it skips
+   an `<img>` narrower than 64 declared pixels — so letting its wrapper carry
+   the sheet means that judgement is made once rather than twice, in the one
+   place that can actually see the width attribute. */
+/* **A DESCENDANT selector, not a child one.** The first version of this said
+   `.zoomable > :is(img, svg)` and was wrong for the case the feature exists
+   for: when the wrapper holds a `<figure>` or a `<picture>` — or a bare `<a>`
+   around a linked picture — the media is a *grand*child, so every captioned
+   figure in the corpus went on rendering dark-on-dark while the loose images
+   beside them came right. It looked fixed. GPT Sol, 2026-08-28.
+
+   `:not(.zoom-btn *)` is what keeps it off the enlarge control's own icon,
+   which is inside the wrapper too and would otherwise get a light chip behind
+   it. */
+.prose .zoomable :is(img, svg):not(.zoom-btn *),
+.lightbox-content :is(img, svg) {
+  background: var(--figure-sheet);
+  /* The alt text, when the file 404s: it is drawn ON the sheet, so it cannot be
+     --ink or it is off-white on off-white. A missing image is exactly when a
+     reader needs to be able to read what it was. */
+  color: #1c1c1c;
+  border-radius: 4px;
+  /* Small. This is a mat around a photograph as often as it is breathing room
+     around an equation, and a wide mat reads as a frame nobody asked for. */
+  padding: 0.35rem;
+}
+
+/* The wrapper `zoomable.ts` puts round each figure. It exists so the ⤢ can be
+   positioned over the corner of the thing it enlarges — and, as above, so that
+   "is this a figure?" is decided once.
+
+   `inline-block` by default because the common case is an `<img>` inside a
+   `<p>`, where a block wrapper would break the line. The three that are already
+   block-level say so, keyed off the tag the wrapper records. */
+.prose .zoomable {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+.prose .zoomable[data-zoom-kind="table"],
+.prose .zoomable[data-zoom-kind="pre"],
+.prose .zoomable[data-zoom-kind="figure"] {
+  display: block;
+}
+/* **The wrapper has to re-do `.prose > * { margin: 0 }`.** That rule is what
+   flattens the UA's own block margins in this column, and it is a CHILD
+   selector — so the moment a `<pre>` gains a wrapper it stops being a direct
+   child of `.prose` and Chrome's `margin: 1em 0` comes back, in a column whose
+   whole spacing story is that every gap is a multiple of `--block-pad`. Nothing
+   errors; one kind of block is just differently spaced from every other one.
+   GPT Sol, 2026-08-28. */
+.prose .zoomable > * { margin: 0; }
+
+/* The ⤢ itself — see zoomable.ts, and Lightbox.tsx for what it opens.
+
+   **Visible at rest, not on hover.** Every instinct says to fade it in under
+   the pointer, and it would be wrong twice: there is no hover on a phone, which
+   is the device where a 423px-wide data table most needs enlarging; and a
+   control nobody can see is a control nobody uses. So it sits at 55% and comes
+   up to full when you are on the figure or on it.
+
+   The border and the cursor are written out because this button is injected
+   HTML rather than a shadcn one, and the app's reset is scoped to `[data-slot]`
+   — a `<button>` with no `border-style` of its own gets the UA's `2px outset
+   white`, which is the bug design-css-overview.md § The reset covered a
+   minority of what it named is about. */
+.prose .zoom-btn {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  /* Over the figure, and nothing more: this is inside .prose, and the numbers
+     that matter (the spine at 45, the bars, the tooltip at 100) are all on
+     positioned ancestors of their own. */
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--surface-raised) 90%, transparent);
+  color: var(--ink);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.12s, color 0.12s, border-color 0.12s;
+}
+.prose .zoomable:hover .zoom-btn,
+.prose .zoom-btn:hover,
+.prose .zoom-btn:focus-visible { opacity: 1; }
+.prose .zoom-btn:hover {
+  color: var(--highlight);
+  border-color: var(--highlight);
+}
+.prose .zoom-btn:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+}
+/* A picture is its own button (TableView § the delegated click handler), so it
+   should say so. Not on a table or a code block, where a press is someone
+   starting a selection, and not on a picture inside a link, where the link
+   wins. */
+.prose .zoomable > img { cursor: zoom-in; }
+.prose a .zoomable > img { cursor: inherit; }
 /* Video embeds arrive with the host's own `width="560" height="315"`, which is
    wider than a reading column and overflowed it visibly. `height: auto` alone
    won't do here as it does for an image: an iframe has no intrinsic ratio, so
@@ -1070,6 +1195,17 @@ tr.row-active .block-ref { opacity: 0.95; }
   padding: 0.3em 0.7em;
   border: 1px solid var(--rule);
   text-align: left;
+  /* A cell of numbers is a column you read down, so it must not also be a
+     column that reflows. The table scrolls; the cells do not wrap to nothing. */
+  vertical-align: top;
+}
+/* A header row that looks exactly like a data row is a table with no header.
+   `th` already carries the browser's bold; what it did not have was a ground of
+   its own, so the first row of every article table read as data. */
+.prose th {
+  background: var(--muted);
+  font-weight: 600;
+  color: var(--ink);
 }
 .prose code { font-family: var(--font-mono); font-size: 0.9em; }
 /* Inside a <pre> the size is already reduced once by the rule above; without
@@ -8450,3 +8586,172 @@ tr:hover .block-ref.block-id { opacity: 0.6; }
    landscape phone, and it removes a row reading `Text verbatim` above a column
    of the author's paragraphs, which is not a loss at any size. */
 table.only-prose thead { display: none; }
+
+/* ------------------------------------------------------------- lightbox --
+   One figure, as big as the window will allow — Lightbox.tsx, opened by the ⤢
+   the reading column puts on every picture, table and code block
+   (zoomable.ts). Greg asked for it, 2026-08-28: "a nearly-full-screen
+   panel/overlay that's easy to dismiss."
+
+   **It is a native `<dialog>`, and that is why there is no z-index here.** A
+   dialog opened with `showModal()` is promoted to the browser's *top layer*, so
+   it paints above the spine (45), the mode band, the dock (96), the search
+   colour picker (99) and the tooltip (100) without being a number that has to
+   agree with any of them. design-css-overview.md § What is not written down yet
+   calls the z-index budget the most likely thing here to break next; this adds
+   nothing to it. The reasoning behind choosing the platform's modal over the
+   three hand-rolled `role="dialog"` panels this app already has is in the
+   header of Lightbox.tsx.
+
+   **`[open]` is load-bearing on the display rule.** The UA stylesheet hides a
+   closed dialog with `dialog:not([open]) { display: none }`, and this file is
+   inside `@layer app` — which beats the UA sheet. A bare `.lightbox { display:
+   flex }` would therefore show the panel permanently, in the middle of the
+   article, from the moment the page loads. Nothing would error. */
+.lightbox {
+  /* The <dialog> box IS the click target for dismissing: it fills the viewport,
+     the panel sits inside it, and Lightbox.tsx closes when `event.target` is
+     the dialog itself. So it has no look of its own — everything visible below
+     is the panel. */
+  /* `inset: 0` rather than `100vw` / `100dvh`. A <dialog> is `position: fixed`
+     already, so the four zeroes fill the viewport EXACTLY — where `100vw`
+     includes the width a vertical scrollbar has taken, which would put the panel
+     a few pixels off centre and hang the right edge outside the window. The two
+     `none`s are undoing the UA's own `max-width: calc(100% - 6px - 2em)`. */
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  /* Both halves of the scroll lock, and the second is here rather than only on
+     `.lightbox-content` because a wheel or a finger that starts on the BACKDROP
+     — or on the panel's padding, or on the close-button row — never touches the
+     content scroller at all, and chains straight through to the article behind.
+     `overflow: hidden` still makes this a scroll container, which is what
+     `overscroll-behavior` needs to act on. GPT Sol, 2026-08-28. */
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.lightbox[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* A LITERAL COLOUR, not var(--page), and it is not laziness. `::backdrop` did
+   not inherit from its originating element for most of the time this feature's
+   browsers have been shipping, so a custom property resolves to nothing there
+   on anything older — and an invalid `background` is not an error, it is no
+   dim at all. The value is the page's own near-black at 88%. */
+.lightbox::backdrop {
+  background: rgb(10 10 10 / 0.88);
+  backdrop-filter: blur(2px);
+}
+
+.lightbox-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* Nearly full screen, capped so a figure does not stretch across a 34" monitor
+     into something nobody can read the far side of. */
+  width: min(96vw, 1600px);
+  max-height: 92dvh;
+  padding: 0.6rem 0.75rem 0.75rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+}
+
+/* Its own row above the figure rather than floating over its corner: the figure
+   is the whole point of this panel and a control sitting on top of it would
+   cover the one thing the reader opened it to see. */
+.lightbox-close {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-bottom: 0.4rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.lightbox-close:hover { color: var(--highlight); border-color: var(--rule-strong); }
+.lightbox-close:focus-visible {
+  outline: 1px solid var(--highlight);
+  outline-offset: 2px;
+}
+
+/* The figure itself. `min-height: 0` is what lets a flex child scroll rather
+   than push its parent past `max-height` — without it the panel grows and the
+   overflow never happens.
+
+   `overscroll-behavior: contain` is the whole of the scroll lock. A modal
+   `<dialog>` does not stop the page behind it scrolling, and the case that
+   actually happens is a trackpad flick that reaches the end of a tall figure
+   and chains into the article. Locking `body` was rejected: this view writes
+   the reading position from the scroll (`?at=`), so an overflow change that
+   clamped `scrollTop` would move the reader's place in the article as a side
+   effect of looking at a picture. */
+.lightbox-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+/* `.prose` caps itself at the reading measure. A figure is not prose and the
+   whole point here is width, so the cap comes off — and with the class kept, a
+   table still gets the article's own table styling rather than a second
+   description of it living in this section. */
+.lightbox .prose { max-width: none; }
+
+/* Now the panel scrolls, the table need not. `display: block` on a .prose table
+   is what gives it its own scrollbar in the column (§ content that cannot
+   reflow); here that would be a scrollbar inside a scrollbar. */
+.lightbox .prose table {
+  display: table;
+  overflow: visible;
+  font-size: 1rem;
+}
+.lightbox .prose pre {
+  overflow: visible;
+  font-size: 0.95rem;
+}
+
+/* **`width: auto` beats the article's own `width="423"`.** An HTML `width`
+   attribute is a presentational hint — it sets CSS `width`, not merely a ratio
+   (design-css-overview.md § The other half of the same hole, where the missing
+   half of that pair stretched every screenshot on the landing page by 1.95x).
+   Wolfram's tables are declared at 423px and the files behind them are 854px
+   wide, so without this line "view larger" would show the identical picture at
+   the identical size, and look exactly like a feature that does nothing.
+
+   No upscaling past the file's own pixels: a 232px equation blown up to 1600
+   is a blurrier version of a thing the reader could already almost read. */
+.lightbox-content img {
+  display: block;
+  margin: 0 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  /* The panel's 92dvh less its chrome — the close row and the padding. Stated
+     rather than inherited because a `max-height: 100%` inside a scroll
+     container resolves against the scrolled content, not the box. */
+  max-height: calc(92dvh - 4rem);
+}
+.lightbox-content figcaption { max-width: none; text-align: center; }
+
+@keyframes lightbox-in {
+  from { opacity: 0; transform: scale(0.985); }
+}
+.lightbox[open] .lightbox-panel { animation: lightbox-in 120ms ease-out; }

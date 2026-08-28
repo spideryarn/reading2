@@ -242,7 +242,30 @@ describe("things the first draft got wrong", () => {
     );
     expect(out).not.toContain("data-chat");
     expect(out).not.toContain("data-chat-end");
+    /* **The class, too, and it was not stripped until 2026-08-28.** This file's
+       header has named `chat` as one of the reserved classes since chat marks
+       landed, and the hook's list was `["cmt", "term"]` the whole time. The
+       assertions above could not see it: `class="chat"` does not contain the
+       string `data-chat`, so the test agreed with a policy it was not checking.
+       The comment above was right and the code was not. */
+    expect(out).not.toMatch(/\bchat\b/);
     expect(out).toContain("forged");
+  });
+
+  it("does not let an article forge the enlarge control", () => {
+    /* `zoomable` and `zoom-btn` are ours (src/web/zoomable.ts), injected into
+       the prose after this sanitiser has run. Forbidding `<button>` does not
+       settle it on its own, because the delegated handler in TableView finds
+       the control by its class — so a forged pair would take our chrome, our
+       light figure sheet and our absolutely-positioned corner. GPT Sol,
+       2026-08-28. */
+    const out = sanitizeHtml(
+      `<p><span class="zoomable" data-zoom-kind="table"><img src="/x.png"><span class="zoom-btn">forged</span></span></p>`,
+    );
+    expect(out).not.toMatch(/\bzoomable\b/);
+    expect(out).not.toMatch(/\bzoom-btn\b/);
+    expect(out).not.toContain("data-zoom-kind");
+    expect(out).toContain("forged"); // the words are still the author's
   });
 
   it("does not let an article forge any of the four pressed-mark attributes", () => {

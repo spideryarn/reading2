@@ -154,12 +154,15 @@ theme appears.
 `--rhythm` is `17px × 1.4 ≈ 23.8px`. Theirs, and it is arithmetic rather than evidence — but good
 arithmetic, and the thing that makes a page look considered rather than assembled.
 
-Every vertical gap **in the article column** is a multiple of `--block-pad`, which is a third of a
-unit: one pad above and below each block (so two pads — two thirds of a unit — between paragraphs),
+Every vertical gap **in the article column** is a multiple of `--block-pad`, which is a quarter of a
+unit: one pad above and below each block (so two pads — half a unit, 11.9px — between paragraphs),
 two above a heading, half a pad below. **`--block-pad` is the one number to change** if the article
 wants more or less air; every rule is written as a multiple of it, so the heading spacing keeps its
-proportions on its own. It was half a unit until 2026-08-27, when Greg asked for a smaller gap
-between blocks.
+proportions on its own. It has come down twice on Greg's asking — half a unit until 2026-08-27, a
+third until 2026-08-28 — and there is a floor below this that is not arithmetic: at 17px/1.6 the
+whitespace *between two lines of one paragraph* is around 10px, and once the gap between paragraphs
+stops clearly exceeding that, the paragraph stops being a unit the eye can see. A fifth would be
+past it.
 
 **Scoped to the reading column on purpose.** The chrome keeps its per-rule `rem` values; sweeping
 1,800 lines onto a scale is a different job, and Greg scoped this one to the article. Do not reach
@@ -176,6 +179,39 @@ so one wide code sample in one paragraph dragged the whole article's furniture o
 
 `display: block` on the `<table>` is load-bearing and is not a typo: `overflow` does nothing on
 `display: table`.
+
+### Content that cannot be read at all: the light sheet under a figure
+
+Added 2026-08-28. Greg, looking at Wolfram's *What If We Had Bigger Brains?*: *"Improve how we
+display tables, equations. They seem to be being displayed in dark text on a black background."*
+
+They were, and **it was not a colour bug.** The block is a `<p>` containing one `<img>`, and all
+seven of that article's images are PNGs with an alpha channel carrying near-black ink — equations
+and data tables, drawn for a white page and served onto ours. The alpha extrema are in
+[figures-in-the-prose.md](../plans/figures-in-the-prose.md).
+
+So `.prose .zoomable > :is(img, svg)` sits on `--figure-sheet`, an off-white, with a small mat of
+padding. Three things about that are worth knowing before changing it:
+
+- **It is unconditional, and it has to be.** CSS cannot see an alpha channel, and JavaScript cannot
+  either: article images are hot-linked cross-origin with no `crossorigin` attribute, so a canvas
+  drawn from one is tainted and `getImageData` throws. Per-image detection would mean proxying every
+  image, which is stage 1's job. Wikipedia's night mode reached the same conclusion the long way
+  round — their `skin-invert` class is applied *by hand*, to images an editor has certified as pure
+  black, precisely because `filter: invert()` wrecks anything with a real hue.
+- **An opaque photograph covers its own sheet exactly**, so the only visible cost is the mat. The
+  case this makes worse is white-ink-on-transparent, which is rare because the web's default page is
+  white — but it is a real regression class, not a hypothetical.
+- **The scope is `.zoomable >`, and that is a guard, not a coincidence.** A 1×1 tracking GIF given
+  this rule is a pale square in the middle of a sentence.
+  [`zoomable.ts`](../../src/web/zoomable.ts) already decides what counts as a figure (it skips an
+  `<img>` under 64 declared pixels), so hanging the sheet off its wrapper makes that judgement once,
+  in the only place that can see the width attribute.
+
+The same wrapper carries the **⤢** that opens [`Lightbox.tsx`](../../src/web/Lightbox.tsx) — one
+figure, near-full-screen. That is a native `<dialog>` opened with `showModal()`, so it is in the
+browser's **top layer** and does not appear in the z-index budget below at all; its header says what
+else the platform's modal gives for free, and what it does not.
 
 ## Controls: one height, one radius, one hover
 
@@ -389,15 +425,18 @@ eventually have to decide whether they are a system or an accident:
 
 - **The z-index budget.** Nine values between 1 and 80, and their ordering is real — the spine is
   45, the tooltip 80 *because* it must clear the spine and both sticky bars. Written as a comment
-  on one line of `styles.css`, nowhere else. This is the most likely thing to break next.
+  on one line of `styles.css`, nowhere else. This is the most likely thing to break next. The one
+  thing that had to cover *everything* — the figure lightbox — sidesteps it entirely by being a
+  native modal `<dialog>` in the top layer, which is the cheapest answer available and is worth
+  reaching for again.
 - **Spacing.** No scale. `rem` values chosen per rule. Control *heights* on a list page are
   settled — see [Controls](#controls-one-height-one-radius-one-hover) above — but that is one row
   of one page agreeing with itself, not a scale, and it should not be read as one.
 - **Breakpoints.** Exactly one, `max-width: 760px`, plus the widths at which the columns are given
   up, computed in JS rather than in CSS ([`layout.ts`](../../src/web/layout.ts)). The interesting
   responsive behaviour is not in the stylesheet at all. (The spine used to be in that sentence too,
-  collapsing from 13rem to 1.5rem on width; the expanded rail was deleted on 2026-08-26 and it is
-  now one width, on or off.)
+  collapsing from 13rem to a strip on width; the expanded rail was deleted on 2026-08-26 and it is
+  now one width, on or off — 12px since 2026-08-28.)
 - **Motion.** Settled, mostly. One global guard in `@layer base` at the foot of
   [`tailwind.css`](../../src/web/tailwind.css) flattens every animation and transition; four
   narrower blocks in `styles.css` remain, for the things that are *wrong* when reduced rather than

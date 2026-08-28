@@ -52,12 +52,17 @@ import type { Config, DOMPurify } from "dompurify";
  * against a policy, and this names the policy. Tying it to the dependency would
  * re-sanitise every article in the library on every patch release, for nothing.
  */
-export const SANITIZER_VERSION = 2;
+export const SANITIZER_VERSION = 3;
 /* 1 → 2 on 2026-08-27: the policy now strips URLs pointing at our own `/api/`
    (see `isOwnApi`). Stricter, so every artefact stored under 1 was cleaned by a
    policy that has never seen this rule and has to be re-cleaned on next read —
    which is exactly what the paragraph above says to bump for, and what the
-   first version of that change forgot to do. GPT Sol, 2026-08-27. */
+   first version of that change forgot to do. GPT Sol, 2026-08-27.
+
+   2 → 3 on 2026-08-28: three more class names are reserved (`chat`, `zoomable`,
+   `zoom-btn`) and `data-zoom-kind` is forbidden. Stricter again, and the same
+   reasoning applies — an artefact cleaned under 2 could be carrying any of
+   them. GPT Sol, 2026-08-28, reviewing docs/plans/figures-in-the-prose.md. */
 
 /**
  * Video embeds, by exact origin and path prefix.
@@ -187,6 +192,12 @@ export const ARTICLE_CONFIG: Config = {
     "data-comment", "data-mark-end", "data-term",
     "data-chat", "data-chat-end",
     "data-open", "data-cmt-open", "data-chat-open", "data-hit-open", "data-term-open",
+    /* The enlarge wrapper's own attribute (src/web/zoomable.ts). It decides
+       whether the figure is laid out inline or as a block, so an article that
+       shipped its own could make any element it liked take the wrapper's
+       geometry. Listed alongside the `class` strip in the hook below, not
+       instead of it: one covers the attribute, the other the class. */
+    "data-zoom-kind",
   ],
 };
 
@@ -499,16 +510,28 @@ export function installArticlePolicy(purify: DOMPurify): void {
     // only, while the browser side keeps working. Caught by tests/sanitize.test.ts.
     const el = node as Element;
 
-    /* `cmt` and `term` are the reading view's own classes for a comment mark
-       and a glossary occurrence (src/web/annotate.ts, styled in
-       src/web/styles.css). Forbidding the `data-` attributes is not quite
-       enough on its own — either class alone still draws its highlight.
+    /* **Class names the reading view owns.** Every one of these is written onto
+       the prose by our own code *after* this sanitiser has run, so stripping it
+       from a stranger's markup costs nothing and takes away a way to forge one
+       of our marks. Forbidding the matching `data-` attributes above is not
+       quite enough on its own — a class alone still draws its highlight.
 
-       `term` joined `cmt` here when the glossary landed. It is the less obvious
-       of the two and arguably the more useful to a publisher: a comment mark is
-       visibly the reader's, whereas a forged term underline reads as *the app
-       having decided* those words matter. */
-    for (const own of ["cmt", "term"]) {
+       - `cmt`, `chat`, `term` — a comment mark, a conversation's mark and a
+         glossary occurrence (src/web/annotate.ts). `term` is the less obvious
+         and arguably the more useful to a publisher: a comment mark is visibly
+         the reader's, whereas a forged term underline reads as *the app having
+         decided* those words matter.
+       - `zoomable`, `zoom-btn` — the enlarge control (src/web/zoomable.ts).
+         Forbidding `<button>` above does not settle ownership on its own,
+         because the delegated handler in TableView.tsx finds the control by its
+         class. A forged pair would put our chrome, and our light figure sheet,
+         on markup of the publisher's choosing.
+
+       `chat` was named in this file's header as forbidden from the day chat
+       marks landed and was never actually in this list — the code and its own
+       documentation had disagreed since. Added 2026-08-28 alongside the two
+       zoom classes, which is when reading the list against the prose found it. */
+    for (const own of ["cmt", "chat", "term", "zoomable", "zoom-btn"]) {
       if (el.classList?.contains(own)) el.classList.remove(own);
     }
     if (el.classList?.length === 0 && el.hasAttribute("class")) el.removeAttribute("class");
