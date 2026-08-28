@@ -34,7 +34,7 @@ integrations and the automatic one is closed to us.
 |---|---|---|
 | Who it is for | Sentry docs: *"This setup is designed for **new Sentry users** and unifies billing within the Vercel platform."* | Everyone else |
 | Available to an existing Sentry org | **No.** *"There is no path for existing Sentry organizations to use the Vercel Marketplace integration."* | Yes |
-| Forwards Vercel logs and traces to Sentry via Drains | Yes | Not as a listed native drain destination |
+| Forwards Vercel logs and traces to Sentry via Drains | Yes, in one step | Possible, but wired by hand — and see below for what a drain is and is not |
 | Sets `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`, DSN on the Vercel project | Yes | Yes |
 | Notifies Sentry of every deployment (releases) | Yes | Yes |
 | **Removes the need for the SDK in your code** | **No** | **No** |
@@ -51,14 +51,25 @@ source maps and marks releases. It does not turn a crash into an issue.
 
 Vercel Drains are Pro and above, billed at **$0.50/GB** of uncompressed JSON
 ([Vercel Drains docs](https://vercel.com/docs/drains), page dated 2026-08-25).
-The native drain destinations that page lists are Dash0 and Braintrust; Sentry
-is not among them. So a drain to Sentry would be a **custom HTTP endpoint**, and
-Sentry has no endpoint that accepts Vercel's log schema. You would be writing
-and hosting a translator — which is a service that can itself fail silently, to
-replace a library that already exists.
+**This path is real** — Sentry has its own page for it
+([docs.sentry.io/product/drains/integration/vercel/](https://docs.sentry.io/product/drains/integration/vercel/))
+and it will take both Vercel's logs and its OpenTelemetry traces.
 
-**So: with zero code changes you get nothing you do not already have.** Vercel's
-runtime logs, one day, no grouping, no alert. That is the status quo.
+*(An earlier draft of this section said flatly that Sentry had no endpoint for
+Vercel's log schema and that a drain would need a translator we would have to
+write. That was wrong, and it is corrected rather than deleted because it was
+the kind of wrong that would have settled the question.)*
+
+What it does **not** do is turn a log line into an **issue**. Everything Sentry
+is actually for here — grouping the thousandth occurrence with the first, a
+source-mapped stack trace, an alert on a new kind of error — is built around
+events the SDK captured, not around parsing stdout. A drain gets you the same
+Pino lines in a second window, kept longer.
+
+**So: with zero code changes you get no error tracking.** You get Vercel's
+runtime logs for one day, and — for $0.50/GB — the option of keeping those same
+lines somewhere for longer. Neither groups anything or tells you when something
+new breaks.
 
 ### What a drain *would* be good for, later
 
