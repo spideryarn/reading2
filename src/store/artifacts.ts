@@ -24,7 +24,9 @@
  *    the other two are still their steps' `isDone` and are next.
  *
  * This file is types and one pure function. The file-backed adapter is
- * src/store/artifacts-fs.ts; the Postgres one is not written yet.
+ * src/store/artifacts-fs.ts; the Postgres one is src/store/artifacts-pg.ts,
+ * which exists but which nothing in production imports yet — see the header of
+ * src/store/revisions.ts.
  *
  * ## The key is `(step, kind)`, not `kind`
  *
