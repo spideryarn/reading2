@@ -165,6 +165,7 @@ import {
 import type {
   Article,
   ArticleMetadata,
+  ArticleSharing,
   LibraryEntry,
   Meta,
   StageState,
@@ -762,7 +763,12 @@ export function Metadata({
             pressing it is how you find out. The same rule Delete follows, and
             withheld until `provenance` has landed for the same reason: `null`
             is "not yet told" as much as it is "not the fixture". */}
-        <SharingSection slug={slug} title={meta.title} offer={hasShelfRow} />
+        <SharingSection
+          slug={slug}
+          title={meta.title}
+          offer={hasShelfRow}
+          sharing={provenance?.sharing}
+        />
 
         {/* --------------------------------------------- 7. not built yet --
             Dimmed rows rather than absence, because absence is indistinguishable
@@ -855,16 +861,24 @@ function SharingSection({
   slug,
   title,
   offer,
+  sharing,
 }: {
   slug: string;
   title: string;
   /** There is a shelf row and we know it — `hasShelfRow` in `Metadata`. */
   offer: boolean;
+  /**
+   * Off the same `provenance` fetch this page already makes, which is the
+   * point of the field being there rather than on a route of its own: the card
+   * costs no request until the owner presses something. `undefined` while it is
+   * in flight, and for ever on a store with no column to read.
+   */
+  sharing: ArticleSharing | undefined;
 }) {
   if (!offer) return null;
   return (
     <Section label="Access & sharing">
-      <AccessSharing slug={slug} title={title} />
+      <AccessSharing slug={slug} title={title} sharing={sharing} />
     </Section>
   );
 }

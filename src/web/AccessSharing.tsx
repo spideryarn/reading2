@@ -8,23 +8,25 @@
  *
  * ## How it finds out whether the document is already shared
  *
- * By asking the public endpoint, anonymously: a 200 means a stranger can read
- * this, a 404 means they cannot. **There is no owner-side field to read** —
- * `GET /api/metadata/:slug` answers with stages, timings and byte counts and
- * says nothing about visibility (`ArticleMetadata` in src/types.ts), and the
- * `PUT` is the only other route that knows, which is not a thing you may call
- * to find out.
+ * From `ArticleMetadata.sharing`, which the page it lives on has already
+ * fetched. **This component makes no request of its own until the owner presses
+ * something.**
  *
- * That turns out to be the better check rather than a workaround: it asks
- * exactly the question the card claims to answer — *can somebody with this link
- * read it* — from exactly the position a stranger asks it from. What it costs
- * is the timestamp, which only the `PUT` returns.
+ * It asked the *public* endpoint anonymously until 2026-08-28 — a 200 meant a
+ * stranger could read it, a 404 meant they could not — because there was no
+ * owner-side field to read. That worked and it was the wrong shape: an
+ * owner-facing control interrogating the anonymous surface about their own
+ * document, unable to tell *private* from *no such article* since both are a
+ * 404, and leaning on a second source of truth to decide whether to render at
+ * all. It also could not see `publicAt`, so "shared since" survived only until
+ * a reload.
  *
- * **And a third answer, which is the part that matters.** Anything that is
- * neither 200 nor 404 — a 500, a 501 from the filesystem store, a dropped
- * connection — leaves this `null`, and the card says it does not know rather
- * than drawing an off switch. A toggle that reads "not shared" because the
- * check failed is a page that looks exactly like one that works, on the one
+ * **The absence is still the important state.** `sharing` is optional and
+ * absent means *this store cannot say* — the filesystem store has no column, and
+ * `ArticleMetadata.sharing` says at length why it refuses rather than defaulting
+ * to `private`. The card keeps the state it had for a failed probe: it says it
+ * does not know, and offers no switch. A toggle that reads "not shared" because
+ * the read failed is a page that looks exactly like one that works, on the one
  * control where being wrong publishes somebody else's article.
  * docs/reusable/silent-success.md.
  *
@@ -42,54 +44,78 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Globe, Lock } from "lucide-react";
 
+import type { StepName } from "../types.js";
 import {
   SHARING_CANNOT_UNRING,
   SHARING_CONFIRM_TITLE,
+  SHARING_NOT_PERSONALISED,
   SHARING_OFF,
   SHARING_ON,
   SHARING_PERSONALISED,
+  sharingPersonalisedList,
   SHARING_RIGHTS_CONFIRM,
   SHARING_WHAT_VISITORS_SEE,
   sharingConfirmBody,
 } from "../messages.js";
+import type { ArticleSharing, VisibilityState } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { loadPublicMetadata } from "./public-api.js";
 import { readHref } from "./router.js";
 
-/** What `PUT /api/article/:slug/visibility` answers with. src/store/contracts.ts. */
-interface VisibilityState {
-  visibility: "private" | "public";
-  publicAt: string | null;
-}
-
-export function AccessSharing({ slug, title }: { slug: string; title: string }) {
+export function AccessSharing({
+  slug,
+  title,
+  sharing,
+}: {
+  slug: string;
+  title: string;
   /**
-   * `true` shared, `false` not, **`null` we do not know** — see the header.
-   * `undefined` is the fourth state and it is "still asking".
+   * From the page's own metadata fetch. `undefined` covers both *not landed
+   * yet* and *this store cannot say*, and the card draws the same thing for
+   * both — it does not know, so it offers nothing.
+   *
+   * Telling those two apart would need a third value and would change no
+   * pixel: neither is a state in which it is safe to draw a switch.
    */
-  const [shared, setShared] = useState<boolean | null | undefined>(undefined);
-  /** Only ever known from a `PUT` we made, so it is absent on a fresh page. */
-  const [publicAt, setPublicAt] = useState<string | null>(null);
+  sharing: ArticleSharing | undefined;
+}) {
+  /**
+   * What our own `PUT` last said, or `"unknown"` after one failed.
+   *
+   * `null` means the owner has not touched it and `sharing` stands. A sentinel
+   * object rather than seeding state from the prop in an effect, because the
+   * prop arrives late and a seeding effect would have to decide whether a later
+   * `sharing` is fresher than a click — a question with no good answer. The
+   * same shape `DeleteArticle` on this page uses, for the same reason.
+   */
+  const [acted, setActed] = useState<VisibilityState | "unknown" | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [rights, setRights] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /* The switch's own answer wins over the page load, and a failed write beats
+     both — see `set` below for why a failure means we stop claiming to know. */
+  const state: VisibilityState | null = acted === "unknown" ? null : (acted ?? sharing ?? null);
+  const shared = state === null ? null : state.visibility === "public";
+  const publicAt = state?.publicAt ?? null;
+  /**
+   * Which artefacts were written for this reader's profile.
+   *
+   * Read from the **page load** rather than from `acted`, and that is not an
+   * oversight: `PUT …/visibility` answers with `VisibilityState`, which has no
+   * `personalised` — because turning sharing on and off does not change what
+   * the model was given when it wrote a glossary last week.
+   */
+  const personalised = sharing?.personalised;
+
+  /* One article's answer must not survive into another's. `Metadata` is keyed
+     on the slug so this component remounts anyway; the effect is what keeps
+     that true if the key ever moves. */
   useEffect(() => {
-    let live = true;
-    setShared(undefined);
-    setPublicAt(null);
+    setActed(null);
     setConfirming(false);
     setRights(false);
-    loadPublicMetadata(slug)
-      .then((read) => live && setShared(read.kind === "ok"))
-      /* Not `false`. See the header: a failed check must not be drawn as an
-         answer, because one of the two answers is about somebody's article
-         being on the open web. */
-      .catch(() => live && setShared(null));
-    return () => {
-      live = false;
-    };
+    setError(null);
   }, [slug]);
 
   async function set(to: "private" | "public"): Promise<void> {
@@ -112,19 +138,21 @@ export function AccessSharing({ slug, title }: { slug: string; title: string }) 
          already in returns the current representation without changing
          anything — so reading back is the only way the card ends up agreeing
          with the database. A 200 is not evidence a field was honoured. */
-      const state = await readJson<VisibilityState>(res);
-      setShared(state.visibility === "public");
-      setPublicAt(state.publicAt);
+      setActed(await readJson<VisibilityState>(res));
       setConfirming(false);
       setRights(false);
     } catch (e) {
       setError((e as Error).message);
       /* **A failed request is not proof that nothing was written** — the same
-         lesson Delete on this page learned, 2026-08-27. So the switch goes back
-         to "we do not know" rather than back to where it was, and the reader is
+         lesson Delete on this page learned, 2026-08-27. So the switch goes to
+         "we do not know" rather than back to where it was, and the reader is
          invited to reload. Claiming the old state would be the version of this
-         where somebody believes a document is private and it is not. */
-      setShared(null);
+         where somebody believes a document is private and it is not.
+
+         It overrides `sharing` deliberately: the prop still holds what the page
+         load said, which is now exactly the stale answer that must not be
+         drawn. */
+      setActed("unknown");
     } finally {
       setBusy(false);
     }
@@ -134,9 +162,7 @@ export function AccessSharing({ slug, title }: { slug: string; title: string }) 
 
   return (
     <div className="tw:font-sans tw:text-sm">
-      {shared === undefined ? (
-        <p className="tw:m-0 tw:text-ink-faint">Checking who can read this…</p>
-      ) : shared === null ? (
+      {shared === null ? (
         <p className="tw:m-0 tw:text-ink-faint">
           We could not check who can read this, so nothing is offered here — reload the page to try
           again. Whatever it was before is unchanged.
@@ -181,7 +207,7 @@ export function AccessSharing({ slug, title }: { slug: string; title: string }) 
                 {SHARING_CONFIRM_TITLE}
               </h3>
               <p className="tw:m-0 tw:mb-2 tw:text-ink-faint">{sharingConfirmBody(title)}</p>
-              <p className="tw:m-0 tw:mb-2 tw:text-ink-faint">{SHARING_PERSONALISED}</p>
+              <Personalisation kinds={personalised} />
               <p className="tw:m-0 tw:mb-3 tw:text-ink-faint">{SHARING_CANNOT_UNRING}</p>
               <label className="tw:mb-3 tw:flex tw:items-start tw:gap-2 tw:text-ink">
                 <input
@@ -223,6 +249,38 @@ export function AccessSharing({ slug, title }: { slug: string; title: string }) 
       {error && <p className="tw:m-0 tw:mt-3 tw:text-destructive">{error}</p>}
     </div>
   );
+}
+
+/**
+ * **Which of this document's artefacts were written for the owner, and the
+ * three answers that are genuinely different.**
+ *
+ * The plan's first draft warned in general, and GPT Sol's improvement on it was
+ * that the dialog should *name* them — which is what turns a sentence nobody
+ * reads into a specific fact about the thing being shared. Between 2026-08-28
+ * morning and afternoon this was thought to be unbuildable, then built; the
+ * general sentence survives as the first row rather than as the answer.
+ *
+ * | `kinds` | what it means | what it says |
+ * |---|---|---|
+ * | `undefined` | the store cannot say | *may have been written for your profile* |
+ * | `[]` | it can, and none were | *nothing here was* |
+ * | non-empty | these were | names them |
+ *
+ * **The middle row is the one worth defending.** It is a much stronger claim
+ * than the first, and the only thing separating them is the difference between
+ * an absent field and an empty array — which `?? []` silently erases. The
+ * `sharing` block exists so that `[]` can only come from a store that answered:
+ * src/types.ts § ArticleSharing.
+ */
+function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
+  const said =
+    kinds === undefined
+      ? SHARING_PERSONALISED
+      : kinds.length === 0
+        ? SHARING_NOT_PERSONALISED
+        : sharingPersonalisedList(kinds);
+  return <p className="tw:m-0 tw:mb-2 tw:text-ink-faint">{said}</p>;
 }
 
 /**

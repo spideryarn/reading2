@@ -25,7 +25,7 @@
  *    brackets and last, so it is skippable by a reader who does not want it and
  *    quotable by one reporting a problem.
  */
-import type { EmbeddingReason } from "./types.js";
+import type { EmbeddingReason, StepName } from "./types.js";
 import { MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /**
@@ -1218,37 +1218,97 @@ export function sharingConfirmBody(title: string): string {
   );
 }
 
+/* The three things the dialog can say about personalisation, and they are three
+   rather than one for the reason the visitor's four sentences are four: *we
+   could not tell*, *none were*, and *these were* are different facts, and a
+   single hedged sentence covering all three tells an owner nothing they can act
+   on. `ArticleMetadata.sharing.personalised` is what chooses between them.
+
+   This file went through a wrong turn worth recording, because the comment that
+   was here asserted it confidently. On 2026-08-28 it looked as though naming
+   the artefacts would mean widening `REVISION_READ_POLICY`, and the general
+   warning was written up as the permanent answer. It would not: the revision
+   row already carries all four artefacts that can hold a `profileHash`, so
+   reading it was free, and `personalised` was built the same afternoon. The
+   sentence below is the fallback again rather than the answer. */
+
 /**
- * The personalisation warning.
+ * **We could not tell.** The whole `sharing` block is absent — a store with no
+ * column to read, which today means the filesystem one.
  *
- * **General on purpose, and that is now a decision rather than a gap.** The
- * plan asked this to name which of *this document's* artefacts were written
- * against the reader's profile, and the fact does exist — `profileHash` is
- * stored on every one of them. It is not served, and on 2026-08-28 it was
- * decided not to serve it: reading it would have meant widening
- * `REVISION_READ_POLICY`, and a read policy on the owner's revision is not
- * worth loosening for one sentence in a dialog. The two visibility fields beside
- * it were free; this one was not. So this sentence is the answer rather than a
- * placeholder, and an earlier version of this comment saying it "belongs with
- * slice 1b" was telling a future reader to go and build something already
- * weighed and declined.
+ * A hedge, and honest as a hedge: it says *may have been* because nothing here
+ * knows. What it must never become is the sentence for `personalised: []`,
+ * which is a different and much stronger claim.
  *
- * What it says instead is the part a general warning usually leaves out — that
- * the leak is what a personalised artefact **left out**, not what it quotes.
- * src/profile.ts forbids quoting the profile and carries a verbatim example of
- * what not to do, but a prompt is not an enforcement mechanism, and the terms a
- * glossary skipped are inferable from the ones it kept. That is the sentence
- * worth having whether or not we can name the artefacts, which is the reason
- * losing the list costs less than it looks.
+ * What it says that a general warning usually leaves out is the half worth
+ * keeping in all three states — the leak is what a personalised artefact **left
+ * out**, not what it quotes. src/profile.ts forbids quoting the profile and
+ * carries a verbatim example of what not to do, but a prompt is not an
+ * enforcement mechanism, and the terms a glossary skipped are inferable from
+ * the ones it kept.
  *
- * **"The pipeline" is gone.** It is our word for our machinery, and copy.md's
- * first rule is to say what happened in words that assume nothing — the owner
- * is a reader who marked a document shareable, not somebody operating a build.
+ * **"The pipeline" is not in it**, deliberately. That is our word for our
+ * machinery, and copy.md's first rule is to say what happened in words that
+ * assume nothing — the owner is a reader who marked a document shareable, not
+ * somebody operating a build.
  */
 export const SHARING_PERSONALISED =
   "The summaries, glossaries and ideas here may have been written for your reader profile, and they " +
   "go out exactly as they are. None of them quotes it — but what a profile made them skip is still " +
   "visible in what they kept.";
+
+/**
+ * **None were.** `personalised: []`, from a store that can say.
+ *
+ * Worth a sentence rather than silence: the owner is being asked to make a
+ * rights statement about somebody else's article, and *nothing here was shaped
+ * by you* is a real fact that removes a real worry. Saying nothing would leave
+ * them to assume the general case.
+ */
+export const SHARING_NOT_PERSONALISED =
+  "Nothing here was written for your reader profile.";
+
+/** What the owner's own copy of each artefact is called, in a sentence. */
+const OWNED_ARTEFACT: Partial<Record<StepName, string>> = {
+  tweets: "your tweet thread",
+  glossary: "your glossary",
+  summary: "your summary",
+  ideas: "your list of ideas",
+};
+
+/**
+ * **These were**, named — Sol's improvement on the plan's first draft, and the
+ * thing that turns a sentence nobody reads into a specific fact about the
+ * document being shared.
+ *
+ * ## The phrasing dodges number agreement on purpose
+ *
+ * One artefact and three need the same sentence, and the obvious construction
+ * needs `was`/`were`, `it`/`them` and `is`/`are` picked apart by count — five
+ * ternaries in a sentence, each of them a place to get it wrong for the case
+ * nobody tested. Making **the model** the subject of the second half removes
+ * all of it: *what it made the model leave out* reads identically for one
+ * artefact and for four.
+ *
+ * The dash after the list does the same job for the first half.
+ *
+ * A `StepName` with no entry in `OWNED_ARTEFACT` falls back to *"your <name>"*
+ * rather than being dropped. Only four artefacts can carry a `profileHash` and
+ * all four are in the table, so this is unreachable today — but a silently
+ * shortened list is the failure that would matter here, since the whole point
+ * of the sentence is that it is complete.
+ */
+export function sharingPersonalisedList(kinds: StepName[]): string {
+  const nouns = kinds.map((k) => OWNED_ARTEFACT[k] ?? `your ${k}`);
+  const list =
+    nouns.length <= 1
+      ? (nouns[0] ?? "")
+      : `${nouns.slice(0, -1).join(", ")} and ${nouns[nouns.length - 1]}`;
+  return (
+    `${list} — written for your reader profile, and shared exactly as written. Nothing here quotes ` +
+    "your profile, but what it made the model leave out is still visible in what it kept."
+  );
+}
 
 /** The box the owner ticks, which the server refuses the request without. */
 export const SHARING_RIGHTS_CONFIRM =

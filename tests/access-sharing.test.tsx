@@ -5,12 +5,11 @@
  * Four things about this control are load-bearing, and three of them are about
  * what it does when it is *not sure*:
  *
- *  1. It finds out the current state by **asking the public endpoint**, which
- *     is the only non-mutating way to ask — there is no visibility field on
- *     `GET /api/metadata/:slug`, and the `PUT` is not a thing you may call to
- *     find out. Asking anonymously is also the honest version of the question:
- *     *can somebody with this link read it*, asked from where a stranger asks
- *     it.
+ *  1. It finds out the current state from `ArticleMetadata.sharing`, which the
+ *     page has already fetched, and so **makes no request at all** until the
+ *     owner presses something. Until 2026-08-28 it probed the public endpoint
+ *     anonymously, because there was no owner-side field; that worked and was
+ *     the wrong shape, and could not see `publicAt`.
  *  2. A check that **failed** must not be drawn as "not shared". That is the
  *     one control where being confidently wrong publishes an article, or tells
  *     somebody a public document is private. docs/reusable/silent-success.md.
@@ -23,6 +22,7 @@
  *     is not evidence a field was honoured.
  */
 import { act, createElement } from "react";
+import type { ArticleSharing } from "../src/types.js";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -43,10 +43,15 @@ const SLUG = "a-piece";
 
 /** Every request the card made. */
 const calls: { url: string; method: string; body: unknown }[] = [];
-/** How the probe of the public endpoint is answered. Posed by each test. */
-let probe: () => Response;
 /** How the `PUT` is answered. */
 let put: () => Response;
+
+const PRIVATE: ArticleSharing = { visibility: "private", publicAt: null, personalised: [] };
+const SHARED: ArticleSharing = {
+  visibility: "public",
+  publicAt: "2026-08-28T09:00:00.000Z",
+  personalised: [],
+};
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -61,13 +66,15 @@ let root: Root;
 beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   calls.length = 0;
-  probe = () => json({ error: "not shared" }, 404);
   put = () => json({ visibility: "public", publicAt: "2026-08-28T11:00:00.000Z" });
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-    return Promise.resolve(method === "PUT" ? put() : probe());
+    /* Anything that is not the `PUT` is a request this card should not be
+       making at all, and the first test asserts exactly that — so the reply is
+       deliberately useless rather than plausible. */
+    return Promise.resolve(method === "PUT" ? put() : json({}, 500));
   });
   host = document.createElement("div");
   document.body.append(host);
@@ -80,9 +87,20 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function mount(): Promise<void> {
+/**
+ * **No default parameter, and that is the point of this comment.**
+ *
+ * It had `= PRIVATE`, and JavaScript applies a default for an *explicitly
+ * passed* `undefined` — so `mount(undefined)`, which is the whole of the "this
+ * store cannot say" case, quietly mounted a **private** article instead. The
+ * test then failed against a state it had never rendered, and the obvious next
+ * move would have been to go looking in the component. A default that swallows
+ * the exact value a test is about is worse than no default; every caller says
+ * what it means.
+ */
+async function mount(sharing: ArticleSharing | undefined): Promise<void> {
   await act(async () => {
-    root.render(createElement(AccessSharing, { slug: SLUG, title: "A piece" }));
+    root.render(createElement(AccessSharing, { slug: SLUG, title: "A piece", sharing }));
   });
   for (let i = 0; i < 4; i++) {
     await act(async () => {
@@ -102,6 +120,12 @@ function press(text: string): void {
   });
 }
 
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((go) => setTimeout(go, 0));
+  });
+}
+
 function tickTheBox(): void {
   const box = host.querySelector<HTMLInputElement>('input[type="checkbox"]');
   if (!box) throw new Error("No rights checkbox on the page");
@@ -111,57 +135,50 @@ function tickTheBox(): void {
 }
 
 describe("finding out who can read this", () => {
-  it("asks the public endpoint, and never the PUT", async () => {
-    await mount();
+  it("reads the field the page already fetched, and asks for nothing", async () => {
+    await mount(PRIVATE);
 
-    expect(calls).toEqual([
-      { url: `/api/public/metadata/${SLUG}`, method: "GET", body: undefined },
-    ]);
+    expect(calls).toEqual([]);
     expect(host.textContent).toContain("Only you can read this");
   });
 
   it("says so when the article is already shared", async () => {
-    probe = () => json({ slug: SLUG, title: "A piece", available: {} });
-    await mount();
+    await mount(SHARED);
 
     expect(host.textContent).toContain("Anyone with the link can read this");
-    // The link, ready to copy, and the honest limit beside it.
     expect(host.querySelector<HTMLInputElement>("input[readonly]")?.value).toContain(
       `/read/${SLUG}`,
     );
     expect(host.textContent).toContain("cannot take back a page");
+    /* **"Shared since" survives a page load**, which the old probe could not
+       manage: a 200 said *somebody can read this* and nothing about when. This
+       is the visible half of moving to the owned field. */
+    expect(host.textContent).toContain("Shared since");
   });
 
   /**
-   * **The failure that must not look like an answer.**
+   * **The absence that must not be drawn as an answer.**
    *
-   * A 501 is what the filesystem store answers with, and a 500 is anything
-   * else. Drawing either as "not shared" would tell an owner their public
-   * document is private — and would offer them a Share button for a document
-   * that is already shared.
+   * `sharing` is optional and absent means *this store cannot say* — the
+   * filesystem store has no column. Drawing that as "not shared" would tell an
+   * owner their public document is private, and offer them a Share button for a
+   * document that is already shared. It is also the state while the page's
+   * fetch is in flight, and the card draws the same thing for both because
+   * neither is a state in which it is safe to offer a switch.
    */
-  it("refuses to guess when the check fails", async () => {
-    for (const status of [500, 501]) {
-      calls.length = 0;
-      probe = () => json({ error: "no" }, status);
-      await mount();
+  it("refuses to guess when the store cannot say", async () => {
+    await mount(undefined);
 
-      expect(host.textContent).toContain("could not check");
-      expect(host.textContent).not.toContain("Only you can read this");
-      expect(host.querySelector("button")).toBeNull();
-
-      await act(async () => root.unmount());
-      host.remove();
-      host = document.createElement("div");
-      document.body.append(host);
-      root = createRoot(host);
-    }
+    expect(host.textContent).toContain("could not check");
+    expect(host.textContent).not.toContain("Only you can read this");
+    expect(host.querySelector("button")).toBeNull();
+    expect(calls).toEqual([]);
   });
 });
 
 describe("turning it on", () => {
   it("will not publish until the owner confirms the rights", async () => {
-    await mount();
+    await mount(PRIVATE);
     press("Share with anyone");
 
     const share = [...host.querySelectorAll("button")].find((b) =>
@@ -174,23 +191,21 @@ describe("turning it on", () => {
   });
 
   it("names the article and says what sharing does, before it does it", async () => {
-    await mount();
+    await mount(PRIVATE);
     press("Share with anyone");
 
     expect(host.textContent).toContain("A piece");
     expect(host.textContent).toContain("anyone with the link can read it");
-    expect(host.textContent).toContain("reader profile");
+    expect(host.textContent).toContain("cannot take back a page");
   });
 
   it("sends rightsConfirmed: true, and believes the answer rather than the request", async () => {
     put = () => json({ visibility: "public", publicAt: "2026-08-28T11:00:00.000Z" });
-    await mount();
+    await mount(PRIVATE);
     press("Share with anyone");
     tickTheBox();
     press("Share it");
-    await act(async () => {
-      await new Promise((go) => setTimeout(go, 0));
-    });
+    await settle();
 
     expect(calls.filter((c) => c.method === "PUT")).toEqual([
       {
@@ -210,27 +225,84 @@ describe("turning it on", () => {
    */
   it("draws what the server said, not what it asked for", async () => {
     put = () => json({ visibility: "private", publicAt: null });
-    await mount();
+    await mount(PRIVATE);
     press("Share with anyone");
     tickTheBox();
     press("Share it");
-    await act(async () => {
-      await new Promise((go) => setTimeout(go, 0));
-    });
+    await settle();
 
     expect(host.textContent).toContain("Only you can read this");
   });
 });
 
+/**
+ * **Three answers, and the middle one is a much stronger claim than the first.**
+ *
+ * *We could not tell*, *none were*, and *these were* are different facts, and
+ * the only thing separating the first two is an absent field from an empty
+ * array — the distinction `?? []` silently erases. That is why `personalised`
+ * lives inside the `sharing` block: `[]` can only come from a store that
+ * answered.
+ */
+describe("what the dialog says about the reader's profile", () => {
+  const withKinds = (personalised: ArticleSharing["personalised"]): ArticleSharing => ({
+    ...PRIVATE,
+    personalised,
+  });
+
+  async function openDialog(sharing: ArticleSharing | undefined): Promise<void> {
+    await mount(sharing);
+    press("Share with anyone");
+  }
+
+  it("hedges when the store cannot say", async () => {
+    /* The card shows "could not check" and offers no Share button when the
+       whole block is absent, so the hedge is reached through a block that
+       exists with the field somehow missing — defensive, and the branch has to
+       be total. */
+    await openDialog(withKinds(undefined as unknown as ArticleSharing["personalised"]));
+    expect(host.textContent).toContain("may have been written for your reader profile");
+  });
+
+  it("says plainly when none were", async () => {
+    await openDialog(withKinds([]));
+
+    expect(host.textContent).toContain("Nothing here was written for your reader profile");
+    // And NOT the hedge, which would leave the owner assuming the general case.
+    expect(host.textContent).not.toContain("may have been written");
+  });
+
+  it("names them when some were", async () => {
+    await openDialog(withKinds(["glossary", "summary"]));
+
+    expect(host.textContent).toContain("your glossary and your summary");
+    expect(host.textContent).not.toContain("may have been written");
+    expect(host.textContent).not.toContain("Nothing here was written");
+  });
+
+  /**
+   * One artefact and three need the same sentence, and the obvious construction
+   * needs `was`/`were` and `it`/`them` picked apart by count. The phrasing makes
+   * *the model* the subject of the second half so no agreement is needed — this
+   * is the case that would have caught a version that did.
+   */
+  it("reads correctly for a single artefact", async () => {
+    await openDialog(withKinds(["glossary"]));
+
+    const text = host.textContent ?? "";
+    expect(text).toContain("your glossary — written for your reader profile");
+    expect(text).not.toContain("and your");
+    // The half that survives in every state: the leak is what was left out.
+    expect(text).toContain("leave out");
+  });
+});
+
 describe("turning it off", () => {
   it("sends no rightsConfirmed at all", async () => {
-    probe = () => json({ slug: SLUG, title: "A piece", available: {} });
     put = () => json({ visibility: "private", publicAt: null });
-    await mount();
+    await mount(SHARED);
     press("Stop sharing");
-    await act(async () => {
-      await new Promise((go) => setTimeout(go, 0));
-    });
+    await settle();
 
     expect(calls.filter((c) => c.method === "PUT")).toEqual([
       { url: `/api/article/${SLUG}/visibility`, method: "PUT", body: { visibility: "private" } },
@@ -243,15 +315,17 @@ describe("turning it off", () => {
    * then reads back, and a response can be lost on the way home — so the card
    * goes to "we do not know" rather than back to where it was. The same lesson
    * Delete on this page learned on 2026-08-27.
+   *
+   * **It has to beat the prop, not just the local state.** `sharing` still holds
+   * what the page load said, which after a failed write is exactly the stale
+   * answer that must not be drawn — so this would pass on a version that merely
+   * cleared its own state and fell back.
    */
   it("stops claiming to know when the write fails", async () => {
-    probe = () => json({ slug: SLUG, title: "A piece", available: {} });
     put = () => json({ error: "the database went away" }, 500);
-    await mount();
+    await mount(SHARED);
     press("Stop sharing");
-    await act(async () => {
-      await new Promise((go) => setTimeout(go, 0));
-    });
+    await settle();
 
     expect(host.textContent).toContain("could not check");
     expect(host.textContent).not.toContain("Anyone with the link can read this");
