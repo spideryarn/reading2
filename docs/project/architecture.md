@@ -152,7 +152,10 @@ Filesystem, one directory per article, no database:
                     and "whichever exists" then picks the stale one silently
     pdf-chunks/     PDFs only: one cached model response per page range, keyed
                     on the bytes + the prompt version + the reader, so fixing
-                    the renderer costs nothing (pdf-ingestion.md)
+                    the renderer costs nothing (pdf-ingestion.md). Written
+                    atomically, and an entry that will not parse is discarded
+                    and re-read rather than thrown
+                    (../postmortems/pdf-chunk-cache-corrupt-entry.md)
     article.html    extracted — NOT yet sanitised (security.md)
     meta.json       title, byline, site, lang, url, fetchedAt
     blocks.json     the block sequence with stable ids   ← the spine
@@ -250,6 +253,14 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 - Every stage is runnable on its own against a slug, so any one can be re-run without the others.
 - Anything expensive should be cached on a content hash. Two stages do it, and copy *their* choice of
   hash input rather than only the idea — [database.md](database.md#the-filesystem-era-files-under-dataslug).
+- **A cache whose key is deterministic must be written atomically and read tolerantly**, and the two
+  are one rule. `writeFile` truncates before it writes, so a killed process leaves a file that exists
+  and does not parse; the key does not change between runs, so every later run finds that same file
+  and fails the same way, for ever. Write beside the target and `rename` (`writeAtomic` in
+  [`src/toc.ts`](../../src/toc.ts), [`src/labels.ts`](../../src/labels.ts),
+  [`src/pdf-read.ts`](../../src/pdf-read.ts)); treat an entry that will not parse as a miss and say so
+  in the log. It wedged one article's PDF extract permanently —
+  [pdf-chunk-cache-corrupt-entry.md](../postmortems/pdf-chunk-cache-corrupt-entry.md).
 - What the model calls cost, and the three prompt caches that stop us paying for the article twice,
   are in [prompt-caching.md](prompt-caching.md).
 - **Where the calls actually go** is [ai-gateway.md](ai-gateway.md): every paid call goes through
