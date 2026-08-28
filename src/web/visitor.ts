@@ -112,7 +112,16 @@ export const COMMENTS_GAP: VisitorGap = { kind: "readers-own", plural: "Comments
 export const TWEETS_GAP: VisitorGap = { kind: "not-yet-public", noun: "a tweet thread" };
 
 /**
- * Which mode buttons in the bottom bar are drawn dimmed.
+ * Which mode buttons in the bottom bar are drawn dimmed, **and the sentence
+ * each one will show when pressed.**
+ *
+ * A map rather than a set since 2026-08-28, and the value is the whole reason:
+ * the bar's tooltip used to carry a line of its own — *"Not carried on a shared
+ * link — press for why"* — a few words off the band's *"a shared link does not
+ * carry it yet"*. One fact, two sentences, two files. A browser pass read it as
+ * copy that had drifted, which is exactly what it was. Handing the tooltip the
+ * band's own sentence makes drift impossible rather than unlikely, and turns
+ * the tooltip into a preview of the thing the press will open.
  *
  * **Derived from `MODES` rather than listed**, which is the whole reason it is
  * a function and not a constant: a mode added next month is marked for a
@@ -123,9 +132,12 @@ export const TWEETS_GAP: VisitorGap = { kind: "not-yet-public", noun: "a tweet t
  * because `visitorGap` answers with a boundary for anything it does not
  * recognise.
  */
-export function markedModes(available: PublicArtefacts | null): ReadonlySet<Mode> {
-  const marked = new Set<Mode>();
-  for (const mode of MODES) if (visitorGap(mode, available)) marked.add(mode);
+export function markedModes(available: PublicArtefacts | null): ReadonlyMap<Mode, string> {
+  const marked = new Map<Mode, string>();
+  for (const mode of MODES) {
+    const gap = visitorGap(mode, available);
+    if (gap) marked.set(mode, visitorSentence(gap));
+  }
   return marked;
 }
 

@@ -111,6 +111,7 @@ export function AccessSharing({
   /* One article's answer must not survive into another's. `Metadata` is keyed
      on the slug so this component remounts anyway; the effect is what keeps
      that true if the key ever moves. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads nothing, and a new slug is exactly when one article's answer stops describing the article on screen
   useEffect(() => {
     setActed(null);
     setConfirming(false);

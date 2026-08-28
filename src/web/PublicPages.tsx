@@ -45,10 +45,13 @@ export function PublicMetadataPage({
   slug,
   article,
   available,
+  signedIn,
 }: {
   slug: string;
   article: Article;
   available: PublicArtefacts | null;
+  /** For the call to action only — reader-capability.ts § signedIn. */
+  signedIn: boolean;
 }) {
   const { meta } = article;
   const stats = articleStats(article);
@@ -67,7 +70,7 @@ export function PublicMetadataPage({
           <p className="tw:m-0 tw:mb-6 tw:text-sm tw:text-ink-faint">{facts.join(" · ")}</p>
         )}
 
-        <SharedNotice />
+        <SharedNotice signedIn={signedIn} />
 
         <section className="tw:mt-8">
           <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">The piece</h2>
@@ -111,7 +114,7 @@ export function PublicMetadataPage({
           <p className="tw:m-0 tw:text-sm tw:text-ink-faint">{SHARING_WHAT_VISITORS_SEE}</p>
         </section>
       </main>
-      <VisitorDock slug={slug} view="metadata" available={available} />
+      <VisitorDock slug={slug} view="metadata" available={available} signedIn={signedIn} />
     </>
   );
 }
@@ -139,11 +142,14 @@ export function VisitorPage({
   article,
   view,
   gap,
+  signedIn,
 }: {
   slug: string;
   article: Article;
   view: ArticleView;
   gap: VisitorGap;
+  /** For the call to action only — reader-capability.ts § signedIn. */
+  signedIn: boolean;
 }) {
   useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view }));
   return (
@@ -153,9 +159,9 @@ export function VisitorPage({
         <h1 className="tw:m-0 tw:mb-4 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
           {article.meta.title}
         </h1>
-        <VisitorNotice gap={gap} />
+        <VisitorNotice gap={gap} signedIn={signedIn} />
       </main>
-      <VisitorDock slug={slug} view={view} available={null} />
+      <VisitorDock slug={slug} view={view} available={null} signedIn={signedIn} />
     </>
   );
 }
@@ -184,10 +190,14 @@ function VisitorDock({
   slug,
   view,
   available,
+  signedIn,
 }: {
   slug: string;
   view: ArticleView;
   available: PublicArtefacts | null;
+  signedIn: boolean;
 }) {
-  return <Dock slug={slug} view={view} marked={markedModes(available)} />;
+  return (
+    <Dock slug={slug} view={view} marked={markedModes(available)} signedIn={signedIn} />
+  );
 }

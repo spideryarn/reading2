@@ -106,11 +106,17 @@ describe("what a visitor is told, mode by mode", () => {
       if (mode === "toc") expect(gap).toBeNull();
       else expect(gap).not.toBeNull();
     }
-    expect([...markedModes(EVERYTHING_BUILT)].sort()).toEqual(
+    expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
       MODES.filter((m: Mode) => m !== "toc")
         .slice()
         .sort(),
     );
+    /* And each entry carries the sentence the band will show, so the bar's
+       tooltip cannot drift away from it — the drift a browser pass found on
+       2026-08-28, when the two said the same fact a few words apart. */
+    for (const [mode, sentence] of markedModes(EVERYTHING_BUILT)) {
+      expect(sentence).toBe(visitorSentence(visitorGap(mode, EVERYTHING_BUILT) as VisitorGap));
+    }
   });
 });
 

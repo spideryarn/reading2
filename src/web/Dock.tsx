@@ -167,7 +167,12 @@ interface Props {
    * the tooltip line below are the supplement, never the message.
    * docs/research/public-access-how-others-do-it.md § 2.
    */
-  marked?: ReadonlySet<Mode> | undefined;
+  marked?: ReadonlyMap<Mode, string> | undefined;
+  /**
+   * Whether this reader has an account — read **only** by the visitor drawer's
+   * call to action. reader-capability.ts § signedIn.
+   */
+  signedIn?: boolean | undefined;
   drawer?: {
     /** Comments in reading order — App already sorts them, see comment-nav.ts. */
     comments: Comment[];
@@ -347,7 +352,7 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
   },
 ];
 
-export function Dock({ slug, view, mode, onMode, marked, drawer }: Props) {
+export function Dock({ slug, view, mode, onMode, marked, signedIn, drawer }: Props) {
   const panel = drawer?.panel ?? null;
   const open = panel !== null;
   /* Narrowed once, so the four reads below are the compiler checking one fact
@@ -414,7 +419,12 @@ export function Dock({ slug, view, mode, onMode, marked, drawer }: Props) {
       )}
 
       {panel !== null && drawer && (
-        <div className="dock-drawer" role="dialog" aria-modal="true" aria-label={TITLES[panel]}>
+        <div
+          className="dock-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label={own ? TITLES[panel].own : TITLES[panel].visitor}
+        >
           <div className="dock-drawer-head">
             {/* The wordmark used to sit here, and the note beside it said the
                 app named itself *here and nowhere else* — true at the time, and
@@ -424,7 +434,7 @@ export function Dock({ slug, view, mode, onMode, marked, drawer }: Props) {
                 logo took the top-left corner of the window (HomeLogo.tsx). Two
                 wordmarks on screen at once is one too many, and the one in the
                 corner is the one that is always there, so this one went. */}
-            <h2>{TITLES[panel]}</h2>
+            <h2>{own ? TITLES[panel].own : TITLES[panel].visitor}</h2>
             <button
               type="button"
               className="dock-close"
@@ -447,7 +457,7 @@ export function Dock({ slug, view, mode, onMode, marked, drawer }: Props) {
                 onOpen={own.onOpenComment}
               />
             ) : (
-              <VisitorNotice gap={COMMENTS_GAP} />
+              <VisitorNotice gap={COMMENTS_GAP} signedIn={signedIn ?? false} />
             )}
           </div>
         </div>
@@ -553,8 +563,20 @@ export function Dock({ slug, view, mode, onMode, marked, drawer }: Props) {
   );
 }
 
-const TITLES: Record<Panel, string> = {
-  questions: "Your comments",
+/**
+ * The drawer's heading, and **it cannot be one string.**
+ *
+ * A visitor saw *"Your comments"* directly above *"Comments belong to whoever
+ * added this article"* — the body correct, the heading backwards, and half a
+ * second of doubt planted exactly where the copy is working hardest to
+ * reassure. Found by a browser pass, 2026-08-28; no test would have caught it,
+ * because both strings were individually right and nothing compared them.
+ *
+ * `Your` is the word that does not survive: true for the owner, whose drawer
+ * this is, and false for everybody else.
+ */
+const TITLES: Record<Panel, { own: string; visitor: string }> = {
+  questions: { own: "Your comments", visitor: "Comments" },
 };
 
 /**
@@ -686,7 +708,7 @@ function DockModes({
 }: {
   mode: Mode;
   onMode(next: Mode): void;
-  marked?: ReadonlySet<Mode> | undefined;
+  marked?: ReadonlyMap<Mode, string> | undefined;
 }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const current = MODES_UI.findIndex((m) => m.mode === mode);
@@ -732,7 +754,12 @@ function DockModes({
                     explains the boundary is in the band this button opens —
                     see the `marked` prop above for why that distinction is
                     load-bearing rather than fussy. */}
-                {marked?.has(m.mode) && <p>Not carried on a shared link — press for why.</p>}
+                {/* **The band's own sentence, not a second one saying the same
+                    thing.** It was a line of its own here until a browser pass
+                    read the pair as copy that had drifted — which it was. The
+                    tooltip is a preview of what the press opens now, and there
+                    is no second string to keep in step. visitor.ts § markedModes. */}
+                {marked?.get(m.mode) && <p>{marked.get(m.mode)}</p>}
               </>
             }
           >

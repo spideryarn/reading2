@@ -80,11 +80,13 @@ export function ViewOnlyChip() {
  * Not dismissible and not a toast: it is what this page *is*, and a control to
  * make it go away would say otherwise.
  */
-export function SharedNotice() {
+export function SharedNotice({ signedIn }: { signedIn: boolean }) {
   return (
     <div className="tw:mx-auto tw:mb-4 tw:max-w-3xl tw:rounded-md tw:border tw:border-rule tw:bg-surface-raised tw:px-4 tw:py-3 tw:font-sans tw:text-sm tw:text-ink-faint">
       <p className="tw:m-0">{SHARED_WITH_YOU}</p>
-      <SignUp reason="to ask this article questions, build a glossary for it, and keep it on your own shelf" />
+      {!signedIn && (
+        <SignUp reason="to ask this article questions, build a glossary for it, and keep it on your own shelf" />
+      )}
     </div>
   );
 }
@@ -97,12 +99,12 @@ export function SharedNotice() {
  * as it would for a reader who has one. A mode that answered a press by doing
  * nothing at all would read as broken.
  */
-export function VisitorBand({ gap }: { gap: VisitorGap }) {
+export function VisitorBand({ gap, signedIn }: { gap: VisitorGap; signedIn: boolean }) {
   return (
     <aside className="mode-band" aria-label="Not available on a shared link">
       <div className="tw:flex tw:flex-1 tw:flex-col tw:justify-center tw:gap-3 tw:px-4 tw:py-6 tw:text-sm tw:text-ink-faint">
         <p className="tw:m-0 tw:text-ink">{visitorSentence(gap)}</p>
-        {anAccountWouldHelp(gap) && <SignUp reason="to have it here" />}
+        {offerAnAccount(gap, signedIn) && <SignUp reason="to have it here" />}
       </div>
     </aside>
   );
@@ -112,13 +114,31 @@ export function VisitorBand({ gap }: { gap: VisitorGap }) {
  * The same sentence, for the two places that are not a mode band: the drawer
  * where the owner's comments would be, and the tweets page.
  */
-export function VisitorNotice({ gap }: { gap: VisitorGap }) {
+export function VisitorNotice({ gap, signedIn }: { gap: VisitorGap; signedIn: boolean }) {
   return (
     <div className="tw:flex tw:flex-col tw:gap-3 tw:px-1 tw:py-4 tw:font-sans tw:text-sm tw:text-ink-faint">
       <p className="tw:m-0 tw:text-ink">{visitorSentence(gap)}</p>
-      {anAccountWouldHelp(gap) && <SignUp reason="to have it here" />}
+      {offerAnAccount(gap, signedIn) && <SignUp reason="to have it here" />}
     </div>
   );
+}
+
+/**
+ * **Whether to put the offer in front of this particular reader**, which is two
+ * questions and not one.
+ *
+ * `anAccountWouldHelp` asks whether an account is the fix *for this gap* — it
+ * is not, for an artefact waiting on slice 1b or for somebody else's comments.
+ * This adds the second: whether the reader has one already. Both have to be
+ * true, and they fail for different reasons — the first would be a promise we
+ * break, the second an offer of something they are holding.
+ *
+ * Note what is NOT gated on `signedIn`: the sentence. The reason a control is
+ * unavailable is shown to everybody, because it is a fact about the page rather
+ * than a pitch. Only the ask is conditional.
+ */
+function offerAnAccount(gap: VisitorGap, signedIn: boolean): boolean {
+  return !signedIn && anAccountWouldHelp(gap);
 }
 
 /**

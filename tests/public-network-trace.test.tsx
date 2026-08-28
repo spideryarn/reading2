@@ -142,6 +142,13 @@ const METADATA: PublicMetadata = {
 /** The same article as the owner would be served it. Extra fields and all. */
 const OWNED: Article = { ...ARTICLE, meta: { ...ARTICLE.meta, url: "https://example.com/a" } };
 
+/**
+ * How the **owned** route answers. A 404 is what a signed-in reader gets for
+ * somebody else's article, and it is the only way to reach the case that
+ * matters most to the chrome: a visitor who has an account.
+ */
+let owned: () => Response;
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -159,7 +166,7 @@ function json(body: unknown, status = 200): Response {
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/public/metadata/${SLUG}`) return json(METADATA);
-  if (url === `/api/article/${SLUG}`) return json(OWNED);
+  if (url === `/api/article/${SLUG}`) return owned();
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: [] });
@@ -187,6 +194,7 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   trace.length = 0;
   session.user = null;
+  owned = () => json(OWNED);
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -211,6 +219,22 @@ async function settle(turns = 6): Promise<void> {
       await new Promise((go) => setTimeout(go, 0));
     });
   }
+}
+
+/**
+ * A clean root, for a test that opens the app twice.
+ *
+ * `open()` renders into the same root, and React would reconcile rather than
+ * remount — so the second address would inherit the first's mode state and the
+ * assertion would be about a page that never existed.
+ */
+async function remount(): Promise<void> {
+  await act(async () => root.unmount());
+  host.remove();
+  trace.length = 0;
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
 }
 
 /** The whole app, at a shared article's address. */
@@ -259,12 +283,62 @@ describe("a signed-out browser on a shared document", () => {
       trace.length = 0;
       await open(`?mode=${mode}`);
       expect(outsidePublic()).toEqual([]);
-      await act(async () => root.unmount());
-      host.remove();
-      host = document.createElement("div");
-      document.body.append(host);
-      root = createRoot(host);
+      await remount();
     }
+  });
+
+  /**
+   * **The four sentences, rendered rather than unit-tested.**
+   *
+   * `tests/visitor-gaps.test.ts` proves `visitorGap` tells them apart. It
+   * cannot prove the reading view *shows* the right one, and a browser pass on
+   * 2026-08-28 found that the "never built" case had never been rendered by
+   * anything at all: the article it drove had every artefact generated, so the
+   * only one of the four states no human had ever seen was the one that says a
+   * piece has no glossary.
+   *
+   * The fixture is asymmetric on purpose — `glossary: true`, `summary: false` —
+   * so the two artefact sentences are produced by one article in one run, which
+   * is the arrangement in which "they blurred into one" is visible.
+   */
+  it("tells a missing artefact from one we do not carry yet, on screen", async () => {
+    await open("?mode=summary");
+    /* `summary: false` — nobody built one. This is the state the browser pass
+       could not reach. */
+    expect(host.textContent).toContain("Nobody has built a summary for this piece yet");
+
+    await remount();
+
+    await open("?mode=glossary");
+    /* `glossary: true` — it exists, and slice 1b has not shipped the endpoint
+       that would carry it. A different sentence, and it has to be. */
+    expect(host.textContent).toContain("does not carry it yet");
+    expect(host.textContent).not.toContain("Nobody has built");
+  });
+
+  /**
+   * The offer is the one thing keyed on *am I signed in* rather than on *is
+   * this mine* — a browser pass read "Make a free account" put to somebody
+   * already holding one as a page that had not noticed them. The **reason** is
+   * shown to everybody; only the ask is conditional.
+   */
+  it("does not offer an account to a reader who has one", async () => {
+    await open("?mode=chat");
+    expect(host.textContent).toContain("Chat is for signed-in readers");
+    expect(host.textContent).toContain("Make a free account");
+
+    await remount();
+
+    session.user = { id: "somebody-else", email: "else@example.com" };
+    /* Signed in, and not the owner: `/api/article/:slug` 404s, so the two-step
+       falls through to the public route and this is a *visitor* who has an
+       account. The chrome is identical; the ask is not. */
+    owned = () => json({ error: "not yours" }, 404);
+    await open("?mode=chat");
+
+    expect(host.textContent).toContain("View only");
+    expect(host.textContent).toContain("Chat is for signed-in readers");
+    expect(host.textContent).not.toContain("Make a free account");
   });
 
   it("opens the comments drawer without asking for anybody's comments", async () => {
@@ -273,6 +347,26 @@ describe("a signed-out browser on a shared document", () => {
     /* And it says whose they would be, rather than "nothing asked yet" — which
        is what an empty owner drawer says, and would be a false claim here. */
     expect(host.textContent).toContain("belong to whoever added this article");
+  });
+
+  /**
+   * **The heading has to agree with the body it sits above.**
+   *
+   * A visitor saw *"Your comments"* directly over *"Comments belong to whoever
+   * added this article"* — the body right, the heading backwards, and half a
+   * second of doubt exactly where the copy is working hardest. A browser pass
+   * found it on 2026-08-28 and **no test could have**: both strings were
+   * individually correct and nothing put them in the same assertion.
+   *
+   * So this one reads the heading element rather than the page text, because
+   * the word "Comments" is also on the bar button underneath and a substring
+   * check on the whole page would pass either way.
+   */
+  it("does not call somebody else's comments yours", async () => {
+    await open("?panel=questions");
+
+    const heading = host.querySelector(".dock-drawer-head h2")?.textContent;
+    expect(heading).toBe("Comments");
   });
 });
 

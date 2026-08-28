@@ -129,10 +129,14 @@ import { PublicMetadataPage, VisitorPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
 
 /**
- * The owner's `marked` set: nothing is marked, and it is one object for the
+ * The owner's `marked` map: nothing is marked, and it is one object for the
  * life of the module so the bar's props do not change identity every render.
+ *
+ * A map since 2026-08-28 because each entry now carries the sentence the band
+ * will show, so the bar's tooltip and the band cannot say the same fact in two
+ * slightly different ways. visitor.ts § markedModes.
  */
-const EVERY_MODE_AVAILABLE: ReadonlySet<Mode> = new Set();
+const EVERY_MODE_AVAILABLE: ReadonlyMap<Mode, string> = new Map();
 
 
 
@@ -528,6 +532,7 @@ function ArticlePage({
           slug={slug}
           article={access.article}
           available={access.available}
+          signedIn={signedIn}
           view={view}
         />
       )}
@@ -704,17 +709,42 @@ function VisitorArticle({
   slug,
   article,
   available,
+  signedIn,
   view,
 }: {
   slug: string;
   article: Article;
   available: PublicArtefacts | null;
+  /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
+  signedIn: boolean;
   view: ArticleView;
 }) {
   if (view === "metadata")
-    return <PublicMetadataPage slug={slug} article={article} available={available} />;
-  if (view === "tweets") return <VisitorPage slug={slug} article={article} view="tweets" gap={TWEETS_GAP} />;
-  return <Reader slug={slug} article={article} capability={{ kind: "visitor", available }} />;
+    return (
+      <PublicMetadataPage
+        slug={slug}
+        article={article}
+        available={available}
+        signedIn={signedIn}
+      />
+    );
+  if (view === "tweets")
+    return (
+      <VisitorPage
+        slug={slug}
+        article={article}
+        view="tweets"
+        gap={TWEETS_GAP}
+        signedIn={signedIn}
+      />
+    );
+  return (
+    <Reader
+      slug={slug}
+      article={article}
+      capability={{ kind: "visitor", available, signedIn }}
+    />
+  );
 }
 
 /** The window width, as state, because the whole layout is computed from it. */
@@ -889,6 +919,10 @@ function Reader({
    */
   const owner = capability.kind === "owner" ? capability : null;
   const available = capability.kind === "visitor" ? capability.available : null;
+  /* Only the call to action reads this — see reader-capability.ts § signedIn.
+     `true` for the owner is never consulted, since none of the chrome it gates
+     is drawn for them. */
+  const signedIn = capability.kind === "visitor" ? capability.signedIn : true;
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -963,6 +997,7 @@ function Reader({
     () => (owner ? EVERY_MODE_AVAILABLE : markedModes(available)),
     [owner, available],
   );
+  /* The bar's Comments drawer needs it for the same one reason the bands do. */
 
   /**
    * An absent `cols` means "whatever fits", not "all of them". All of them is
@@ -1519,7 +1554,7 @@ function Reader({
           this is the sentence and the ask, which belong with the title. Not
           dismissible: it is what this page is, not a notification.
           PublicChrome.tsx. */}
-      {!owner && <SharedNotice />}
+      {!owner && <SharedNotice signedIn={signedIn} />}
       <div className="controls">
         {/* First of all, before even the spine: what footing you are reading
             on outranks every control that follows, and this bar is the one
@@ -1898,7 +1933,7 @@ function Reader({
           Placed above the real bands rather than woven into each of their
           conditions, so that a mode added later cannot arrive without one:
           `visitorGap` answers for every member of `Mode` and fails closed. */}
-      {!owner && gap && <VisitorBand gap={gap} />}
+      {!owner && gap && <VisitorBand gap={gap} signedIn={signedIn} />}
       {owner && (mode === "chat" || mode === "review") && (
         <ConversationBand
           key={mode}
@@ -2002,6 +2037,7 @@ function Reader({
            added later is marked whether or not whoever adds it remembers.
            visitor.ts § markedModes. */
         marked={marked}
+        signedIn={signedIn}
         drawer={
           owner
             ? {

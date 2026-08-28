@@ -53,10 +53,26 @@ export type ReaderCapability =
        * Which artefacts this piece has, from `GET /api/public/metadata/:slug` —
        * or `null` when that request did not land.
        *
-       * The only thing a visitor's capability carries, and it decides one thing:
-       * which of two true sentences a marked mode shows. visitor.ts.
+       * It decides one thing: which of two true sentences a marked mode shows.
+       * visitor.ts.
        */
       available: PublicArtefacts | null;
+      /**
+       * **Whether there is a session — the one question the chrome asks that is
+       * not "is this mine".**
+       *
+       * Everything else about this page keys on ownership, deliberately: a
+       * signed-in reader on somebody else's shared document sees exactly what a
+       * stranger sees, and that is the whole rule. The **call to action** is the
+       * exception, and a browser pass found it, 2026-08-28: *"Make a free
+       * account"* was being offered to somebody who already had one. Not wrong
+       * — that reader genuinely cannot do more with this article — but it reads
+       * as a page that has not noticed them.
+       *
+       * So the reason is shown to everybody and the offer only to somebody who
+       * could take it up.
+       */
+      signedIn: boolean;
     };
 
 /**
