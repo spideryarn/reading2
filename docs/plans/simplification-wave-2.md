@@ -106,6 +106,39 @@ clear-cut, ask at the end about anything that is not. Tier 1 from there.
 | **1.6** dead code knip cannot see | `0a4e0db` — `editTurn` and the stale `JobStore`, plus **nine** citations of `editTurn` rather than the two the plan counted. `preview-colour.tsx` refused; see 1.6. |
 | **1.9** the origins list | `0e75064` — `ownOrigins()` reads `VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_URL`, so nobody has to set anything. Two red-first tests; `.env.example` and `security.md` say what the gap was. |
 
+| **the Tier 1 review** | `b709d26` — [`simplification-wave-2-tier1-review-sol.md`](simplification-wave-2-tier1-review-sol.md). One medium finding: the `.env.local` gate accepted a call that runs *after* the spending. Fixed, and it then found `src/labels.ts` in the same shape. |
+
+### What the Tier 1 review changed
+
+**The medium finding was a gate of mine giving a false guarantee rather than a weak one.** `main() {
+await spend(); loadEnvLocal(); }` passed. So did `if (false) loadEnvLocal()`, a call after an early
+`return`, and `const { loadEnvLocal } = helpers`. The rule asked whether the call is *there*, which
+is not the property. Three requirements now — a statement of `main` itself, nothing awaiting or
+returning before it, and the name bound to the `./env.js` import through any binding form — plus
+five controls.
+
+**It then paid for itself.** `src/labels.ts` read two artefacts before calling it, and
+`src/pdf-read.ts` had the same shape until this morning. Neither read spends, so nothing was broken;
+but a rule that has to except the harmless awaits is not a rule. Both moved up, and the eight are
+uniform.
+
+**Three refused-write tests overclaimed.** One was named "instead of letting the row look deleted"
+and started from an empty list. Seeded now, each asserting the seed arrived, and asserting what
+really happens: `remove` does not roll back where `create` does, and that asymmetry is pinned by a
+test rather than described.
+
+**Sol was right about production and wrong about the tree, once.** It found a seventh `fetchOk` site
+— `writeThread` in `chat/effects.ts`, an exact duplicate. Migrating it reddens two tests in
+`tests/chat-cancel-before-begin.test.ts`, which mocks `lib/api.js` with `importActual` and overrides
+`apiFetch`: `fetchOk` closes over the *real* `apiFetch` inside the module, so the writes that suite
+counts stop arriving. Tried, watched it break, reverted, and written into `fetchOk`'s docstring as a
+fourth thing it is not for.
+
+**Two comments were too broad and one of them was false.** `readJsonOrNull` claimed V8's quotation is
+"never built"; it is built, and what holds is that it never escapes. `ownOrigins` claimed Vercel sets
+its variables "with no configuration"; there is a project setting for it, on by default for newer
+projects.
+
 **Tier 1 is done.** 0.4 (the three streaming tests) and all of Tier 2 are not, and Tier 2 was never
 in the clear-cut half.
 
