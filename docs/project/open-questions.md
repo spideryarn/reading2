@@ -177,3 +177,51 @@ today is the standard, not the reader. The machinery already exists (`ProseHover
 `.interactive` for real reasons), so this is a prop and a corridor rather than a design.
 [tooltips.md § The pointer cannot enter a card](tooltips.md#the-pointer-cannot-enter-a-card-and-that-used-to-be-exempt)
 has the detail.
+
+---
+
+## Q11 — Should the pipeline decide which figures need a light sheet? <a id="q11"></a>
+
+Article figures currently sit on `--figure-sheet` **unconditionally** — every image in the reading
+column gets an off-white ground, because a transparent PNG carrying black ink is otherwise invisible
+on our page ([design-css-overview.md § the light sheet under a
+figure](design-css-overview.md#content-that-cannot-be-read-at-all-the-light-sheet-under-a-figure),
+[../plans/figures-in-the-prose.md](../plans/figures-in-the-prose.md)). Greg, 2026-08-29:
+
+> Perhaps this could be part of the post-processing that the LLM does after Readability to notice
+> images that need this?
+
+The stage is right and the tool is not. **There is no model in stage 2's HTML branch** — Readability
+is free and deterministic, and the only model on that path reads *PDF* pages
+([content-extraction.md § Two extractors](content-extraction.md#two-extractors-one-artefact)). And
+the question is not a judgement call: "does this file have an alpha channel, and is the ink behind it
+dark?" is a fact you get by decoding the bytes. A vision model would be paying per image to guess at
+what `sharp` answers exactly.
+
+**What makes the pipeline the right place is not the LLM — it is the server.** The reason this cannot
+be detected in the browser is CORS: article images are hot-linked cross-origin with no `crossorigin`
+attribute, so a canvas drawn from one is tainted and `getImageData` throws. Node has no such rule.
+
+| Option | For | Against |
+|---|---|---|
+| **The sheet on every figure** (today) | one CSS rule; no fetching, no artefact, no new dependency; cannot be wrong in the direction that costs a reader the content | a mat around every photograph; a figure drawn *for* a dark page (light ink on transparent) is made invisible, which is the one case this makes worse |
+| Decode each image at ingest and record the treatment | exact, deterministic, cacheable; no mat on photographs; the light-ink case is left alone | images become something we fetch — N requests per article; an image-decode dependency; a new artefact and a client-side join; a fetch that fails needs a default |
+| A vision model looks at each image | could also answer "is this a diagram or a photograph" | pays per image for something a decoder knows; non-deterministic; nobody has asked the second question |
+
+**Recommendation: the second, when the mat starts to annoy someone — not before.** Three things a
+plan for it would have to settle:
+
+- **Where the answer rides.** Not as a `data-` attribute on the `<img>` in `article.html`. The
+  browser sanitiser has to strip our own attributes from stored markup, or a publisher can forge one
+  ([security.md](security.md), and `SANITIZER_VERSION` 3). So it would be a `src` → treatment map in
+  an artefact, applied client-side — the same shape as marks.
+- **The default when the fetch fails.** Hotlink protection and 403s are ordinary. *Unknown* must mean
+  *sheet*, because the failure of omission is an unreadable equation and the failure of commission is
+  a mat.
+- **Whose stage it is.** Fetching images is acquisition, which is stage 1's job
+  ([fetching.md](fetching.md)) — but nothing there fetches anything but the document today.
+
+**And there is a larger prize behind the same door.** If we are fetching every image at ingest, we
+could *host* them: hotlinks rot, publishers block by referer, and today every reader's browser
+announces itself to the publisher's CDN on every read. That is a bigger piece of work than this
+question, and it would make this one free.
