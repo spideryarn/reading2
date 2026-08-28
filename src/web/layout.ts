@@ -113,7 +113,7 @@ export function proseVisible(showText: boolean, modeBand: boolean): boolean {
   return modeBand || showText;
 }
 
-export function spineWidth(mode: SpineMode): number {
+function spineWidth(mode: SpineMode): number {
   return mode === "on" ? SPINE_W : 0;
 }
 

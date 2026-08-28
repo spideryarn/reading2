@@ -32,7 +32,7 @@ import { useEffect, useState } from "react";
 import type { ProjectionPoint, ProjectionResponse, SkipCounts } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
-export type ProjectionStatus = "idle" | "loading" | "ready" | "error";
+type ProjectionStatus = "idle" | "loading" | "ready" | "error";
 
 export interface UseProjection {
   status: ProjectionStatus;
@@ -68,11 +68,15 @@ const IDLE: UseProjection = {
 export function useProjection(slug: string, enabled: boolean): UseProjection {
   const [state, setState] = useState<UseProjection & { slug: string }>({ ...IDLE, slug });
 
-  /* **Whose answer this is.** Held in the state rather than compared inside the
-     effect, because the reader can move to another article without this
-     component unmounting — and these coordinates are about one article's
+  /* **Whose answer this is.** These coordinates are about one article's
      paragraphs, so drawing the previous one's would be a picture confidently
-     about the wrong text. `useSimilar` learnt this first; it is the same trap. */
+     about the wrong text.
+
+     **As the app is wired today this can never be false** — `App.tsx` keys the
+     article components on the slug, so a slug change remounts this hook rather
+     than handing it a new slug. The comment here used to claim the opposite.
+     `useSimilar` carries the same guard and the same correction; read the
+     longer version there for why both are kept. */
   const mine = state.slug === slug;
 
   useEffect(() => {

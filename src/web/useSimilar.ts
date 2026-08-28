@@ -34,7 +34,7 @@ import { useEffect, useState } from "react";
 import type { SimilarPair, SimilarResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
-export type SimilarStatus = "idle" | "loading" | "ready" | "error";
+type SimilarStatus = "idle" | "loading" | "ready" | "error";
 
 export interface UseSimilar {
   status: SimilarStatus;
@@ -59,12 +59,23 @@ export function useSimilar(slug: string, enabled: boolean): UseSimilar {
     error: null,
   });
 
-  /* **Whose answer this is.** Held in the state rather than compared inside the
-     effect, because the reader can move to another article without this
-     component unmounting — and an answer is about one article's passages, so
+  /* **Whose answer this is.** The answer is about one article's passages, so
      showing the previous one's dotted lines over the new article would be a
-     picture that is confidently about the wrong text. Returning `idle` for a
-     slug we have not answered for yet is the honest report. */
+     picture confidently about the wrong text. Returning `idle` for a slug we
+     have not answered for yet is the honest report.
+
+     **As the app is wired today this can never be false**, and the comment
+     used to claim the opposite — that the reader can move to another article
+     without this component unmounting. They cannot: `App.tsx` keys both
+     `OwnedArticle` and `VisitorArticle` on the slug ("Keyed on the slug so
+     switching article remounts"), and `DiagramPanel` is inside that subtree,
+     so a slug change destroys this hook rather than handing it a new slug.
+     No test exercises the transition either.
+
+     Kept anyway. It costs one string comparison, it is the invariant written
+     down where the invariant is used, and it is the half that survives if
+     someone ever drops that key — which is exactly the kind of change nobody
+     would think to look here for. */
   const mine = state.slug === slug;
 
   useEffect(() => {

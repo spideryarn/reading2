@@ -30,7 +30,7 @@ import { useJobs } from "./useJobs.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
-export type SummariesStatus = "loading" | "none" | "ready" | "error";
+type SummariesStatus = "loading" | "none" | "ready" | "error";
 
 export interface UseSummaries {
   status: SummariesStatus;

@@ -28,7 +28,7 @@ import { useJobs } from "./useJobs.js";
 import { apiFetch, failure, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
-export type GlossaryStatus = "loading" | "none" | "ready" | "error";
+type GlossaryStatus = "loading" | "none" | "ready" | "error";
 
 /**
  * The glossary read: the list, whether it still describes the article, and the

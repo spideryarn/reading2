@@ -27,7 +27,7 @@ import { useJobs } from "./useJobs.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { useHasProfile } from "./useProfile.js";
 
-export type IdeasStatus = "loading" | "none" | "ready" | "error";
+type IdeasStatus = "loading" | "none" | "ready" | "error";
 
 export interface UseIdeas {
   status: IdeasStatus;

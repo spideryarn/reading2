@@ -50,7 +50,7 @@ import { useRenderCount } from "./perf.js";
 const DELAY = { open: 150, close: 60 } as const;
 
 /** The strip of the column left uncovered, so the cells' boundaries show. */
-export const GUTTER_PX = 10;
+const GUTTER_PX = 10;
 
 /**
  * The height of the fade at the panel's bottom edge. Anything inside it is
