@@ -23,7 +23,7 @@
  * move the shared thing into a module that imports nothing — src/types.ts,
  * src/ids.ts, src/urls.ts are the existing examples.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -116,21 +116,52 @@ function sourcesUnder(dir: string): string[] {
   return out;
 }
 
-/** The specifiers one file imports — `import` and `export … from` alike. */
-function importsOf(file: string): string[] {
+/** One import, and whether it survives compilation. */
+interface Imported {
+  spec: string;
+  /**
+   * A **whole-statement** type import — `import type { X } from "…"`, or
+   * `export type { X } from "…"`.
+   *
+   * The distinction is exact and it has to be: only this form erases. TypeScript
+   * deletes the entire statement, so no edge reaches the bundler and nothing can
+   * be dragged along. `import { type A, b } from "…"` is a *different thing*
+   * wearing similar clothes — `b` is a value, the module is emitted, and it
+   * drags whatever it drags. A scanner that waved that one through would be
+   * worse than no scanner, because it would read as a check while permitting
+   * the exact import it exists to stop.
+   */
+  typeOnly: boolean;
+}
+
+/** Every import one file makes — `import` and `export … from` alike. */
+function scan(file: string): Imported[] {
   const text = readFileSync(file, "utf8");
-  const found: string[] = [];
-  for (const m of text.matchAll(/(?:^|\n)\s*(?:import|export)[^;'"]*from\s*["']([^"']+)["']/g)) {
-    if (m[1]) found.push(m[1]);
+  const found: Imported[] = [];
+  /* The middle capture is everything between the keyword and `from`, which is
+     what decides `typeOnly`: ` type { X } ` says yes, ` { type A, b } ` says
+     no. `\s` after `type` and not `\b`, so a default import named `types`
+     stays a value import. */
+  for (const m of text.matchAll(
+    /(?:^|\n)\s*(?:import|export)([^;'"]*)from\s*["']([^"']+)["']/g,
+  )) {
+    if (m[2]) found.push({ spec: m[2], typeOnly: /^\s*type\s/.test(m[1] ?? "") });
   }
-  // `import "./side-effect.css"` and dynamic `import("…")` too.
+  /* `import "./side-effect.css"` and dynamic `import("…")` too. Neither form has
+     a type-only spelling: a side-effect import exists *for* the side effect,
+     and a dynamic import is a runtime call. */
   for (const m of text.matchAll(/(?:^|\n)\s*import\s*["']([^"']+)["']/g)) {
-    if (m[1]) found.push(m[1]);
+    if (m[1]) found.push({ spec: m[1], typeOnly: false });
   }
   for (const m of text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)) {
-    if (m[1]) found.push(m[1]);
+    if (m[1]) found.push({ spec: m[1], typeOnly: false });
   }
   return found;
+}
+
+/** Just the specifiers, for the rule that does not care how they were written. */
+function importsOf(file: string): string[] {
+  return scan(file).map((i) => i.spec);
 }
 
 describe("the client's imports", () => {
@@ -176,19 +207,86 @@ describe("the client's imports", () => {
    * `import type` from dompurify, which erases at compile time and is a package
    * the client bundles anyway. Flagging that would push somebody to duplicate a
    * type rather than share it, which is worse than the thing being prevented.
+   *
+   * ## And a type-only import of a local module is the same case
+   *
+   * That argument never depended on dompurify being a *package*. The rule
+   * underneath is that **a shared module reaching further into `src/` can drag
+   * anything with it** — and a whole-statement `import type` cannot drag
+   * anything, because TypeScript deletes it before a bundler ever sees it.
+   *
+   * The case that forced this, 2026-08-28: `src/messages.ts` takes
+   * `import type { EmbeddingReason } from "./embeddings.js"`, and the comment
+   * at `PLACING` in that file explains that the type-only spelling is
+   * *load-bearing* — `embeddings.ts` reaches back to `messages.ts` through
+   * `ai-call.ts`, so a value import there would close a cycle. A guard that
+   * flagged it would have been pushing somebody to duplicate a union rather
+   * than share it: exactly the outcome the dompurify paragraph above rejects.
+   *
+   * **`node:` is deliberately still absolute**, type import or not. A `node:`
+   * type in a module the browser loads erases just as cleanly, but it is a
+   * sentence about the shape of this code that is worth somebody stopping over,
+   * and the cost of being strict there is one conversation rather than a
+   * duplicated type.
+   *
+   * The precision this rests on is in `Imported.typeOnly`, and it is the whole
+   * of the risk: `import { type A, b }` still emits the module, and waving that
+   * through would leave a check that reads as a check while permitting the one
+   * import it exists to stop.
    */
   it("keeps the shared modules free of node built-ins", () => {
     const impure: string[] = [];
     for (const name of SHARED) {
       const file = path.join(ROOT, "src", name.replace(/\.js$/, ".ts"));
-      for (const spec of importsOf(file)) {
+      for (const { spec, typeOnly } of scan(file)) {
         if (spec.startsWith("node:")) impure.push(`src/${name} → ${spec}`);
-        // A shared module reaching further into src/ can drag anything with it.
-        if (spec.startsWith("./") && !SHARED.has(spec.slice(2))) {
+        // A shared module reaching further into src/ can drag anything with it
+        // — unless the statement erases, in which case there is no edge at all.
+        if (spec.startsWith("./") && !SHARED.has(spec.slice(2)) && !typeOnly) {
           impure.push(`src/${name} → ${spec}`);
         }
       }
     }
     expect(impure).toEqual([]);
+  });
+
+  /**
+   * **The scanner can tell the two spellings apart**, which is the assumption
+   * the rule above rests on and the one place it could go quietly wrong.
+   *
+   * Asserted against fixture text rather than against a real file, because the
+   * property is about the parse and not about any module's current contents —
+   * and because the dangerous form (`import { type A, b }`) is one nobody
+   * happens to have written in a shared module today, so a check that only read
+   * the repo would pass without ever exercising it.
+   */
+  it("counts only a whole-statement type import as erased", () => {
+    const fixture = path.join(ROOT, "node_modules", ".import-scan-fixture.ts");
+    writeFileSync(
+      fixture,
+      [
+        'import type { A } from "./a.js";',
+        'export type { B } from "./b.js";',
+        'import type C from "./c.js";',
+        // Mixed: `d` is a value, so the module is emitted and this must be flagged.
+        'import { type D, d } from "./d.js";',
+        'import { e } from "./e.js";',
+        // A default import that merely starts with the letters "type".
+        'import types from "./f.js";',
+        'import "./g.js";',
+      ].join("\n"),
+    );
+    try {
+      const byName = new Map(scan(fixture).map((i) => [i.spec, i.typeOnly]));
+      expect(byName.get("./a.js")).toBe(true);
+      expect(byName.get("./b.js")).toBe(true);
+      expect(byName.get("./c.js")).toBe(true);
+      expect(byName.get("./d.js")).toBe(false);
+      expect(byName.get("./e.js")).toBe(false);
+      expect(byName.get("./f.js")).toBe(false);
+      expect(byName.get("./g.js")).toBe(false);
+    } finally {
+      rmSync(fixture, { force: true });
+    }
   });
 });

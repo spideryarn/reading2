@@ -123,3 +123,46 @@ describe("reading a public endpoint", () => {
     expect(calls[0]?.url).toBe("/api/public/metadata/a%20b%2Fc");
   });
 });
+
+/**
+ * **The path is a seam, so it is tested from both ends of it.**
+ *
+ * The assertions above pin what the client *sends*; on their own they would go
+ * on passing after a server-side rename, and the only thing left wrong would be
+ * the real client. `PUBLIC_ROUTES` is the server's own inventory — the
+ * dispatcher walks it and the method and spend sweeps drive off it — so asking
+ * the client to agree with *that* is what makes a unilateral rename on either
+ * side a red test rather than a 404 in a stranger's browser.
+ *
+ * Added after the server half grew the inventory, 2026-08-28, on the team
+ * lead's steer. Before it there were two literal spellings of each path and no
+ * line anywhere that said they had to match.
+ *
+ * **One direction only, deliberately.** Every route the client asks for must be
+ * in the inventory; the reverse is not asserted, because slice 1b lands public
+ * glossary, summaries, ideas and tweets on the server before the client has
+ * loaders for them, and a test that went red for the whole of that would be
+ * turned off rather than read.
+ */
+describe("the client and the server agree about the paths", () => {
+  it("asks only for routes the server's own inventory names", async () => {
+    /* Imported here rather than at the top: it pulls in the public reader and
+       the store, which the tests above have no business loading. */
+    const { PUBLIC_ROUTES } = await import("../src/public/routes.js");
+    const spelled = new Set(PUBLIC_ROUTES.map((r) => r.path("a-piece")));
+    /* The inventory does not encode — `path()` is the *spelling*, and encoding
+       is the client's own job, which the test above covers. A plain slug is the
+       same either way, which is why this one uses one. */
+    expect(spelled.size).toBe(PUBLIC_ROUTES.length); // no two routes spell alike
+
+    next = () => new Response(JSON.stringify(ARTICLE), { status: 200 });
+    calls.length = 0;
+    await loadPublicArticle("a-piece");
+    await loadPublicMetadata("a-piece");
+
+    expect(calls).toHaveLength(2);
+    for (const call of calls) expect(spelled).toContain(call.url);
+    // And the two loaders do not both ask for the same thing.
+    expect(new Set(calls.map((c) => c.url)).size).toBe(2);
+  });
+});
