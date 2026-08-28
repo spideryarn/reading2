@@ -189,7 +189,9 @@ Four defences, each cheap, and none of them optional once you have seen the othe
 - **Read the failure message and check it names what you meant to break.** Nothing else separates a
   real red from a syntax error, and it costs one line of output.
 
-And treat an unexpectedly green control as broken until you have seen it red once. All of the above
+And treat a control that passes as broken until you have seen **the specific failure string it
+should have produced** — not merely a red run. *"It passed"* and *"it never ran"* are the same
+observation, and only the message tells you which you are looking at. All of the above
 was collected in spideryarn on one afternoon, 2026-08-28; the tell for the first was four controls
 passing at once, which is not a thing that happens.
 
