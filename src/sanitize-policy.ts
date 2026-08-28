@@ -274,8 +274,25 @@ const FUNCTIONAL_IRI = /url\(\s*['"]?([^'")]+)['"]?\s*\)/gi;
  *
  * In a browser this is exact: `location.origin` is the page the article is
  * being rendered into, which is the only origin that matters. On the server —
- * where stage 3 runs — there is no such thing, so it takes a configured list
- * and falls back to the local dev origins.
+ * where stage 3 runs — there is no such thing, so it takes the host the
+ * deployment knows itself by, plus a configured list, and falls back to the
+ * local dev origins.
+ *
+ * **`VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_URL` were added on 2026-08-28,
+ * and until then the server half of this did nothing in production.**
+ * `SPIDERYARN_ORIGINS` was the only way to name the real host and has never
+ * been set — not in `.env.example`, not in deployment.md, not on Vercel — so
+ * `ownOrigins()` returned two localhost entries and stage 3 could not recognise
+ * `https://spideryarn-…vercel.app/api/library` as ours. The browser pass still
+ * caught it, which is precisely the failure this file's header warns about: two
+ * half-policies that read as defence in depth. Vercel sets both variables on
+ * every deployment with no configuration, and src/monitoring.ts:182 already
+ * reads a sibling, so they are known to arrive. They carry a bare host with no
+ * scheme, which is why `https://` goes on here.
+ *
+ * Widening this list can only make the sanitiser **stricter** — `isOwnApi`
+ * returning true removes the attribute — so an origin wrongly counted as ours
+ * costs a stripped link, not a leaked request.
  *
  * **This exists because the first version resolved everything against a
  * placeholder origin**, which made every absolute URL "foreign" — including
@@ -293,8 +310,13 @@ function ownOrigins(): string[] {
     .split(",")
     .map((o: string) => o.trim())
     .filter(Boolean);
+  /* Bare hosts, so they are given the only scheme Vercel serves. A value that
+     already carries one is left alone rather than doubled up. */
+  const deployed = [env?.VERCEL_PROJECT_PRODUCTION_URL, env?.VERCEL_URL]
+    .filter((h): h is string => typeof h === "string" && h.trim() !== "")
+    .map((h: string) => (h.includes("://") ? h.trim() : `https://${h.trim()}`));
   const here = typeof location === "object" && location?.origin ? [location.origin] : [];
-  return [...here, ...configured, "http://localhost:5273", "http://127.0.0.1:5273"];
+  return [...here, ...deployed, ...configured, "http://localhost:5273", "http://127.0.0.1:5273"];
 }
 
 /** A placeholder that no real host can collide with, for resolving relative URLs. */

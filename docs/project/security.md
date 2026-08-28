@@ -888,6 +888,18 @@ over our source can see those; they arrive at runtime. `installArticlePolicy` in
 resolves to our own `/api/`, and `tests/sanitize-own-api.test.ts` pins both halves — that it strips
 those, and that it leaves `/d.png`, `//example.com/api/x` and `/apiary/notes` alone. GPT Sol, 2026-08-26.
 
+**Half of that was inert in production until 2026-08-28.** Deciding whether a URL is ours needs to
+know what "ours" is. In the browser it does — `location.origin`. On the server, where stage 3 cleans
+the artefact before it is stored, `ownOrigins()` had only `SPIDERYARN_ORIGINS`, an environment
+variable that is not in `.env.example`, not in [deployment.md](deployment.md) and has never been set
+on Vercel. So server-side the list was two localhost entries, and
+`https://spideryarn-…vercel.app/api/library` did not look like us. The render-time pass still caught
+it, which is the shape the file's own header warns about — two half-policies that read as defence in
+depth. `ownOrigins()` now also reads `VERCEL_PROJECT_PRODUCTION_URL` and `VERCEL_URL`, which Vercel
+sets on every deployment with no configuration. `SPIDERYARN_ORIGINS` stays as the override for a
+custom domain. Widening that list only ever makes the sanitiser stricter, so getting it wrong costs a
+stripped link rather than a leaked request.
+
 **`/api/health` is the one route outside the gate**, because [`src/vercel.ts`](../../src/vercel.ts)
 answers it before `handleApi` runs — a probe that reports on the deployment has to work when the
 application does not. Until 2026-08-27 that endpoint read the *entire* request body from any

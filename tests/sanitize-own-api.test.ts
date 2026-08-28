@@ -84,6 +84,39 @@ describe("article HTML cannot reach our API", () => {
         else process.env.SPIDERYARN_ORIGINS = before;
       }
     });
+
+    /**
+     * **Nobody has ever set `SPIDERYARN_ORIGINS`.** It is not in `.env.example`,
+     * not in `docs/project/deployment.md` and not on Vercel, so until 2026-08-28
+     * the test above was the only place it had a value and the server pass could
+     * not recognise our production host at all. The browser pass still could —
+     * it uses `location.origin` — which is what made this a half-policy wearing
+     * the shape of defence in depth, and the file's own header warns about
+     * exactly that.
+     *
+     * Vercel sets these two itself on every deployment, and
+     * `src/monitoring.ts:182` already reads a sibling (`VERCEL_ENV`), so they
+     * are known to reach the server. They carry a bare host with no scheme.
+     *
+     * Widening this list can only make the sanitiser **stricter** — `isOwnApi`
+     * returning true removes the attribute — so the failure direction of getting
+     * it wrong is a stripped link, not a leaked one.
+     */
+    for (const name of ["VERCEL_PROJECT_PRODUCTION_URL", "VERCEL_URL"]) {
+      it(`the host Vercel puts in ${name}, which carries no scheme`, () => {
+        const before = process.env[name];
+        process.env[name] = "spideryarn-greg-detre.vercel.app";
+        try {
+          const out = sanitizeHtml(
+            `<p><img src="https://spideryarn-greg-detre.vercel.app/api/health" alt="x"></p>`,
+          );
+          expect(out).not.toContain("/api/health");
+        } finally {
+          if (before === undefined) delete process.env[name];
+          else process.env[name] = before;
+        }
+      });
+    }
   });
 
   /**
