@@ -44,12 +44,18 @@ describe("withServerIds — believing the server about what things are called", 
        question kept a name the server had never heard of — invisible, because
        nothing renders an id, until the edit button posted it and the server
        answered "That message is not in this conversation." */
-    const [after] = withServerIds([turn()], "guess-thread", "guess-a", {
-      threadId: "spya-t7r4wz",
-      title: "why is it like that?",
-      messageId: "spya-aaaaaa",
-      questionId: "spya-uuuuuu",
-    });
+    const [after] = withServerIds(
+      [turn()],
+      "guess-thread",
+      "guess-a",
+      {
+        threadId: "spya-t7r4wz",
+        title: "why is it like that?",
+        messageId: "spya-aaaaaa",
+        questionId: "spya-uuuuuu",
+      },
+      true,
+    );
     expect(after?.messages.map((m) => m.id)).toEqual(["spya-uuuuuu", "spya-aaaaaa"]);
     expect(after?.id).toBe("spya-t7r4wz");
     // The server cuts the title on a word boundary; the optimistic one is a
@@ -66,12 +72,18 @@ describe("withServerIds — believing the server about what things are called", 
       msg({ id: "guess-u", text: "second" }),
       msg({ id: "guess-a", role: "assistant", text: "", status: "pending" }),
     ]);
-    const [after] = withServerIds([before], "guess-thread", "guess-a", {
-      threadId: "guess-thread",
-      title: "a title the server minted",
-      messageId: "spya-aaaaaa",
-      questionId: "spya-uuuuuu",
-    });
+    const [after] = withServerIds(
+      [before],
+      "guess-thread",
+      "guess-a",
+      {
+        threadId: "guess-thread",
+        title: "a title the server minted",
+        messageId: "spya-aaaaaa",
+        questionId: "spya-uuuuuu",
+      },
+      false,
+    );
     expect(after?.messages.map((m) => m.id)).toEqual([
       "spya-111111",
       "spya-222222",
@@ -85,24 +97,55 @@ describe("withServerIds — believing the server about what things are called", 
   it("leaves every other conversation alone", () => {
     const other = optimistic([msg({ id: "spya-999999" })]);
     other.id = "spya-other0";
-    const [untouched] = withServerIds([other, turn()], "guess-thread", "guess-a", {
-      threadId: "spya-t7r4wz",
-      title: "t",
-      messageId: "spya-aaaaaa",
-      questionId: "spya-uuuuuu",
-    });
+    const [untouched] = withServerIds(
+      [other, turn()],
+      "guess-thread",
+      "guess-a",
+      { threadId: "spya-t7r4wz", title: "t", messageId: "spya-aaaaaa", questionId: "spya-uuuuuu" },
+      true,
+    );
     expect(untouched).toBe(other);
   });
 
   it("changes nothing but the answer when the server sends no question id", () => {
     // An older server, or a frame from before this field existed. The answer's
     // id still has to be followed — the stop button is the only name for it.
-    const [after] = withServerIds([turn()], "guess-thread", "guess-a", {
-      threadId: "guess-thread",
-      title: "t",
-      messageId: "spya-aaaaaa",
-    });
+    const [after] = withServerIds(
+      [turn()],
+      "guess-thread",
+      "guess-a",
+      { threadId: "guess-thread", title: "t", messageId: "spya-aaaaaa" },
+      true,
+    );
     expect(after?.messages.map((m) => m.id)).toEqual(["guess-u", "spya-aaaaaa"]);
+  });
+
+  /**
+   * **`namesThread` is asked rather than guessed, and this is the case that
+   * made the guess wrong.**
+   *
+   * It used to be read off the list as "this thread has two messages or fewer",
+   * which says "the first turn" for the case it was written for. The *second*
+   * send into a one-turn conversation reads the same when the optimistic rows
+   * are not in the list the check is applied to — and the title the `begin`
+   * frame carries is then the server's stored one, which lands over a rename
+   * the reader made a moment earlier. Only the turn that creates a conversation
+   * names it, and only the turn knows whether it did.
+   */
+  it("leaves the title alone for a turn that did not name the conversation", () => {
+    const before = optimistic([
+      msg({ id: "spya-111111", text: "first" }),
+      msg({ id: "spya-222222", role: "assistant", text: "answer" }),
+    ]);
+    before.title = "Renamed from the list";
+    const [after] = withServerIds(
+      [before],
+      "guess-thread",
+      "guess-a",
+      { threadId: "guess-thread", title: "the title the server has stored", messageId: "srv-a" },
+      false,
+    );
+    expect(after?.title).toBe("Renamed from the list");
   });
 });
 

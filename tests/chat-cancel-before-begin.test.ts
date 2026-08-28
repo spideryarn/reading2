@@ -2,39 +2,38 @@
 /**
  * **What the reader is left with when a cancel lands before the row is named.**
  *
- * `tests/chat-intent-paths.test.ts` pins the *requests* in this window: one
- * `/cancel` goes out carrying an id the client invented, and no second one ever
- * follows, because the correction in `nameRow` reads `cancelWanted` after
- * `pendingId` has been reassigned to the server's id and so looks up an id
- * `cancelAndDiscard` never added. That branch is dead.
+ * The window is real and it is common — the `begin` frame is emitted
+ * immediately after the server writes the conversation, so "no frame yet"
+ * mostly means "not written yet". What used to happen in it was written up in
+ * docs/postmortems/cancel-before-begin.md: one `/cancel` went out at once,
+ * naming a row this client had invented, and `cancelChat` had two answers for
+ * it and both were wrong for the reader.
  *
- * This file asks the next question, which nothing answered: **the doomed
- * request is answered by a real route — so what does the reader see?** Both
- * answers below are read off `cancelChat` in src/routes.ts rather than guessed,
- * and which one the reader gets depends on whether `beginTurn` has written the
- * conversation yet at the moment the button is pressed. Both are reachable and
- * they are not the same failure:
+ * - **The conversation is not on disk yet → `200 { cancelled: true }`**, from
+ *   the deliberate `if (!thread)` branch. The client was told it worked.
+ *   Nothing aborted, `beginTurn` wrote the conversation a moment later, the
+ *   answer ran to completion, and the reader was told they had discarded
+ *   something that is still there. The quiet one, and the common one.
+ * - **On disk, frame still in flight → `409` on the tail id.**
+ *   `askToCancel`'s catch reads any refusal as "the premise was wrong": the
+ *   tombstone came off, the conversation came back with an error under it, and
+ *   the frames started landing in it again. The reader watched the answer they
+ *   cancelled carry on typing.
  *
- * - **The server has not written it yet** — `cancelChat` cannot find the thread
- *   and returns `{ cancelled: true }` with a 200, deliberately: "a second tab,
- *   a double-press, or a reader who cancelled and reloaded". The client is told
- *   it worked. Nothing aborts the stream, `beginTurn` writes the conversation a
- *   moment later, and it is on disk with a finished answer in it. **The reader
- *   is told they discarded something that is still there.** This is the common
- *   case, because the `begin` frame is emitted immediately after that write, so
- *   "no frame yet" mostly means "not written yet".
- * - **The server has written it** but the frame has not arrived — the tail is
- *   the server's answer id and the client sent its own, so `tail?.id !==
- *   messageId` and the route throws **409, "That is not the answer at the end
- *   of this conversation"**. `askToCancel`'s catch treats a refusal as "the
- *   premise was wrong": it removes the tombstone, the conversation comes back
- *   on screen with its answer still streaming into it, and an error appears
- *   under it. The reader watches the thing they cancelled carry on typing.
+ * **Stage 2 closes the window rather than picking between those two answers**,
+ * and that is why this file changed on 2026-08-28. The two rules, from
+ * docs/plans/chat-operation-model.md: send **once**, when there is an id the
+ * server can match; and never read "the server could not match that id" as a
+ * refusal *or* as a success, because case one comes back `200`. Both are
+ * satisfied by the same move — the turn is an operation now, so the client can
+ * ask whether the row has a server name yet, and there is no request to
+ * misread until it does.
  *
- * Neither is corrected afterwards, because the branch that would re-send is
- * dead. Written to answer team-lead's question before proposing a fix,
- * 2026-08-28. **These pin what the code does today**; the note above each says
- * whether that is defensible.
+ * So the two tests below are the same two server answers, asked of the fixed
+ * client. The first is now unreachable from this window at all — that is the
+ * assertion — and the second has become an honest refusal that means what it
+ * says. Neither file was edited to make the stage pass: the old assertions are
+ * quoted in each note, and what they described is a bug this stage fixes.
  *
  * Same harness as tests/chat-intent-paths.test.ts.
  */
@@ -175,15 +174,25 @@ afterEach(async () => {
   container.remove();
 });
 
-describe("a cancel the server cannot match, because the row has no name yet", () => {
+describe("a cancel pressed before the row has a name the server would know", () => {
   /**
-   * The common case, and the worse one: the reader is told it worked.
+   * **The `200 { cancelled: true }` case is now out of reach**, and that is the
+   * whole of the fix for it.
    *
-   * Nothing on screen is wrong, which is exactly the problem — the conversation
-   * the server goes on to write is never asked about again, and the only way
-   * the reader finds out is the next time they load the article.
+   * It used to be the common one and the worse one: the request went out while
+   * the conversation was still unwritten, `cancelChat` could not find the thread
+   * and said "already gone", nothing was aborted, and the answer ran to
+   * completion into a conversation the reader believed they had discarded. The
+   * old assertions here were `expect(posts).toHaveLength(1)` with the
+   * provisional id in it, and `expect(api().error).toBeNull()` — a clean-looking
+   * cancel over a conversation that is still there.
+   *
+   * Now nothing is sent until the `begin` frame, and the `begin` frame is the
+   * server saying it has written the conversation. So the request that does go
+   * out cannot reach the `!thread` branch by way of this window: it names a
+   * thread and a row the server minted a moment earlier.
    */
-  it("is answered `cancelled: true` for a conversation the server has not written yet", async () => {
+  it("sends nothing while the server could only answer `already gone`", async () => {
     const turn = controllableStream();
     answer = (url, init) => {
       const method = init?.method ?? "GET";
@@ -200,12 +209,18 @@ describe("a cancel the server cannot match, because the row has no name yet", ()
     };
     const { threadId, provisional } = await sendAndCancel();
 
-    // On screen it looks like a clean cancel, and it says nothing went wrong.
+    /* The reader's half is unchanged and is not what was ever wrong: the
+       conversation leaves the screen the instant they press the button, by
+       tombstone, and nothing claims a failure. */
     expect(threadIn(threadId)).toBeUndefined();
     expect(api().error).toBeNull();
+    /* **And the server has not been asked anything it could only answer
+       wrongly.** This is the assertion that changed. */
+    expect(posts, "a cancel went out that the server could only mis-answer").toHaveLength(0);
 
     /* And now the server names the row — which is the moment it has finished
-       writing the conversation the reader believes they discarded. */
+       writing the conversation, and therefore the first moment there is
+       anything real to cancel. */
     act(() => {
       turn.frame("begin", {
         threadId,
@@ -217,29 +232,36 @@ describe("a cancel the server cannot match, because the row has no name yet", ()
     });
     await settle();
 
-    /* **Nothing ever asks the server to remove what it actually wrote.** One
-       request went out, naming a row the server had never heard of; the
-       correction in `nameRow` is dead. `cancelChat` treats a thread it cannot
-       find as already gone, so that request deleted nothing and aborted
-       nothing — the answer runs to completion and the conversation is on disk.
-       The reader sees it again on the next load. */
+    /* Exactly one request, naming what the server named. `alreadyGone()` still
+       answers it here — this stub cannot tell the two ids apart — and that no
+       longer matters: a `200 { cancelled: true }` for a row the server minted
+       means the conversation really is gone, which is the case the route's
+       comment is about. The reader's screen and the server now agree. */
     expect(posts).toHaveLength(1);
-    expect(posts[0]?.body.messageId).toBe(provisional);
-    expect(posts.some((p) => p.body.messageId === "srv-answer-1")).toBe(false);
-    // Still gone from this screen, and still no word of any of it.
+    expect(posts[0]?.body.messageId).toBe("srv-answer-1");
+    expect(posts[0]?.body.attempt).toBe("att-1");
+    expect(posts.some((p) => p.body.messageId === provisional)).toBe(false);
     expect(threadIn(threadId)).toBeUndefined();
     expect(api().error).toBeNull();
   });
 
   /**
-   * The narrower case, and the one the team lead asked about: written already,
-   * frame not yet here, so the route refuses on the tail id.
+   * **The 409 case, which is now an honest refusal.**
    *
-   * Here the reader is told something, and what they are told is wrong in the
-   * other direction — the cancel *is* refused, so the conversation comes back,
-   * with an error under it and an answer still arriving into it.
+   * It used to fire on a premise that was never wrong: the client named its own
+   * invented id, the route compared it to the tail and refused, and
+   * `askToCancel` read that as "another tab moved this on" — so the tombstone
+   * came off, the conversation came back with an error under it, and the
+   * frames started landing in it again. The reader watched the answer they
+   * cancelled carry on typing.
+   *
+   * The request now names the tail the server itself named a moment earlier, so
+   * a 409 means what the route says it means: somebody else really has moved
+   * this conversation on. Putting it back is then the right answer rather than
+   * an accident, and the assertions below are the same ones — what changed is
+   * that they are now describing the intended behaviour rather than a bug.
    */
-  it("brings the conversation back with an error under it when the server refuses on the tail", async () => {
+  it("brings the conversation back when the server refuses a cancel it could match", async () => {
     const turn = controllableStream();
     answer = (url, init) => {
       const method = init?.method ?? "GET";
@@ -256,15 +278,15 @@ describe("a cancel the server cannot match, because the row has no name yet", ()
     };
     const { threadId } = await sendAndCancel();
 
-    /* The conversation the reader cancelled is back, because `askToCancel`
-       reads a refusal as "the premise was wrong" — which is right when the
-       server refused a *real* cancel, and wrong here, where the request never
-       named anything the server could act on. */
-    expect(threadIn(threadId), "the cancelled conversation did not come back").toBeDefined();
-    expect(api().error).toMatch(/Couldn't discard that conversation/);
+    /* Nothing has been asked yet, so nothing has been refused: the conversation
+       is off the screen and there is no error under it. */
+    expect(posts).toHaveLength(0);
+    expect(threadIn(threadId)).toBeUndefined();
+    expect(api().error).toBeNull();
 
-    /* And the answer carries on arriving into it: the stream was never
-       stopped, and the row is no longer tombstoned, so frames land. */
+    /* The frame arrives — the wish fires, naming the server's row and tail —
+       and the server refuses anyway, which now means one thing: somebody else
+       moved this conversation on. */
     act(() => {
       turn.frame("begin", {
         threadId,
@@ -273,12 +295,26 @@ describe("a cancel the server cannot match, because the row has no name yet", ()
         questionId: "srv-question-1",
         attempt: "att-1",
       });
+    });
+    await settle();
+
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.body.messageId).toBe("srv-answer-1");
+    expect(posts[0]?.body.expectedTailId).toBe("srv-answer-1");
+    /* So it is put back, with a line saying why — the reader must not be left
+       believing they discarded a conversation that is still there. */
+    expect(threadIn(threadId), "the refused cancel did not put it back").toBeDefined();
+    expect(api().error).toMatch(/Couldn't discard that conversation/);
+
+    /* And the answer carries on arriving into it, which is right: the server
+       refused to stop it, so it really is still being written. */
+    act(() => {
       turn.frame("delta", { text: "Because " });
     });
     await settle();
 
     expect(threadIn(threadId)?.messages.at(-1)?.text).toBe("Because ");
-    // And nothing tries again, so this is where the reader is left.
+    // One request, and nothing tries again. This is where the reader is left.
     expect(posts).toHaveLength(1);
   });
 });

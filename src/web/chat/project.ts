@@ -6,19 +6,54 @@
  * `setThreads` call sites it replaces: each of those had its own merge rule and
  * its own idea of who was entitled to write.
  *
- * The payoff is the 409 path, and it lands in stage 2. An edit destroys — it
- * rewrites a question and discards every turn under it — and today that is
- * performed on screen, so a refusal can only be undone by re-fetching the
- * conversation and hoping nothing else was happening in it. As a projection the
- * discard is something the *operation* does, and refusing it is dropping one
- * entry from a map: the discarded turns come back because they never left, and
- * any other conversation with a send running in it re-projects untouched.
+ * The payoff is the 409 path. An edit destroys — it rewrites a question and
+ * discards every turn under it — and that used to be performed on screen, so a
+ * refusal could only be undone by re-fetching the conversation and hoping
+ * nothing else was happening in it. As a projection the discard is something
+ * the *operation* does, and refusing it is dropping one entry from a map: the
+ * discarded turns come back because they never left, and any other conversation
+ * with a send running in it re-projects untouched.
  *
- * In stage 1 only rename draws anything. The rest are here so that the shape is
- * the plan's and stage 2 fills them in rather than re-deciding.
+ * **What each operation draws is decided by one rule**, and it is worth stating
+ * once here because every branch below is an instance of it: **an operation
+ * projects what can still be withdrawn.** A rename's title is never taken back,
+ * even when the PATCH fails, so it belongs in `base` and is drawn by nothing. A
+ * send's two rows are never taken back either. A retry's blanking and an edit's
+ * discard are taken back the moment the server refuses them, so they are drawn.
  */
-import type { ChatThread } from "../../types.js";
-import type { ChatState, Operation } from "./model.js";
+import type { ChatMessage, ChatThread } from "../../types.js";
+import type { ChatState, Operation, TurnOperation } from "./model.js";
+
+/**
+ * One turn's rows, laid over the messages already there.
+ *
+ * Exported because **the reducer commits a turn by calling this**, with the
+ * operation's final state, over `base`. That is deliberate: what the reader was
+ * looking at and what gets written down are then the same function of the same
+ * data, rather than two pieces of code that have to agree. The two used to be
+ * an optimistic `setThreads` and a `patchReply`, and they disagreed twice.
+ */
+export function turnMessages(messages: ChatMessage[], op: TurnOperation): ChatMessage[] {
+  if (op.shape === "edit") {
+    /* The rewritten question, and everything under it gone. Found by id
+       because the server keeps a rewritten question's id — `withEdit` builds
+       `{ ...target, text, editedAt }` — so this is the same row, not a new one. */
+    const at = messages.findIndex((m) => m.id === op.editing);
+    if (at < 0 || !op.question) return messages;
+    return [...messages.slice(0, at), op.question, op.reply];
+  }
+  /* A send and a retry both replace exactly one row: the send's own empty
+     answer, which went into `base` at registration, and the retry's blanked
+     copy of the answer it is replacing. Rebuilt in place rather than appended,
+     which is what keeps two sends in one conversation in the reader's order
+     however they finish. */
+  const at = messages.findIndex((m) => m.id === op.replyId);
+  if (at < 0) return messages;
+  if (messages[at] === op.reply) return messages;
+  const next = messages.slice();
+  next[at] = op.reply;
+  return next;
+}
 
 /**
  * Lay one operation over the list.
@@ -27,11 +62,23 @@ import type { ChatState, Operation } from "./model.js";
  * re-renders the conversation band and the article is underneath it, so
  * changing one thread must not rebuild every thread and every message. Each
  * branch either hands back the array it was given or rebuilds exactly the one
- * thread it touches, leaving every other thread — and the touched thread's
- * `messages` array — at the same reference.
+ * thread it touches, leaving every other thread — and every message in the
+ * touched thread but the one that moved — at the same reference.
  */
 function draw(threads: readonly ChatThread[], op: Operation): readonly ChatThread[] {
   switch (op.kind) {
+    case "turn": {
+      const at = threads.findIndex((t) => t.id === op.threadId);
+      /* The conversation is not there: deleted, discarded, or belonging to an
+         article this hook has left. Nothing to draw on. */
+      if (at < 0) return threads;
+      const thread = threads[at] as ChatThread;
+      const messages = turnMessages(thread.messages, op);
+      if (messages === thread.messages) return threads;
+      const next = threads.slice();
+      next[at] = { ...thread, updatedAt: op.at, messages };
+      return next;
+    }
     /* **A rename draws nothing**, and that is the rule rather than an
        exception: an operation projects what can still be **withdrawn**. A
        refused edit's discarded turns come back because the operation never
@@ -45,18 +92,21 @@ function draw(threads: readonly ChatThread[], op: Operation): readonly ChatThrea
     case "rename":
     /* The load writes through `base` when it is admitted rather than drawing
        while it is in flight: what it has to say is the server's list, and until
-       it answers it has nothing. */
+       it answers it has nothing. The 409's repair is the same. */
     case "load":
+    case "repair":
     /* A delete draws by its tombstone, which is in the state and is filtered
        out below — deletions have to win over every projection, including ones
        registered after them. */
     case "delete":
-    /* Stage 2's, all three. A turn projects its pending row and the words
-       accumulating in it; a recovery projects the answer it went looking for; a
-       repair projects nothing and commits when it lands. */
-    case "turn":
+    /* A recovery draws nothing either, and it is the third instance of the same
+       rule: the row it is looking for is already `pending` in `base`, put there
+       by the turn that handed it over or by the load that found it, and nothing
+       about it is withdrawn. What the recovery has to say arrives when it finds
+       the answer, and that goes into `base` like every other admitted result.
+       The panel is told the row is being chased through `recovering`, which is
+       derived from this operation existing at all. */
     case "recovery":
-    case "repair":
       return threads;
   }
 }

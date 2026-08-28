@@ -17,7 +17,7 @@
  * which is what lets tests/chat-reduce.test.ts run the whole machine without a
  * DOM.
  */
-import type { ChatThread, ToolRun } from "../../types.js";
+import type { ChatMessage, ChatThread, Citation, ToolRun } from "../../types.js";
 
 /**
  * The name of one asynchronous action, and **branded** so that a thread id, a
@@ -82,22 +82,110 @@ export interface RepairOperation extends Registered {
 }
 
 /**
+ * Who put a tombstone down, and whether anything is allowed to lift it.
+ *
+ * A bare `Set<string>` could not answer either question, and that cost a
+ * conversation: cancel a first answer, delete the conversation while the cancel
+ * is still out, and the cancel's refusal took the *delete's* tombstone off — so
+ * a conversation the reader deleted came back. Deletions are supposed to win
+ * over every projection, and here one lost to an unrelated request failing.
+ *
+ * `final` is the delete's. Nothing lifts it, in either order: a cancel that
+ * arrives afterwards does not overwrite it, and a cancel that arrived first is
+ * overwritten by it.
+ */
+export interface Tombstone {
+  /** The operation, or the request, that laid it. */
+  by: string;
+  /** A deletion. Never lifted. */
+  final: boolean;
+}
+
+/**
  * A send, a retry or an edit, and the stream it is reading.
  *
- * Stage 2 builds this. The fields are the ones `run` and `drainTurn` already
- * keep in local variables: the words and the tool runs accumulate **in the
- * operation** rather than on the row, because a row is state a later frame
- * cannot read back in time.
+ * The words and the tool runs accumulate **in the operation** — on `reply`,
+ * which is the row itself — rather than being read back off the list. That is
+ * where `drainTurn` kept them and it is for the same reason: two deltas in one
+ * tick would each append to the same stale text.
+ *
+ * **The three shapes differ in what they draw, and that is not an accident of
+ * how they were written.** An operation projects what can still be *withdrawn*:
+ *
+ * - a **send** puts its two rows into `base` at registration, exactly as it
+ *   always has, and the operation draws only the answer row's contents. The
+ *   rows are not withdrawn by anything — a refused send is repaired by fetching
+ *   the conversation — and putting them in `base` is what keeps two sends in one
+ *   conversation in the reader's own order however they finish, and what lets
+ *   `mergedArrival` see them;
+ * - a **retry** draws a blanked row over the answer it replaces, so a refusal
+ *   simply puts the old answer back;
+ * - an **edit** draws the rewritten question, the discard of everything under
+ *   it, and the new answer. That is the whole payoff: a refused edit's turns
+ *   come back because they never left.
  */
 export interface TurnOperation extends Registered {
   kind: "turn";
+  /** Which of the three the reader asked for. */
+  shape: "send" | "retry" | "edit";
+  /** The conversation. Replaced by the `begin` frame if the server overrules it. */
   threadId: string;
   /** The assistant row the words land in. Provisional until the `begin` frame. */
   replyId: string;
-  /** Which of the three the reader asked for. They differ only in the payload. */
-  shape: "send" | "retry" | "edit";
-  text: string;
-  tools: readonly ToolRun[];
+  /** That row, as the frames have left it. The accumulator. */
+  reply: ChatMessage;
+  /**
+   * The reader's row.
+   *
+   * Written into `base` at registration for a send; **drawn** for an edit,
+   * which is a rewrite of a stored question and has to be undoable; `null` for
+   * a retry, which re-asks a question already on screen.
+   */
+  question: ChatMessage | null;
+  /** An edit's target: this question and everything under it is replaced. */
+  editing: string | null;
+  /** The conversation this send had to invent. Written to `base` at registration. */
+  opening: ChatThread | null;
+  /**
+   * A title this turn writes straight into `base`.
+   *
+   * An edit of the *first* question renames its conversation — `editTurn` on
+   * the server says so. It goes into `base` rather than being drawn, for the
+   * reason a rename's does: a title is never withdrawn, so the last writer wins
+   * and that writer is the reader's own order. See `rename.started` in
+   * reduce.ts, and tests/chat-title-ownership.test.ts.
+   */
+  title: string | null;
+  /**
+   * Does the `begin` frame's title belong to this conversation?
+   *
+   * True only for the turn that *creates* it. `withServerIds` used to work this
+   * out from "the thread has two messages or fewer", which is the same thing
+   * for the case it was written for and wrong for the second send into a
+   * one-turn conversation: it would put the server's stored title back over a
+   * rename the reader had just made.
+   */
+  namesThread: boolean;
+  /** `updatedAt` for the conversation. Minted outside the reducer. */
+  at: string;
+  /**
+   * Has the server named these rows?
+   *
+   * Until it has, `replyId` is a name this client invented and no amount of
+   * looking on the server will find it — so a stream lost before `begin` cannot
+   * be recovered and goes straight to a failure. It is also what tells a stop or
+   * a cancel whether there is yet an id the server could match.
+   */
+  began: boolean;
+  /**
+   * Which attempt at that row this is, from the `begin` frame.
+   *
+   * A retry reuses the row, so the id names a place rather than an answer. Sent
+   * with a stop so the server can tell "stop the answer I am watching" from
+   * "stop whatever happens to be there when this arrives" — `Live.attempt` in
+   * src/routes.ts. `null` means the server did not say.
+   */
+  attempt: string | null;
 }
 
 /**
@@ -113,6 +201,15 @@ export interface RecoveryOperation extends Registered {
   messageId: string;
   /** When to stop looking, as a timestamp. Minted outside the reducer. */
   until: number;
+  /**
+   * The attempt the lost stream was watching, carried over from the turn.
+   *
+   * So that a stop pressed while "connection lost — checking…" is on screen
+   * still names the answer the reader was watching. This is what the `attempts`
+   * ref used to hold, and holding it here is what lets that ref go: an attempt
+   * is a fact about one writer, and the recovery is the writer that inherited it.
+   */
+  attempt: string | null;
 }
 
 export interface RenameOperation extends Registered {
@@ -166,7 +263,7 @@ export interface ChatState {
    * hook asks whether the conversation is still there. A base updater cannot
    * stand in for it. GPT Sol, 2026-08-28.
    */
-  tombstones: ReadonlySet<string>;
+  tombstones: ReadonlyMap<string, Tombstone>;
   /**
    * Where the one fetch that fills the list got to — **and it outlives that
    * fetch's operation**, which is why it is a field rather than a lookup.
@@ -187,7 +284,7 @@ export function initialState(slug: string): ChatState {
     slug,
     base: [],
     operations: new Map(),
-    tombstones: new Set(),
+    tombstones: new Map(),
     loadPhase: "loading",
     error: null,
     nextSeq: 0,
@@ -207,28 +304,33 @@ export type ChatInput =
   | { type: "load.started"; op: Registering<LoadOperation> }
   | { type: "rename.started"; op: Registering<RenameOperation> }
   | { type: "delete.started"; op: Registering<DeleteOperation> }
+  /**
+   * A send, a retry or an edit. Everything it puts on screen is on the op;
+   * `payload` is what goes in the request body, which nothing draws.
+   */
+  | {
+      type: "turn.started";
+      op: Registering<TurnOperation>;
+      payload: Record<string, unknown>;
+    }
+  /**
+   * A `pending` answer with nobody behind it, being looked for.
+   *
+   * Registered from two places and they must not both take it: the hook's scan
+   * of what is on screen, and `turn.disconnected` below, which hands its own
+   * row over in the same transition it retires in. The reducer refuses a second
+   * recovery for a row that already has one — that is idempotence rather than
+   * the admission gate, which is for results.
+   */
+  | { type: "recovery.started"; op: Registering<RecoveryOperation> }
   /** A new, empty conversation. Local: nothing is stored until you send. */
   | { type: "thread.begun"; thread: ChatThread }
   /** Forgetting one. A no-op on anything with a message in it. */
   | { type: "thread.discarded"; threadId: string }
-  | { type: "tombstone.added"; threadId: string }
-  | { type: "tombstone.removed"; threadId: string }
-  | { type: "error.set"; error: string | null }
-  /**
-   * The escape hatch, and **it exists in stage 1 and no other.**
-   *
-   * `run`, the watcher and the 409 repair still live in the hook and still
-   * carry their own guards, so while there are no turn operations this merely
-   * relocates their writes. The moment turn projection starts it becomes an
-   * opaque write to the base underneath a live operation, and neither an
-   * allowlist nor a slug check makes that safe — a slug cannot tell two loads
-   * of one article apart. Hence the assertion in `reduce`, and hence stage 2
-   * deleting this. GPT Sol, 2026-08-28.
-   */
-  | {
-      type: "legacy.apply";
-      update: (prev: readonly ChatThread[]) => readonly ChatThread[];
-    };
+  /** `by` is who is laying it, and it is what a removal has to match. */
+  | { type: "tombstone.added"; threadId: string; by: string }
+  | { type: "tombstone.removed"; threadId: string; by: string }
+  | { type: "error.set"; error: string | null };
 
 /**
  * The world answering: a response, a failure, a timeout.
@@ -244,7 +346,118 @@ export type ChatResult =
   | { type: "rename.succeeded"; opId: OpId }
   | { type: "rename.failed"; opId: OpId; error: string }
   | { type: "delete.succeeded"; opId: OpId }
-  | { type: "delete.failed"; opId: OpId; error: string };
+  | { type: "delete.failed"; opId: OpId; error: string }
+  /**
+   * The server's names for this turn's three rows — thread, question and
+   * answer — **swapped in one transition**.
+   *
+   * Two of the three shipped once and surfaced weeks later as "That message is
+   * not in this conversation.", so this is deliberately one event and not
+   * three: there is no state in which some of the ids are the server's.
+   */
+  | { type: "turn.began"; opId: OpId; begun: Begun }
+  /** One chunk of the answer. Appended to the operation, not read off the row. */
+  | { type: "turn.delta"; opId: OpId; text: string }
+  /** A tool starting, or the same tool finishing — assigned by index. */
+  | { type: "turn.tool"; opId: OpId; index: number; run: ToolRun }
+  /** The `done` frame: the finished answer, and everything it came with. */
+  | { type: "turn.done"; opId: OpId; done: TurnDone }
+  /**
+   * The turn is over and there is nothing to recover.
+   *
+   * The `error` frame inside a 200, a request that never opened, a non-2xx that
+   * is not a 409. `text` is the partial answer where the server sent one back;
+   * what arrived is kept, because the reader watched it appear.
+   */
+  | { type: "turn.failed"; opId: OpId; error: string; text?: string }
+  /**
+   * The stream stopped without ending, or ended without saying how.
+   *
+   * The server does not stop working when a reader's connection dies, so the
+   * answer is usually already on disk. **The turn hands the row to the recovery
+   * in one transition** — it commits what it has, retires, and registers the
+   * operation that goes looking. Split across two, the live turn would go on
+   * projecting its pending row over the answer when it arrived, so the answer
+   * would land and be invisible. GPT Sol's second blocker, 2026-08-28.
+   *
+   * Unless the server never named the row, in which case there is nothing to
+   * look for and `error` is what the reader is told. The reducer decides that,
+   * because `began` is a fact about the operation.
+   */
+  | {
+      type: "turn.disconnected";
+      opId: OpId;
+      error: string;
+      /**
+       * The id and the deadline for the operation that takes the row over. The
+       * rest of it — which conversation, which row, which attempt — is a fact
+       * about the turn, so the reducer fills it in rather than the caller
+       * repeating it and getting one of them wrong.
+       */
+      recovery: { id: OpId; until: number };
+    }
+  /**
+   * A 409: the server refused a turn this client had already performed.
+   *
+   * **Dropping the turn and registering the repair is one transition**, because
+   * they are one decision — this conversation on screen is wrong, drop what made
+   * it wrong and go and ask. Split across two there is a moment where neither is
+   * true, and the repair's answer arrives with nothing to admit it.
+   */
+  | {
+      type: "turn.refused";
+      opId: OpId;
+      error: string;
+      /** Only the id: which conversation to repair is the turn's own. */
+      repair: { id: OpId };
+    }
+  /** The server's copy of one conversation. `null` means it does not have it. */
+  | { type: "repair.succeeded"; opId: OpId; thread: ChatThread | null }
+  | { type: "repair.failed"; opId: OpId; error: string }
+  /** The answer, found on the server, once it had stopped moving. */
+  | { type: "recovery.found"; opId: OpId; message: ChatMessage }
+  /** The window closed and the answer never settled. */
+  | { type: "recovery.givenUp"; opId: OpId; error: string }
+  /** Nobody is looking any more, and there is nothing to say about it. */
+  | { type: "recovery.stopped"; opId: OpId };
+
+/** What the `done` frame carries — the finished answer, and its receipts. */
+export interface TurnDone {
+  text: string;
+  citations?: Citation[];
+  searches?: number;
+  tools?: ToolRun[];
+  truncated?: boolean;
+  model?: string;
+  stopped?: boolean;
+}
+
+/**
+ * What the `begin` frame carries: the ids the server actually minted.
+ *
+ * The client guesses all of them — a thread id so `?thread=` can be in the URL
+ * before anything is sent, and two message ids so the reader's words and the
+ * empty answer beneath them can be on screen the instant Enter is pressed. Then
+ * the server writes the turn to disk under ids of its own, and every guess that
+ * is still on screen is a name for a row that does not exist anywhere else.
+ */
+export interface Begun {
+  threadId: string;
+  title: string;
+  /** The assistant row the answer streams into. */
+  messageId: string;
+  /** The question above it. Absent from older servers; see `withServerIds`. */
+  questionId?: string;
+  /**
+   * Which attempt at that row this is.
+   *
+   * A retry writes into the same row, so the id alone does not say *which*
+   * answer a stop was pressed on. Sent back with the stop so the server can
+   * refuse one aimed at an answer that has already finished — see `Live.attempt`
+   * in src/routes.ts.
+   */
+  attempt?: string;
+}
 
 /**
  * A result without an `opId` must not compile, and this is what says so.
@@ -274,7 +487,49 @@ export function isResult(event: ChatEvent): event is ChatResult {
 export type ChatCommand =
   | { type: "load"; opId: OpId; slug: string }
   | { type: "rename"; opId: OpId; slug: string; threadId: string; title: string }
-  | { type: "delete"; opId: OpId; slug: string; threadId: string };
+  | { type: "delete"; opId: OpId; slug: string; threadId: string }
+  /** Open the POST, and read the stream until it ends one of its five ways. */
+  | {
+      type: "turn";
+      opId: OpId;
+      slug: string;
+      /** The id in the request body. The server may answer with another. */
+      threadId: string;
+      payload: Record<string, unknown>;
+    }
+  /** Ask about one conversation, because the screen is wrong about it. */
+  | { type: "repair"; opId: OpId; slug: string; threadId: string }
+  /** Go and find out whether an answer nobody is streaming ever finished. */
+  | {
+      type: "recover";
+      opId: OpId;
+      slug: string;
+      threadId: string;
+      messageId: string;
+      /** When to stop looking, as a timestamp. */
+      until: number;
+    }
+  /**
+   * The server has named a turn's rows, and something outside the state wants
+   * to know.
+   *
+   * Two things do, and both have to happen at exactly this instant: the panel's
+   * `?thread=` when the server overruled the thread id, and a stop or a cancel
+   * the reader pressed before there was an id the server could match. A command
+   * rather than a callback on the operation, so that the reducer stays a pure
+   * function of data.
+   */
+  | {
+      type: "named";
+      opId: OpId;
+      /** What the row was called when the reader was looking at it. */
+      wasThreadId: string;
+      wasReplyId: string;
+      /** And what the server calls it. */
+      threadId: string;
+      replyId: string;
+      attempt: string | null;
+    };
 
 /** Either this article's conversations, or why they are not here. */
 export type ThreadsOutcome =
@@ -355,11 +610,90 @@ export function withoutEmpty(threads: readonly ChatThread[], id: string): ChatTh
 export function mergedArrival(
   prev: readonly ChatThread[],
   fresh: readonly ChatThread[],
-  deleted: ReadonlySet<string>,
+  deleted: { has(id: string): boolean },
 ): ChatThread[] {
   const ours = new Set(prev.map((t) => t.id));
   /* Appended rather than merged into place, because nothing downstream reads
      this order: ThreadList sorts by `updatedAt`, and the panel finds the open
      conversation by id. */
   return [...prev, ...fresh.filter((t) => !ours.has(t.id) && !deleted.has(t.id))];
+}
+
+/**
+ * Replace this turn's provisional ids with the server's, in `base`.
+ *
+ * Pure, and exported, for the reason `withRetry` and `withEdit` are in
+ * src/chat.ts: it is a rule about ids that nothing renders, so a mistake in it
+ * is invisible until something else needs one of those ids for real. That is
+ * exactly how the question id came to be missed — the assistant row was swapped
+ * from the first version and the user row was not, nothing on screen changed,
+ * and it surfaced weeks later as "That message is not in this conversation."
+ * the first time a reader edited a question without reloading first.
+ *
+ * The question is found by position rather than by id, because its id is the
+ * one thing here that is not trustworthy: it is the row immediately above the
+ * pending answer, which is what a turn *is*.
+ *
+ * **`namesThread` is an argument rather than a guess**, and that is a fix. It
+ * used to be read off the list as `t.messages.length <= 2`, which says "this is
+ * the first turn" for the case it was written for and something else entirely
+ * for the *second* send into a one-turn conversation: the server's stored title
+ * would land over a rename the reader had made a moment earlier. Only the turn
+ * that creates a conversation names it, and only the turn knows that.
+ */
+export function withServerIds(
+  threads: readonly ChatThread[],
+  current: string,
+  pendingId: string,
+  begun: Begun,
+  namesThread: boolean,
+): ChatThread[] {
+  return threads.map((t) =>
+    t.id !== current
+      ? t
+      : {
+          ...t,
+          id: begun.threadId,
+          // The title is cut on a word boundary on the server; the optimistic
+          // one is a blunt 60-character slice that would otherwise stay on
+          // screen until the next reload.
+          title: namesThread ? begun.title : t.title,
+          messages: t.messages.map((m, i) => {
+            if (m.id === pendingId) return { ...m, id: begun.messageId };
+            if (begun.questionId && m.role === "user" && t.messages[i + 1]?.id === pendingId) {
+              return { ...m, id: begun.questionId };
+            }
+            return m;
+          }),
+        },
+  );
+}
+
+/**
+ * Is somebody in this tab writing that answer row?
+ *
+ * The one question the recovery scan has to answer, and it cannot be answered
+ * from the row: `pending` on screen means "somebody is answering this" and says
+ * nothing about whether that somebody is still here. A stream in another tab, a
+ * stream in a hook that has since unmounted, and this hook's own live stream
+ * all look identical.
+ *
+ * This is what the `owned` map and the `watched` map both used to answer, from
+ * two vocabularies. There is one now, and it is the same map the gate reads.
+ */
+export function writerOf(state: ChatState, messageId: string): Operation | undefined {
+  for (const op of state.operations.values()) {
+    if (op.kind === "turn" && op.replyId === messageId) return op;
+    if (op.kind === "recovery" && op.messageId === messageId) return op;
+  }
+  return undefined;
+}
+
+/** Answers this tab has lost the stream of and is asking the server about. */
+export function recoveringIds(state: ChatState): Set<string> {
+  const ids = new Set<string>();
+  for (const op of state.operations.values()) {
+    if (op.kind === "recovery" && !op.superseded) ids.add(op.messageId);
+  }
+  return ids;
 }

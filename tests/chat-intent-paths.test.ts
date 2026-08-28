@@ -1,14 +1,23 @@
 // @vitest-environment jsdom
 /**
- * Characterisation tests for the stop/cancel-before-`begin` window, a refused
- * cancel, and `onThreadId` — the last four items on
- * docs/plans/chat-operation-model-acceptance.md, and named by Sol as the ones
- * that must be pinned before the stage that rewrites `turn.began` and moves
- * command delivery, because that stage *is* the machinery holding these
- * wishes.
+ * The stop/cancel-before-`begin` window, a refused cancel, and `onThreadId` —
+ * the last four items on docs/plans/chat-operation-model-acceptance.md, and
+ * named by Sol as the ones that must be pinned before the stage that rewrites
+ * `turn.began` and moves command delivery, because that stage *is* the
+ * machinery holding these wishes.
  *
- * **These pin what the code does today, not what it should do.** Where that is
- * debatable, the note says so rather than asserting a preference.
+ * **The first two of these changed on 2026-08-28, deliberately, in stage 2 of
+ * docs/plans/chat-operation-model.md.** They were written the day before as
+ * characterisation tests, and what they characterised was two requests for one
+ * stop — the first carrying an id the server had never heard of — and one for a
+ * cancel, likewise doomed, never corrected. Stage 2 represents the turn, so the
+ * client can finally ask the question those requests were guessing at: *does
+ * this row have a server name yet?* The rule now is **send once, when there is
+ * an id the server can match**, and both assertions moved with it. What the old
+ * ones said, and why the old behaviour was worse than a wasted request, is in
+ * docs/postmortems/cancel-before-begin.md and in the note on each test below.
+ *
+ * The other two pin what the code does and did not change.
  *
  * Same harness as tests/chat-error-scope.test.ts: React's own `act` and
  * `createRoot`, no testing library, `apiFetch` stubbed with the real `readJson`
@@ -116,7 +125,7 @@ afterEach(async () => {
 });
 
 describe("a stop pressed before the begin frame", () => {
-  it("posts /stop with whatever id it is given immediately, and again with the server's id and attempt once begin names the row", async () => {
+  it("sends nothing until the row has a server name, and then exactly one /stop", async () => {
     const turn = controllableStream();
     answer = (url, init) => {
       const method = init?.method ?? "GET";
@@ -140,15 +149,15 @@ describe("a stop pressed before the begin frame", () => {
       api().stop(threadId, provisional as string);
     });
 
-    // Before `begin`: this file's own docstring on `stopWanted` says a stop
-    // here is "remembered and sent as soon as there is an id to send it
-    // with", read as if only one request goes out. What actually happens is
-    // this: `stop` posts immediately, with whatever id it was given — the
-    // provisional one, which the server has never heard of.
-    expect(posts).toHaveLength(1);
-    expect(posts[0]?.url).toBe(`/api/chat/${SLUG}/${threadId}/stop`);
-    expect(posts[0]?.body.messageId).toBe(provisional);
-    expect(posts[0]?.body.attempt).toBeUndefined();
+    /* **Nothing has gone out**, and this is the assertion that changed.
+
+       It used to be one request, right here, carrying the provisional id — a
+       name this client invented, which reaches a real route and comes back
+       `{ stopped: false }`. Nothing was stopped and the button reported that it
+       had, which is the exact shape docs/reusable/silent-success.md is about.
+       The turn is an operation now, so `stop` can ask whether the row has a
+       server name yet; it has not, so the wish waits. */
+    expect(posts, "a stop went out before the server could name the row").toHaveLength(0);
 
     act(() => {
       turn.frame("begin", {
@@ -161,23 +170,68 @@ describe("a stop pressed before the begin frame", () => {
     });
     await settle();
 
-    // A second /stop goes out, this time with the server's id and attempt —
-    // the wish recorded in `stopWanted` is still there and `nameRow` honours
-    // it. Two requests total, not the one the acceptance item names.
-    expect(posts).toHaveLength(2);
-    expect(posts[1]?.url).toBe(`/api/chat/${SLUG}/${threadId}/stop`);
-    expect(posts[1]?.body.messageId).toBe("srv-answer-1");
-    expect(posts[1]?.body.attempt).toBe("att-1");
+    // And now exactly one, carrying the server's id and the attempt it named —
+    // which is what the acceptance item asks for and what the two requests
+    // between them never managed.
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.url).toBe(`/api/chat/${SLUG}/${threadId}/stop`);
+    expect(posts[0]?.body.messageId).toBe("srv-answer-1");
+    expect(posts[0]?.body.attempt).toBe("att-1");
+    // The provisional id never left the tab.
+    expect(posts.some((p) => p.body.messageId === provisional)).toBe(false);
+  });
+
+  /**
+   * And the ordinary case, unchanged: a stop pressed on a row the server has
+   * already named goes out at once, because there is nothing to wait for.
+   *
+   * Here so that the fix above cannot be "never send a stop", which the test
+   * before it would not notice.
+   */
+  it("still posts at once when the row already has a server name", async () => {
+    const turn = controllableStream();
+    answer = (url, init) => {
+      const method = init?.method ?? "GET";
+      if (method === "GET") return Promise.resolve(json({ threads: [] }));
+      if (url.endsWith("/stop") || url.endsWith("/cancel")) {
+        recordPost(url, init);
+        return Promise.resolve(json({ stopped: true }));
+      }
+      return Promise.resolve({ ok: true, body: turn.stream } as unknown as Response);
+    };
+    await mount();
+
+    let threadId = "";
+    act(() => {
+      threadId = api().send(null, "why?", null, false);
+    });
+    act(() => {
+      turn.frame("begin", {
+        threadId,
+        title: "why?",
+        messageId: "srv-answer-1",
+        questionId: "srv-question-1",
+        attempt: "att-1",
+      });
+    });
+    await settle();
+    expect(posts).toHaveLength(0);
+
+    act(() => {
+      api().stop(threadId, "srv-answer-1");
+    });
+    expect(posts).toHaveLength(1);
+    expect(posts[0]?.body.messageId).toBe("srv-answer-1");
+    expect(posts[0]?.body.attempt).toBe("att-1");
   });
 });
 
 describe("a cancel pressed before the begin frame", () => {
-  /* The name used to say "and again after begin", which is the opposite of
-     what the body asserts and of what the note below explains: there is no
-     second cancel, and that is the finding. What the reader is left with when
-     that one doomed request is answered is in
-     tests/chat-cancel-before-begin.test.ts. */
-  it("posts one /cancel with an id the server cannot match, never repeats it, and never posts /stop", async () => {
+  /* The name used to say "and again after begin", which was the opposite of
+     what the body asserted: there was no second cancel, and that was the
+     finding — docs/postmortems/cancel-before-begin.md. Stage 2 makes there be
+     exactly one, and puts it on the far side of the frame. */
+  it("sends nothing until the row has a server name, and then exactly one /cancel and no /stop", async () => {
     const turn = controllableStream();
     answer = (url, init) => {
       const method = init?.method ?? "GET";
@@ -201,14 +255,18 @@ describe("a cancel pressed before the begin frame", () => {
       api().cancelAndDiscard(threadId, provisional as string);
     });
 
-    // Same shape as `stop`: an immediate post with the provisional id, not
-    // the "cannot have sent anything real yet" the comment on `nameRow`
-    // claims of it — a request does go out, it is just doomed to be refused
-    // or ignored, because the server has never heard of that id.
-    expect(posts).toHaveLength(1);
-    expect(posts[0]?.url).toBe(`/api/chat/${SLUG}/${threadId}/cancel`);
-    expect(posts[0]?.body.messageId).toBe(provisional);
-    expect(posts[0]?.body.expectedTailId).toBe(provisional);
+    /* **Nothing has gone out, and the conversation has already gone from the
+       screen.** Those two are separate promises and only the first changed: the
+       reader pressed a destructive button and it takes effect at once, by
+       tombstone, whatever the server ends up saying.
+
+       The request that used to go out here named the provisional id, and
+       `cancelChat` has two answers for that and both are wrong for the reader —
+       `200 { cancelled: true }` for a conversation it has not written yet, and
+       a 409 on the tail for one it has. See
+       tests/chat-cancel-before-begin.test.ts. */
+    expect(posts, "a cancel went out before the server could name the row").toHaveLength(0);
+    expect(threadIn(threadId), "the conversation is still on screen").toBeUndefined();
 
     act(() => {
       turn.frame("begin", {
@@ -221,22 +279,19 @@ describe("a cancel pressed before the begin frame", () => {
     });
     await settle();
 
-    /* No second /cancel — unlike `stop`. In `nameRow`, `pendingId` is
-       reassigned to `begun.messageId` *before* the cancel check runs, but
-       *after* the stop check runs (see the ordering in useChat.ts). So
-       `cancelWanted.current.delete(pendingId)` is deleting the server's id,
-       which was never added — `cancelAndDiscard` only ever added the
-       provisional one. The wish is never found, never re-sent, and the
-       correction `stop` gets never happens here: only the first, doomed
-       request — the one the server has never heard of — ever goes out. A
-       cancel pressed in this window has removed the conversation from every
-       screen but very possibly never told the server to stop the answer.
-       Characterised as-is; this reads like a real bug, not an intended
-       asymmetry with `stop`. */
+    /* One `/cancel`, on the far side of the frame, naming what the server
+       named — the row, the attempt, and the tail it believes is last, which is
+       the same row. Every one of those is an id the server minted, so both of
+       its answers now mean what they say. */
     expect(posts).toHaveLength(1);
+    expect(posts[0]?.url).toBe(`/api/chat/${SLUG}/${threadId}/cancel`);
+    expect(posts[0]?.body.messageId).toBe("srv-answer-1");
+    expect(posts[0]?.body.attempt).toBe("att-1");
+    expect(posts[0]?.body.expectedTailId).toBe("srv-answer-1");
+    expect(posts.some((p) => p.body.messageId === provisional)).toBe(false);
 
-    // The one thing that does hold: stop and cancel never both fire on the
-    // same row. No request to /stop at any point.
+    // The one thing that held before and still holds: stop and cancel never
+    // both fire on the same row. No request to /stop at any point.
     expect(posts.some((p) => p.url.endsWith("/stop"))).toBe(false);
   });
 });
@@ -285,6 +340,83 @@ describe("a refused cancel", () => {
 
     expect(threadIn(stored.id)?.id).toBe(stored.id);
     expect(api().error).toContain("discard");
+  });
+});
+
+/**
+ * **A tombstone remembers who laid it, and a delete's is never lifted.**
+ *
+ * The sequence is three ordinary actions in a row: cancel the first answer of a
+ * conversation, then delete the conversation while that cancel is still out,
+ * then the cancel comes back refused. `askToCancel`'s catch lifts the tombstone
+ * — which is right for its *own* tombstone and was, until 2026-08-28, applied to
+ * whichever tombstone happened to be on that conversation. The delete's. So a
+ * conversation the reader had deleted came back on screen, and the delete
+ * request had already succeeded, so it is not on the server either.
+ *
+ * Deletions are supposed to win over every projection; here one lost to an
+ * unrelated request failing. Found written down in
+ * docs/plans/chat-operation-model.md's stage 2, and fixed there by giving each
+ * tombstone the name of who put it down and a `final` flag the delete sets.
+ */
+describe("a cancel that fails after the reader has deleted the conversation", () => {
+  const stored: ChatThread = {
+    id: "spya-th02",
+    kind: "chat",
+    title: "one the reader is finished with",
+    createdAt: "2026-08-27T10:00:00.000Z",
+    updatedAt: "2026-08-27T10:00:00.000Z",
+    messages: [
+      { id: "msg-q", role: "user", text: "why?", createdAt: "2026-08-27T10:00:00.000Z", status: "done" },
+      {
+        id: "msg-a",
+        role: "assistant",
+        text: "Half an ",
+        createdAt: "2026-08-27T10:00:01.000Z",
+        status: "pending",
+      },
+    ],
+  };
+
+  it("does not take the delete's tombstone off with its own", async () => {
+    let refuse!: (r: Response) => void;
+    const cancel = new Promise<Response>((r) => {
+      refuse = r;
+    });
+    cancel.catch(() => {});
+    answer = (url, init) => {
+      const method = init?.method ?? "GET";
+      if (method === "GET") return Promise.resolve(json({ threads: [stored] }));
+      if (url.endsWith("/cancel")) {
+        recordPost(url, init);
+        return cancel;
+      }
+      if (method === "DELETE") return Promise.resolve(json({}));
+      throw new Error(`unexpected request: ${method} ${url}`);
+    };
+    await mount();
+    expect(threadIn(stored.id)).toBeDefined();
+
+    /* The row is already named — it came from the server — so this cancel goes
+       out at once, which is what leaves it in flight for the delete to overtake. */
+    act(() => {
+      api().cancelAndDiscard(stored.id, "msg-a");
+    });
+    expect(posts).toHaveLength(1);
+
+    // And the reader deletes the conversation outright while it is still out.
+    await act(async () => {
+      api().remove(stored.id);
+    });
+    await settle();
+    expect(threadIn(stored.id)).toBeUndefined();
+
+    // Now the cancel is refused. Its own tombstone is long gone under the
+    // delete's, and the delete's is not its to lift.
+    refuse(json({ error: "This conversation has moved on since you looked" }, 409));
+    await settle();
+
+    expect(threadIn(stored.id), "a deleted conversation came back").toBeUndefined();
   });
 });
 

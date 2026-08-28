@@ -1,9 +1,10 @@
 # The chat operation model — the build plan
 
 **Status:** stage 1 built as `6f35022`, reviewed by GPT Sol, and one reader-reachable regression
-fixed on top, 2026-08-28. Stages 2 and 3 written down and not built. What stage 1 turned out to need
-that this plan did not say — including what the review sent back — is in
-[§ What stage 1 actually did](#what-stage-1-actually-did) at the bottom.
+fixed on top, 2026-08-28. **Stage 2 built 2026-08-28** and awaiting its review. Stage 3 written down
+and not built. What each stage turned out to need that this plan did not say is at the bottom:
+[§ What stage 1 actually did](#what-stage-1-actually-did) and
+[§ What stage 2 actually did](#what-stage-2-actually-did).
 
 The strategy and the evidence for it are in
 [chat-client-architecture.md](chat-client-architecture.md), which ends with steps 2–4 written down
@@ -201,6 +202,9 @@ late rename failure cannot write `error` after the reader has moved on — which
 and the reverse-order rename above.
 
 ### Stage 2 — the turn, in one piece
+
+**Built 2026-08-28.** Read [§ What stage 2 actually did](#what-stage-2-actually-did) alongside this:
+most of it held, and the two places it did not are worth more than the places it did.
 
 `send`, `retry` and `edit` each create a `TurnOperation`; every frame becomes an event carrying its
 id: `turn.began`, `turn.delta`, `turn.tool`, `turn.done`, `turn.failed`, `turn.disconnected`. The
@@ -471,3 +475,114 @@ place and a thread renamed in place — because `Object.freeze` on a `Map` does 
 every ref with its read and write sites (marking the reads that happen after an `await`, which are
 the staleness checks), and what each chat test would catch. Built before stage 1 so that "all of
 them" can be checked rather than asserted.
+
+## What stage 2 actually did
+
+Built 2026-08-28. Everything above held except where this section says otherwise. Five modules now:
+`effects.ts` joined `model.ts`, `reduce.ts`, `project.ts` and `controller.ts`, because the controller
+runs the turn and the controller is imported *by* the hook — the request functions could not stay in
+`useChat.ts` without a cycle.
+
+`legacy.apply` and its assertion are gone, and so are `owned`, `released`, `attempts`, `watched`,
+`running`, `showing`, `recovering` as stored state, `run` and its four mutable variables. What is
+left in the hook is `stopWanted` and `cancelWanted`, which stage 3 takes.
+
+### The rule that decided every branch, and what it dissolved
+
+**An operation projects what can still be withdrawn** — stage 1's finding, applied to the turn. The
+three shapes come out *different*, and that is the answer rather than an inconsistency:
+
+- a **send** writes its two rows into `base` at registration, exactly as it always did, and the
+  operation draws only the answer row's contents. Nothing withdraws the reader's own words; a
+  refused send is repaired by fetching the conversation. Two other things turn on this and the plan
+  named neither: `mergedArrival` protects a conversation it can see in `base`, and **two sends in one
+  conversation stay in the reader's order however they finish**. Drawing them instead would have
+  landed them in completion order, which is the plan's own "two operations in one conversation
+  completing in reverse order" failing in the ordinary case rather than the exotic one;
+- a **retry** draws a blanked row over the answer it replaces, so a refusal puts the old answer back;
+- an **edit** draws the rewritten question, the discard, and the new answer. The payoff, unchanged
+  from the plan.
+
+**This dissolves "mixed title ownership" rather than solving it.** The plan said an edit's title must
+supersede a rename's *title* without superseding the whole turn, and that a single per-operation
+`superseded` flag cannot express it. It does not have to: **a title is never withdrawn, so no
+operation draws one.** An edit writes its title into `base` at registration, the way a rename does,
+and the last writer wins — which is the reader's own order.
+[`tests/chat-title-ownership.test.ts`](../../tests/chat-title-ownership.test.ts) passes unchanged,
+including the case that says a rename which fails *after* an edit still reports its failure. Per-
+thing supersession would have silenced that, and the committed test says it should not.
+
+### `withServerIds` takes `namesThread` as an argument now
+
+It worked out "does this turn name the conversation?" from `t.messages.length <= 2`, which is right
+for the case it was written for. Under a projection the optimistic rows are not always in the list
+being checked, and the same expression then reads *true* for the **second** send into a one-turn
+conversation — so the `begin` frame's title, which is the server's stored one, lands over a rename
+the reader made a moment earlier. The turn knows whether it created the conversation; nothing else
+does. `tests/chat-client.test.ts` gained the argument and one case for it.
+
+### The cancel-before-`begin` fix, and both rules
+
+`stop` and `cancelAndDiscard` ask the operation whether the row has a server name yet. If it has, the
+request goes out at once, as it always did. If it has not, the wish waits and the `named` command —
+emitted by `turn.began`, run synchronously by the controller — fires it **once**, with the id, the
+attempt and the tail the server itself minted.
+
+Both rules the postmortem asked for fall out of that. Sent once, when there is an id the server can
+match. And nothing ever has to decide what "the server could not match that id" means, because the
+request that provoked that answer is not sent: the `200 { cancelled: true }` case is now **out of
+reach from this window**, and a 409 means what `cancelChat` says it means.
+
+None of the four fixes the plan warned against was used. The reason they all failed was that they
+needed to know whether the row has a server name yet, and now `TurnOperation.began` is that fact.
+
+### Three guards nothing could redden, and what was done about them
+
+Every guard was probed by deleting it in a copy of the tree. Three reddened nothing:
+`Tombstone.final`, and the `superseded` checks in `repair.succeeded` and in
+`recovery.found`/`givenUp`. All three are unreachable *through the hook* for the same reason — the
+write lands in `base` under a tombstone that is never lifted, so no reader can see it. They were kept
+and pinned with reducer-level tests instead of deleted, because the argument that makes them
+unreachable is one line long and the class of bug they stop has cost days here. Each now has a probe
+that turns exactly one test red.
+
+**`Tombstone` carries `by` and `final`, not just `by`.** `by` alone is what fixes the reported bug
+(cancel → delete → the cancel's failure); `final` is the invariant stated rather than implied.
+
+### Smaller things
+
+- **`showing` went with the rest**, which the plan listed but did not explain. A new article is a new
+  controller, so an abandoned repair or recovery dispatches into a controller nothing is reading. The
+  two halves `tests/chat-error-scope.test.ts` pins are covered by that alone.
+- **`recovering` is derived** from the recovery operations that exist. The plan called it "stored
+  state" to be removed and did not say what replaces it.
+- **`turn.disconnected` carries only an id and a deadline** for the recovery it hands over to; which
+  conversation, which row and which attempt are facts about the turn, so the reducer fills them in.
+  The attempt riding across is what let `attempts` go: a stop pressed while "connection lost —
+  checking…" is on screen still names the answer the reader was watching.
+- **The reducer commits a turn by calling the projection's own `turnMessages`.** What the reader was
+  looking at and what is written down are one function of one piece of data. The two that used to do
+  this — an optimistic `setThreads` and a `patchReply` — disagreed twice.
+- **`thread.discarded` now refuses while a turn is drawing into the conversation.** A retry or an
+  edit writes nothing to `base`, so a conversation whose only turn is being rewritten can have no
+  stored messages and still be one the reader is watching; `withoutEmpty` alone would have taken it
+  off the screen.
+
+### What stage 3 inherits that this plan does not anticipate
+
+- **The rename fence is untouched and is now slightly easier to fix.** Two PATCHes racing on the
+  server is still real. What changed is that every title write goes through one transition in
+  `reduce.ts`, so a server-side fence (an `expectedTitle`, the way `expectedTailId` works on the
+  destructive path) has one place to be sent from and one place to admit its refusal.
+- **`stopWanted` and `cancelWanted` are a `Set` and a `Map`**, not two `Set`s: the cancel's has to
+  carry the name of the tombstone it laid, so that only its own failure can lift it. Folding them
+  into one `intent` field has to carry that with it.
+- **A stop on a row no operation is writing sends no attempt.** That is the same as the old behaviour
+  for a row inherited from a load or a remount, and differs only in the frame between an answer
+  finishing and the panel repainting, where `attempts` used to keep a value one moment longer. The
+  server treats a stop with no attempt as "stop whatever is live", which for a finished turn is
+  nothing.
+- **The recovery loop reads `controller.state.operations` to decide whether to keep polling.** It is
+  the same map the gate reads rather than a second vocabulary, and every *write* still goes through
+  the gate — but it is a read after an `await`, which is the shape this file keeps getting wrong. It
+  is the last one.
