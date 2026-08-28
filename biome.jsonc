@@ -24,6 +24,17 @@
       "tests/**",
       "scripts/**",
       "evals/**",
+      // The extraction fixtures are whole saved web pages, and one of them —
+      // whatwg.html, the HTML Standard, 772KB — nests about 3,700 elements
+      // deep. Biome's HTML parser recurses once per level, and a macOS worker
+      // thread gets a 512KB stack, so it blows it: every `biome lint` in this
+      // repo died with `thread 'biome::workspace_worker_N' has overflowed its
+      // stack` from 2026-08-28, when the fixtures landed, and **exited 0 while
+      // doing so** — a linter reporting success having checked nothing
+      // (docs/reusable/silent-success.md). Naming a smaller scope does not
+      // help: the scanner walks the whole allowlist whatever path you pass it.
+      // These are captured inputs, not our code; there is nothing here to lint.
+      "!evals/extraction/fixtures/**",
       "styles/**",
       "vite.config.ts",
       "vitest.config.ts",

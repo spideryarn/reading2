@@ -28,6 +28,43 @@ on** — import cycles and cognitive complexity. The third was switched straight
 autofix was caught rewriting `import "./tailwind.css"` to `"./tailwind.js"`. That story, and the
 tools we chose not to install at all, are in [static-analysis.md](static-analysis.md).
 
+## A saved web page killed the linter, quietly
+
+On 2026-08-28 every `biome lint` in this repo — the whole tree, one directory, or one
+five-word scratch file — died with
+
+```
+thread 'biome::workspace_worker_8' has overflowed its stack
+fatal runtime error: stack overflow, aborting
+```
+
+and **exited 0 while doing it.** Bisected down to one file:
+`evals/extraction/fixtures/whatwg.html`, the HTML Standard, 772KB, nesting roughly
+3,700 elements deep. Biome's HTML parser recurses once per level of nesting, and a
+macOS worker thread gets a 512KB stack against the main thread's 8MB, so it runs out
+of stack partway down the document. It is Biome's own long-running
+[stack-overflow bug class](https://github.com/biomejs/biome/issues/10411) — the
+recursion depth is the bug, the small stack is why it shows up on a Mac first.
+
+Two things made it worse than a crash.
+
+**It exits 0.** Lint is the one check [CLAUDE.md](../../CLAUDE.md) calls advice rather
+than a gate, so nobody reads the output closely and the exit code is all anyone
+consults. A crash that exits 0 is indistinguishable from a clean run, and "I ran the
+linter" becomes a claim about nothing. Grep the output for `stack overflow`, or check
+for the `Checked N files` summary line, before believing it.
+
+**Scope does not narrow it.** `biome lint src` crashed too, and so did a one-line file
+in `/tmp`. The scanner walks the whole `includes` allowlist whatever path you hand it,
+so the only lever is the allowlist itself. `!evals/extraction/fixtures/**` is in
+`biome.jsonc` for that reason.
+
+Neither commit was wrong on its own. `evals/**` joined the allowlist on 2026-08-26,
+when there was nothing there to choke on; the fourteen saved pages landed in `5ccd8ed`
+on 2026-08-28. The rule to carry forward: **captured inputs are not code, and do not
+belong inside the allowlist.** A fixture directory is data that happens to be shaped
+like HTML.
+
 ## Why Biome and not ESLint
 
 ESLint with `typescript-eslint` was the obvious choice, and the type-aware rules are the ones worth
