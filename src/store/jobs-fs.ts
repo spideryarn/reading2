@@ -419,7 +419,17 @@ export const fsJobStore: JobStore = {
         // oldest first within each. A reader who loses a failure loses the only
         // account of what went wrong.
         const kind = Number(a.status !== "done") - Number(b.status !== "done");
-        return kind !== 0 ? kind : a.createdAt < b.createdAt ? -1 : 1;
+        if (kind !== 0) return kind;
+        /* Then the id, because `createdAt` is a millisecond and two jobs queued
+           in the same one are not rare. Without this the comparator answered 1
+           for every tied pair — inconsistent, so what actually got dropped was
+           whichever the `Map` happened to hold first, and that is not a rule
+           anything can be held to. Postgres has ordered by `id` since it was
+           written (src/store/pg-jobs.ts § trimFinished); this side had the
+           opposite answer, and the parity suite was red before this line went
+           in. Lowest id goes, on both. */
+        if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+        return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       })
       .slice(0, finished.length - keep);
     for (const job of doomed) await removeJob(job.id);

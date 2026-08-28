@@ -20,15 +20,14 @@
  * through the same cases is how "the same rules, differently enforced" stays a
  * claim somebody checked.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { eq, inArray } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { jobs } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
-import { mintId } from "../src/ids.js";
-import { DEV_OWNER_ID } from "../src/owner.js";
+import { ID_PREFIX, mintId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import type { JobStore } from "../src/store/jobs.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
@@ -43,6 +42,36 @@ import type { Job, JobStep, OwnerId } from "../src/types.js";
 
 loadEnvLocal();
 
+/**
+ * **This suite's own person, seeded here and taken away again.**
+ *
+ * It used to be the development owner — `DEV_OWNER_ID`, imported rather than
+ * written out, on the grounds that `jobs_owner_fk` needs a real `auth.users`
+ * row and there was exactly one of those. That was wrong, and it took a while
+ * to show, because sharing an owner is only a problem for the one method whose
+ * scope is the owner: **`trimFinished` is owner-wide**. Every other case here
+ * addresses a job by id and cannot see anybody else's.
+ *
+ * So the retention case counted rows it had not created and deleted rows it did
+ * not own. One stray `error` row, left in the local database by a run of
+ * tests/jobs.test.ts that had picked up `SPIDERYARN_STORE=postgres` from a file
+ * before it in the same worker, made it delete three where it expected two —
+ * and the same arrangement, with the stray a *success* rather than a failure,
+ * would have deleted that other suite's row instead of its own. That is exactly
+ * the hazard tests/fixture-ids.test.ts exists to catch, and it could not: the
+ * id was imported rather than written out, so there was no literal to collide.
+ *
+ * Hence a uuid of this file's own, and a real `auth.users` row to hang it on —
+ * the pattern is tests/db-schema.test.ts, which has been inserting one for its
+ * own fixtures since it was written. Created once at module load, removed with
+ * its jobs in `afterAll`, and nothing else in the suite anywhere near it.
+ *
+ * The stranger is this file's own too and is never inserted: it exists only to
+ * prove that somebody else's job reads as one that is not there.
+ */
+const OWNER = "00000000-0000-4000-8000-0000000000b6" as OwnerId;
+const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
+
 /** Probed at MODULE LOAD so the skip is a real vitest skip rather than a green tick. */
 let reachable = false;
 if (process.env.DATABASE_URL) {
@@ -54,23 +83,32 @@ if (process.env.DATABASE_URL) {
   try {
     const probe = await pool.query("select to_regclass('spideryarn.jobs') is not null as ready");
     reachable = probe.rows[0]?.ready === true;
-  } catch {
+    /* Seeded in the same breath as the probe, because a `beforeAll` runs after
+       the describes have been collected and one of them would already have been
+       skipped. `on conflict do nothing` for the run that was killed before its
+       teardown — and for two runs at once, which the local database allows.
+
+       Not a `catch` that shrugs: if the row cannot be created then every
+       Postgres case here is about to fail on a foreign key, and a probe that
+       swallowed the reason would send the reader to the store. The dozen
+       not-null columns and the zero `instance_id` are `auth.users` being
+       Supabase's table rather than ours — see scripts/db-seed-owner.ts. */
+    if (reachable) {
+      await pool.query(
+        `insert into auth.users
+           (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
+         values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
+                 'store-jobs-parity@example.invalid', 'x', now(), now())
+         on conflict (id) do nothing`,
+        [OWNER],
+      );
+    }
+  } catch (err) {
+    if (reachable) throw err;
     reachable = false;
   }
   await pool.end();
 }
-
-/**
- * The dev owner, **imported rather than written out**, because `jobs_owner_fk`
- * means it has to be a real `auth.users` row and there is exactly one of those.
- * A literal here would be a second copy of a value the app already owns — and
- * `tests/fixture-ids.test.ts` would rightly flag it as shared.
- *
- * The stranger is this file's own and never inserted: it exists only to prove
- * that somebody else's job reads as one that is not there.
- */
-const OWNER = DEV_OWNER_ID;
-const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
 
 const LEASE = 60_000;
 /** Prefixed so this file's rows can be found and removed without touching anybody else's. */
@@ -145,8 +183,11 @@ for (const adapter of ADAPTERS) {
       if (ids.length > 0) await adapter.forgetAll(ids);
     });
 
+    /* `over.id` is honoured and still cleaned up. The retention cases below name
+       their own ids, because two jobs created in the same millisecond are told
+       apart by id and a test of that cannot leave the ids to chance. */
     function aJob(over: Partial<Job> = {}): Job {
-      const id = mintId();
+      const id = over.id ?? mintId();
       made.push(id);
       return {
         id,
@@ -541,6 +582,27 @@ for (const adapter of ADAPTERS) {
       expect(await store.get(job.id, OWNER)).toBeUndefined();
     });
 
+    /* ------------------------------------------------------------ retention --
+
+       **The only two cases here whose scope is the whole owner**, which is why
+       the file has an owner nobody else uses — see the head of it. `keep` is a
+       plain number in both, and it can be, because every finished job this
+       owner has is one of these lines. Written against a shared owner it would
+       have to count first, and then it would be asserting arithmetic against
+       whatever else happened to be in the database that morning. */
+
+    /** Queue it, claim it, end it. The three lines every case below repeats. */
+    async function endJob(job: Job, key: string, ending: "done" | "error"): Promise<void> {
+      await store.enqueueOrGet(job, key);
+      const attempt = mintAttempt();
+      await store.claim(job.id, OWNER, attempt, LEASE);
+      await store.finish(job.id, attempt, {
+        status: ending,
+        steps: job.steps,
+        ...(ending === "error" ? { error: "went wrong" } : {}),
+      });
+    }
+
     it("keeps the newest finished jobs and drops successes before failures", async () => {
       /* Retention is on the contract rather than left to a caller because a
          store that grows without limit is not a detail: `list` reads all of
@@ -548,15 +610,8 @@ for (const adapter of ADAPTERS) {
       const ended: Job[] = [];
       for (let i = 0; i < 4; i++) {
         const job = aJob({ createdAt: new Date(Date.now() - (4 - i) * 60_000).toISOString() });
-        await store.enqueueOrGet(job, `k${i}`);
-        const attempt = mintAttempt();
-        await store.claim(job.id, OWNER, attempt, LEASE);
         // The oldest one failed; the rest succeeded.
-        await store.finish(job.id, attempt, {
-          status: i === 0 ? "error" : "done",
-          steps: job.steps,
-          ...(i === 0 ? { error: "went wrong" } : {}),
-        });
+        await endJob(job, `k${i}`, i === 0 ? "error" : "done");
         ended.push(job);
       }
 
@@ -567,9 +622,68 @@ for (const adapter of ADAPTERS) {
       expect(left).toContain(ended[0]!.id);
       expect(left).toContain(ended[3]!.id);
       expect(left).not.toContain(ended[1]!.id);
+      expect(left).not.toContain(ended[2]!.id);
+    });
+
+    it("breaks a tie in the timestamps by id rather than by luck", async () => {
+      /**
+       * **The part that drifts silently.** `created_at` is not a total order —
+       * two jobs queued in the same millisecond are common enough — and with no
+       * tie-break the two adapters answer from different accidents: Postgres
+       * from whatever order the planner returned, the filesystem store from the
+       * insertion order of a `Map`. Both look right until the day they disagree
+       * about which record still exists.
+       *
+       * So the rule is written down here: **same timestamp, lowest id goes.**
+       *
+       * **They are finished in the opposite order to their ids**, which is the
+       * part that gives this teeth. Written the other way round it passed
+       * against a filesystem store with no tie-break at all, because the order
+       * it was handed them happened to be the order it should have sorted them
+       * into — a green tick for a rule nobody had implemented.
+       *
+       * The ids are built rather than minted, and differ only in a trailing
+       * letter, because `id` is compared by Postgres under the database's
+       * collation and by this test in JavaScript — and those two agree about
+       * `a < b < c` under every collation, which is not true of every pair of
+       * random ids. The stem is still random, so a killed run cannot collide
+       * with the next one.
+       */
+      const stem = mintId().slice(0, ID_PREFIX.length + 3);
+      const stamp = new Date().toISOString();
+      const tied = ["aaa", "aab", "aac"].map((tail) =>
+        aJob({ id: `${stem}${tail}`, createdAt: stamp }),
+      );
+      for (const [i, job] of [...tied].reverse().entries()) await endJob(job, `tie${i}`, "done");
+
+      expect(await store.trimFinished(OWNER, 2)).toBe(1);
+      const left = (await store.list(OWNER)).map((j) => j.id);
+      expect(left).not.toContain(tied[0]!.id);
+      expect(left).toContain(tied[1]!.id);
+      expect(left).toContain(tied[2]!.id);
     });
   });
 }
+
+/**
+ * Take the seeded person away again, and their jobs first.
+ *
+ * **The jobs delete is not belt and braces.** `afterEach` forgets by id, so it
+ * misses anything a case left behind by throwing before its ids were recorded —
+ * and one such row makes `jobs_owner_fk` refuse the delete below, which would
+ * leave the user row behind for ever while the run still reported green. Both
+ * statements, in the order the foreign key requires.
+ */
+afterAll(async () => {
+  if (!reachable) return;
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  try {
+    await pool.query("delete from spideryarn.jobs where owner_id = $1", [OWNER]);
+    await pool.query("delete from auth.users where id = $1", [OWNER]);
+  } finally {
+    await pool.end();
+  }
+});
 
 process.on("beforeExit", () => {
   void closeDb();
