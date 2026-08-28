@@ -237,6 +237,23 @@ describe("opening one part past the depth cut-off", () => {
     click(badge);
     expect(document.activeElement).toBe(twistFor("First part"));
   });
+
+  it("moves only the focus that was already on the badge", () => {
+    /* The guarantee is not "keyboard only" — Chrome focuses a button on
+       mousedown, so a real mouse press takes this same path, and that is fine:
+       the reader landed on the badge, the badge is gone, the twist is where
+       they now are. `:focus-visible` is false for a mouse-originated focus, so
+       no ring paints, which is the browser drawing the line better than we
+       could. What must never happen is focus being dragged off something the
+       reader was actually using. jsdom's dispatched click does not focus the
+       button, which is exactly the shape of that case. */
+    const elsewhere = host.querySelector<HTMLButtonElement>(".summ-pill");
+    if (!elsewhere) throw new Error("no pill to park the keyboard on");
+    elsewhere.focus();
+    click(badgeFor("First part"));
+    expect(titles()).toContain("1.1Alpha");
+    expect(document.activeElement).toBe(elsewhere);
+  });
 });
 
 /**

@@ -675,8 +675,14 @@ function Entry({
                twist is where the reader should land: it stays mounted, it now
                reads "Close <title>", and it is the control that undoes this.
 
-               Only when the badge actually had focus, so that a mouse click
-               does not leave a focus ring on a control nobody was using. */
+               Only when the badge actually had focus. Not a keyboard-only
+               guard: Chrome focuses a button on mousedown, so a real mouse
+               press takes this path too, and should — the reader was on the
+               badge, the badge is gone, the twist is where they now are. No
+               ring paints there, because `:focus-visible` is false for a
+               mouse-originated focus; the browser draws that line better than
+               we can. What the check prevents is dragging focus off something
+               the reader was actually using. */
             const takeFocus = document.activeElement === badgeRef.current;
             onToggle(entry.node.id, false, beyond);
             if (takeFocus) twistRef.current?.focus();

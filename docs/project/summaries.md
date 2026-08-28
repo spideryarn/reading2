@@ -183,8 +183,14 @@ Two things the same review got right about the badge as a control, both since fi
 - **It hands the keyboard to the twist as it goes.** The badge unmounts the moment the children are
   open — its job is done — and a focused button that disappears drops focus onto `document.body`,
   which loses a screen reader's place in the outline entirely. Focus moves to the twist, which stays
-  mounted and now reads *"Close Framing The Question"*. Only when the badge actually had focus, so a
-  mouse click does not leave a ring on a control nobody was using.
+  mounted and now reads *"Close Framing The Question"*. Only when the badge actually had focus —
+  which is not the same as "only from the keyboard", and the first version of this note said it was.
+  Chrome focuses a button on mousedown, so a real mouse press hands over too, and should: the reader
+  was on the badge, the badge is gone, the twist is where they now are. No ring paints, because
+  `:focus-visible` is false for a mouse-originated focus — the browser draws that line better than we
+  can. What the check is for is never dragging focus off something the reader was actually using.
+  Confirmed in Chrome, 2026-08-28: a scripted `.click()` does not focus the button, so the first
+  browser pass saw the guard read false and reported a distinction that does not exist.
 
 The paragraph count on every row (`18¶`) is the other half of that borrowing, and it answers a
 question our gist columns cannot: *how much am I not seeing?* A section holding forty paragraphs and
