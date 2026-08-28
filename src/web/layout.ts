@@ -28,19 +28,44 @@
  */
 
 /**
- * px at a 16px root. Mirrors --spine-w in styles.css; change both together.
+ * The painted width of the rail, in px. Mirrors `--spine-w` in styles.css —
+ * and `tests/spine-width.test.ts` is what stops the two drifting, because CSS
+ * cannot read this constant and two of the numbers derived from it live in
+ * `@media` queries, which cannot read a custom property either.
+ *
+ * **Px on both sides of that mirror, and it used to be `24` here against
+ * `1.5rem` there.** That pair is only equal at a 16px root, and nothing in this
+ * app locks the root font size: a reader who has set their browser to 20px got
+ * a rail CSS painted at 30px while this file went on subtracting 24, so the
+ * table was 6px wider than the window said it was and the drift test would have
+ * certified the disagreement as correct. Found by GPT Sol, 2026-08-28. The rail
+ * is part of pixel arithmetic — breakpoints, column widths, `minWidth` — so px
+ * is the unit it belongs in, and the stylesheet now says `12px` too.
+ *
+ * **12, halved from 24 on 2026-08-28** — Greg: *"let's make the Spine a little
+ * bit narrower … define one, and then halve it from the current"*. What that
+ * costs and what it does not is docs/plans/spine-rail.md § What a 12px rail
+ * actually breaks; the short version is that a mouse loses nothing (the rail is
+ * flush against the viewport edge, which is the easy case for Fitts) and a
+ * finger loses half of a target that was already below every guideline —
+ * defused, not solved, by reveal-then-commit (docs/project/touch.md).
  *
  * One width, not two. There used to be a labelled 13rem rail as well, shown
  * whenever the window could afford it — Greg took it out on 2026-08-26, so the
  * rail is now always the collapsed one. That deletes a whole negotiation from
  * this file (labels-versus-a-gist-column, and the non-monotonic fit it caused)
- * and leaves the spine as a fixed 24px the layout simply subtracts.
+ * and leaves the spine as a fixed 12px the layout simply subtracts.
  */
-const SPINE_W = 24; // 1.5rem
+export const SPINE_W = 12;
 
 const GIST_IDEAL = 240; // 15rem — comfortable for a one-sentence gist
-const GIST_MIN = 176; // 11rem — the narrowest a gist still reads at
-const PROSE_MIN = 544; // 34rem — the narrowest the reading column may be
+/* Exported for `tests/spine-width.test.ts` alone: the two breakpoints in
+   styles.css are `GIST_MIN + PROSE_MIN + SPINE_W − 1` and
+   `MODE_MIN + PROSE_MIN + SPINE_W − 1`, performed by hand because a `@media`
+   query cannot read a custom property, and that test is the only thing that can
+   notice when one of the four moves and the others don't. */
+export const GIST_MIN = 176; // 11rem — the narrowest a gist still reads at
+export const PROSE_MIN = 544; // 34rem — the narrowest the reading column may be
 
 /**
  * The **mode band** — the strip between the spine and the prose when the middle
@@ -85,7 +110,7 @@ export interface Fit extends Layout {
    *
    * It is `0` in two cases, and reading it as "there is no band" is wrong in
    * the second: the table-of-contents mode, where there genuinely is no band —
-   * and **a window under 856px, where there is one and it takes no room from
+   * and **a window under 844px, where there is one and it takes no room from
    * the table because it covers it instead** (`fitMode`). Ask `mode !== "toc"`
    * if what you want to know is whether a band is open.
    */
@@ -209,7 +234,7 @@ export function fitView({
    *
    * **The spine is not part of that answer, though the obvious sentence says it
    * is.** An earlier version of this comment claimed the coarse levels are what
-   * the rail already shows. They are not, on this device: the rail is 24px of
+   * the rail already shows. They are not, on this device: the rail is 12px of
    * slivers and every name, gist and count it carries lives in a *hover* card
    * (Spine.tsx), which a finger cannot open. A touch reader gets the rail's
    * shape and its jumps and none of its words. GPT Sol caught the claim,
@@ -345,7 +370,7 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
    *
    * The negotiation below has an implied floor and no behaviour underneath it:
    * both terms bottom out, so at 390px this function used to return a 288px
-   * band beside a 544px column and ask a 390px window for 856px of content.
+   * band beside a 544px column and ask a 390px window for 832px of content.
    * Opening chat on a phone put two half-visible panels side by side and
    * neither of them could be read.
    *
@@ -369,6 +394,32 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
    * with no article behind it is how the outline-mode bug produced an empty
    * table beside a chat panel. It is still there, still full width, one tap on
    * the dock's Contents button away.
+   */
+  /**
+   * **This crossover is conditional and the stylesheet's is not, so with the
+   * rail turned off there is a 12px band of widths where they disagree.**
+   *
+   * `avail` is the window minus the rail, so the width at which the band stops
+   * fitting beside the prose depends on whether the rail is there: 844 with it,
+   * 832 without. `styles.css` § a band with no room is a plain
+   * `@media (max-width: 843px)` and knows nothing about `?spine=0`. So between
+   * **832 and 843 with the rail off**, this function hands the band 288–299px
+   * and squeezes the table to make room, while the stylesheet widens the same
+   * band to the whole window and lays it over the article it just made space
+   * for. Measured, not reasoned: at 832px, `modeW` 288 against a covering band.
+   *
+   * **Pre-existing rather than introduced by the halving**, which only moved it:
+   * the same 12px gap sat at 844–855 when the rail was 24px, and it is 12 wide
+   * because the rail is. Found by GPT Sol reviewing the halving, 2026-08-28.
+   *
+   * Not fixed here, and deliberately not with a fourth hand-copied breakpoint —
+   * a second conditional query would be a *third* thing to keep in step, and the
+   * whole reason `tests/spine-width.test.ts` exists is that there are already
+   * too many. The right fix is to stop the stylesheet guessing: `App.tsx`
+   * already writes `--mode-w` from `fit.modeW`, so it can write the fact itself
+   * as a class or data attribute derived from `fit.modeW === 0`, and the covering
+   * rules key off that instead of off a width. That is a change to App.tsx,
+   * which belongs to whoever owns the mode band.
    */
   if (MODE_MIN + PROSE_MIN > avail) {
     return {

@@ -172,24 +172,31 @@ describe("fitView in a mode — the band replaces the columns", () => {
     // No gist columns at all — they are not squeezed, they are gone.
     expect(f.columns).toEqual([]);
     expect(f.modeW).toBe(MODE_IDEAL);
-    // 1600 - 24 of spine - 400 of band.
-    expect(f.widths).toEqual([1176]);
+    // 1600 - 12 of spine - 400 of band.
+    expect(f.widths).toEqual([1188]);
     expect(f.overflowing).toBe(false);
     expect(f.minWidth).toBe(1600);
   });
 
   it("the band gives way to the prose before the prose gives way to it", () => {
-    // 966 - 24 spine = 942 available; the prose floor is 544, so the band
+    // 954 - 12 spine = 942 available; the prose floor is 544, so the band
     // takes 398 rather than its ideal 400.
-    const f = band(966);
+    //
+    // **The window was 966 until 2026-08-28, and halving the rail would have
+    // left this test passing while proving nothing.** At 966 a 12px rail leaves
+    // 954, `clamp(954 - 544, 288, 400)` is MODE_IDEAL, and the band is at its
+    // ideal width — so "gives way" never happens and every assertion below
+    // would have had to be relaxed to green. The window moves instead, so the
+    // *available* width is the 942 the scenario was written around. GPT Sol.
+    const f = band(954);
     expect(f.modeW).toBe(398);
     expect(f.widths).toEqual([544]);
     expect(f.overflowing).toBe(false);
   });
 
   it("shrinks to MODE_MIN, and that is the last width where both fit", () => {
-    // 856 - 24 spine = 832 available, which is exactly MODE_MIN + PROSE_MIN.
-    const f = band(856);
+    // 844 - 12 spine = 832 available, which is exactly MODE_MIN + PROSE_MIN.
+    const f = band(844);
     expect(f.modeW).toBe(MODE_MIN);
     expect(f.widths).toEqual([544]);
     expect(f.overflowing).toBe(false);
@@ -212,31 +219,37 @@ describe("fitView in a mode — the band replaces the columns", () => {
    * none. layout.ts § fitMode, and styles.css § a narrow window.
    */
   it("gives the band the whole screen once the two no longer fit", () => {
-    const f = band(855);
+    const f = band(843);
     expect(f.modeW).toBe(0);
     expect(f.widths).toEqual([831]); // the prose, still there, still full width
     expect(f.overflowing).toBe(false);
-    expect(f.minWidth).toBe(855); // never wider than the window
+    expect(f.minWidth).toBe(843); // never wider than the window
   });
 
   /**
    * **The number the stylesheet has to agree with.**
    *
    * styles.css § a band with no room widens the fixed `.mode-band` to the window
-   * below `855px`, and this is the only thing keeping that literal honest. They
-   * were out of step for a while and the failure was total rather than untidy:
-   * `fitMode` handed the band `modeW: 0` from 855 down, the CSS widened it only
-   * from 743 down, and between those two every mode was a correctly-positioned
-   * element nought pixels wide. Nothing threw. Move either number and this test
-   * is what tells you about the other.
+   * below `843px`, and this was the only thing keeping that literal honest
+   * until 2026-08-28. They were out of step for a while and the failure was
+   * total rather than untidy: `fitMode` handed the band `modeW: 0` from 855
+   * down, the CSS widened it only from 743 down, and between those two every
+   * mode was a correctly-positioned element nought pixels wide. Nothing threw.
+   * Move either number and this test is what tells you about the other.
+   *
+   * It is no longer the only thing: `tests/spine-width.test.ts` reads the query
+   * out of styles.css and checks it against `MODE_MIN + PROSE_MIN + SPINE_W - 1`
+   * directly, which is the half this test cannot do — this one only knows what
+   * layout.ts believes, and both halves of the pair are needed to catch a drift
+   * in the stylesheet alone.
    */
-  it("hands over to the stylesheet at exactly 856/855", () => {
-    expect(band(856).modeW).toBe(MODE_MIN); // still a band beside the prose
-    expect(band(855).modeW).toBe(0); // the stylesheet takes it from here
+  it("hands over to the stylesheet at exactly 844/843", () => {
+    expect(band(844).modeW).toBe(MODE_MIN); // still a band beside the prose
+    expect(band(843).modeW).toBe(0); // the stylesheet takes it from here
   });
 
   it("never asks a phone for more width than it has", () => {
-    for (const w of [320, 390, 480, 600, 744, 855]) {
+    for (const w of [320, 390, 480, 600, 732, 843]) {
       const f = band(w);
       expect(f.minWidth).toBe(w);
       expect(f.overflowing).toBe(false);
@@ -264,7 +277,7 @@ describe("fitView in a mode — the band replaces the columns", () => {
       showSpine: false,
     });
     expect(f.spine).toBe("off");
-    // The 24px goes to the prose; the band keeps its ideal width.
+    // The rail's 12px goes to the prose; the band keeps its ideal width.
     expect(f.modeW).toBe(MODE_IDEAL);
     expect(f.widths).toEqual([1200]);
     expect(f.minWidth).toBe(1600);

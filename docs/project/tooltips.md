@@ -138,10 +138,10 @@ Each of these is a way the obvious version fails silently.
    reason `useTransitionStyles` returns styles separately instead of merging them.
 2. **It portals to `<body>`.** The spine is `overflow: hidden` and has to be — its bands are
    absolutely positioned in percentages of the document height and would otherwise spill out of the
-   rail. Anything rendered *inside* the rail is therefore clipped to 1.5rem — the rail's whole
-   width, since the expanded 13rem form was deleted on 2026-08-26. `<FloatingPortal>` is what stops
-   a 22rem panel becoming a 24px one, and it is now the only thing standing between the reader and
-   an unreadable card.
+   rail. Anything rendered *inside* the rail is therefore clipped to 12px — the rail's whole
+   width, since the expanded 13rem form was deleted on 2026-08-26 and the strip was halved on
+   2026-08-28. `<FloatingPortal>` is what stops a 22rem panel becoming a 12px one, and it is now
+   the only thing standing between the reader and an unreadable card.
 3. **The arrow's `fill` and `stroke` are props, not CSS.** Given a `strokeWidth`, `FloatingArrow`
    draws a second clipped path for the border and paints over the seam where the arrow meets the
    panel using the `fill` value it was passed. A stylesheet rule wins the cascade over the
@@ -214,7 +214,7 @@ Two more, learned on 2026-08-25:
   believing an empty rail.
 - **The collapsed rail is where it earns its keep, and it works.** Verified at ~1170px, back when
   the rail also had an expanded form and 1170px was where it collapsed: the tooltip is the *only*
-  thing naming a section, and the portal means the 22rem panel is unaffected by the 24px rail it
+  thing naming a section, and the portal means the 22rem panel is unaffected by the 12px rail it
   grows out of. Since 2026-08-26 that is every width rather than the narrow ones, so this is the
   ordinary case rather than the edge one. Getting there took two goes — `resize_window` reported
   success while `innerWidth` stayed put, the tooling limit already written up in browser-testing.md,

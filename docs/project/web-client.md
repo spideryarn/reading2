@@ -603,7 +603,7 @@ loading half already and was missing the failed half.
   `scroll.ts` that moves the page marks the window it owns, and the bar watcher sits it out — a
   destination is computed once, so chrome that answered to our own scrolling would land every jump
   44px out. [mobile-reading-view.md](../plans/mobile-reading-view.md).
-- **On a phone the horizontal axis is a switch, not a scroll.** Below 744px `fitView` offers no gist
+- **On a phone the horizontal axis is a switch, not a scroll.** Below 732px `fitView` offers no gist
   columns at all and the prose column *is* the window; a mode band stops taking horizontal room and
   covers the article instead. Both are the same rule — the view would otherwise promise more columns
   than the window has and cut every line of prose mid-word. What a phone loses, and the one thing

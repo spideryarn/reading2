@@ -558,7 +558,7 @@ The spine solves the same problem with a hover card
 ([tooltips.md](tooltips.md)); this panel deliberately does not. A hover target
 here can be 6px tall, and a floating card over a 6px band covers its neighbours
 — which are the thing you are comparing it against, and the entire point of a
-picture that is to scale. The spine is 1.5rem wide and has nowhere to put a
+picture that is to scale. The spine is 12px wide and has nowhere to put a
 strip; this band has 400px.
 
 The card is **fixed height**. A card that grew with its gist would resize the

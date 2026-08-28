@@ -396,8 +396,10 @@ Four decisions worth keeping:
   once one is open the neighbours open with no second wait and running the pointer down the rail
   reads the article's sections one after another. Built on Floating UI — why that library, and what
   it is doing for us: [tooltips.md](tooltips.md).
-- **There is one rail, and it is the collapsed one** — 1.5rem of bands, ticks and marks, at every
-  window width. Greg, 2026-08-26: *"There are two versions of the Spine — a collapsed and an
+- **There is one rail, and it is the collapsed one** — 12px of bands, ticks and marks, at every
+  window width. Halved from 24px on 2026-08-28, and the names it can no longer hold were already in
+  the hover card — [spine-rail.md](../plans/spine-rail.md).
+   Greg, 2026-08-26: *"There are two versions of the Spine — a collapsed and an
   expanded view. Let's get rid of the expanded view, so it's always collapsed."*
 
   What went with it: a 13rem form that carried the part titles inside the bands, and a header strip
@@ -553,9 +555,15 @@ So the view now **chooses which columns to show, and how wide**, in
 - **Give up the coarse levels first.** They are what the spine is already showing; the finest gist is
   the one that earns its place next to the paragraph it summarises. So L0 goes, then L1.
 - **The reading column takes the slack**, so the table fills the window exactly when it can and
-  overflows by a known amount when it can't. At 1600px: L0/L1/L2 at 240px and 856px of prose. At
-  760px: one gist column and prose, fitting exactly. At 700px it overflows by 44px, and that is the
-  first width where it does.
+  overflows by a known amount when it can't. At 1600px: L0/L1/L2 at 240px and 868px of prose. At
+  760px: one gist column at 204px and 544px of prose, fitting exactly. At 700px there is no gist
+  column left and the prose column *is* the window.
+
+  **Auto-fit never overflows**, and this line said it overflowed by 44px at 700px until 2026-08-28.
+  That stopped being true on 2026-08-27, when `gistsThatFit` was allowed to return zero rather than
+  stopping at one — before that a 390px phone got a 720px table with every line of prose cut
+  mid-word. Overflow is now reachable only by asking for it: a manual `?cols=` is honoured exactly,
+  including one that does not fit ([layout.ts](../../src/web/layout.ts)).
 - **Touching a granularity button takes the columns off automatic** and leaves them where you put
   them; an `auto` control puts them back. The window should not quietly overrule a choice you made.
 

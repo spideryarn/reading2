@@ -46,6 +46,29 @@ no hover has to let the first press mean *show me* or the reader commits blind.
 - **The spine**, whose bands are proportional, so most are a few pixels tall and tapping one blind
   is a coin flip. First tap opens the band's card, second goes there (Spine.tsx § bandPress). That
   is also the only reason the rail is usable by finger at all: everything it knows lives in a card.
+
+  **The rail is 12px wide, and that is below every guideline by a factor of four.** It was 24px,
+  which was already far below the 44/48px everyone recommends; Greg halved it on 2026-08-28
+  ([spine-rail.md](../plans/spine-rail.md)) and the cost lands entirely here, because a mouse loses
+  almost nothing — the rail is flush against the left edge of the viewport, and an edge target is
+  the easy case under Fitts's law. A finger has no such help.
+
+  What makes it survivable rather than acceptable is that **a mis-tap costs a card, not a jump**.
+  Reveal-then-commit means the first tap on the wrong band shows you the wrong band's name and
+  moves nothing; you slide a few pixels and tap again. The failure is a wasted gesture, which is
+  the same failure a 44px target has when you miss it — and the second tap is the one that has to
+  be accurate, by which point the card is telling you what you are about to press.
+
+  **The obvious fix was considered and not built.** The plan proposed extending the hit targets
+  12px to the right of the painted rail under `(pointer: coarse)`, which needs the painted layers
+  moved into an inner `overflow: hidden` wrapper so `.spine-track`'s buttons can overhang. GPT Sol
+  reviewed it and found enough underneath to stop: the overhang covers the first 12px of the mode
+  band whenever one is open (the rail is z-index 45 and the band is 44, so the rail wins), it makes
+  `elementFromPoint` return a depth-1 rail button over a strip of the table, and `(pointer: coarse)`
+  describes only the *primary* pointer, so a hybrid device gets it wrong in one direction or the
+  other — which is the same mistake `bandPress` already had to unlearn once. It is worth doing with
+  a browser pass over the hit map behind it, and it is not worth doing blind in the same change
+  that moves the width.
 - **A glossary term in the prose**, since 2026-08-27 — the dotted underlines
   ([glossary.md](glossary.md)). First tap opens the hover card, second goes to glossary mode with
   that term selected, which is what the card's **in the glossary** button does. Before this the

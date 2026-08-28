@@ -146,11 +146,17 @@ export function stickyOffset(): number {
  * Duplicated rather than derived, because CSS cannot read a TypeScript constant
  * and a media query cannot be built at runtime without `matchMedia` string
  * concatenation that is harder to read than the string itself. If you change one
- * you must change the other; there is no test that can catch the drift, because
- * the failure is "the bar never hides", which looks exactly like the feature
- * being off.
+ * you must change the other — and the failure mode is why that mattered: it is
+ * "the bar never hides", which looks exactly like the feature being off.
+ *
+ * **There is now a test that catches the drift**, which there was not until
+ * 2026-08-28: `tests/spine-width.test.ts` reads this literal out of this file as
+ * text and asserts it is the same number as § a small device's query in
+ * styles.css, and that both are `GIST_MIN + PROSE_MIN + SPINE_W − 1`. The 731
+ * fell out of the spine being halved, which is exactly the change that would
+ * otherwise have moved three of the four copies and left this one behind.
  */
-const SMALL_DEVICE = "(max-height: 620px), (max-width: 743px)";
+const SMALL_DEVICE = "(max-height: 620px), (max-width: 731px)";
 
 /** px of downward travel before the bar gives way. */
 export const BAR_HIDE_AFTER = 24;

@@ -66,11 +66,41 @@ function node(id: string, first: string): TreeNode {
   } as unknown as TreeNode;
 }
 
+/**
+ * Two parts of ten rows, **each split into two sections of five**.
+ *
+ * The sections are not decoration and this file was blind without them. Until
+ * 2026-08-28 both parts had `children: []`, which makes `measure`'s `hits`
+ * identical to its `l1` — so there was no L2 boundary anywhere in the fixture,
+ * and the case below asserting that scrolling *within one part* costs no render
+ * could not have encountered one. That mattered the moment the rail started
+ * tracking the current **section** as well as the current part: the new cost is
+ * invisible to a fixture with no sections in it. GPT Sol found it reviewing the
+ * built code.
+ */
 function outline(): OutlineEntry[] {
-  // Two parts, ten rows each, so there is exactly one boundary to cross.
+  const section = (id: string, first: string, startRow: number): OutlineEntry => ({
+    node: node(id, first),
+    startRow,
+    endRow: startRow + 4,
+    words: 50,
+    children: [],
+  });
   return [
-    { node: node("a", "b0"), startRow: 0, endRow: 9, words: 100, children: [] },
-    { node: node("b", "b10"), startRow: 10, endRow: 19, words: 100, children: [] },
+    {
+      node: node("a", "b0"),
+      startRow: 0,
+      endRow: 9,
+      words: 100,
+      children: [section("a1", "b0", 0), section("a2", "b5", 5)],
+    },
+    {
+      node: node("b", "b10"),
+      startRow: 10,
+      endRow: 19,
+      words: 100,
+      children: [section("b1", "b10", 10), section("b2", "b15", 15)],
+    },
   ];
 }
 
@@ -192,14 +222,47 @@ describe("the spine during a scroll", () => {
     expect(settled).toBeGreaterThan(0);
     const before = band.style.top;
 
-    // Four frames of scrolling, all inside the first part.
+    /* Four frames of scrolling, all inside the first *section* — rows 0–4, so
+       0–500px, and the reading line is `scrollY + 175`. Staying inside one
+       section is the claim now; see the case below for what a section boundary
+       costs, which is the thing this fixture could not see until it had any. */
     for (const y of [50, 100, 150, 200]) await scrollTo(y);
 
     expect(band.style.top, "the band must actually move").not.toBe(before);
     expect(
       renders.get("Spine"),
-      "scrolling within one part must not re-render the rail",
+      "scrolling within one section must not re-render the rail",
     ).toBe(settled);
+  });
+
+  it("renders once per section crossed, which is what `you are here` costs", async () => {
+    /**
+     * **The price of the card's *you are here*, measured rather than assumed.**
+     *
+     * The rail tracks the current section as well as the current part
+     * (`hereHit` in Spine.tsx), so the render count now follows L2 boundaries
+     * rather than L1 ones — about fifty times across an article instead of
+     * seven. That is still nothing beside the sixty-a-second this file exists
+     * to prevent, but "still nothing" is a number somebody should have to keep
+     * true, so here it is pinned at exactly one render per crossing.
+     */
+    await mount();
+    const settled = renders.get("Spine") ?? 0;
+
+    // Reading line 375 → section a1 (0–500). Same part, same section.
+    await scrollTo(200);
+    expect(renders.get("Spine"), "still inside a1").toBe(settled);
+
+    // Reading line 575 → section a2 (500–1000). Same part, next section.
+    await scrollTo(400);
+    expect(
+      renders.get("Spine"),
+      "crossing into another section of the same part costs one render",
+    ).toBe(settled + 1);
+
+    // …and staying in it costs nothing further.
+    for (const y of [450, 500, 550]) await scrollTo(y);
+    expect(renders.get("Spine"), "staying in one section is free").toBe(settled + 1);
   });
 
   it("renders once when the reader crosses into another part", async () => {

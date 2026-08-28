@@ -8,7 +8,7 @@
  * layout.ts, these fail and the doc needs editing too.
  */
 import { describe, expect, it } from "vitest";
-import { fitView, type FitInput } from "../src/web/layout.js";
+import { fitView, SPINE_W, type FitInput } from "../src/web/layout.js";
 
 /** A normal three-deep tree: gists at 0/1/2, one leaf node per block at 3. */
 const article = { gistDepths: [0, 1, 2], leafDepth: 3 };
@@ -16,37 +16,40 @@ const fit = (o: Partial<FitInput> & { windowWidth: number }) =>
   fitView({ ...article, showText: true, chosen: null, ...o });
 
 describe("the widths granularity-zoom.md promises", () => {
-  it("1600px: three gist columns at 240 and 856 of prose", () => {
+  it("1600px: three gist columns at 240 and 868 of prose", () => {
     const f = fit({ windowWidth: 1600 });
     expect(f.columns).toEqual([0, 1, 2]);
-    expect(f.widths).toEqual([240, 240, 240, 856]);
+    expect(f.widths).toEqual([240, 240, 240, 868]);
     expect(f.overflowing).toBe(false);
-    // Fills the window exactly: 24 of spine + 1576 of table.
+    // Fills the window exactly: 12 of spine + 1588 of table.
     expect(f.minWidth).toBe(1600);
   });
 
   it("760px: one gist column and prose, fitting exactly", () => {
     const f = fit({ windowWidth: 760 });
     expect(f.columns).toEqual([2]);
-    expect(f.tableW).toBe(736);
+    expect(f.tableW).toBe(748);
     expect(f.overflowing).toBe(false);
   });
 
-  it("744px is the crossover, and it is derived rather than chosen", () => {
-    // GIST_MIN (176) + PROSE_MIN (544) + the spine (24). One pixel above it the
+  it("732px is the crossover, and it is derived rather than chosen", () => {
+    // GIST_MIN (176) + PROSE_MIN (544) + the spine (12). One pixel above it the
     // last gist column still fits; at it and below there is no room for one, so
     // auto-fit gives up rather than overflowing. No breakpoint was picked: this
-    // number falls out of the two constants that were already in the file.
-    expect(fit({ windowWidth: 744 }).columns).toEqual([2]); // fits exactly
-    expect(fit({ windowWidth: 743 }).columns).toEqual([]);
+    // number falls out of the two constants that were already in the file — and
+    // it moved from 744 when the rail was halved on 2026-08-28, which is the
+    // whole reason tests/spine-width.test.ts exists: styles.css performs this
+    // same sum by hand, in a `@media` query that cannot read either constant.
+    expect(fit({ windowWidth: 732 }).columns).toEqual([2]); // fits exactly
+    expect(fit({ windowWidth: 731 }).columns).toEqual([]);
   });
 
   it("700px: no gist column, and the prose fills the window exactly", () => {
-    // It used to be a 720px table in a 676px window — sideways scrolling to
+    // It used to be a 720px table in a 688px window — sideways scrolling to
     // read a line. See layout.ts § gistsThatFit.
     const f = fit({ windowWidth: 700 });
     expect(f.columns).toEqual([]);
-    expect(f.tableW).toBe(676);
+    expect(f.tableW).toBe(688);
     expect(f.overflowing).toBe(false);
     expect(f.minWidth).toBe(700);
   });
@@ -66,7 +69,7 @@ describe("which levels get given up", () => {
     // used to get a 720px table whose every line of prose was cut mid-word.
     const f = fit({ windowWidth: 390 });
     expect(f.columns).toEqual([]);
-    expect(f.widths).toEqual([366]); // the window, less the spine
+    expect(f.widths).toEqual([378]); // the window, less the spine
     expect(f.overflowing).toBe(false);
     expect(f.minWidth).toBe(390);
   });
@@ -92,18 +95,25 @@ describe("which levels get given up", () => {
        the prose should still hold its 544px floor here — which would make this
        a 720px table rather than 542px. It should not, and the reason is what
        the reader does next: they are going to scroll sideways to the prose
-       either way, and at 366px it then fills the screen, while at 544px it is
+       either way, and at 378px it then fills the screen, while at 544px it is
        still cut off the right-hand edge when they get there. So the widths
        follow the window, always; only the set of columns is theirs. */
-    expect(f.widths).toEqual([176, 366]);
+    expect(f.widths).toEqual([176, 378]);
     const wide = fit({ windowWidth: 900, chosen: [0, 1, 2] });
     expect(wide.columns).toEqual([0, 1, 2]);
     expect(wide.overflowing).toBe(true);
   });
 
   it("shrinks before it drops", () => {
-    // 1279px still shows all three, squeezed; nothing has been given up yet.
-    const f = fit({ windowWidth: 1279 });
+    // 1275px still shows all three, squeezed; nothing has been given up yet.
+    //
+    // **1279 until 2026-08-28, and halving the rail would have made it prove
+    // nothing.** At a 12px rail 1279 leaves 1267, and `floor((1267 - 544) / 3)`
+    // is 241, which clamps to GIST_IDEAL — so the columns are at their full
+    // width and "squeezed" is false. The assertion below would have gone red
+    // rather than silently passing, which is the good case; the window moves to
+    // 1275 (gistW 239) so the test keeps testing what its name says. GPT Sol.
+    const f = fit({ windowWidth: 1275 });
     expect(f.columns).toEqual([0, 1, 2]);
     expect(f.widths[0]).toBeLessThan(240);
   });
@@ -116,7 +126,7 @@ describe("a wider window never shows less of the article", () => {
   // two levels of context, which is indefensible whatever the labels are worth.
   //
   // The labelled rail was deleted on 2026-08-26 (Greg: the spine is always the
-  // collapsed one), so the rail is a constant 24px and nothing here can go
+  // collapsed one), so the rail is a constant 12px and nothing here can go
   // non-monotonic any more. The sweep stays: it is cheap, and it is the check
   // that would catch the next width that gets spent conditionally.
   it("column count is monotonic in window width", () => {
@@ -138,7 +148,7 @@ describe("a wider window never shows less of the article", () => {
     for (const w of [700, 1099, 1100, 1279, 1280, 1600, 2400]) {
       const f = fit({ windowWidth: w });
       expect(f.spine).toBe("on");
-      expect(f.minWidth - f.tableW).toBe(24);
+      expect(f.minWidth - f.tableW).toBe(SPINE_W);
     }
   });
 });
@@ -187,7 +197,7 @@ describe("the table always has room for its own width", () => {
   it("minWidth covers the rail plus the table at every width", () => {
     for (let w = 320; w <= 2600; w += 7) {
       const f = fit({ windowWidth: w });
-      expect(f.minWidth).toBe(f.tableW + (f.spine === "on" ? 24 : 0));
+      expect(f.minWidth).toBe(f.tableW + (f.spine === "on" ? SPINE_W : 0));
       expect(f.widths.reduce((a, b) => a + b, 0)).toBe(f.tableW);
     }
   });
@@ -208,7 +218,7 @@ describe("hiding the spine", () => {
     const on = fit({ windowWidth: 1600 });
     const off = fit({ windowWidth: 1600, showSpine: false });
     expect(off.spine).toBe("off");
-    expect(off.tableW).toBe(on.tableW + 24);
+    expect(off.tableW).toBe(on.tableW + SPINE_W);
     expect(off.minWidth).toBe(1600);
   });
 

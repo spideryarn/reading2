@@ -9,7 +9,8 @@
  * **There is one rail, and it is the collapsed one.** Until 2026-08-26 a wide
  * enough window got a 13rem version carrying part labels in the bands and a
  * header strip naming the current L1 and L2; Greg took that form out, so the
- * rail is always the 1.5rem strip of bands, ticks and marks. What a band is
+ * rail is always the 12px strip of bands, ticks and marks — halved from 24px
+ * on 2026-08-28 (docs/plans/spine-rail.md). What a band is
  * lives in its hover card, which is where a proportional rail always had to put
  * it — most bands were too thin for a label even at 13rem.
  *
@@ -110,15 +111,33 @@ import {
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
 
+/**
+ * Where a band sits inside the part it belongs to.
+ *
+ * **Three fields rather than the parent `OutlineEntry` itself**, which is what
+ * the plan proposed. The entry would hand `BandCard` the whole subtree — every
+ * sibling, every grandchild, the parent's own gist — to render one line, and
+ * the card is deliberately not allowed to show most of that (§ the card, on why
+ * two gists is a wall). A narrow value says what the card may use. GPT Sol,
+ * 2026-08-28.
+ *
+ * `index` is 0-based; the card renders `index + 1`.
+ */
+interface BandParent {
+  title: string;
+  index: number;
+  total: number;
+}
+
 interface Band {
   entry: OutlineEntry;
   /** Offsets in document pixels, relative to the top of the first row. */
   top: number;
   height: number;
-  /** For an L2, the title of the L1 it belongs to. */
+  /** For an L2, which L1 it belongs to and whereabouts in it. */
   // `| undefined` explicitly: bandFor passes the argument through whether or
   // not the caller supplied one, and a top-level band genuinely has no parent.
-  parentTitle?: string | undefined;
+  parent?: BandParent | undefined;
 }
 
 interface Metrics {
@@ -173,12 +192,18 @@ function measure(outline: OutlineEntry[]): Metrics | null {
   // the blocks array clamps here rather than reading past the end.
   const edge = (row: number) => (row < tops.length ? tops[row]! : docBottom);
 
-  const bandFor = (e: OutlineEntry, parentTitle?: string): Band => ({
+  const bandFor = (e: OutlineEntry, parent?: BandParent): Band => ({
     entry: e,
     top: edge(e.startRow) - docTop,
     height: Math.max(0, edge(e.endRow + 1) - edge(e.startRow)),
-    parentTitle,
+    parent,
   });
+
+  /** The children of `e` as bands, each knowing where in `e` it sits. */
+  const childBands = (e: OutlineEntry): Band[] =>
+    e.children.map((c, i) =>
+      bandFor(c, { title: e.node.title, index: i, total: e.children.length }),
+    );
 
   // L2s are rendered as siblings in the same track rather than nested inside
   // their parent's element, so every band shares one coordinate system and
@@ -187,15 +212,13 @@ function measure(outline: OutlineEntry[]): Metrics | null {
     docTop,
     docHeight,
     l1: outline.map((e) => bandFor(e)),
-    l2: outline.flatMap((e) => e.children.map((c) => bandFor(c, e.node.title))),
+    l2: outline.flatMap(childBands),
     // Hit targets must tile the whole rail, or a stretch of the article has no
     // tooltip and nothing to click. L2s partition their parent, so they cover
     // it exactly — *unless* a part has no children at all, and then the part
     // itself stands in for them.
     hits: outline.flatMap((e) =>
-      e.children.length > 0
-        ? e.children.map((c) => bandFor(c, e.node.title))
-        : [bandFor(e)],
+      e.children.length > 0 ? childBands(e) : [bandFor(e)],
     ),
     rows: new Map(
       rows.flatMap((r, i) => {
@@ -259,6 +282,19 @@ const NO_MATCHES: Map<BlockId, BlockMatch> = new Map();
  * one band to another re-reveals rather than jumping, so the rail can be read
  * by walking down it instead of firing at whatever it lands on.
  */
+/**
+ * Which card is open, and what opened it.
+ *
+ * `outline` is carried so that the id can be checked against the article it was
+ * minted in — ids are positional within an outline, so the same id in a new one
+ * is a different band. See `armedId`.
+ */
+interface Armed {
+  id: string;
+  byTouch: boolean;
+  outline: OutlineEntry[];
+}
+
 export function bandPress(
   touch: boolean,
   armed: string | null,
@@ -270,23 +306,69 @@ export function bandPress(
 export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Props) {
   useRenderCount("Spine");
   /**
-   * Which band's card a finger has opened, and `null` on a device with a
-   * pointer.
+   * Which band's card is open, and what opened it.
+   *
+   * **It said "a finger" here, and `null` on a device with a pointer, and that
+   * has not been true since `bf398f3` made the tooltips controlled.** Every
+   * input feeds this one value now — a mouse through hover, a keyboard through
+   * focus, a finger through the click handler — which is exactly why one shared
+   * piece of state serving fifty triggers was able to take the hover cards away
+   * for a day (docs/postmortems/spine-hover-cards.md). `byTouch` is the part
+   * that is still about fingers.
    *
    * **State on this component is not free** — performance.md is largely about
-   * how often this file re-renders during a scroll — so it is worth saying why
-   * this one is cheap: it changes on a *tap*, which is a deliberate act
+   * how often this file re-renders during a scroll — so it is worth saying what
+   * this one costs: it changes when a card opens or closes, which is a
    * happening at most a few times a minute, and never on scroll, hover or
    * resize. It is also dead weight on a mouse, where `coarse` is false and
    * `armed` never leaves `null`.
    */
-  const [armed, setArmed] = useState<{ id: string; byTouch: boolean } | null>(null);
+  const [armed, setArmed] = useState<Armed | null>(null);
+  /**
+   * **`armed`, but only if it is about the outline on screen right now.**
+   *
+   * Every read of "which card is open" goes through this rather than through
+   * `armed`, and that is the whole of the outline-replacement guard — there is
+   * no effect, because an effect was the wrong shape for it. `useEffect` runs
+   * *after* paint, so a `setArmed(null)` there lets the stale card render once
+   * on the new article before it is taken away, and a test that waits 300ms
+   * cannot tell that from never opening at all. GPT Sol, 2026-08-28.
+   *
+   * Comparing the array by reference is exactly right here: `outline` is
+   * memoised per article in App.tsx, so a new reference *is* a new outline, and
+   * two different articles cannot share one.
+   */
+  const armedId = armed && armed.outline === outline ? armed.id : null;
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [viewportH, setViewportH] = useState(() => window.innerHeight);
   /* The you-are-here band. State, because it changes what is *drawn* — but set
      only when the band actually changes, which is a handful of times per
      article rather than once per frame. See the scroll effect below. */
   const [here, setHere] = useState<Band | null>(null);
+  /**
+   * The same question one level finer: which **hit** the reading line is in.
+   *
+   * Separate from `here` because the two are read by different things. `here`
+   * is an L1 and draws `.spine-part.active`, which must stay a part — the rail
+   * highlights the part you are in. This is the L2 (or the childless part
+   * standing in for one), and it is what a card means by *you are here*.
+   *
+   * **Comparing `here` would have been wrong rather than approximate.** The
+   * cards hang off `hits`, which are L2s, so a card that asked "is my parent
+   * the current part" would say *you are here* on every sibling section of the
+   * one you are actually in — five wrong answers and one right one, with
+   * nothing distinguishing them. GPT Sol, 2026-08-28.
+   *
+   * The cost is honest and small: this transitions when the reader crosses a
+   * *section* boundary rather than a part boundary, so a Spine re-render goes
+   * from about seven times an article to about fifty. That is still nothing
+   * beside the sixty-a-second the scroll effect below exists to avoid, and it
+   * is not on the scroll path — `apply` compares and only calls the setter on a
+   * real transition, exactly as it does for `here`.
+   */
+  const [hereHit, setHereHit] = useState<{ id: string; metrics: Metrics } | null>(
+    null,
+  );
   /** The moving viewport band, written to directly rather than re-rendered. */
   const viewportBand = useRef<HTMLDivElement>(null);
 
@@ -345,6 +427,16 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
    *   changes what is drawn, but the setter is called only on a real
    *   transition. Same local-mirror trick as useAudioLevel.ts.
    *
+   * **Since 2026-08-28 there is a second one of those, and it is finer.** The
+   * card's *you are here* needs the current **section**, not the current part
+   * (`hereHit`), so the rail now re-renders on L2 boundaries — roughly fifty
+   * times across an article rather than seven. That is the cost of the feature,
+   * it is bounded by the outline rather than by the frame rate, and it is
+   * pinned at exactly one render per crossing in `tests/spine-scroll.test.ts`.
+   * Until that file was given a fixture with sections in it, on the same day, it
+   * could not have seen this at all: both its parts had `children: []`, which
+   * makes `hits` and `l1` the same array.
+   *
    * React does not clobber the imperative `top`: the element's `style` prop
    * never contains it, so the diff has nothing to say about it.
    *
@@ -354,12 +446,13 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
    */
   useEffect(() => {
     if (!metrics) return;
-    const { docTop, docHeight, l1 } = metrics;
+    const { docTop, docHeight, l1, hits } = metrics;
     let raf = 0;
-    /* A local mirror of `here`'s identity. Comparing against the state value
-       would need it in the dependency list, which would re-subscribe the
-       listener every time the reader crossed a boundary. */
+    /* Local mirrors of the two current-position identities. Comparing against
+       the state values would need them in the dependency list, which would
+       re-subscribe the listener every time the reader crossed a boundary. */
     let hereId: string | null = null;
+    let hitId: string | null = null;
 
     const apply = () => {
       raf = 0;
@@ -377,6 +470,16 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
         hereId = id;
         setHere(next);
       }
+
+      /* The finer one. No fallback to the first or last: a reading line above
+         the article or below its end is genuinely in no section, and a card
+         claiming *you are here* about the last section while the reader is in
+         the masthead would be worse than saying nothing. */
+      const hit = hits.find(inBand)?.entry.node.id ?? null;
+      if (hit !== hitId) {
+        hitId = hit;
+        setHereHit(hit === null ? null : { id: hit, metrics });
+      }
     };
 
     const onScroll = () => {
@@ -390,6 +493,78 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
       cancelAnimationFrame(raf);
     };
   }, [metrics, viewportH]);
+
+  /**
+   * **An armed band that is no longer on the rail has to be let go of.**
+   *
+   * `armed` is cleared by `onOpenChange`, and `onOpenChange` comes from a
+   * mounted tooltip — so if the band under it *disappears* (a re-measure after
+   * a re-extraction, a layout change that replaces `hits`, a failed measure
+   * that returns `null`) the tooltip unmounts without any close arriving and
+   * `armed` stays pointing at a band that is gone. Nothing is drawn, so it
+   * looks harmless; what it costs is that ids are positional within an outline,
+   * so a *different* article's band can inherit the same id and open a card
+   * nobody asked for. Found by GPT Sol reviewing the plan, 2026-08-28 — the
+   * identity guard that fixed the regression is about stale *closes*, and this
+   * is the opposite end of the same lifecycle.
+   *
+   * Not a `useEffect` over `metrics.hits.map(id)` with a join: the array is
+   * rebuilt on every measure, so the cheap check is the membership test itself.
+   */
+  useEffect(() => {
+    if (!armedId) return;
+    const stillThere = metrics?.hits.some((b) => b.entry.node.id === armedId);
+    if (!stillThere) setArmed(null);
+  }, [metrics, armedId]);
+
+  /**
+   * **A card a finger opened does not survive a scroll.**
+   *
+   * Floating UI's `useDismiss` is not configured for ancestor scroll here, so
+   * without this a touch-opened card rides up the screen while the article
+   * moves underneath it, and everything it says about position — `38% in`, and
+   * now *you are here* — quietly stops being true of where the reader is. A
+   * card that is wrong is worse than one that has gone.
+   *
+   * Touch only, and deliberately: on a mouse the card is held open by the
+   * pointer being on the band, so closing it on scroll would fight the reader
+   * rather than help them. `byTouch` is exactly the distinction already drawn
+   * for the tap hint. GPT Sol, 2026-08-28.
+   *
+   * Subscribed only while such a card is open, so a mouse reader and a
+   * finger reader who has not opened anything both pay nothing.
+   */
+  useEffect(() => {
+    if (!(armedId && armed?.byTouch)) return;
+    const close = () => setArmed(null);
+    window.addEventListener("scroll", close, { passive: true, once: true });
+    return () => window.removeEventListener("scroll", close);
+    /* `armedId` as well as `armed`: it is the one that goes null when the
+       outline is replaced under a card that is still open, and subscribing on
+       the strength of a stale `armed` would arm a listener for a card nobody
+       can see. */
+  }, [armed, armedId]);
+
+  /**
+   * **The current section, but only if it was measured against the geometry on
+   * screen now.** Same shape as `armedId` above, and for the same reason: a
+   * re-measure (a resize, a font swap, a re-extraction) replaces every band, and
+   * the id this state holds was found in the *previous* set of them. The scroll
+   * effect recomputes it, but not before the next paint — so without this
+   * comparison there is one frame in which a card says *you are here* about a
+   * band the reader is not in. `null` for that frame is a claim about what we
+   * know; a stale id is a claim about the article. GPT Sol, 2026-08-28.
+   *
+   * **Correct by construction rather than by test, and that is worth saying out
+   * loud.** Every other guard in this file has a case that was watched going red
+   * without it; this one does not, because the window it closes is a single
+   * paint *between* a commit and the effect that follows it, and `act` flushes
+   * both before anything can look. A mutation removing the `=== metrics`
+   * comparison leaves the whole suite green. It is kept because a reference
+   * comparison cannot be subtly wrong, not because anything here proves it
+   * works — do not read the passing suite as evidence about this line.
+   */
+  const hereHitId = hereHit && hereHit.metrics === metrics ? hereHit.id : null;
 
   const docHeight = metrics?.docHeight ?? 1;
   const pct = useCallback(
@@ -558,7 +733,7 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
                  click handler below. Being controlled is also what turns off
                  hover's synthesised touch events — see `mouseOnly` in
                  Tooltip.tsx, without which the second tap could never land. */
-              open={armed?.id === b.entry.node.id}
+              open={armedId === b.entry.node.id}
               /* **A close only counts from the band that is open.** The
                  obvious `setArmed(v ? {…} : null)` is what took the rail's
                  hover cards away between 2026-08-27 and 2026-08-28, and it is
@@ -574,7 +749,7 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
               onOpenChange={(v: boolean) =>
                 setArmed((prev) =>
                   v
-                    ? { id: b.entry.node.id, byTouch: false }
+                    ? { id: b.entry.node.id, byTouch: false, outline }
                     : prev?.id === b.entry.node.id
                       ? null
                       : prev,
@@ -585,11 +760,12 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
                   band={b}
                   position={Math.round((b.top / docHeight) * 100)}
                   matches={bandCounts.get(b.entry.node.id) ?? 0}
+                  here={hereHitId === b.entry.node.id}
                   /* Only when a finger opened it. A mouse reader hovering the
                      rail is one click from anywhere and does not need telling;
                      saying "tap again" to somebody holding a mouse is noise. */
                   showTapHint={
-                    armed?.id === b.entry.node.id && armed.byTouch
+                    armedId === b.entry.node.id && (armed?.byTouch ?? false)
                   }
                 />
               }
@@ -608,6 +784,15 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
                    read. "Four matches here" is the whole reason somebody using
                    the rail during a search would press this one. */
                 aria-label={ariaFor(b, bandCounts.get(b.entry.node.id) ?? 0)}
+                /* **The same fact the card puts in words, in the one place a
+                   screen reader will find it.** `you are here` in the card is
+                   the tooltip's *description*, which a screen reader can be
+                   configured not to read, and the card is opened by hover —
+                   which is not a thing a keyboard has. `aria-current="location"`
+                   is the standard way to say "this one, of these, is where you
+                   are", and it costs nothing because `hereHit` is already
+                   state. Do not make it visual-only. GPT Sol, 2026-08-28. */
+                {...(hereHitId === b.entry.node.id && { "aria-current": "location" as const })}
                 /* **On a touch device the first tap reads the band and the
                    second one goes there.**
 
@@ -637,8 +822,8 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
                      which jumps. */
                   const touch =
                     (e.nativeEvent as PointerEvent).pointerType === "touch";
-                  if (bandPress(touch, armed?.id ?? null, b.entry.node.id) === "reveal") {
-                    setArmed({ id: b.entry.node.id, byTouch: true });
+                  if (bandPress(touch, armedId, b.entry.node.id) === "reveal") {
+                    setArmed({ id: b.entry.node.id, byTouch: true, outline });
                     return;
                   }
                   setArmed(null);
@@ -677,11 +862,61 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
 /** Beyond this many sub-sections the list stops being scannable at a glance. */
 const MAX_CHILDREN = 5;
 
+/**
+ * What a child row says — its nav label, or its title if it somehow has one.
+ *
+ * **This way round, and it is the fix for a bug that had been on screen since
+ * the spine was written.** The list rendered `c.node.title`, and the children of
+ * a hit are *depth-3 leaves*: `App.tsx` builds the outline three deep, `measure`
+ * makes the hits the L2s, so a card's children are one node per paragraph. The
+ * tree contract puts a heading title on a section and a `navLabel` on a leaf
+ * (granularity-zoom.md § Node shape) — measured across all eight articles in
+ * `data/`, that is **888 depth-3 nodes, 0 with a title, 0 with a gist, 853 with
+ * a navLabel**. So every child row in every card was an empty bullet, and `+ 3
+ * more` counted rows that said nothing. Nobody noticed because a bullet with no
+ * text looks like a design, and no test rendered one — the fixtures give their
+ * entries `children: []`. GPT Sol found the premise false while reviewing the
+ * plan that was about to build a second blank line under each of them;
+ * docs/plans/spine-rail.md § 3.
+ *
+ * `navLabel` is allowed here for the reason it is allowed anywhere: this is
+ * navigation chrome, and the spine is one of the two places the node shape
+ * sanctions it. It is never standing in for prose the reader could be shown.
+ */
+function childLabel(e: OutlineEntry): string {
+  return e.node.navLabel?.trim() || e.node.title?.trim() || "";
+}
+
+/**
+ * What the band itself is called.
+ *
+ * **A section can have no title, and two of them do.** `revistes-ub-30977` has
+ * two childless depth-2 nodes under its References — one with a `navLabel` and
+ * one with neither — so the card rendered an empty `.tip-title` and `ariaFor`
+ * gave both buttons the same accessible name as their parent. Two anonymous
+ * bands next to each other, on a rail where the card is the only thing that can
+ * say what you are about to press. GPT Sol found them in the corpus while
+ * reviewing the built code, 2026-08-28.
+ *
+ * Same order as a child row — a real title, then navigation chrome — and then a
+ * positional fallback, because *something* has to distinguish one untitled band
+ * from the next. The fallback is deliberately built from the crumb the reader is
+ * already being shown rather than from an id: `Section 2 of 4` under
+ * `REFERENCES` reads as a place in the article, and `spya-k3m9qt` does not.
+ */
+function bandLabel(band: Band): string {
+  const own = band.entry.node.title?.trim() || band.entry.node.navLabel?.trim();
+  if (own) return own;
+  return band.parent
+    ? `Section ${band.parent.index + 1} of ${band.parent.total}`
+    : "Untitled section";
+}
+
 /** The band's name for a screen reader, with the matches in it if there are any. */
 function ariaFor(band: Band, matches: number): string {
-  const name = band.parentTitle
-    ? `${band.parentTitle} › ${band.entry.node.title}`
-    : band.entry.node.title;
+  const name = band.parent
+    ? `${band.parent.title} › ${bandLabel(band)}`
+    : bandLabel(band);
   if (matches === 0) return name;
   return `${name} — ${matches} search ${matches === 1 ? "match" : "matches"}`;
 }
@@ -690,35 +925,69 @@ function BandCard({
   band,
   position,
   matches,
+  here = false,
   showTapHint = false,
-}: { band: Band; position: number; matches: number; showTapHint?: boolean }) {
+}: {
+  band: Band;
+  position: number;
+  matches: number;
+  /** The reading line is inside this band — see `hereHit` in `Spine`. */
+  here?: boolean;
+  showTapHint?: boolean;
+}) {
   const { node, words, children } = band.entry;
+  const { parent } = band;
+  /* Filtered before it is counted, so `+ n more` is a promise about rows the
+     reader would actually get. Counting first and filtering second is how a
+     card ends up saying "+ 3 more" and then showing three blank bullets. */
+  const kids = children
+    .map((c) => ({ id: c.node.id, label: childLabel(c) }))
+    .filter((c) => c.label !== "");
   return (
     <>
-      {band.parentTitle && <div className="tip-crumb">{band.parentTitle}</div>}
+      {parent && (
+        <div className="tip-crumb">
+          <span className="tip-crumb-name">{parent.title}</span>
+          {/* **Where in the part, which is the one thing a proportional rail
+              cannot show.** The rail says how far through the *article* you
+              are; nothing on it says this is the third section of seven. One
+              number pair, on a line that already exists, and it is skipped when
+              the part has a single child because "1 of 1" is noise rather than
+              orientation. */}
+          {parent.total > 1 && (
+            <span className="tip-crumb-pos">
+              {parent.index + 1} of {parent.total}
+            </span>
+          )}
+        </div>
+      )}
       <div className="tip-title">
-        {node.title}
+        {bandLabel(band)}
         {node.sourceHeading && <span className="tip-own">§</span>}
       </div>
+      {/* The gist, or the nav label standing in for one — but never the nav
+          label *twice*, which is what an untitled band would otherwise show:
+          `bandLabel` has already used it as the title, and repeating it under
+          itself in italics reads as a rendering fault. */}
       {node.gist ? (
         <p className="tip-gist">{node.gist}</p>
-      ) : node.navLabel ? (
+      ) : node.navLabel && node.title?.trim() ? (
         <p className="tip-gist tip-navlabel">{node.navLabel}</p>
       ) : null}
-      {children.length > 0 && (
+      {kids.length > 0 && (
         <ul className="tip-kids">
-          {children.slice(0, MAX_CHILDREN).map((c) => (
-            <li key={c.node.id}>{c.node.title}</li>
+          {kids.slice(0, MAX_CHILDREN).map((c) => (
+            <li key={c.id}>{c.label}</li>
           ))}
-          {children.length > MAX_CHILDREN && (
-            <li className="tip-more">
-              + {children.length - MAX_CHILDREN} more
-            </li>
+          {kids.length > MAX_CHILDREN && (
+            <li className="tip-more">+ {kids.length - MAX_CHILDREN} more</li>
           )}
         </ul>
       )}
       <div className="tip-foot">
-        <span>{words.toLocaleString()} words</span>
+        {/* `words` is 0 for a band whose blocks carry no count, and a "0 words"
+            is a fact about the pipeline rather than about the article. */}
+        {words > 0 && <span>{words.toLocaleString()} words</span>}
         {/* Only when there are some. A "0 matches" on every band during a search
             would turn the whole rail into a wall of zeroes, and the absence of
             a mark already says it. */}
@@ -728,6 +997,12 @@ function BandCard({
           </span>
         )}
         <span>{position}% in</span>
+        {/* **The difference between reading the card as *what is over there*
+            and as *what I am in*.** On a 12px rail nothing else says it: the
+            viewport band shows where the screen is, but the card is opened by a
+            pointer that has gone somewhere else entirely, and at this width the
+            two are a few pixels apart. */}
+        {here && <span className="tip-here">you are here</span>}
       </div>
       {/* **Said out loud, because a tap that does nothing visible reads as a
           broken control.** On a touch device the first tap opens this card and

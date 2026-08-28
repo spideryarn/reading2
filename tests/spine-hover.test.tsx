@@ -154,6 +154,15 @@ it("opens a hover card when the pointer rests on a band", () => {
     hover(0);
     vi.advanceTimersByTime(AFTER_THE_OPEN_DELAY);
   });
+  /* **Advanced past the exit transition before looking, and that is what makes
+     this evidence rather than a coincidence.** A card torn down by the bug this
+     file is about stays in the DOM for another 80ms while `useTransitionStyles`
+     animates it out, so an assertion taken the instant after the open delay can
+     be looking at a corpse. GPT Sol, reviewing which of these five cases could
+     actually have gone red, 2026-08-28. */
+  act(() => {
+    vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
+  });
   expect(cards()).toHaveLength(1);
   expect(cards()[0]?.textContent).toContain("First part");
 });
@@ -204,6 +213,14 @@ it("closes the card when the pointer leaves the rail", () => {
     hover(0);
     vi.advanceTimersByTime(AFTER_THE_OPEN_DELAY);
   });
+  /* Establish that it is genuinely open before asking it to close — otherwise
+     this case passes against the broken code for the wrong reason, which is
+     exactly what it did until 2026-08-28: the card was already gone, so
+     "it closes" was true of a card that had never stayed. A control that cannot
+     tell the fix from the bug is not a control. */
+  act(() => {
+    vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
+  });
   expect(cards()).toHaveLength(1);
   act(() => {
     leave(0);
@@ -214,6 +231,115 @@ it("closes the card when the pointer leaves the rail", () => {
      returns, so the unmount timer is scheduled *after* the first advance is
      over and would never fire inside it. Getting this wrong makes a working
      close look like a card that never goes away. */
+  act(() => {
+    vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
+  });
+  expect(cards()).toHaveLength(0);
+});
+
+/* ------------------------------------------------------- the armed lifecycle --
+   `armed` is cleared by `onOpenChange`, which arrives from a *mounted* tooltip.
+   Both cases below are ones where no such close can arrive, so the state has to
+   be reconciled from outside. Found by GPT Sol reviewing the fix, 2026-08-28:
+   the regression this file is named for was about stale closes, and these are
+   the same seam at the other end of the component's life. */
+
+/** A click carrying a `pointerType`, which is what `bandPress` branches on. */
+function tap(index: number, pointerType: "touch" | "mouse") {
+  const hit = host.querySelectorAll<HTMLElement>(".spine-hit")[index];
+  const ev = new MouseEvent("click", { bubbles: true, cancelable: true });
+  Object.defineProperty(ev, "pointerType", { value: pointerType });
+  act(() => {
+    hit?.dispatchEvent(ev);
+  });
+}
+
+it("a finger's card does not ride up the screen when the article scrolls", () => {
+  /* Reveal-then-commit leaves a card open with no pointer holding it there, and
+     Floating UI is not configured to dismiss on ancestor scroll — so without
+     this the card stays put while the article moves underneath it, and
+     everything it says about position ("38% in", "you are here") quietly stops
+     being true of where the reader is. A card that is wrong is worse than one
+     that has gone. */
+  mountSpine();
+  tap(0, "touch");
+  expect(cards()).toHaveLength(1);
+
+  act(() => {
+    window.dispatchEvent(new Event("scroll"));
+  });
+  act(() => {
+    vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
+  });
+  expect(cards()).toHaveLength(0);
+});
+
+it("a mouse reader's card is not taken away by a scroll", () => {
+  /* The control, and the reason the rule is keyed on `byTouch`. On a mouse the
+     card is held open by the pointer being on the band; closing it on scroll
+     would fight the reader rather than help them. Without this assertion
+     "close on scroll" could be implemented for every card and nothing would
+     notice. */
+  mountSpine();
+  act(() => {
+    hover(0);
+    vi.advanceTimersByTime(AFTER_THE_OPEN_DELAY);
+  });
+  act(() => {
+    window.dispatchEvent(new Event("scroll"));
+  });
+  act(() => {
+    vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
+  });
+  expect(cards()).toHaveLength(1);
+});
+
+it("a new article does not arrive with a card already open", () => {
+  /* **Ids are positional within an outline**, so the same id in a new one is a
+     different band. A finger opens n1's card; the reader goes to another
+     article whose first band is also n1; `open={armed?.id === id}` is true on
+     the very first render of the new rail, and a card nobody asked for is
+     showing over a section nobody pointed at. Clearing only when the id has
+     *gone* from `hits` does not catch this — the id is still there. */
+  mountSpine();
+  tap(0, "touch");
+  expect(cards()).toHaveLength(1);
+
+  const OTHER: OutlineEntry[] = [
+    entry("n1", "A different article's first part", 0),
+    entry("n2", "And its second", 2),
+  ];
+  act(() => {
+    root.render(<Spine outline={OTHER} layoutKey="test" onJump={() => {}} />);
+  });
+  /* **Asserted on the first committed render, with no timers advanced, and
+     `aria-describedby` rather than a node count.**
+
+     The first version of this guard was a `useEffect` calling `setArmed(null)`,
+     which runs *after* paint — so the stale card rendered fully open on the new
+     article for a frame and was then taken away. Counting `.tooltip` nodes
+     cannot see that, and cannot even see it now: a card that has just been told
+     to close stays in the DOM for its 80ms exit transition, so there is exactly
+     one panel here either way. What separates them is whether anything is
+     *open*, and `useRole` puts `aria-describedby` on the trigger only while it
+     is. GPT Sol, reviewing the built code, 2026-08-28.
+
+     The guard is now a derived `armedId` rather than an effect, so there is no
+     frame in which it is wrong. */
+  const describedBy = [...host.querySelectorAll(".spine-hit")].map((h) =>
+    h.getAttribute("aria-describedby"),
+  );
+  expect(describedBy).toEqual([null, null]);
+
+  /* And the panel still on screen is the *old* article's, mid-exit — not a new
+     one opened about a section nobody pointed at, which is the actual failure
+     this is here to stop. */
+  expect(cards()[0]?.textContent).toContain("First part");
+
+  // Then it goes, and does not come back.
+  act(() => {
+    vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
+  });
   act(() => {
     vi.advanceTimersByTime(AFTER_THE_CLOSE_DELAY);
   });

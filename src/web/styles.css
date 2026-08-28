@@ -261,7 +261,14 @@
    Diagnosed by spideryarn2-c1, 2026-08-25; written up in
    docs/reusable/css-sticky-containing-block.md. */
 .reader {
-  --spine-w: 1.5rem;
+  /* **Px, not rem, and that is the point rather than a style choice.** It was
+     `1.5rem` against `SPINE_W = 24` in layout.ts, which are the same width only
+     at a 16px root — and nothing here locks the root font size. At a 20px root
+     CSS painted 30px of rail while the layout arithmetic subtracted 24, so the
+     table was 6px wider than the fit believed. The rail is a term in pixel
+     arithmetic (the column widths, `minWidth`, and the two breakpoints at the
+     end of this file), so px is the unit it belongs in. GPT Sol, 2026-08-28. */
+  --spine-w: 12px;
   /* **How much horizontal room the mode band takes from the table**, set inline
      in pixels by App from `fit.modeW`. Declared here so every rule below can
      add it unconditionally: `+ 0px` is a no-op, which is what makes the default
@@ -285,9 +292,11 @@
 }
 /* One rail width, since 2026-08-26: the labelled 13rem form is gone and the
    spine is always the collapsed strip — see Spine.tsx. Mirrors SPINE_W in
-   layout.ts; change both together. */
-.reader.spine-on { --spine-w: 1.5rem; }
-.reader.spine-off { --spine-w: 0rem; }
+   layout.ts; change both together, and `tests/spine-width.test.ts` is what
+   notices when you don't. Halved from 24px on 2026-08-28 —
+   docs/plans/spine-rail.md. */
+.reader.spine-on { --spine-w: 12px; }
+.reader.spine-off { --spine-w: 0px; }
 
 body {
   margin: 0;
@@ -1271,14 +1280,33 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   /* How much of the rail's width the search lanes may take, and how wide one
      lane may get when there are few of them — see § search marks below.
 
-     The cap is what makes one search a tick rather than a slab. These are the
-     numbers the collapsed rail always used; when there was also a 13rem rail
-     they were its overrides (24px / 8px there), and with the wide form gone
-     they are simply the numbers. The whole rail is 24px, so the gutter is a
-     little under two thirds of it and three lanes fill it exactly — the common
-     cases (one, two, three searches) all get a bar you can see and nothing
-     overflows. */
-  --spine-gutter: 15px;
+     The cap is what makes one search a tick rather than a slab.
+
+     **The gutter did not halve with the rail, and the reasoning is the whole
+     of why these two numbers are what they are.** A mark's legibility is
+     absolute rather than proportional: halving 15px to 7.5px would have given
+     a single search a 2.5px bar, which is not "the same mark, smaller", it is
+     a bar you cannot tell from the L2 hairline beside it. So the gutter keeps
+     enough absolute width for the cases that actually happen — at 10px of a
+     12px rail, one search and two searches each still draw the **same 4px bar
+     they drew on the 24px rail**, and two fill the gutter exactly.
+
+     What that costs is only apparent during a search, and less than it looks:
+     `.spine-matches` is `inset: 0` over the whole track and a mark is only as
+     tall as the paragraph it names, so the gutter is not a permanent 10px
+     stripe taken off the bands — it is the width a mark may reach on the rows
+     that matched, and nowhere else.
+
+     Where it gives out, measured rather than guessed. The pitch is
+     `min(--lane-max, 10 / lanes)` — the cap is why one search and two searches
+     both get 5px of it, and `10 / lanes` alone would predict a 10px slab for a
+     single search — and the painted width is `max(1.5px, pitch − 1px)`. The
+     widths therefore run 4px, 4px, 2.33px, 1.5px for one to four searches: the
+     floor starts governing at four and exceeds the pitch at seven, from which
+     point adjacent lanes merge into one band of colour. That is sooner than the 24px rail's eleven. No 12px rail can do
+     better — eight lanes at a 1.5px stroke and a 1px gap needs 20px — and the
+     search panel still lists every one of them. GPT Sol, 2026-08-28. */
+  --spine-gutter: 10px;
   --lane-max: 5px;
   z-index: 45;
   background: var(--panel);
@@ -1335,7 +1363,9 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
    there is no room for a word of it. */
 .spine-tick {
   position: absolute;
-  left: 4px;
+  /* A sixth of the rail, so the tick still reads as an indent rather than a
+     full-width rule. It was 4px of 24; it is 2px of 12. */
+  left: 2px;
   right: 0;
   height: 1px;
   background: var(--rule);
@@ -1404,17 +1434,20 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
      covered the neighbour's shadow. Every separator but the outermost was
      invisible. Found by a GPT Sol review, 2026-08-26.
 
-     A `max()` under it because the gutter is shared: with eight searches on,
-     the pitch is 3px and a plain subtraction leaves 2px, but the narrow rail's
-     is 1.875px and would leave under one. A lane that rounds to a sub-pixel
-     line is the fault the phrase stripes already cap for.
+     A `max()` under it because the gutter is shared: with eight searches on
+     the pitch is 1.25px, and a plain subtraction would leave a quarter of a
+     pixel. A lane that rounds to a sub-pixel line is the fault the phrase
+     stripes already cap for.
 
-     Where that turns over, said out loud rather than discovered: the floor is
-     wider than the pitch once there are more than about a dozen lanes, so the
-     bars start overlapping and the gap disappears. There is no cap stopping it
-     — a cap would drop a search from the rail silently, which is worse — and
-     past a dozen simultaneously active searches no encoding in 24 pixels is
-     going to work anyway. The panel still lists every one of them. */
+     Where that turns over, said out loud rather than discovered, and it turned
+     over sooner when the rail was halved on 2026-08-28. The floor governs from
+     **four** searches (pitch 2.5px, so `pitch − 1` is 1.5px and they meet) and
+     exceeds the pitch from **seven** (pitch 1.43px), past which adjacent bars
+     overlap and the separating gap is gone. On the old 24px rail those numbers
+     were six and eleven. There is no cap stopping it — a cap would drop a
+     search from the rail silently, which is worse — and no arrangement of 12
+     pixels can hold eight distinguishable lanes at all: a 1.5px stroke with a
+     1px gap needs 20px. The panel still lists every one of them. */
   right: calc(var(--lane) * var(--lane-w));
   width: max(1.5px, calc(var(--lane-w) - 1px));
   /* Percentages of the document's height, like everything else in the track —
@@ -1504,10 +1537,35 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
   text-transform: uppercase;
   color: var(--highlight-ink);
   margin-bottom: 0.2rem;
-  /* One line: a long part title must not push the section title out of view. */
+  /* One line: a long part title must not push the section title out of view.
+     A flex row rather than plain text since 2026-08-28, because the position
+     pair sits at the far end of it — `gap` and `justify-content` are what keep
+     "3 of 7" pinned right however long the part's name is. */
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+/* The part's name. It is the half that yields: `min-width: 0` is what lets a
+   flex item shrink below its content, without which the ellipsis never appears
+   and the position pair is pushed out of the panel instead. */
+.tip-crumb-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* `3 of 7` — how far through this *part*, as opposed to the footer's how far
+   through the article. Dimmer than the part's name and never wrapped: it is
+   orientation you take in without reading, and it must not be what your eye
+   lands on first. */
+.tip-crumb-pos {
+  flex: none;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: var(--ink-faint);
 }
 
 .tip-title {
@@ -1584,6 +1642,20 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
 .tip-matches {
   color: var(--highlight-ink);
   opacity: 1;
+}
+
+/* **you are here** — the reading line is inside this band.
+
+   Pushed to the far end of the footer rather than sitting in the run of
+   counts, because it is not a measurement: everything to its left is a number
+   about the section, and this is a statement about the *reader*. Same brightness
+   as the match count, which is the footer's other "look at this one" — and the
+   two can appear together without competing, since one is at each end. */
+.tip-here {
+  margin-left: auto;
+  color: var(--highlight-ink);
+  opacity: 1;
+  font-style: italic;
 }
 
 /* Somebody who has asked not to be moved gets the panel, not the animation.
@@ -8016,7 +8088,7 @@ tr:hover .block-chat,
 
    ## The breakpoint is derived, not chosen
 
-   744px is `GIST_MIN (176) + PROSE_MIN (544) + the spine (24)` — the exact width
+   732px is `GIST_MIN (176) + PROSE_MIN (544) + the spine (12)` — the exact width
    at which layout.ts can still fit one gist column beside the prose. Below it
    `fitView` shows no gist columns at all, so **the prose column IS the window**,
    and every horizontal luxury the reading view affords itself stops being free:
@@ -8025,7 +8097,8 @@ tr:hover .block-chat,
 
    That is why one number governs all of it. If `GIST_MIN` or `PROSE_MIN` ever
    moves, this query moves with it — tests/layout.test.ts pins the crossover at
-   744/743 so the pair cannot drift silently.
+   732/731 so the pair cannot drift silently, and tests/spine-width.test.ts checks
+   that the query below is still that sum minus one.
 
    ## The other axis has its own query
 
@@ -8034,7 +8107,8 @@ tr:hover .block-chat,
    breakpoint and do not share a fix, so `max-height` is a separate query below.
 */
 
-@media (max-width: 743px) {
+/* spine-width-check: GIST_MIN + PROSE_MIN + SPINE_W - 1 */
+@media (max-width: 731px) {
   :root {
     /* The wordmark gives up its word. Both sticky bars reserve `--logo-w` as
        left padding (§ shell), so this one token was pushing the article's title
@@ -8120,6 +8194,27 @@ tr:hover .block-chat,
      generous vertical padding does not, and it is the first thing between the
      reader and the article. */
   .masthead { padding: calc(0.85rem + var(--safe-top)) 1rem 0.7rem; }
+  /* **And then the left is given back, because the shorthand above throws away
+     the one term that was holding the title clear of the wordmark.**
+
+     § shell sets `padding-left: max(1.5rem, calc(var(--logo-w) + 1.5rem -
+     var(--spine-w) - var(--mode-w)))` — the subtraction being the point: the
+     rail already pushes the title right, so the masthead only has to make up the
+     difference. The shorthand here replaces all four sides with a flat `1rem`
+     and the compensation goes with it, which was survivable at a 24px rail and
+     is not at 12px. Measured at a 16px root, where `--logo-w` is 2.6rem = 41.6px
+     in this query: the title used to start at 24 + 16 = 40px against a wordmark
+     reaching 41.6px, and now starts at 12 + 16 = 28px — thirteen pixels of the
+     article's title underneath the way home. GPT Sol found it reviewing the
+     halving, 2026-08-28.
+
+     Same shape as § shell's rule, with this query's tighter 1rem gutter rather
+     than 1.5rem: 41.6 + 8 − 12 = 37.6px, so the title starts at 49.6px and
+     clears the wordmark by 8px. It follows `--spine-w`, so it cannot go stale
+     the next time the rail moves. */
+  .masthead {
+    padding-left: max(1rem, calc(var(--logo-w) + 0.5rem - var(--spine-w) - var(--mode-w)));
+  }
   h1 { font-size: 1.25rem; }
 
   .dock {
@@ -8169,15 +8264,17 @@ tr:hover .block-chat,
    § a narrow window above, which is why this is its own query rather than a few
    more lines in that one.
 
-   **855px, and it is derived rather than chosen**, exactly like the 743 above:
-   `MODE_MIN (288) + PROSE_MIN (544) + the spine (24)` is 856, the last width at
+   **843px, and it is derived rather than chosen**, exactly like the 731 above:
+   `MODE_MIN (288) + PROSE_MIN (544) + the spine (12)` is 844, the last width at
    which `fitMode` can give the band its minimum and the prose its floor. One
    pixel under, it hands the band `modeW: 0` instead. `tests/chat.test.ts` pins
-   the 856/855 crossover so this number and that one cannot drift apart.
+   the 844/843 crossover so this number and that one cannot drift apart, and
+   tests/spine-width.test.ts checks the query below against layout.ts directly.
 
    **Getting this wrong deletes the panel rather than making it look odd**, and
-   it did for a while: these rules were written inside the 743 query, so between
-   744 and 855 `fitMode` was handing the band a width of zero while no rule was
+   it did for a while: these rules were written inside the narrow-window query,
+   so across the gap between the two `fitMode` was handing the band a width of
+   zero while no rule was
    widening it, and Chat, Search, Glossary, Summary, Ideas and Diagram were all
    simply invisible on a small laptop window. Nothing errored — the element was
    in the DOM, correctly positioned, and nought pixels wide. Caught by GPT Sol
@@ -8191,12 +8288,13 @@ tr:hover .block-chat,
 
    layout.ts § fitMode has what was tried first, and why a fixed element cannot
    be one of two panes you scroll between. */
-@media (max-width: 855px) {
+/* spine-width-check: MODE_MIN + PROSE_MIN + SPINE_W - 1 */
+@media (max-width: 843px) {
   /* **The window minus the rail — not the whole window.** `left: 0` was tried
-     first and the panel came out with its left-hand ~24px missing: every term
-     name lost its first letter, the slider ran off the edge, and the heading
-     read "reshold". The spine is `position: fixed` at z-index 45 and the band
-     is 44, so a band starting at zero simply spends its first 24px underneath
+     first and the panel came out with its left-hand rail-width missing: every
+     term name lost its first letter, the slider ran off the edge, and the
+     heading read "reshold". The spine is `position: fixed` at z-index 45 and the
+     band is 44, so a band starting at zero simply spends its first 12px underneath
      the rail — drawn, and unreadable. Nothing overflows and nothing scrolls, so
      it looks like a panel laid out slightly wrong rather than one being covered.
 
@@ -8254,9 +8352,9 @@ tr:hover .block-chat,
    is a phone.
 
    So the condition is a device that is small in *some* direction, and the
-   comma is doing that work — `(max-height: 620px), (max-width: 743px)` is an
+   comma is doing that work — `(max-height: 620px), (max-width: 731px)` is an
    OR. 620px so a landscape phone with browser chrome is comfortably inside it
-   and no laptop ever is; 743px is § a narrow window's own number, reused here
+   and no laptop ever is; 731px is § a narrow window's own number, reused here
    deliberately rather than picked again, so "small" means one thing in this
    file. **`watchBarVisibility` in scroll.ts carries this whole string** and
    attaches its listener only while it matches — change one and change both.
@@ -8264,7 +8362,8 @@ tr:hover .block-chat,
    The bar and everything pinned under it move together because they are all
    driven by `--bar-bottom` — see the token's own note in § tokens for the
    `@property` version of this that could not survive the build. */
-@media (max-height: 620px), (max-width: 743px) {
+/* spine-width-check: GIST_MIN + PROSE_MIN + SPINE_W - 1 */
+@media (max-height: 620px), (max-width: 731px) {
   :root[data-bars="hidden"] {
     /* **`var(--safe-top)`, not `0px`.** This is the y the table head parks at
        once the bar has gone, and in the installed app y=0 is under the clock —

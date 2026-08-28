@@ -363,10 +363,12 @@ were silently clipping their own controls, and the mode band going full-screen.
 
 Three things worth carrying to whatever is built next:
 
-- **The breakpoint is derived, not chosen.** `743px` is `GIST_MIN + PROSE_MIN + the spine`, minus
+- **The breakpoint is derived, not chosen.** `731px` is `GIST_MIN + PROSE_MIN + the spine`, minus
   one — the width at which layout.ts gives up the last gist column and the prose column *becomes*
-  the window. `tests/layout.test.ts` pins the crossover so the CSS and the TypeScript cannot drift
-  apart silently.
+  the window. `tests/layout.test.ts` pins the crossover on the TypeScript side; since 2026-08-28
+  `tests/spine-width.test.ts` reads the query out of the stylesheet and checks it against the same
+  sum, which is the half a layout test cannot see. Both are needed: the number is written down six
+  times and the compiler checks none of them.
 - **A row that does not fit must scroll, never clip.** `.dock-modes` had `overflow: hidden` for a
   good reason (rounded corners on a segmented control) and it quietly turned into a machine for
   deleting buttons: 48px of clip over a 245px control, five of six modes unpressable, no scrollbar

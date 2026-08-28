@@ -43,8 +43,8 @@ const rowsOf = (entries: [string, number, number, number][]): Map<string, Row> =
 describe("laneOrder", () => {
   it("packs the lanes, so two searches never leave six empty tracks", () => {
     /* The trade this function exists to make. Keying the lane off the slot
-       number would be stable under every change and would divide a 24px gutter
-       into eight tracks of three pixels, six of them showing nothing. */
+       number would be stable under every change and would divide the 10px
+       gutter into eight tracks of 1.25px, six of them showing nothing. */
     const lanes = laneOrder(matchesOf([["a", [["r1", 2], ["r2", 7]], 2]]));
     expect(lanes.get("r1")).toBe(0);
     expect(lanes.get("r2")).toBe(1);
