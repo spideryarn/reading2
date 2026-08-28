@@ -276,7 +276,7 @@ rather than by reasoning about it:
 | `summarise.ts` `textOf` | builds text by **slicing `blocks` over a node's range**, filtering only on `b.text` — so a root extended over supplements includes every note, whatever `article-prompt` does |
 | `tweets.ts` | consumes whole-article text; was not on the original list at all |
 | `similar.ts:198` | has its **own** `gistable` filter, separate from `article-vectors.ts` |
-| `pg-shelf.ts:222` | hard-codes `gistable = true` **in SQL** — outside any TypeScript predicate, so a predicate refactor cannot reach it |
+| `pg-shelf.ts:222` | hard-codes `gistable = true` **in SQL**, outside any TypeScript predicate — but see Sol's input below: it is *library search*, so the right change is **none**, plus a test proving a note still comes back |
 | `graph.ts:322` | reads structural blocks for diagram terms even once anchor edges are excluded |
 | `library-scalars.ts:73`, `web/stats.ts:33` | count every shallow tree child, so supplements would be reported as "parts" and "sections" |
 | `article-prompt.ts` `articleWithIds` | shared by search, explain and conversation — **must not** filter, or notes vanish from questions a reader explicitly asks |
@@ -457,6 +457,172 @@ fidelity, not an apology for an omission**. Three placements, one line each:
 **Nothing on the markers themselves.** A marker's hover is the note's own text, which is the best
 possible answer to the gesture, and meta-commentary there would displace it.
 
+## Stage 3's input, measured before building it — 2026-08-28
+
+Three facts, each from running the real pipeline over the real fixtures (`output/stamp-survival.mts`,
+`output/note-ranges.mts`, `output/clock.mts`) rather than from reading the code.
+
+**The stamps survive.** `data-spya-note`, `-ref`, `-back` and the container all come through
+Readability *and* the sanitiser intact — DOMPurify keeps `data-*`, as
+[`blocks.ts:456`](../../src/blocks.ts) claims, and now measured: gwern 34/34, wikipedia 121 notes
+with 170 markers, acx 18/18, tufte 5/5, and **zero** on ar5iv, gutenberg and the constitution. So
+stage 3 has an input, which was not certain.
+
+**A note really is a range, and the range is most of the words.** Gwern has 34 notes and *118*
+block-level elements inside the notes container. Had stage 3 classified only the elements carrying
+`data-spya-note`, **84 blocks of footnote prose would have stayed body** — summarised, embedded and
+on the clock, with every count looking plausible. The rule that avoids it is an ancestor lookup, and
+it is exact on all four shapes: `closest("[data-spya-notes]")` gives `treatment`,
+`closest("[data-spya-note]")` gives `noteId`. Measured: every stamped element is inside the
+container, and every block-level element inside the container is under exactly one note. No orphans,
+no strays.
+
+**What the clock is wrong by**, which is the visible change stage 3 promises:
+
+| fixture | today | as argument | apparatus |
+|---|---|---|---|
+| gwern | 16846 words · **73 min** | 12637 · **55 min** | 4209 words, 41 of 184 blocks, 34 notes |
+| wiki_transformer | 11436 · **50 min** | 8053 · **35 min** | 3383 words, 121 of 356 blocks, 121 notes |
+| acx_footnotes | 6415 · **28 min** | 5366 · **23 min** | 1049 words, 18 of 96 blocks, 18 notes |
+| tufte | 2198 · 10 min | 2141 · 9 min | 57 words, 5 notes |
+| ar5iv | 5491 · 24 min | 5491 · 24 min | **0 — the control, and it stays put** |
+
+An eighteen-minute error on the piece a reader is deciding whether to start.
+
+**And the labels are being bought for them.** [`labels.ts`](../../src/labels.ts) writes one nav
+label per *gistable* block and says of itself that it is "the one output in the whole pipeline"
+whose cost is linear in block count. A footnote body is an `<li>` full of prose, so it is
+`gistable: true` and it gets one:
+
+| fixture | nav labels bought | of which footnote |
+|---|---|---|
+| gwern | 175 | 41 — **23%** |
+| wiki_transformer | 335 | 121 — **36%** |
+| acx_footnotes | 96 | 18 — 19% |
+| tufte | 63 | 5 — 8% |
+
+So `isStructural` is not only about a truthful "parts · 7"; on a heavily cited piece it is a third of
+the labelling bill, spent writing navigation for rows nobody navigates to.
+
+**And the automatic/asked split does not follow the obvious seam.** `article-prompt.ts` has two
+builders and it is tempting to read them as the policy — ids for the stages that cite, bare text for
+the stages that do not. They are not:
+
+| builder | call site | automatic or asked | may it see notes? |
+|---|---|---|---|
+| `articleText` | `glossary.ts:1190`, `arc.ts:300`, `tweets.ts:484` | automatic | no |
+| `articleWithIds` | **`ideas.ts:815`** | **automatic** | **no** |
+| `articleWithIds` | `explain.ts:410`, `search.ts:248`, `converse.ts:946` | asked | **yes** |
+
+Filtering inside the two builders is right for three stages and silently leaves `ideas.ts` reading
+the bibliography — and `ideas.ts:795` has a comment explaining exactly why it needs ids, so the next
+person would not think to look. **The filter belongs at the call site**, and `isBodyEvidence` has to
+be applied seven times rather than twice.
+
+## GPT Sol's input before stages 3–5 — 2026-08-28
+
+Asked before writing any code
+([prompt](footnotes-stage345-upfront-prompt.md), [answer](footnotes-stage345-upfront-sol.md)):
+eleven concrete decisions, attacked against the code. One was **wrong**, six needed adjustment. Every
+claim below I checked in the file myself before writing it down.
+
+**Decision 4 was wrong, and so was this plan.** The plan said `pg-shelf.ts:222` hard-codes
+`gistable = true` in SQL "outside any TypeScript predicate, so a predicate refactor cannot reach
+it", and listed it as work. It is **library full-text search**, not a shelf scalar — and the policy
+says a note *is* searchable. Adding `treatment <> 'supplement'` there would contradict the policy the
+predicate exists to state. **Leave that SQL alone**, and add a parity test proving a
+`gistable: true, treatment: "supplement"` note still comes back from library search.
+
+**The five predicates are not five spellings of one formula.** Defining each as
+`gistable && treatment !== "supplement"` is the obvious move and is wrong in two of five:
+
+| predicate | rule |
+|---|---|
+| `isSearchable` | `gistable` alone — **supplements included** |
+| `isBodyEvidence` | body only, and do not quietly change what code and media blocks feed |
+| `isEmbeddable`, `isStructural` | `gistable && body` |
+| `countsTowardReadingTime` | **body only, regardless of `gistable`** |
+
+And `gistable`'s own doc comment ([`types.ts:39`](../../src/types.ts)) says it decides whether the
+ToC writes a row — which stops being true the moment a prose footnote is `gistable: true` and
+`isStructural: false`. It stays as the splitter's intrinsic "this block has independently describable
+prose" fact, `block-policy.ts` becomes its only policy-reading consumer, and the comment gets
+rewritten in the same commit.
+
+**The hash compatibility trick needs a branch, not an omission.** `hashBlocks` is not JSON — it
+builds `id \t text` by hand ([`source-hash.ts:47`](../../src/source-hash.ts)), so "omit absent
+fields" has nothing to omit *from*. It needs an explicit legacy branch: every block nullish ⇒ run
+the old algorithm byte-for-byte; otherwise a versioned framed representation. Postgres `null` and
+filesystem `undefined` must normalise identically. `structureHash` needs the same branch keyed on
+"no supplement node".
+
+And the fingerprint has **three narrow queries** that select only `id` and `text`
+([`pg.ts:636`](../../src/store/pg.ts), [`pg-searches.ts:139`](../../src/store/pg-searches.ts),
+[`import.ts:453`](../../src/store/import.ts)). Miss one and a second import compares a full new hash
+against an old two-column hash and creates a revision every time, forever.
+
+**The thing most likely to be found late, and it is not the hash.** A perfect fingerprint does not
+make a stage re-run. `toc` deliberately has **no** freshness stamp and
+[`pipeline.ts:1083`](../../src/pipeline.ts) explains why at length — one was written, tested, and
+*reverted* on 2026-08-27, because arc and summary entries are joined to the tree by **exact block-range
+pair**, so a rebuilt tree drops them "from the reading view without a word". `arc` has no stamp at
+all. So: correct hashes, plausible output, green tests, and stale artefacts.
+
+That comment is aimed at stage 3, but **it is really about stage 4**: appending a supplement node
+changes the root's range, and the root's range is half of a join key. Stage 4 must either preserve
+the ranges arc and summary were written against, or regenerate them, and it must prove which —
+this is the one place in the whole feature where the failure is invisible in every test and visible
+to a reader as a missing sentence.
+
+**Six more seams the plan did not have:**
+
+- **Append the supplement before `generateLabels`, not after.** `labels.json` records
+  `structureHash(opts.tree)` ([`labels.ts:1475`](../../src/labels.ts)); appending afterwards makes
+  the labels stale at birth. There is no later gist-composition pass to worry about — composition
+  is an instruction to the ToC model ([`toc.ts:105`](../../src/toc.ts)) and `buildTree` merely copies
+  what comes back ([`toc.ts:442`](../../src/toc.ts)) — so the plan's ordering worry was misplaced
+  and a different one takes its place.
+- **The fisheye fix cannot live in `itemsFromCells`.** Three other consumers read the raw cells:
+  keyboard navigation ([`keynav.ts:152`](../../src/web/keynav.ts)), saved reading position
+  ([`position.ts:68`](../../src/web/position.ts)), and the arc's numbering
+  ([`web/tree.ts:222`](../../src/web/tree.ts)). Fixing only the visible list is what *breaks* the
+  anchor invariant. One shared "navigable items at depth" projection, collapsing every cell under a
+  supplement to a single item anchored at its first block, used by all four.
+- **Three more word-count numerators**, none of them a displayed statistic and all of them policy:
+  `tweets.ts:448`, `ideas.ts:766` and `glossary.ts:1114` each sum *every* block's words and choose
+  how much output to ask for from it. Prompts that exclude notes while output sizes include them is
+  the same braiding one layer down. Plus a fourth reading-time formula at
+  [`extract.ts:121`](../../src/extract.ts) — characters ÷ 5 ÷ **200**, its own WPM — which is
+  either deliberately debug-only or wrong, and nobody has decided which.
+- **The shelf is not separate.** Its Postgres fallback already refuses to sum in SQL and calls
+  `deriveLibraryScalars` instead ([`pg.ts:1029`](../../src/store/pg.ts)). Extend `scalarInputsQuery`
+  to aggregate treatment alongside words and it uses the shared seam like everything else.
+- **The carry-over key has to come in two families.** `Candidate` keeps only tag, text and html
+  ([`blocks.ts:365`](../../src/blocks.ts)) — the DOM element is gone by then, and a *previous* block
+  has only serialised HTML. So the note-aware key is computed from HTML on both sides. And the first
+  run after stage 2 compares canonical-new against pre-stage-2-previous, which needs a one-time
+  legacy bridge; without it either target replacement keeps the old id, or the whole corpus is
+  re-minted once.
+- **Name the tree field `treatment`, not `role`.** Otherwise `role` means semantic content on a block
+  and structural exclusion on a node. And `publicTree` **silently drops** optional `TreeNode` fields
+  by design ([`dto.ts:124`](../../src/public/dto.ts)), so the supplement marker must be added there
+  by hand or the client never sees it.
+
+**A stage-5 trap, named now because it changes what stage 3 must expose.** The hover preview cannot
+render a note's range by injecting the stored block HTML: that duplicates block ids into the
+document, and the preview's links sit outside `TableView`'s delegated click handler
+([`TableView.tsx:470`](../../src/web/TableView.tsx)). The preview needs its own fragment, with ids
+stripped or namespaced, owning its own internal-link delegation. Which means stage 3 must persist and
+project **`noteId`** — not just `role` and `treatment` — and add all three to `PublicBlock`, its
+query and its DTO, all three of which are explicit allow-lists.
+
+### Stage 3 splits in two
+
+It was one stage and it is now too big to end anywhere safe. **3a** is the field, the persistence,
+the predicates and the policy — ending with the clock telling the truth. **3b** is the carry-over
+key, its two families and its four tests, which is a correctness fix for a bug that predates this
+work and does not block the reader-visible arc through 4 and 5.
+
 ## Word count and reading time
 
 Two independent sums today, and neither knows about the other:
@@ -610,7 +776,7 @@ alike, with assertions on note prose and ranges rather than on retarget counts. 
 own already fixes a live bug** — Substack markers stop landing on a digit.
 
 **3 — `role`, `treatment`, and the policy.** The five predicates replace the `gistable` overload at
-every consumer in the table above, `pg-shelf`'s SQL included; `articleWordCounts` becomes the one
+every consumer in the table above, `pg-shelf`'s SQL **excluded**, which is the correction; `articleWordCounts` becomes the one
 seam the card and the masthead read; **the fingerprints learn about roles** so reclassification
 invalidates what it should; the migration, every hand-written projection and the public DTO carry
 both fields, proved by a synthetic role-bearing article rather than by today's zero-role corpus. The
