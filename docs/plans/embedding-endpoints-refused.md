@@ -65,16 +65,52 @@ fix is on that account's <https://openrouter.ai/settings/privacy>. OpenRouter le
 at three levels — account, organisation, and individual key — and the most specific wins, so
 checking which one is doing the refusing comes first.
 
-**2. Compare the two, rather than guessing which toggle.** Open the privacy page for the working
-account and for the production one side by side and find the setting they differ on. The prime
-suspect is **ZDR-only** ("only route to endpoints with a Zero Data Retention policy"), because it is
-account-wide, it is a *guardrail* — which is the word in the 404 — and it explains why everything
-else still works: this app's Anthropic-bound calls have ZDR-capable upstreams and
-`voyageai/voyage-4` has exactly one endpoint, `VoyageAI by MongoDB`. Next after that are the two
-training toggles (*"providers that may train on inputs"*, paid and free stated separately).
-OpenRouter takes a conservative stance where it cannot establish a provider's policy — it assumes
-the endpoint both retains and trains — so an upstream can be excluded without anybody having
-decided anything about it.
+**2. It is Zero Data Retention, and specifically the "Non-frontier" scope.** This was guessed at
+first and is now proven three ways, so nobody need go looking:
+
+- **The routing experiment.** Asking the *working* key to route under each restriction in turn, one
+  request each: `zdr: true` is the only one that turns Voyage's 200 into a 404 —
+  `data_collection: "deny"`, `require_parameters` and `allow_fallbacks: false` all still answer 200.
+  The same `zdr: true` on `anthropic/claude-sonnet-4.5` answers 200. That is the production symptom
+  exactly: embeddings dead, chat and the whole pipeline fine.
+
+  ```
+  voyageai/voyage-4                     plain=200   zdr=404
+  openai/text-embedding-3-small         plain=200   zdr=200
+  openai/text-embedding-3-large         plain=200   zdr=200
+  anthropic/claude-sonnet-4.5 (chat)    plain=200   zdr=200
+  ```
+
+  The 404 under `zdr` even says so in words the account-level one does not:
+  *"No endpoints found matching your data policy (Zero data retention)"*.
+
+- **OpenRouter's own list.** `GET https://openrouter.ai/api/v1/endpoints/zdr` is the authoritative
+  set of ZDR-compliant endpoints — 806 of them. **No Voyage entry appears anywhere in it**, while
+  both OpenAI embedding models and Anthropic do. `voyageai/voyage-4` has exactly one endpoint
+  ("VoyageAI by MongoDB"), so there is nothing to fall back to and a ZDR guardrail leaves zero.
+
+- **The docs.** ZDR is not one switch. From
+  [`guides/features/zdr.mdx`](https://github.com/OpenRouterTeam/docs/blob/main/guides/features/zdr.mdx):
+  five scopes — Anthropic, OpenAI, Google, SpaceXAI, and **Non-frontier**, which *"removes all other
+  non-ZDR endpoints"* — and *"in your privacy settings, each model group has its own toggle"*.
+  Voyage is Non-frontier.
+
+So the change is **the Non-frontier ZDR toggle alone**, at
+<https://openrouter.ai/settings/privacy>. The other four scopes keep their guarantee.
+
+**And it does not weaken the one that matters most.** Dictation — the reader's voice — sends
+`zdr: true` in the *request* (`AI_JOB_ROUTE` in [`src/ai-call.ts`](../../src/ai-call.ts)), so its
+guarantee is enforced per call and survives any account setting. That is what lets the copy beside
+the microphone keep saying what it says. Relaxing the account-level Non-frontier scope changes
+routing only for jobs that do not ask for ZDR themselves, which in practice means embeddings.
+
+**If the privacy page already shows Non-frontier off**, the restriction is coming from a
+**guardrail** attached to that key rather than from the account —
+[`guides/features/guardrails.mdx`](https://github.com/OpenRouterTeam/docs/blob/main/guides/features/guardrails.mdx)
+puts ZDR per model group inside a guardrail too, guardrails can be assigned to a single API key, and
+*"stricter rules always win when multiple guardrails apply."* Same fix, different page
+(openrouter.ai/workspaces). Check its **provider allowlist** while you are there: Voyage has one
+provider, so any allowlist omitting it kills the model outright with no data policy involved.
 
 **3. Check it, with the production key, before believing it.** A settings page saying the right
 thing is not the same as an endpoint answering:
@@ -95,6 +131,32 @@ stopped putting the provider's response body into the thrown message — product
 article's own paragraphs*, and an upstream that echoes a request back would put article prose in a
 log that [logging.md](../project/logging.md) forbids it from reaching. So that is a privacy fix
 sitting undeployed, independent of the key. ⟨Sol⟩
+
+### The other option, if ZDR everywhere is a commitment rather than a default
+
+Turning the Non-frontier scope off is the recommended fix, because the two environments differing
+is what caused this and the local one already runs without it. But ZDR is not all-or-nothing for
+this feature, and the alternative is real: **`openai/text-embedding-3-small` answers 200 under
+`zdr: true`.** So the app could keep ZDR everywhere and change model instead.
+
+The eval already says the quality cost is nil —
+[embedding-retrieval-2026-08-26.md](../../evals/results/embedding-retrieval-2026-08-26.md) found the
+two *statistically tied on every measure under both judges*, and the tie-break that chose Voyage was
+**billing**. That tie-break is still true, and measured again on 2026-08-28:
+
+```
+voyageai/voyage-4              cost 5.4e-07   is_byok: false
+openai/text-embedding-3-small  cost 0         is_byok: true   (upstream 1.8e-07)
+```
+
+`is_byok: true` means it bills to Greg's own OpenAI account rather than to OpenRouter credits, which
+is exactly what [`src/embeddings.ts`](../../src/embeddings.ts) says the choice turned on. Switching
+also means **1536 dimensions rather than 1024**, so `RECIPE` in
+[`src/article-vectors.ts`](../../src/article-vectors.ts) changes and every cached vector is
+correctly missed rather than silently reused — the cache key was built for exactly this.
+
+So: a real second option, no quality cost, at the price of a billing dependency the eval
+deliberately avoided. **It is a decision about data policy, not a bug fix, and it is Greg's.**
 
 ## What was wrong in the code, regardless of which key wins — and is now fixed
 
