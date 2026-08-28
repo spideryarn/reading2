@@ -184,7 +184,7 @@ import { timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { AccessSharing } from "./AccessSharing.js";
+import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
 import { ProfileBox } from "./ProfileBox.js";
 
 /**
@@ -774,7 +774,13 @@ export function Metadata({
              Hidden only for a *known* fixture, which is the one case where the
              controls really would 404. */
           offer={!showingFixture}
-          sharing={provenance?.sharing}
+          /* **Parsed, not passed.** `readJson<ArticleMetadata>` above is a
+             cast and checks nothing, so `sharing: {}` used to be truthy, become
+             the card's *known* state, and draw "Only you can read this" about a
+             body that said nothing. The write response was validated from the
+             day it was written; this door was not. AccessSharing.tsx §
+             asArticleSharing. */
+          sharing={asArticleSharing(provenance?.sharing)}
         />
 
         {/* --------------------------------------------- 7. not built yet --

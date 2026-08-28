@@ -195,15 +195,17 @@ export function Masthead({ article, slug, onRenamed }: Props) {
               <>
                 Transcribed by a machine from a scanned image. There was no text in the file to
                 check it against, so nothing has verified it.{" "}
-                <SourceLink slug={meta.slug}>View the scanned pages</SourceLink>
-                .
+                <SeeTheOriginal slug={meta.slug} offer={onRenamed !== undefined}>
+                  View the scanned pages
+                </SeeTheOriginal>
               </>
             ) : (
               <>
                 Transcribed by a machine from a PDF, and checked against the file's own text on{" "}
                 {meta.pagesChecked ?? 0} of {meta.pages ?? 0} pages.{" "}
-                <SourceLink slug={meta.slug}>View the original</SourceLink>
-                .
+                <SeeTheOriginal slug={meta.slug} offer={onRenamed !== undefined}>
+                  View the original
+                </SeeTheOriginal>
               </>
             )}
           </p>
@@ -214,6 +216,51 @@ export function Masthead({ article, slug, onRenamed }: Props) {
         {root?.gist && <p className="root-gist">{root.gist}</p>}
       </div>
     </div>
+  );
+}
+
+/**
+ * **The way to the original file — offered only to the reader who may have it.**
+ *
+ * `SourceLink` fetches `GET /api/source/:slug`, which is authenticated, and
+ * stage 1 deliberately does not serve it publicly: *"Serving somebody's
+ * uploaded bytes to the world is a separate decision from serving the extracted
+ * text. Hide the link rather than 404 it."*
+ * docs/plans/public-read-only-access.md § What a public visitor gets.
+ *
+ * That decision was written down and then not built. Every visitor to a shared
+ * **PDF** mounted the control, so pressing it — or tabbing to it and pressing
+ * Enter, which is the half that is easy to forget — opened a blank tab, issued
+ * a private request, was refused, and left the reader looking at nothing. GPT
+ * Sol, second pass, 2026-08-28.
+ *
+ * **The sentence stays and only the control goes.** A visitor is entitled to
+ * know the article was transcribed from a scan and how much of it was checked
+ * — that is a fact about how much to trust what they are reading, and the whole
+ * reason the note exists (docs/plans/pdf-ingestion.md § A scan with no text
+ * layer). What they cannot have is somebody else's uploaded file.
+ *
+ * `offer` keyed on `onRenamed`, which is this component's existing stand-in for
+ * *is this yours* — see the prop's own comment. One question, asked once.
+ */
+function SeeTheOriginal({
+  slug,
+  offer,
+  children,
+}: {
+  slug: string;
+  offer: boolean;
+  children: ReactNode;
+}) {
+  /* Not a disabled control and not a marked one: there is nothing here a
+     visitor could ever be given, so a dimmed button would be advertising a
+     door that does not exist. The bands mark what an account would unlock;
+     this is not that. */
+  if (!offer) return null;
+  return (
+    <>
+      <SourceLink slug={slug}>{children}</SourceLink>.
+    </>
   );
 }
 

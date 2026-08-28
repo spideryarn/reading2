@@ -91,7 +91,7 @@ const WRITE_UNCERTAIN: CardState = { kind: "unknown", because: "write" };
  * know* rather than into a state. A 2xx we cannot read is the absence of an
  * answer, not a quiet `private`.
  */
-function asVisibilityState(body: unknown): VisibilityState | null {
+export function asVisibilityState(body: unknown): VisibilityState | null {
   if (body === null || typeof body !== "object") return null;
   const { visibility, publicAt } = body as Record<string, unknown>;
   if (visibility !== "private" && visibility !== "public") return null;
@@ -99,7 +99,47 @@ function asVisibilityState(body: unknown): VisibilityState | null {
      not the same as an explicit `null`, and only the explicit one is the
      server saying "private, and no timestamp". */
   if (publicAt !== null && typeof publicAt !== "string") return null;
+  /* **The two fields have to agree, and a string has to be a date.** The
+     contract is that `public_at` is set on publishing and cleared on
+     unpublishing, so `{visibility: "public", publicAt: null}` and
+     `{visibility: "private", publicAt: "…"}` are both states the server does
+     not hold — and a card that drew one of them would be reporting a database
+     that does not exist. `"soon"` would have been printed straight into
+     *"Shared since Invalid Date"*. GPT Sol, second pass, 2026-08-28. */
+  if (publicAt !== null && Number.isNaN(Date.parse(publicAt))) return null;
+  if ((visibility === "public") !== (publicAt !== null)) return null;
   return { visibility, publicAt };
+}
+
+/**
+ * **The same parser, for the other door.**
+ *
+ * `ArticleSharing` arrives through `GET /api/metadata/:slug`, which
+ * `Metadata.tsx` reads with `readJson<ArticleMetadata>` — a cast, which
+ * validates nothing. So `sharing: {}` was truthy, became the card's `known`
+ * state, and drew *"Only you can read this"* with complete confidence about a
+ * body that said nothing at all.
+ *
+ * That is the rule this control must never break, arriving through the one door
+ * that had not been validated: the write response was checked from the day it
+ * was written and the page load was not. GPT Sol, second pass, 2026-08-28.
+ *
+ * `undefined` rather than a throw, so the rest of the metadata page still
+ * renders and the card falls back to *we could not check* — which is exactly
+ * true, and is a state it already has.
+ */
+export function asArticleSharing(value: unknown): ArticleSharing | undefined {
+  const state = asVisibilityState(value);
+  if (!state) return undefined;
+  const { personalised } = value as Record<string, unknown>;
+  /* Every entry a string. An artefact name we do not recognise is left in
+     rather than dropped — `sharingPersonalisedList` falls back to "your <name>"
+     — because a silently shortened list is worse here than an odd noun: the
+     whole point of the sentence is that it is complete. */
+  if (!Array.isArray(personalised) || personalised.some((k) => typeof k !== "string")) {
+    return undefined;
+  }
+  return { ...state, personalised: personalised as ArticleSharing["personalised"] };
 }
 
 export function AccessSharing({

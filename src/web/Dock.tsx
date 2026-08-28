@@ -173,6 +173,16 @@ interface Props {
    * call to action. reader-capability.ts § signedIn.
    */
   signedIn?: boolean | undefined;
+  /**
+   * **Whether this article is theirs**, which is a different question from
+   * `signedIn` and the one every other piece of chrome keys on.
+   *
+   * Needed separately from `drawer` because the drawer's *shape* is not a
+   * reliable proxy for footing: the metadata and tweets pages mount the bar
+   * without one, and they exist for both readers. Inferring from its absence is
+   * what left two of the three visitor pages saying "Your comments".
+   */
+  visitor?: boolean | undefined;
   drawer?: {
     /** Comments in reading order — App already sorts them, see comment-nav.ts. */
     comments: Comment[];
@@ -352,12 +362,16 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
   },
 ];
 
-export function Dock({ slug, view, mode, onMode, marked, signedIn, drawer }: Props) {
+export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, drawer }: Props) {
   const panel = drawer?.panel ?? null;
   const open = panel !== null;
   /* Narrowed once, so the four reads below are the compiler checking one fact
      rather than four independent tests that could drift apart. */
   const own = drawer && drawer.visitor !== true ? drawer : null;
+  /* Either signal says visitor: the prop, or a drawer that declared itself one.
+     Two spellings of one fact, and the older one is kept because the reading
+     view already passes it that way. */
+  const isVisitor = visitor === true || drawer?.visitor === true;
   const pending = own?.comments.filter((c) => c.status === "pending").length ?? 0;
 
   /**
@@ -531,7 +545,22 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, drawer }: Pro
             current={false}
             icon={MessageSquareText}
             label="Comments"
-            title="Your comments, back in the article they are about"
+            /* **Whose, and the visitor pages reach this arm too.**
+               `PublicMetadataPage` and `VisitorPage` mount the bar with no
+               drawer, which lands here — so two of the three visitor pages went
+               on calling somebody else's comments *"Your comments"* after the
+               reading view had been corrected. The heading inside the drawer
+               was fixed and the link that leads to it was not. GPT Sol, second
+               pass, 2026-08-28.
+
+               `signedIn` is not the question; ownership is. A drawer-less bar
+               belongs to the owner on the metadata and tweets pages of *their*
+               article, and to a visitor on the public stand-ins. */
+            title={
+              isVisitor
+                ? "Comments on this article, back in the article they are about"
+                : "Your comments, back in the article they are about"
+            }
           />
         )}
 

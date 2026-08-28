@@ -9,6 +9,23 @@
          rather than a guess at which page is about to render. -->
     <title>Spideryarn</title>
     <meta name="description" content="AI-assisted reading: an article at whatever level of detail you need." />
+    <!-- **No referrer, from any page of this app, to anywhere.**
+
+         Settled in docs/plans/public-read-only-access.md § Stage 1 and then not
+         built until GPT Sol's second pass found it missing, 2026-08-28. It
+         matters because a shared article is read by strangers and its own HTML
+         carries third-party images and embeds: without this, an image host
+         learns the exact URL of the article somebody is reading, and so does
+         every outbound link they follow. `/read/<slug>?at=<block>` is reading
+         state as well as an address.
+
+         Here as well as in vercel.json, and the duplication is the point. The
+         header is set by Vercel's edge and applies only where Vercel serves;
+         this applies wherever the document is served from — the dev server, a
+         preview, a copy somebody saved. A document-level policy also covers
+         subresources the header would, and neither one depends on the other
+         being right. -->
+    <meta name="referrer" content="no-referrer" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />

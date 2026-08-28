@@ -9,13 +9,53 @@
  * either way, and the difference is a stream of 401s behind it that only a
  * trace or a devtools panel shows. docs/plans/public-read-only-access.md § Stage 1.
  *
- * ## Why the spy is on `globalThis.fetch` and not on `apiFetch`
+ * ## What this proves, stated narrowly on purpose
  *
- * Because `apiFetch` is one of the things being tested. A spy on it would see
- * only the requests that went through the module we already know about, and the
- * failure this is guarding against is a hook mounting somewhere nobody
- * remembered. Every request in the client ends at `fetch`, including
- * `public-api.ts`'s deliberately plain one, so that is where the trace is taken.
+ * **No application request leaves `/api/public/`.** That is the claim, and it
+ * is smaller than the one this comment used to make.
+ *
+ * The spy is on `globalThis.fetch` rather than on `apiFetch` because `apiFetch`
+ * is one of the things being tested: a spy on it would see only the requests
+ * that went through the module we already know about, and the failure being
+ * guarded against is a hook mounting somewhere nobody remembered. Every request
+ * the *client code* makes ends at `fetch`, including `public-api.ts`'s
+ * deliberately plain one, so that is where the trace is taken.
+ *
+ * ## And three things it cannot see, which are not bugs in it
+ *
+ * This comment asserted *"every request in the client ends at fetch"* until
+ * 2026-08-28, and that sentence was false. GPT Sol found it, and it is an
+ * instance of exactly the failure this file keeps catching elsewhere — a test
+ * whose stated scope exceeds its real one — so the sentence is corrected here
+ * rather than quietly narrowed.
+ *
+ * **1. Browser-native subresource loads from the article's own HTML.**
+ * `TableView` injects the extracted HTML, and the sanitiser deliberately keeps
+ * external `src`, `srcset`, `poster` and allowlisted iframes — the committed
+ * fixture has an `imgix.net` image with a `srcset`. A visitor's browser
+ * therefore contacts third parties on mount, on scroll, and on resize, and none
+ * of it passes through `fetch`. **A `fetch` spy cannot cover this and neither
+ * can jsdom**, which loads no subresources at all; it needs a real browser with
+ * an external image and an iframe as positive controls.
+ *
+ * Whether to *change* that is a product decision rather than a test one — a
+ * proxy or click-to-open placeholders would alter what a visitor sees, against
+ * the first decision this feature was built on (*the full article, same as the
+ * owner*), so it is Greg's. What is not in question is that this file does not
+ * prove it, and `Referrer-Policy: no-referrer` is what limits the damage
+ * meanwhile: tests/referrer-policy.test.ts.
+ *
+ * **2. Supabase's own token refresh.** A signed-in visitor with a stale session
+ * can cause a POST to Supabase from inside the SDK. Not a Spideryarn API call,
+ * not ours to remove, and it happens on every page of this app.
+ *
+ * **3. Sentry.** In a production build with error reporting configured, a render
+ * error causes a POST from the error boundary. Same category.
+ *
+ * Two and three are known exceptions rather than gaps: they are recorded so
+ * that the next person to read a real trace does not find them and conclude the
+ * seam leaks. Neither appears here, because neither is configured under
+ * vitest.
  *
  * ## The control, and why the file would be worthless without it
  *
@@ -87,6 +127,28 @@ Object.defineProperty(window, "scrollTo", { writable: true, value: () => {} });
 const trace: { url: string; method: string; auth: string | null }[] = [];
 
 const SLUG = "a-piece";
+
+/**
+ * A **PDF** article, because the private source control only mounts for one.
+ *
+ * `Masthead` renders it under `meta.source === "pdf"`, so a fixture extracted
+ * from a web page never reaches the code at all — which is why nothing noticed
+ * that every visitor to a shared PDF was being offered somebody else's uploaded
+ * file. GPT Sol, second pass, 2026-08-28.
+ *
+ * **`PublicMeta` has no `source`**, deliberately — the public projection drops
+ * the whole PDF provenance block (src/public-types.ts) — so a visitor never
+ * reaches that branch of the masthead at all. That is why the gate itself is
+ * tested in tests/masthead-source.test.tsx rather than here: this file can only
+ * show that today's wire shape happens not to carry the field, which is a fact
+ * about the projection rather than about the control.
+ */
+const PDF_META = {
+  source: "pdf" as const,
+  pages: 12,
+  pagesChecked: 12,
+  unverified: false,
+};
 
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
@@ -165,7 +227,12 @@ const METADATA: PublicMetadata = {
  */
 const OWNED: Article = {
   ...ARTICLE,
-  meta: { ...ARTICLE.meta, title: "A piece, as its owner renamed it", url: "https://example.com/a" },
+  meta: {
+    ...ARTICLE.meta,
+    ...PDF_META,
+    title: "A piece, as its owner renamed it",
+    url: "https://example.com/a",
+  },
 };
 
 /**
@@ -524,6 +591,33 @@ describe("a signed-out browser on a shared document", () => {
     const heading = host.querySelector(".dock-drawer-head h2")?.textContent;
     expect(heading).toBe("Comments");
   });
+
+  /**
+   * **And on the other two pages, which reach a different arm of the bar.**
+   *
+   * `PublicMetadataPage` and `VisitorPage` mount `Dock` with no drawer, so the
+   * Comments button degrades to a link back to the reading view — and that link
+   * had a hard-coded *"Your comments…"* title. The drawer heading was corrected
+   * and the link that leads to it was not, so two of the three visitor pages
+   * went on saying it. GPT Sol, second pass, 2026-08-28.
+   *
+   * The bar cannot infer footing from the drawer's *shape*: a drawer-less bar
+   * belongs to the owner on the metadata and tweets pages of their own article,
+   * and to a visitor on the public stand-ins. Inferring from its absence is what
+   * caused this, so footing is passed.
+   */
+  it.each(["/metadata", "/tweets"])(
+    "does not call somebody else's comments yours on %s",
+    async (view) => {
+      await open("", view);
+
+      const link = [...host.querySelectorAll("a")].find(
+        (a) => a.getAttribute("aria-label") === "Comments",
+      );
+      expect(link, "the bar must offer a Comments link").toBeDefined();
+      expect(link?.getAttribute("title")).not.toContain("Your comments");
+    },
+  );
 });
 
 /**

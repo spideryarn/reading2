@@ -198,6 +198,15 @@ function VisitorDock({
   signedIn: boolean;
 }) {
   return (
-    <Dock slug={slug} view={view} marked={markedModes(available)} signedIn={signedIn} />
+    <Dock
+      slug={slug}
+      view={view}
+      marked={markedModes(available)}
+      signedIn={signedIn}
+      /* These pages mount no drawer, so the bar cannot infer footing from its
+         shape — and inferring from its absence is what left them calling
+         somebody else's comments "Your comments". Dock.tsx § visitor. */
+      visitor
+    />
   );
 }

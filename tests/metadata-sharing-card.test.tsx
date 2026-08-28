@@ -20,7 +20,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article, ArticleMetadata, ArticleSharing } from "../src/types.js";
+import type { Article } from "../src/types.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -82,12 +82,25 @@ const ARTICLE: Article = {
   },
 };
 
-/** What `GET /api/metadata/:slug` answers. Posed by each test. */
-let sharing: ArticleSharing | undefined;
+/**
+ * What `GET /api/metadata/:slug` answers in its `sharing` field.
+ *
+ * `unknown` rather than `ArticleSharing`, because half these tests are about
+ * bodies the type says cannot exist — and `readJson<ArticleMetadata>` is a cast
+ * that would have accepted every one of them.
+ */
+let sharing: unknown;
 /** Whether that request fails outright. The page's `provenance` then stays null. */
 let metadataFails = false;
 
-function metadata(): ArticleMetadata {
+/**
+ * **Typed as the wire rather than as `ArticleMetadata`**, and that is the point
+ * of half these tests: the bodies below are ones the type says cannot exist,
+ * and `readJson<ArticleMetadata>` in the page is a cast that would have
+ * accepted every one of them. Declaring the fixture as the type would be
+ * asserting the very thing under test.
+ */
+function metadata(): Record<string, unknown> {
   return {
     slug: SLUG,
     /* Not `example`, and it matters: the page withholds every control that
@@ -99,7 +112,7 @@ function metadata(): ArticleMetadata {
     profile: null,
     purpose: null,
     archivedAt: null,
-    ...(sharing ? { sharing } : {}),
+    ...(sharing === undefined ? {} : { sharing }),
   };
 }
 
@@ -199,6 +212,48 @@ describe("the sharing card, on the page that owns it", () => {
     expect(host.textContent).toContain("your glossary and your summary");
     // And not the hedge, which is what a dropped prop falls back to.
     expect(host.textContent).not.toContain("may have been written");
+  });
+
+  /**
+   * **The door that was not validated.**
+   *
+   * The write response was parsed from the day it was written; the page load
+   * was cast. So `sharing: {}` was truthy, became the card's *known* state, and
+   * drew **"Only you can read this"** with complete confidence about a body
+   * that said nothing at all — the one claim this control must never get wrong,
+   * arriving through the one door nobody had checked. GPT Sol, second pass,
+   * 2026-08-28.
+   *
+   * The last two rows are contract-breaking *combinations* rather than wrong
+   * types: `public_at` is set on publishing and cleared on unpublishing, so
+   * neither pair is a state the server holds, and a card drawing one would be
+   * reporting a database that does not exist. `"soon"` would have printed
+   * straight into *"Shared since Invalid Date"*.
+   */
+  it.each([
+    ["an empty object", {}],
+    ["a null", null],
+    ["a string", "public"],
+    ["an unknown visibility", { visibility: "world", publicAt: null, personalised: [] }],
+    ["a missing personalised list", { visibility: "private", publicAt: null }],
+    ["a personalised list of numbers", { visibility: "private", publicAt: null, personalised: [7] }],
+    ["public with no timestamp", { visibility: "public", publicAt: null, personalised: [] }],
+    [
+      "private with a timestamp",
+      { visibility: "private", publicAt: "2026-08-28T09:00:00.000Z", personalised: [] },
+    ],
+    ["a timestamp that is not a date", { visibility: "public", publicAt: "soon", personalised: [] }],
+  ])("treats %s in the metadata as unknown rather than as private", async (_name, body) => {
+    sharing = body;
+
+    await open();
+
+    expect(host.textContent).toContain("could not check");
+    expect(host.textContent).not.toContain("Only you can read this");
+    expect(host.textContent).not.toContain("Anyone with the link");
+    /* And the rest of the page still renders — a bad `sharing` must not take
+       the metadata page down with it. */
+    expect(host.textContent).toContain("At a glance");
   });
 
   it("says a private article is private, and offers to share it", async () => {
