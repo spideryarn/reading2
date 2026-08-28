@@ -24,6 +24,14 @@
  * one careless `...spread` away from being widened; a column that was never
  * selected has to be put back on purpose, in SQL, where a reviewer sees it.
  *
+ * ## Four of these are not exported, deliberately
+ *
+ * `publicMeta`, `publicBlock`, `publicTree` and `publicArc` are the pieces
+ * `publicArticle` is built from, and nothing outside this file assembles a
+ * public response by hand — which is the property worth keeping. Slice 1b adds
+ * four more endpoints and will want some of them; exporting one then, for a
+ * caller that exists, is better than exporting four now for callers that do not.
+ *
  * ## What is NOT here
  *
  * `profileChanged`, on any artefact. It cannot even be computed on this path:
@@ -62,7 +70,7 @@ import type {
  * The fallback that *is* kept is `metaFrom`'s: a stored title, then the
  * article's own first `<h1>`, then the slug. That one is about the article.
  */
-export function publicMeta(row: {
+function publicMeta(row: {
   slug: string;
   title: string | null;
   byline: string | null;
@@ -90,7 +98,7 @@ export function publicMeta(row: {
  * `note` is the field that must not cross, and it is gone twice over: the query
  * does not select it, and this function does not name it.
  */
-export function publicBlock(block: Block | PublicBlock): PublicBlock {
+function publicBlock(block: Block | PublicBlock): PublicBlock {
   return {
     id: block.id,
     tag: block.tag,
@@ -123,7 +131,7 @@ export function publicBlock(block: Block | PublicBlock): PublicBlock {
  * say which of our generators wrote the tree, which is provenance about us and
  * not about the owner, and the client reads `rootId` and `nodes` beside them.
  */
-export function publicTree(tree: Tree): Tree {
+function publicTree(tree: Tree): Tree {
   const nodes: Record<NodeId, TreeNode> = {};
   for (const [id, node] of Object.entries(tree.nodes)) {
     nodes[id as NodeId] = {
@@ -149,7 +157,7 @@ export function publicTree(tree: Tree): Tree {
 }
 
 /** The arc, rebuilt, for the same reason and by the same rule as the tree. */
-export function publicArc(arc: Arc): Arc {
+function publicArc(arc: Arc): Arc {
   return {
     version: arc.version,
     generator: arc.generator,
