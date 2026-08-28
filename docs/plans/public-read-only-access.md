@@ -864,6 +864,64 @@ browser pass runs in a Sonnet subagent against [browser-testing.md](../project/b
 - **Not indexing in stage 1.** The site-wide `noindex` stays until stage 2 gives a crawler something
   worth reading.
 
+## Progress
+
+**Stage 1a, the server half, is built and committed** — 2026-08-28, nineteen files, nine commits
+from `f6d5d98` to `4bbed5d`. What exists: the migration, `PUT /api/article/:slug/visibility`,
+`publicSlug()`, a hardwired public reader, the closed `/api/public/` namespace with
+`GET article/:slug` and `GET metadata/:slug`, allowlist DTOs, the branded `VerifiedUser` and the
+`serveApi` split, and seven test files. Typecheck is clean across all three projects.
+
+### What the build changed about the plan
+
+**The slices were cut the wrong way, and Sol recut them.** This plan proposed server-then-client.
+That would have shipped 1a as a live public namespace and a visibility switch with no UI to set it —
+infrastructure, not a feature, and a dark deployment rather than a shippable slice. The cut is
+**vertical** now: 1a is article and metadata end to end, including the client, so the thing that
+ships is *send someone a link and they can read it*. Glossary, summaries, ideas and tweets become 1b,
+each landing with its own projection and its own tests. Do not land six DTOs behind an unused
+namespace for symmetry.
+
+**A required `user` parameter is not a boundary.** The plan asked for `serveAuthenticatedApi` to be
+callable only after `requireUser`. A required parameter prevents *omission* but accepts any object of
+the right shape, which does not encode *"came from the gate"*. What was built is a branded
+`VerifiedUser` whose private symbol `requireUser` alone can add, plus a runtime assert at the
+boundary so a JavaScript caller or an `as never` fails there rather than three layers down.
+
+**Five modules, not one `src/public.ts`.** [`src/store/public-slug.ts`](../../src/store/public-slug.ts),
+[`src/store/public-reader.ts`](../../src/store/public-reader.ts),
+[`src/public/routes.ts`](../../src/public/routes.ts), [`src/public/dto.ts`](../../src/public/dto.ts),
+[`src/public-types.ts`](../../src/public-types.ts). `publicSlug` gets its own file for a better reason
+than tidiness: putting it beside `ownedSlug` would make the public leaf import `currentOwnerId`,
+which is exactly the dependency public reads must not have.
+
+**The public reader takes no predicate, and that is the point.** `ownedSlug` and `publicSlug` have
+the same Drizzle type, so a shared helper that accepts a `where` — or a `scope`, or a
+`{kind: "owned" | "public"}` — compiles perfectly with the wrong one passed in, and one careless call
+site becomes an authorization decision. The public reader hardwires `publicSlug` and accepts nothing.
+The cost is some duplication between the two readers, which is the failure mode that fails locally
+rather than silently.
+
+**The public dispatcher is never handed the request object** — an improvement on what Sol specified,
+which was one shared envelope carrying `req` for both halves. It gets `{res, path, method}`. So
+*"the public routes ignore `Authorization`"* stops being a rule somebody has to remember and becomes
+a thing with no way to be expressed: there is no header to read, no body to parse, no cookie in
+scope. This is the shape to preserve if the namespace ever grows.
+
+**Public blocks need their own column list, not a projection afterwards.** `blocksQuery` in
+[`pg.ts`](../../src/store/pg.ts) selects per-block `note`. Projecting it away after fetching it is
+strictly weaker than never selecting it.
+
+**And two hazards of this tree, both hit rather than predicted.** The migration lane is busy: 0023
+was taken by another agent fourteen minutes before this work needed a number, while the journal was
+mid-update, so the number has to be re-checked immediately before writing *and* again before
+committing. And `src/routes.ts` turned out to be a file two agents needed at once — an error-monitoring
+change was written against this dispatcher split and could not compile without it, so it committed
+the file, carrying 338 lines of this work under its message. Nothing was lost and the attribution is
+recorded in the next commit, but the working agreement only covers one direction: it protects a peer
+from your commit message and says nothing about your finished work landing under theirs. Whoever
+takes 1b will meet it on the same file.
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next
