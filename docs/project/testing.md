@@ -298,6 +298,31 @@ Nothing points at a rule today (it's `gistable: false`, so no ToC row), but a tr
 one goes stale. `tests/blocks.test.ts` asserts the current behaviour so that fixing it is a
 deliberate act rather than an accident. See [block-ids.md](block-ids.md).
 
+## A test that spawns a process needs its own timeout
+
+Vitest's default is 5 seconds. That is generous for a function call and meaningless for anything that
+starts `tsx`, which has to compile the script and its imports before it does the thing you are
+testing.
+
+On 2026-08-28 all four cases in `tests/store-export-fails-closed.test.ts` went red at
+`Test timed out in 5000ms`, each taking 11-19 seconds. Nothing was wrong with the code or the tests:
+the machine had a load average of **108** and 56 vitest workers alive, because six sessions were
+sharing one laptop. The same file passes with a realistic ceiling, and a mutation still reddens
+exactly the cases it should — so the ceiling did not weaken anything.
+
+The cost of that red was not the failure, it was the **wording**. "Timed out" reads like a hang, so
+it gets investigated as one. Half an hour went on a number.
+
+So: **if a test shells out, give it an explicit timeout and say in a comment why that number.** Sixty
+seconds is the convention here (`tests/pdf-read.test.ts`, `tests/store-export-fails-closed.test.ts`).
+Being generous costs nothing except when something really is stuck; being tight costs whoever is
+unlucky.
+
+Most of the child-process suites here do not do this yet — `tests/db-tls.test.ts`,
+`tests/lockfile.test.ts` and `tests/no-undeclared-spend.test.ts` among them. They are fine on an idle
+machine and are the first things to go red on a busy one, which is exactly when you are least able to
+tell a real failure from a slow one.
+
 ## A suite that cannot run, and how to make it say so
 
 A Postgres suite that finds the database behind the code should say so out loud. Getting that to

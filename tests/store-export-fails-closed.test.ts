@@ -113,6 +113,24 @@ function run(overrides: Env): Run {
   };
 }
 
+/**
+ * **Each case spawns `tsx scripts/db-export.ts`, so vitest's 5s default is not a
+ * timeout — it is a load test.**
+ *
+ * Every one of these failed on 2026-08-28 at `Test timed out in 5000ms`, taking
+ * 11-19s apiece, with a load average of 108 and 56 vitest workers alive across
+ * six sessions sharing this laptop. Nothing was wrong: the same file passes with
+ * a realistic ceiling. But a red that says "timed out" reads like a hang, and
+ * chasing it cost half an hour that a number here would have saved.
+ *
+ * Three `tsx` starts per case, each compiling the script and its imports. That
+ * is seconds of honest work even on an idle machine, and there is no upper bound
+ * on how slow a busy one gets. So: generous, because the cost of being generous
+ * is only paid when something really is stuck, and the cost of being tight is
+ * paid by whoever is unlucky.
+ */
+const SPAWNS_A_PROCESS = 60_000;
+
 describe("db:export against Postgres with no matching bucket", () => {
   it("refuses when the service key is missing — the commonest version", () => {
     /* A `.env.local` with `SUPABASE_URL` set and the key absent. This is the
@@ -124,7 +142,7 @@ describe("db:export against Postgres with no matching bucket", () => {
     expect(r.stderr).toContain(REFUSAL);
     // Fail closed means nothing on disk, not a directory that half worked.
     expect(r.written).toEqual([]);
-  });
+  }, SPAWNS_A_PROCESS);
 
   it("refuses when neither credential is set", () => {
     const r = run({ DATABASE_URL: LOCAL_DB, SUPABASE_URL: "", SUPABASE_SERVICE_ROLE_KEY: "" });
@@ -132,7 +150,7 @@ describe("db:export against Postgres with no matching bucket", () => {
     expect(r.stderr).toContain("SUPABASE_URL");
     expect(r.stderr).toContain(REFUSAL);
     expect(r.written).toEqual([]);
-  });
+  }, SPAWNS_A_PROCESS);
 
   it("refuses a bucket in a different Supabase project from the database", () => {
     /* Both credentials present and both perfectly valid — the failure is that
@@ -153,7 +171,7 @@ describe("db:export against Postgres with no matching bucket", () => {
     expect(r.written).toEqual([]);
     // And it refused before touching the database, which is remote and fake.
     expect(r.stderr).not.toMatch(/ENOTFOUND|ECONNREFUSED|getaddrinfo/);
-  });
+  }, SPAWNS_A_PROCESS);
 
   it("does not refuse a matching pair", () => {
     /* The control. Without it, a constructor that threw unconditionally would
@@ -167,5 +185,5 @@ describe("db:export against Postgres with no matching bucket", () => {
       SUPABASE_SERVICE_ROLE_KEY: "not-a-real-key",
     });
     expect(r.stderr).not.toContain(REFUSAL);
-  });
+  }, SPAWNS_A_PROCESS);
 });
