@@ -164,42 +164,34 @@ is that it passes is indistinguishable from one that inspects nothing — which 
 link checker came to go green on all three bugs it was written in response to.
 
 **And the control itself can be a no-op.** Breaking the thing on purpose is usually a scripted edit,
-and a scripted edit that matches nothing changes nothing and says nothing —
-`str.replace` on an absent needle returns the string unchanged and raises no error, and `sed` is no
-better. So the control runs, the test passes, and the green is reported as evidence.
+and a scripted edit that matches nothing changes nothing and says nothing — `str.replace` on an
+absent needle returns the string unchanged and raises no error, and `sed` is no better. So the
+control runs, the test passes, and the green is reported as evidence.
 
 > A no-op in ordinary work leaves a missing change somebody may notice. A no-op in a red-first
 > control leaves a **green test you are about to cite as evidence**.
 
-It is worse than it sounds, because the line a control edits is by definition the line you have just
-been changing — the least stable text in the file, and the thing a peer may have edited under you
-minutes ago. Two defences, both cheap: **insert a fresh line at a stable anchor** rather than editing
-an existing one, and **assert the anchor occurs exactly once** before substituting — *exactly* once,
-not at least once, and pick an anchor that identifies **the line that runs**. A control that asserted
-`>= 1` on a string appearing in both a docstring and the code renamed the comment, left the code
-alone, and passed seven tests. That is the third face of one failure: a no-op passes, a partial edit
-passes, and an edit that lands in a comment passes. All three look identical from outside. And treat an
-unexpectedly green control as broken until you have seen it red once — spideryarn, 2026-08-28, where
-four controls passed at once and the tell was that four controls passing at once is not a thing that
-happens.
+**Four ways a control lies, and they are indistinguishable from outside.** It matched nothing. It
+applied half and the rest died. It landed in a comment rather than in the code. Or it went red — for
+a syntax error rather than for the thing under test, which is the same class of useless as green for
+the wrong reason.
 
-**The same guard belongs on the mutation, and on the ordinary edit beside it.** Within the hour, on
-the same afternoon, a scripted edit block died on a syntax error partway through — so a test went on
-asserting a field the rename had already moved, passed trivially, and was about to be cited as
-evidence. So: make a red-first that did not actually mutate report **"NO-OP"** rather than a green
-run, and check the anchor on every scripted replacement, not only the ones inside controls. A partial
-edit is the same failure wearing different clothes — some of it applied, so nothing looks skipped.
+Four defences, each cheap, and none of them optional once you have seen the others:
 
-**And a control can go red for the wrong reason, which the NO-OP guard cannot catch.** Same
-afternoon: two mutations were written with `\n` passed through a shell argument, so the files got a
-literal backslash-n and the suite went red on a **syntax error** rather than on the guard under test.
-Both read as successful red-firsts if you look only at the exit code.
+- **Insert a fresh line at a stable anchor** rather than editing an existing one. The line a control
+  breaks is by definition the line you have just been changing: the least stable text in the file,
+  and the one a peer may have edited under you minutes ago.
+- **Assert the anchor occurs exactly once** — *exactly*, not at least — and pick one that identifies
+  **the line that runs**. `>= 1` on a string living in both a docstring and the code renames the
+  comment and passes.
+- **Make a mutation that did not apply say so**, in the words `NO-OP` rather than by going green. The
+  guard belongs on every scripted replacement, not only the ones inside controls.
+- **Read the failure message and check it names what you meant to break.** Nothing else separates a
+  real red from a syntax error, and it costs one line of output.
 
-> Red for the wrong reason is the same class of useless as green for the wrong reason.
-
-The NO-OP guard catches a mutation that never applied. It cannot catch one that applied and broke
-something else first. **Read the failure message and check it names the thing you meant to break** —
-that is the only step that separates the two, and it costs one line of output.
+And treat an unexpectedly green control as broken until you have seen it red once. All of the above
+was collected in spideryarn on one afternoon, 2026-08-28; the tell for the first was four controls
+passing at once, which is not a thing that happens.
 
 ## Spotting the family
 
