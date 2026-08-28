@@ -23,7 +23,7 @@
  * failing case, and it is what makes the second one evidence about the ref
  * rather than about the content.
  */
-import { act, type ReactNode } from "react";
+import { act, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Link } from "../src/web/Link.js";
@@ -78,18 +78,15 @@ async function hoverTheLink() {
 
 it("hands a ref straight through to the anchor it renders", () => {
   /* A callback ref rather than an object one, so this records what React
-     actually attached rather than what we hoped it would. */
+     actually attached rather than what we hoped it would — and it takes
+     whatever it is given, `null` included, so that a ref which was attached and
+     then detached reads as detached rather than as the node it used to be.
+     ⟨Sol, 2026-08-28⟩. */
   let node: Element | null = null;
 
   act(() =>
     root.render(
-      <Link
-        href="/profile"
-        ref={(el) => {
-          if (el) node = el;
-        }}
-        onClick={(e) => e.preventDefault()}
-      >
+      <Link href="/profile" ref={(el) => { node = el; }} onClick={(e) => e.preventDefault()}>
         Profile
       </Link>,
     ),
@@ -119,15 +116,56 @@ it("opens the card when the pointer rests on the link", async () => {
   expect(document.querySelector(".tooltip")?.textContent).toContain("reader@example.com");
 });
 
+/** Everything a trigger is handed, with `ref` named so it can be dropped. */
+type SwallowProps = { ref?: unknown; href: string; children?: ReactNode } & Record<string, unknown>;
+
+/**
+ * **Both refs, not one.** `Tooltip` merges its own reference ref with whatever
+ * ref the trigger already had (`useMergeRefs`), and the two tests above only
+ * ever exercise one of them at a time: the first has no tooltip, the second
+ * gives the link no ref of its own. This is the case the masthead would hit the
+ * day a link wants its own ref, and it runs under `<StrictMode>`, whose
+ * attach-detach-reattach cycle is where a merged ref goes wrong if it is going
+ * to. ⟨Sol, 2026-08-28⟩.
+ */
+it("keeps the trigger's own ref as well as its own", async () => {
+  let mine: Element | null = null;
+
+  act(() =>
+    root.render(
+      <StrictMode>
+        <Tooltip content="Signed in as reader@example.com" placement="bottom">
+          <Link href="/profile" ref={(el) => { mine = el; }} onClick={(e) => e.preventDefault()}>
+            Profile
+          </Link>
+        </Tooltip>
+      </StrictMode>,
+    ),
+  );
+
+  expect((mine as unknown as Element | null)?.tagName).toBe("A");
+
+  await hoverTheLink();
+
+  expect(document.querySelector(".tooltip")?.textContent).toContain("reader@example.com");
+});
+
 /**
  * The control for the test above: the same card around a trigger that drops the
- * ref instead of passing it on — `Link` with the one line that matters removed.
- * It must be the failing case, or the test above is about the content and not
- * about the ref at all.
+ * ref instead of passing it on. It must be the failing case, or the test above
+ * is about the content and not about the ref at all.
+ *
+ * It forwards **everything else** — the handlers, the ARIA — and pulls `ref`
+ * out of the spread and drops it on the floor, so the ref is the only
+ * difference between this and the test above. An earlier version rendered a
+ * bare `<a href>` and dropped every injected prop at once, which would have gone
+ * red for any of half a dozen reasons. ⟨Sol, 2026-08-28⟩.
  */
 it("cannot open when the trigger swallows the ref", async () => {
-  const Swallow = ({ href, children }: { href: string; children?: ReactNode }) => (
-    <a href={href}>{children}</a>
+  const Swallow = ({ ref: _dropped, href, children, ...rest }: SwallowProps) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
   );
 
   act(() =>

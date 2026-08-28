@@ -301,7 +301,11 @@ export function Library() {
                         mention it. */}
                     {user?.email && (
                       <span className="tw:mt-1 tw:block tw:text-ink-faint">
-                        Signed in as {user.email}
+                        {/* `break-all` on the address alone: `.tooltip` caps at
+                            22rem and sets no `overflow-wrap`, so a long address
+                            with nothing to break on would run out of the panel
+                            rather than wrap. GPT Sol, 2026-08-28. */}
+                        Signed in as <span className="tw:break-all">{user.email}</span>
                       </span>
                     )}
                   </Tip>
