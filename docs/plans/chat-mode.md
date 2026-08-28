@@ -708,22 +708,26 @@ sees while the first fetch is in flight, and `?thread=` can still name a convers
 bookmark that has not arrived, or one that was closed and discarded.
 
 - **The question goes down `onSendNew`, which always mints.** The ordinary `onSend` means *send to
-  the open conversation*, and `ChatBand` resolves that against `?thread=`. The first version used it,
-  on the reasoning that `?thread=` is null whenever the list is showing — which is exactly the thing
+  the open conversation*, and `ConversationBand` resolves that against `?thread=`. The first version
+  used it, on the reasoning that `?thread=` is null whenever the list is showing — which is the thing
   that is not true. A reader opening a stored `?thread=` from a bookmark, or from the floating
   dialog's *"open in full chat"*, would have had their question **appended to that conversation**,
   under a placeholder promising a new one, past the `busy` guard, and possibly on top of an answer
   still arriving.
 - **The box is offered only once the fetch has landed on a list with something in it** —
-  `loaded && threads.length > 0`. Minting before the fetch lands is no better than joining: `refresh`
-  on arrival replaces the whole list with the server's snapshot
-  ([useChat.ts](../../src/web/useChat.ts) § refresh, `only === undefined`), taking the just-minted
-  conversation with it; every later frame of the answer then patches a row that is not there, so
-  **the reader's question disappears off the screen while its request carries on**. Both halves are
-  needed, and the second review's own suggested guard — a non-empty list — is what the third review
-  broke: press `+` before the fetch lands, type a draft, close the conversation, and `leave` above
-  keeps that thread *because* there is a draft in it. A list, still loading. `threads.length` stays
-  because an empty list is what the `+` and the empty panel's own button are for.
+  `loaded && threads.length > 0`. It went in as a safety guard: minting before the fetch landed was
+  no better than joining, because `refresh` on arrival replaced the whole list with the server's
+  snapshot and took the just-minted conversation with it, so **the reader's question disappeared off
+  the screen while its request carried on**. Both halves were needed for that, and the second
+  review's own suggested guard — a non-empty list — is what the third review broke: press `+` before
+  the fetch lands, type a draft, close the conversation, and `leave` above keeps that thread
+  *because* there is a draft in it. A list, still loading.
+
+  **That reason has since been fixed at its source** — see the next section — so what the guard now
+  does is presentational, and it stays for that: a box saying *"Ask something new…"* under a list the
+  reader cannot see yet is offering to start a second conversation in a panel that has not admitted
+  to having a first, and an empty list is what the `+` and the empty panel's own button are for. Both
+  halves still earn their place; neither is load-bearing for safety any more.
 
 The second detail: **it is passed `focusNonce={0}` and a focus counter of its own.** The composer
 takes the caret when the nonce rises, and that is right when a reader has just *asked* for somewhere
@@ -746,29 +750,100 @@ nothing for** — which is the state the first version got wrong and the one the
 working. Every one was watched failing first, against the wiring swapped back to `onSend` and against
 each half of the guard removed in turn.
 
-### What is left undone
+### The list arriving is not allowed to overwrite what the reader did
 
-**The wipe-on-arrival race is `refresh`'s, not the composer's.** Any conversation minted before the
-initial fetch lands is replaced by the snapshot, and that is reachable today by pressing `+` fast
-enough — the composer only made it easy to reach, and the guard above only keeps *this* box out of
-it. There is a second way in that the guard does not cover either: **`loaded` is set by whichever
-refresh answers first, not by the last one still in flight.** Under `StrictMode` the mount effect
-runs twice ([main.tsx](../../src/web/main.tsx)), so in development the first response can turn the
-box on while the second is still on its way to replace everything under it. GPT-5.6's fourth pass
-found that one.
+The composer above is guarded because of a bug that was never the composer's: **the answer to the
+load on arrival was written straight over whatever was on screen** — `setThreads(fresh)` in
+[useChat.ts](../../src/web/useChat.ts) § `refresh`. That looks safe, on the reasoning that a panel
+which has only just mounted has nothing on screen to lose, and it is true for exactly as long as the
+fetch takes and no longer. Greg hit the visible half of it on 2026-08-27 — *"I tried loading Chat
+mode on a slow internet connection, and it initially told me there were no chats"* — and everything
+a reader can do inside that window landed in a list the response was about to replace:
 
-The fix belongs in `useChat`: an initial `refresh` that merges rather than replaces, or that declines
-to overwrite a thread this client has already put on the screen, and a generation guard so a stale
-response cannot land at all. It wants its own piece of work and its own failing test, because it is
-the sort of thing that looks fine every time you try it by hand.
+- press `+` and get a conversation, and it is **gone** when the list lands;
+- type a question into it and send, and the conversation goes with it while its request carries on.
+  Every later frame of the answer then patches a row that is not there, so **the answer arrives
+  nowhere** and the reader is looking at a list with no sign they ever asked anything;
+- delete a conversation, and the older snapshot **puts it back**;
+- and one that is not about the reader at all: **two loads of one article can be in flight at
+  once**, and they can answer in either order. `StrictMode` runs the mount effect twice
+  ([main.tsx](../../src/web/main.tsx)), so this is a development-only state — `Reader` is keyed on
+  the slug, so changing article remounts the hook rather than re-running its effect, and nothing
+  else starts a second arrival load. I claimed otherwise here first and GPT Sol corrected it. Worth
+  guarding anyway: the `loadFailed` bug fixed the day before was the same shape and cost a day of
+  believing a panel that said it could not load a list it was showing.
 
-**And one thing the tests cannot say.** They mock `onSendNew`, so they pin the *panel's* half of the
-contract — which call the question goes down, and when the box is offered at all. The other half,
-that `send(null, …)` mints rather than joins, is already exercised all through
-[use-chat-recovery.test.ts](../../tests/use-chat-recovery.test.ts). What is left untested is the one
-line between them, `ChatBand`'s `onSendNew`, because testing it means rendering `ChatBand` with a
-fake fetch and nothing in this repo does that yet. A narrow gap, but it is the classic one: both
-sides green, the value that crosses between them never exercised.
+So `refresh` now does two things on arrival. The server's list is **added to** what is on screen and
+never applied over it — `mergedArrival`, and its two rules are each a rule this file already keeps
+somewhere else:
+
+- **a row already on screen wins.** Not *unless the server's is newer*: ours is newer by
+  construction, because the mount effect empties the list before it fetches, so everything in `prev`
+  was put there afterwards by this tab, from a send this tab is watching. The server's copy of the
+  same conversation is at best equal and at worst the half-written one it had when it answered — the
+  question stored, the answer still streaming — and a response crawling back over a slow connection
+  can be that stale even after the send it is behind has *finished*. The first version of this fix
+  was narrower: it protected a conversation only while a send was still **running**, which is the
+  narrowing [`refresh(only)`](../../src/web/useChat.ts) already makes. That rule passes four of the
+  five tests and fails the fifth, which is the one where the answer completed before the list landed
+  — so the rule with no timing in it is the one that is right;
+- **deletions win**, which `put` has always said and the arriving list did not. A conversation the
+  reader deleted while the fetch was out is still in the snapshot, because the send that created it
+  told the server; putting it back reads as the delete button not working.
+
+Both are the arrival load's alone. Neither would be safe for `refresh(only)`, where the screen is
+the thing known to be wrong and a thread the server does not have is one somebody else deleted —
+which is why that branch takes the server's copy, and deletes on its absence.
+
+And it **numbers its loads**, so a response belonging to a load that a later one has superseded may
+neither write nor complain. Merging covers half of that on its own — a stale snapshot answering *after* the
+current one finds the fuller list already on screen, and the row on screen wins. It is the other
+order that needs the number: the stale one answering **first**, when there is nothing on screen to
+defend with, puts its shorter copy there — and the current response, arriving second, is then the
+one that loses. The conversation sits a message short until the next reload. This is the same
+distinction `loadFailed` was bitten by and fixed for in
+[load-failed-flags.test.ts](../../tests/load-failed-flags.test.ts): `showing.current` tells
+**articles** apart, and what has to be told apart here is **loads of one article**.
+
+**Neither write nor complain**, and the second half was GPT Sol's, reviewing this: the `catch` was
+still guarded on the slug alone, so a superseded load *failing* after the current one succeeded put
+a failure message over a list that was on screen and correct. The exact shape
+[load-failed-flags.test.ts](../../tests/load-failed-flags.test.ts) had fixed the day before for the
+`loadFailed` flag — and a reminder that guarding a fix's write path is not the same as guarding the
+request.
+
+**What is still not covered**, and was not before either: `deleted` holds the conversations *this
+tab* deleted, so a slow arrival response can still bring back a conversation that **another tab**
+deleted while it was in flight. GPT Sol found it; it predates this change and the old
+`setThreads(fresh)` had it too, so the merge is not what to fix it in. It wants a server-side
+`deletedAt`, or a version on the list the client can compare.
+
+[tests/chat-arrival-race.test.ts](../../tests/chat-arrival-race.test.ts) is seven cases: the three the
+reader can cause, the answer that *finished* before the list landed, the two orders the double load
+can answer in, and the superseded load that fails. Each was watched failing against the old `setThreads(fresh)`; the finished-answer
+one was watched failing against the narrower still-running rule as well; and the superseded-load one
+was watched failing against the merge with the number taken out, so each half of the fix has a test
+that fails without it. The double-load pair mounts under the real `StrictMode` rather than an
+imitation of the double run.
+
+### And the one line the composer's own tests could not reach
+
+[tests/chat-list-composer.test.tsx](../../tests/chat-list-composer.test.tsx) pins the panel's half of
+the contract and [use-chat-recovery.test.ts](../../tests/use-chat-recovery.test.ts) pins the hook's,
+that `send(null, …)` mints rather than joins. Between them sat `ConversationBand`'s `onSendNew`,
+untested — both sides green and the value that crosses between them never exercised, which is the
+classic gap and, here, the exact line the first version of this feature got wrong.
+
+[tests/conversation-band-send-new.test.tsx](../../tests/conversation-band-send-new.test.tsx) drives
+the real component with the real hook, `ChatPanel` stubbed to capture what it is handed, and reads
+the one thing that says where the question went: the `threadId` in the request body. With `?thread=`
+naming a stored conversation, the question must go somewhere else, `?thread=` must follow it, and the
+focus nonce must rise. Watched failing against a copy of `ConversationBand` wired back to `thread`.
+
+That needed `ConversationBand` exported from [App.tsx](../../src/web/App.tsx), which nothing else in
+the repo does — the alternative was the source-text assertion
+[glossary-band-wiring.test.ts](../../tests/glossary-band-wiring.test.ts) settles for, and this seam
+is worth the real thing.
 
 ## What is still open
 

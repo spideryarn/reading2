@@ -1950,8 +1950,10 @@ export function ConversationBand({
     <ChatPanel
       slug={slug}
       /* Not for display — the panel offers its "start a new one" box only once
-         this is true, because a conversation minted before the first fetch
-         lands is wiped by it. See the composer under `ThreadList`. */
+         this is true. It went in because a conversation minted before the first
+         fetch landed was wiped by it; that is fixed at source now
+         (`mergedArrival` in useChat.ts), so what this does is keep the box off
+         a list the reader cannot see yet. See the composer under `ThreadList`. */
       loaded={loaded}
       loadFailed={loadFailed}
       threads={threads}

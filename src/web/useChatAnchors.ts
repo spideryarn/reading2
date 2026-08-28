@@ -18,7 +18,7 @@
  * proposed lifting `useChat` into `Reader`; it also found the race below.
  *
  * So the summaries live here, the transcripts live in `ChatDialog` and
- * `ChatBand`, and this state changes only when a conversation is created,
+ * `ConversationBand`, and this state changes only when a conversation is created,
  * renamed or deleted.
  *
  * ## The one rule that keeps them in step

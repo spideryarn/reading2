@@ -629,9 +629,22 @@ export function useChat(slug: string): ChatApi {
    * `showing.current` does not cover this, and the difference is the same one
    * `loadFailed` was bitten by — see the note in the mount effect. That ref
    * distinguishes **articles**; this distinguishes **loads of one article**, of
-   * which `StrictMode` deliberately starts two. Merging is no defence there,
-   * because the stale snapshot has the same conversations in it, one message
-   * shorter. Found by GPT Sol reviewing the composer under the list, 2026-08-27.
+   * which `StrictMode` deliberately starts two.
+   *
+   * **Two loads of one article is a development-only state**, and worth saying
+   * so rather than leaving the guard looking broader than it is: `Reader` is
+   * keyed on the slug in App.tsx, so changing article remounts this hook rather
+   * than re-running its effect, and nothing else starts a second arrival load.
+   * `StrictMode` is the case, and a dev-only wrong state is still worth two
+   * lines — the `loadFailed` bug this is modelled on was exactly that, and it
+   * cost a day of believing a panel that said it could not load a list it was
+   * displaying.
+   *
+   * Merging is only half a defence, which is why the number is here at all: a
+   * stale snapshot answering *after* the current one finds the fuller list
+   * already on screen and loses to it, but one answering *first* puts its
+   * shorter copy on an empty screen, and then it is the current response that
+   * loses. Found by GPT Sol reviewing the composer under the list, 2026-08-27.
    */
   const load = useRef(0);
 
@@ -699,7 +712,15 @@ export function useChat(slug: string): ChatApi {
         );
         return true;
       } catch (e) {
-        if (showing.current === mine) setError(describeFetchFailure(e as Error));
+        /* The same two guards the success path uses, and the second one for the
+           same reason `loadFailed` needed it: a superseded load failing after
+           the current one succeeded put a failure message over a list that was
+           on the screen and correct. Guarding only the writes and not the
+           errors would have left exactly that bug in a quieter form. GPT Sol,
+           2026-08-28. */
+        if (showing.current !== mine) return false;
+        if (only === undefined && generation !== load.current) return false;
+        setError(describeFetchFailure(e as Error));
         return false;
       }
     },

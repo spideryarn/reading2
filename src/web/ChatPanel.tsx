@@ -115,7 +115,7 @@ interface Props {
    * under the list.
    *
    * A separate call from `onSend`, and the separation is the safety. `onSend`
-   * means *send to the open conversation*, and ChatBand resolves that against
+   * means *send to the open conversation*, and ConversationBand resolves that against
    * `?thread=` — which is not always null while the list is on screen, because
    * the panel decides between list and conversation with `threads.find`, and a
    * `?thread=` can name a conversation that has been discarded, or one the
@@ -163,7 +163,7 @@ interface Props {
   blocks: Map<string, string>;
   /**
    * Rises by one each time a *new* conversation is started; the composer takes
-   * focus when it changes. See ChatBand in App.tsx for why a counter, and why
+   * focus when it changes. See ConversationBand in App.tsx for why a counter, and why
    * opening an existing conversation deliberately does not do this.
    */
   focusNonce: number;
@@ -511,28 +511,30 @@ export function ChatPanel({
               `onSendNew` mints whatever the URL says, which is the only thing
               this box ever means.
 
-              That leaves the other half, which is not about the URL at all:
-              **nothing may be minted before the first fetch lands.** `refresh`
-              on arrival replaces the whole list with the server's snapshot
-              (useChat.ts § refresh, `only === undefined`), taking a
-              just-minted conversation with it — and every later frame of the
-              answer then patches a row that is not there, so the reader's
-              question disappears off the screen while its request carries on.
-              Hence `loaded`, and hence *both* of `loaded` and `threads.length`:
-              a non-empty list is not proof the fetch landed, because pressing
-              `+` before it does and closing the conversation with a draft in it
-              leaves a thread behind (see `leave` above) — GPT-5.6 again, on the
-              third pass, against its own suggested guard. `threads.length`
-              stays because an empty list is the state the `+` and the empty
-              panel's own button are for.
+              That leaves the other half, which is not about the URL at all,
+              and which is **no longer a safety rule**. It was one: `refresh` on
+              arrival used to replace the whole list with the server's snapshot,
+              taking a just-minted conversation with it — and every later frame
+              of the answer then patched a row that was not there, so the
+              reader's question disappeared off the screen while its request
+              carried on. That is fixed where it belonged, in `mergedArrival`
+              (useChat.ts), so what the guard does now is presentational: a box
+              offering to start a *second* conversation, sitting under a list
+              the reader cannot see yet, is not a thing to offer. It stays for
+              that. Hence `loaded`, and hence *both* of `loaded` and
+              `threads.length`: a non-empty list is not proof the fetch landed,
+              because pressing `+` before it does and closing the conversation
+              with a draft in it leaves a thread behind (see `leave` above) —
+              GPT-5.6 again, on the third pass, against its own suggested guard.
+              `threads.length` stays because an empty list is the state the `+`
+              and the empty panel's own button are for.
 
-              What this does **not** close is the race itself, which is
-              `refresh`'s rather than this box's: pressing `+` fast enough gets
-              into it without the box, and `loaded` is set by whichever refresh
-              answers first rather than by the last one in flight — so under
-              StrictMode's double mount, in development, the box can come on
-              while a second snapshot is still on its way. docs/plans/chat-mode.md
-              § What is left undone says where that fix belongs.
+              The race those two guards were keeping this box out of is closed
+              now, in `refresh` itself, where pressing `+` fast enough could
+              reach it without the box at all — `mergedArrival` and the load
+              number in useChat.ts, and
+              docs/plans/chat-mode.md § The list arriving is not allowed to
+              overwrite what the reader did.
 
               `focusNonce={0}` on purpose: this box must never take the caret.
               The nonce is for a reader who has just *asked* for somewhere to
@@ -1760,7 +1762,7 @@ export function Composer({
    * Take focus when a new conversation has just been started.
    *
    * Greg, 2026-08-26: *"when a new chat is started, move focus to the input
-   * box."* Which is the only time it is right — see ChatBand in App.tsx. The
+   * box."* Which is the only time it is right — see ConversationBand in App.tsx. The
    * guard on `0` is what keeps a plain page load, or the reader opening a
    * conversation they already had, from stealing the caret; a focused textarea
    * turns ↑ / ↓ from "step through the article" into "move the cursor", and

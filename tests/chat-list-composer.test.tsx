@@ -10,7 +10,7 @@
  * the state they had missed.
  *
  * **It sends down `onSendNew`, which always mints.** The ordinary `onSend`
- * means *send to the open conversation*, and ChatBand resolves that against
+ * means *send to the open conversation*, and ConversationBand resolves that against
  * `?thread=` — which is not always null while the list is on screen, because
  * the panel picks between list and conversation with `threads.find`. A
  * `?thread=` naming a stored conversation the fetch has not brought yet leaves
@@ -18,12 +18,19 @@
  * question to that conversation, under a placeholder promising a new one.
  *
  * **And it is offered only once the fetch has landed on a list with something
- * in it.** Minting before the fetch lands is no better than joining: the
- * arriving snapshot replaces the whole list (`refresh` in useChat.ts) and takes
- * the new conversation with it, so the question goes off the screen while its
- * request carries on. Both `loaded` and `threads.length` are needed, because a
- * non-empty list is not proof the fetch landed — pressing `+` before it does
- * and closing the conversation with a draft in it leaves a thread behind.
+ * in it.** This went in as a safety rule: minting before the fetch landed was
+ * no better than joining, because the arriving snapshot replaced the whole list
+ * and took the new conversation with it, so the question went off the screen
+ * while its request carried on. Both `loaded` and `threads.length` were needed
+ * for that, because a non-empty list is not proof the fetch landed — pressing
+ * `+` before it does and closing the conversation with a draft in it leaves a
+ * thread behind.
+ *
+ * That is now fixed where it belonged, in `mergedArrival` (useChat.ts, and
+ * tests/chat-arrival-race.test.ts), so the guard is presentational and the
+ * tests below say only what is still true: **when the box is offered.** A box
+ * offering to start a second conversation under a list the reader cannot see
+ * yet is not a thing to offer, and that is the whole of it now.
  *
  * It also pins the focus rule. The composer takes the caret when `focusNonce`
  * rises, and a focused textarea turns the article's ↑/↓ into caret movement —
