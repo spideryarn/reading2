@@ -47,6 +47,31 @@ is nothing here worth turning off to save it.
 The cold number is a one-off per project. If it ever reappears, the thing to
 suspect is a change that alters every chunk at once.
 
+**Three runs, because a research pass disagreed and it was worth settling.** A
+Sonnet agent reading the plugin's shipped types concluded there is no
+unchanged-file cache and that "a deploy that changes one file still re-uploads
+everything at full cost" — flagging it, honestly, as inference and saying to
+test it. Tested: a rebuild with genuinely changed code took 6 s, and a rebuild
+under a **brand-new release name** took 6.3 s. So the dedup is keyed on content
+rather than on the release, and it lives at Sentry's end rather than in a local
+cache — which is what makes it work from a fresh Vercel build machine.
+
+Its other findings were right and are worth knowing if this ever does get slow:
+
+- `sourcemaps.disable: "disable-upload"` — real, and only in the shipped types
+  rather than the README. Debug ids still get injected at build time; the upload
+  is skipped, to be done later by `sentry-cli sourcemaps upload` from somewhere
+  off the deploy's critical path. **The escape hatch to reach for**, and the
+  cost of using it is a window where errors arrive with unmapped frames.
+- The prep pass — copy every matched file to a temp dir, inject debug ids,
+  rewrite the map — runs with up to 16 workers, which parallelises across many
+  small client chunks and does nothing for one big server bundle. A plausible
+  account of why the API build's cold number was six times the client's on half
+  the bytes, though nobody has confirmed it.
+- `release.cleanArtifacts` is deprecated and does nothing. We do not set it.
+- `prepareArtifacts: false` would skip that pass, and `sentryVitePlugin` does
+  not expose it — it is on the lower-level manager API the framework SDKs use.
+
 ## What is deliberately left able to fail the build
  *
  * With a token configured, an upload failure stops the build, and that is the
