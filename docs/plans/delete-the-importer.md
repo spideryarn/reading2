@@ -607,10 +607,33 @@ So the interface takes a namespace and an opaque content key, and the store neve
 Ownership and cleanup follow from the same fact: an entry is dead when nothing will ever ask its
 question again, which is a time-based sweep rather than a cascade from a revision.
 
+**And it is many rows per step, not one slot.** Both checkpoints are *collections*: the labels file
+holds an array of batch entries, and `pdf-chunks/` is one file per chunk. A table with one row per
+`(revision, step)` would hold the last entry and lose the rest — which is the same "written on every
+run, read on none" failure arriving by a different door. `(revision_id, step, key)` with `key` an
+opaque caller-supplied string, and the store never interprets it.
+
+**Concurrency is designed for, not hypothetical.** [`src/store/artifacts-fs.ts:349-352`](../../src/store/artifacts-fs.ts)
+ties it to the browser-driven advance endpoint letting two processes advance the same article.
+`labels.ts` already handles it: each run mints a random `runId`, stamps every write with it, and
+`clearCheckpoint` refuses to delete a file that is not its own. `pdf-chunks` handles it by having a
+pure content-hash key, so two attempts converge on the same bytes.
+
 Two more things the inventory turned up:
 
 - **Size is not a problem.** The largest real one on disk is `data/ball-lightning/pdf-chunks` at
-  100 KB over five files. A Postgres table is right; nothing here needs the bucket.
+  100 KB over five files, ~20 KB a chunk, and `MAX_PAGES = 100` bounds the worst case to the low
+  hundreds of KB. The largest labels file is 47.8 KB. A Postgres table is right; nothing here needs
+  the bucket.
+- **The `.running` attempt markers are not B3's.** `data/<slug>/steps/<step>.running`
+  ([`src/store/artifacts-fs.ts:441`](../../src/store/artifacts-fs.ts)) looks like scratch state and is
+  not — it already maps onto `revision_step_runs.status` and `attempt_id`, which C2 built. Named here
+  so that nobody designs it a second home.
+- **Nothing has ever deleted a pdf chunk**, on success or failure, so retention today is unbounded
+  and undecided. B3 should say out loud which it is rather than inheriting the silence.
+- **Moving to a row fixes a corruption class for free**, because a row cannot be half-written. That
+  is a side benefit of the migration and not its purpose, but it is the second time this plan has
+  found the destination better than the origin.
 - **`tweets` decides it is done by reading its own output.** `isDone: (ctx) => threadIsCurrent(ctx.dir)`
   compares a `sourceHash` stored in `tweets.json` ([`src/pipeline.ts:1206`](../../src/pipeline.ts),
   [`src/tweets.ts:140`](../../src/tweets.ts)). That is not a checkpoint and does not belong in B3 —
@@ -1199,8 +1222,14 @@ somebody fixed exactly this, wrote down why, and D undoes it from the other end.
 
 `tweets` and `summary` also read their own output, but only to ask whether it is stale
 (`threadIsCurrent`), and D replaces that with the step run's stamp. The ToC's `labels-progress.json`
-and the PDF chunk cache are checkpoints, and they are B3's. So the sweep finds five self-reads and
-they fall into three different drawers; only the three above are identity.
+and the PDF chunk cache are checkpoints, and they are B3's.
+
+So the sweep finds five self-reads in three different drawers, and **the drawer these three belong to
+had no name**. It is not a stage reading the previous *stage's* output, which is what D converts. It
+is not retry state within one attempt, which is what B3 is for. It is **a stage reading the article's
+own prior published output, across revisions, to keep identity stable** — and because it had no name,
+neither plan assigned it a landing and neither checklist tested it. That is the whole reason it
+survived four reviews.
 
 #### What the blocks failure actually is — narrower than I first wrote
 
@@ -1464,6 +1493,24 @@ relearning ([silent-success.md](../reusable/silent-success.md)).
 12. **Block identities outlive the revision that dropped them**, through the production path.
 13. **`db:export` refuses to run against Postgres without matching blob credentials.**
 14. **A retry does not buy a checkpoint twice**, on a different store instance.
+15. **`blocks`, `glossary` and `ideas` keep their ids on a *second* run against unchanged text**,
+    through the Postgres path — and **no existing item can stand in for this one.** The closest,
+    [transactional-stage-runner.md](transactional-stage-runner.md) item 8, runs the pipeline with
+    `data/<slug>/` deliberately empty and proves it completes. But a **fresh** ingest mints every id
+    by design, so that test cannot tell "carries ids correctly" from "silently re-mints every time".
+    It never runs a stage twice against the same article, which is the only place the difference
+    shows. Watched red by dropping the baseline.
+16. **A failed baseline read fails the stage**, rather than minting. The stage cannot tell an
+    infrastructure fault from a first ingest today, and the two must not share a branch — § Three
+    stages carry identity in a file.
+
+**And one thing that will not appear as a failure at all.** After D, `StepContext` loses `dir` and
+`htmlFile` ([transactional-stage-runner.md](transactional-stage-runner.md)), so the code that reads
+the previous blocks cannot compile and somebody is *forced* to touch it. That is the one piece of
+luck here. But `splitIntoBlocks(html, previous?: Block[])` takes its baseline as **optional**, so a
+conversion that reads the HTML from the store and calls it with one argument compiles cleanly, runs
+green, and re-mints everything. The forced edit guarantees somebody looks at the line. It does not
+guarantee they get it right, and nothing downstream would say so.
 
 ## Open
 
