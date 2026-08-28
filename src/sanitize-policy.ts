@@ -415,8 +415,22 @@ export function installArticlePolicy(purify: DOMPurify): void {
    * `semantics`, `annotation` and `annotation-xml` are all on its
    * `mathMlDisallowed` list, and `annotation-xml` is an HTML integration point
    * and a classic mXSS surface — but refusing a *tag* unwraps it and keeps its
-   * text. So the TeX was promoted into the formula as prose, and a reader of an
-   * equation-heavy page saw the rendered symbols followed by `\frac{1}{2}`.
+   * text, so the TeX ended up as a bare text node inside the `<math>`.
+   *
+   * **It is not a rendering bug, and the first version of this comment said it
+   * was.** Checked in Chrome on the ar5iv rendering of *Attention Is All You
+   * Need*: the formulas paint correctly either way, because MathML layout
+   * ignores a bare text node that is not in a token element — the `<math>` box
+   * is the same width with the stray text and without it. Nobody ever saw a
+   * `\frac`.
+   *
+   * **It is a `textContent` bug, which is worse in a quieter way**, because
+   * `textContent` is what everything after stage 2 reads. On that paper, 25 of
+   * 151 blocks carried TeX in their text — 486 characters, 1.3% of the article —
+   * so the block text stage 3 mints ids from, and that summaries, ideas, the
+   * glossary, search, quote-matching and every embedding are computed over, read
+   * `(x1,…,xn)(x_{1},...,x_{n})`: the same formula twice, once as symbols and
+   * once as source. Invisible on the page and present in every model call.
    * Wikipedia emits one on all 188 formulas of a single article; LaTeXML emits
    * them too. Found 2026-08-28 — docs/plans/readability-repair-pass.md.
    *

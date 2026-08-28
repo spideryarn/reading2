@@ -6,8 +6,19 @@
  * machine-readable TeX copy of itself —
  * `<semantics><mrow>…</mrow><annotation encoding="application/x-tex">…</annotation></semantics>`,
  * which is what Wikipedia and LaTeXML both emit — came out with the wrappers
- * gone and the TeX **left behind as visible text inside the formula**. The
- * reader saw the rendered symbols followed by `\frac{1}{2}`.
+ * gone and the TeX left behind as a bare text node inside the formula.
+ *
+ * **Not a rendering bug.** Chrome paints the formula identically either way; a
+ * bare text node inside `<math>` is not in a token element, so MathML layout
+ * ignores it, and the box measures the same width with and without. Verified in
+ * a browser before this was written up, because the first draft claimed readers
+ * were seeing `\frac{1}{2}` and they were not.
+ *
+ * **A `textContent` bug instead**, which is why it still matters: `textContent`
+ * is what every stage after 2 reads. On the ar5iv *Attention Is All You Need*,
+ * 25 of 151 blocks carried TeX in their text — 486 characters — so summaries,
+ * ideas, the glossary, search, quote-matching and every embedding saw each
+ * formula twice, once as symbols and once as source.
  *
  * The wrappers are stripped on purpose: DOMPurify lists `semantics`,
  * `annotation` and `annotation-xml` as `mathMlDisallowed`, and `annotation-xml`
@@ -45,7 +56,7 @@ describe("the TeX annotation does not become prose", () => {
     `<p>See <math><semantics><mrow><mi>x</mi></mrow>` +
     `<annotation encoding="application/x-tex">${TEX}</annotation></semantics></math> here.</p>`;
 
-  it("drops the TeX source rather than leaving it visible in the formula", () => {
+  it("drops the TeX source rather than leaving it in the block's text", () => {
     const clean = sanitizeHtml(withAnnotation);
     expect(clean).not.toContain("\\frac");
     expect(clean).not.toContain("\\sqrt");
