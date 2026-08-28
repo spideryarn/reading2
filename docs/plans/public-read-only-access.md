@@ -97,11 +97,24 @@ writing up ([silent-success.md](../reusable/silent-success.md)), and it is the s
 `src/store/index.ts` already gives for refusing to fall back from Postgres to files: *"Do not catch a
 Postgres error and fall back to files."*
 
-One consequence to know about before it surprises somebody:
-[`tests/store-parity.test.ts`](../../tests/store-parity.test.ts) compares the two stores'
-`articleMetadata`, and it holds **only while no parity fixture is published**. Publish one and the
-filesystem side says *cannot answer* where Postgres says `public`. That divergence is the feature
-working, not a regression, and the seam carries a comment saying so.
+One consequence, and it is worse than the one this paragraph claimed until 2026-08-28. The claim was
+that `tests/store-parity.test.ts` compares the two stores' `articleMetadata`, so the divergence would
+surface there once a parity fixture was published. **That file does not mention `articleMetadata` at
+all.** The only cross-store comparison of it is in
+[`tests/store-carry-forward.test.ts`](../../tests/store-carry-forward.test.ts), which reads
+`stages[].done` and nothing else.
+
+So the honest statement is: **the two stores now answer this differently and no test can see it.**
+Postgres says `private` or `public`; the filesystem says *cannot answer*. That divergence is the
+feature working rather than a regression — but nothing checks it either way, and a whole-object
+comparison written later would go red on a published fixture and look like a bug. The seam carries a
+comment saying exactly that.
+
+Worth noticing how this nearly went wrong: an agent reported the parity test as covering it, I
+endorsed writing a comment about when it would fire, and neither of us opened the file. **Asserting a
+check that was never written, while introducing the divergence it was supposed to cover**, is the
+purest form of the thing [silent-success.md](../reusable/silent-success.md) is about. It was caught
+because the agent went back to check its own claim before building on it.
 
 ## What the code already gets right
 
