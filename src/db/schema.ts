@@ -257,26 +257,49 @@ export const articles = spideryarn.table("articles", {
  * arrives the question is *who turned this on, when, and did they confirm they
  * had the right*. `public_at` alone cannot answer it.
  *
- * **`on delete cascade`, like every other child of `articles`.** A log row
- * naming an article nobody holds any more answers nothing anybody would ask:
- * the takedown question is about a document we are serving. Nothing deletes an
- * article today either — the shelf archives (see `archivedAt` above) — so this
- * is a choice about a path that does not exist yet rather than a live loss.
+ * **`on delete set null`, and NOT the cascade every other child of `articles`
+ * has.** That is the one place this table is deliberately unlike its siblings,
+ * and it was wrong here for a day.
+ *
+ * It shipped as `on delete cascade` on 2026-08-28 with the reasoning that a log
+ * row naming an article nobody holds any more answers nothing anybody would
+ * ask. GPT Sol's finding 2 the same day put it the other way round, and it is
+ * right: the log's whole purpose is the complaint that arrives **after** a
+ * document is taken down, and cascade erases the record at exactly the moment
+ * somebody needs it. *"Who shared this, when, and had they said they were
+ * entitled to"* is a question about an article we no longer have.
+ *
+ * The comment also rested on a claim that was simply false — *"nothing deletes
+ * an article today"*. `src/store/import.ts` deletes orphaned articles, so this
+ * was a live loss rather than a choice about a hypothetical path.
+ *
+ * So `article_id` is nullable and the reference clears on delete. Everything
+ * that makes the row *evidence* survives without it: the slug that was shared,
+ * who shared it, the transition, whether they confirmed the right to, and when.
+ * The FK is kept rather than dropped so that a row pointing at a live article
+ * still cannot point at a missing one.
  */
 export const articleVisibilityChanges = spideryarn.table(
   "article_visibility_changes",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    articleId: uuid("article_id")
-      .notNull()
-      .references(() => articles.id, { onDelete: "cascade" }),
+    /**
+     * **Nullable, because the row outlives the article.** See the header: the
+     * takedown question is asked about documents we no longer serve, so a log
+     * that vanishes with the article answers it in exactly the case it exists
+     * for. Null means the article has been deleted, and `slug` below is then
+     * the only name the row has.
+     */
+    articleId: uuid("article_id").references(() => articles.id, { onDelete: "set null" }),
     /**
      * The slug as it stood at the moment of the act.
      *
      * A second copy of something `articles.slug` already holds, deliberately: a
      * log line has to be readable on its own, and the URL that was shared is
      * the thing a complaint will name. `articles.slug` is what the article is
-     * called *now*.
+     * called *now* — and after a deletion there is no `articles` row at all, so
+     * this is the only name left. **Not null**, unlike `article_id`, for that
+     * reason: a row with neither is not evidence of anything.
      */
     slug: text("slug").notNull(),
     /** Who pressed it. The owner, because only the owner can — src/routes.ts. */

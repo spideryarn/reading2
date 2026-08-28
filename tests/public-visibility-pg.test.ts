@@ -930,6 +930,69 @@ when("sharing one article", { timeout: 60_000 }, () => {
     }
   });
 
+  /**
+   * **The audit trail outlives the article**, which is the whole point of it.
+   *
+   * 0024 gave this table the `on delete cascade` every other child of `articles`
+   * has, and GPT Sol's finding 2 caught it the same day: the log exists for the
+   * complaint that arrives *after* a takedown, so cascade erased the record at
+   * exactly the moment somebody would need it. The comment defending the cascade
+   * also claimed nothing deletes an article, which was false —
+   * `src/store/import.ts` deletes orphans.
+   *
+   * Deleted for real here rather than archived, because archiving is not the
+   * case: the shelf's `archived_at` leaves the row in place and nothing about
+   * the log changes. What had to be proved is the destructive path.
+   *
+   * A separate article, so the file's own fixture and its `afterAll` are not
+   * disturbed by deleting the thing every other case reads.
+   */
+  it("keeps the visibility log after the article itself is deleted", async () => {
+    const db = getDb();
+    const DOOMED = "00000000-0000-4000-8000-0000000000fb";
+    const DOOMED_SLUG = "test-public-visibility-doomed";
+    await db.delete(articleVisibilityChanges).where(eq(articleVisibilityChanges.slug, DOOMED_SLUG));
+    await db.delete(articles).where(eq(articles.id, DOOMED));
+    try {
+      await db.insert(articles).values({ id: DOOMED, ownerId: OWNER, slug: DOOMED_SLUG });
+      await db.insert(articleVisibilityChanges).values({
+        articleId: DOOMED,
+        slug: DOOMED_SLUG,
+        actorOwnerId: OWNER,
+        fromVisibility: "private",
+        toVisibility: "public",
+        rightsConfirmed: true,
+      });
+
+      await db.delete(articles).where(eq(articles.id, DOOMED));
+      /* The article really is gone — otherwise everything below is vacuous. */
+      const left = await db.select().from(articles).where(eq(articles.id, DOOMED));
+      expect(left).toHaveLength(0);
+
+      const [record] = await db
+        .select()
+        .from(articleVisibilityChanges)
+        .where(eq(articleVisibilityChanges.slug, DOOMED_SLUG));
+      expect(record, "the audit row went with the article").toBeDefined();
+      /* Every field a complaint would ask about, still there. `articleId` is the
+         one that goes, and null now means exactly one thing: it was deleted. */
+      expect(record).toMatchObject({
+        articleId: null,
+        slug: DOOMED_SLUG,
+        actorOwnerId: OWNER,
+        fromVisibility: "private",
+        toVisibility: "public",
+        rightsConfirmed: true,
+      });
+      expect(record?.at).toBeInstanceOf(Date);
+    } finally {
+      await db
+        .delete(articleVisibilityChanges)
+        .where(eq(articleVisibilityChanges.slug, DOOMED_SLUG));
+      await db.delete(articles).where(eq(articles.id, DOOMED));
+    }
+  });
+
   /** And the log will not take a row that records no movement. */
   it("and the change log refuses a row that did not move", async () => {
     await expect(
