@@ -142,6 +142,48 @@ projects.
 **Tier 1 is done.** 0.4 (the three streaming tests) and all of Tier 2 are not, and Tier 2 was never
 in the clear-cut half.
 
+### Tier 2, split by the plan's own risk lines — 2026-08-28
+
+Greg: *"Do at least the safe ones from Tier 2. Get input from GPT Sol about the others, and a
+review."* So the split is the risk column above, taken at its word:
+
+| | risk, as written above | |
+|---|---|---|
+| **2.1** `useStepJob` | low — "pure lift-and-shift of already-identical code" | building |
+| **2.4** `stamp` for tweets + summary | low | building |
+| **2.5** `stageCli` | low **with** tests, high without — so tests first, then callers | building |
+| **2.2** `stage-call.ts` | medium | [asked Sol](simplification-wave-2-tier2-input-prompt.md) |
+| **2.3** `roundClock` / `endOfStream` | real, and 0.4 is not done | asked Sol |
+| **2.6** `useArtefactRead` | medium, and it "wants its own review before it is built" | asked Sol |
+
+**One thing 2.4 needed checking before it could be called safe, and it holds.** `stepIsDone`
+compares against `store.stampFor(...)`, which reads *a separate record* on the face of it — and if
+it were separate, migrating `tweets` and `summary` off `isDone` would leave every existing artefact
+unstamped, fail the comparison, and re-run both stages on every article at model cost. It is not
+separate: `stampFor` reads the three fields **out of the artefact itself**, and `STAMP_SOURCE`
+(`store/artifacts.ts:528`) already names `tweets` and `summary`. `threadIsCurrent` and
+`summariesAreCurrent` compare `sourceHash`/`version`/`generator`; so does `sameStamp`. The migration
+is genuinely equivalent and costs nothing. `isStale` and `readSummaries` stay — the API routes use
+them at the other end.
+
+**The tree is the constraint, not the work.** Six other sessions are in this checkout, and at the
+time of writing `src/pipeline.ts`, `src/summarise.ts`, `src/arc.ts`, `src/toc.ts`, `src/glossary.ts`,
+`src/ideas.ts` and `src/web/Tweets.tsx` all hold uncommitted peer work — between 18 and 124 lines
+each, all touched within the hour. That is most of 2.4's file set and one of 2.1's four hooks. So:
+2.1 migrates the three clean hooks and names `Tweets.tsx` in the new module as the fourth, held;
+2.5 builds and tests the helper first and migrates only clean callers; 2.4 waits for
+`pipeline.ts` to go quiet. Rule 3 above already says the line numbers are stale — this is the same
+fact with a cost attached.
+
+**2.5 has one interaction the plan does not mention.** `tests/paid-cli-ledger.test.ts` is an AST
+gate requiring a direct `await withLedger("cli", main)` in the executed main branch. Migrating
+callers to `stageCli(...)` breaks it, and the wrong repair is to loosen it to "the call is
+somewhere" — that is the defeatable shape the Tier 1 review already caught once. The right repair
+makes it stronger: require the entrypoint to *be* `stageCli(import.meta.url, main)`, and assert
+separately that `stageCli` opens the ledger. It has to accept both forms while the migration is
+partial, and still reject every way of getting it wrong.
+
+
 ### What the code review changed, and it earned its keep
 
 The project weights the second review higher than the plan review because a plan-stage review cannot
@@ -555,13 +597,15 @@ is where these were found.
   So it stays until somebody makes the pass. **A question for Greg**, not a piece of work to take:
   the pass itself is a job, and doing it would close the item properly — the file could then go, with
   `preview-colour.html` and the markdown link, in one commit.
-- **Four `editTurn` citations are still outstanding**, and finding their owner cost more than the
-  fix will. `src/web/useChat.ts:657`, `src/web/chat/model.ts:229`, `src/web/chat/reduce.ts:231` and
-  `tests/chat-reduce.test.ts:420` all name the deleted function as "the server". Two peer sessions
-  were asked and both said the files are not theirs, so a third holds them. **Do not keep hunting:
-  wait for `git status` to go quiet on those four and fix them then.** The right names are `withEdit`
-  where the point is the rule and `chatStore.edit` where the point is the write. The mentions under
-  `docs/postmortems/` stay as they are — they are records of what was true at the time.
+- **Four `editTurn` citations: fixed, `d15f8cc`.** They named the deleted function as "the server"
+  in `src/web/useChat.ts`, `src/web/chat/model.ts`, `src/web/chat/reduce.ts` and
+  `tests/chat-reduce.test.ts`. Finding their owner cost more than the fix did: two peer sessions were
+  asked and both said the files were not theirs, so the answer was to stop hunting and wait for
+  `git status` to go quiet on the four, which it did within the hour once the third session
+  committed. They now name `withEdit` (`src/chat.ts:681`), which is where the rule they cite — the
+  first question names the thread, so rewriting it renames the thread — actually lives. The mentions
+  under `docs/postmortems/` and in the other plans stay as they are: they are records of what was
+  true at the time, and rewriting a record to match today is how you lose the history.
 - **`grantIsOver` and `MAX_UPLOAD_BYTES` re-export lines** in `upload-records.ts:119,182`. The
   functions stay; only the unreferenced re-exports go. **Do not touch `source.ts:186`'s re-export of
   `MAX_UPLOAD_BYTES`** — `pipeline.ts:41` uses it.
