@@ -62,7 +62,7 @@ refusal that reads as a missing route in a log.
 
 ## Who the administrator is
 
-**Greg's account id — `ADMIN_USER_ID` — and not his email address**, even though the email is what
+**Greg's account id — `ADMIN_USER_IDS` — and not his email address**, even though the email is what
 he asked for. The difference is worth being plain about, because the code says a uuid where the
 request said an address.
 
@@ -87,6 +87,27 @@ with no imports at all — so the browser and the server ask the *same* function
 spellings of one idea. It is on the shared-module allowlist in `tests/client-imports.test.ts`
 because it qualifies, not because it was convenient. The id is not a secret: it travels in every
 JWT that account holds, and it identifies rather than authorises.
+
+### One account per Supabase project, which is why it is a list
+
+**`ADMIN_USER_IDS` holds two ids and they are both Greg** — one on the laptop stack, one on the
+production project. Sign-up happens per project, GoTrue mints a fresh uuid each time, and the two
+have nothing in common. So a single constant is necessarily right in one place and wrong in the
+other.
+
+It was wrong in production for a day. The id was read off the local database when the page was
+built on 2026-08-27, the page was checked on a laptop where it worked, and on spideryarn.com the
+Admin link did not draw and `/api/admin/*` answered Greg 403 — the *silent lockout* this design
+names as its own cost, arriving on the first deploy rather than on some future recreated account.
+[admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md).
+
+**A second entry widens nothing.** Each id names an account that exists on exactly one project, so
+on either database the other entry names nobody: production has no `f4d08b58…`, and nothing can be
+issued a `sub` that already exists elsewhere.
+
+The test spells both uuids out rather than importing the constants. Asserting
+`isAdmin(ADMIN_USER_ID_PROD)` passes for whatever the constant happens to say, which is the mistake
+itself — the value is a fact about an external system, so the check has to carry its own copy.
 
 **A constant, not an environment variable.** An unset env var read as "allow everyone" is the
 canonical fail-open ([silent-success.md](../reusable/silent-success.md)); a constant has no unset
@@ -115,6 +136,36 @@ kind of rule that gets eroded a column at a time by people who never saw it.
 
 Email addresses are shown, because a list of accounts that cannot name them is not a list of
 accounts.
+
+## The page cannot read `auth.users` in production
+
+**Known broken, 2026-08-28, and not fixed here because it is a privilege change on the real
+database.** The link now draws; the page behind it does not load.
+
+`listUsersAcrossOwners` reads `auth.users` on the ordinary application connection. In production
+that is `spideryarn_app`, and
+[database.md § the migration role that cannot exist](database.md#the-migration-role-that-cannot-exist)
+records, as a deliberate and verified property of the role split, that it **cannot read `auth`**:
+
+```
+$ psql "$DATABASE_URL" -c "select id from auth.users limit 1"
+ERROR:  permission denied for schema auth
+```
+
+Locally the identical query works, because `DATABASE_URL` on a laptop is the `postgres` superuser.
+So this page has never been run against a role resembling production's, which is the same mistake as
+the account id one layer down — [admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md).
+
+Three ways out, and the choice is Greg's:
+
+| | What it does | Cost |
+|---|---|---|
+| **A narrow view** (recommended) | a `security definer` view in `spideryarn`, owned by `postgres`, selecting the seven declared columns; `grant select` on **the view** to `spideryarn_app` | one migration run as `postgres`; the app role still cannot see `auth`, and the seven-column ceiling becomes a database fact rather than a Drizzle convention |
+| **Grant the table** | `grant usage on schema auth` + `grant select on auth.users to spideryarn_app` | works — `postgres` holds `SELECT` on `auth.users` *with* grant option, unlike `REFERENCES` — but the running server can then read every column of every account, which is what the role split existed to prevent |
+| **Go around the database** | ask GoTrue's admin API with the service role key instead of Drizzle | no DDL, but it puts a service-role key in the server's environment and needs a second code path for the counts |
+
+The first keeps `spideryarn_app` fenced and makes the "counts and dates only" rule enforceable by
+Postgres rather than by the paragraph above.
 
 ## Where the numbers come from
 

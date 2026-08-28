@@ -1,8 +1,9 @@
 /**
  * Who the administrator is, and nothing else.
  *
- * One id, spelled once, in a module that imports nothing — so the browser can
- * ask exactly the same question the server asks. Greg, 2026-08-27:
+ * One account per Supabase project, spelled once, in a module that imports
+ * nothing — so the browser can ask exactly the same question the server asks.
+ * Greg, 2026-08-27:
  *
  * > Set up an /admin/ page that only user `greg@gregdetre.com` sees a link for
  * > or is allowed to access.
@@ -45,6 +46,11 @@
  * somebody with the right address and the wrong id is turned away, which turns
  * a baffling silence into a line that says what happened and what to edit.
  *
+ * That cost was paid on the first deploy rather than at some future recreation,
+ * because *a different project* is a different account for the same reason a
+ * recreated one is — see `ADMIN_USER_IDS` below. The log sentence was written
+ * and nobody was reading it, which is worth knowing about the mitigation.
+ *
  * ## Why a constant and not an environment variable
  *
  * An unset environment variable read as "allow everyone" is the canonical
@@ -60,12 +66,54 @@
  */
 
 /**
- * Greg's `auth.users(id)` — the `sub` claim on his token.
+ * Greg's `auth.users(id)` **on the local Supabase stack**.
  *
  * The same value `tests/helpers/authed.ts` signs its requests with, and the
- * same one the local Supabase stack holds for `greg@gregdetre.com`.
+ * owner of everything in a laptop's `data/` and database.
  */
-export const ADMIN_USER_ID = "f4d08b58-5573-4811-9887-e26c114fb324";
+export const ADMIN_USER_ID_LOCAL = "f4d08b58-5573-4811-9887-e26c114fb324";
+
+/**
+ * Greg's `auth.users(id)` **on the production Supabase project**
+ * (`alschkahzfagtppxspfq`), read from `auth.users` on 2026-08-28.
+ *
+ * A different account from the one above, holding the same email address —
+ * which is the whole of the bug this constant fixes, and the reason there is a
+ * list rather than a value. See the note on `ADMIN_USER_IDS`.
+ */
+export const ADMIN_USER_ID_PROD = "001bb7a0-7720-4f1b-8b9d-1ee6e63d132a";
+
+/**
+ * Every account that is Greg.
+ *
+ * ## Why a list, when there is one administrator
+ *
+ * Because "the administrator" is a person and an account id is not. Sign-up
+ * happens per Supabase project, so **one person has one account per project**,
+ * and this repo talks to two: a stack on a laptop and
+ * `alschkahzfagtppxspfq` in production. The two ids share nothing — GoTrue
+ * mints a fresh uuid each time — so a single constant is necessarily right in
+ * one place and wrong in the other.
+ *
+ * It was wrong in production for a day. The constant was read off the local
+ * database on 2026-08-27, the built page was checked on a laptop where it
+ * worked, and on spideryarn.com the Admin link did not draw and `/api/admin/*`
+ * answered Greg 403 — the exact silent lockout the header above predicts as the
+ * *cost* of gating on an id, arriving on the first deploy rather than on some
+ * future recreated account.
+ * docs/postmortems/admin-id-was-the-local-one.md.
+ *
+ * **This does not widen anything.** Each id is an account that exists on
+ * exactly one project, so on either project the other entry names nobody: the
+ * production database has no `f4d08b58…`, and nothing can be issued a `sub`
+ * that already exists elsewhere. Two entries, one reachable administrator,
+ * whichever database the server is pointed at.
+ *
+ * Still a constant rather than an environment variable, for the reason in the
+ * header: an unset env var read as "allow everyone" is the canonical fail-open,
+ * and an array literal has no unset state either.
+ */
+export const ADMIN_USER_IDS: readonly string[] = [ADMIN_USER_ID_LOCAL, ADMIN_USER_ID_PROD];
 
 /**
  * The address that id belongs to, for people rather than for code.
@@ -83,7 +131,7 @@ export const ADMIN_EMAIL = "greg@gregdetre.com";
  * be absent — the server's claims are checked before this runs, the browser's
  * `user.id` is a string but arrives inside a possibly-null user — and a
  * signature that made each of them write their own `?? ""` is a signature that
- * invites one of them to write `?? ADMIN_USER_ID` by accident.
+ * invites one of them to write `?? ADMIN_USER_IDS[0]` by accident.
  *
  * Compared exactly, and lower-cased first because a uuid has no case: Postgres
  * and Supabase both render one in lower case, so this is belt and braces rather
@@ -91,7 +139,10 @@ export const ADMIN_EMAIL = "greg@gregdetre.com";
  */
 export function isAdmin(userId: string | undefined | null): boolean {
   if (typeof userId !== "string") return false;
-  return userId.trim().toLowerCase() === ADMIN_USER_ID;
+  const id = userId.trim().toLowerCase();
+  /* `includes` on the array, never on a string: a substring test here would
+     admit anything containing an id. tests/admin.test.ts pins that. */
+  return ADMIN_USER_IDS.includes(id);
 }
 
 /**

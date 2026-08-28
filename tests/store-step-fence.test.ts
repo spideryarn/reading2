@@ -63,7 +63,7 @@ import {
 } from "../src/store/pg-revisions.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, jobs, revisionStepRuns } from "../src/db/schema.js";
-import { ADMIN_USER_ID } from "../src/admin.js";
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
@@ -83,7 +83,7 @@ const SLUG = "test-step-fence";
  * holding their own copy of the uuid is three files to miss when it changes.
  * Not a fixture id — the teardown here deletes by slug, never by owner.
  */
-const DEV_OWNER_ID = ADMIN_USER_ID;
+const DEV_OWNER_ID = ADMIN_USER_ID_LOCAL;
 
 /* ---------------------------------------------------- is there a database -- */
 

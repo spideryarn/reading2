@@ -15,7 +15,7 @@
 import { describe, expect, it } from "vitest";
 import type { IncomingMessage } from "node:http";
 
-import { ADMIN_USER_ID } from "../src/admin.js";
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { requireUser, type VerifyResult } from "../src/auth.js";
 
 /**
@@ -30,7 +30,7 @@ import { requireUser, type VerifyResult } from "../src/auth.js";
  * Not a fixture row either way: no test creates this user and none deletes it.
  * `tests/fixture-ids.test.ts`.
  */
-const SUB = ADMIN_USER_ID;
+const SUB = ADMIN_USER_ID_LOCAL;
 
 function req(authorization?: string): IncomingMessage {
   return { headers: authorization ? { authorization } : {} } as unknown as IncomingMessage;

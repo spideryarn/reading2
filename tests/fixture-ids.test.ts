@@ -59,7 +59,7 @@ interface Claim {
  * That is the real distinction, and it is narrower than "several files use it".
  * A shared *foreign key* does not belong here: three files pointed rows at
  * Greg's `auth.users` row by writing his uuid out longhand, and the fix for
- * that was to import `ADMIN_USER_ID` from `src/admin.ts`, which is both the
+ * that was to import `ADMIN_USER_ID_LOCAL` from `src/admin.ts`, which is both the
  * single source of truth and, incidentally, no longer a literal for this guard
  * to trip over. Reach for an entry below only when nothing in the suite creates
  * the row at all.

@@ -69,7 +69,7 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../src/db/schema.js";
-import { ADMIN_USER_ID } from "../src/admin.js";
+import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { loadEnvLocal } from "../src/env.js";
 import { PATHS } from "../src/store/artifacts-fs.js";
 import {
@@ -120,7 +120,7 @@ const SLUG = "test-artefacts-pg";
  * `cleanUp` below deletes by slug and by article id, never by owner — so
  * sharing it across files is safe in a way sharing an article id is not.
  */
-const DEV_OWNER_ID = ADMIN_USER_ID;
+const DEV_OWNER_ID = ADMIN_USER_ID_LOCAL;
 
 /* ------------------------------------------- the map, which needs no database -- */
 

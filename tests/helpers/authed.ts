@@ -14,7 +14,7 @@
  * makes a production build permissive is exactly the fail-open this whole area
  * is about. The real verifier is the default there; this is passed in.
  */
-import { ADMIN_USER_ID } from "../../src/admin.js";
+import { ADMIN_USER_ID_LOCAL } from "../../src/admin.js";
 import type { Verifier, VerifyResult } from "../../src/auth.js";
 
 /**
@@ -28,7 +28,7 @@ import type { Verifier, VerifyResult } from "../../src/auth.js";
  * file — it scans `tests/*.test.ts` only, so this copy survived the sweep that
  * caught the other three.
  */
-export const TEST_SUB = ADMIN_USER_ID;
+export const TEST_SUB = ADMIN_USER_ID_LOCAL;
 export const TEST_EMAIL = "greg@gregdetre.com";
 
 /** Says yes to any token at all. Only ever handed in by a test. */

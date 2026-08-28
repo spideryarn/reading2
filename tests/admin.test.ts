@@ -16,32 +16,45 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { ADMIN_EMAIL, ADMIN_USER_ID, describeAdminMiss, isAdmin } from "../src/admin.js";
+import {
+  ADMIN_EMAIL,
+  ADMIN_USER_ID_LOCAL,
+  ADMIN_USER_ID_PROD,
+  ADMIN_USER_IDS,
+  describeAdminMiss,
+  isAdmin,
+} from "../src/admin.js";
 import { TEST_EMAIL, TEST_SUB } from "./helpers/authed.js";
 
 /** Well-formed, and not Greg's. */
 const SOMEBODY_ELSE = "9a1f4c2e-7b3d-4a58-9e12-0c6d8f5a41b7";
 
 describe("the administrator", () => {
-  it("is one account id, and it is the one the suite signs in as", () => {
-    expect(isAdmin(ADMIN_USER_ID)).toBe(true);
+  it("is one account id per project, and the local one is what the suite signs in as", () => {
+    expect(isAdmin(ADMIN_USER_ID_LOCAL)).toBe(true);
     /* If these two ever drift, every route test in the repo authenticates as
        somebody who is not the administrator and the admin suite's "lets the
        administrator through" case starts asserting a 403 by accident. */
-    expect(ADMIN_USER_ID).toBe(TEST_SUB);
+    expect(ADMIN_USER_ID_LOCAL).toBe(TEST_SUB);
     expect(ADMIN_EMAIL).toBe(TEST_EMAIL);
   });
 
   it("is the same id however it was typed", () => {
     // A uuid has no case, but nothing anywhere should depend on that.
-    expect(isAdmin(ADMIN_USER_ID.toUpperCase())).toBe(true);
-    expect(isAdmin(`  ${ADMIN_USER_ID}  `)).toBe(true);
+    expect(isAdmin(ADMIN_USER_ID_LOCAL.toUpperCase())).toBe(true);
+    expect(isAdmin(ADMIN_USER_ID_PROD.toUpperCase())).toBe(true);
+    expect(isAdmin(`  ${ADMIN_USER_ID_PROD}  `)).toBe(true);
   });
 
   it("is not an id that merely contains it", () => {
-    expect(isAdmin(`${ADMIN_USER_ID}0`)).toBe(false);
-    expect(isAdmin(`0${ADMIN_USER_ID}`)).toBe(false);
-    expect(isAdmin(ADMIN_USER_ID.slice(0, -1))).toBe(false);
+    /* Both, because the list is now searched with `Array.includes` and the
+       one-id version of this test could not have told that apart from a
+       `String.includes` on a joined list. */
+    for (const id of ADMIN_USER_IDS) {
+      expect(isAdmin(`${id}0`)).toBe(false);
+      expect(isAdmin(`0${id}`)).toBe(false);
+      expect(isAdmin(id.slice(0, -1))).toBe(false);
+    }
   });
 
   it("is not somebody else's account", () => {
@@ -95,6 +108,39 @@ describe("which refusals are worth a line in the log", () => {
   });
 
   it("says nothing at all about the administrator, who was not refused", () => {
-    expect(describeAdminMiss(ADMIN_USER_ID, ADMIN_EMAIL)).toBeUndefined();
+    expect(describeAdminMiss(ADMIN_USER_ID_LOCAL, ADMIN_EMAIL)).toBeUndefined();
+    expect(describeAdminMiss(ADMIN_USER_ID_PROD, ADMIN_EMAIL)).toBeUndefined();
+  });
+});
+
+/**
+ * **The id was read off a laptop and never checked against production.**
+ *
+ * `greg@gregdetre.com` is an account on the local Supabase stack *and* an
+ * account on the production project, and they are two different accounts with
+ * two different `auth.users(id)`s. The constant was the local one, so the Admin
+ * link never drew on spideryarn.com and `/api/admin/*` answered 403 to the
+ * administrator — for a day, silently, exactly the lockout `describeAdminMiss`
+ * was written to explain (it did fire; nobody was reading the log).
+ *
+ * docs/postmortems/admin-id-was-the-local-one.md.
+ */
+describe("the administrator has one account per Supabase project", () => {
+  /* Spelled out rather than imported. Asserting `isAdmin(ADMIN_USER_ID_PROD)`
+     would pass for whatever the constant happened to say, which is exactly the
+     mistake — the value is a fact about an external system, so the test has to
+     carry its own copy of it. */
+  it("is Greg on production, not only Greg on a laptop", () => {
+    // Read from production's `auth.users` on 2026-08-28, via the GoTrue admin API.
+    expect(isAdmin("001bb7a0-7720-4f1b-8b9d-1ee6e63d132a")).toBe(true);
+  });
+
+  it("is Greg on the local stack too, which is what the suite signs in as", () => {
+    expect(isAdmin("f4d08b58-5573-4811-9887-e26c114fb324")).toBe(true);
+  });
+
+  it("is nobody else — the list is two accounts, not a door left ajar", () => {
+    expect(ADMIN_USER_IDS).toHaveLength(2);
+    expect(isAdmin(SOMEBODY_ELSE)).toBe(false);
   });
 });
