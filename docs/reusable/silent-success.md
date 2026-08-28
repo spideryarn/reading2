@@ -146,7 +146,7 @@ same wrong conclusion. Optimise for shortening that interval, not for the fix.
 > When something looks right, ask what you would have to measure for it to look **wrong** — then
 > measure that.
 
-Three corollaries, each of which caught something here:
+Four corollaries, each of which caught something here:
 
 **Sweep a continuous input; don't sample it.** Where the input is a width, an offset, a count, assert
 the *shape* of the output over the range rather than its value at points you thought to name. A
@@ -162,6 +162,22 @@ because it re-runs the same assumption that produced the code.
 **Test the test.** Break the thing on purpose and confirm you get a red. A test whose only evidence
 is that it passes is indistinguishable from one that inspects nothing — which is exactly how a
 link checker came to go green on all three bugs it was written in response to.
+
+**And the control itself can be a no-op.** Breaking the thing on purpose is usually a scripted edit,
+and a scripted edit that matches nothing changes nothing and says nothing —
+`str.replace` on an absent needle returns the string unchanged and raises no error, and `sed` is no
+better. So the control runs, the test passes, and the green is reported as evidence.
+
+> A no-op in ordinary work leaves a missing change somebody may notice. A no-op in a red-first
+> control leaves a **green test you are about to cite as evidence**.
+
+It is worse than it sounds, because the line a control edits is by definition the line you have just
+been changing — the least stable text in the file, and the thing a peer may have edited under you
+minutes ago. Two defences, both cheap: **insert a fresh line at a stable anchor** rather than editing
+an existing one, and **assert the anchor occurs exactly once** before substituting. And treat an
+unexpectedly green control as broken until you have seen it red once — spideryarn, 2026-08-28, where
+four controls passed at once and the tell was that four controls passing at once is not a thing that
+happens.
 
 ## Spotting the family
 
