@@ -70,11 +70,53 @@ after a re-extraction there are no ids in the file to preserve — the first ver
 re-minted all 139 and would have orphaned every note, which is the exact failure random ids were
 chosen to prevent.
 
-So stage 3 also **carries ids over from the previous `blocks.json`** when one exists, matching a new
-block to an old one by its text. A paragraph keeps its id as long as its words are unchanged, no
+So stage 3 also **carries ids over from the previous run's blocks** when there are any, matching a
+new block to an old one by its text. A paragraph keeps its id as long as its words are unchanged, no
 matter how far it has moved. Blocks with no text — images, figures — match on their `src` instead,
 so a ToC row aimed at a diagram doesn't go stale. Each previous id is consumed once, so a page with
 several identical short paragraphs cannot hand the same id to two blocks.
+
+#### Where the previous run comes from, and the three answers it can give
+
+**From the `ArtifactStore`, not from a path** — `previousBlocksFrom` in
+[`src/blocks.ts`](../../src/blocks.ts). On the filesystem that is still
+`output/<slug>.blocks.json`; in Postgres it is the block rows `beginDraftIn` copies into a new draft
+from the published revision before any stage runs, so the baseline is already sitting there when
+stage 3 starts. Reading the draft's own carried rows is not matching against itself: before stage
+3's first write those rows *are* the previous published blocks.
+
+Until 2026-08-28 the read was a `readFile` inside a `try/catch` whose `catch` said *"first run for
+this article"*. That is one branch doing two jobs, and the moment the pipeline's artefacts leave the
+filesystem it takes the second one for every article at once: the read fails, every article looks
+new, every id is re-minted, and the step reports success
+([delete-the-importer.md](../plans/delete-the-importer.md)). So the three cases are now separate and
+only one of them mints:
+
+| | what it means | what happens |
+|---|---|---|
+| no earlier blocks for this article | a genuine first ingest | mint, quietly |
+| earlier blocks exist, no readable baseline | the carry-forward did not happen | **the stage fails** |
+| the store read throws | an infrastructure fault | **propagates; the stage fails** |
+
+`ArtifactStore.hasEarlierBlocks` is the second question, and each store answers it with the thing it
+actually knows: Postgres asks whether `articles.current_revision_id` points at a published revision
+(one cannot exist without blocks), the filesystem asks whether stage 4's `data/<slug>/blocks.json`
+is there. **Warning and minting is not an option** — it turns a database hiccup into permanent,
+silent reader data loss, and the reader finds out by scrolling.
+
+There is a second guard behind that one, because a baseline that is present is not a baseline that
+was used. `assertIdsCarried` compares the baseline's ids against the ones this run produced: a
+non-empty baseline and a non-empty output that share **nothing** stops the stage, before either
+artefact is written. Ids and not counts — two runs of three paragraphs sharing none of their ids
+would pass a count. A *partial* loss is deliberately not an error; any threshold would be a guess.
+There is no exemption for a deliberate whole-article replacement because no such operation exists:
+`force` on a step means *run it again*, which is the ordinary idempotent path and must keep its ids.
+
+Stage 3's input is **stage 2's HTML** (`extractedHtml`), never its own previous output
+(`stampedHtml`) — `BLOCKS_INPUT_HTML` in [`src/blocks.ts`](../../src/blocks.ts). On disk the two are
+the same file and nobody could choose; Postgres holds them in separate columns, and reading the
+stamped one would hand stage 3 last week's paragraphs already carrying this week's ids: identity
+"preserved" onto the wrong text, with a clean-looking run to show for it.
 
 ### Two passes, and the second one refuses to guess
 
@@ -138,8 +180,10 @@ Two honest limits:
   a heavily rewritten paragraph from a new one, and guessing with fuzzy matching would silently
   attach a reader's note to a sentence that no longer says what they annotated. Losing the anchor is
   the safer failure.
-- **Carry-over needs the previous `blocks.json`.** Delete it and the ids are gone for good. It is a
-  source artefact, not a cache; `data/<slug>/blocks.json` should be treated as precious.
+- **Carry-over needs the previous run's blocks.** Delete them and the ids are gone for good. They
+  are a source artefact, not a cache; `data/<slug>/blocks.json` and the `revision_blocks` rows
+  should both be treated as precious. Since 2026-08-28 losing them **fails the stage** rather than
+  quietly minting a new set — see the three cases above.
 
 ### The cost we accepted
 

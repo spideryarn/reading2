@@ -22,7 +22,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { generateArc } from "./arc.js";
-import { runBlocks } from "./blocks.js";
+import { previousBlocksFrom, runBlocks } from "./blocks.js";
 import { runExtract } from "./extract.js";
 import { fetchDocument, type RawManifest, readRaw, writeRaw } from "./fetch.js";
 import { generateGlossary, PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "./glossary.js";
@@ -362,8 +362,19 @@ export interface PipelineStep {
    * there is no directory to read. docs/plans/transactional-stage-runner.md § D.
    */
   isDone?(ctx: StepContext, store: ArtifactStore): Promise<boolean>;
-  /** Do the work. The returned string is the one-line summary kept on the finished step. */
-  run(ctx: StepContext): Promise<string>;
+  /**
+   * Do the work. The returned string is the one-line summary kept on the
+   * finished step.
+   *
+   * **The store is an argument, like `isDone`'s and `stamp`'s, and it has no
+   * default** — for the reason `stepIsDone` gives at length: a default lets a
+   * Postgres caller that forgot it compile cleanly and get a confident answer
+   * about the filesystem. Only `blocks` reads it today, because stage 3 is the
+   * only stage whose *previous output* is an input it cannot do without
+   * (docs/project/block-ids.md); the two stages with the same shape, `glossary`
+   * and `ideas`, are the next piece of work and this is the seam they take.
+   */
+  run(ctx: StepContext, store: ArtifactStore): Promise<string>;
 }
 
 /**
@@ -413,48 +424,23 @@ function blocksPathFor(ctx: StepContext): string {
   return ctx.htmlFile.replace(/\.html$/, ".blocks.json");
 }
 
-/**
- * How many blocks a blocks.json holds, or 0 if it isn't there or isn't readable.
+/*
+ * `countBlocksIn` and `previousBlockCount` were here until 2026-08-28, and what
+ * replaced them is worth a line where they stood.
  *
- * Every unhappy answer is 0 — missing, half-written, not the shape we expect.
- * Only logging calls this, and a logging helper must never be the thing that
- * fails a step, so "we don't know" and "there was nothing" deliberately give the
- * same answer: stay quiet.
+ * They counted blocks in the two `blocks.json` files on disk, so that the warn
+ * in the `blocks` step could tell a first ingest (mint everything, correctly)
+ * from a re-run that lost every id. Both halves were about to stop working at
+ * once: with the artefacts in Postgres there are no files, the count is 0, and
+ * `previousBlocks > 0` — the clause that keeps a first ingest quiet — keeps
+ * *every* ingest quiet. The warning would have gone silent at the exact moment
+ * it became true, which is docs/reusable/silent-success.md in one line.
+ *
+ * The replacement is not a better count. It is `previousBlocksFrom` and
+ * `assertIdsCarried` in src/blocks.ts: the baseline comes from the store, and
+ * losing it throws instead of warning. See
+ * docs/plans/delete-the-importer.md § Three stages carry identity in a file.
  */
-async function countBlocksIn(file: string): Promise<number> {
-  try {
-    const parsed = JSON.parse(await readFile(file, "utf-8")) as { blocks?: unknown };
-    return Array.isArray(parsed.blocks) ? parsed.blocks.length : 0;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * Did this article already have ids before stage 3 runs, and how many?
- *
- * Only the id-orphaning warn below uses this, and it exists so that warn can
- * tell apart the two ways a run can carry nothing over: a first ingest, where
- * minting every id is the correct and only thing to do, and a re-run over an
- * article that already had ids, where minting every id throws away every anchor
- * into it. Mere existence would confuse them, because an article whose first
- * extraction produced nothing leaves a perfectly real `{"blocks": []}` behind.
- *
- * **Both copies, and the second one is the point.** Stage 3 carries ids over
- * from its own copy beside the HTML, so that is what it reads and what this asks
- * first. But block-ids.md calls `data/<slug>/blocks.json` a source artefact
- * rather than a cache precisely because losing it loses the ids for good — and
- * if only stage 3's copy has gone missing, carry-over silently has nothing to
- * work from while stage 4's copy still sits there recording every id that used
- * to exist. Asking that copy too is what turns the worst case from an invisible
- * one into a warn. Read second because it is only needed when the first is
- * empty.
- */
-async function previousBlockCount(ctx: StepContext): Promise<number> {
-  const own = await countBlocksIn(blocksPathFor(ctx));
-  if (own > 0) return own;
-  return countBlocksIn(path.join(ctx.dir, "blocks.json"));
-}
 
 /**
  * Has this step already produced everything it produces, and is what it
@@ -999,12 +985,33 @@ export const STEPS: Record<StepName, PipelineStep> = {
     /* Presence is not enough here, and this is the only step where that is
        true for a reason other than cost — see `htmlCarriesItsIds`. */
     isDone: (ctx, store) => htmlCarriesItsIds(ctx, store),
-    async run(ctx) {
-      // Read before the stage runs, because the stage overwrites blocks.json
-      // with its own output. Afterwards there is no way to ask what was there.
-      const previousBlocks = await previousBlockCount(ctx);
+    async run(ctx, store) {
+      /*
+       * **The store, not a path, and read before the stage runs.**
+       *
+       * Stage 3 keeps a paragraph's id across a re-extraction by matching this
+       * run's blocks against the previous run's — that is the whole reason
+       * random ids are survivable (docs/project/block-ids.md). Until 2026-08-28
+       * it got the previous run by reading `output/<slug>.blocks.json` inside a
+       * `try/catch` whose `catch` said "first run for this article", so the day
+       * the artefacts leave the filesystem every article silently becomes a
+       * first ingest and every anchor in the database stops naming anything.
+       *
+       * `previousBlocksFrom` asks the store instead, and refuses rather than
+       * minting when a baseline that should be there is not. On the filesystem
+       * it reads the same file as before; in Postgres it reads the block rows
+       * `beginDraftIn` copied into this draft from the published revision.
+       *
+       * **Which HTML this consumes is `BLOCKS_INPUT_HTML` in src/blocks.ts —
+       * stage 2's, `extractedHtml`, never stage 3's own `stampedHtml`**, and
+       * that only becomes a real choice when the input stops being a path: on
+       * disk `extractedHtml` and `stampedHtml` are the same file. Landing D
+       * has to honour it; the reasoning is on the constant.
+       */
+      const previous = await previousBlocksFrom(store, ctx.slug);
 
-      const run = await runBlocks({ htmlFile: ctx.htmlFile });
+      const run = await runBlocks({ htmlFile: ctx.htmlFile, previous });
+      const previousBlocks = run.previousBlocks;
       const { total, minted, carried, reused, retargeted } = run.stats;
       const kept = reused + carried;
 
@@ -1030,38 +1037,27 @@ export const STEPS: Record<StepName, PipelineStep> = {
        * Block ids are the spine: every comment, and later every note and
        * highlight, is anchored to one (docs/project/block-ids.md). Stage 3 is
        * meant to be idempotent — ids already in the HTML are reused, and ids the
-       * previous blocks.json knew are carried over by matching the block's
-       * words, which is what makes a re-extraction survivable. When that works,
-       * `minted` is 0 or nearly 0 on a re-run.
+       * previous run knew are carried over by matching the block's words, which
+       * is what makes a re-extraction survivable. When that works, `minted` is 0
+       * or nearly 0 on a re-run.
        *
-       * So: we had blocks before, and not one of them kept its id. Every anchor
-       * into this article now points at nothing. The step still *succeeds* —
-       * that is the whole problem, and it is the shape of failure this project
-       * keeps meeting (docs/reusable/silent-success.md). A warn is the only
-       * thing that would tell you.
+       * **This used to be a warn here, and it is now a throw in src/blocks.ts.**
+       * The warn was right about what to watch and wrong about two things. It
+       * counted the previous ids by reading two files, which returns 0 once
+       * there are no files — so it went silent at the moment it became true. And
+       * a warn lets the step succeed: the reader's anchors are gone either way,
+       * and a line in a log nobody is tailing is not a defence.
        *
-       * **`kept === 0`, deliberately, and not a ratio.** Zero survivors is
-       * unambiguous, and it has three causes: carry-over is broken, the previous
-       * blocks.json went missing, or the publisher rewrote every paragraph. The
-       * reader's anchors are equally gone in all three, so all three deserve the
-       * line, and none of them needs a threshold anyone has to tune. This warn
-       * therefore says *what happened*, not whose fault it was — which is the
-       * honest thing a log line can say from here.
+       * `assertIdsCarried` replaces it, comparing the baseline's **ids** against
+       * the output's rather than their counts — two equal totals made of
+       * entirely different ids is the failure, not the healthy case — and it
+       * refuses before either artefact is written.
        *
-       * A *partial* loss — 5 of 139 survive — is just as real and is **not**
-       * warned about, because any cutoff would be a guess and a guessed alarm
-       * gets ignored. `previousBlocks`, `carried` and `reused` are all in the
-       * info line above, so that case is one query away instead.
-       *
-       * `previousBlocks > 0` is what keeps a first ingest quiet: everything is
-       * minted and nothing is lost, which is the opposite of a problem.
+       * A *partial* loss — 5 of 139 survive — is just as real and is still not
+       * flagged, because any cutoff would be a guess and a guessed alarm gets
+       * ignored. `previousBlocks`, `carried` and `reused` are all in the info
+       * line above, so that case is one query away instead.
        */
-      if (previousBlocks > 0 && kept === 0 && minted > 0) {
-        plog.warn(
-          fields,
-          `blocks ${ctx.slug}: all ${minted} ids re-minted — ${previousBlocks} previous ids lost, anchors orphaned`,
-        );
-      }
       return `${total} blocks, ${minted} new ids (${kept} kept)`;
     },
   },

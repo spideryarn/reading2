@@ -25,6 +25,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { readRaw } from "../src/fetch.js";
 import { contextPaths, STEPS, stepLabel } from "../src/pipeline.js";
+import { fsArtifacts } from "../src/store/artifacts-fs.js";
 import { canonicalKey, stagingKey } from "../src/source.js";
 import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
 import { claimUpload, forgetUpload, mintUpload, readUpload } from "../src/upload-records.js";
@@ -90,7 +91,7 @@ describe("acquiring an uploaded file", () => {
     const { id, ctx, dir } = await readyToVerify(bytes);
     rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "pdf")));
 
-    await STEPS.fetch.run(ctx);
+    await STEPS.fetch.run(ctx, fsArtifacts);
 
     const manifest = await readRaw(dir);
     expect(manifest?.kind).toBe("pdf");
@@ -124,7 +125,7 @@ describe("acquiring an uploaded file", () => {
     const { ctx } = await readyToVerify(bytes);
     rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "pdf")));
 
-    await STEPS.fetch.run(ctx);
+    await STEPS.fetch.run(ctx, fsArtifacts);
     expect(await blobs.get(canonicalKey(shaOf(bytes), "pdf"))).toEqual(bytes);
   });
 
@@ -160,7 +161,7 @@ describe("acquiring an uploaded file", () => {
     await blobs.putIfAbsent(key, aPdf("not the real paper"), CONTENT_TYPE.pdf);
 
     const { ctx, id } = await readyToVerify(bytes);
-    await expect(STEPS.fetch.run(ctx)).rejects.toThrow();
+    await expect(STEPS.fetch.run(ctx, fsArtifacts)).rejects.toThrow();
 
     /* The two halves that matter. The upload must NOT have been recorded as
        verified — that is the lie — and the squatter must still be there,
@@ -175,7 +176,7 @@ describe("acquiring an uploaded file", () => {
     const { id, ctx } = await readyToVerify(bytes);
     rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "pdf")));
 
-    await STEPS.fetch.run(ctx);
+    await STEPS.fetch.run(ctx, fsArtifacts);
     expect(await blobs.head(stagingKey(id))).not.toBeNull();
   });
 
@@ -183,7 +184,7 @@ describe("acquiring an uploaded file", () => {
     const bytes = new TextEncoder().encode("PK this is a zip, honestly");
     const { id, ctx } = await readyToVerify(bytes);
 
-    await expect(STEPS.fetch.run(ctx)).rejects.toThrow(/isn't a PDF inside/);
+    await expect(STEPS.fetch.run(ctx, fsArtifacts)).rejects.toThrow(/isn't a PDF inside/);
     expect((await readUpload(id))?.status).toBe("rejected");
     expect((await readUpload(id))?.reason).toBe("not-a-pdf");
   });
@@ -199,7 +200,7 @@ describe("acquiring an uploaded file", () => {
     expect(arrived.byteLength).toBe(sent.byteLength);
     const { id, ctx } = await readyToVerify(arrived, shaOf(sent));
 
-    await expect(STEPS.fetch.run(ctx)).rejects.toThrow(/isn't quite the file that was sent/);
+    await expect(STEPS.fetch.run(ctx, fsArtifacts)).rejects.toThrow(/isn't quite the file that was sent/);
     expect((await readUpload(id))?.reason).toBe("checksum-mismatch");
   });
 
@@ -208,7 +209,7 @@ describe("acquiring an uploaded file", () => {
     const { id, ctx } = await readyToVerify(bytes);
     await blobs.remove(stagingKey(id));
 
-    await expect(STEPS.fetch.run(ctx)).rejects.toThrow(/never finished arriving/);
+    await expect(STEPS.fetch.run(ctx, fsArtifacts)).rejects.toThrow(/never finished arriving/);
     expect((await readUpload(id))?.reason).toBe("missing");
   });
 
@@ -223,8 +224,8 @@ describe("acquiring an uploaded file", () => {
     const { id, ctx } = await readyToVerify(bytes);
     rubbish.push(() => blobs.remove(canonicalKey(shaOf(bytes), "pdf")));
 
-    await STEPS.fetch.run(ctx);
-    await STEPS.fetch.run(ctx);
+    await STEPS.fetch.run(ctx, fsArtifacts);
+    await STEPS.fetch.run(ctx, fsArtifacts);
     expect((await readUpload(id))?.status).toBe("verified");
   });
 });

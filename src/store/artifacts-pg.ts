@@ -59,6 +59,7 @@ import type { SQL } from "drizzle-orm";
 import type { Db } from "../db/client.js";
 import {
   articleRevisions,
+  articles,
   blockIdentities,
   rawSources,
   revisionBlocks,
@@ -464,6 +465,37 @@ async function readBlocks(
       ...(row.noteId === null ? {} : { noteId: row.noteId }),
     })),
   };
+}
+
+/**
+ * Is there a published revision behind this draft — the `basedOn` that
+ * `beginDraftIn` copied its block rows from?
+ *
+ * **`articles.current_revision_id`, because the draft does not record its own
+ * lineage.** There is no `based_on_revision_id` column (it is named in
+ * `REVISION_CARRY_POLICY`'s comment as a column that *would* be harmful to
+ * carry, not as one that exists), so the honest source is the article's current
+ * publication — which is exactly the value `beginDraftIn` read as `basedOn` when
+ * it made this draft, and which only moves when something publishes.
+ *
+ * That makes the answer sound in the direction that matters. A published
+ * revision cannot exist without blocks — `publishRevision` refuses a revision
+ * with none — so a non-null pointer means block rows really were copied into
+ * this draft, and stage 3 finding none means the carry-forward did not happen.
+ *
+ * The one case it can be wrong about is a first ingest for a slug that somebody
+ * *else's* job published in between, which would turn a genuine mint into a
+ * refusal. That is the safe direction, it needs two concurrent ingests of one
+ * article, and the alternative — recording lineage on the draft — is a column
+ * and a migration that landing D can add if this is ever seen.
+ */
+async function articleHasPublishedBlocks(exec: Executor, articleId: string): Promise<boolean> {
+  const [row] = await exec
+    .select({ current: articles.currentRevisionId })
+    .from(articles)
+    .where(eq(articles.id, articleId))
+    .limit(1);
+  return row?.current != null;
 }
 
 /* --------------------------------------------------------------- read -- */
@@ -1260,6 +1292,10 @@ export function pgArtifactsIn(ref: JobDraftRef, tx: Tx): ArtifactStore {
   const job = { id: ref.jobId, attemptId: ref.attemptId };
   return {
     ...readOnlyPgArtifacts(ref, tx),
+    async hasEarlierBlocks(slug) {
+      requireBound(ref, slug);
+      return articleHasPublishedBlocks(tx, ref.articleId);
+    },
     write: (slug, step, parts, stamp) => writeArtefacts(ref, tx, slug, step, parts, stamp),
     async beginStep(slug, step) {
       requireBound(ref, slug);

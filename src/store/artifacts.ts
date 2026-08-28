@@ -424,6 +424,44 @@ export interface ArtifactStore {
    * 0.381 ms for a 354 KB `blocks.json`.
    */
   has(slug: string, step: StepName, kinds: readonly ArtifactKind[]): Promise<boolean>;
+  /**
+   * Has an **earlier run** of this article already produced blocks — so that
+   * stage 3 reading no baseline means something is wrong rather than that this
+   * is a first ingest?
+   *
+   * The one question stage 3 cannot answer from its own artefact, and the
+   * reason it needs asking is that the two states look identical from there:
+   * `read(slug, "blocks", "blocks")` returns `null` for a brand-new article,
+   * where minting every id is the only correct thing to do, and `null` again
+   * when a baseline that should have been carried forward is not there, where
+   * minting every id destroys every anchor into the article and reports
+   * success. See `previousBlocksFrom` in src/blocks.ts.
+   *
+   * **It is deliberately not `has`.** In Postgres `beginDraftIn` copies the
+   * published revision's completion rows into a new draft along with its
+   * blocks, so `has(slug, "blocks", …)` answers *"did an earlier run finish"* —
+   * true of a draft whose block rows have since been deleted.
+   *
+   * Each store answers with the thing it actually knows, and neither can
+   * usefully imitate the other:
+   *
+   * - **Postgres** — does `articles.current_revision_id` point at a published
+   *   revision? If it does, `beginDraftIn` copied that revision's blocks into
+   *   this draft, and a publication cannot happen without blocks.
+   * - **The filesystem** — has stage 4 ever written `data/<slug>/blocks.json`
+   *   for this article? There are no revisions on disk, so the previous full
+   *   run is the closest true statement, and it is the same pair of files the
+   *   warning this replaced used to count.
+   *
+   * **One honest limit on the filesystem side**, since it is the kind of gap
+   * this project writes postmortems about: `readOne` returns `null` both for a
+   * file that is not there and for one that will not parse, so a *corrupt*
+   * `data/<slug>/blocks.json` answers `false` here. That only matters when
+   * stage 3's own copy is missing too — otherwise the baseline reads fine and
+   * this is never asked — and in that state there is genuinely nothing left to
+   * carry. Postgres has no equivalent: a uuid column is there or it is not.
+   */
+  hasEarlierBlocks(slug: string): Promise<boolean>;
   /** The artefact, or `null` if it is absent or unreadable. */
   read<K extends ArtifactKind>(
     slug: string,

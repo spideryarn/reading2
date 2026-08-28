@@ -390,6 +390,29 @@ export function createFsArtifactStore(
       return value as ArtifactMap[typeof kind] | null;
     },
 
+    /**
+     * **Stage 4's copy, not stage 3's** — `data/<slug>/blocks.json`, which is
+     * exactly the second file `previousBlockCount` in src/pipeline.ts used to
+     * read for the same reason.
+     *
+     * There are no revisions on disk, so the closest true statement is *has
+     * this article ever been through a full run*. Asking stage 3's own copy
+     * would be circular: that file **is** the baseline, so it could only ever
+     * report that a missing baseline is missing.
+     *
+     * block-ids.md calls this copy a source artefact rather than a cache
+     * precisely because losing it loses the ids for good. So the case it now
+     * catches — stage 3's copy gone while stage 4's still lists every id that
+     * used to exist — stops the stage instead of warning about it after the
+     * fact. The recovery is to put the file back, or to delete both if the
+     * article really is being started again from nothing.
+     */
+    async hasEarlierBlocks(slug) {
+      const artefact = await readOne(locate(slug), slug, "toc", "blocks");
+      const blocks = (artefact as ArtifactMap["blocks"] | null)?.blocks;
+      return blocks !== undefined && blocks.length > 0;
+    },
+
     async write(slug, step, parts: ArtifactParts, stamp) {
       const at = locate(slug);
       for (const [kind, value] of Object.entries(parts) as [

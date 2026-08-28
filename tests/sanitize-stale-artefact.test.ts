@@ -57,7 +57,7 @@ describe("the stamp stage 3 writes", () => {
     try {
       const htmlFile = path.join(dir, "a.html");
       await writeFile(htmlFile, `<!doctype html><html><body>${DIRTY_HTML}</body></html>`);
-      const { jsonFile } = await runBlocks({ htmlFile });
+      const { jsonFile } = await runBlocks({ htmlFile, previous: undefined });
       const written = JSON.parse(await readFile(jsonFile, "utf8"));
 
       expect(written.sanitizer).toBe(SANITIZER_VERSION);
@@ -80,7 +80,7 @@ describe("the stamp stage 3 writes", () => {
       await writeFile(htmlFile, `<!doctype html><html><body>${DIRTY_HTML}</body></html>`);
       await writeFile(jsonFile, JSON.stringify({ blocks: [dirtyBlock()] }));
 
-      await runBlocks({ htmlFile, jsonFile });
+      await runBlocks({ htmlFile, jsonFile, previous: [dirtyBlock()] });
       const written = JSON.parse(await readFile(jsonFile, "utf8"));
       expect(written.sanitizer).toBe(SANITIZER_VERSION);
       expect(JSON.stringify(written.blocks)).not.toContain("onerror");

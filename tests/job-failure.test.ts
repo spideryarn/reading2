@@ -24,6 +24,7 @@ import { JobCard } from "../src/web/AddArticle.js";
 import { failureKindOf, jobWorthRetrying } from "../src/job-failure.js";
 import { providerHttpFailure } from "../src/messages.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
+import { fsArtifacts } from "../src/store/artifacts-fs.js";
 import { generateSummaries } from "../src/summarise.js";
 import {
   budgetFor,
@@ -200,7 +201,7 @@ describe("the failures a retry cannot change", () => {
     // Retry copies the same absent URL, so it fails in the same place. The
     // article's meta.json has none and none was given: nothing about a second
     // attempt is different.
-    const err = await threw(() => STEPS.fetch.run(ctx("/nowhere")));
+    const err = await threw(() => STEPS.fetch.run(ctx("/nowhere"), fsArtifacts));
     expect((err as Error).message).toMatch(/No source URL/);
     expect(failureKindOf(err)).toBe("ours");
   });
@@ -243,7 +244,7 @@ describe("the failures a retry cannot change", () => {
     try {
       await writeFile(path.join(dir, "raw.html"), "");
       const err = await threw(() =>
-        STEPS.extract.run(ctx(dir, { url: "https://example.com/a-piece" })),
+        STEPS.extract.run(ctx(dir, { url: "https://example.com/a-piece" }), fsArtifacts),
       );
       expect((err as Error).message).toMatch(/Readability/);
       expect(failureKindOf(err)).toBe("blocked");

@@ -356,7 +356,7 @@ async function runStep(
        say nothing and this still gets the whole bill.
 
        What it is told about the work is below rather than here. */
-    const { result } = await collectSpend(() => STEPS[step.name].run(ctx), {
+    const { result } = await collectSpend(() => STEPS[step.name].run(ctx, pipelineStore), {
       /* **Everything the ledger cannot work out for itself.** A gateway sees a
          model id and a body; this is the frame that knows whose article it is,
          which job, and which step — so it says so once and every call inside

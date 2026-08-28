@@ -31,6 +31,9 @@ import { SANITIZER_VERSION } from "./sanitize-policy.js";
    An `import type` is erased, so this does not put jsdom in anyone's bundle —
    the reason types.ts gives for staying declaration-only still holds. */
 import type { Block, BlockKind } from "./types.js";
+/* Types only, so nothing runtime crosses from the store into stage 3. Stage 3
+   asks the store two questions and does not care which store answers. */
+import type { ArtifactKind, ArtifactStore } from "./store/artifacts.js";
 
 /**
  * Blocks are the *finest* unit a reader takes in as one thing, so a `<li>` is a
@@ -348,7 +351,8 @@ export interface SplitResult {
  * with no ids in it at all — and re-extraction is exactly the case random ids
  * exist to protect against (block-ids.md#why-random-and-not-sequential).
  *
- * So when the previous blocks.json is available we re-attach ids by matching
+ * So when the previous run's blocks are available — `previousBlocksFrom` below
+ * gets them from the store — we re-attach ids by matching
  * block text. A paragraph keeps its id for as long as its words are unchanged,
  * regardless of what was inserted above it. An edited paragraph gets a fresh id
  * and loses its annotations — that is a real limit, and honest: we cannot tell
@@ -895,6 +899,11 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
 export interface BlocksRun extends SplitResult {
   htmlFile: string;
   jsonFile: string;
+  /**
+   * How many blocks the baseline held — what the pipeline used to work out for
+   * itself by counting two files, and now simply gets told.
+   */
+  previousBlocks: number;
 }
 
 /**
@@ -939,6 +948,152 @@ export function blocksArtefact(blocks: Block[]): { sanitizer: number; blocks: Bl
   return { sanitizer: SANITIZER_VERSION, blocks: sanitizeStoredBlocks(blocks, undefined).blocks };
 }
 
+/* ------------------------------------------------- the baseline this run carries from -- */
+
+/**
+ * **The HTML kind stage 3 consumes: stage 2's, and never its own.**
+ *
+ * On the filesystem this is not a choice anybody could make — `extractedHtml`
+ * and `stampedHtml` are the same path, so stage 3 reads whatever the last
+ * writer left there. Postgres holds them in two columns on purpose
+ * (src/store/artifacts.ts § `ArtifactKind`), so once the pipeline reads its
+ * input from the store the choice becomes real, and it decides whether
+ * identity carries or not — silently, in both directions:
+ *
+ * - Reading `stampedHtml` would hand stage 3 a document that already has our
+ *   ids in it. They are reused directly (`splitIntoBlocks`, the `isSpideryarnId`
+ *   branch), so ids survive — but they survive *the wrong text*. After a
+ *   re-extraction that stamped HTML is the previous article, and stage 3 would
+ *   happily re-emit last week's paragraphs with last week's ids, reporting a
+ *   clean run.
+ * - Reading `extractedHtml` hands stage 3 the article as stage 2 just produced
+ *   it, with no ids anywhere. Every id then comes from the baseline below, by
+ *   matching text — which is the mechanism block-ids.md actually specifies, and
+ *   the only one that can tell an unchanged paragraph from a changed one.
+ *
+ * So `extractedHtml`, and the reuse-ids-found-in-the-document path stays as the
+ * safety net it was written to be rather than becoming the main road. Stated
+ * here as a value rather than as a sentence in a comment because a rule written
+ * only in prose is not a rule the code follows —
+ * tests/blocks-baseline.test.ts holds it, and landing D reads it.
+ */
+export const BLOCKS_INPUT_HTML: ArtifactKind = "extractedHtml";
+
+/**
+ * The carry-forward did not happen, and stage 3 refuses to paper over it.
+ *
+ * The three cases stage 3 has to tell apart, which used to be two:
+ *
+ * | | what it means | what happens |
+ * |---|---|---|
+ * | no earlier blocks | a genuine first ingest | mint, quietly |
+ * | earlier blocks, no readable baseline | this | **throw** |
+ * | the store read throws | an infrastructure fault | propagates, untouched |
+ *
+ * Warning and minting — which is what the pipeline did until 2026-08-28 — turns
+ * a database hiccup into permanent, silent reader data loss: every comment,
+ * saved search and ToC row anchored into this article stops naming anything,
+ * the step reports success, and the reader finds out by scrolling.
+ */
+export class BaselineMissing extends Error {
+  constructor(readonly slug: string) {
+    super(
+      `blocks "${slug}": this article has blocks from an earlier run, but the baseline ` +
+        "stage 3 carries ids from could not be read. Minting would give every paragraph a " +
+        "new id and orphan every comment, saved search and ToC row anchored to it " +
+        "(docs/project/block-ids.md). Refusing rather than re-minting.",
+    );
+    this.name = "BaselineMissing";
+  }
+}
+
+/** Every id changed at once, which is what losing the baseline looks like from the far side. */
+export class IdsNotCarried extends Error {
+  constructor(readonly slug: string, before: number, after: number) {
+    super(
+      `blocks "${slug}": not one of the ${before} previous ids appears in the ${after} blocks ` +
+        "this run produced. Either the matcher is broken or this is a different article; " +
+        "either way every anchor into it would be orphaned. Refusing.",
+    );
+    this.name = "IdsNotCarried";
+  }
+}
+
+/**
+ * The previous run's blocks, from the store — the parameter `splitIntoBlocks`
+ * has always taken, now fetched through the seam rather than from a path.
+ *
+ * **`read`, not `has`.** `beginDraftIn` copies the published revision's block
+ * rows into a new draft before any stage runs, and it copies the completion
+ * rows with them (src/store/pg-revisions.ts), so `has` answers *"did an earlier
+ * run finish"* rather than *"are the blocks here"* — a different question with
+ * the same shape.
+ *
+ * Reading the draft's own carried rows is not matching against itself: before
+ * stage 3's first write those rows **are** the previous published blocks, a
+ * failed computation has not replaced them, and a deliberate second stage-3 run
+ * matching the immediately preceding result is what idempotence means.
+ *
+ * A store read that throws is left alone. It is an infrastructure fault, and
+ * the one thing that must not happen to it is being turned into an answer.
+ */
+export async function previousBlocksFrom(
+  store: ArtifactStore,
+  slug: string,
+): Promise<Block[] | undefined> {
+  const artefact = await store.read(slug, "blocks", "blocks");
+  const previous = artefact?.blocks;
+  if (previous && previous.length > 0) return previous;
+  /* Asked only when the baseline came back empty, because it is the *second*
+     question: "there is nothing here" is fine on a first ingest and fatal on
+     everything else, and nothing about the empty answer itself can tell which. */
+  if (await store.hasEarlierBlocks(slug)) throw new BaselineMissing(slug);
+  return undefined;
+}
+
+/**
+ * Did anything at all survive?
+ *
+ * The runtime half of the guard, and it replaces a warn in src/pipeline.ts that
+ * counted blocks in two files on disk — a count that returns 0 once there are
+ * no files, so the warning would have gone silent at the exact moment it became
+ * true.
+ *
+ * **Ids, not counts.** The question is whether the baseline and the output name
+ * any of the same blocks; two equal totals made of entirely different ids is
+ * the failure, not the healthy case. One shared id is enough to say the matcher
+ * ran — a partial loss is real but any threshold for it would be a guess, and a
+ * guessed alarm gets ignored (the numbers are in the info line instead).
+ *
+ * There is deliberately **no exemption**, because there is no operation in this
+ * repo that explicitly asks for a whole-article replacement: `force` on a step
+ * means *run it again*, which is the ordinary idempotent path and must keep its
+ * ids. If one is ever added, this is where it is honoured, and it must be a
+ * flag somebody set on purpose rather than anything inferred from the article.
+ */
+function assertIdsCarried(slug: string, previous: Block[] | undefined, produced: Block[]): void {
+  if (!previous?.length || produced.length === 0) return;
+  const before = new Set(previous.map((b) => b.id));
+  if (produced.some((b) => before.has(b.id))) return;
+  throw new IdsNotCarried(slug, before.size, produced.length);
+}
+
+/**
+ * Stage 3's baseline read for a caller that has files and no store — the CLI at
+ * the bottom of this file, and nothing else.
+ *
+ * The swallowed error is why this is not the pipeline's path any more. "There
+ * is no file" and "I could not read the file" are the same answer here, and the
+ * second one costs every id in the article.
+ */
+async function previousBlocksInFile(jsonFile: string): Promise<Block[] | undefined> {
+  try {
+    return JSON.parse(await readFile(jsonFile, "utf-8")).blocks as Block[];
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Stage 3 over a file on disk: read, split, write both artefacts back.
  *
@@ -947,28 +1102,35 @@ export function blocksArtefact(blocks: Block[]): { sanitizer: number; blocks: Bl
  * (src/pipeline.ts). Everything interesting is still in `splitIntoBlocks`,
  * which is pure; this is the IO around it.
  *
- * **Ids are carried over from the existing blocks.json, not re-minted.** That
+ * **Ids are carried over from the previous run's blocks, not re-minted.** That
  * is the whole reason a re-extraction is survivable — see
  * docs/project/block-ids.md#surviving-stage-2-which-is-the-case-that-actually-matters.
+ *
+ * **`previous` is required, and that is the point of this change.** It used to
+ * be read here, from `jsonFile`, inside a `try/catch` whose `catch` said "first
+ * run for this article" — so the day the pipeline's artefacts leave the
+ * filesystem, that read fails on every run and every article silently becomes a
+ * first ingest. A required argument cannot be dropped by a landing that removes
+ * the files; an optional one can, and would compile.
  */
 export async function runBlocks(opts: {
   htmlFile: string;
   jsonFile?: string;
+  /**
+   * The previous run's blocks — `undefined` **only** for a genuine first
+   * ingest. `previousBlocksFrom` above is how the pipeline gets it.
+   */
+  previous: Block[] | undefined;
 }): Promise<BlocksRun> {
   const htmlFile = opts.htmlFile;
   const jsonFile = opts.jsonFile ?? `${htmlFile.replace(/\.html$/, "")}.blocks.json`;
-
-  // If a previous run's blocks.json is sitting there, use it to carry ids
-  // across a re-extraction that wiped them from the HTML.
-  let previous: Block[] | undefined;
-  try {
-    previous = JSON.parse(await readFile(jsonFile, "utf-8")).blocks as Block[];
-  } catch {
-    previous = undefined; // first run for this article
-  }
+  const previous = opts.previous;
 
   const source = await readFile(htmlFile, "utf-8");
   const result = splitIntoBlocks(source, previous);
+  /* Before either write, so a refusal leaves the previous artefacts exactly
+     where they were rather than half-replaced by the run that was refused. */
+  assertIdsCarried(path.basename(htmlFile).replace(/\.html$/, ""), previous, result.blocks);
 
   await writeFile(htmlFile, result.html, "utf-8");
   /* `blocksArtefact`, not a bare `{ blocks }` — see its own comment. The stamp
@@ -978,7 +1140,7 @@ export async function runBlocks(opts: {
      for. Re-running this stage *is* the migration: it rewrites the file anyway. */
   await writeFile(jsonFile, JSON.stringify(blocksArtefact(result.blocks), null, 2), "utf-8");
 
-  return { ...result, htmlFile, jsonFile };
+  return { ...result, htmlFile, jsonFile, previousBlocks: previous?.length ?? 0 };
 }
 
 async function main() {
@@ -988,9 +1150,14 @@ async function main() {
     process.exit(1);
   }
   const argOut = process.argv[3];
+  const jsonFile = argOut ?? `${input.replace(/\.html$/, "")}.blocks.json`;
+  /* The CLI has files and no store, so it resolves its own baseline — and it is
+     the *only* caller allowed to, because it is the only one for which "the
+     file is not there" honestly means "there is nothing to carry". */
   const { blocks, stats, jsonFile: outJson } = await runBlocks({
     htmlFile: input,
-    ...(argOut ? { jsonFile: argOut } : {}),
+    jsonFile,
+    previous: await previousBlocksInFile(jsonFile),
   });
 
   const byKind = blocks.reduce<Record<string, number>>((acc, b) => {
