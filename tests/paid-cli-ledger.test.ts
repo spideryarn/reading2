@@ -81,6 +81,33 @@
  * for itself any more. A gate that checked only that the CLIs call `stageCli`
  * would go silent the day somebody simplified `stageCli`.
  *
+ * ## The Tier 2 review, and the two things it changed
+ *
+ * The first version of the new-tail rules was beaten by GPT Sol on 2026-08-28,
+ * and it was beaten *by execution* — it ran these exported functions against
+ * adversarial sources rather than reading them, which is why it found things a
+ * careful read had not. Every one reproduced. Both faults are the same mistake
+ * in two places, and it is the mistake this file's header already warns about:
+ *
+ * 1. **Presence read as execution.** A guard whose test was the wrong way
+ *    round, a guard that exits along one path, a `return` between the guard and
+ *    the `.env.local` read, a wrapper in `if (false)`, a wrapper that is not
+ *    awaited, a tail that is not awaited, and a helper closure hiding a bare
+ *    `main()` — all seven had the right syntax in the right order and did the
+ *    wrong thing. The fix is to require the *statement*, not to find the call:
+ *    `stageCli`'s body must be exactly its three statements, and a caller's tail
+ *    must be a top-level `await stageCli(…);` — nothing nested, voided or
+ *    chained. And `main` is now looked for **everywhere** in a caller, function
+ *    bodies included, because a closure over `main` is a call waiting for its
+ *    caller and the caller is one line away.
+ * 2. **A basename read as an identity.** `spec.endsWith("/cli-ledger.js")`
+ *    accepted `import { stageCli } from "./fake/cli-ledger.js"` where the fake
+ *    ran `main()` bare. Import specifiers are now *resolved* against the
+ *    importing file — which is why every fixture below is named
+ *    `src/fixture.ts`. That the entrypoint guards this whole item is about were
+ *    making the very same mistake at the very same time is not a coincidence:
+ *    it is what `src/is-main.ts` is for.
+ *
  * The old tail's two guard idioms are both still understood — `import.meta` in
  * the `if` test itself, and a top-level `const isMain = …import.meta…` the `if`
  * then names — because harmonising them is what §2.5 is for and it is not
@@ -294,6 +321,31 @@ function mentionsAnyName(node: unknown, names: ReadonlySet<string>): boolean {
   return found;
 }
 
+/** The three modules the rules below are about, by their path from the repo root. */
+const CLI_LEDGER = "src/cli-ledger.ts";
+const ENV_MODULE = "src/env.ts";
+const IS_MAIN_MODULE = "src/is-main.ts";
+
+/**
+ * **Whether an import specifier names a particular module** — resolved, not
+ * matched by its tail.
+ *
+ * This was `spec.endsWith("/cli-ledger.js")` until GPT Sol beat it on
+ * 2026-08-28 by *executing* the detector against
+ * `import { stageCli } from "./fake/cli-ledger.js"`, where the fake calls
+ * `main()` bare. The gate returned `null`. A basename is not an identity, which
+ * is the same mistake the entrypoint guards this whole item is about were
+ * making at the same time — `src/is-main.ts` has the other half of it.
+ *
+ * Only a relative specifier can name a file in this repo, so a bare one is
+ * refused outright rather than resolved against `node_modules`.
+ */
+function resolvesTo(file: string, spec: string, module: string): boolean {
+  if (!spec.startsWith(".")) return false;
+  const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(file), spec));
+  return resolved.replace(/\.js$/, ".ts") === module;
+}
+
 /**
  * The local name a given export was imported under, or `null`.
  *
@@ -302,12 +354,22 @@ function mentionsAnyName(node: unknown, names: ReadonlySet<string>): boolean {
  * check that tells the two apart. `envOffence` needs exactly the same question
  * asked about `loadEnvLocal`, which is why this takes the module and the export
  * rather than hard-coding one pair.
+ *
+ * **And by module, not by basename** — see `resolvesTo`. It needs the importing
+ * file's own path to resolve a relative specifier, which is why every caller
+ * passes one; the fixtures below are named `src/fixture.ts` for exactly that
+ * reason rather than as decoration.
  */
-function importedLocalName(body: Node[], moduleSuffix: string, exported: string): string | null {
+function importedLocalName(
+  file: string,
+  body: Node[],
+  module: string,
+  exported: string,
+): string | null {
   for (const stmt of body) {
     if (stmt.type !== "ImportDeclaration") continue;
     const spec = (stmt.source as { value?: string } | undefined)?.value ?? "";
-    if (!spec.endsWith(moduleSuffix)) continue;
+    if (!resolvesTo(file, spec, module)) continue;
     if (stmt.importKind === "type") continue;
     for (const sp of (stmt.specifiers ?? []) as Node[]) {
       if (sp.type !== "ImportSpecifier" || sp.importKind === "type") continue;
@@ -320,13 +382,13 @@ function importedLocalName(body: Node[], moduleSuffix: string, exported: string)
 }
 
 /** The local name `withLedger` was imported under, or `null`. */
-function ledgerLocalName(body: Node[]): string | null {
-  return importedLocalName(body, "/cli-ledger.js", LEDGER);
+function ledgerLocalName(file: string, body: Node[]): string | null {
+  return importedLocalName(file, body, CLI_LEDGER, LEDGER);
 }
 
 /** The local name `stageCli` was imported under, or `null`. */
-function stageLocalName(body: Node[]): string | null {
-  return importedLocalName(body, "/cli-ledger.js", STAGE);
+function stageLocalName(file: string, body: Node[]): string | null {
+  return importedLocalName(file, body, CLI_LEDGER, STAGE);
 }
 
 /**
@@ -583,7 +645,7 @@ export function envOffence(file: string, source: string): string | null {
   if (errors > 0) {
     return `${file} — could not be parsed (${errors} error(s)), so nothing here was checked`;
   }
-  const local = importedLocalName(body, "/env.js", LOAD_ENV);
+  const local = importedLocalName(file, body, ENV_MODULE, LOAD_ENV);
   if (!local) return `${file} — imports no ${LOAD_ENV} from ./env.js`;
 
   const main = mainFunction(body);
@@ -693,10 +755,10 @@ export function ledgerOffence(file: string, source: string): string | null {
      both. They are checked separately and each is checked whole. The file picks
      its form by what it imports and runs, not by which of the two is easier to
      satisfy. */
-  const stage = stageLocalName(body);
+  const stage = stageLocalName(file, body);
   if (stage !== null) return stageOffence(file, body, stage);
 
-  const ledger = ledgerLocalName(body);
+  const ledger = ledgerLocalName(file, body);
   if (!ledger) return `${file} — imports no withLedger from ./cli-ledger.js`;
   if (!declaresMain(body)) return `${file} — declares no top-level ${MAIN}() for the ledger to wrap`;
 
@@ -722,15 +784,14 @@ export function ledgerOffence(file: string, source: string): string | null {
     }
   }
 
-  /* **And nothing else reaches main.** Two passes, because "reached" means
-     different things in the two places. At the top level, a function body is
-     not run, so only the statements themselves count — that is where
-     `if (isMain) … else await main()` lives. Inside the guard, a lambda closing
-     over `main` is as good as a call, because the branch is about to hand it to
-     something, so everything counts. */
-  const stray =
-    body.some((s) => reachesMain(s, { deferred: false, skip: wrapped })) ||
-    guards.some((g) => reachesMain(g, { deferred: true, skip: wrapped }));
+  /* **And nothing else reaches main, anywhere in the module.** This used to
+     read the top level with `deferred: false`, on the argument that a function
+     body is not run. That is true of the body and false of the module: a helper
+     closing over `main` is a call waiting for a caller, and
+     `async function leak() { await main(); }` beside `await leak();` was green.
+     Sol found it on the new tail by execution, 2026-08-28; the same hole was
+     here. There is no legitimate second mention of `main` in a stage CLI. */
+  const stray = body.some((s) => reachesMain(s, { deferred: true, skip: wrapped }));
   if (stray) {
     return `${file} — ${MAIN}() is reached outside ${ledger}("cli", ${MAIN}), so it can spend outside the ledger`;
   }
@@ -757,49 +818,101 @@ export function ledgerOffence(file: string, source: string): string | null {
  *    calls the right function with a hard-coded answer, which is the version of
  *    this bug that would survive a rename;
  * 3. it is handed **`main`**;
- * 4. and `main` is reached nowhere else at the top level, so there is no second,
- *    unmetered call beside it.
+ * 4. and `main` is reached nowhere else in the module *at all* — see below.
  *
  * What it does not ask is whether the ledger opens, because that is no longer a
  * fact about this file. `stageCliOffence` asks it once, of the helper.
+ *
+ * ## What the first version of this got wrong, found by execution
+ *
+ * GPT Sol beat it on 2026-08-28 by *running* it, and both beats are ordinary
+ * code:
+ *
+ * ```ts
+ * async function leak() { await main(); }
+ * await leak();
+ * if (false) await stageCli(import.meta.url, main);
+ * ```
+ *
+ * `executedCalls` found the `stageCli` call **inside the dead branch** and
+ * counted it as the tail, while the reach check walked past `leak`'s body
+ * because a function definition is not a call. Right tail, unreachable; wrong
+ * call, reached. The gate returned `null`.
+ *
+ * Two changes, and they are the same idea twice — *stop asking whether the
+ * syntax is present and start asking whether it is the statement that runs*:
+ *
+ * - **the tail must be a top-level `await stageCli(…)` statement**, exactly one
+ *   of them, not a call found somewhere under the top level. A call in an `if`,
+ *   in a `try`, behind a `void`, or with `.then()` chained onto it is not the
+ *   tail. `void` is refused here even though the old form allows it — plan §0.1
+ *   is explicit that awaiting is what keeps the ledger flush and any failure
+ *   part of the command finishing, and all three files on this tail await;
+ * - **`main` may not be named anywhere else in the file**, function bodies
+ *   included. The old reading — "a function body is not run" — is true of the
+ *   body and false of the module, because something at the top level then calls
+ *   it. There is no legitimate second mention of `main` in a stage CLI.
  */
 function stageOffence(file: string, body: Node[], stage: string): string | null {
   if (!declaresMain(body)) return `${file} — declares no top-level ${MAIN}() for ${stage}() to run`;
   if (shadowsWhereItRuns(body, stage)) {
-    return `${file} — the top level declares its own ${stage}, shadowing the import from ./cli-ledger.js`;
+    return `${file} — the top level declares its own ${stage}, shadowing the import from ${CLI_LEDGER}`;
   }
 
-  const wrapped = new Set<unknown>();
-  let ran = false;
-  for (const call of executedCalls({ type: "Program", body } as unknown as Node)) {
-    const { name, call: opened } = rootCall(call);
-    if (name !== stage) continue;
-    ran = true;
-    const [first, second] = opened.arguments as Node[];
-    if (!mentionsImportMeta(first)) {
-      return `${file} — ${stage}() is not passed import.meta.url, so the guard is asking about some other module`;
+  const tails = body.filter((s) => awaitedCallStatement(s, stage) !== null);
+  if (tails.length === 0) {
+    /* **Near-miss and absent are different reports**, because the fix differs.
+       A `void`, a `.then()` chain, or a call nested in an `if` all read as a
+       tail and are not one — that is the dead-branch bypass, and saying "there
+       is no tail" about a file that visibly contains one would send the reader
+       looking for the wrong thing. */
+    const loose = executedCalls({ type: "Program", body } as unknown as Node).some(
+      (c) => rootCall(c).name === stage,
+    );
+    if (loose) {
+      return `${file} — runs ${stage}() at the top level but not as \`await ${stage}(…);\` — a \`void\`, a \`.then()\` or a call inside an \`if\` each let ${MAIN}() run outside the ledger`;
     }
-    if (!runsMain(second)) {
-      return `${file} — ${stage}(…) is not passed ${MAIN}(), so ${MAIN}() runs outside the ledger`;
-    }
-    wrapped.add(second);
+    return `${file} — has no top-level \`await ${stage}(import.meta.url, ${MAIN})\` statement, so nothing here proves the CLI starts inside the ledger`;
   }
-  if (!ran) {
-    /* Two different faults share this shape, and telling them apart is the
-       difference between "nobody can start this" and "this spends unmetered".
-       Both are red; only one is about money. */
-    return body.some((s) => reachesMain(s, { deferred: false }))
-      ? `${file} — the top level runs ${MAIN}() without ${stage}(), so it can spend outside the ledger`
-      : `${file} — imports ${stage} and never runs it at the top level, so nothing starts the CLI`;
+  if (tails.length > 1) {
+    return `${file} — runs ${stage}() more than once at the top level, so which one starts the CLI is not known`;
   }
 
-  /* Top level only, and only what runs there. A function body is not run, so
-     `main` appearing inside one is a definition rather than a second entrypoint —
-     the same reading the old form takes outside its guard. */
-  if (body.some((s) => reachesMain(s, { deferred: false, skip: wrapped }))) {
+  const opened = awaitedCallStatement(tails[0] as Node, stage) as Node;
+  const [first, second] = opened.arguments as Node[];
+  if (!mentionsImportMeta(first)) {
+    return `${file} — ${stage}() is not passed import.meta.url, so the guard is asking about some other module`;
+  }
+  if (!runsMain(second)) {
+    return `${file} — ${stage}(…) is not passed ${MAIN}(), so ${MAIN}() runs outside the ledger`;
+  }
+
+  /* **Everywhere, not just where it runs.** A helper that closes over `main` is
+     a call waiting for a caller, and the caller is one line away. */
+  const wrapped = new Set<unknown>([second]);
+  if (body.some((s) => reachesMain(s, { deferred: true, skip: wrapped }))) {
     return `${file} — ${MAIN}() is reached outside ${stage}(import.meta.url, ${MAIN}), so it can spend outside the ledger`;
   }
   return null;
+}
+
+/**
+ * **`await f(…);` as a statement of the enclosing block** — the call node, or
+ * `null`.
+ *
+ * Deliberately narrow, and the narrowness is the check. `void f(…)`, `f(…)`,
+ * `f(…).then(g)`, and anything nested inside an `if` or a `try` are all *not*
+ * this, and each of them is one of the ways an entrypoint can read correct and
+ * behave otherwise.
+ */
+function awaitedCallStatement(stmt: Node, name: string): Node | null {
+  if (stmt.type !== "ExpressionStatement") return null;
+  const expr = stmt.expression as Node | undefined;
+  if (expr?.type !== "AwaitExpression") return null;
+  const call = expr.argument as Node | undefined;
+  if (call?.type !== "CallExpression") return null;
+  const callee = call.callee as Node | undefined;
+  return callee?.type === "Identifier" && callee.name === name ? call : null;
 }
 
 /**
@@ -854,59 +967,59 @@ export function stageCliOffence(file: string, source: string): string | null {
   }
 
   const statements = ((fn.body as Node | undefined)?.body ?? []) as Node[];
-
-  /* 1. The guard, and it has to be a statement of `stageCli` that leaves. */
-  const guardedBy = importedLocalName(body, "/is-main.js", IS_MAIN);
-  if (!guardedBy) return `${file} — imports no ${IS_MAIN} from ./is-main.js`;
-  const atGuard = statements.findIndex(
-    (s) =>
-      s.type === "IfStatement" &&
-      callsWith(s.test, guardedBy, entry) &&
-      leaves(s.consequent as Node),
-  );
-  if (atGuard === -1) {
-    return `${file} — ${STAGE}() never returns early unless ${guardedBy}(${entry}), so importing a stage would run it`;
-  }
-
-  /* 2. `.env.local`, after the guard and before anything is awaited. */
-  const env = importedLocalName(body, "/env.js", LOAD_ENV);
-  if (!env) return `${file} — imports no ${LOAD_ENV} from ./env.js`;
+  const guardedBy = importedLocalName(file, body, IS_MAIN_MODULE, IS_MAIN);
+  if (!guardedBy) return `${file} — imports no ${IS_MAIN} from ${IS_MAIN_MODULE}`;
+  const env = importedLocalName(file, body, ENV_MODULE, LOAD_ENV);
+  if (!env) return `${file} — imports no ${LOAD_ENV} from ${ENV_MODULE}`;
   if (shadowsWhereItRuns(fn.body, env)) {
-    return `${file} — ${STAGE}() declares its own ${env}, shadowing the import from ./env.js`;
-  }
-  const atEnv = statements.findIndex((s) => isCallStatement(s, env));
-  if (atEnv === -1 || atEnv < atGuard) {
-    return `${file} — ${STAGE}() never calls ${env}() as a statement of its own after the guard, so a key in .env.local goes unread`;
-  }
-  for (const stmt of statements.slice(0, atEnv)) {
-    if (hasAwait(stmt)) {
-      return `${file} — ${STAGE}() awaits before ${env}(), so .env.local is read after the work has started`;
-    }
+    return `${file} — ${STAGE}() declares its own ${env}, shadowing the import from ${ENV_MODULE}`;
   }
 
-  /* 3 and 4. The wrapper, and nothing else holding the entry function. */
-  const wrapped = new Set<unknown>();
-  let atLedger = -1;
-  statements.forEach((stmt, i) => {
-    for (const call of executedCalls(stmt)) {
-      const { name, call: opened } = rootCall(call);
-      if (name !== LEDGER) continue;
-      const [first, second] = opened.arguments as Node[];
-      if (first?.type !== "StringLiteral" || first.value !== "cli") continue;
-      if (second?.type !== "Identifier" || second.name !== run) continue;
-      wrapped.add(second);
-      atLedger = i;
-    }
-  });
-  if (atLedger === -1) {
-    return `${file} — ${STAGE}() never calls ${LEDGER}("cli", ${run}), so a CLI on ${STAGE} opens no ledger`;
+  /* **Three statements, in this order, and nothing else.** The index-and-
+     predicate version of this was beaten four ways by GPT Sol on 2026-08-28,
+     each time by syntax that was present and did not run: `if (isMain(entry))
+     return` (the polarity), `if (x) return` inside the guard (a conditional
+     exit), a bare `return;` between the guard and the read, and
+     `if (false) await withLedger("cli", main)`. Every one of them left the
+     positions in the right order.
+
+     So the shape is required outright rather than sampled. This is four lines
+     that eight CLIs depend on and say nothing about for themselves; if somebody
+     adds a fifth, the right outcome is that this goes red and gets read, not
+     that it quietly keeps passing on the strength of what is still there. */
+  if (statements.length !== 3) {
+    return `${file} — ${STAGE}() is not exactly \`if (!${guardedBy}(${entry})) return; ${env}(); await ${LEDGER}("cli", ${run});\` — it has ${statements.length} statement(s), and every guarantee the CLIs stopped making rests on those three`;
   }
-  if (atLedger < atEnv) {
-    return `${file} — ${STAGE}() opens the ledger before it reads .env.local, so the key is read after the spending starts`;
+  const [guard, reads, opens] = statements as [Node, Node, Node];
+
+  /* 1. The guard, negated and leaving unconditionally. */
+  if (!refusesUnless(guard, guardedBy, entry)) {
+    return `${file} — ${STAGE}() does not begin \`if (!${guardedBy}(${entry})) return;\`, so it does not reliably refuse to run on import`;
   }
+
+  /* 2. `.env.local`, as the next thing that happens. */
+  if (!isCallStatement(reads, env)) {
+    return `${file} — ${STAGE}() does not call ${env}() as the statement after the guard, so a key in .env.local goes unread`;
+  }
+
+  /* 3. The wrapper, awaited, holding the entry function. */
+  const opened = awaitedCallStatement(opens, LEDGER);
+  if (!opened) {
+    return `${file} — ${STAGE}() does not end with \`await ${LEDGER}(…)\` as a statement of its own, so a CLI on ${STAGE} can finish before the ledger does`;
+  }
+  const [scope, wrapped] = opened.arguments as Node[];
+  if (scope?.type !== "StringLiteral" || scope.value !== "cli") {
+    return `${file} — ${STAGE}() does not open ${LEDGER} with the "cli" scope`;
+  }
+  if (wrapped?.type !== "Identifier" || wrapped.name !== run) {
+    return `${file} — ${STAGE}() does not hand ${run} to ${LEDGER}("cli", …), so a CLI runs outside the ledger`;
+  }
+
+  /* 4. And nothing else in the function is holding the entry function. */
+  const allowed = new Set<unknown>([wrapped]);
   const stray = statements.some((s) => {
     let found = false;
-    walk(s, { deferred: false, skip: wrapped }, (n) => {
+    walk(s, { deferred: true, skip: allowed }, (n) => {
       if (n.type === "Identifier" && n.name === run) found = true;
     });
     return found;
@@ -917,36 +1030,34 @@ export function stageCliOffence(file: string, source: string): string | null {
   return null;
 }
 
-/** `f(x)` — a call to `f` in this expression, holding `x` as an argument. */
-function callsWith(node: unknown, fn: string, arg: string): boolean {
-  let found = false;
-  walk(node, EVERYTHING, (n) => {
-    if (n.type !== "CallExpression") return;
-    const callee = n.callee as Node | undefined;
-    if (callee?.type !== "Identifier" || callee.name !== fn) return;
-    for (const a of (n.arguments ?? []) as Node[]) {
-      if (a.type === "Identifier" && a.name === arg) found = true;
-    }
-  });
-  return found;
-}
+/**
+ * **`if (!f(x)) return;`** — the guard, with its polarity and its exit.
+ *
+ * The first version asked only whether `f(x)` appeared somewhere in the test and
+ * whether a `return` appeared somewhere under the consequent. Both halves were
+ * beatable, and neither beat needs cleverness: `if (isMain(entry)) return;` runs
+ * the CLI on every import and refuses to run it when started, and
+ * `if (!isMain(entry)) { if (x) return; }` exits only sometimes. A guard that is
+ * right about *when* and wrong about *whether* is not a guard.
+ */
+function refusesUnless(stmt: Node, fn: string, arg: string): boolean {
+  if (stmt.type !== "IfStatement" || stmt.alternate) return false;
+  const test = stmt.test as Node | undefined;
+  if (test?.type !== "UnaryExpression" || test.operator !== "!") return false;
+  const call = test.argument as Node | undefined;
+  if (call?.type !== "CallExpression") return false;
+  const callee = call.callee as Node | undefined;
+  if (callee?.type !== "Identifier" || callee.name !== fn) return false;
+  const args = (call.arguments ?? []) as Node[];
+  if (args.length !== 1 || args[0]?.type !== "Identifier" || args[0].name !== arg) return false;
 
-/** Whether this branch leaves the function — `return`, or a `process.exit`-shaped throw. */
-function leaves(node: Node): boolean {
-  let found = false;
-  walk(node, { deferred: false }, (n) => {
-    if (n.type === "ReturnStatement" || n.type === "ThrowStatement") found = true;
-  });
-  return found;
-}
-
-/** Whether this statement suspends. `defersOrReturns` also counts `return`, which the guard is. */
-function hasAwait(stmt: Node): boolean {
-  let found = false;
-  walk(stmt, { deferred: false }, (n) => {
-    if (n.type === "AwaitExpression") found = true;
-  });
-  return found;
+  /* Unconditionally, which means the `return` is the consequent itself or the
+     one statement of its block — not something reached along one path. */
+  const consequent = stmt.consequent as Node;
+  if (consequent.type === "ReturnStatement") return true;
+  if (consequent.type !== "BlockStatement") return false;
+  const inner = (consequent.body ?? []) as Node[];
+  return inner.length === 1 && inner[0]?.type === "ReturnStatement";
 }
 
 /** Whether a module reaches a provider seam by importing one for its values. */
@@ -1067,7 +1178,7 @@ describe("the listed stage CLIs open the ledger", () => {
          standing as permission for the next one. */
       const parsed = parseSource(read(declared.file)).body;
       expect(
-        ledgerLocalName(parsed) ?? stageLocalName(parsed),
+        ledgerLocalName(declared.file, parsed) ?? stageLocalName(declared.file, parsed),
         `${id} is admitted here as opening no ledger, and ${declared.file} now imports\n` +
           `withLedger or ${STAGE}. Delete the row and the declaration, and mark the\n` +
           "declaration metered.\n",
@@ -1092,14 +1203,14 @@ describe("the listed stage CLIs open the ledger", () => {
       "  process.argv[1] !== undefined &&\n" +
       "  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);\n";
 
-    const BARE = 'fixture.ts — the entrypoint branch calls main() directly rather than withLedger("cli", …)';
+    const BARE = 'src/fixture.ts — the entrypoint branch calls main() directly rather than withLedger("cli", …)';
 
     const SHADOWED =
-      "fixture.ts — the entrypoint branch declares its own withLedger, shadowing the import from ./cli-ledger.js";
+      "src/fixture.ts — the entrypoint branch declares its own withLedger, shadowing the import from ./cli-ledger.js";
     const NOT_MAIN =
-      'fixture.ts — withLedger("cli", …) is not passed main(), so main() runs outside the ledger';
+      'src/fixture.ts — withLedger("cli", …) is not passed main(), so main() runs outside the ledger';
     const OUTSIDE =
-      'fixture.ts — main() is reached outside withLedger("cli", main), so it can spend outside the ledger';
+      'src/fixture.ts — main() is reached outside withLedger("cli", main), so it can spend outside the ledger';
 
     const bad: [string, string, string | RegExp][] = [
       [
@@ -1130,7 +1241,7 @@ describe("the listed stage CLIs open the ledger", () => {
         "a locally-defined withLedger, with no import anywhere in the file",
         `${DECLARES_MAIN}const withLedger = async (_k: string, f: () => Promise<void>) => f();\n` +
           `${GUARD}if (isMain) await withLedger("cli", main);`,
-        "fixture.ts — imports no withLedger from ./cli-ledger.js",
+        "src/fixture.ts — imports no withLedger from ./cli-ledger.js",
       ],
       [
         /* **The binding case, properly this time.** The import is present and
@@ -1181,7 +1292,7 @@ describe("the listed stage CLIs open the ledger", () => {
            `main()` beside it is deleted. */
         "a branch that defines the wrapper and runs nothing",
         `${IMPORT}${DECLARES_MAIN}${GUARD}if (isMain) {\n  const run = () => withLedger("cli", main);\n}`,
-        "fixture.ts — the entrypoint branch invokes nothing directly, so nothing proves it opens the ledger",
+        "src/fixture.ts — the entrypoint branch invokes nothing directly, so nothing proves it opens the ledger",
       ],
       [
         /* The wrapper is right and there is no `main` for it to be holding, so
@@ -1190,7 +1301,7 @@ describe("the listed stage CLIs open the ledger", () => {
            to be looked at rather than waved through. */
         "a module with no main() at all",
         `${IMPORT}${GUARD}if (isMain) await withLedger("cli", run);`,
-        "fixture.ts — declares no top-level main() for the ledger to wrap",
+        "src/fixture.ts — declares no top-level main() for the ledger to wrap",
       ],
       [
         /* A correct wrapper does not license a second, unwrapped call beside it. */
@@ -1201,24 +1312,24 @@ describe("the listed stage CLIs open the ledger", () => {
       [
         "the wrapper opened with the wrong scope",
         `${IMPORT}${DECLARES_MAIN}${GUARD}if (isMain) await withLedger("eval", main);`,
-        'fixture.ts — withLedger is not called with the "cli" scope',
+        'src/fixture.ts — withLedger is not called with the "cli" scope',
       ],
       [
         "no entrypoint guard at all",
         `${IMPORT}${DECLARES_MAIN}await main();`,
-        "fixture.ts — has no top-level entrypoint guard testing import.meta",
+        "src/fixture.ts — has no top-level entrypoint guard testing import.meta",
       ],
       [
         /* Recovery rather than a throw, so a file this cannot read becomes an
            offence instead of an empty program that looks clean. */
         "a file it cannot parse",
         `${IMPORT}${DECLARES_MAIN}${GUARD}if (isMain) await withLedger("cli", main);\nfunction (((`,
-        /^fixture\.ts — could not be parsed \(\d+ error\(s\)\), so nothing here was checked$/,
+        /^src\/fixture\.ts — could not be parsed \(\d+ error\(s\)\), so nothing here was checked$/,
       ],
     ];
     for (const [name, source, expected] of bad) {
       it(name, () => {
-        const offence = ledgerOffence("fixture.ts", source);
+        const offence = ledgerOffence("src/fixture.ts", source);
         /* **The message, not merely a red.** "It passed" and "it never ran" are
            the same observation from outside, and so are "it caught this" and "it
            caught something else": the locally-defined-withLedger case below used
@@ -1231,11 +1342,11 @@ describe("the listed stage CLIs open the ledger", () => {
 
     it("accepts both real guard idioms and nothing else", () => {
       expect(
-        ledgerOffence("fixture.ts", `${IMPORT}${DECLARES_MAIN}${GUARD}if (isMain) void withLedger("cli", main);`),
+        ledgerOffence("src/fixture.ts", `${IMPORT}${DECLARES_MAIN}${GUARD}if (isMain) void withLedger("cli", main);`),
       ).toBeNull();
       expect(
         ledgerOffence(
-          "fixture.ts",
+          "src/fixture.ts",
           `${IMPORT}${DECLARES_MAIN}if (path.resolve(process.argv[1] ?? "") === path.resolve(import.meta.filename)) {\n  await withLedger("cli", main);\n}`,
         ),
       ).toBeNull();
@@ -1243,7 +1354,7 @@ describe("the listed stage CLIs open the ledger", () => {
          the chained form has to resolve to the call underneath it. */
       expect(
         ledgerOffence(
-          "fixture.ts",
+          "src/fixture.ts",
           `${IMPORT}${DECLARES_MAIN}${GUARD}if (isMain) withLedger("cli", main).catch(() => process.exit(1));`,
         ),
       ).toBeNull();
@@ -1252,7 +1363,7 @@ describe("the listed stage CLIs open the ledger", () => {
          `withLedger("cli", () => main(process.argv))` for no reason. */
       expect(
         ledgerOffence(
-          "fixture.ts",
+          "src/fixture.ts",
           `${IMPORT}${DECLARES_MAIN}${GUARD}if (isMain) await withLedger("cli", async () => {\n  await main();\n});`,
         ),
       ).toBeNull();
@@ -1307,12 +1418,25 @@ describe("the listed stage CLIs open the ledger", () => {
         mutations: [
           [
             "await main();",
-            `${file} — the top level runs main() without stageCli(), so it can spend outside the ledger`,
+            `${file} — has no top-level \`await stageCli(import.meta.url, main)\` statement, so nothing here proves the CLI starts inside the ledger`,
           ],
           [
-            /* The same bypass, in the new tail's spelling. */
+            /* The same bypass, in the new tail's spelling: the chain means this
+               is not the tail statement at all, which is the first thing wrong
+               with it. */
             "await stageCli(import.meta.url, async () => {}).then(main);",
-            `${file} — stageCli(…) is not passed main(), so main() runs outside the ledger`,
+            `${file} — runs stageCli() at the top level but not as \`await stageCli(…);\` — a \`void\`, a \`.then()\` or a call inside an \`if\` each let main() run outside the ledger`,
+          ],
+          [
+            /* **Sol's counterexample, on the real files.** A helper that closes
+               over `main`, called at the top level, beside a correct tail. */
+            "async function leak() {\n  await main();\n}\nawait leak();\nawait stageCli(import.meta.url, main);",
+            `${file} — main() is reached outside stageCli(import.meta.url, main), so it can spend outside the ledger`,
+          ],
+          [
+            /* The tail that does not wait for the ledger to flush. */
+            "stageCli(import.meta.url, main);",
+            `${file} — runs stageCli() at the top level but not as \`await stageCli(…);\` — a \`void\`, a \`.then()\` or a call inside an \`if\` each let main() run outside the ledger`,
           ],
           [
             /* **The one the new tail adds.** Right function, right entry
@@ -1367,23 +1491,32 @@ describe("the listed stage CLIs open the ledger", () => {
      */
     describe("the stageCli tail", () => {
       const STAGE_IMPORT = 'import { stageCli } from "./cli-ledger.js";\n';
+      const NOT_A_STATEMENT =
+        "src/fixture.ts — runs stageCli() at the top level but not as `await stageCli(…);` — " +
+        "a `void`, a `.then()` or a call inside an `if` each let main() run outside the ledger";
+      const NO_TAIL =
+        "src/fixture.ts — has no top-level `await stageCli(import.meta.url, main)` statement, " +
+        "so nothing here proves the CLI starts inside the ledger";
+      const OUTSIDE =
+        "src/fixture.ts — main() is reached outside stageCli(import.meta.url, main), so it can spend outside the ledger";
+
       const bad: [string, string, string][] = [
         [
           "a bare main() beside a correct tail",
           `${STAGE_IMPORT}${DECLARES_MAIN}await stageCli(import.meta.url, main);\nawait main();`,
-          "fixture.ts — main() is reached outside stageCli(import.meta.url, main), so it can spend outside the ledger",
+          OUTSIDE,
         ],
         [
           /* Defining is not running, and the difference is invisible in a diff
              that adds one arrow. */
           "the tail defined and never run",
           `${STAGE_IMPORT}${DECLARES_MAIN}const tail = () => stageCli(import.meta.url, main);`,
-          "fixture.ts — imports stageCli and never runs it at the top level, so nothing starts the CLI",
+          NO_TAIL,
         ],
         [
           "the tail in a comment, with a bare main() below it",
           `${STAGE_IMPORT}${DECLARES_MAIN}/* await stageCli(import.meta.url, main); */\nawait main();`,
-          "fixture.ts — the top level runs main() without stageCli(), so it can spend outside the ledger",
+          NO_TAIL,
         ],
         [
           /* A block at the top level is legal, and the `const` inside it wins
@@ -1391,7 +1524,7 @@ describe("the listed stage CLIs open the ledger", () => {
              spelling is satisfied, and nothing is started. */
           "a block-scoped stageCli shadowing the real import",
           `${STAGE_IMPORT}${DECLARES_MAIN}{\n  const stageCli = async () => {};\n  await stageCli(import.meta.url, main);\n}`,
-          "fixture.ts — the top level declares its own stageCli, shadowing the import from ./cli-ledger.js",
+          "src/fixture.ts — the top level declares its own stageCli, shadowing the import from src/cli-ledger.ts",
         ],
         [
           /* The guard inside `stageCli` compares against whatever it is handed.
@@ -1399,43 +1532,97 @@ describe("the listed stage CLIs open the ledger", () => {
              the CLI never starts, or starts on import, and the line reads right. */
           "a hard-coded URL instead of this module's own",
           `${STAGE_IMPORT}${DECLARES_MAIN}await stageCli("file:///nowhere.ts", main);`,
-          "fixture.ts — stageCli() is not passed import.meta.url, so the guard is asking about some other module",
+          "src/fixture.ts — stageCli() is not passed import.meta.url, so the guard is asking about some other module",
         ],
         [
           "the tail handed an empty function, with main chained onto it",
           `${STAGE_IMPORT}${DECLARES_MAIN}await stageCli(import.meta.url, async () => {}).then(main);`,
-          "fixture.ts — stageCli(…) is not passed main(), so main() runs outside the ledger",
+          NOT_A_STATEMENT,
         ],
         [
           "a module with no main() at all",
           `${STAGE_IMPORT}await stageCli(import.meta.url, run);`,
-          "fixture.ts — declares no top-level main() for stageCli() to run",
+          "src/fixture.ts — declares no top-level main() for stageCli() to run",
         ],
         [
-          /* A dead branch runs nothing, so the tail beside it is the only thing
-             that runs — and it is a bare `main()`. */
-          "the tail in a dead branch beside a bare main()",
-          `${STAGE_IMPORT}${DECLARES_MAIN}if (false) await stageCli(import.meta.url, main);\nawait main();`,
-          "fixture.ts — main() is reached outside stageCli(import.meta.url, main), so it can spend outside the ledger",
+          /* **GPT Sol, by execution, 2026-08-28.** The old check took the call
+             in the dead branch for the tail and walked past `leak`'s body
+             because a function definition is not a call — right tail,
+             unreachable; wrong call, reached. It returned `null`. */
+          "a helper closure hiding a bare main(), with the tail in a dead branch",
+          `${STAGE_IMPORT}${DECLARES_MAIN}async function leak() {\n  await main();\n}\nawait leak();\nif (false) await stageCli(import.meta.url, main);`,
+          NOT_A_STATEMENT,
+        ],
+        [
+          /* The same closure without the dead branch, so the tail is genuinely
+             correct and the leak is the only fault left. */
+          "a helper closure hiding a bare main(), beside a correct tail",
+          `${STAGE_IMPORT}${DECLARES_MAIN}async function leak() {\n  await main();\n}\nawait leak();\nawait stageCli(import.meta.url, main);`,
+          OUTSIDE,
+        ],
+        [
+          /* An IIFE is a function body the top level runs immediately, which is
+             the shortest version of the same hole. */
+          "main() inside an IIFE beside a correct tail",
+          `${STAGE_IMPORT}${DECLARES_MAIN}await (async () => {\n  await main();\n})();\nawait stageCli(import.meta.url, main);`,
+          OUTSIDE,
+        ],
+        [
+          /* **The tail that does not wait.** §0.1 asks for `await` so the ledger
+             flush and any failure are part of the command finishing; a floating
+             call can let the process exit first. */
+          "the tail not awaited",
+          `${STAGE_IMPORT}${DECLARES_MAIN}stageCli(import.meta.url, main);`,
+          NOT_A_STATEMENT,
+        ],
+        [
+          "the tail voided rather than awaited",
+          `${STAGE_IMPORT}${DECLARES_MAIN}void stageCli(import.meta.url, main);`,
+          NOT_A_STATEMENT,
+        ],
+        [
+          /* **A basename is not an identity.** Sol wrote a `fake/cli-ledger.js`
+             that calls `main()` bare; the old `spec.endsWith("/cli-ledger.js")`
+             accepted it. This falls through to the old form's rule, which is
+             the honest answer: nothing here imports the real wrapper. */
+          "stageCli imported from a look-alike module",
+          `import { stageCli } from "./fake/cli-ledger.js";\n${DECLARES_MAIN}await stageCli(import.meta.url, main);`,
+          "src/fixture.ts — imports no withLedger from ./cli-ledger.js",
+        ],
+        [
+          /* **Half-migrated, which is what a mistake during this migration would
+             actually look like** — the new tail added and the old one left
+             behind, so `main` is started twice and the second ledger nests
+             inside the first. Pinned here because the review asserted this was
+             rejected and that is worth holding still. */
+          "both tails present, the old one left behind",
+          `import { stageCli, withLedger } from "./cli-ledger.js";\n${DECLARES_MAIN}${GUARD}if (isMain) void withLedger("cli", main);\nawait stageCli(import.meta.url, main);`,
+          OUTSIDE,
         ],
       ];
       for (const [name, source, expected] of bad) {
         it(name, () => {
-          expect(ledgerOffence("fixture.ts", source)).toBe(expected);
+          expect(ledgerOffence("src/fixture.ts", source)).toBe(expected);
         });
       }
 
-      it("accepts the tail as it is actually written, and its two variants", () => {
+      it("accepts the tail as it is actually written, and the one variant of it", () => {
         for (const tail of [
           "await stageCli(import.meta.url, main);",
-          "void stageCli(import.meta.url, main);",
           /* Wrapping main in a lambda is still wrapping main, for the same
              reason the old form allows it: `() => main(process.argv)` is not a
              bypass. */
           "await stageCli(import.meta.url, () => main(process.argv));",
         ]) {
-          expect(ledgerOffence("fixture.ts", `${STAGE_IMPORT}${DECLARES_MAIN}${tail}`), tail).toBeNull();
+          expect(ledgerOffence("src/fixture.ts", `${STAGE_IMPORT}${DECLARES_MAIN}${tail}`), tail).toBeNull();
         }
+        /* An alias is a binding, and the binding is what this follows. */
+        expect(
+          ledgerOffence(
+            "src/fixture.ts",
+            `import { stageCli as tail } from "./cli-ledger.js";\n${DECLARES_MAIN}await tail(import.meta.url, main);`,
+          ),
+        ).toBeNull();
       });
     });
   });
@@ -1470,6 +1657,19 @@ describe("stageCli itself opens the ledger", () => {
    * item exists to stop there being two of.
    */
   describe("the detector goes red when it should", () => {
+    /** The one sentence three of the seven mutations land on, because the shape
+        is required outright rather than sampled — see `stageCliOffence`. */
+    const SHAPE = (n: number) =>
+      'src/cli-ledger.ts — stageCli() is not exactly `if (!isMain(entry)) return; loadEnvLocal(); ' +
+      `await withLedger("cli", main);\` — it has ${n} statement(s), and every guarantee the CLIs ` +
+      "stopped making rests on those three";
+    const NO_WRAPPER =
+      "src/cli-ledger.ts — stageCli() does not end with `await withLedger(…)` as a statement of its " +
+      "own, so a CLI on stageCli can finish before the ledger does";
+    const NO_GUARD =
+      "src/cli-ledger.ts — stageCli() does not begin `if (!isMain(entry)) return;`, so it does not " +
+      "reliably refuse to run on import";
+
     const mutations: [string, string, string, string][] = [
       [
         /* Without the guard it is not a guard helper at all: importing any stage
@@ -1477,13 +1677,33 @@ describe("stageCli itself opens the ledger", () => {
         "the entrypoint guard taken out",
         "  if (!isMain(entry)) return;\n",
         "",
-        "src/cli-ledger.ts — stageCli() never returns early unless isMain(entry), so importing a stage would run it",
+        SHAPE(2),
+      ],
+      [
+        /* **GPT Sol, by execution, 2026-08-28.** The guard is present, names the
+           right function and the right argument, and returns — with the test the
+           wrong way round. Started directly it does nothing; imported, it runs.
+           The old check asked whether `isMain(entry)` appeared in the test and
+           never looked at the `!`. */
+        "the guard reversed, so it runs on import and not when started",
+        "  if (!isMain(entry)) return;\n",
+        "  if (isMain(entry)) return;\n",
+        NO_GUARD,
+      ],
+      [
+        /* Sol's second on the guard: it exits along one path. `leaves` walked
+           nested statements, so any `return` anywhere under the consequent
+           satisfied it. */
+        "the guard's exit made conditional",
+        "  if (!isMain(entry)) return;\n",
+        "  if (!isMain(entry)) {\n    if (process.env.CI) return;\n  }\n",
+        NO_GUARD,
       ],
       [
         "the .env.local read taken out",
         "  loadEnvLocal();\n",
         "",
-        "src/cli-ledger.ts — stageCli() never calls loadEnvLocal() as a statement of its own after the guard, so a key in .env.local goes unread",
+        SHAPE(2),
       ],
       [
         /* The Tier 1 review's finding, moved into the helper: it is in the right
@@ -1491,13 +1711,37 @@ describe("stageCli itself opens the ledger", () => {
         "the .env.local read moved below the spending",
         '  loadEnvLocal();\n  await withLedger("cli", main);\n',
         '  await withLedger("cli", main);\n  loadEnvLocal();\n',
-        "src/cli-ledger.ts — stageCli() awaits before loadEnvLocal(), so .env.local is read after the work has started",
+        "src/cli-ledger.ts — stageCli() does not call loadEnvLocal() as the statement after the guard, so a key in .env.local goes unread",
+      ],
+      [
+        /* Sol's third: a `return` between the guard and the read. Every position
+           check the old version made still held, and the function did nothing. */
+        "an unconditional return between the guard and the read",
+        "  if (!isMain(entry)) return;\n",
+        "  if (!isMain(entry)) return;\n  return;\n",
+        SHAPE(4),
       ],
       [
         "the wrapper taken out, so the CLI runs bare",
         '  await withLedger("cli", main);\n',
         "  await main();\n",
-        'src/cli-ledger.ts — stageCli() never calls withLedger("cli", main), so a CLI on stageCli opens no ledger',
+        NO_WRAPPER,
+      ],
+      [
+        /* Sol's fourth: the wrapper in a dead branch. Present, correct, never
+           reached — and the old check found it by walking the whole body. */
+        "the wrapper put in a dead branch",
+        '  await withLedger("cli", main);\n',
+        '  if (false) await withLedger("cli", main);\n',
+        NO_WRAPPER,
+      ],
+      [
+        /* And the wrapper not awaited, which is the same fault as a floating
+           `void` at a caller: the process can exit before the ledger flushes. */
+        "the wrapper not awaited",
+        '  await withLedger("cli", main);\n',
+        '  withLedger("cli", main);\n',
+        NO_WRAPPER,
       ],
       [
         /* `"eval"` is a real scope with a real meaning, which is why this is the
@@ -1506,7 +1750,7 @@ describe("stageCli itself opens the ledger", () => {
         "the wrapper opened with the eval scope",
         '  await withLedger("cli", main);\n',
         '  await withLedger("eval", main);\n',
-        'src/cli-ledger.ts — stageCli() never calls withLedger("cli", main), so a CLI on stageCli opens no ledger',
+        'src/cli-ledger.ts — stageCli() does not open withLedger with the "cli" scope',
       ],
       [
         /* The same bypass Greg reproduced by hand on `src/toc.ts`, one level
@@ -1515,7 +1759,7 @@ describe("stageCli itself opens the ledger", () => {
         "the wrapper handed an empty function, with main chained onto it",
         '  await withLedger("cli", main);\n',
         '  await withLedger("cli", async () => {}).then(main);\n',
-        'src/cli-ledger.ts — stageCli() never calls withLedger("cli", main), so a CLI on stageCli opens no ledger',
+        NO_WRAPPER,
       ],
       [
         "a local withLedger shadowing the module's own",
@@ -1587,42 +1831,42 @@ describe("the listed stage CLIs read .env.local", () => {
       [
         "main() never calls it — src/pdf-read.ts before 2026-08-28",
         `${IMPORT}async function main(): Promise<void> {\n  await run();\n}\n`,
-        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
+        "src/fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       ],
       [
         "the import missing entirely",
         "async function main(): Promise<void> {\n  loadEnvLocal();\n}\n",
-        "fixture.ts — imports no loadEnvLocal from ./env.js",
+        "src/fixture.ts — imports no loadEnvLocal from ./env.js",
       ],
       [
         /* The binding trap again: right spelling, no import behind it. */
         "a local loadEnvLocal shadowing the real import",
         `${IMPORT}async function main(): Promise<void> {\n  const loadEnvLocal = () => {};\n  loadEnvLocal();\n}\n`,
-        "fixture.ts — main() declares its own loadEnvLocal, shadowing the import from ./env.js",
+        "src/fixture.ts — main() declares its own loadEnvLocal, shadowing the import from ./env.js",
       ],
       [
         /* Defining is not running. A helper that would have read the file, had
            anything called it, leaves the key just as unread. */
         "the call inside a helper main() declares and never invokes",
         `${IMPORT}async function main(): Promise<void> {\n  const setup = () => loadEnvLocal();\n  await run();\n}\n`,
-        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
+        "src/fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       ],
       [
         "a call in a comment, which is not a call",
         `${IMPORT}async function main(): Promise<void> {\n  /* loadEnvLocal(); */\n  await run();\n}\n`,
-        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
+        "src/fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       ],
       [
         /* Called at module scope instead: it runs, but on *import* as well as on
            start, which is the thing the note in src/ideas.ts refuses. */
         "called at the top level rather than in main()",
         `${IMPORT}loadEnvLocal();\nasync function main(): Promise<void> {\n  await run();\n}\n`,
-        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
+        "src/fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       ],
       [
         "a module with no main() at all",
         `${IMPORT}loadEnvLocal();\n`,
-        "fixture.ts — declares no top-level main() function to read .env.local in",
+        "src/fixture.ts — declares no top-level main() function to read .env.local in",
       ],
       [
         /* **The sharpest of GPT Sol's three, 2026-08-28.** It is in `main`, it is
@@ -1632,28 +1876,28 @@ describe("the listed stage CLIs read .env.local", () => {
            guarantee rather than a weak one. */
         "the call after the spending, which is in main and useless",
         `${IMPORT}async function main(): Promise<void> {\n  await spend();\n  loadEnvLocal();\n}\n`,
-        "fixture.ts — main() awaits or returns before loadEnvLocal(), so .env.local is read after the work has started",
+        "src/fixture.ts — main() awaits or returns before loadEnvLocal(), so .env.local is read after the work has started",
       ],
       [
         /* A `return` before it is the same fault reached the other way: the
            statement is there, in order, and never runs. */
         "the call after an early return",
         `${IMPORT}async function main(): Promise<void> {\n  if (!process.argv[2]) return;\n  loadEnvLocal();\n}\n`,
-        "fixture.ts — main() awaits or returns before loadEnvLocal(), so .env.local is read after the work has started",
+        "src/fixture.ts — main() awaits or returns before loadEnvLocal(), so .env.local is read after the work has started",
       ],
       [
         /* Nested is not run. `if (false)` is the honest version of every branch
            whose condition happens to be false on the day. */
         "the call inside a dead branch",
         `${IMPORT}async function main(): Promise<void> {\n  if (false) loadEnvLocal();\n  await run();\n}\n`,
-        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
+        "src/fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       ],
       [
         /* Nested in a live branch is still nested, and still not the guarantee:
            the rule is that it happens, not that it happens on some paths. */
         "the call inside a live branch",
         `${IMPORT}async function main(): Promise<void> {\n  if (process.env.X) {\n    loadEnvLocal();\n  }\n  await run();\n}\n`,
-        "fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
+        "src/fixture.ts — main() never calls loadEnvLocal() as a statement of its own, so a key in .env.local goes unread",
       ],
       [
         /* **The destructured shadow**, which the first version of the shadow
@@ -1661,7 +1905,7 @@ describe("the listed stage CLIs read .env.local", () => {
            `const loadEnvLocal = …`. */
         "a destructured local shadowing the real import",
         `${IMPORT}async function main(): Promise<void> {\n  const { loadEnvLocal } = helpers;\n  loadEnvLocal();\n}\n`,
-        "fixture.ts — main() declares its own loadEnvLocal, shadowing the import from ./env.js",
+        "src/fixture.ts — main() declares its own loadEnvLocal, shadowing the import from ./env.js",
       ],
       [
         "a file that will not parse, which checks nothing and must not read as clean",
@@ -1672,7 +1916,7 @@ describe("the listed stage CLIs read .env.local", () => {
 
     for (const [name, source, expected] of bad) {
       it(name, () => {
-        const offence = envOffence("fixture.ts", source);
+        const offence = envOffence("src/fixture.ts", source);
         expect(offence, "the detector said this fixture was fine").not.toBeNull();
         if (expected === "") {
           expect(offence).toMatch(/could not be parsed/);

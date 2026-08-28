@@ -46,9 +46,27 @@
  * symlink — a `bin/` shim, a checkout inside a symlinked directory — gives a
  * URL for the target and an argument for the link, and a plain string compare
  * says "not the entry file" and runs nothing. That is the failure mode with no
- * error message, so it is worth two `stat` calls once per process. The direct
- * compare is tried first and answers every ordinary run without touching the
- * disk; the fallback only decides the case that would otherwise be a silent no-op.
+ * error message, so the fallback is worth its cost.
+ *
+ * **What that cost actually is**, corrected after the Tier 2 review: two
+ * `realpathSync` calls **per call that does not match**, not two once per
+ * process. Every guarded module asks this question as it loads and all but the
+ * entry gets `false`, so loading ten guarded modules is up to twenty
+ * `realpathSync` calls, not two. Still nothing next to loading the modules — but
+ * the first version of this sentence understated it by an order of magnitude,
+ * which is exactly the sort of measurement-in-a-comment that never gets re-run.
+ *
+ * The direct compare is tried first, so the entry module itself never touches
+ * the disk.
+ *
+ * **One case this gets wrong, left alone on purpose.** Under Node's
+ * `--preserve-symlinks-main`, the entry keeps the symlink's own path, and the
+ * link and its target can load as two distinct module instances — so the
+ * fallback can answer `true` for the instance that is *not* the entry. No script
+ * in this repo passes that flag (`package.json`, and nothing sets `NODE_OPTIONS`),
+ * and the alternative is reinstating the silent no-op above, which is the
+ * failure that actually happens. Written down so the next reader does not have
+ * to rediscover which flag it is.
  */
 
 import { realpathSync } from "node:fs";

@@ -342,6 +342,39 @@ branch, a locally-defined wrapper of the same name and a bare `main()` sitting n
 wrapper all beat a text search while the money still disappears. Each of those is a case in the
 test, red, alongside the real files with the wrapper taken back out.
 
+**Since 2026-08-28 a stage CLI can end in either of two ways, and the gate checks both whole.** The
+new tail is one line — `await stageCli(import.meta.url, main)` — which folds the guard,
+`loadEnvLocal()` and `withLedger("cli", …)` together, so the leak above stops being a line somebody
+has to remember to copy (`stageCli` in [`src/cli-ledger.ts`](../../src/cli-ledger.ts);
+docs/plans/simplification-wave-2.md §2.5). Three of the eight are on it; the other five still carry
+the old pair, because they were dirty with other agents' work on the day.
+
+The tempting way to accept two tails is to ask something weaker of each, which is the failure this
+gate already had once. So the two are checked separately, and the new one is checked *harder*: the
+CLI's tail has to **be** a top-level `await stageCli(import.meta.url, main);` statement — not a
+`stageCli` call found somewhere, so not a `void`, a `.then()` chain or a call inside an `if` — on
+the `stageCli` **resolved** to `src/cli-ledger.ts`, with `main` named nowhere else in the file,
+function bodies included. A separate rule then asks of `src/cli-ledger.ts` itself that `stageCli`
+is exactly `if (!isMain(entry)) return; loadEnvLocal(); await withLedger("cli", main);` and nothing
+more. That last one is the point: a gate that only checked that the CLIs call `stageCli` would go
+quiet the day somebody simplified `stageCli`.
+
+**The first version of both rules asked for presence where it needed execution**, and GPT Sol found
+it by *running* the exported detectors against adversarial sources rather than reading them — seven
+ways in, every one ordinary code with the right syntax in the right order: a guard whose test was
+the wrong way round, a guard that exits along one path, a `return` between the guard and the
+`.env.local` read, a wrapper in `if (false)`, a wrapper that is not awaited, a tail that is not
+awaited, and `async function leak() { await main(); }` beside `await leak();`. It also beat the
+dispatch with `import { stageCli } from "./fake/cli-ledger.js"`, because `endsWith("/cli-ledger.js")`
+matches a basename and a basename is not an identity — the same mistake the entrypoint guards this
+item replaced were making at the same time, which is what [`src/is-main.ts`](../../src/is-main.ts)
+is for. All seven are now red controls with the exact sentence each produces.
+
+The guard those tails ask is one function now, [`isMain`](../../src/is-main.ts), rather than the
+nine spellings that were in the tree — three of which were wrong, in both directions.
+[`tests/is-main.test.ts`](../../tests/is-main.test.ts) runs the same table of inputs against the
+real one and against all three broken ones, and says which rows each broken one gets wrong.
+
 ### Aborted is a cause, not a coincidence
 
 Both wires used to record *any* failure raised while a signal happened to be aborted as `"aborted"`.
