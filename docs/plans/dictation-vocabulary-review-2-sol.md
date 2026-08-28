@@ -1,0 +1,37 @@
+Not ready. The rerun exposed a real implementation bug and does not support the large-list conclusion.
+
+1. **High — purpose and profile prose are silently capped at 80 characters, not 300/400.** `purposeTerms` and `profileTerms` each return the prose as one array element ([src/vocabulary-sources.ts](../../src/vocabulary-sources.ts), lines 95–108 and 139–146). `fit()` then treats that element as one term and truncates every term to `MAX_TERM = 80` ([src/vocabulary.ts](../../src/vocabulary.ts), lines 252 and 287–312).
+
+   The raw `+purpose` vocabulary ends after “I want the argument against” ([results-vocabulary-sources.json](../../evals/dictation/results-vocabulary-sources.json), line 2446). `Anjali Chaudhuri` survives; `Vervaeke`, `relevance realisation`, and `Friston` do not. Therefore claims 3 and 4—that those spellings were in the prompt—are false ([dictation-vocabulary.md](dictation-vocabulary.md), lines 318–326). The current tests use prose shorter than 80 characters and miss this ([tests/transcribe.test.ts](../../tests/transcribe.test.ts), lines 37–45 and 167–184).
+
+2. **High — “all five sources earn their place” is not established.** The comparison combines sources and another behavior change:
+
+   - `shipped` means glossary for article clips but profile for the profile clip.
+   - `site+profile+glossary` simultaneously adds site terms, adds profile prose to articles, and changes the glossary from stored to ranked order ([bench-vocabulary-sources.ts](../../evals/dictation/bench-vocabulary-sources.ts), lines 126–138).
+   - The profile clip was already perfect without vocabulary: 15/15 recall and zero errors under both `none` and `shipped` ([results-vocabulary-sources.json](../../evals/dictation/results-vocabulary-sources.json), lines 219–235 and 566–582).
+
+   The five values quoted in the plan contain only four transitions and never isolate the profile source ([dictation-vocabulary.md](dictation-vocabulary.md), lines 308–311). The profile may still be a sensible source, but this run does not show that it earns its place.
+
+3. **High — the two safety controls contain relevant vocabulary, so they cannot license large lists.** `LIBRARY` is built from every article and glossary used to construct the test clips ([bench-vocabulary-sources.ts](../../evals/dictation/bench-vocabulary-sources.ts), lines 108–124). Its better score is therefore not surprising: it adds relevant coverage as well as irrelevant size. To test size, append irrelevant terms to the exact same correct vocabulary while holding its relevant terms and order fixed.
+
+   The “wrong article” condition is also not wrong throughout. It contains Fowler’s glossary and names plus the site terms ([bench-vocabulary-sources.ts](../../evals/dictation/bench-vocabulary-sources.ts), lines 196–211), while the suite includes two Fowler clips and a site-terms clip ([utterances.json](../../evals/dictation/utterances.json), lines 32–56 and 75–86). The comment that nothing in it is said in any clip is false. Claim 7’s reported 2.7%/2.2%, 21/25 and 32/35 numbers are correct, but the aggregate arm is not a clean wrong-vocabulary experiment.
+
+4. **Medium — one duplicate contrast is still being treated as a statistical threshold.** The identical rows differ by one edit out of 1,215 words and one hard-term hit out of 190. That is one realised aggregate contrast, not evidence that all larger differences exceed measurement noise. The plan acknowledges this earlier, then calls it “exactly what this measurement cannot resolve” and uses it to validate every following claim ([dictation-vocabulary.md](dictation-vocabulary.md), lines 262–266 and 304–311).
+
+   Interleaving is an improvement, but this is deterministic rotation, explicitly not randomisation ([bench-vocabulary-sources.ts](../../evals/dictation/bench-vocabulary-sources.ts), lines 383–398). It balances positions reasonably well; it still does not satisfy the earlier request for a randomised run or provide uncertainty around the small deltas.
+
+5. **Medium — the new shelf read can hold transcription up far beyond its stated timeout.** `purposeTerms` awaits `shelfStore.read` without a deadline ([src/vocabulary-sources.ts](../../src/vocabulary-sources.ts), lines 139–149), and `Promise.all` waits for it ([src/vocabulary-sources.ts](../../src/vocabulary-sources.ts), lines 351–354). The 90-second transcription timeout is only created afterward ([src/transcribe.ts](../../src/transcribe.ts), lines 180–225). Postgres’s default statement timeout is two minutes ([database.md](../project/database.md), lines 504–509).
+
+   A missing Postgres row is fine: `read` throws 404 and `purposeTerms` returns no terms. I would not cache this mutable field. I would bound the whole vocabulary build, or at least every store source. The plan’s claim that adding a promise to `Promise.all` “adds nothing” to waiting is incorrect ([dictation-vocabulary.md](dictation-vocabulary.md), lines 116–119).
+
+6. **Medium — `+purpose` is not the production composition with a purpose filled in.** It injects the same purpose into every clip, including unrelated slugs and the profile clip, and it does not add production’s title/byline ([bench-vocabulary-sources.ts](../../evals/dictation/bench-vocabulary-sources.ts), lines 178–183). The production condition uses the real store and composition ([bench-vocabulary-sources.ts](../../evals/dictation/bench-vocabulary-sources.ts), lines 213–225). Their stored vocabularies visibly differ ([results-vocabulary-sources.json](../../evals/dictation/results-vocabulary-sources.json), lines 2446 and 3487), so “with a purpose box filled in, production is the `+purpose` row” is false.
+
+7. **Medium — parts of the result artifact are not auditable.** I independently reproduced every rounded WER/recall table value, the 550 calls, 190 opportunities, and the 779–7,514 ms range. The $0.154 cannot be checked: `say()` discards cost and the JSON writer stores no cost field ([bench-vocabulary-sources.ts](../../evals/dictation/bench-vocabulary-sources.ts), lines 331–334 and 492–509). The condition is still named `whole library (256)` although it contains 339 terms (line 195). Finally, the recorded commit is `4bbed5d` ([results-vocabulary-sources.json](../../evals/dictation/results-vocabulary-sources.json), lines 1–4), but that commit contains neither the benchmark nor `src/vocabulary-sources.ts`; it identifies HEAD, not the uncommitted code actually evaluated.
+
+The purpose clip is not inherently rigged. It is a valid positive-control fixture for the narrow claim that purpose text can contribute terms absent elsewhere. One reliably moved name is enough for that mechanism claim, but not enough to measure priority, budget, or typical benefit. Honest reporting does not rescue the other two terms here because they were never actually supplied.
+
+The structural prompt fence is fine: angle brackets and controls are removed, and purpose is same-reader text. The residual risk that imperative prose inside a data block influences the model already existed with titles and profiles. The `SOURCES`/`RECIPES` seam and `keyof` typing are sound; cycle checking passed, and the re-export/mock paths are correct.
+
+Targeted tests passed: 51/51. Import-cycle checking passed. Full typechecking could not be reported green: the normal wrapper was blocked by the read-only environment, and direct checks found unrelated current-tree errors in `scripts/deploy.ts` and `scripts/lockfile.ts`.
+
+**Verdict: not ready.**

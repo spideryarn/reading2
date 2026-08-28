@@ -1,0 +1,135 @@
+{
+  "readme": "Ten dictations a reader might plausibly make, written so that between them they exercise every source a vocabulary can be built from. `hard` lists the terms whose spelling is the point — recall is scored on those, and WER on the whole line. `slug` is the article in scope, which decides which glossary and which extracted names the article-level conditions get. The last one is the control: it says nothing hard at all, so any vocabulary term appearing in its transcript was invented.",
+  "utterances": [
+    {
+      "id": "noema-glossary",
+      "slug": "noema-mythology-of-conscious-ai",
+      "voice": "Daniel",
+      "source": "glossary",
+      "text": "The Müller-Lyer illusion does not show what he thinks it shows here. Predictive processing is doing all the work, and pareidolia is a separate claim about computational functionalism.",
+      "hard": [
+        "Müller-Lyer",
+        "predictive processing",
+        "pareidolia",
+        "computational functionalism"
+      ]
+    },
+    {
+      "id": "noema-names",
+      "slug": "noema-mythology-of-conscious-ai",
+      "voice": "Samantha",
+      "source": "extracted",
+      "text": "Worth checking whether Hinton would accept this. The Ex Machina reading of Ava feels like a distraction from the Turing point that Anil Seth is actually making.",
+      "hard": [
+        "Hinton",
+        "Ex Machina",
+        "Ava",
+        "Turing",
+        "Anil Seth"
+      ]
+    },
+    {
+      "id": "fowler-glossary",
+      "slug": "fowler-phrenology",
+      "voice": "Karen",
+      "source": "glossary",
+      "text": "Ranking philoprogenitiveness above combativeness tells you more about Victorian morals than about acquisitiveness, and veneration is barely argued for at all.",
+      "hard": [
+        "philoprogenitiveness",
+        "combativeness",
+        "acquisitiveness",
+        "veneration"
+      ]
+    },
+    {
+      "id": "fowler-names",
+      "slug": "fowler-phrenology",
+      "voice": "Daniel",
+      "source": "extracted",
+      "text": "Alimentiveness barely gets a mention, but phrenology as a whole rests on it. Spurzheim was more careful than Gall, and Elliotson was not careful at all.",
+      "hard": [
+        "Alimentiveness",
+        "phrenology",
+        "Spurzheim",
+        "Gall",
+        "Elliotson"
+      ]
+    },
+    {
+      "id": "constitution-mixed",
+      "slug": "constitution",
+      "voice": "Samantha",
+      "source": "glossary+extracted",
+      "text": "Corrigibility and the disposition dial are in tension. Anthropic wants Claude to be a transparent conscientious objector and also broadly safe, and sandbagging is the failure mode nobody has priced in.",
+      "hard": [
+        "corrigibility",
+        "disposition dial",
+        "Anthropic",
+        "Claude",
+        "transparent conscientious objector",
+        "broadly safe",
+        "sandbagging"
+      ]
+    },
+    {
+      "id": "site-terms",
+      "slug": "noema-mythology-of-conscious-ai",
+      "voice": "Karen",
+      "source": "site",
+      "text": "Add this to Spideryarn please. The granularity zoom is fine but the gist column should follow the block id, which here is spya-k3m9qt.",
+      "hard": [
+        "Spideryarn",
+        "granularity zoom",
+        "gist column",
+        "block id",
+        "spya-k3m9qt"
+      ]
+    },
+    {
+      "id": "profile",
+      "slug": null,
+      "voice": "Daniel",
+      "source": "profile",
+      "text": "My background is in cognitive science, and I have spent most of my working life on startups, so the software engineering parts are the easy bit for me.",
+      "hard": [
+        "cognitive science",
+        "startups",
+        "software engineering"
+      ]
+    },
+    {
+      "id": "short",
+      "slug": "constitution",
+      "voice": "Samantha",
+      "source": "glossary",
+      "text": "Ask about the principal hierarchy.",
+      "hard": [
+        "principal hierarchy"
+      ],
+      "note": "Most dictation is short. The plan's own eval README says the 22-second sample tells us nothing about short utterances, and a four-word one is where a transcriber has least context to work with."
+    },
+    {
+      "id": "purpose-box",
+      "slug": "noema-mythology-of-conscious-ai",
+      "voice": "Karen",
+      "source": "purpose",
+      "why": "Every hard term here comes from one place and one only: the reader's \"why you're reading this one\" box. None of them is in the article, in its glossary, in the profile or in the site terms — checked by grep against every blocks.json and glossary.json in data/. So this clip scores zero on every condition that does not read that box, which is what makes it a measurement of the box rather than of the four sources around it.",
+      "text": "Does this actually answer Vervaeke on relevance realisation? Worth sending to Anjali Chaudhuri before Thursday, and it bears on Friston too.",
+      "hard": [
+        "Vervaeke",
+        "relevance realisation",
+        "Anjali Chaudhuri",
+        "Friston"
+      ]
+    },
+    {
+      "id": "control-no-hard-terms",
+      "slug": "constitution",
+      "voice": "Karen",
+      "source": "none",
+      "text": "I think the second half of this is much weaker than the first. He keeps asserting things that need an argument, and by the end I had stopped believing the setup.",
+      "hard": [],
+      "note": "The harm probe, and the reason the whole eval exists rather than just a bigger vocabulary. Ordinary English, no jargon, dictated against an article whose vocabulary is loaded. Every vocabulary term that turns up in this transcript was invented by a model that had been told to expect it. If a large list makes this one worse, the list is too large — and no measurement of the other eight would have said so."
+    }
+  ]
+}

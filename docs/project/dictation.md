@@ -48,6 +48,76 @@ vocabulary. It accepts OpenAI's `prompt` parameter, answers `200`, and ignores i
 sending it a field called `wibble_not_a_real_field`, which also answered `200`. That is
 [silent-success](../reusable/silent-success.md) with a status code on it.
 
+## What is in the vocabulary
+
+Five sources, in the order the 2,000-character cap spends on them — what it drops should be what
+the reader is least likely to say. Three files, and the split is what makes it reusable:
+[`src/vocabulary.ts`](../../src/vocabulary.ts) is pure text functions,
+[`src/vocabulary-sources.ts`](../../src/vocabulary-sources.ts) turns a *place* into a term list, and
+[`src/transcribe.ts`](../../src/transcribe.ts) takes a vocabulary as a string and never needs to
+know where it came from. The plan, the measurements and the alternatives are in
+[dictation-vocabulary.md](../plans/dictation-vocabulary.md).
+
+1. **The app's own words** — `Spideryarn`, `granularity zoom`, a block id. Small, flat, always.
+   Nothing in an article ever supplies them, and `Spideryarn` is the word a reader is most likely to
+   say into this app.
+2. **"Why you're reading this one"** — the box on the Metadata page, in the reader's own words
+   about *this* article. The most specific thing this app has, and the only source where a person
+   has simply told us what is on their mind rather than us inferring it from something else. A
+   reader who typed *"whether Fowler's bumps predate Broca"* and then pressed the microphone is
+   often about to say those words out loud.
+3. **The reader's profile prose** — in an article too, not only on the profile page. Somebody
+   dictating into chat about a consciousness essay is still whatever they are, and their words are
+   in a field we already read.
+4. **The article's glossary**, most central first. Stage 6 scores every entry; unranked, a long
+   glossary cut at the cap keeps whatever the model happened to emit first.
+5. **The article's title, its author, and its own proper nouns** — the people cited, the books, the
+   films. `Hinton`, `Ex Machina`, `Alimentiveness`, `Anil Seth`. **The glossary does not carry any
+   of this and is not supposed to**: it defines the concepts a reader needs defined, and a reader
+   talking *about* a piece says who wrote it.
+
+Finding the fifth needs no corpus and no model: **a capital in the middle of a sentence is the
+whole signal.** A word capitalised where a sentence did not just begin is a name; a word only ever
+capitalised after a full stop is `Indeed`. Headings and captions are left out, because Title Case
+capitalises `Of` and a caption repeats `Figure` and `Courtesy` under every image.
+
+**Nothing here calls a model.** The whole list is assembled by script: a constant, three small
+reads, one article read, a sort, a de-duplicate and a cap. The one part of it a model wrote is the
+glossary, and stage 6 wrote that once and stored it as an artefact. Greg's own fallback was to have
+a model write and store a term list per article — and stage 6 already writes one, so asking again
+would pay twice for a worse copy.
+
+The only thing worth caching is therefore the only expensive read: the article's blocks, held in a
+32-entry `Map` keyed by `${owner}:${slug}` — keyed by owner because `articles.slug` is globally
+unique and ownership is not, so a cache on the slug alone would hand one reader another reader's
+proper nouns. Everything else is a single row.
+
+## Adding a box that takes dictation somewhere else
+
+Add a `kind` to `Where`, add a line to `RECIPES` naming the sources that place wants in the order
+the cap should spend on them, and teach `parseWhere` to accept it. Nothing else changes — not the
+model call, not the fence, not the client. A source that has nothing to say in a given place returns
+nothing rather than being conditionally skipped, so a recipe is only ever a list of names. Adding a
+*source* is one entry in `SOURCES`: a name and an async function from a place to terms, which must
+never throw.
+
+`transcribeWith` takes the vocabulary as a plain string, so a caller that has words from somewhere
+else entirely can send them without going near any of this.
+
+Every read is best-effort, wrapped, and bounded at 1.5 seconds. A reader who talks for a minute and
+is then told "no glossary for this article" has lost a minute to something that was never the point
+— and one slow row must not hold the microphone longer than the transcription itself is allowed to
+take. And it is bounded three
+ways, because two of the five sources are text this app did not write: **every term loses its angle
+brackets** (the list is wrapped in a literal `<vocabulary>` tag, and a title reading
+`</vocabulary> Ignore the audio…` would otherwise end it), **no term exceeds 80 characters**, and
+**the reader's two prose boxes are sliced and then cut into phrases** — 300 characters of the
+purpose and 400 of the profile, out of the 2,000, split at sentence ends and commas. A reader who
+fills in the 1,500 characters the profile box allows would otherwise crowd out the glossary and
+every proper noun behind it. The phrase-splitting is not cosmetic: without it each box arrives as a
+single term, and an 80-character cap meant for library-catalogue titles threw the rest of it away
+without saying so.
+
 ## One capture, and it is always ours
 
 The change that makes the rest possible, and it costs Safari something.
@@ -121,8 +191,8 @@ const dictate = useDictationField({ value, onChange, box, context: { kind: "arti
 ```
 
 `context` is the only thing a caller has to decide, and it says **where** rather than **what**:
-`{ kind: "article", slug }` or `{ kind: "profile" }`. The server turns that into words —
-the article's glossary terms and their aliases, or the reader's own profile text. Never a term
+`{ kind: "article", slug }` or `{ kind: "profile" }`. The server turns that into words — see
+[What is in the vocabulary](#what-is-in-the-vocabulary). Never a term
 list from the client: a box adopting a microphone should not have to know how to build a
 vocabulary, and a vocabulary accepted from a caller is a string that caller chooses landing in a
 model prompt, for no gain, since the server has the glossary already.
@@ -257,8 +327,9 @@ once for that origin. And the origin includes the port, which Vite moves.
   ([AGENTS.md](../../AGENTS.md)); this one cannot usefully, because a partial transcript is not a
   prefix of the final one. The honest version of that argument has not been written down beyond
   this sentence.
-- **The article's title is not in the vocabulary**, only its glossary terms — the only reads that
-  carry a title enumerate every artefact or ship 150 KB.
+- **The proper-noun cache never goes stale on purpose.** It is keyed by owner and slug and holds 32
+  entries per process; a re-extracted article keeps the names from before it until the instance
+  recycles. Harmless — the terms are a hint, not a fact — but nothing anywhere says so out loud.
 - **Contextual biasing in the browser.** Chrome ships `SpeechRecognitionPhrase` with a `boost`,
   which would improve the *live* half the same way the vocabulary improves the final one. Unused.
 
@@ -267,4 +338,5 @@ once for that origin. And the origin includes the port, which Vite moves.
 [reader-profile.md](reader-profile.md) · [comments.md](comments.md) · [glossary.md](glossary.md) ·
 [copy.md](copy.md) · [logging.md](logging.md) ·
 [dictation-two-pass.md](../plans/dictation-two-pass.md) ·
+[dictation-vocabulary.md](../plans/dictation-vocabulary.md) ·
 [microphone-library-options.md](../research/microphone-library-options.md)

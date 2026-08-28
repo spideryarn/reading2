@@ -38,18 +38,14 @@ import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
 import { providerHttpFailure } from "./messages.js";
 import { DICTATION_MODEL } from "./models.js";
-/* **`store/index.js`, not `api.js`, and this line is a bug that was caught in
-   review rather than in production.** The first version imported `loadGlossary`
-   straight from src/api.ts — the filesystem-era seam — while every request-path
-   read in this app goes through the store, which is owner-filtered and picks
-   Postgres or the filesystem. On the deployed app that lookup would have failed
-   for every article, been swallowed by the `try` in `vocabularyFor` (which is
-   deliberately best-effort), and quietly removed the entire quality improvement
-   this file exists for: the transcripts would have come back a bit worse and
-   nothing anywhere would have said why. GPT Sol's code review, 2026-08-27,
-   item 5. docs/reusable/silent-success.md. */
-import { loadGlossary, readerStore } from "./store/index.js";
-import { isSlug } from "./ingest.js";
+/* **The words, and nothing about where they came from.** Everything that turns
+   a place into a term list lives in vocabulary-sources.ts, so this file is
+   about the model call and a new box that takes dictation never touches it.
+   `Where` and `parseWhere` are re-exported below, because every caller of this
+   module needs them and none of them should have to know there are two files. */
+import { type Where, vocabularyFor } from "./vocabulary-sources.js";
+export { parseWhere, vocabularyFor } from "./vocabulary-sources.js";
+export type { Where };
 /* **Shared with the browser, and it has to be.** The recorder's cap, the
    request's cap and Vercel's cap are one arithmetic problem with two ends;
    see src/dictation-limits.ts for why a copy on each side is the shape of a
@@ -66,16 +62,6 @@ export type { AudioFormat };
 
 import { type JsonCall, ProviderRefused, openRouterJson } from "./ai-call.js";
 const line = log("model");
-
-/**
- * Where the reader is dictating, which is the only thing the client has to
- * know. Everything else about the vocabulary is decided here.
- */
-export type Where =
-  /** Into one of the profile boxes. Their own words are the best hint we have. */
-  | { kind: "profile" }
-  /** Into a box with an article in scope — chat, a comment follow-up. */
-  | { kind: "article"; slug: string };
 
 /** Below this there is nothing to transcribe, and asking invites an invention. */
 const MIN_AUDIO_BASE64 = 2_000;
@@ -148,72 +134,6 @@ const SCHEMA = {
 } as const;
 
 /**
- * The whole of what the vocabulary may cost.
- *
- * A cap in characters rather than terms, because a glossary of forty short
- * names and one of forty long ones are not the same purchase. Enough for a
- * substantial glossary, small beside the audio.
- */
-const MAX_VOCABULARY = 2_000;
-
-/**
- * The words this reader is likely to be about to say.
- *
- * **Best-effort, and it must stay that way.** Every read in here is wrapped,
- * because a missing glossary, an archived article or a store that is briefly
- * unhappy must degrade the transcript rather than fail the dictation. A reader
- * who talks for a minute and is told "no glossary for this article" has lost a
- * minute to something that was never the point.
- */
-export async function vocabularyFor(where: Where): Promise<string> {
-  const words: string[] = [];
-  if (where.kind === "article") {
-    try {
-      const found = await loadGlossary(where.slug);
-      /* The glossary's own terms and their aliases, and nothing else. The
-         article's *title* would be a good hint too and is deliberately not
-         fetched: the only reads that carry one — `articleMetadata`,
-         `loadArticle` — enumerate every artefact or ship 150 KB, and charging
-         that to every press of a microphone to improve one proper noun is the
-         wrong trade. If a cheap title read ever exists, this is where it goes. */
-      for (const entry of found.glossary?.entries ?? []) {
-        words.push(entry.name, ...entry.aliases);
-      }
-    } catch {
-      /* No glossary, no article, or a store having a moment. The transcript is
-         a little worse and the dictation still works, which is the trade this
-         whole function is making. */
-    }
-  } else {
-    try {
-      const profile = await readerStore.readProfile();
-      /* Their own prose rather than a term list, and that is the point: the
-         jargon a reader is about to dictate into the box about themselves is
-         the jargon already in the box about themselves, spelled the way they
-         spell it. */
-      if (profile) words.push(profile);
-    } catch {
-      /* Same trade. */
-    }
-  }
-
-  const seen = new Set<string>();
-  const kept: string[] = [];
-  let size = 0;
-  for (const raw of words) {
-    const word = raw.trim();
-    if (!word) continue;
-    const key = word.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (size + word.length + 2 > MAX_VOCABULARY) break;
-    kept.push(word);
-    size += word.length + 2;
-  }
-  return kept.join(", ");
-}
-
-/**
  * What a transcription can come back as.
  *
  * `text` is empty for a recording with no speech in it, which is a success and
@@ -224,6 +144,17 @@ export interface Transcription {
   text: string;
   model: string;
   ms: number;
+  /**
+   * What OpenRouter says the call cost, in dollars, when it says anything.
+   *
+   * **Here so that a benchmark's cost figure can be checked.** The number is
+   * already computed and logged; returning it means
+   * `evals/dictation/results-vocabulary-sources.json` can carry the total
+   * beside the transcripts it paid for, instead of the plan quoting a figure
+   * that came from grepping a log nobody kept. GPT Sol's second review, item 7.
+   * Nothing in the request path reads it.
+   */
+  usd?: number;
 }
 
 /**
@@ -250,8 +181,52 @@ export async function transcribe(
   if (audio.length < MIN_AUDIO_BASE64)
     return { text: "", model: DICTATION_MODEL, ms: 0 };
 
-  const vocabulary = await vocabularyFor(where);
+  /* **The clock starts before the vocabulary, not after it.** It used to start
+     after, which hid the one part of this request that ships an article's worth
+     of blocks: `loadArticle` sanitises every block through jsdom, measured at
+     76–184 ms locally in docs/plans/library-read-latency.md, and none of it
+     appeared in the `ms` we log or in the eval's timings. A cost that is not in
+     the number is a cost nobody will ever be asked about. GPT Sol's review,
+     item 9. */
   const started = Date.now();
+  const vocabulary = await vocabularyFor(where);
+  const vocabularyMs = Math.round(since(started));
+  return transcribeWith(audio, format, vocabulary, {
+    signal,
+    startedAt: started,
+    vocabularyMs,
+    where: where.kind,
+  });
+}
+
+/**
+ * The transcription itself, given the words rather than the place.
+ *
+ * **Split out so that the eval can send the production request.** It used to be
+ * one function, and `evals/dictation/bench-vocabulary-sources.ts` therefore
+ * built its own `fetch` with its own system prompt and no JSON schema — which
+ * meant every number it produced was about a request this app never sends. GPT
+ * Sol's review, item 3, found it by reading the two side by side. The eval now
+ * calls this, so the prompt, the schema, `require_parameters`, the truncation
+ * and refusal checks and `tidy()` are the same code in both.
+ *
+ * Not exported for any other reason. Callers in the app should use
+ * {@link transcribe}, which is the one that knows how to build a vocabulary and
+ * therefore the one that cannot be called with somebody else's.
+ */
+export async function transcribeWith(
+  audio: string,
+  format: AudioFormat,
+  vocabulary: string,
+  opts: {
+    signal?: AbortSignal | undefined;
+    startedAt?: number;
+    vocabularyMs?: number;
+    where?: string;
+  } = {},
+): Promise<Transcription> {
+  const { signal, vocabularyMs = 0, where = "direct" } = opts;
+  const started = opts.startedAt ?? Date.now();
 
   /* Two aborts, one signal. The caller's covers a reader who navigated away;
      ours covers an upstream that stopped answering. `AbortSignal.any` rather
@@ -407,7 +382,9 @@ export async function transcribe(
       audioKb: Math.round((audio.length * 3) / 4 / 1024),
       chars: cleaned.length,
       vocabularyChars: vocabulary.length,
-      where: where.kind,
+      /* Its own field, because it is the half of `ms` that is ours to fix. */
+      vocabularyMs,
+      where,
       cost,
     },
     "dictation transcribed",
@@ -416,6 +393,7 @@ export async function transcribe(
     text: cleaned,
     model: DICTATION_MODEL,
     ms: Math.round(since(started)),
+    ...(typeof cost === "number" ? { usd: cost } : {}),
   };
 }
 
@@ -439,17 +417,3 @@ export function tidy(text: string): string {
   return out;
 }
 
-/** `{ kind: "article", slug }` and `{ kind: "profile" }`, validated off the wire. */
-export function parseWhere(x: unknown): Where | null {
-  if (typeof x !== "object" || x === null) return null;
-  const where = x as { kind?: unknown; slug?: unknown };
-  if (where.kind === "profile") return { kind: "profile" };
-  if (
-    where.kind === "article" &&
-    typeof where.slug === "string" &&
-    isSlug(where.slug)
-  ) {
-    return { kind: "article", slug: where.slug };
-  }
-  return null;
-}
