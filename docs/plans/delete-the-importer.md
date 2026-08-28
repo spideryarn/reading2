@@ -1394,6 +1394,37 @@ honoured.
 `tests/blocks-baseline.test.ts` is the suite, with the mutation each case was watched failing
 against written at the top of it.
 
+#### What the baseline landing leaves owed
+
+Named here because they were found by the person who built it, when asked what they were unsure
+about, and an unowned risk in a report is a risk nobody meets again. Worst first.
+
+**`htmlCarriesItsIds` stops working under Postgres, and this one is a D-time hazard rather than a
+caveat.** The `blocks` step's `isDone` compares the stamped HTML against the block rows. After stage
+2 re-runs under Postgres, `stamped_html` and the rows are *still last revision's matching pair*, so
+`isDone` answers "done" and **stage 3 skips entirely**. That is a different and quieter failure than
+re-minting: no ids change, nothing warns, and the article simply keeps the previous run's blocks over
+new text. Its own comment calls it "the one check that can tell `extractedHtml` from `stampedHtml`",
+and under Postgres it stops being able to. D must replace it, and the replacement needs its own red.
+
+**The `articles.current_revision_id` proxy has a race, accepted on purpose.** If another job publishes
+this slug between `beginDraftIn` creating a first-ingest draft and stage 3 running, `hasEarlierBlocks`
+answers true for a draft that has no baseline, and a legitimate first ingest fails. It needs two
+concurrent ingests of one article and it **fails safe** — refusing, not minting. The real fix is a
+`based_on_revision_id` column on the draft, which is the same column § the fix above found does not
+exist and which D can add.
+
+**The CLI still swallows its baseline read.** `previousBlocksInFile` catches everything, so
+`npm run blocks -- output/x.html` on a machine where the file is present but unreadable re-mints
+silently. Deliberate — the CLI has no store to ask — and `assertIdsCarried` catches it immediately
+afterwards. On the record rather than only in a comment, because a swallow that is currently harmless
+is how the original bug got in.
+
+**Two smaller ones.** The filesystem warn→fail change can stop a local re-run for somebody who
+cleaned `output/` but kept `data/`; the recovery is to restore the file or delete both. And
+`assertIdsCarried` labels its error with the HTML file's basename, which is the slug only because the
+layout happens to be `output/<slug>.html`.
+
 ### The switchover, and what "preserve what we have" costs
 
 Greg asked, 2026-08-28, whether there is one destructive switchover and how much work it is to keep
