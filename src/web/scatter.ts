@@ -213,6 +213,18 @@ const EMPTY: ReadonlySet<NodeId> = new Set<NodeId>();
  * missing: the picture would be quietly about a paragraph that no longer
  * exists. Block ids are the identity of a passage everywhere else in this app
  * (docs/project/block-ids.md) and this is the same rule.
+ *
+ * **And a point whose block is apparatus is dropped too**, which is the same
+ * rule one step further in. The server picks the points from the embeddable
+ * blocks, so under a coherent answer there is never a note among them — but the
+ * article and the projection are two separate reads of the current revision,
+ * and a re-ingest in the gap hands us an id that still resolves and no longer
+ * means what it meant. Recognising an id is not the same as the block behind it
+ * still being argument. Left unchecked the page said both things at once: the
+ * you-are-here line withheld because the reader is not in the body, and a note
+ * drawn as one of the body's paragraphs — "paragraph 3 of 2" where the article
+ * ends in a note. GPT Sol, sixth review; tests/scatter.test.ts § a reader
+ * inside the apparatus.
  */
 function dots(root: SummaryNode, blocks: readonly Block[], input: ScatterInput): Dot[] {
   const rowOf = new Map<BlockId, number>();
@@ -226,6 +238,7 @@ function dots(root: SummaryNode, blocks: readonly Block[], input: ScatterInput):
     const row = rowOf.get(point.id);
     const block = row === undefined ? undefined : blocks[row];
     if (row === undefined || !block) continue;
+    if (!isBody(block)) continue;
     const at = sections[row] ?? null;
     kept.push({
       point,
@@ -417,6 +430,13 @@ function node(
      `cluster` already solve this the same way — `dot` for the mark, the box for
      the pointer. */
   const hit = Math.max(13, r * 2 + 7);
+  /* **No hit, no claim.** `dots()` keeps only body blocks, so this map always
+     answers — but the fallback that used to stand here (`d.row + 1`) was a raw
+     row index wearing a paragraph number's clothes, and it was reachable
+     through exactly the seam the sixth review found. A label that says less is
+     the right failure; a label that invents a position is the wrong one. */
+  const ordinal = paragraphs.of.get(d.row);
+  const where = ordinal === undefined ? "" : `paragraph ${ordinal} of ${paragraphs.total}`;
   return {
     id: d.block.id as unknown as NodeId,
     blockId: d.block.id,
@@ -453,7 +473,7 @@ function node(
        lane, and a reader using a screen reader gets neither. So both are in
        words. docs/project/colour-scales.md § Colour is never the only carrier
        is the rule; this is where it lands for a scatter. */
-    label: `${d.number ? `${d.number} ${d.title}, ` : ""}paragraph ${paragraphs.of.get(d.row) ?? d.row + 1} of ${paragraphs.total}${input.k > 1 ? `, topic ${d.point.c + 1} of ${input.k}` : ""}: ${excerpt(d.block.text, 90)}`,
+    label: `${d.number ? `${d.number} ${d.title}, ` : ""}${where}${input.k > 1 ? `${where ? ", " : ""}topic ${d.point.c + 1} of ${input.k}` : ""}: ${excerpt(d.block.text, 90)}`,
   };
 }
 

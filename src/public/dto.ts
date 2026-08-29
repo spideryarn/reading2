@@ -106,6 +106,35 @@ function publicMeta(row: {
 }
 
 /**
+ * **Carry one optional field across, with the compiler checking its name.**
+ *
+ * Every field in this file is named on purpose, and until 2026-08-29 the idiom
+ * for an optional one spread a fresh object literal into the result, naming the
+ * key twice. That idiom has a hole, confirmed by GPT Sol's sixth review and
+ * then measured: spelling the key `treatmnt` inside the spread compiles
+ * **clean**. TypeScript's excess-property check does not look at keys
+ * contributed through a spread, and an outer `satisfies` on the whole object
+ * does not repair it. So the one mistake this file cannot afford — a field that
+ * silently fails to cross — was the one mistake the compiler would not catch.
+ * `publicTree` dropping `treatment` reverted the entire footnotes feature for
+ * anyone following a shared link, and that was an omission rather than a typo;
+ * a typo would have looked identical and been harder to see.
+ *
+ * `K extends keyof T` closes it: the field name is a checked literal, so a typo
+ * is a compile error, and it still reads at the call site as this file naming
+ * the field deliberately, which is the property the whole design rests on. The
+ * cast is for the computed key alone — `{ [key]: … }` widens to `string` — and
+ * it is contained here rather than repeated twenty-two times.
+ *
+ * The output is byte-identical to the idiom it replaces: absent stays absent,
+ * so no cached public payload changes shape. tests/public-dto.test.ts pins the
+ * exact recursive key set.
+ */
+function opt<T, K extends keyof T>(source: T, key: K): Partial<Pick<T, K>> {
+  return source[key] === undefined ? {} : ({ [key]: source[key] } as Partial<Pick<T, K>>);
+}
+
+/**
  * One block, rebuilt.
  *
  * `note` is the field that must not cross, and it is gone twice over: the query
@@ -116,14 +145,14 @@ function publicBlock(block: Block | PublicBlock): PublicBlock {
     id: block.id,
     tag: block.tag,
     kind: block.kind as BlockKind,
-    ...(block.level === undefined ? {} : { level: block.level }),
+    ...opt(block, "level"),
     text: block.text,
     words: block.words,
     html: block.html,
     gistable: block.gistable,
-    ...(block.role === undefined ? {} : { role: block.role }),
-    ...(block.treatment === undefined ? {} : { treatment: block.treatment }),
-    ...(block.noteId === undefined ? {} : { noteId: block.noteId }),
+    ...opt(block, "role"),
+    ...opt(block, "treatment"),
+    ...opt(block, "noteId"),
   };
 }
 
@@ -157,10 +186,10 @@ function publicTree(tree: Tree): Tree {
       children: [...node.children],
       range: [node.range[0], node.range[1]],
       title: node.title,
-      ...(node.gist === undefined ? {} : { gist: node.gist }),
-      ...(node.navLabel === undefined ? {} : { navLabel: node.navLabel }),
-      ...(node.summary === undefined ? {} : { summary: node.summary }),
-      ...(node.sourceHeading === undefined ? {} : { sourceHeading: node.sourceHeading }),
+      ...opt(node, "gist"),
+      ...opt(node, "navLabel"),
+      ...opt(node, "summary"),
+      ...opt(node, "sourceHeading"),
       /* **`treatment` crosses, and that is a decision.** The safe default here
          is to drop an optional field, and this one was dropped until 2026-08-29
          — with the test below saying in as many words that whoever landed the
@@ -178,7 +207,7 @@ function publicTree(tree: Tree): Tree {
          argument, which is structure exactly as `depth` and `title` are, and it
          is derived from the article's own markup rather than from anything the
          owner did. GPT Sol, fifth review. */
-      ...(node.treatment === undefined ? {} : { treatment: node.treatment }),
+      ...opt(node, "treatment"),
     };
   }
   return {
@@ -234,14 +263,14 @@ function publicGlossary(glossary: Glossary): PublicGlossary {
            is on and absent is a meaningful answer for most of these — an entry
            with no `background` is one the model did not claim to know about,
            which is visibly different from an invented one. */
-        ...(entry.senseHere === undefined ? {} : { senseHere: entry.senseHere }),
-        ...(entry.background === undefined ? {} : { background: entry.background }),
-        ...(entry.gloss === undefined ? {} : { gloss: entry.gloss }),
-        ...(entry.detail === undefined ? {} : { detail: entry.detail }),
-        ...(entry.url === undefined ? {} : { url: entry.url }),
-        ...(entry.difficulty === undefined ? {} : { difficulty: entry.difficulty }),
-        ...(entry.centrality === undefined ? {} : { centrality: entry.centrality }),
-        ...(entry.fromOutside === undefined ? {} : { fromOutside: entry.fromOutside }),
+        ...opt(entry, "senseHere"),
+        ...opt(entry, "background"),
+        ...opt(entry, "gloss"),
+        ...opt(entry, "detail"),
+        ...opt(entry, "url"),
+        ...opt(entry, "difficulty"),
+        ...opt(entry, "centrality"),
+        ...opt(entry, "fromOutside"),
         blocks: [...entry.blocks],
       }),
     ),
@@ -271,8 +300,8 @@ function publicSummaries(summaries: Summaries): PublicSummaries {
       (entry): SummaryEntry => ({
         range: [entry.range[0], entry.range[1]],
         depth: entry.depth,
-        ...(entry.short === undefined ? {} : { short: entry.short }),
-        ...(entry.long === undefined ? {} : { long: entry.long }),
+        ...opt(entry, "short"),
+        ...opt(entry, "long"),
       }),
     ),
     missing: summaries.missing,
@@ -288,13 +317,13 @@ function publicIdeas(ideas: Ideas): PublicIdeas {
         name: idea.name,
         provenance: idea.provenance,
         statement: idea.statement,
-        ...(idea.whyYouNeedIt === undefined ? {} : { whyYouNeedIt: idea.whyYouNeedIt }),
-        ...(idea.analogy === undefined ? {} : { analogy: idea.analogy }),
+        ...opt(idea, "whyYouNeedIt"),
+        ...opt(idea, "analogy"),
         occurrences: idea.occurrences.map((at) => ({
           blockId: at.blockId,
           quote: at.quote,
           reasoning: at.reasoning,
-          ...(at.start === undefined ? {} : { start: at.start }),
+          ...opt(at, "start"),
         })),
       }),
     ),

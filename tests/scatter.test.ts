@@ -533,6 +533,49 @@ describe("a reader inside the apparatus", () => {
     }
   });
 
+  /* **A point the server should never have sent, which the browser must still
+     refuse.** `dots()` drops a point whose block id it does not recognise, but
+     it used to accept any id that *did* resolve — including one that is now
+     apparatus. The article and the projection are two separate reads of the
+     current revision, so a re-ingest in the gap hands the browser a recognised
+     id whose classification has changed, and the page then said the reader was
+     not in the argument (`nowY: null`) while drawing a note as one of the
+     argument's paragraphs. With a trailing note it could say "paragraph 3 of
+     2". GPT Sol, sixth review. The existing tests could not see it because
+     every one of them builds its points from the body alone. */
+  it("drift: refuses a point that resolves to a note, rather than drawing it as a paragraph", () => {
+    const out = layoutDrift(tree(body), all, opts(), input(points(all)));
+    const drawn = out.nodes.map((n) => n.label ?? "").filter((l) => l.length > 0);
+    // Not one dot is a note.
+    for (const note of notes) expect(drawn.some((l) => l.includes(note.text))).toBe(false);
+    // And the body is still drawn, so this is a filter and not an off switch.
+    expect(drawn.some((l) => l.includes(body[0]!.text))).toBe(true);
+  });
+
+  /* **This one goes red only when both halves are gone**, and that is not a
+     flaw in it. Probed on 2026-08-29: removing the `isBody` guard alone reddens
+     the two tests above and leaves this green (a note dot then gets no ordinal,
+     so it makes no claim); restoring the `?? d.row + 1` fallback alone reddens
+     *nothing*, because the guard means nothing can reach it. So the fallback's
+     removal has no test of its own and cannot have one — it is there so that a
+     later change to the guard cannot quietly bring the lie back, and this test
+     is the tripwire for that pair. Counting it as evidence for either clause on
+     its own would be wrong. */
+  it("drift: never speaks a paragraph number above the count it says it is out of", () => {
+    const out = layoutDrift(tree(body), all, opts(), input(points(all)));
+    const spoken = out.nodes
+      .map((n) => /paragraph (\d+) of (\d+)/.exec(n.label ?? ""))
+      .filter((m): m is RegExpExecArray => m !== null);
+    expect(spoken.length).toBeGreaterThan(0);
+    for (const m of spoken) expect(Number(m[1])).toBeLessThanOrEqual(Number(m[2]));
+  });
+
+  it("trail: refuses a point that resolves to a note", () => {
+    const out = layoutTrail(tree(body), all, opts(), input(points(all)));
+    const drawn = out.nodes.map((n) => n.label ?? "");
+    for (const note of notes) expect(drawn.some((l) => l.includes(note.text))).toBe(false);
+  });
+
   /* **A note stranded mid-article**, which `splitBlocks` deliberately refuses
      to build a supplement node for (src/supplement.ts) — so the apparatus is a
      *hole* in the body rather than a tail, and no "up to the last body row"

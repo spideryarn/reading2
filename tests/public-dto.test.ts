@@ -149,15 +149,21 @@ const NODE_FIELDS = {
    * **Apparatus rather than argument**, and the one field here that is not
    * merely provenance.
    *
-   * `publicTree` does **not** copy it, deliberately and for a reason that is
-   * about this tree rather than about privacy: the field exists only in the
-   * footnotes lane's uncommitted `src/types.ts`, so a public projection reading
-   * it would compile against one agent's working copy and not against the
-   * commit. When that lane lands, whoever lands it meets this fixture, sets
-   * this key, watches the key-set assertion below report the field as dropped,
-   * and decides — which is exactly the decision a visitor's spine depends on,
-   * since a client that cannot tell apparatus from argument numbers the
-   * footnotes as a part of the piece.
+   * **`publicTree` copies it, and the note that used to stand here is why.**
+   * This comment said the field was deliberately dropped because it existed
+   * only in the footnotes lane's uncommitted `src/types.ts`, and that whoever
+   * landed that lane would meet this fixture and decide. That is what happened,
+   * on 2026-08-29, and the answer was that it crosses: `treatment` says a node
+   * is apparatus, which is structure exactly as `depth` and `title` are, and it
+   * comes from the article's own markup rather than from anything the owner
+   * did. Every consumer that tells apparatus from argument reads it off the
+   * node, so a client without it numbers the footnotes as a part of the piece —
+   * measured through the real DTO before the fix: 1 part and 1 section for the
+   * owner, 2 and 2 for a visitor of the same article.
+   *
+   * The note left for a future author is the good version of this failure mode,
+   * and it is the only reason this was ever found. Leave one behind if you add
+   * a field here and choose not to carry it.
    */
   treatment: "supplement" as const,
 };
@@ -281,8 +287,11 @@ describe("the public article payload", () => {
         "tree.nodes.n1.depth",
         /* `n1` is the `Required<TreeNode>` fixture, so it carries every field
            the type has — and this list is where each one's fate is recorded.
-           `treatment` is the absence to read: it is set on the fixture and it
-           is not here, which is `publicTree` dropping what it does not name. */
+           `treatment` is present below, and its presence is the thing to read:
+           it is the one field here that a client *branches on* rather than
+           merely displays, so dropping it reverted the whole footnotes feature
+           for anyone following a shared link. Anything new that lands in
+           `TreeNode` gets its fate decided here, in this list, on purpose. */
         "tree.nodes.n1.gist",
         "tree.nodes.n1.id",
         "tree.nodes.n1.navLabel",
