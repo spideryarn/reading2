@@ -193,10 +193,28 @@ writes the shared index and so keeps it current. The bug needs private-index com
 dropped. Its author's own commit is perfect; the damage is entirely in what everyone else's
 `git status` says afterwards, and they have no reason to connect it to you.
 
-Still open, and stated so nobody treats this as closed: what would falsify it is **a staged
-modification for a path that no recent commit touched.** Nobody has swept for one. And the mechanism
-above explains the *signature* — the attribution of each specific incident rests on 56's dating work,
-not on this reproduction.
+**The sweep that would have broken it, and did not.** If any staged blob held content that never
+existed anywhere in history, it would be a hand-crafted revert and this theory would be wrong. All 16
+paths in the 20:20–20:55 batch matched a real historical version — and all 16 matched **the same
+commit**, `f42a877`. One commit, its exact path set, held at its pre-commit state. That is the
+omitted-reset signature in its purest form, and it retires the last of the "index read at some old
+tree" framing: the index was never read at an old tree, it simply **never learned about `f42a877`.**
+
+*Scope, so this is not over-read:* that sweep covered the 16-path batch, not the earlier 87-path one,
+which nobody has been through path by path. And the reproduction shows the mechanism is *sufficient*;
+attributing any particular incident rests on the dating work, not on the throwaway repo.
+
+**Why it will happen again anyway, and this is the part to read if you skip the rest.** The mechanism
+explains how; the *incentive* explains the recurrence. Omit that line and:
+
+- your own commit is perfect
+- your own `git status` looks briefly odd, then you move on
+- **everyone else inherits a staged revert of your work, and nothing tells you**
+
+No feedback ever reaches the person who could fix it. A step whose only victim is somebody else is the
+step that rots, and a `# NOT optional` comment is no match for that gradient. The fix is not a firmer
+comment — it is `scripts/check-staged-revert.ts` run before every commit, by everyone, so the cost
+lands on the person who caused it.
 
 **The rule behind all of this, and it is one rule rather than three.** In this harness, *separate
 tool calls are separate shells and separate instants*, so **anything that must be true at the moment
