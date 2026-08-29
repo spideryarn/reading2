@@ -1899,7 +1899,23 @@ version from a weak one that looks identical from the call sites.
 One trap on the way, and it is the same shape one level down: the first attempt ran all six through a
 `tsconfig.json` whose `include` named a single file, so five of them were never compiled and every
 one reported "clean". A control that is not in the compilation is indistinguishable from a control
-that passed.
+that passed. The harness now gives each file its own config, treats TypeScript's `TS18003`
+("no input files") as its **own** outcome rather than as zero errors, and asserts a *direction* per
+file — three must error, three must be clean — because one compilation cannot say that and a count
+of errors reads an empty run as a pass.
+
+**And the harness was then run against the real broken state**, which is the only version of this
+check worth having. Deleting `owner?: never` from the shipped `GlossaryPanel` — not from a copy —
+makes exactly one file change verdict:
+
+```
+ok      bad.tsx errors (1)
+FAILED  sneaky.tsx wanted errors, got 0 error(s)
+```
+
+`bad.tsx` still errors, because a fresh literal errors under both versions. Only `sneaky.tsx`
+separates them, and it is the file that would not have existed if the control had been written
+against the shape the call sites already use.
 
 #### What the union does not forbid, and cannot
 
