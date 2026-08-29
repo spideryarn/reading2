@@ -16,6 +16,9 @@ import type { Arc, Block, Tree } from "../src/types.js";
 import { buildArcColumn, buildGeometry } from "../src/web/tree.js";
 import { partsOf, buildArc } from "../src/arc.js";
 
+/** The arc's input fingerprint is not what these tests are about; see tests/arc-freshness.test.ts. */
+const FIXTURE_HASH = "0000000000000000.0000000000000000.0000000000000000";
+
 const blocks: Block[] = JSON.parse(readFileSync("example/blocks.json", "utf8")).blocks;
 const tree: Tree = JSON.parse(readFileSync("example/tree.json", "utf8"));
 const geometry = buildGeometry(tree, blocks);
@@ -26,11 +29,12 @@ const arc: Arc = buildArc(
   parts.map((_, i) => `arc sentence ${i + 1}`),
   tree,
   "example",
+  FIXTURE_HASH,
 );
 
 describe("buildArc", () => {
   it("refuses a sentence count that doesn't match the parts", () => {
-    expect(() => buildArc(["only one"], tree, "example")).toThrow(/Refusing to guess/);
+    expect(() => buildArc(["only one"], tree, "example", FIXTURE_HASH)).toThrow(/Refusing to guess/);
   });
 
   it("pairs each sentence with the part at the same index", () => {

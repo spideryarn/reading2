@@ -159,6 +159,16 @@ export interface Arc {
   version: string;
   generator: string;
   slug: string;
+  /**
+   * What this arc was written from — blocks, tree and the metadata the prompt
+   * carries. See `inputFingerprint` in src/arc.ts.
+   *
+   * **Optional only so that the arcs already on disk still parse.** Every one of
+   * them predates this field (2026-08-29), and `isStale` reads its absence as
+   * stale rather than as current: "we cannot tell" must not be confused with "we
+   * checked". New arcs always carry it.
+   */
+  sourceHash?: string;
   entries: ArcEntry[];
 }
 

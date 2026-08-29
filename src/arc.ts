@@ -32,6 +32,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { createHash } from "node:crypto";
 import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -43,8 +44,15 @@ import { articleText } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { isSupplementNode } from "./supplement.js";
 import { withLedger } from "./cli-ledger.js";
+import { hashBlocks, structureHash, type BlockFingerprint } from "./source-hash.js";
 
-const PROMPT_VERSION = "arc/2";
+/**
+ * Exported since 2026-08-29 so that the pipeline's `stamp` can compare against it
+ * without writing the string out a second time. Two copies of a prompt version are
+ * free to drift, and the drift shows up as an artefact that never regenerates —
+ * which is the reason `tweets` and `glossary` export theirs as well.
+ */
+export const PROMPT_VERSION = "arc/2";
 
 const SYSTEM = `You are writing the leftmost, coarsest column of a reading view for a long
 article. The reader sees, side by side: your column, then a one-sentence gist
@@ -186,6 +194,7 @@ export function buildArc(
   sentences: string[],
   tree: Tree,
   slug: string,
+  sourceHash: string,
 ): Arc {
   const parts = partsOf(tree);
   if (sentences.length !== parts.length) {
@@ -200,7 +209,83 @@ export function buildArc(
     // check is the whole reason this function refuses to guess.
     text: sentences[i]!.trim(),
   }));
-  return { version: PROMPT_VERSION, generator: CAPABLE_MODEL, slug, entries };
+  return { version: PROMPT_VERSION, generator: CAPABLE_MODEL, slug, entries, sourceHash };
+}
+
+/**
+ * **What this arc was written from: the blocks, the tree, and the three metadata
+ * fields the prompt actually carries.**
+ *
+ * The arc had no input fingerprint at all until 2026-08-29. Its freshness was its
+ * *position* — it sat in `DEFAULT_INGEST_STEPS` behind `toc`, so `cascadeForce`
+ * swept it whenever an earlier step was forced (src/pipeline.ts §
+ * `FORCE_ONLY_WHEN_NAMED`, which says so and adds "give it a freshness check of its
+ * own and it belongs here too"). That was never quite true: `cascadeForce` only
+ * names steps already in the job, so a forced `steps: ["toc"]` has never reached
+ * `arc`, and the resulting stale arc loses entries **in silence** — the join in
+ * `buildArcColumn` is by exact block range, and an entry matching no node is simply
+ * not drawn.
+ *
+ * **Blocks and tree, for the reason `ideas` gives** (src/ideas.ts §
+ * `inputFingerprint`): section boundaries move without a single block changing, and
+ * this stage writes one sentence per *part*, so a re-cut article is a different
+ * question against an input a blocks-only hash calls unchanged. `structureHash`
+ * covers titles and gists too, which matters here because `renderParts` builds the
+ * prompt out of them — a reworded gist is a different question at identical ranges.
+ *
+ * **And the metadata, which is this stage's own addition.** `generateArc` reads
+ * `meta.json` and hands it to `articleText`, which puts `TITLE:`, `BY:` and
+ * `PUBLISHED IN:` at the head of the prompt (src/article-prompt.ts). Only those
+ * three: folding in `fetchedAt` would mark every arc stale on every re-fetch of an
+ * unchanged page, a paid re-run bought for nothing. A *missing* `meta.json` is a
+ * distinct input rather than an error, because `generateArc` tolerates one.
+ *
+ * GPT Sol raised the metadata half on 2026-08-29, having noticed that the reading
+ * view renames articles in place (`useArticleRename`), so a title change is
+ * reachable rather than theoretical.
+ * docs/plans/defer-arc-and-rename-hierarchy.md § 2.1.
+ */
+export function inputFingerprint(
+  blocks: readonly BlockFingerprint[],
+  tree: Tree,
+  meta: Meta | null,
+): string {
+  /* JSON, not a delimiter join, and for the reason src/source-hash.ts sets out at
+     length: title, byline and siteName are the page's own text, so any unescaped
+     separator is a collision waiting for the page that contains it. `null` for an
+     absent meta is a different canonical string from a meta whose fields are all
+     empty, which is correct — they are different states. */
+  const head = meta
+    ? JSON.stringify([meta.title ?? "", meta.byline ?? "", meta.siteName ?? ""])
+    : "none";
+  return `${hashBlocks(blocks)}.${structureHash(tree)}.${createHash("sha256")
+    .update(`spya-arc-meta/1\n${head}`, "utf8")
+    .digest("hex")
+    .slice(0, 16)}`;
+}
+
+/**
+ * Is this arc still about this article?
+ *
+ * Three questions, and the artefact already answered two of them before this
+ * function existed — `version` and `generator` have been on `Arc` all along, and
+ * nothing compared them. The third is the new one.
+ *
+ * **An arc with no `sourceHash` is stale, not current.** Every `arc.json` written
+ * before 2026-08-29 is in that state, and reading absent as current is precisely how
+ * the original hole survived: "we cannot tell" and "we checked and it matches" are
+ * different answers, and only one of them justifies skipping a model call.
+ */
+export function isStale(
+  arc: Arc,
+  blocks: readonly BlockFingerprint[],
+  tree: Tree,
+  meta: Meta | null,
+): boolean {
+  if (!arc.sourceHash) return true;
+  if (arc.version !== PROMPT_VERSION) return true;
+  if (arc.generator !== CAPABLE_MODEL) return true;
+  return arc.sourceHash !== inputFingerprint(blocks, tree, meta);
 }
 
 /**
@@ -379,7 +464,7 @@ export async function generateArc(opts: {
     .map((b) => b.text)
     .join("");
 
-  const arc = buildArc(parseJson(raw).arc, tree, tree.slug);
+  const arc = buildArc(parseJson(raw).arc, tree, tree.slug, inputFingerprint(blocks, tree, meta));
   const outFile = path.join(opts.dir, "arc.json");
   await writeFile(outFile, JSON.stringify(arc, null, 2), "utf-8");
 

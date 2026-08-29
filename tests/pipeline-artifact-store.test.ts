@@ -32,6 +32,10 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { ASSETS_VERSION } from "../src/collect-assets.js";
+import {
+  inputFingerprint as arcFingerprint,
+  PROMPT_VERSION as ARC_VERSION,
+} from "../src/arc.js";
 import { PROMPT_VERSION as GLOSSARY_VERSION } from "../src/glossary.js";
 import {
   inputFingerprint as ideasFingerprint,
@@ -145,6 +149,18 @@ const TREE = {
 /** Blocks **and** tree — src/ideas.ts § `inputFingerprint`. */
 const IDEAS_SOURCE_HASH = ideasFingerprint(BLOCKS, TREE);
 
+/**
+ * Hoisted for the reason `TREE` is, and the reason bites harder here: the arc's
+ * fingerprint covers the metadata as well (src/arc.ts § `inputFingerprint`), so a
+ * second copy of "the meta the fixture writes" would let the hash and the file
+ * disagree and report `arc` not-done for a reason that has nothing to do with the
+ * step.
+ */
+const META = { slug: SLUG, title: "A title" };
+
+/** Blocks, tree **and** metadata — src/arc.ts § `inputFingerprint`. */
+const ARC_SOURCE_HASH = arcFingerprint(BLOCKS, TREE, META);
+
 /** A context pointing at a temp article. Nothing here runs, so most of it is
     the type asking rather than anything being used. */
 function ctxAt(at: ArtifactLocations): StepContext {
@@ -185,7 +201,7 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     fetchedAt: "2026-08-26T00:00:00.000Z",
   });
   await writeFile(pathFor(at, "extract", "extractedHtml"), STAMPED_HTML, "utf-8");
-  await writeJson(pathFor(at, "extract", "meta"), { slug: SLUG, title: "A title" });
+  await writeJson(pathFor(at, "extract", "meta"), META);
   await writeJson(pathFor(at, "blocks", "blocks"), { blocks: BLOCKS });
   await writeJson(pathFor(at, "toc", "blocks"), { blocks: BLOCKS });
   await writeJson(pathFor(at, "toc", "tree"), TREE);
@@ -210,9 +226,12 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     entries: [],
   });
   await writeJson(pathFor(at, "arc", "arc"), {
-    version: "arc/2",
+    version: ARC_VERSION,
     generator: CAPABLE_MODEL,
     slug: SLUG,
+    /* Stamped since 2026-08-29. Before that the arc had no input fingerprint at
+       all, so this fixture only had to exist to count as done. */
+    sourceHash: ARC_SOURCE_HASH,
     entries: [{ range: [HEAD.id, BODY.id], text: "It begins." }],
   });
   await writeJson(pathFor(at, "tweets", "tweets"), {

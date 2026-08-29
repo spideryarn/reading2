@@ -21,7 +21,11 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { generateArc } from "./arc.js";
+import {
+  generateArc,
+  inputFingerprint as arcFingerprint,
+  PROMPT_VERSION as ARC_PROMPT_VERSION,
+} from "./arc.js";
 import { type BlocksRun, NoBlocksProduced, previousBlocksFrom, runBlocks } from "./blocks.js";
 import { ASSETS_VERSION, collectAssets, writeAssets } from "./collect-assets.js";
 import { runExtract } from "./extract.js";
@@ -1418,6 +1422,48 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     label: "Writing the arc",
     outputs: (ctx) => [path.join(ctx.dir, "arc.json")],
     produces: ["arc"],
+    /**
+     * **Added 2026-08-29, and it fixes a live bug rather than only enabling the
+     * deferral it was written for.**
+     *
+     * `FORCE_ONLY_WHEN_NAMED` above says of this step: *"it cannot tell whether
+     * it is current, so its position is the only signal there is. Give it a
+     * freshness check of its own and it belongs here too."* Position was never
+     * quite enough — `cascadeForce` (src/jobs.ts) only names steps **already in
+     * the job**, so a forced `steps: ["toc"]` has never reached `arc`. The tree
+     * is re-cut, `arc.json` still exists, `stepIsDone` sees a file and skips, and
+     * the reading view then drops every arc entry whose range no longer matches a
+     * node — with no error and no gap, because `TableView` falls back to the root
+     * gist. So anyone who has refreshed just the table of contents already has a
+     * truncated arc and no way of knowing.
+     *
+     * **Four inputs, like `ideas`, and for the same reason plus one.** Blocks and
+     * tree because section boundaries move without a block changing, and this
+     * stage writes one sentence per *part*; `structureHash` also covers titles and
+     * gists, which matters because `renderParts` builds the prompt from them.
+     * **And the metadata**, which is this step's own addition: `generateArc` hands
+     * `meta.json` to `articleText`, which puts `TITLE:`, `BY:` and
+     * `PUBLISHED IN:` at the head of the prompt — and the reading view renames
+     * articles in place (`useArticleRename`), so that is reachable rather than
+     * theoretical. GPT Sol, 2026-08-29.
+     *
+     * `null` is "we cannot tell", which the runner must not confuse with a hash
+     * that fails to match: both answer not-current, but only one is a stale
+     * artefact. Absent metadata is **not** one of those cases — `generateArc`
+     * tolerates a missing `meta.json` on purpose, so "no meta" is a legitimate
+     * input and `inputFingerprint` hashes it as one.
+     */
+    stamp: async (ctx, store) => {
+      const blocksFile = await store.read(ctx.slug, "toc", "blocks");
+      const tree = await store.read(ctx.slug, "toc", "tree");
+      if (!blocksFile?.blocks || !tree) return null;
+      const meta = await store.read(ctx.slug, "extract", "meta");
+      return {
+        inputHash: arcFingerprint(blocksFile.blocks, tree, meta ?? null),
+        promptVersion: ARC_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
     async run(ctx) {
       const run = await generateArc({
         dir: ctx.dir,

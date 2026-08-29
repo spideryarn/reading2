@@ -43,6 +43,7 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
+import { isStale as arcIsStale } from "../arc.js";
 import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import {
   isStale as ideasAreStale,
@@ -282,9 +283,11 @@ const REVISION_READ_POLICY: Record<
   status: { publish: "value" },
 
   /* `metaFrom` — the reading view's masthead and the library card. */
-  title: { article: "value", library: "value" },
-  byline: { article: "value", library: "value" },
-  siteName: { article: "value", library: "value" },
+  /* `metadata` reads these three because the arc's freshness fingerprint covers
+     them — src/arc.ts § `inputFingerprint`. */
+  title: { article: "value", library: "value", metadata: "value" },
+  byline: { article: "value", library: "value", metadata: "value" },
+  siteName: { article: "value", library: "value", metadata: "value" },
   lang: { article: "value", library: "value" },
   excerpt: { article: "value", library: "value", publish: "value" },
   note: { article: "value", library: "value" },
@@ -310,7 +313,7 @@ const REVISION_READ_POLICY: Record<
     article: "value", metadata: "value", publish: "value", ideas: "value",
     library: "presence",
   },
-  arc: { article: "value", library: "presence" },
+  arc: { article: "value", library: "presence", metadata: "value" },
 
   /* **The image manifest, and the reading view is the only read that takes
      it.** It is what tells the reader which `<img src>` we hold a copy of, so
@@ -460,6 +463,16 @@ export const REVISION_PROJECTIONS = {
   metadata: {
     id: articleRevisions.id,
     tree: articleRevisions.tree,
+    /* `arc` and the three metadata columns joined this projection on 2026-08-29,
+       when the arc gained a freshness check. Three columns rather than
+       `...META_COLUMNS`, because the fingerprint reads exactly `title`, `byline`
+       and `siteName` (src/article-prompt.ts § `articleText`) and a projection
+       that selects more than its reader needs is what this whole map exists to
+       prevent. */
+    arc: articleRevisions.arc,
+    title: articleRevisions.title,
+    byline: articleRevisions.byline,
+    siteName: articleRevisions.siteName,
     assets: articleRevisions.assets,
     tweets: articleRevisions.tweets,
     glossary: articleRevisions.glossary,
@@ -1347,9 +1360,14 @@ export const pgArticleReader: Pick<
    * a model change makes those two steps re-runnable on disk and still
    * green here.
    *
-   * `fetch`, `extract`, `blocks` and `arc` have no currency rule in **either**
-   * store — nothing they write records what it was made from — so they are the
-   * step row alone, exactly as on the filesystem. **`assets` is not one of
+   * `arc` gained one on 2026-08-29 — `arc.json` records the blocks, the tree and
+   * the three metadata fields its prompt carries (src/arc.ts §
+   * `inputFingerprint`), so it is checked against the artefact like `tweets` and
+   * `glossary`, and in full, because its `PROMPT_VERSION` is exported.
+   *
+   * `fetch`, `extract` and `blocks` have no currency rule in **either** store —
+   * nothing they write records what it was made from — so they are the step row
+   * alone, exactly as on the filesystem. **`assets` is not one of
    * them**, and the `default` arm below is why it needed a case: its manifest
    * does record what it was made from, so falling through would have this page
    * call a stale one current while the filesystem store said otherwise about
@@ -1430,9 +1448,37 @@ export const pgArticleReader: Pick<
         }
         case "ideas":
           return ideasAreCurrent(revision, blocks);
+        /* **Added 2026-08-29, the day `arc.json` started recording what it was
+           made from.** Before that this step genuinely had nothing to compare and
+           sat in the `default` arm below with `fetch`, `extract` and `blocks`.
+
+           It has to move out of that arm the moment the artefact gains a stamp,
+           for the reason `assets` is not in it either: the filesystem store now
+           answers this question from `STEPS.arc.stamp`, and a `default: true`
+           here would have the metadata page call an arc current while the same
+           article's ingest re-runs it. Two stores disagreeing about one article
+           is the failure this switch exists to prevent.
+
+           **Blocks, tree AND the three metadata fields**, because that is what
+           `inputFingerprint` covers — the arc's prompt carries `TITLE:`, `BY:`
+           and `PUBLISHED IN:` at its head (src/article-prompt.ts). The revision
+           row stores those three as columns, so the meta is rebuilt from it
+           rather than read again. `slug` is not in the fingerprint, so the
+           placeholder here cannot affect the answer. */
+        case "arc": {
+          const arc = revision.arc as Arc | null;
+          const tree = revision.tree as Tree | null;
+          if (!arc || !tree || blocks.length === 0) return false;
+          return !arcIsStale(arc, blocks, tree, {
+            slug,
+            title: revision.title ?? "",
+            ...(revision.byline == null ? {} : { byline: revision.byline }),
+            ...(revision.siteName == null ? {} : { siteName: revision.siteName }),
+          });
+        }
         default:
-          // fetch, extract, blocks, arc — nothing to compare, in either store.
-          // `assets` is NOT here; it has its own case above.
+          // fetch, extract, blocks — nothing to compare, in either store.
+          // `assets` and `arc` are NOT here; each has its own case above.
           return true;
       }
     };

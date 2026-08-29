@@ -37,6 +37,9 @@ import {
   navigableItems,
 } from "../src/web/tree.js";
 
+/** The arc's input fingerprint is not what these tests are about; see tests/arc-freshness.test.ts. */
+const FIXTURE_HASH = "0000000000000000.0000000000000000.0000000000000000";
+
 const bodyBlocks: Block[] = JSON.parse(readFileSync("example/blocks.json", "utf8")).blocks;
 const bodyTree: Tree = JSON.parse(readFileSync("example/tree.json", "utf8"));
 
@@ -489,10 +492,10 @@ describe("the arc", () => {
 
   it("does not throw when the model returns one sentence per real part", () => {
     const sentences = partsOf(tree).map((_, i) => `Sentence ${i + 1}.`);
-    expect(() => buildArc(sentences, tree, "example")).not.toThrow();
+    expect(() => buildArc(sentences, tree, "example", FIXTURE_HASH)).not.toThrow();
     // And the reverse: one per depth-1 child, apparatus included, is refused.
     const tooMany = [...sentences, "A sentence about the endnotes."];
-    expect(() => buildArc(tooMany, tree, "example")).toThrow(/Refusing to guess/);
+    expect(() => buildArc(tooMany, tree, "example", FIXTURE_HASH)).toThrow(/Refusing to guess/);
   });
 
   it("numbers the argument only — 3 / 7, never 3 / 9", () => {
@@ -501,6 +504,7 @@ describe("the arc", () => {
       partsOf(tree).map((_, i) => `Sentence ${i + 1}.`),
       tree,
       "example",
+      FIXTURE_HASH,
     );
     const cells = [...buildArcColumn(geometry, arc)!.values()];
     const numbered = cells.filter((c) => c.index !== undefined);
@@ -706,7 +710,7 @@ describe("a reader standing mid-Notes", () => {
   });
 
   it("and the arc's numbering agrees with all three", () => {
-    const arc = buildArc(partsOf(tree).map(() => "A sentence."), tree, "example");
+    const arc = buildArc(partsOf(tree).map(() => "A sentence."), tree, "example", FIXTURE_HASH);
     const cells = buildArcColumn(geometry, arc)!;
     const rows = [...cells.keys()].sort((a, b) => a - b);
     const startingAtOrBefore = rows.filter((r) => r <= midNoteRow).at(-1)!;
