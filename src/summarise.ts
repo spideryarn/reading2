@@ -82,7 +82,7 @@ import { partsOf } from "./arc.js";
 import { isSupplementNode } from "./supplement.js";
 import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import { parseJsonFrom } from "./parse-json.js";
+import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
 import type {
   Block,
@@ -600,23 +600,15 @@ ${textOf(scope, opts.blocks, order)}${
 /* ---------------------------------------------------- reading the answer --- */
 
 /**
- * Strip a stray code fence if the model wraps its JSON despite instructions.
+ * Read the model's answer, fence and all.
  *
- * The parse goes through src/parse-json.ts, and the reason is that **nothing in
- * this file logs**. A step that throws is logged by src/jobs.ts with
- * `errorFields`, which keeps `message` *and* `stack` — and V8's own parse error
- * quotes the first characters of whatever it was handed. So a plain
- * `JSON.parse` here writes part of the model's writing about the article into
- * the log, from a file that never calls the logger at all. An error is a value
- * that travels, and where it is thrown is not where it is written down.
+ * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` — src/parse-json.ts
+ * § `stripFence` has the reasoning, and the short version is that nothing in this
+ * file logs and that is not enough, because a thrown error is logged where it is
+ * caught and V8 quotes the input in it.
  */
 export function parseJson(raw: string): { summaries?: unknown } {
-  const text = raw
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/```$/, "")
-    .trim();
-  return parseJsonFrom<{ summaries?: unknown }>(text, "the summaries response");
+  return parseJsonFrom<{ summaries?: unknown }>(stripFence(raw), "the summaries response");
 }
 
 /** Titles compared with the punctuation and casing taken out. */
@@ -807,17 +799,9 @@ export function isStale(summaries: Summaries, blocks: BlockFingerprint[]): boole
   return summaries.sourceHash !== hashBlocks(blocks);
 }
 
-async function readJson<T>(file: string): Promise<T | null> {
-  try {
-    return JSON.parse(await readFile(file, "utf-8")) as T;
-  } catch {
-    return null;
-  }
-}
-
 /** The summaries on disk, or null. Exported so the step and the API read them one way. */
 export async function readSummaries(dir: string): Promise<Summaries | null> {
-  return readJson<Summaries>(path.join(dir, "summary.json"));
+  return readJsonOrNull<Summaries>(path.join(dir, "summary.json"));
 }
 
 /**
@@ -835,7 +819,7 @@ export async function summariesAreCurrent(dir: string): Promise<boolean> {
   if (!summaries) return false;
   if (summaries.version !== PROMPT_VERSION) return false;
   if (summaries.generator !== CAPABLE_MODEL) return false;
-  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const blocksFile = await readJsonOrNull<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
   if (!blocksFile?.blocks) return false;
   return !isStale(summaries, blocksFile.blocks);
 }

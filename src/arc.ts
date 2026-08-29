@@ -39,7 +39,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { stageFailure } from "./job-failure.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Arc, ArcEntry, Block, Meta, Tree, TreeNode } from "./types.js";
-import { parseJsonFrom } from "./parse-json.js";
+import { parseJsonFrom, stripFence } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { isSupplementNode } from "./supplement.js";
@@ -289,19 +289,15 @@ export function isStale(
 }
 
 /**
- * Strip a stray code fence if the model wraps its JSON despite instructions.
+ * Read the model's answer, fence and all.
  *
- * The parse goes through src/parse-json.ts, and the reason is that **nothing in
- * this file logs**. A step that throws is logged by src/jobs.ts with
- * `errorFields`, which keeps `message` *and* `stack` — and V8's own parse error
- * quotes the first characters of whatever it was handed. So a plain
- * `JSON.parse` here writes part of the model's writing about the article into
- * the log, from a file that never calls the logger at all. An error is a value
- * that travels, and where it is thrown is not where it is written down.
+ * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` — src/parse-json.ts
+ * § `stripFence` has the reasoning, and the short version is that nothing in this
+ * file logs and that is not enough, because a thrown error is logged where it is
+ * caught and V8 quotes the input in it.
  */
 function parseJson(raw: string): { arc: string[] } {
-  const text = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
-  return parseJsonFrom(text, "the arc response");
+  return parseJsonFrom(stripFence(raw), "the arc response");
 }
 
 export interface ArcRun {
