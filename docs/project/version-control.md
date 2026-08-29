@@ -154,6 +154,50 @@ test "$(git rev-parse --git-path index)" != ".git/index" || { echo "PRIVATE INDE
 can tell you which index you actually got. A recipe whose failure mode is silent needs a check that
 speaks.
 
+### The cause was the recipe's own last line, not a stray command — 2026-08-29
+
+**Reproduced, in both directions, with a control.** For most of the day this was blamed on a stray
+`read-tree` running against `.git/index` because `GIT_INDEX_FILE` had not survived into the call. That
+hazard is real and is demonstrated below, but it was **not** what happened here. The cause is the
+recipe's **final `git reset -q -- <every path you just committed>` being omitted.**
+
+A private-index commit deliberately never touches the shared index. So without that last line the
+shared index keeps the **pre-commit** state of every path in the commit, and that produces both halves
+of the signature exactly:
+
+| The commit | What the shared index keeps | How `git diff --cached` reads it |
+|---|---|---|
+| **adds** a file | no entry for it | a **staged deletion** of a file that is in HEAD and on disk |
+| **modifies** a file | its pre-commit blob | a **staged modification** byte-identical to a revert of that commit |
+
+In a throwaway repo, one private-index commit adding `late.txt` and no final reset:
+
+```
+late.txt in HEAD?   YES
+late.txt on disk?   YES
+SHARED INDEX SAYS:  D  late.txt
+```
+
+and for a modified file, the staged blob is the *old* content while HEAD holds the new one — a
+byte-identical revert, staged, with nobody having staged anything. **With** the final reset, the
+shared index stays empty. That control is what makes the reset the cause rather than a correlate.
+
+**Why it went unattributed for six hours.** Nobody was running a stray command, so nobody could find
+one. Each session omitted one line, the effects accumulated, and every clear was undone within minutes
+by the next private-index commit. It also explains what never fitted the stray-command theory: why the
+45 files were *modifications* byte-identical to an older commit rather than deletions, and why a5's
+attempted reproduction **failed** when they used plain `git add` for the later commits — `git add`
+writes the shared index and so keeps it current. The bug needs private-index commits specifically.
+
+**So the final `reset` is load-bearing for your peers, not for you** — which is exactly why it gets
+dropped. Its author's own commit is perfect; the damage is entirely in what everyone else's
+`git status` says afterwards, and they have no reason to connect it to you.
+
+Still open, and stated so nobody treats this as closed: what would falsify it is **a staged
+modification for a path that no recent commit touched.** Nobody has swept for one. And the mechanism
+above explains the *signature* — the attribution of each specific incident rests on 56's dating work,
+not on this reproduction.
+
 **The rule behind all of this, and it is one rule rather than three.** In this harness, *separate
 tool calls are separate shells and separate instants*, so **anything that must be true at the moment
 a command runs has to be established in the same invocation as that command.** Three of the day's
