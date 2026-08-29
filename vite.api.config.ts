@@ -35,9 +35,12 @@
  * it is good at.
  */
 
+import { fileURLToPath } from "node:url";
+
 import { defineConfig } from "vite";
 
 import { resolveBuildStamp } from "./scripts/build-stamp.js";
+import { readClientShell } from "./scripts/client-shell.js";
 import { sentrySourceMaps, sentryUploadEnabled } from "./scripts/sentry-build.js";
 
 /**
@@ -73,6 +76,34 @@ const BUNDLE_ANYWAY = ["html-encoding-sniffer", "@exodus/bytes"];
  */
 const stamp = resolveBuildStamp();
 
+/**
+ * **The built client `index.html`, compiled in — or no build at all.**
+ *
+ * `/read/<slug>` is served by this function so the `<head>` can be about the
+ * article rather than about the app (src/public/page-head.ts), and to do that it
+ * needs the real shell: the one with hashed `/assets/….js` in it, not the source
+ * `index.html` whose `/src/web/boot.tsx` only Vite's dev server understands.
+ *
+ * Resolved here, at config evaluation, so that **a stale or missing shell fails
+ * the build** rather than being discovered by a reader whose shared link renders
+ * a blank page. scripts/client-shell.ts holds the four checks and the reason
+ * there is no fallback of any kind; the short version is that the worktree this
+ * design came out of had HEAD at one commit and `dist/build.json` at another, so
+ * an API build on its own would have compiled a shell from a different version
+ * of the client and said nothing.
+ *
+ * `vercel.json` runs `vite build` before this, so `dist/` is fresh by
+ * construction on a deployment. Locally the two are two commands and the order
+ * is yours to get right — which is what the commit comparison is for.
+ *
+ * **There is no such constant in development.** `npm run dev` never loads this
+ * config, so `typeof __SPIDERYARN_BUILT_SHELL__` is `"undefined"` there, the
+ * function that reads it takes its other branch, and `/read/:slug` keeps the
+ * ordinary default head. Same shape as the build stamp above, and the same
+ * `typeof` guard on the reading side.
+ */
+const shell = readClientShell(fileURLToPath(new URL("./dist", import.meta.url)), stamp.commit);
+
 export default defineConfig({
   /* The server half of the source-map upload, and the half that is easy to
      forget. `vercel.json` builds the client first and this second, so a plugin
@@ -88,6 +119,14 @@ export default defineConfig({
     __SPIDERYARN_BUILD_TIME__: JSON.stringify(stamp.builtAt),
     __SPIDERYARN_BUILD_SOURCE__: JSON.stringify(stamp.source),
     __SPIDERYARN_BUILD_DEPLOYMENT__: JSON.stringify(stamp.deploymentId),
+    __SPIDERYARN_BUILT_SHELL__: JSON.stringify(shell.html),
+    /* The digest of the shell **as it was read**, before any head was composed
+       into it. Served as `X-Spideryarn-Shell-SHA256`, so the deployed check can
+       compare it against the SHA-256 of `GET /index.html` and prove the function
+       and the CDN are serving the same build. Hashing the composed output
+       instead would make that comparison always fail, and hashing nothing would
+       make it always pass. */
+    __SPIDERYARN_BUILT_SHELL_SHA256__: JSON.stringify(shell.sha256),
   },
   /* `ssr.noExternal`, not just `rollupOptions.external` below. Vite decides what
      an SSR build externalises before Rollup's own `external` hook is consulted,

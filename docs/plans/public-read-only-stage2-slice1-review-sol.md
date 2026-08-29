@@ -1,0 +1,24 @@
+BLOCKED — one blocker. I found no private-title response leak or HTML injection.
+
+1. **Blocker — the 200 fallback argument is wrong.** A handled 500 does not require Vercel’s error page. [`servePublicReadPage`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/public/page.ts:266) composes and sends the shell independently of the chosen status. Return the default shell with 500—or preferably 503—not 200.
+
+   The 200 is worse because an unfurler may store the generic card, while `no-store` cannot control its separate card cache; the code already acknowledges this at [`page.ts:171`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/public/page.ts:171). It also makes status-based monitoring report success. A 5xx shell preserves the browser application while telling unfurlers and monitors the truth.
+
+2. **Should-fix — `composeShell` can touch the body.** It checks marker uniqueness and order, but not that both markers are inside `<head>` and before `<body>` ([`page-head.ts:117`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/public/page-head.ts:117)). Put the end marker after `<body>` and replacement deletes body bytes. The build check has the same hole ([`client-shell.ts:79`](/Users/greg/Dropbox/dev/experim/spideryarn2/scripts/client-shell.ts:79)). The current shell is safe, but the claimed invariant is not enforced.
+
+3. **Should-fix — some malformed restored captures miss the HTML refusal path.** `__spy_read=a%2Fb` becomes `/read/a/b` ([`vercel.ts:159`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/vercel.ts:159)), misses the read regex ([`vercel.ts:253`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/vercel.ts:253)), and receives generic JSON 404 rather than the default-shell 400. Empty captures behave similarly. A decoded `?` can create query state, but cannot change the `/read/` prefix or bypass visibility. Repeated/mixed captures and `%25` handling are sound.
+
+4. **Non-blocker — `status === 404` is correct today, but not structural.** The current reader creates the deliberate 404 ([`public-reader.ts:110`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/public-reader.ts:110)) and scrubs ordinary database failures to 500. However, `scrubbed` passes through any numeric status ([`public-reader.ts:138`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/public-reader.ts:138)), and `loadHead` treats any 404 as refusal ([`page.ts:207`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/public/page.ts:207)). A future genuine fault carrying `status: 404` would be silently misclassified. A branded refusal or direct result union would close this.
+
+5. **Test findings.**
+
+   - [`public-read-rewrite.test.ts:101`](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/public-read-rewrite.test.ts:101) is a literal regex tested against a literal string. It cannot fail from any source mutation.
+   - The private-title canary at [`public-read-page.test.ts:273`](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/public-read-page.test.ts:273) is never returned to the subject; the fake reader throws first. Its `not.toContain` assertions cannot detect a title leak. The real Postgres rejection at [`public-visibility-pg.test.ts:506`](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/public-visibility-pg.test.ts:506) is the effective guard.
+   - The “character-for-character” title test is already incomplete: `documentTitle` normalises controls and whitespace ([`page-head.ts:224`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/public/page-head.ts:224)); the client only trims and clamps ([`page-title.ts:248`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/page-title.ts:248)). Internal double spaces, newlines, and bidi controls diverge after React mounts.
+   - The body test covers the current source shell, but not a malformed shell handed directly to the composer or produced by a build transformation.
+
+6. **Router departure.** Both replacement fixtures preserve their original purposes: `%2D` proves decoding still occurs, and `a/b` proves `readHref` escapes the slash while parsing now refuses the impossible slug. The claim that every caller receives a server-minted slug is slightly false: the legacy `?slug=` rewrite passes user-controlled text directly to `readHref` ([`main.tsx:197`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/main.tsx:197)). It is safe because `parseRoute` then rejects it, but it can leave a malformed `/read/...` address visible.
+
+Escaping itself is correct: title and gist are normalised then escaped exactly once; canonical URLs are validated then escaped; slugs are URL-encoded then escaped. Canonical and slug appropriately do not pass through `headText`.
+
+The public query filters visibility in the query itself ([`public-reader.ts:341`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/public-reader.ts:341)), excludes owner fields, and the 404 path never receives a `PublicHead`. I found no path that puts a private article title into response bytes or headers.

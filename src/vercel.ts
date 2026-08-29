@@ -46,6 +46,7 @@ import {
   withMonitoringScope,
 } from "./monitoring.js";
 import { UNEXPECTED_FAILURE } from "./messages.js";
+import { builtShell, servePublicReadPage } from "./public/page.js";
 import { handleApi } from "./routes.js";
 import { health } from "./vercel-health.js";
 
@@ -71,6 +72,28 @@ export const config = { runtime: "nodejs" };
 initMonitoring();
 
 /**
+ * **The two rewrites this function is the destination of**, and the prefix each
+ * one puts back.
+ *
+ * They are separate parameters rather than one, and that is the whole of it: a
+ * single `__spy_path` always reconstructs `/api/${capture}`, so reusing it for
+ * the reading page would either manufacture `/api/read/:slug` — a path nothing
+ * routes — or create a second, public HTML alias underneath `/api/`, which is
+ * exactly the "second way to read an article" src/public/routes.ts exists to
+ * refuse. GPT Sol's stage 2 design, § 2.
+ *
+ * `/read/:slug` is the **base** reading URL only. `/read/:slug/metadata` and
+ * `/read/:slug/tweets` are separate live client routes and keep falling through
+ * to the SPA catch-all; `tests/public-read-rewrite.test.ts` pins that against
+ * the rewrite in vercel.json — which is where it is decided — and says why
+ * `/read/:path*` would have been the wrong reach.
+ */
+const REWRITE_CAPTURES = [
+  { parameter: "__spy_path=", prefix: "/api/" },
+  { parameter: "__spy_read=", prefix: "/read/" },
+] as const;
+
+/**
  * The path the browser actually asked for, recovered from the rewrite.
  *
  * `vercel.json` sends every `/api/*` request to this one function via
@@ -80,6 +103,9 @@ initMonitoring();
  * every request would arrive claiming to be `/api/index` and `handleApi` — which
  * routes on `req.url`, and in several places on its query string too — would
  * 404 the lot.
+ *
+ * Since stage 2 of the public reading feature it also serves `/read/:slug`, via
+ * a second and deliberately distinct parameter — see `REWRITE_CAPTURES`.
  *
  * The captured value **must** be decoded exactly once, because Vercel encodes it
  * exactly once when it substitutes `$1` into a query value. `/api/jobs/abc/retry`
@@ -96,40 +122,88 @@ initMonitoring();
  *
  * Two `__spy_path` parameters means one of them came from the client, who is
  * then choosing which route runs. That is refused rather than resolved: picking
- * either one is a guess, and the guess is a routing bypass.
+ * either one is a guess, and the guess is a routing bypass. **Both kinds
+ * together is the same fault wearing a new coat** — a caller who can put
+ * `?__spy_read=…` on an `/api/` request is choosing between two handlers with
+ * two quite different authorization stories, and there is no answer to that
+ * which is not a guess. Refusing is the only one that is not.
  */
 export function originalUrl(raw: string): string | null {
   const cut = raw.indexOf("?");
   if (cut === -1) return raw;
 
-  const PREFIX = "__spy_path=";
   const rest: string[] = [];
-  let captured: string | null = null;
-  let seen = 0;
+  /* Counted per parameter and collected across both, so the two failures are
+     distinguishable in the code even though they share an answer: `seen` is
+     "the client repeated one", `found.size` is "the client mixed them". */
+  const seen = new Map<string, number>();
+  const found = new Map<string, string>();
 
   for (const part of raw.slice(cut + 1).split("&")) {
-    if (part.startsWith(PREFIX)) {
-      seen += 1;
-      captured = part.slice(PREFIX.length);
+    const capture = REWRITE_CAPTURES.find((c) => part.startsWith(c.parameter));
+    if (capture) {
+      seen.set(capture.parameter, (seen.get(capture.parameter) ?? 0) + 1);
+      found.set(capture.parameter, part.slice(capture.parameter.length));
     } else if (part) {
       rest.push(part);
     }
   }
 
-  if (seen > 1) return null;
+  if (found.size > 1) return null;
+  const parameter = [...found.keys()][0];
   /* Not rewritten at all — which is the normal case in development, where this
      same handler is never used, and would also be the case if the rewrite in
      vercel.json were ever removed. Leaving the URL alone is right in both. */
-  if (captured === null) return raw;
+  if (parameter === undefined) return raw;
+  if ((seen.get(parameter) ?? 0) > 1) return null;
 
   let path: string;
   try {
-    path = decodeURIComponent(captured);
+    path = decodeURIComponent(found.get(parameter) ?? "");
   } catch {
     return null;
   }
 
-  return `/api/${path}${rest.length ? `?${rest.join("&")}` : ""}`;
+  const prefix = REWRITE_CAPTURES.find((c) => c.parameter === parameter)?.prefix ?? "/api/";
+  return `${prefix}${path}${rest.length ? `?${rest.join("&")}` : ""}`;
+}
+
+/**
+ * **The slug this path is asking to read, or `null` if it is not asking.**
+ *
+ * A separate exported function rather than a regex inside `serve`, for the
+ * reason `originalUrl` is one: the interesting cases are the malformed ones,
+ * and a decision buried in a handler can only be tested through a fake request
+ * and a fake response. Four lines is not route knowledge growing.
+ *
+ * **Everything under `/read/`, not only a single segment**, and the reason is
+ * not that nested reading views are served from here — they are not. It is that
+ * the *only* way a `/read/` path reaches this function at all is the
+ * `__spy_read` rewrite, and vercel.json's source is `/read/:slug`, which Vercel
+ * matches against one segment. `/read/x/metadata` and `/read/x/tweets` never
+ * arrive: they fall through to the SPA catch-all and the client renders them,
+ * exactly as before. tests/public-read-rewrite.test.ts pins that against
+ * vercel.json, which is where it is actually decided — this function could not
+ * pin it, because by the time a path is here the rewrite has already chosen.
+ *
+ * So a multi-segment path arriving here is by definition malformed input rather
+ * than a nested client route — `__spy_read=a%2Fb` decodes to `/read/a/b` — and
+ * it belongs on the same answer as every other malformed slug. Returning it
+ * hands it to `isSlug` in src/public/page.ts, which refuses it with the default
+ * shell and a 400. Under the old `/^\/read\/([^/]+)\/?$/` it missed the branch
+ * entirely, fell through to `handleApi` and got a generic JSON **404**, while
+ * `/read/A%20b` got the default-shell **400**. Two answers to one question, and
+ * a stranger could see both. GPT Sol's review of slice 1, finding 3.
+ *
+ * The trailing slash comes off rather than being refused, because `/read/x/` is
+ * the same address as `/read/x` and always was here. `/read` itself is not a
+ * reading URL and is left alone; `/read/` is one with an empty slug, which is a
+ * 400 like any other malformed one.
+ */
+export function readSlug(path: string): string | null {
+  const read = /^\/read\/(.*)$/.exec(path);
+  if (read === null) return null;
+  return (read[1] ?? "").replace(/\/$/, "");
 }
 
 /**
@@ -195,7 +269,42 @@ async function serve(req: IncomingMessage, res: ServerResponse): Promise<void> {
     return;
   }
 
+  /**
+   * **The reading page, served as HTML with its head filled in.**
+   *
+   * One call, and every decision on the other side of it. The head, the
+   * database read, the statuses and the escaping all live in
+   * src/public/page.ts — this file's own header says it must stay
+   * transport-free, and a `<title>` is not transport.
+   *
+   * **`builtShell()` returning null means there is no compiled shell**, which
+   * is every context except a production API build — vite.api.config.ts is the
+   * only thing that defines the constant, and `npm run dev` never loads it. The
+   * request then falls through to `handleApi`, which does not claim `/read/`
+   * and answers the 404 below. That is the honest answer: without the shell
+   * there is nothing to serve, and inventing one would be a second reading view.
+   */
+  const slug = readSlug(path);
+  const shell = slug === null ? null : builtShell();
+
   try {
+    /* **Inside the try**, and that is not filing. `composeShell` throws when the
+       compiled shell has no managed-head sentinel or has two — a broken build,
+       and it throws on the default-head path too, so it can happen on any of
+       the five cases below it. Outside this try that throw would escape
+       `handler`'s `finally` and become a platform FUNCTION_INVOCATION_FAILED
+       with the reason nowhere a person can reach it, which is the exact failure
+       api/index.js exists to have stopped happening. */
+    if (slug !== null && shell) {
+      await servePublicReadPage({
+        res,
+        method: req.method ?? "GET",
+        slug,
+        shell,
+      });
+      return;
+    }
+
     const handled = await handleApi(req, res);
     if (handled) return;
     /* handleApi only claims `/api/*`. Anything else reaching this function means

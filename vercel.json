@@ -25,6 +25,10 @@
 
   "rewrites": [
     {
+      "source": "/read/:slug",
+      "destination": "/api/index?__spy_read=:slug"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index?__spy_path=$1"
     },

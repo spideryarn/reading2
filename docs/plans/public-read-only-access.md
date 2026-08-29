@@ -2196,6 +2196,122 @@ correct code. What separates the two is the punctuation: a select-list item is f
 there is a control on the control — the *article* read must contain the needle, or the loop passes on
 a typo in the table name.
 
+### Slice 1, built 2026-08-29 — the link previews
+
+The whole of it: the `/read/:slug` rewrite ahead of the SPA catch-all, `__spy_read` beside
+`__spy_path` in [`originalUrl`](../../src/vercel.ts), the built shell compiled into the API bundle
+with a refusal if it is stale, a pure composer in [`page-head.ts`](../../src/public/page-head.ts),
+and the transport in [`page.ts`](../../src/public/page.ts). Crawler exposure is unchanged: the
+site-wide `X-Robots-Tag` is untouched, `robots.txt` still says `Disallow: /`, and the function sets
+no robots header of its own.
+
+Built by two agents against a seam fixed in advance — `composeShell(shell, head | null)` and the two
+compiled-in constant names — so neither waited on the other. That worked, and it is worth repeating:
+the alternative was one agent holding both halves, and the first attempt at that died on a transport
+error with nothing to show.
+
+#### The evidence that is worth more than the test count
+
+Five and a half thousand tests passing says little on its own. These were run by hand:
+
+- **The stale-shell refusal fires.** A wrong commit in `dist/build.json` fails the API build, naming
+  both values. Without it, an API build alone compiles last week's page and says nothing —
+  the worktree this design was written in was already in that state.
+- **The compiled shell is the built shell.** SHA-256 of `dist/index.html` appears in
+  `api-dist/vercel.js`, as does the hashed asset reference.
+- **The compiled bundle, driven against a real Postgres** with a genuinely public article: 200 and
+  the article's own title; 404 and a bare *Spideryarn* for an absent slug; 400 for a malformed one;
+  `HEAD` returning the GET's status and `Content-Length` with a zero-byte body; `POST` giving 405
+  with `Allow: GET, HEAD`; both captures together giving 400.
+- **A browser, on a local stand-in for Vercel's rewrites.** A signed-out visitor sees real prose, and
+  `performance.getEntriesByType('resource')` shows exactly one API call on the page —
+  `GET /api/public/article/:slug` — with no POST and nothing private. **That is the acceptance test
+  for the whole feature** ([§ How we prove it](#how-we-prove-it)) and nothing else has ever run it.
+
+#### The blank page a status code cannot see
+
+Sol's § 7 calls one mutation the important one: corrupt the compiled script URL, and `curl` still
+returns 200 with the right title while the page is blank. It was worth the trouble it took.
+
+**The first attempt could not have worked, and the agent running it worked out why rather than
+reporting a failure.** It edited `dist/index.html` and nothing changed — because the shell is read at
+*build* time and compiled in as a string constant, so the disk file is not what `/read/:slug` serves.
+It confirmed that by searching the bundle for `readFile` and for the literal `index.html`, finding
+neither. The instruction was wrong, not the code: the mutation has to be baked in, which means
+editing the file **and rebuilding**.
+
+Done properly, the two readings disagree exactly as predicted — `curl` 200 with
+`<title>The Mythology Of Conscious AI · Spideryarn</title>`, and a browser showing an empty `#root`
+with `/assets/missing.js` in the resource list. It then arrived a second time by an independent
+route: `/read/:slug/metadata` falls through to the static branch, which does read the disk fresh, so
+that route demonstrated the same thing while the file was mutated.
+
+And the sentence worth keeping, which came from the agent rather than from me: **an empty console is
+not evidence the page is healthy.** A module script that 404s does not reliably surface as a
+`console.error` a tool can read. The empty `#root` is the evidence.
+
+The header that made all this legible is `X-Spideryarn-Shell-SHA256`, which exists so a deployed
+check can prove the shell compiled in is the shell being served. Its first real use was diagnosing
+this, from outside, by a process that could not see the build.
+
+#### Sol reviewed the code and blocked it, on the one thing I had overridden
+
+[The review](public-read-only-stage2-slice1-review-sol.md). One blocker, and it was **the departure
+from the design I had made deliberately and argued for at length**.
+
+I had specified 200-with-the-default-shell where the design said 500, on the grounds that a 5xx would
+replace our application with Vercel's error page and take down a reading view the client could have
+loaded on its own. **The premise is simply false.** `servePublicReadPage` composes and writes the
+shell body itself, whatever status it chose, so a 5xx carries our page exactly as a 200 does. The
+whole argument rested on a fact I never checked.
+
+And the 200 is worse than wrong, in two ways the file's own comments already knew about: an unfurler
+may cache the resulting generic card in a card cache we cannot reach — the same cache the sharing
+copy admits we cannot clear — and a status-based monitor reports success over a silently broken
+preview. It is now **503** with `Retry-After`, which also says *transient* rather than *broken*.
+
+The decision is robust even against the thing I was afraid of. If Vercel does substitute its own page
+for a 5xx — not verified on a deployment — the outcome is still right, because a head read fails when
+the database is unreachable, and then the client's own `/api/public/article/:slug` fails too. There
+was no working page to protect. **The 404 stays a 404**: not shared is an answer, not a failure.
+
+The general lesson is not "the reviewer was right". It is that the override was argued *well*, in
+several paragraphs, from a premise of one sentence that nobody tested — and length of argument is not
+evidence. The test would have been to send a 500 and look at what came back.
+
+#### Three tests that could not fail, in the pass whose whole subject was tests that cannot fail
+
+The rest of the review, and this is the uncomfortable part: every one of these was in code written to
+a brief that named the mutation each assertion had to die to, by agents that reported 17 of 17 and 12
+of 12 going red.
+
+- **A literal regex asserted against a literal string.** The rewrite-ordering test compared a hand-written
+  pattern to a hand-written path, so no change to `vercel.json` could redden it. It reads the file now.
+- **A private-title canary the code never saw.** The fake reader threw before the canary title was
+  ever returned, so `not.toContain` was asserting about a string that had not entered the subject.
+  The real Postgres test was doing the work the whole time.
+- **`composeShell`'s central invariant, documented and unenforced.** It checked that each sentinel
+  appears once and that start precedes end — not that both sit above `<body`. Move the end marker
+  below it and the replacement deletes body bytes. The build check had the identical hole.
+
+Sol also found a real inconsistency a stranger can see: `__spy_read=a%2Fb` decodes to a two-segment
+path, misses the read branch, and gets a generic JSON 404 instead of the default-shell 400 every
+other malformed slug gets. Anything under `/read/` now goes to the page module — safe because the
+only way such a path reaches this function is the rewrite, which Vercel applies to a single segment.
+
+#### Two recorded rather than fixed, and one for Greg
+
+- **`status === 404` is correct today and not structural.** `scrubbed` passes through any numeric
+  status, and `loadHead` reads any 404 as *the reader refused this*. A future fault carrying
+  `status: 404` would be misclassified as "not shared" — a wrong answer that looks like a right one.
+  A branded refusal type closes it; it is not urgent and it is not free.
+- **`src/web/main.tsx`'s legacy `?slug=` rewrite** hands user-controlled text to `readHref`. Safe,
+  because `parseRoute` now rejects it — but it can leave a malformed `/read/…` address in the bar.
+- **The tab title changes when React mounts**, for a title containing a double space, a newline or a
+  bidi control: `documentTitle` normalises through `headText` and the client's `pageTitle` only trims
+  and clamps. Found sideways, by a test that claimed to compare the two character for character and
+  did not. Which of the two is right is a product decision, so the client is untouched.
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next

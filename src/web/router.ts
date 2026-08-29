@@ -62,6 +62,8 @@
  */
 import { useMemo, useSyncExternalStore } from "react";
 
+import { isSlug } from "../ingest.js";
+
 /** Which of an article's three pages. `article` is the reading view itself. */
 export type ArticleView = "article" | "metadata" | "tweets";
 
@@ -245,7 +247,16 @@ export function parseRoute(pathname: string): Route {
   } catch {
     return { kind: "library" };
   }
-  if (!slug) return { kind: "library" };
+  /* **The same `isSlug` the server uses**, and not merely "is it non-empty".
+     `/read/Upper` used to become an article route: the client would ask for it,
+     the API would refuse it with the 400 it gives every malformed slug, and the
+     reader would get an error page instead of the shelf. A mistyped address is
+     supposed to land you on the shelf — see this function's header — and an
+     address the server can never answer is a mistyped address. GPT Sol's stage 2
+     design § 5. `src/ingest.ts` is an approved shared import
+     (tests/client-imports.test.ts), so both sides ask one function rather than
+     two regexes drifting apart. */
+  if (!isSlug(slug)) return { kind: "library" };
   // The alternation in the regex is the validation: anything that reached here
   // is a known segment or nothing at all.
   const view = (m[2] ?? "article") as ArticleView;

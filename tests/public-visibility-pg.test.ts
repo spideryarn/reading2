@@ -1407,8 +1407,14 @@ when("sharing one article", { timeout: 60_000 }, () => {
  * this file green: the bar is unreachable from the corpus that exists. A guard
  * no fixture can redden is a comment. docs/reusable/silent-success.md.
  */
-const BONELESS_ID = "00000000-0000-4000-8000-0000000000ec";
-const BONELESS_REVISION = "00000000-0000-4000-8000-0000000000ed";
+/* **Not the ...00ec/...00ed pair this fixture was first written with.**
+   `tests/public-dispatch.test.ts` already declares ...00ed as a user id, and
+   `tests/fixture-ids.test.ts` refuses a uuid claimed by two test files — vitest
+   runs them in parallel against one database, so whichever tears down first can
+   delete the other's row while both pass when run alone. The two ids here are
+   in a block nothing else touches. */
+const BONELESS_ID = "00000000-0000-4000-8000-0000000b04e0";
+const BONELESS_REVISION = "00000000-0000-4000-8000-0000000b04e1";
 const BONELESS_SLUG = "test-public-head-no-blocks";
 
 when("a public article whose revision has no blocks", { timeout: 60_000 }, () => {

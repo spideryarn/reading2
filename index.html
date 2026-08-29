@@ -14,8 +14,42 @@
          Every page sets its own from src/web/page-title.ts — see
          docs/project/page-titles.md — so this is deliberately the bare name
          rather than a guess at which page is about to render. -->
+    <!-- **The two `managed-head` comments below are a boundary, not decoration.**
+
+         `composeShell()` in src/public/page-head.ts replaces everything between
+         them — the two comments included — and **nothing else**, when the stage
+         2 serverless function serves a shared `/read/<slug>` link. That is what
+         turns a pasted address into a card with the article's own title and
+         gist on it, instead of the bare product name below. See
+         docs/plans/public-read-only-access.md § Stage 2.
+
+         Two consequences, both easy to get wrong later:
+
+          - **Anything put between them is gone on a shared link.** Tags that
+            must survive — the referrer policy, the icons, the manifest, the
+            viewport — belong outside, where they are.
+          - **Each comment must appear exactly once in this file.** The function
+            asserts it and refuses to compose otherwise, and so does the build
+            check in scripts/client-shell.ts, so a duplicate is a failed build
+            rather than a head assembled from the wrong halves. That is also why
+            neither marker's full text is written out in this prose.
+
+         The build compiles `dist/index.html` into the function, so a change here
+         reaches production only through `npm run build`; the API build refuses a
+         stale one. `npm run dev` never loads that config, so locally the head
+         below is simply what you get. -->
+    <!-- spideryarn:managed-head:start -->
     <title>Spideryarn</title>
     <meta name="description" content="AI-assisted reading: an article at whatever level of detail you need." />
+    <!-- Belt and braces, and it changes nothing today: the `X-Robots-Tag`
+         header Vercel sets already says exactly this for every path, and
+         public/robots.txt still says `Disallow: /`. It is here for the day the
+         header is narrowed so that shared articles can be indexed — at which
+         point a `/read/` URL that somehow missed the rewrite would otherwise be
+         indexable by accident. Fail closed: a document that says nothing about
+         robots is a document that may be indexed. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <!-- spideryarn:managed-head:end -->
     <!-- **No referrer, from any page of this app, to anywhere.**
 
          Settled in docs/plans/public-read-only-access.md § Stage 1 and then not

@@ -37,8 +37,47 @@ describe("parseRoute", () => {
     });
   });
 
+  /**
+   * The decode still happens — the fixture changed, because the old one could
+   * not exist.
+   *
+   * This case read `/read/a%20b` → `slug: "a b"` until `parseRoute` grew an
+   * `isSlug` guard. `isSlug` is `^[a-z0-9][a-z0-9-]*$` with a 60-character cap
+   * (src/ingest.ts), and its own comment calls it a path-traversal guard rather
+   * than a tidiness check, because a slug is joined onto `data/` and `output/`.
+   * So no article has ever had a space in its slug and none ever can, and the
+   * server 400s the address. `%2D` is a percent-encoded hyphen: a legal slug,
+   * spelled in a way that still has to be decoded to be recognised.
+   */
   it("decodes an escaped slug", () => {
-    expect(parseRoute("/read/a%20b")).toEqual({ kind: "read", slug: "a b", view: "article" });
+    expect(parseRoute("/read/a%2Db")).toEqual({ kind: "read", slug: "a-b", view: "article" });
+  });
+
+  /**
+   * **An address the server could never answer is a mistyped address**, and a
+   * mistyped address lands on the shelf — which is what this file's own opening
+   * paragraph says the degradation is for.
+   *
+   * Before the guard, `/read/Upper` became an article route: the client asked
+   * for it, the API refused it with the 400 it gives every malformed slug, and
+   * the reader got an error page. GPT Sol's stage 2 design § 5.
+   *
+   * The three shapes are chosen to be different failures rather than three of
+   * one: a capital letter, a leading hyphen (the path-traversal shape `../` is
+   * a leading punctuation mark too), and a slug past the 60-character cap — the
+   * one an alphabet-only check would wave straight through.
+   */
+  it("sends an address that is not a slug to the library instead of rendering an error", () => {
+    expect(parseRoute("/read/Upper")).toEqual({ kind: "library" });
+    expect(parseRoute("/read/-leading")).toEqual({ kind: "library" });
+    expect(parseRoute(`/read/${"a".repeat(61)}`)).toEqual({ kind: "library" });
+    /* And the control: one character shorter is a slug, and still reads. If the
+       cap moved, the case above would pass for the wrong reason. */
+    expect(parseRoute(`/read/${"a".repeat(60)}`)).toEqual({
+      kind: "read",
+      slug: "a".repeat(60),
+      view: "article",
+    });
   });
 
   it("reads the third segment as the view", () => {
@@ -121,9 +160,25 @@ describe("readHref", () => {
     expect(parseRoute(readHref(slug))).toEqual({ kind: "read", slug, view: "article" });
   });
 
+  /**
+   * **The escaping stays defensive; what changed is the far end.**
+   *
+   * `readHref` still refuses to let a slash out into the path unescaped, and
+   * that half of this case is unchanged — it is the assertion that stops a
+   * `/`-carrying value silently becoming two path segments.
+   *
+   * The round trip no longer comes back as an article, and that is the point
+   * rather than a weakening: `parseRoute` now applies `isSlug`, which no value
+   * containing a slash can pass, so an encoded slash is refused at **both**
+   * ends instead of being handed on to a server that would 400 it. Nothing that
+   * calls `readHref` in the app can produce one — every caller passes a slug
+   * the server minted, and `kebab()` in src/ingest.ts strips everything outside
+   * `[a-z0-9-]` and trims to 60 characters — so this is a guard against a value
+   * that should not exist, kept because it should not exist quietly.
+   */
   it("escapes a slug that would otherwise change the shape of the path", () => {
     expect(readHref("a/b")).toBe("/read/a%2Fb");
-    expect(parseRoute(readHref("a/b"))).toEqual({ kind: "read", slug: "a/b", view: "article" });
+    expect(parseRoute(readHref("a/b"))).toEqual({ kind: "library" });
   });
 
   it("carries view state across, with or without the leading question mark", () => {

@@ -145,11 +145,42 @@ const WRITERS = [
 
 const FORBIDDEN = [...OWNER_READS, ...THE_OWNER, ...SPENDS, ...WRITERS];
 
+/**
+ * **Every door a stranger can come through**, and there are two of them now.
+ *
+ * `src/public/routes.ts` is the JSON namespace. `src/public/page.ts` is the
+ * HTML one — stage 2 serves `/read/:slug` from the same function, off the same
+ * hardwired reader, to somebody who has not signed in and never will. It is the
+ * same closed room with a second door, so it gets the same guard rather than a
+ * new one: a walk that started only at `routes.ts` would have said nothing at
+ * all about the page, and the page is the surface we invite strangers to.
+ *
+ * Listed rather than globbed over `src/public/`, so adding a third entry point
+ * is a decision somebody makes here on purpose. `dto.ts` and `route-names.ts`
+ * are leaves reached from these two, not doors of their own.
+ */
+const PUBLIC_ENTRIES = ["src/public/routes.ts", "src/public/page.ts"];
+
+/** Everything reachable from either door, deduplicated. */
+function publicFiles(): string[] {
+  return [...new Set(PUBLIC_ENTRIES.flatMap((entry) => graphFrom(entry)))].sort();
+}
+
 describe("the public API's import graph", () => {
-  const publicGraph = graphFrom("src/public/routes.ts");
+  const publicGraph = publicFiles();
 
   it("cannot reach the owner's reads, the owner, a writer or the gateway", () => {
     expect(publicGraph.filter((f) => FORBIDDEN.includes(f))).toEqual([]);
+  });
+
+  /**
+   * And each door on its own, so a failure names the one that opened.
+   *
+   * The case above would go red for either, and then somebody would have to
+   * work out which — these two make the answer the test name.
+   */
+  it.each(PUBLIC_ENTRIES)("and neither does %s on its own", (entry) => {
+    expect(graphFrom(entry).filter((f) => FORBIDDEN.includes(f))).toEqual([]);
   });
 
   /**
@@ -339,7 +370,7 @@ describe("the public API's tables", () => {
     const forbidden = tables.filter((t) => !ALLOWED.includes(t));
 
     const offenders: string[] = [];
-    for (const file of graphFrom("src/public/routes.ts")) {
+    for (const file of publicFiles()) {
       if (file === SCHEMA) continue;
       const source = readFileSync(path.join(ROOT, file), "utf8");
       const full = path.join(ROOT, file);
@@ -405,7 +436,7 @@ describe("the public API's tables", () => {
     expect(forbidden).toContain("glossaryLookups");
 
     const offenders: string[] = [];
-    for (const file of graphFrom("src/public/routes.ts")) {
+    for (const file of publicFiles()) {
       if (file === SCHEMA) continue;
       /* Comments stripped — this file and the public reader both discuss these
          tables by name while explaining the rule, and a guard that fires on its
