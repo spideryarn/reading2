@@ -157,7 +157,8 @@ speaks.
 **Watch the assertion fail once before you rely on it.** Run it in a call with `GIT_INDEX_FILE`
 unset and confirm it prints `.git/index` and exits non-zero; only then does the passing case mean
 anything. A guard you have never seen trip is not evidence it is guarding — and this one sits in
-front of the operation that has already reverted other people's work five times in a day.
+front of the operation that, from a single mistake, produced six hours of phantom reverts across
+this tree on 2026-08-29 — see below.
 
 **The recipe can print `COMMITTED` having committed nothing.** The block above ends by *doing* things
 and never by *asking whether they happened*, and on 2026-08-29 that cost a minute of believing work
@@ -222,11 +223,37 @@ reads; a shared index with a fresh `BASE` is close to a no-op. Together they wri
 old snapshot into the index everybody shares, and it reads as a precise, deliberate back-out of
 exactly the work that landed in between.
 
-The ordering is the evidence. On 2026-08-29, `tests/note-carry-over.test.ts` and the footnotes review
-docs from `7edad4f` were staged as deleted, *and* `tests/arc-freshness.test.ts` from `0aa30ac` was
-staged as deleted within minutes of landing. One stale snapshot cannot do both — the tree would have
-to predate `7edad4f` and postdate `0aa30ac` at once. A repeatedly-reused stale `BASE` does exactly
-that, because each retry rewrites the index from the same old tree while HEAD keeps moving.
+**It was one write, and the belief that it was ongoing is what cost the day.** This paragraph first
+said the opposite, on my evidence and 56's: that a file committed at 19:34 appearing as a staged
+deletion minutes later proved a *later* stale write, since no single snapshot could both predate one
+commit and postdate another. d7 refuted it. `git diff --cached` compares the index to **HEAD**, so a
+file that is in HEAD and merely *absent* from a stale index reads as a deletion — one old index plus
+a moving HEAD manufactures a fresh phantom deletion every time anybody commits a new file. That is
+why the count climbed 3 → 58 → 65 → 87 with nobody touching anything. A second discarded signal:
+`.git/index`'s mtime moves constantly because `git status` rewrites it to refresh the stat cache,
+while its content hash does not change. **Mtime is not content.**
+
+The measurement that actually dates it asks, for each commit, whether the file that commit *added* is
+present in the index:
+
+```
+14:14 c469335  added=src/html.ts                in-index=YES
+14:19 5697b21  added=tests/fetch-asset.test.ts  in-index=no
+15:33 f7c5846  added=…/footnotes-final.diff     in-index=no
+16:26 df81f17  added=drizzle/0029_assets.sql    in-index=no
+19:34 0aa30ac  added=…defer-arc-and-rename…     in-index=no
+20:16 837df17  added=tests/dock-mode-urls…      in-index=no
+```
+
+Everything up to 14:14, nothing from 14:19: **a single write, inside a five-minute window.** So the
+`BASE`-reuse composition above still stands as the shape of the mistake, but nothing measured requires
+*retries* — one mistake explains all of it.
+
+That correction is the most useful thing in this section. One silent mistake in a five-minute window
+produced six hours of phantom reverts, three misattributions, five honest denials and a nearly-committed
+back-out of a finished feature — and the **wrong diagnosis, that it was ongoing, is what stopped anyone
+clearing the index for six hours.** When the damage is a stale snapshot, "is this still happening?" is
+the question to answer first and with a measurement, because it decides whether you clean up or hunt.
 
 **The one number that settles who did it.** Compare each staged path's blob against `git hash-object`
 of the file on disk. Anything a person deliberately staged matches disk; a stale `read-tree` matches
