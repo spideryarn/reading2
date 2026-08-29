@@ -68,7 +68,7 @@ Four reasons, in the order they will actually bite:
    query parameter. A signature is a thing that can be rotated. When it is, the article silently
    loses its figures and nothing in our system knows.
 3. **Publishers block by `Referer`.** `fetchDocument` deliberately sends none
-   ([`src/fetch.ts:1085`](../../src/fetch.ts)) — fine for one document, and precisely the header many
+   (`documentHeaders` in [`src/fetch.ts`](../../src/fetch.ts)) — fine for one document, and precisely the header many
    CDNs hotlink-check on. We are currently one policy change away from broken figures.
 4. **Privacy.** Every reader's browser announces itself to the publisher's CDN on every read, with
    the reader's IP and User-Agent, once per image. Hosting the bytes ends that. This is the reason
@@ -223,6 +223,8 @@ security-sensitive file in the repo and "the tests still pass" is a weak argumen
 - the existing injected fetch/DNS/time/random seams
 - document-specific headers, encoding sniff and `sniffKind` behaviour
 
+<a id="dns-pinning"></a>
+
 #### DNS rebinding closes here, not later
 
 The first draft of this plan noted the known TOCTOU gap and moved on. **Sol's call is that this work
@@ -247,6 +249,8 @@ whose `src` is missing or a placeholder stays hot-linked until a real example ju
 
 `srcset`, `sizes` and any sibling `<source>` are then **removed** from the rendered copy — see
 [trap 1](#trap-1) for why leaving them is a silent no-op.
+
+<a id="limits"></a><a id="limits--policy-not-measurement"></a>
 
 #### Limits — policy, not measurement
 
@@ -488,6 +492,39 @@ Sol's answer to "is that justified": **yes.** The manifest has its own stage, fr
 carry policy, failure history, authorisation meaning and reader projection. Riding it on `meta`,
 `raw`, `blocks` or `tree` would braid unrelated ownership and lifecycles, and hide it somewhere a
 future reader would not know to preserve. The tax is real and it is the cheaper side.
+
+## Stages, and where we are
+
+Run as staged work per [engineering-manager.md](../reusable/engineering-manager.md): each stage ends
+with the gates green and the tree safe to commit, and each gets a GPT Sol review before the next
+starts. **Nothing a reader sees changes until stage D.**
+
+| | Stage | Lands | State |
+|---|---|---|---|
+| 1 | **DNS address pinning** | `pinnedAgent`, `guardAddress` returns its answer | ✅ `1fe0a8d` |
+| 2 | **The pure module** | `src/assets.ts` — URL extraction, sniffing, the index | ✅ `82f11b1` |
+| 3 | **The bucket** | `sources` accepts png/jpeg/gif, locally | ✅ `e5f421c` |
+| A | **`fetchAsset`** | `fetchBytes` split out of `fetchDocument`; images fetchable | ✅ |
+| B | **The artefact and the step** | `assets` through all its homes, the migration, the step that fills it | in progress |
+| C | **Delivery** | the owned route and the public one | |
+| D | **The reading view** | `rehostImages`, and images that come from us | |
+| E | **Proof and docs** | the browser pass, `architecture.md`, `deployment.md`, Q11 | |
+
+A and B are built in parallel against **one agreed seam**, so neither waits on the other:
+
+```ts
+/** What the assets step needs from the network, and all it needs. */
+export type AssetFetch = (
+  url: string,
+  opts: { maxBytes: number; timeoutMs: number; signal?: AbortSignal },
+) => Promise<{ bytes: Uint8Array; contentType: string | null; finalUrl: string }>;
+```
+
+Stage A implements it as `fetchAsset`; stage B consumes it and injects a fake in tests. **That is
+exactly the shape where both sides go green and the value crossing between them is never
+exercised**, so a stage-B test must import the *real* `fetchAsset` and assert it satisfies
+`AssetFetch` — a type-level check is not enough, because the failure would be a runtime shape, not a
+compile error.
 
 ## Build order
 

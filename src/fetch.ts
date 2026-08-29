@@ -1109,7 +1109,29 @@ async function discard(res: Response): Promise<void> {
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 /**
- * Fetch a URL and say what came back.
+ * What a caller of `fetchBytes` supplies: the headers this kind of request
+ * sends, and what to make of the first response that isn't a redirect.
+ *
+ * Two fields rather than a flag, because the two callers differ in exactly
+ * these two ways and in nothing else. Everything security-relevant — the
+ * address guard, the pin, the hop cap, the deadline, the byte cap — is below
+ * this line and neither caller can reach it.
+ */
+interface BytesSpec<T> {
+  /** A function of the resolved options, so the User-Agent default lives in one place. */
+  headers: (opts: Resolved) => Record<string, string>;
+  read: (res: Response, finalUrl: string, chain: string[], opts: Resolved) => Promise<T>;
+}
+
+/**
+ * **The whole of the network path, and private on purpose.**
+ *
+ * The retry loop, the redirect hops, the address guard and its pin, the
+ * deadline and the byte cap — one copy of each, shared by `fetchDocument` and
+ * `fetchAsset`. It is deliberately **not** exported and deliberately narrow:
+ * the two callers above it are the only shapes it serves, and a third caller
+ * wanting "just the bytes of anything" is how a module like this grows a way
+ * around its own guards. Add a named caller here instead.
  *
  * Redirects are followed by hand rather than by `redirect: "follow"`, which is
  * a deliberate cost. Following them ourselves is the only way to cap the hops
@@ -1118,13 +1140,13 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
  * somewhere else" is most of the explanation when an article turns out to be a
  * paywall notice.
  */
-export async function fetchDocument(input: string, options: FetchOptions = {}): Promise<FetchedDocument> {
+async function fetchBytes<T>(input: string, options: FetchOptions, spec: BytesSpec<T>): Promise<T> {
   const opts = withDefaults(options);
   const target = parseTarget(input);
 
   for (let attempt = 1; ; attempt++) {
     try {
-      return await attemptFetch(target, input.trim(), opts);
+      return await attemptFetch(target, input.trim(), opts, spec);
     } catch (err) {
       const failure = classifyNetworkError(err, input.trim());
       if (!failure.retryable || attempt >= opts.attempts) throw failure;
@@ -1135,6 +1157,38 @@ export async function fetchDocument(input: string, options: FetchOptions = {}): 
       await (opts.signal ? underSignal(waiting, opts.signal, input.trim()) : waiting);
     }
   }
+}
+
+/**
+ * The headers a *document* request sends.
+ *
+ * `Accept` names the two things stage 1 can read, and `Accept-Language` is a
+ * browser-shaped courtesy that goes with the browser-shaped User-Agent. Both
+ * are on the document path only — an image request has no use for either, and
+ * sending an HTML-first `Accept` for a PNG invites a content-negotiating server
+ * to hand back a web page.
+ */
+function documentHeaders(opts: Resolved): Record<string, string> {
+  return {
+    "User-Agent": opts.userAgent,
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-GB,en;q=0.9",
+    /* No Accept-Encoding on purpose. undici sets it and decompresses for
+       us; setting it by hand is how you accidentally turn that off. */
+  };
+}
+
+/**
+ * Fetch a URL and say what came back.
+ *
+ * The document-shaped caller of `fetchBytes`: it adds the headers above, the
+ * `sniffKind` refusal and the encoding sniff, and nothing else.
+ */
+export async function fetchDocument(input: string, options: FetchOptions = {}): Promise<FetchedDocument> {
+  return await fetchBytes(input, options, {
+    headers: documentHeaders,
+    read: (res, finalUrl, chain, opts) => readDocument(res, input.trim(), finalUrl, chain, opts),
+  });
 }
 
 /** The same fetched thing? The fragment is never sent, so it cannot make it different. */
@@ -1150,7 +1204,64 @@ function sameResource(seen: string, candidate: URL): boolean {
   }
 }
 
-async function attemptFetch(target: URL, requestedUrl: string, opts: Resolved): Promise<FetchedDocument> {
+/**
+ * Where a redirect points, or the failure that says why we won't follow it.
+ *
+ * Split out of the hop loop below rather than inlined, so that loop stays
+ * readable — and because every branch here is a refusal, which makes them
+ * easier to find in one place. The caller has already discarded the response:
+ * this function never touches the body.
+ */
+function redirectTarget(
+  location: string | null,
+  status: number,
+  current: URL,
+  here: string,
+  chain: string[],
+): URL {
+  if (!location) {
+    throw new FetchFailure("http-error", here, `That site redirected without saying where (HTTP ${status}).`, {
+      status,
+    });
+  }
+  let next: URL;
+  try {
+    next = new URL(location, current);
+  } catch {
+    // **Not the header.** `location` is written by the remote server, and a
+    // `FetchFailure` message is logged — a failed fetch step reaches
+    // src/jobs.ts, which keeps a thrown error's `message` and its `stack`,
+    // so anything quoted here is written down twice and redaction can reach
+    // neither (docs/project/logging.md). A site that redirects to
+    // `?token=…`, by malice or by bug, would have put it in the log.
+    // The reader loses nothing: they cannot act on an address they never
+    // chose to visit, and `code` already says which failure this was.
+    throw new FetchFailure("invalid-url", here, "That site redirected somewhere unreadable.");
+  }
+  if (next.protocol !== "http:" && next.protocol !== "https:") {
+    throw new FetchFailure(
+      "unsupported-scheme",
+      here,
+      `That site redirected to ${next.protocol.replace(":", "")}, which we don't follow.`,
+    );
+  }
+  /* Compared without the fragment, because the fragment never reaches the
+     server: `/a` → `/a#one` is a second request for the same resource, and
+     a site that cycles fragments would otherwise eat the whole hop budget
+     instead of being named as the loop it is. The chain keeps the real
+     URLs. */
+  if (chain.some((seen) => sameResource(seen, next))) {
+    throw new FetchFailure("too-many-redirects", here, "That address redirects in a loop.");
+  }
+  return next;
+}
+
+async function attemptFetch<T>(
+  target: URL,
+  requestedUrl: string,
+  opts: Resolved,
+  spec: BytesSpec<T>,
+): Promise<T> {
   /* One deadline for the whole attempt, redirects included — a chain of five
      hops that are each just under the limit is still a page nobody is waiting
      for. `AbortSignal.any` folds in the queue's cancellation where there is one. */
@@ -1190,13 +1301,7 @@ async function attemptFetch(target: URL, requestedUrl: string, opts: Resolved): 
            resolve twice — and undefined is also what every injected `fetchImpl`
            in the tests sees, which is why they did not have to change. */
         ...(agent ? { dispatcher: agent } : {}),
-        headers: {
-          "User-Agent": opts.userAgent,
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.9,*/*;q=0.8",
-          "Accept-Language": "en-GB,en;q=0.9",
-          /* No Accept-Encoding on purpose. undici sets it and decompresses for
-             us; setting it by hand is how you accidentally turn that off. */
-        },
+        headers: spec.headers(opts),
       });
     } catch (err) {
       throw classifyNetworkError(err, here);
@@ -1204,47 +1309,14 @@ async function attemptFetch(target: URL, requestedUrl: string, opts: Resolved): 
 
     if (REDIRECT_STATUSES.has(res.status)) {
       const location = res.headers.get("location");
+      const status = res.status;
       await discard(res);
-      if (!location) {
-        throw new FetchFailure("http-error", here, `That site redirected without saying where (HTTP ${res.status}).`, {
-          status: res.status,
-        });
-      }
-      let next: URL;
-      try {
-        next = new URL(location, current);
-      } catch {
-        // **Not the header.** `location` is written by the remote server, and a
-        // `FetchFailure` message is logged — a failed fetch step reaches
-        // src/jobs.ts, which keeps a thrown error's `message` and its `stack`,
-        // so anything quoted here is written down twice and redaction can reach
-        // neither (docs/project/logging.md). A site that redirects to
-        // `?token=…`, by malice or by bug, would have put it in the log.
-        // The reader loses nothing: they cannot act on an address they never
-        // chose to visit, and `code` already says which failure this was.
-        throw new FetchFailure("invalid-url", here, "That site redirected somewhere unreadable.");
-      }
-      if (next.protocol !== "http:" && next.protocol !== "https:") {
-        throw new FetchFailure(
-          "unsupported-scheme",
-          here,
-          `That site redirected to ${next.protocol.replace(":", "")}, which we don't follow.`,
-        );
-      }
-      /* Compared without the fragment, because the fragment never reaches the
-         server: `/a` → `/a#one` is a second request for the same resource, and
-         a site that cycles fragments would otherwise eat the whole hop budget
-         instead of being named as the loop it is. The chain keeps the real
-         URLs. */
-      if (chain.some((seen) => sameResource(seen, next))) {
-        throw new FetchFailure("too-many-redirects", here, "That address redirects in a loop.");
-      }
-      current = next;
+      current = redirectTarget(location, status, current, here, chain);
       continue;
     }
 
     try {
-      return await readDocument(res, requestedUrl, here, chain, opts);
+      return await spec.read(res, here, chain, opts);
     } catch (err) {
       throw classifyNetworkError(err, here);
     }
@@ -1265,15 +1337,16 @@ async function attemptFetch(target: URL, requestedUrl: string, opts: Resolved): 
   }
 }
 
-async function readDocument(
-  res: Response,
-  requestedUrl: string,
-  finalUrl: string,
-  chain: string[],
-  opts: Resolved,
-): Promise<FetchedDocument> {
-  const contentType = res.headers.get("content-type");
-
+/**
+ * The bytes of a response that is not a redirect, or the reason there are none.
+ *
+ * Every refusal that is about the *response* rather than about what the bytes
+ * turn out to be lives here, so the document and asset paths cannot drift into
+ * two different answers on any of them: a bad status, a partial `206`, a body
+ * over the cap, an empty body. What each caller then does with the bytes —
+ * sniff a document kind, or hand them back — is the caller's own business.
+ */
+async function readBody(res: Response, finalUrl: string, opts: Resolved): Promise<Uint8Array> {
   if (!res.ok) {
     const asked = retryAfterMs(res.headers.get("retry-after"), opts.now());
     await discard(res);
@@ -1307,6 +1380,18 @@ async function readDocument(
   if (bytes.byteLength === 0) {
     throw new FetchFailure("empty", finalUrl, "That page came back empty.");
   }
+  return bytes;
+}
+
+async function readDocument(
+  res: Response,
+  requestedUrl: string,
+  finalUrl: string,
+  chain: string[],
+  opts: Resolved,
+): Promise<FetchedDocument> {
+  const contentType = res.headers.get("content-type");
+  const bytes = await readBody(res, finalUrl, opts);
 
   const kind = sniffKind(contentType, bytes);
   if (kind === null) {
@@ -1331,6 +1416,99 @@ async function readDocument(
     encoding: decoded?.encoding ?? null,
     fetchedAt: opts.now().toISOString(),
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Assets — the article's own images
+ * ------------------------------------------------------------------ */
+
+/** What comes back from `fetchAsset`. Bytes, and the two facts about them. */
+export interface FetchedAsset {
+  bytes: Uint8Array;
+  /** The `Content-Type` header verbatim, or `null`. **A claim, not a fact** — see below. */
+  contentType: string | null;
+  /** Where we ended up after redirects. */
+  finalUrl: string;
+}
+
+/** What the assets step needs from the network, and all it needs. */
+export type AssetFetch = (
+  url: string,
+  opts: { maxBytes: number; timeoutMs: number; signal?: AbortSignal },
+) => Promise<{ bytes: Uint8Array; contentType: string | null; finalUrl: string }>;
+
+/**
+ * `fetchAsset`'s own options: the seam's three, plus the injected seams so a
+ * test can run it without a network.
+ *
+ * `maxBytes` and `timeoutMs` are **required** here where `FetchOptions` has
+ * them optional. An asset fetch is one of hundreds triggered by an untrusted
+ * page rather than one triggered by a person, so its caller states its budget
+ * rather than inheriting a document's.
+ */
+export interface AssetFetchOptions extends FetchOptions {
+  maxBytes: number;
+  timeoutMs: number;
+}
+
+/**
+ * The headers an *asset* request sends — and the one it deliberately doesn't.
+ *
+ * **No `Referer`.** The obvious move is to send the article's own URL, on the
+ * reasoning that a request with no referer is the shape of a hotlinker. It is a
+ * credential leak: the article's final URL can carry signed query parameters,
+ * and five of the thirteen images in our own corpus sit behind imgix `s=`
+ * signatures. This repo already keeps that URL out of public payloads for the
+ * same reason (src/public-types.ts). Handing it to a third party as a header is
+ * worse than the problem it solves, and all 54 measured URLs answer `200`
+ * without one. If a real host ever refuses, send the *origin* only — never the
+ * path, the query or the userinfo.
+ * docs/plans/hosting-the-articles-images.md#no-referer.
+ */
+function assetHeaders(opts: Resolved): Record<string, string> {
+  return {
+    "User-Agent": opts.userAgent,
+    Accept: "image/png,image/jpeg,image/gif,image/*;q=0.8,*/*;q=0.5",
+  };
+}
+
+async function readAsset(
+  res: Response,
+  finalUrl: string,
+  _chain: string[],
+  opts: Resolved,
+): Promise<FetchedAsset> {
+  /* Read before anything is decided about it. **Nothing here sniffs the
+     format** — that is `sniffImage` in src/assets.ts, and it belongs to the
+     caller, which is the only party that knows which formats it is prepared to
+     store. This function's job is bytes off the wire, guarded. */
+  const contentType = res.headers.get("content-type");
+  const bytes = await readBody(res, finalUrl, opts);
+  return { bytes, contentType, finalUrl };
+}
+
+/**
+ * Fetch one asset — an image, in practice — and hand back the bytes.
+ *
+ * The same guarded path `fetchDocument` takes: HTTP(S) only, the address guard
+ * and the pin on every hop, a capped and loop-checked redirect chain, one
+ * deadline for the whole attempt, and the cap counted on the bytes that arrive
+ * rather than the ones a header promised. It fails the same way too — a
+ * `FetchFailure` with one of the same typed codes.
+ *
+ * What it does **not** do is decide what the bytes are. `fetchDocument` refuses
+ * an image by name (`sniffKind` → `unsupported-type`), and that refusal is
+ * correct for a document; an asset's format question has different answers and
+ * a different owner. So this returns the origin's `Content-Type` verbatim,
+ * clearly labelled as the claim it is, and the caller sniffs.
+ *
+ * Satisfies `AssetFetch`, which is the seam the assets step is written
+ * against — `tests/fetch-asset.test.ts` calls the real function through that
+ * type rather than only assigning it, because the failure would be a runtime
+ * shape rather than a compile error.
+ */
+export async function fetchAsset(url: string, options: AssetFetchOptions): Promise<FetchedAsset> {
+  return await fetchBytes(url, options, { headers: assetHeaders, read: readAsset });
 }
 
 /**
