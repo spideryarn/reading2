@@ -2141,12 +2141,19 @@ through `publicArticle()`, so this shows the *visitor-side client* renders the a
 evidence, and neither substitutes for the other. Summary mode and diagram mode remain unseen by
 anyone, and should be looked at the first time a real article has both notes and summaries.
 
-**The two fixtures, and why neither is a normal artefact.** `data/` is gitignored, so this is the
-durable copy of what was in their `README.md` files — which had to go, because
+**The two fixtures are gone, and this is how to rebuild one.** They were scaffolding for a single
+browser pass and they could not stay: `tests/store-roundtrip.test.ts` and `tests/store-parity.test.ts`
+scan `data/` for any directory holding both `blocks.json` and `tree.json`, and a half-built article —
+a tree with no `labels.json` — is one the publication gate rightly refuses, so both suites went red
+for **every agent in this tree**. Their `README.md` files had to go for the same kind of reason:
 `tests/store-artefact-manifest.test.ts` asks the *filesystem* what sits beside an article and holds
-it against a written list, and a README has no home in Postgres and should not be given one.
+the answer against a written list, and a README has no home in Postgres and should not be given one.
 
-- **`data/fn-wikipedia/`** — "Transformer (deep learning)". 358 blocks: 237 body, 121 footnotes in
+So this is the durable copy of what those files said. Rebuilding takes no model call: run
+`npm run blocks -- output/fn-wikipedia.html`, then drive the real `splitBlocks`, `buildTree` and
+`appendSupplement` from a throwaway script. **Do not leave the result in `data/` afterwards.**
+
+- **fn-wikipedia** — "Transformer (deep learning)", from `output/fn-wikipedia.html`. 358 blocks: 237 body, 121 footnotes in
   one contiguous trailing run. The tree was built by the **real** `splitBlocks`, `buildTree` and
   `appendSupplement`, driven by a throwaway script rather than `generateToc`, which is the only
   thing that calls the model. One flat tier of 20 parts, one per heading block, every title the
@@ -2158,10 +2165,10 @@ it against a written list, and a README has no home in Postgres and should not b
   tree built this way, since `checkTree` requires a gist on every internal node with no exception
   for the root. Structurally it is sound: no partition gaps, no range errors, no supplement-shape
   violations. Do not "fix" the gists by writing prose into them.
-- **`data/your-book-review-the-pale-king/`** — a **degenerate placeholder, not a real tree**: 80
-  depth-one leaves under the root, because the article has exactly one heading block. Kept only
-  because its `raw.html` is a genuine fetch of the live Substack page and nobody need re-fetch it.
-  Use `fn-wikipedia` for anything to do with footnotes.
+- **your-book-review-the-pale-king** — do not bother: its tree was a **degenerate placeholder**, 80
+  depth-one leaves under the root, because the article has exactly one heading block and there is no
+  hierarchy to derive. Its `raw.html` is kept in `data/` because it is a genuine fetch of the live
+  Substack page and nobody need re-fetch it. Use fn-wikipedia for anything to do with footnotes.
 
 **A false trail worth keeping.** The first fisheye reading looked exactly like the bug the plan
 warns about — the current tier moved to "Notes" while a separate ancestor highlight stayed stuck on
