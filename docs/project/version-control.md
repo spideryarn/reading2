@@ -126,6 +126,69 @@ git reset -q -- <every path you just committed>           # NOT optional — see
 git diff --name-only "$BASE" "$NEW"                       # must list your files and NOTHING else
 ```
 
+**Run the whole block in ONE shell invocation, and prove it before you trust it.** This is the
+single most expensive mistake in this file, because it is silent, it looks exactly like a deliberate
+surgical back-out, and it frames somebody else.
+
+An agent harness gives each tool call a **fresh shell**: the working directory persists, and
+environment variables do not. So `export GIT_INDEX_FILE=…` in one call and `git read-tree` in the
+next is not a subtle race — the variable is simply gone, and `read-tree` writes **`.git/index`**,
+the shared one, from a tree that is usually stale. Measured here on 2026-08-29, two consecutive
+calls:
+
+```
+call 1 sees: GIT_INDEX_FILE=/…/probe.index      call 1 git would use: /…/probe.index
+call 2 sees: GIT_INDEX_FILE=<unset>             call 2 git would use: .git/index
+```
+
+The recipe above is written as one block because it **must** be run as one — join the lines with
+`&&` or newlines inside a single invocation, and do not "tidy" it into readable separate steps.
+
+So make the first line an assertion rather than a hope, in the same invocation as everything else:
+
+```sh
+test "$(git rev-parse --git-path index)" != ".git/index" || { echo "PRIVATE INDEX NOT IN EFFECT"; exit 1; }
+```
+
+`GIT_INDEX_FILE` is honoured by `git rev-parse --git-path index`, so this is the one command that
+can tell you which index you actually got. A recipe whose failure mode is silent needs a check that
+speaks.
+
+**Watch the assertion fail once before you rely on it.** Run it in a call with `GIT_INDEX_FILE`
+unset and confirm it prints `.git/index` and exits non-zero; only then does the passing case mean
+anything. A guard you have never seen trip is not evidence it is guarding — and this one sits in
+front of the operation that has already reverted other people's work five times in a day.
+
+**Two dated headings, one trap.** If you link to a heading here that ends `… — 2026-08-29`, the gate
+and GitHub disagree: `tests/doc-links.test.ts` strips the em dash as a non-word character and then
+collapses the remaining whitespace with a single `\s+` match, so it wants **one** hyphen before the
+date, while a browser wants **two**. Both are right about themselves, they differ by a doubled
+character nobody proofreads, and the gate is the one that fails the build. Write the single-hyphen
+form, and check it by running the gate's own slug over the heading text rather than by eye:
+
+```js
+heading.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s+/g, "-")
+```
+
+
+**Why this went unattributed for a whole day.** On 2026-08-29 the shared index was rewritten at least
+five times with a 65-file, ~7,000-deletion revert, and each time the person who looked likeliest
+honestly said it was not them. It was not carelessness — **the agent following the recipe most
+carefully is the likeliest source**, because they are the only one running `read-tree` at all. The
+instruction was the defect, not the person.
+
+**The one number that settles who did it.** Compare each staged path's blob against `git hash-object`
+of the file on disk. Anything a person deliberately staged matches disk; a stale `read-tree` matches
+none of it. On the incident above, **0 of 65 staged paths matched disk**, which turns an argument
+into a measurement. It proves nothing there is anyone's *current* intent — not that nothing was ever
+staged deliberately.
+
+Related: [§ A stale index reports the file deleted while it sits there full of content](#a-stale-index-reports-the-file-deleted-while-it-sits-there-full-of-content-2026-08-29),
+which is what this looks like from the other end — bare `git diff` compares the tree against the
+index, so a corrupted index both invents changes and hides them. `git diff HEAD` reporting *clean*
+can be believed; `git diff HEAD` reporting a deletion cannot; bare `git diff` cannot be believed in
+either direction.
+
 Build the blob from `git show "$BASE":<file>` **plus your own lines**, never from the working tree, and
 anchor each insertion on an exact string that occurs once. That is what guarantees none of their work
 rides along. Check afterwards that every symbol you know to be theirs appears zero times in your
@@ -166,6 +229,73 @@ refused to touch it, and asked — which was the right call and is the behaviour
 `reset` in the **same command** as the ref move rather than as a follow-up step, keep it
 path-limited to the paths you just committed so a peer's staged work is untouched, and if somebody
 asks, the answer is: transient, mine, not a revert.
+
+### A stale index reports the file deleted while it sits there full of content — 2026-08-29
+
+The shared index falls behind HEAD on its own, without anybody reverting anything: a session reads a
+tree into it, or simply staged something before a peer's commit landed, and from then on the index
+describes a world that no longer exists. On 2026-08-29 it held a **1,056-line deletion of three
+files that had been committed an hour earlier and were sitting on disk the whole time**, and 55
+paths were stale in total. A pathspec-less `git commit` at that moment would have shipped that
+deletion under whatever message it was given.
+
+**And the obvious check agrees with the index rather than with the disk.** `git diff --stat HEAD --
+<path>` reported all three as deleted. That is not a bug and it is not evidence of lost work: a
+staged deletion removes the index entry, and with no index entry the file on disk is *untracked* as
+far as `git diff HEAD` is concerned — so it compares HEAD against nothing and prints a deletion. The
+reading a person takes from that is **the work is gone**; the true reading is **the index does not
+know about it**.
+
+The check that answers the actual question needs no index at all:
+
+```
+git hash-object <path>          # what is on disk
+git rev-parse HEAD:<path>       # what is in HEAD
+```
+
+Equal means the file is fine and only the index is wrong, and then `git add` on those paths is
+**safe**: it writes index entries pointing at content that is already committed and already on disk.
+Nothing changes, no other path is touched, and the landmine is gone. That is what took the 55 stale
+paths down to 49. Do the comparison first, every time — it is the step that makes it safe rather
+than lucky, and it is also what catches the opposite case, where the on-disk copy is somebody's
+unfinished work and staging it would ship a half-done edit.
+
+**And it lies in the other direction too, which is worse.** A few minutes after the above, a peer
+checked whether anyone had uncommitted work in the three files their next stage touches. Two
+commands, same tree, same instant:
+
+```
+git diff --stat src/jobs.ts src/store/artifacts-pg.ts src/store/pg-revisions.ts
+  → 3 files changed, 192 insertions(+), 65 deletions(-)
+git diff HEAD --stat <the same three>
+  → nothing
+```
+
+`hash-object` against `rev-parse HEAD:` said all three matched HEAD exactly. Nobody was mid-edit in
+any of them. The stale index had **invented** 192 lines of change — and what it was showing was that
+peer's own committed work, seen from an index that predates the commit. Trusting it would have meant
+waiting for a colleague who was not there, or routing around a file that was free.
+
+So the stale index does not only hide work that exists, it manufactures work that does not, and the
+manufactured version is a plausible-looking diff you can sit and read. Both readings of `git status`
+in a shared tree are unsafe in both directions: a file it calls deleted may be fine, and a file it
+calls modified may be untouched. The sentence to keep is the peer's:
+
+> **`git diff` with no commit argument answers "how does the tree differ from the index", which in a
+> shared tree is a question about your colleagues, not about your files.**
+
+`git diff HEAD -- <path>` is the one to reach for when you want "has anyone edited this", and it is
+sound in that direction — the failure above is `git diff` *without* `HEAD`. Its own failure is the
+opposite one already described: it reports a deletion when the index entry is missing. So "clean"
+from `git diff HEAD` can be believed; "deleted" from it cannot, and neither reading of bare
+`git diff` can.
+
+Two more things learned the same day. `GIT_INDEX_FILE` **is** honoured by `git rev-parse --git-path
+index`, so printing that inside the same invocation proves which index a private-index command
+actually got — worth doing, since a `read-tree` that silently landed in `.git/index` is the best
+explanation anyone has for how these stale snapshots keep appearing. And a file that is
+byte-identical to an older commit is the signature of a stale index at least as often as it is a
+deliberate revert; read it as the former first, and ask.
 
 ## The thing that fails silently
 
