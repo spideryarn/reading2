@@ -80,9 +80,38 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/ingest.ts`](../../src/ingest.ts) | `normaliseUrl` — refuses literal private and loopback hosts before queueing |
 | [`src/chat-tools.ts`](../../src/chat-tools.ts) | `isSlug` on the model's slug, URL-length cap on the model's URL |
 | [`src/urls.ts`](../../src/urls.ts) | `isWebUrl` — what model output must pass to become an `href` |
+| [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
 
 The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-client.test.ts`,
-`tests/routes.test.ts`, `tests/slug.test.ts`, `tests/owner-isolation.test.ts`.
+`tests/routes.test.ts`, `tests/slug.test.ts`, `tests/owner-isolation.test.ts`,
+`tests/public-dto.test.ts`.
+
+### The allowlist has two failure directions, and only one of them is loud
+
+[`src/public/dto.ts`](../../src/public/dto.ts) constructs a public response field by field rather
+than deleting fields from the owner's one, because a denylist has to stay right about a set that
+grows. That makes **default-absent** the behaviour: a new field is not public until somebody names
+it here. A new *required* field stops the file compiling, which is the loud version; a new
+*optional* field is silently dropped, which is the safe one.
+
+Safe is not the same as correct. On 2026-08-29 `publicTree` had never been given `TreeNode.treatment`
+— the field that says a tree node is a footnote section rather than part of the argument — so a
+reader following a shared link had the whole footnotes feature reverted: the notes numbered as a
+part of the piece, one blank row per endnote, the diagram drawing them as argument. Measured through
+the real DTO: 1 part and 1 section for the owner, 2 and 2 for a visitor of the same article. Nothing
+on the owner's side could see it, because every test ran where the field exists.
+
+**So when you add a field that a client branches on, come here and decide.** And a note left in
+`tests/public-dto.test.ts` saying what a future author must decide is worth writing — that note is
+the only reason this one was found.
+
+**The idiom is `opt(source, "key")`, and not a conditional spread.** Until the same date, an optional
+field crossed as `...(x.k === undefined ? {} : { k: x.k })`. That names the key but does not check
+it: spelling it `treatmnt` inside the spread **compiles clean**, because TypeScript's
+excess-property check does not inspect keys contributed through a spread, and an outer `satisfies`
+does not repair it. In the one file where a mis-named field means "this silently stops crossing",
+the compiler was blind to exactly that mistake. `opt<T, K extends keyof T>` makes the name a checked
+literal. Do not reintroduce the spread form.
 
 ---
 

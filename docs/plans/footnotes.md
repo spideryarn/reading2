@@ -1855,6 +1855,68 @@ paragraph count is a *count* rather than a coordinate: `bodyRows` must stay mono
 number for the axis, so a stranded note sits inside it, and the label had to stop reading from
 it.
 
+### The sixth review: the idiom, and one more seam — 2026-08-29
+
+Six rounds now, and **every one found something real**, which is itself the finding worth keeping:
+the stopping rule "the last review confirmed it" would have been wrong five times running.
+[Prompt](footnotes-finish-review-6-prompt.md) -> [answer](footnotes-finish-review-6-sol.md).
+
+**The blocker was a seam, again, and the same shape as the DTO one.** `dots()`
+([`src/web/scatter.ts`](../../src/web/scatter.ts)) drops a point whose block id it does not
+recognise -- a deliberate rule, on the grounds that a dot in the wrong place is worse than a dot
+missing. But it accepted any id that *did* resolve, including one that is now apparatus. The article
+and the projection are two separate reads of the current revision, so a re-ingest in the gap hands
+the browser a recognised id that no longer means what it meant, and the page then said two things at
+once: the you-are-here line withheld because the reader is not in the argument, and a note drawn as
+one of the argument's paragraphs. With a trailing note, *"paragraph 3 of 2"*.
+
+**Recognising an id is not the same as the block behind it still being argument.** Every existing
+test missed it for one reason, and Sol named it: each of them builds its points from the body alone,
+so none could construct the state.
+
+**The probe is the part to remember.** The fix has two halves, and they are not equally testable.
+Removing the `isBody` guard alone reddens two of the three new tests. Restoring the invented
+`?? d.row + 1` label fallback alone reddens **nothing** -- with the guard in place nothing can reach
+it. So that half has no test of its own and cannot have one; it is there so that a later change to
+the guard cannot bring the lie back quietly, and the third test is the tripwire for the pair. It is
+written into the test rather than counted as evidence.
+
+### The idiom the compiler could not check
+
+The question put to Sol was whether `...(node.treatment === undefined ? {} : { treatment: ... })`
+protects the key name. It does not, and this was then measured both ways rather than believed:
+spelling it `treatmnt` **compiled clean**, and after the fix the same typo is
+`error TS2345: Argument of type '"treatmnt"' is not assignable to parameter of type 'keyof TreeNode'`.
+TypeScript's excess-property check does not inspect keys contributed through a spread, and an outer
+`satisfies` does not repair it.
+
+[`src/public/dto.ts`](../../src/public/dto.ts) had twenty-two of them. Its whole design is that every
+key a stranger receives is named here, once, on purpose -- so the one mistake it cannot afford, a
+field that silently fails to cross, was the one mistake the compiler was blind to. `publicTree`
+dropping `treatment` was an *omission* rather than a typo; a typo would have looked identical and
+been harder to see. One `opt<T, K extends keyof T>(source, key)` closes the class, and the call site
+still reads as this file naming the field deliberately, which is the property the design rests on.
+Recorded in [security-map.md](../project/security-map.md), because it is a defence rather than a
+helper.
+
+### The seam inventory, closed -- and one premise of mine was wrong
+
+Sol enumerated every place a `TreeNode` or a `Block` is rebuilt, selected, or serialised, and found
+**no second field-by-field transport boundary**. Two things are worth carrying forward from it:
+
+- **Postgres blocks are not one JSON document.** They are explicit columns in `revision_blocks`
+  ([`src/db/schema.ts`](../../src/db/schema.ts)), which is the opposite of what the prompt asserted.
+  They are safe today because every full-block path carries `role`, `treatment` and `noteId` -- but
+  the reason is "somebody named them", not "the shape cannot lose a field". Anything new on `Block`
+  has to be added there by hand.
+- The narrow reads -- hashes selecting `id/text/role/treatment`, scalars selecting
+  `words/treatment`, search deliberately ignoring `treatment` -- are each correct *and* each a place
+  a future field will be silently absent.
+
+Two smaller things: `0` is the right floor for an empty `bodyDepths` (no consumer divides by it, and
+`1` would invent a rung that does not exist), and the two comments in `tests/public-dto.test.ts` that
+still described `treatment` as deliberately dropped now say what was decided and why.
+
 ## Still open
 
 - Whether the marker carries the substantive-versus-citation distinction in v1, or stays
