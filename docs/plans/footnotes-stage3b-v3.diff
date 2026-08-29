@@ -1,0 +1,346 @@
+diff --git a/src/blocks.ts b/src/blocks.ts
+index 2321fd0..7e56565 100644
+--- a/src/blocks.ts
++++ b/src/blocks.ts
+@@ -17,7 +17,7 @@ import { isSpideryarnId, mintUniqueId } from "./ids.js";
+ import { isMain } from "./is-main.js";
+ /* The three strings stage 2 stamped into the DOM, from the file that writes
+    them. See noteFieldsFor. */
+-import { CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN } from "./notes.js";
++import { BACK_ATTR, CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN, REF_ATTR } from "./notes.js";
+ import { sanitizeInPlace, sanitizeStoredBlocks } from "./sanitize.js";
+ import { SANITIZER_VERSION } from "./sanitize-policy.js";
+ /* `Block` and `BlockKind` come from types.ts rather than being declared here.
+@@ -33,7 +33,7 @@ import { SANITIZER_VERSION } from "./sanitize-policy.js";
+ import type { Block, BlockKind } from "./types.js";
+ /* Types only, so nothing runtime crosses from the store into stage 3. Stage 3
+    asks the store two questions and does not care which store answers. */
+-import type { ArtifactKind, ArtifactStore } from "./store/artifacts.js";
++import type { ArtifactKind, ArtifactReads } from "./store/artifacts.js";
+ 
+ /**
+  * Blocks are the *finest* unit a reader takes in as one thing, so a `<li>` is a
+@@ -374,9 +374,158 @@ export interface SplitResult {
+  * correct, because they *are* alike, and minting instead would drop the ids of
+  * every repeated `<li>Yes</li>` on the page.
+  */
++/**
++ * A block's words with every footnote control taken out of them, and the notes
++ * it is attached to named instead.
++ *
++ * **Why the key cannot just be the text.** `extractText` walks `textContent`,
++ * so a marker's own digits are in `Block.text`. An author inserting one note
++ * near the top of a piece shifts every later marker `7 → 8`, and every
++ * paragraph below keys differently while not one word of its prose has changed:
++ * fresh ids, orphaned comments, a saved position pointing at nothing. Same for
++ * a note block, whose author-written back-links Wikipedia numbers `1 2 3`, one
++ * per place it is cited.
++ *
++ * **Nodes, never text patterns**, which is the part a naive fix gets wrong. A
++ * marker is not always a digit — letters, stars and roman numerals all occur —
++ * and a leading number can be a note's own first word ("1970 was the year…").
++ * So what is removed is what stage 2 stamped: `REF_ATTR` on a marker and
++ * `BACK_ATTR` on a back-link, both of them written by us and nowhere else
++ * (src/notes.ts).
++ *
++ * **And the notes are folded back in**, because stripping alone is too
++ * permissive: two otherwise identical paragraphs citing *different* notes would
++ * collapse into one bucket and trade ids, and a citation repointed at another
++ * note would keep an id that now sits on a paragraph meaning something else.
++ * `noteId` is already a hash of the note's own prose, so the fingerprint costs
++ * nothing to compute: if only the numbering changed the id is carried, and if
++ * the target or the note's words changed a fresh one is minted.
++ *
++ * **Read from `html`, and from nothing else.** This runs over stored `Block`s on
++ * one side and this run's candidates on the other, and it has to agree with
++ * itself across them or nothing matches and every article in the database is
++ * re-minted at once — which looks exactly like an article that changed. The
++ * candidate's html is read before its id is written and before `retargetAnchors`
++ * repoints its hrefs, so `id` and `href` are the two things the two sides
++ * disagree about; the stamps are `data-*`, are what both sides carry
++ * identically, and are measured to survive into `blocks.json`
++ * (tests/note-carry-over.test.ts).
++ *
++ * A block with no stamp in its html returns its text untouched and an empty
++ * fingerprint, so its key is byte-for-byte the one it had before any of this —
++ * which is every block of every article ingested before stage 2 existed.
++ */
++/**
++ * Might this html hold one of stage 2's stamps? Built from the constants rather
++ * than re-spelled, so a rename cannot leave it quietly matching nothing, and
++ * case-insensitive because an attribute name in HTML is.
++ *
++ * It is a cheap gate and not an answer: prose that merely contains the words
++ * gets parsed and then found to have no stamp, which is why the parse returns
++ * the caller's own text in that case rather than its own re-derivation.
++ */
++const MIGHT_BE_STAMPED = new RegExp([REF_ATTR, BACK_ATTR, NOTE_ATTR].join("|"), "i");
++
++/**
++ * A note's identity for keying: its content digest, without the counter.
++ *
++ * `mintNoteId` appends `-2`, `-3` to whichever duplicates of a note come later
++ * in the document, so three notes reading "Ibid." are `h`, `h-2`, `h-3` — and
++ * inserting a fourth above them rotates all three. That counter is a **position**,
++ * and this whole stage exists because a position is not an identity. Two notes
++ * that say the same words are the same note as far as a citing passage is
++ * concerned. GPT Sol's blocker 1, reproduced in tests/note-carry-over.test.ts.
++ */
++const digestOf = (noteId: string): string => NOTE_DIGEST.exec(noteId)?.[1] ?? noteId;
++
++/**
++ * The **fixed ten-hex field**, captured — never the tail, chopped.
++ *
++ * `replace(/-\d+$/, "")` reads as "take the counter off" and is not: a digest
++ * that happens to be all digits *is* the thing that matches, so
++ * `spya-note-9417977611` came back as `spya-note` and every note whose hash
++ * began that way shared one identity. About one in a hundred, and GPT Sol found
++ * two in the corpus within minutes. A structure is parsed by its structure.
++ */
++const NOTE_DIGEST = /^(spya-note-[0-9a-f]{10})(?:-\d+)?$/;
++
++interface NoteKeyParts {
++  /** The block's words with every recognised control node taken out. */
++  text: string;
++  /** The notes it belongs to, then the notes it cites, in document order. */
++  ids: string[];
++  /** Whether a stamp was actually found, which the gate alone cannot say. */
++  stamped: boolean;
++}
++
++function withoutNoteControls(text: string, html: string): NoteKeyParts {
++  if (!MIGHT_BE_STAMPED.test(html)) return { text, ids: [], stamped: false };
++  const root = JSDOM.fragment(html).firstElementChild;
++  if (root === null) return { text, ids: [], stamped: false };
++
++  /* Which notes this block *is part of* — its own, plus any note whose
++     back-link sits in it. A set, because Wikipedia writes one back-link per
++     place a note is cited and a note gaining a fourteenth citation has not
++     changed identity. */
++  const belongs = new Set<string>();
++  /* Which notes it *cites*, in document order and with repeats, because
++     reordering or duplicating a citation is a change to what it asserts. */
++  const cites: string[] = [];
++
++  const own = root.getAttribute(NOTE_ATTR);
++  if (own !== null && NOTE_ID_PATTERN.test(own)) belongs.add(digestOf(own));
++
++  for (const el of Array.from(root.querySelectorAll(`[${REF_ATTR}], [${BACK_ATTR}]`))) {
++    const ref = el.getAttribute(REF_ATTR);
++    const back = el.getAttribute(BACK_ATTR);
++    /* Not the attribute's presence — the shape stage 2 mints. A value that is
++       not one of ours is a page's own text wearing our attribute, and the safe
++       thing to do with an element we do not recognise is **leave it alone**:
++       removing it while contributing no identity would collapse two blocks that
++       differ only in the control we deleted. */
++    if (ref !== null && NOTE_ID_PATTERN.test(ref)) cites.push(digestOf(ref));
++    else if (back !== null && NOTE_ID_PATTERN.test(back)) belongs.add(digestOf(back));
++    else continue;
++    el.remove();
++  }
++
++  const ids = [...[...belongs].sort(), ...cites];
++  /* Nothing recognised: the gate fired on prose that merely says the words. The
++     caller's own text goes back untouched, so the key is the one it always had. */
++  if (ids.length === 0) return { text, ids, stamped: false };
++  return { text: extractText(root), ids, stamped: true };
++}
++
++/**
++ * The key's shape, and it is load-bearing rather than cosmetic.
++ *
++ * `x:p:n[<id>]prose` was ambiguous: an *unstamped* block whose prose literally
++ * began `n[<id>]` spelled the same string as a stamped block citing that note,
++ * so the migration fallback below could reach a stamped block and take the id of
++ * a passage that had not changed. GPT Sol's blocker 2, reproduced in
++ * tests/note-carry-over.test.ts.
++ *
++ * So the fields are counted and delimited: a tag holds no `:` and a note id
++ * holds neither `:` nor `,`, so every field boundary is fixed and the encoding
++ * is injective, and no prose can spell a key that is not its own.
++ *
++ * **The stamped flag is redundant today, and is here on purpose.** `stamped` is
++ * true exactly when `ids` is non-empty, so the count already separates the two
++ * families — a legacy key is always `0:0:`. Probing it out reddens nothing, and
++ * that is worth saying rather than leaving the flag looking like the guard that
++ * holds the line. It is insurance against one specific future edit: change what
++ * contributes an id — stop back-links from doing it, say — and a stamped block
++ * could key with a count of zero and quietly re-merge the namespaces. The flag
++ * cannot be broken by that change. The guard actually doing the work is the
++ * legacy bucket's filter, in `carryOverIds`.
++ */
++const keyOf = (tag: string, parts: NoteKeyParts, written: string): string =>
++  `x:${tag}:${parts.stamped ? 1 : 0}:${parts.ids.length}:${parts.ids.join(",")}:${written}`;
++
+ function exactKey(tag: string, text: string, html: string): string | null {
+-  const written = text.replace(/\s+/gu, " ").trim();
+-  if (written) return `x:${tag}:${written}`;
++  const parts = withoutNoteControls(text, html);
++  const written = parts.text.replace(/\s+/gu, " ").trim();
++  if (written || parts.ids.length) return keyOf(tag, parts, written);
+   // Images and rules carry no text, so match them on what they point at —
+   // otherwise every figure is re-minted on each re-extraction and any ToC row
+   // aimed at a diagram goes stale.
+@@ -394,9 +543,30 @@ function exactKey(tag: string, text: string, html: string): string | null {
+  * completely different content. Anything that folds down to marks and spaces
+  * alone gets a fresh id instead.
+  */
+-function foldedKey(tag: string, text: string): string | null {
+-  const words = normalize(text);
+-  return words && /[\p{L}\p{N}]/u.test(words) ? `f:${tag}:${words}` : null;
++/**
++ * The key a block would have if it carried no stamps at all — its whole text,
++ * with nothing stripped and no notes named.
++ *
++ * Only ever used as a *second* lookup, and only for the migration described at
++ * its call site. It is deliberately what an **unstamped** block keys as, because
++ * that is what an article split before stage 2 existed is stored as; and because
++ * it says `stamped: false`, it can never spell a stamped block's key.
++ */
++function legacyKey(tag: string, text: string): string | null {
++  const written = text.replace(/\s+/gu, " ").trim();
++  return written ? keyOf(tag, { text, ids: [], stamped: false }, written) : null;
++}
++
++function foldedKey(tag: string, text: string, html: string): string | null {
++  /* The same strip and the same fingerprint as pass one, and for the same
++     reason. Without it pass two would quietly undo pass one's work: a paragraph
++     that correctly minted because it now cites a different note folds to the
++     identical string it folded to before, finds a single unambiguous claimant,
++     and takes the old id back. */
++  const parts = withoutNoteControls(text, html);
++  const words = normalize(parts.text);
++  if (!words || !/[\p{L}\p{N}]/u.test(words)) return null;
++  return `f:${tag}:${parts.stamped ? 1 : 0}:${parts.ids.length}:${parts.ids.join(",")}:${words}`;
+ }
+ 
+ function bucketBy<T>(items: T[], key: (item: T) => string | null): Map<string, T[]> {
+@@ -462,28 +632,81 @@ function carryOverIds(
+     return true;
+   };
+ 
++  /** The first id in this bucket nobody has taken, consuming what it passes. */
++  const takeFrom = (bucket: Block[] | undefined): string | undefined => {
++    while (bucket?.length) {
++      const next = bucket.shift()!.id;
++      if (claim(next)) return next;
++    }
++    return undefined;
++  };
++
+   // Pass one. Each previous id is consumed once, so a page with several
+   // identical short paragraphs cannot hand the same id to two blocks.
+   const byExact = bucketBy(previous, (b) => exactKey(b.tag, b.text, b.html));
+-  const unmatched: number[] = [];
++  const missed: number[] = [];
+   candidates.forEach((c, i) => {
+     const key = exactKey(c.tag, c.text, c.html);
+-    const bucket = key === null ? undefined : byExact.get(key);
+-    let id: string | undefined;
+-    while (bucket?.length && id === undefined) {
+-      const next = bucket.shift()!.id;
+-      if (claim(next)) id = next;
+-    }
+-    if (id === undefined) unmatched.push(i);
++    const id = key === null ? undefined : takeFrom(byExact.get(key));
++    if (id === undefined) missed.push(i);
+     else out[i] = id;
+   });
+ 
++  /* Pass one-and-a-half: the one-way bridge across stage 2.
++   *
++   * An article split before `canonicaliseNotes` existed has no stamps in its
++   * stored html, so its blocks key on their raw text — marker digits and all —
++   * while this run's candidates key on the stripped text and the notes they
++   * cite. Nothing would match, and every paragraph citing a note and every note
++   * block in the database would be re-minted at once (206 of 356 blocks on
++   * wiki_transformer.html, measured 2026-08-29).
++   *
++   * **Three things keep it one-way**, and the first version had none of them —
++   * it reached a stamped block and took the id of a passage that had not
++   * changed (GPT Sol's blocker 2, reproduced in tests/note-carry-over.test.ts).
++   *
++   *  1. The key's encoding: a legacy key is always `0:0:`, so no prose can spell
++   *     a stamped block's key. `n[<id>]prose` used to be writable by an
++   *     unstamped block, which was the hole.
++   *  2. The bucket is built only from previous blocks that **parse** with no
++   *     stamp in them, rather than from the whole document.
++   *  3. It runs only after **every** candidate has had its exact match, so an
++   *     earlier candidate's fallback cannot consume an id that a later one would
++   *     have claimed outright.
++   *
++   * **Measured, rather than assumed: (2) is the one holding the line.** Keep it
++   * and probe the other two out, together or singly, and nothing reddens; remove
++   * it and three tests fail even with both of the others in place. (1) and (3)
++   * are defence in depth against a future edit to this function, not the reason
++   * it is correct today, and calling all three load-bearing would have been a
++   * guess dressed as a safeguard.
++   *
++   * It is also what tests/notes-canonical.test.ts requires — turning the pass on
++   * must not cost a single note block its id.
++   */
++  const byLegacy = missed.length
++    ? bucketBy(
++        previous.filter((b) => !withoutNoteControls(b.text, b.html).stamped),
++        (b) => legacyKey(b.tag, b.text),
++      )
++    : new Map<string, Block[]>();
++  const unmatched: number[] = [];
++  for (const i of missed) {
++    const c = candidates[i]!;
++    const legacy = legacyKey(c.tag, c.text);
++    const id = legacy === null ? undefined : takeFrom(byLegacy.get(legacy));
++    if (id === undefined) unmatched.push(i);
++    else out[i] = id;
++  }
++
+   // Pass two, over what is left on both sides.
+   const byFolded = bucketBy(
+     previous.filter((b) => !taken.has(b.id)),
+-    (b) => foldedKey(b.tag, b.text),
++    (b) => foldedKey(b.tag, b.text, b.html),
++  );
++  const claimants = bucketBy(unmatched, (i) =>
++    foldedKey(candidates[i]!.tag, candidates[i]!.text, candidates[i]!.html),
+   );
+-  const claimants = bucketBy(unmatched, (i) => foldedKey(candidates[i]!.tag, candidates[i]!.text));
+   for (const [key, indices] of claimants) {
+     const bucket = byFolded.get(key);
+     if (indices.length !== 1 || bucket?.length !== 1) continue; // ambiguous → mint
+@@ -1130,7 +1353,11 @@ export class NoBlocksProduced extends Error {
+  * the one thing that must not happen to it is being turned into an answer.
+  */
+ export async function previousBlocksFrom(
+-  store: ArtifactStore,
++  /* `ArtifactReads`, not the whole store, since 2026-08-29. This runs inside a
++     stage's `run`, which is the half that may only read — see
++     src/store/artifacts.ts § `ArtifactReads`. The real store still satisfies it,
++     so every caller is unchanged. */
++  store: ArtifactReads,
+   slug: string,
+ ): Promise<Block[] | undefined> {
+   const artefact = await store.read(slug, "blocks", "blocks");
+diff --git a/src/notes.ts b/src/notes.ts
+index 0d4aa1c..1c71136 100644
+--- a/src/notes.ts
++++ b/src/notes.ts
+@@ -162,10 +162,16 @@ import { createHash } from "node:crypto";
+  * reader drift apart without either side going red.
+  */
+ export const NOTE_ATTR = "data-spya-note";
+-/** On a marker in the prose. The value is the noteId it points at. */
+-const REF_ATTR = "data-spya-note-ref";
++/**
++ * On a marker in the prose. The value is the noteId it points at.
++ *
++ * Exported for the same reason as `NOTE_ATTR`: stage 3 reads it back, to take
++ * the marker out of a block's carry-over key so that renumbering a note does
++ * not cost the paragraph citing it its id (`withoutNoteControls`, src/blocks.ts).
++ */
++export const REF_ATTR = "data-spya-note-ref";
+ /** On a back-link inside a note. The value is the noteId it belongs to. */
+-const BACK_ATTR = "data-spya-note-back";
++export const BACK_ATTR = "data-spya-note-back";
+ /** On the one container all notes end up in. Read back by stage 3 — see NOTE_ATTR. */
+ export const CONTAINER_ATTR = "data-spya-notes";
+ 

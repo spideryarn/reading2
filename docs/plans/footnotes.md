@@ -3,9 +3,15 @@
 **Status: built, 2026-08-29 — stages 2 to 5a, less stage 6 (PDFs), which Greg cut from v1.**
 Five rounds of GPT Sol review after it was built; every one found something real, and the last
 of them is the closed inventory of consumers in
-[footnotes-finish-review-5-sol.md](footnotes-finish-review-5-sol.md). Still open: **stage 3b**,
-the block-id carry-over key — until it lands, footnote identity does not survive re-extraction,
-so do not claim that it does.
+[footnotes-finish-review-5-sol.md](footnotes-finish-review-5-sol.md). **Stage 3b — the block-id
+carry-over key — landed 2026-08-29**, after *three* GPT Sol reviews returned BLOCKED
+([round 1](footnotes-stage3b-review-sol.md), [round 2](footnotes-stage3b-review-2-sol.md),
+[round 3](footnotes-stage3b-review-3-sol.md)) with five reproduced data-integrity failures between
+them. Four were real and fixed; the fifth turned out to be behaviour older than the stage, and the
+measurement that settled it is below. What it fixes, the limitation it deliberately keeps —
+**editing a footnote's words re-mints the block ids of the passages citing it** — and the mechanism
+that was built to avoid that and then removed, are in
+[Stage 3b, as it actually landed](#stage-3b-as-it-actually-landed-2026-08-29).
 
 The plan below is kept as it was written. Written 2026-08-28 after a GPT Sol design consultation
 ([footnotes-prompt.md](footnotes-prompt.md) → [footnotes-sol.md](footnotes-sol.md)), then reviewed
@@ -1187,6 +1193,194 @@ the two `array_agg`s in `scalarInputsQuery` are genuinely aligned (`ORDER BY ord
 is no fourth two-column feed into `hashBlocks`; and every remaining direct `gistable` read —
 `TableView.tsx:674`, `blocks.ts`, `pg-shelf.ts` — is correct where it stands.
 
+## Stage 3b, as it actually landed — 2026-08-29
+
+**GPT Sol reviewed this twice and returned BLOCKED twice, with two reproduced data-integrity
+failures each time** ([round 1](footnotes-stage3b-review-sol.md),
+[round 2](footnotes-stage3b-review-2-sol.md)). All four are fixed below; the shape of the key and
+the definition of a note's identity both changed because of them, and one whole mechanism was built
+and then removed. Read both review files before this one.
+
+The key, in one line ([`keyOf`](../../src/blocks.ts), used by `exactKey` and `foldedKey` alike):
+
+```ts
+`x:${tag}:${stamped ? 1 : 0}:${ids.length}:${ids.join(",")}:${written}`
+```
+
+`withoutNoteControls` parses the block's **html**, removes every element carrying a *valid*
+`REF_ATTR` or `BACK_ATTR`, and names the notes it found: the ones it belongs to (its own
+`NOTE_ATTR`, plus any note whose back-link sits in it) as a sorted set, then the ones it cites in
+document order with repeats. A block with no stamp returns its own text untouched, so its key is the
+one it always had.
+
+**`data-spya-note-ref` does survive into the stored `Block.html` — measured, not assumed.** The note
+stamps are `data-*`, which DOMPurify keeps, and `scrubStamps` only takes `WAS_ID`/`WAS_NAME` off.
+Blocks whose stored html carries a stamp: gwern 21 citing / 34 notes, wiki_transformer 85 / 121,
+acx_footnotes 17 / 18, tufte 5 / 5. Had they been scrubbed the key would have degraded to the old
+behaviour on one side and the new one on the other, which is the catastrophic case.
+
+**A no-op re-ingest carries everything**: 356 of 356 on wiki_transformer, 96 of 96, 184 of 184, 68
+of 68. That test is the safety case for the whole change, and it goes red — 85, 17 and 21 blocks
+re-minted — the moment the key reads anything the two sides disagree about, such as an `href`.
+
+### What a note's identity is, and the two ways it was got wrong
+
+A note is named in the key by **the content digest of its prose, and nothing else**. Both bugs here
+came from the same place: `noteId` is that digest plus a positional counter, and neither half is
+straightforwardly an identity.
+
+**1 — The counter is a position.** `mintNoteId` appends `-2`, `-3` to whichever *duplicates* come
+later in the document, so two notes reading "Ibid." are `h` and `h-2` and inserting a third above
+them rotates all three. The first version of this key named the note by its whole id, so the
+renumbering this stage exists to fix simply moved from the marker's digits into the note id and
+re-minted every citing passage again — Sol's first blocker. The key names the digest and drops the
+counter.
+
+**And "drop the counter" is not `replace(/-\d+$/, "")`,** which was Sol's blocker in the second
+round. A digest that happens to be all digits *is* what that pattern matches, so
+`spya-note-9417977611` came back as `spya-note` and every such note shared one identity — about one
+note in a hundred, and Sol found two in the corpus within minutes (`note-12` and `note-58`).
+Repointing an unchanged paragraph between them carried its old id: the wrong-attachment failure the
+fingerprint exists to prevent. The ten-hex field is now **captured** rather than the tail chopped,
+and the fixture asserts its own digests are numeric so it cannot quietly stop being the hard case.
+
+*What remains, and it is older than this stage.* Three notes whose prose is identical cannot be told
+apart by a key built from content, so their block ids go out in document order and an inserted note
+takes the first old note's id — `exactKey`'s documented behaviour for any two blocks that read alike.
+Run the same fixture with the whole of stage 3b switched off and the rotation is identical; the only
+difference is that the citing passages re-mint as well. Neither introduced nor fixed here, and pinned
+as a limit in [`tests/note-carry-over.test.ts`](../../tests/note-carry-over.test.ts).
+
+### The limitation we are choosing: editing a note re-mints the passages citing it
+
+**Correct a typo in note 7 and every passage citing note 7 gets a fresh block id**, though not one
+word of their own prose changed. Comments on them are orphaned. This is known, it is asserted rather
+than left to be discovered, and it is deliberate.
+
+It was fixed once, and the fix was withdrawn. Since `noteId` is a hash of the note's words, telling
+"the author reworded note 7" from "note 7 is a different note now" needs a second signal, and the
+only one available is the author's own anchor — `fn7`, `cite_note-14`. Stage 2 was changed to carry
+it (`SRC_ATTR`) and stage 3 to reconcile on it. Sol then reproduced a mixed insert-edit-renumber
+revision — a new note at `fn1`, edited note A moved to `fn2`, unchanged note B at `fn3` — in which a
+passage's block id moved onto a **different passage**. Two rounds, two wrong-attachment bugs, from
+the cure rather than the disease.
+
+[block-ids.md](../project/block-ids.md) is explicit that **a lost anchor is the safer failure than a
+moved one**: re-minting loses a comment's anchor, mis-continuing moves the comment onto something
+else. The anchor machinery traded the safe failure for the unsafe one to buy a convenience, so all of
+it came out — `SRC_ATTR`, `authorName`, `reconcileNotes`, and the `src/notes.ts` change with them.
+**Stage 2 is untouched by stage 3b**; the only edit to `src/notes.ts` is two `const`s becoming
+`export const`.
+
+Three further reasons it was not worth keeping, beyond the reproduced bug:
+
+- It would have fixed nothing retroactively. The anchor only exists for articles ingested *after* it
+  lands, so every article already stored keeps this behaviour regardless.
+- Editing a note re-mints **the note's own block** whatever we do, since its words changed. A comment
+  on the note itself is lost either way; the machinery only ever saved the citing passages.
+- It put 128 characters of page-controlled text into every reader's `block.html` and the public DTO.
+  Sol confirmed it inert — no execution path, no selector, no reflection — but it is still source
+  metadata shipped for a convenience.
+
+The renumbering bug this stage exists for is untouched by any of that: it is about a marker's digits,
+not a note's words.
+
+
+### The migration bridge, and why it needed three fixes rather than one
+
+An article ingested **before** stage 2 existed has no stamps in its stored html, so its blocks key
+the old way while this run's candidates key the new way. Before the bridge, measured — previous =
+Readability with the notes pass off, current = the same page with it on:
+
+| fixture | re-minted, no bridge | with the old key |
+|---|---|---|
+| wiki_transformer | 206 of 356 (85 citing, 121 notes) | 0 |
+| gwern | 55 of 184 (21 citing, 34 notes) | 0 |
+| acx_footnotes | 35 of 96 (17 citing, 18 notes) | 18 |
+| tufte | 10 of 68 (5 citing, 5 notes) | 10 |
+
+Every footnote paragraph and every note block in the database, orphaned on one re-ingest — and
+already forbidden by a committed test written for stage 2, *"turning the pass on keeps every note's
+block id"* ([`tests/notes-canonical.test.ts`](../../tests/notes-canonical.test.ts)), which this
+change broke. So a candidate that finds nothing under the new key tries `legacyKey`, the key an
+**unstamped** block gets. With the bridge the cost is 0, 0, 18 and 10 — identical to the old key.
+
+**Sol's blocker 2 was that one-way was a claim rather than a construction.** The old encoding
+`x:p:n[<id>]prose` could be spelled by an unstamped block whose prose literally began `n[<id>]`, so
+the fallback could reach a *stamped* previous block and take the id of a passage that had not
+changed. Reproduced. Three things now keep it one-way:
+
+1. The key's **encoding**: the fields are counted and delimited, so a legacy key is always `0:0:` and
+   no prose can spell a stamped block's key.
+2. The legacy bucket is built only from previous blocks that **parse** with no stamp in them, rather
+   than from the whole document.
+3. It runs only after **every** candidate has had its exact match, so an earlier candidate's fallback
+   cannot consume an id a later one would have claimed outright.
+
+**Which of the three is actually holding the line, measured rather than asserted.** Probed singly and
+in pairs against the focused suite:
+
+| kept | reddens |
+|---|---|
+| the bucket filter alone | nothing |
+| the encoding alone | 3 tests |
+| the ordering alone | 3 tests |
+
+So (2) is the guard; (1) and (3) are defence in depth against a future edit to this function, and
+saying all three were load-bearing would have been a guess dressed as a safeguard. The stamped flag
+inside the encoding is redundant a second time over — `stamped` is true exactly when the id count is
+non-zero — and is kept only so that changing *what contributes an id* cannot silently re-merge the
+two namespaces.
+
+### The blocker that was not ours
+
+Sol's third review blocked on the bridge again, from a different direction: its bucket accepts every
+**unstamped** previous block, and an ordinary paragraph is unstamped forever — so the fallback is not
+migration-only. Reproduced: a previous ordinary `<p>Alpha1</p>` is removed, a new
+`<p>Alpha<marker>1</p>` appears, and the new passage takes the old paragraph's id.
+
+Real, and **not introduced here**. Measured three ways before believing it was ours
+(`output/bridge-probe.mts`):
+
+| code | Sol's fixture |
+|---|---|
+| HEAD, with none of stage 3b | **carried** |
+| stage 3b, bridge on | **carried** |
+| stage 3b, bridge off | minted |
+
+The cause is older than this stage and is the same sentence this whole file starts from:
+`extractText` walks `textContent`, so a marker's digits are part of `Block.text`, and `Alpha1` and
+`Alpha` + marker `1` **genuinely read alike**. `exactKey` has always given two blocks that read
+alike their ids in document order — that is its documented behaviour, and it is why a page of
+repeated `<li>Yes</li>` keeps its ids at all.
+
+So the bridge *restores* the old behaviour rather than inventing it, and turning the bridge off would
+be the change: it would mint where the code has always carried, and re-mint 206 of 356 blocks on a
+pre-canonicaliser article. Pinned in the tests with a control asserting the two blocks really do read
+alike, so it cannot pass for the wrong reason. **What would actually fix it** is stopping marker
+digits from reaching `Block.text` at all, which changes what every consumer reads and is not this
+stage.
+
+Sol's proposed remedy — revision metadata saying the previous blocks predate canonicalisation — is
+the right shape for the problem it was aimed at, and is not needed for this one.
+
+### The gate is a gate, not an answer
+
+Three smaller findings, all taken. `MIGHT_BE_STAMPED` is built from the attribute constants and is
+case-insensitive, since an HTML attribute name is; when the parse then finds no stamp, the caller's
+**own text** goes back rather than a re-derivation, so prose that merely writes an attribute name out
+keys exactly as before; and a stamp whose value is not one stage 2 could have minted is **left in
+place** rather than removed, because deleting a control while contributing no identity collapses two
+blocks that differ only in what was deleted.
+
+### Cost
+
+`splitIntoBlocks` with carry-over goes from 350ms to 519ms on wiki_transformer (356 blocks, 206
+stamped) — one parse and one `extractText` per stamped block per lookup. A batch stage nobody is
+waiting on. Unstamped blocks skip the parse, which is most of every page and all of a page without
+footnotes.
+
+
 ## Stage 4, as it actually landed — 2026-08-28
 
 [`src/supplement.ts`](../../src/supplement.ts) is the whole of the new machinery: split the blocks,
@@ -1916,6 +2110,66 @@ Sol enumerated every place a `TreeNode` or a `Block` is rebuilt, selected, or se
 Two smaller things: `0` is the right floor for an empty `bodyDepths` (no consumer divides by it, and
 `1` would invent a rung that does not exist), and the two comments in `tests/public-dto.test.ts` that
 still described `treatment` as deliberately dropped now say what was decided and why.
+
+### Somebody finally looked at it — 2026-08-29
+
+Seven rounds of review and 5700 green tests, and until this point **nobody had seen the feature with
+their eyes**. No local article had footnotes, which is why. One now does: `data/fn-wikipedia/`,
+Wikipedia's "Transformer (deep learning)" — 358 blocks, 121 of them notes, 20 real section headings.
+Its tree was built deterministically from those headings because the AI gateway had run out of
+credit, so it has no gists; that costs nothing here, because everything under test branches on
+`treatment` rather than on gist text.
+
+The route in matters for reading the evidence. The real `App` was mounted at `/read/fn-wikipedia`
+with `useSession()` signed out, which takes the **visitor** branch, and `window.fetch` was stubbed
+for `/api/public/article/fn-wikipedia` only, from the artefacts on disk.
+
+| check | result |
+|---|---|
+| spine | **one** "Notes" band, last of 21, `opacity: 0.1` against 0.75, tooltip "Notes · 3,383 words · 71% in", and clicking it from the part before jumps `?at=` to the notes' first block |
+| masthead | **"20 parts · 237 sections"** — not 21, not 358; 237 is exactly the body count |
+| marker → note → back | hover gives a sidenote-grade card with the citation's own links live and "cited in 2 passages"; the note carries **plural** back-links "1 2"; the round trip lands on the exact citing paragraph |
+| granularity zoom | scrolling through the whole notes range keeps both the current tier and the ancestor highlight on "Notes", and both return to the body on the way out |
+| summary mode | **not tested** — no `summary.json` (a model call), so the panel says nobody has built one |
+| diagram | **not tested** — gated behind a model call for a visitor with no diagram artefact |
+
+**What this is and is not evidence for.** The payload was built from the artefacts directly, not
+through `publicArticle()`, so this shows the *visitor-side client* renders the apparatus correctly
+**given** a payload carrying `treatment`. That the DTO now emits it is a separate piece of evidence
+(`tests/public-dto.test.ts`, and the 1-part/2-part measurement recorded in
+[the fifth review](footnotes-finish-review-5-sol.md)). Two halves, two kinds of
+evidence, and neither substitutes for the other. Summary mode and diagram mode remain unseen by
+anyone, and should be looked at the first time a real article has both notes and summaries.
+
+**The two fixtures, and why neither is a normal artefact.** `data/` is gitignored, so this is the
+durable copy of what was in their `README.md` files — which had to go, because
+`tests/store-artefact-manifest.test.ts` asks the *filesystem* what sits beside an article and holds
+it against a written list, and a README has no home in Postgres and should not be given one.
+
+- **`data/fn-wikipedia/`** — "Transformer (deep learning)". 358 blocks: 237 body, 121 footnotes in
+  one contiguous trailing run. The tree was built by the **real** `splitBlocks`, `buildTree` and
+  `appendSupplement`, driven by a throwaway script rather than `generateToc`, which is the only
+  thing that calls the model. One flat tier of 20 parts, one per heading block, every title the
+  article's own heading text quoted verbatim; then `appendSupplement` added "Notes" from the 121
+  trailing blocks. **No gists and no nav labels**, deliberately, because inventing them would have
+  made the browser pass evidence about an agent's prose. `meta.json` was hand-written from the debug
+  page, since no fetch record existed. Consequence: `validate-tree` reports **21 problems, one per
+  internal non-supplement node** — `internal node has no gist` — and that is unavoidable for any
+  tree built this way, since `checkTree` requires a gist on every internal node with no exception
+  for the root. Structurally it is sound: no partition gaps, no range errors, no supplement-shape
+  violations. Do not "fix" the gists by writing prose into them.
+- **`data/your-book-review-the-pale-king/`** — a **degenerate placeholder, not a real tree**: 80
+  depth-one leaves under the root, because the article has exactly one heading block. Kept only
+  because its `raw.html` is a genuine fetch of the live Substack page and nobody need re-fetch it.
+  Use `fn-wikipedia` for anything to do with footnotes.
+
+**A false trail worth keeping.** The first fisheye reading looked exactly like the bug the plan
+warns about — the current tier moved to "Notes" while a separate ancestor highlight stayed stuck on
+an earlier part, which is "the panel claims the reader is still in the argument while they stand in
+the bibliography". It was an artefact of the test: position had been driven by `history.replaceState`
+plus a dispatched `popstate` rather than by scrolling. A real wheel scroll through the same range
+behaved correctly throughout. **A synthetic navigation is not a navigation**, in the same way a
+scripted click is not a focus, and it manufactures the failure it is looking for.
 
 ## Still open
 

@@ -162,10 +162,16 @@ import { createHash } from "node:crypto";
  * reader drift apart without either side going red.
  */
 export const NOTE_ATTR = "data-spya-note";
-/** On a marker in the prose. The value is the noteId it points at. */
-const REF_ATTR = "data-spya-note-ref";
+/**
+ * On a marker in the prose. The value is the noteId it points at.
+ *
+ * Exported for the same reason as `NOTE_ATTR`: stage 3 reads it back, to take
+ * the marker out of a block's carry-over key so that renumbering a note does
+ * not cost the paragraph citing it its id (`withoutNoteControls`, src/blocks.ts).
+ */
+export const REF_ATTR = "data-spya-note-ref";
 /** On a back-link inside a note. The value is the noteId it belongs to. */
-const BACK_ATTR = "data-spya-note-back";
+export const BACK_ATTR = "data-spya-note-back";
 /** On the one container all notes end up in. Read back by stage 3 — see NOTE_ATTR. */
 export const CONTAINER_ATTR = "data-spya-notes";
 
