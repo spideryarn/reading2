@@ -78,6 +78,7 @@
 import { type MouseEvent, useRef, useState } from "react";
 import { ChevronRight, Compass, Layers, RotateCcw, TriangleAlert } from "lucide-react";
 import type { BlockId, Job, SummaryEntry } from "../types.js";
+import { builtButEmpty } from "../messages.js";
 import { BlockRange } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
 import { TooltipGroup } from "./Tooltip.js";
@@ -291,9 +292,18 @@ export function SummaryPanel({
               // gives no clue that paying is what the button below is for.
               disabled={r !== "gist" && !hasLadder}
               title={
-                r !== "gist" && !hasLadder
-                  ? `${RUNG_LABELS[r].blurb} — not written for this article yet`
-                  : RUNG_LABELS[r].blurb
+                r === "gist" || hasLadder
+                  ? RUNG_LABELS[r].blurb
+                  : /* Two reasons a rung can be dark, and they are different
+                       sentences. `summaries` present means somebody ran the
+                       step and it produced no ladder; absent means nobody has
+                       run it. Saying the second about the first is the bug
+                       this branch exists to stop. */
+                    `${RUNG_LABELS[r].blurb} — ${
+                      summaries === null
+                        ? "not written for this article yet"
+                        : "not in what was written for this article"
+                    }`
               }
               onClick={() => onRung(r)}
             >
@@ -325,6 +335,20 @@ export function SummaryPanel({
           ))}
         </fieldset>
       </div>
+
+      {/* **Run, and it came back with nothing** — the one state that absence
+          cannot express, said for the summary as `GlossaryPanel` and
+          `IdeasPanel` say it for theirs. `hasLadder` alone used to leave this
+          silent while the disabled rungs below claimed the summary had never
+          been written, about an artefact the payload was carrying. GPT Sol,
+          2026-08-29. src/messages.ts § builtButEmpty.
+
+          `summaries !== null` is what separates it from *nobody built one*,
+          which never mounts this panel at all — `visitorGap` answers
+          *not-built* and the band says so instead (src/web/visitor.ts). */}
+      {!owner && summaries !== null && !hasLadder && (
+        <p className="summ-hint">{builtButEmpty("A summary")}</p>
+      )}
 
       {owner?.error && <p className="summ-error">{owner.error}</p>}
 

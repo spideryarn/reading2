@@ -1,0 +1,18 @@
+## Findings
+
+1. **High — the closed-import guard misses normal quoted SQL.**  
+   [tests/public-imports.test.ts:417](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/public-imports.test.ts:417) looks only for `spideryarn.glossary_lookups`. PostgreSQL/Drizzle normally spells this `"spideryarn"."glossary_lookups"`. A public module can query that table without importing it and the guard stays green. Likewise, [line 420](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/public-imports.test.ts:420) misses `db.query["glossaryLookups"]`. The current slice does not use either bypass, but the security gate does not enforce its stated guarantee.
+
+2. **Medium — a present-but-empty summary is rendered as “not written”.**  
+   Given a public payload containing `summary: { entries: [], missing: 0 }`, presence correctly makes `visitorGap` return `null`, but [SummaryPanel.tsx:254](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/SummaryPanel.tsx:254) treats the empty array as no ladder. The generated-length controls then say “not written for this article yet” at [lines 292–296](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/SummaryPanel.tsx:292), and no `builtButEmpty` sentence is rendered. That is the absent/present distinction collapsing at the last rendering step.
+
+3. **Medium — the panel props undo the impossible-state property.**  
+   The panel types independently accept public data plus `owner: Use… | null`: [GlossaryPanel.tsx:132](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/GlossaryPanel.tsx:132), [IdeasPanel.tsx:65](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/IdeasPanel.tsx:65), [SummaryPanel.tsx:120](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/SummaryPanel.tsx:120). Therefore a public glossary paired accidentally with a non-null owner result is legal TypeScript and renders authenticated lookup/regeneration controls. Current visitor callers do pass `owner={null}`, so no authenticated request occurs today; the type seam no longer makes the bad combination impossible.
+
+4. **Medium — deleting the visitor summary renderer would leave the suite green.**  
+   The browser fixture deliberately has no summary at [public-network-trace.test.tsx:223](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/public-network-trace.test.tsx:223). Its summary assertion exercises only the missing-artifact notice; present artefacts exercise glossary and ideas at [lines 484–513](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/public-network-trace.test.tsx:484). Deleting [App.tsx:2249](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/App.tsx:2249) would therefore survive: a payload with a summary would produce no gap and no band—just an empty mode.
+
+5. **Low — the empty-artefact test does not test its claimed sentence.**  
+   [visitor-gaps.test.ts:327](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/visitor-gaps.test.ts:327) asserts only presence and `visitorGap(null)`. It never mounts a panel. Deleting `builtButEmpty` from [GlossaryPanel.tsx:234](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/GlossaryPanel.tsx:234) and [IdeasPanel.tsx:179](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/IdeasPanel.tsx:179) would leave it green.
+
+I found no current DTO disclosure: `Block.note`, glossary lookups, summary guidance, profile hashes, model/run provenance, costs, and timings are excluded. The four columns come from the same `publicSlug`-filtered row, with no new table route. The extracted band hooks preserve the owner path’s ordering, dependencies, and null handling.

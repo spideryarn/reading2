@@ -71,7 +71,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Article } from "../src/types.js";
+import type { Article, SummaryEntry } from "../src/types.js";
 import type { PublicArticle, PublicMetadata, PublicTweets } from "../src/public-types.js";
 
 /** Who `useSession` says is here. Re-posed by each test before it renders. */
@@ -163,6 +163,17 @@ const PDF_META = {
   pages: 12,
   pagesChecked: 12,
   unverified: false,
+};
+
+/** The one sentence a visitor's summary band must actually put on screen. */
+const PUBLIC_SUMMARY = "What the piece is arguing, at length.";
+
+/** Matches `n0`, the tree's only node, so the ladder has a rung to draw. */
+const SUMMARY_ENTRY: SummaryEntry = {
+  range: ["spya-aaaaaa", "spya-cccccc"],
+  depth: 0,
+  short: "What the piece is arguing.",
+  long: PUBLIC_SUMMARY,
 };
 
 const ARTICLE: PublicArticle = {
@@ -532,6 +543,46 @@ describe("a signed-out browser on a shared document", () => {
    * The negative assertion is the load-bearing half: without it this passes on
    * a page saying both things, or the wrong one.
    */
+  /**
+   * **The visitor's summary band, which nothing had ever mounted.**
+   *
+   * The fixture above is asymmetric — no `summary` key — so every summary
+   * assertion in this file exercised the *missing* branch. GPT Sol found the
+   * consequence by reading the component tree, 2026-08-29: deleting the
+   * `!owner && mode === "summary"` band from App.tsx left the whole suite
+   * green, because a payload with a summary produced no gap and no band, just
+   * an empty mode. Confirmed by mutation before this was written.
+   */
+  it("draws the summary the payload carries, for a visitor", async () => {
+    served = { ...ARTICLE, summary: { entries: [SUMMARY_ENTRY], missing: 0 } };
+    /* `len=long` because the band opens on the gist rung, which draws the
+       tree's own `gist` — text that is on screen whether or not a summary was
+       ever fetched, and so cannot be evidence that one was. */
+    await open("?mode=summary&len=long");
+
+    expect(host.textContent).toContain(PUBLIC_SUMMARY);
+    expect(host.textContent).not.toContain("Nobody has built");
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
+   * **And the same artefact, run and empty.**
+   *
+   * `hasLadder` is `entries.length > 0`, so an empty ladder disables the two
+   * longer rungs and titles them *"not written for this article yet"* — the
+   * never-built sentence, about an artefact the payload is carrying. GPT Sol,
+   * 2026-08-29. The `missing: 0` matters: with sections that came back empty
+   * the foot already says so, and this is the case where it does not.
+   */
+  it("does not tell a visitor a summary it is carrying was never written", async () => {
+    served = { ...ARTICLE, summary: { entries: [], missing: 0 } };
+    await open("?mode=summary");
+
+    expect(host.innerHTML).not.toContain("not written for this article yet");
+    expect(host.textContent).toContain("A summary was built for this piece");
+    expect(outsidePublic()).toEqual([]);
+  });
+
   it("says an artefact came back empty, rather than that nobody built one", async () => {
     /* Present and empty, both of them. `artefactsIn` reports the artefact off
        the *key*, so the band mounts the panel rather than answering

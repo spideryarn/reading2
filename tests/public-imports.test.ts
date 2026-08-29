@@ -414,10 +414,24 @@ describe("the public API's tables", () => {
         .replace(/\/\*[\s\S]*?\*\//g, "")
         .replace(/\/\/.*$/gm, "");
       for (const table of forbidden) {
-        if (code.includes(`spideryarn.${snake(table)}`)) {
+        /* **Both spellings of a qualified name, because Postgres has two.**
+           `spideryarn.glossary_lookups` and `"spideryarn"."glossary_lookups"`
+           are the same table, and Drizzle emits the quoted form — so a guard
+           matching only the bare one was green over the spelling the ORM
+           actually writes. GPT Sol found it, 2026-08-29, and a mutation
+           confirmed it: a quoted `select` in the public reader passed. */
+        if (new RegExp(`"?spideryarn"?\\s*\\.\\s*"?${snake(table)}\\b"?`).test(code)) {
           offenders.push(`${file} → raw sql on ${snake(table)}`);
         }
-        if (new RegExp(`\\.query\\s*\\.\\s*${table}\\b`).test(code)) {
+        /* And both ways to reach a property: `db.query.comments` and
+           `db.query["comments"]` are one expression written twice. A computed
+           key from a variable is the one route left open, and it cannot be
+           closed by reading the text — see the note below. */
+        if (
+          new RegExp(
+            `\\.query\\s*(?:\\.\\s*${table}\\b|\\[\\s*["'\`]${table}["'\`]\\s*\\])`,
+          ).test(code)
+        ) {
           offenders.push(`${file} → db.query.${table}`);
         }
       }

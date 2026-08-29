@@ -1722,6 +1722,81 @@ The general lesson is [reachability-is-not-handling](../reusable/silent-success.
 A cast fixture can manufacture a state the type system forbids, and then the code's failure to handle
 it looks like a bug rather than like a fixture that lied.
 
+### The code review of the built slice, and the two guards that were not guarding
+
+`docs/plans/public-read-only-stage1b-built-review-sol.md`, 2026-08-29. Five findings, every one
+checked here by mutation before anything was changed, and four of the five confirmed as stated.
+
+It cleared the part that matters most, and said so specifically rather than by silence: no DTO
+disclosure — `Block.note`, glossary lookups, summary guidance, profile hashes, model and run
+provenance, costs and timings are all excluded — the four new columns come from the same
+`publicSlug`-filtered row with no new table route, and the extracted band hooks preserve the owner
+path's ordering, dependencies and null handling.
+
+**1 — the closed-import guard missed the spelling Drizzle actually writes.** The raw-SQL arm tested
+`code.includes("spideryarn.glossary_lookups")`, and Postgres qualifies a table as
+`"spideryarn"."glossary_lookups"`. The relational arm matched `.query.glossaryLookups` and not
+`.query["glossaryLookups"]`. Both bypasses were confirmed green by mutation. This is the security
+gate for the whole feature, and it was not enforcing what it says it enforces. Now matched in both
+spellings, with the boundary after the name rather than after the closing quote, and verified against
+six spellings — bare, quoted, spaced, dotted, bracket-double, bracket-single — all six red.
+
+The one route left open is a computed key from a variable, `db.query[table]`. It cannot be closed by
+reading the text, and it is written down in the guard rather than left for somebody to discover.
+
+**2 — a summary that was run and came back empty was rendered as never written.** `hasLadder` is
+`entries.length > 0`, so `{entries: [], missing: 0}` disabled the two longer rungs and titled them
+*"not written for this article yet"* — the never-built sentence, about an artefact the payload was
+carrying. The exact collapse this slice's rule exists to prevent, at the last rendering step.
+
+Worth noting how it survived the pass above: [that section](#mutation-testing-found-the-one-state-nothing-had-ever-rendered)
+concluded the summary case *dissolved*, because the probe fixture `{entries: []}` was cast past the
+compiler and `missing` is required. The dissolution was right about the fixture and wrong about the
+bug — the reachable state is `{entries: [], missing: 0}`, and it renders the wrong sentence. A
+fixture that lies can hide a real bug as easily as it can invent one.
+
+Fixed by saying it, the way `GlossaryPanel` and `IdeasPanel` say it, and by splitting the tooltip:
+`summaries === null` is *not written for this article yet*, and a present artefact with no ladder is
+*not in what was written for this article*. Two states, two sentences.
+
+**4 — deleting the visitor's summary band left the suite green.** The fixture has no `summary` key on
+purpose, so every summary assertion in the file exercised the *missing* branch and the band itself
+was never mounted by anything. Confirmed by mutation. Now covered, at `len=long` — the gist rung
+draws the tree's own `gist`, which is on screen whether a summary was ever fetched or not, so it
+cannot be evidence that one was.
+
+**5 — the empty-artefact test never mounted a panel.** Already fixed in `d6ddf5f`, from the mutation
+pass, before the review came back. Two independent methods found the same hole, which is the most
+reassuring thing in this section.
+
+**3 — the panel props no longer make the bad combination impossible.** Not fixed; it is Greg's call.
+`GlossaryPanel`, `IdeasPanel` and `SummaryPanel` each take the public artefact and `owner: Use… | null`
+as **independent** fields, so a visitor's glossary paired with a non-null owner is legal TypeScript
+and would render the authenticated lookup and regeneration controls. Every visitor caller passes
+`owner={null}` and `tests/public-network-trace.test.tsx` asserts none of those controls is on screen,
+so nothing is wrong today — what is gone is the *type* seam that made it unwriteable.
+
+That seam is the whole reason `ReaderCapability` is a discriminated union rather than a boolean, so
+losing it one level down is a real loss. The fix is a union per panel — `{artefact, owner: null} |
+{artefact: null, owner: Use…}` — which is three files and the same pattern already in the codebase.
+Against it: Greg asked us not to overcomplicate, and this is a type-level refactor for a state no
+caller creates. **Recommendation: do it**, on the grounds that it is the pattern already chosen for
+exactly this and the runtime assertion currently standing in for it is one test.
+
+### Eleven mutations, and two of them were wrong
+
+Alongside the four above, the rest of the mutation pass. The guards that fired: a length test in
+`artefactsIn`; `Block.note` copied through `publicBlock`; a dropped `aliases` in `publicGlossary`;
+`publicSlug` without its visibility predicate; `publicSummaries` without `missing`; `artefactsOf`
+returning the whole article rather than the four keys; all three arms of the closed-import guard
+against a genuinely forbidden table; and a single `fetch("/api/library")` inside `VisitorArticle`,
+which reddens **seven** tests.
+
+Two mutations came back green and were *my* mistake rather than a hole: I had added `articles` and
+`revision_blocks` to public files, and both are on the guard's allowlist on purpose. Written down
+because "still green" in a mutation log reads as a finding, and the next person to skim this should
+not spend an hour re-finding that the guard was right.
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next
