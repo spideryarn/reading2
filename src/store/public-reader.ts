@@ -65,9 +65,36 @@ import { publicArticle, publicMetadata } from "../public/dto.js";
  * Declaring four methods nothing implements would be four shapes nobody has
  * checked against a real row, which is the sort of thing that gets believed.
  */
+/**
+ * **What a document head is built from — server-side only, never a wire type.**
+ *
+ * Deliberately not in `src/public-types.ts`, which is the contract with the
+ * client. Nothing here is sent to a browser as JSON: it is read by the stage 2
+ * function, turned into tags, and thrown away. `canonical` in particular is the
+ * article's own address, and a *candidate* rather than a decision — whether any
+ * `<link rel="canonical">` is published at all is `safePublicCanonical`'s
+ * answer, in src/urls.ts, and the reasons it says no are not this file's
+ * business.
+ *
+ * Keeping it out of `PublicMeta` is the point. A visible "read the original"
+ * link is a product decision nobody has made, and if it is ever made it wants
+ * its own named and separately sanitised field — not this one having quietly
+ * become part of the payload because it was already there.
+ */
+export interface PublicHead {
+  slug: string;
+  /** The article's title, or its first `<h1>` when it has no title of its own. */
+  title: string | null;
+  /** The description, from `root_gist` — already the gist/summary/excerpt fallback. */
+  gist: string | null;
+  /** The address the fetcher finally landed on. A candidate canonical, unsanitised. */
+  canonical: string | null;
+}
+
 export interface PublicArticleReader {
   loadArticle(slug: string): Promise<PublicArticle>;
   loadMetadata(slug: string): Promise<PublicMetadata>;
+  loadHead(slug: string): Promise<PublicHead>;
 }
 
 /**
@@ -247,6 +274,50 @@ const PUBLIC_PROJECTIONS = {
     hasSummary: sql<boolean>`${articleRevisions.summary} is not null`.as("has_summary"),
     hasIdeas: sql<boolean>`${articleRevisions.ideas} is not null`.as("has_ideas"),
   },
+  /**
+   * **Enough to fill in a `<head>`, and deliberately not enough to render.**
+   *
+   * Stage 2 serves `/read/:slug` from a function that fills in a `<title>`, a
+   * description and the `og:*` tags before the bundle loads, so a shared link
+   * previews as something. That function must **not** become a second renderer
+   * — the moment it produces body HTML we own two reading views — and the
+   * cheapest way to hold that line is here: it cannot render a body from this
+   * projection because the blocks are not in it.
+   * docs/plans/public-read-only-access.md § Stage 2.
+   *
+   * Six values. `title` and `headingTitle` are the same pair the metadata read
+   * uses, for the same reason — an article whose `<h1>` is its only title still
+   * has one. `rootGist` is the description, and it is that column rather than
+   * `excerpt` because `deriveLibraryScalars()` already encodes the fallback we
+   * want (`root?.gist ?? root?.summary ?? excerpt ?? null`) and its comment says
+   * that is what a card wants; a preview card is a card.
+   *
+   * **`hasBlocks` is not redundant with `hasTree`.** `loadArticle` refuses a
+   * tree with no blocks and `loadMetadata` only checks the tree, so a revision
+   * can pass the metadata bar and still be a page React cannot draw. A head
+   * that answered 200 there would put a title and a description on a link to a
+   * blank screen — which is worse than no preview, because it is a claim.
+   *
+   * `finalUrl` never reaches the wire as-is: it is the *candidate* canonical,
+   * and `safePublicCanonical` in src/urls.ts decides whether anything is
+   * published at all. It stays out of `PublicMeta` deliberately — a visible
+   * "read the original" link is a separate product decision and would want its
+   * own named field rather than this one leaking sideways into a DTO.
+   */
+  head: {
+    id: articleRevisions.id,
+    title: articleRevisions.title,
+    headingTitle: PUBLIC_HEADING_TITLE.as("heading_title"),
+    rootGist: articleRevisions.rootGist,
+    finalUrl: articleRevisions.finalUrl,
+    hasTree: sql<boolean>`${articleRevisions.tree} is not null`.as("has_tree"),
+    /* `exists`, not a count: the question is whether there is at least one, and
+       counting every block of a long article to learn that it is more than zero
+       is work the planner can skip only if we do not ask for it. */
+    hasBlocks: sql<boolean>`exists (
+      select 1 from ${revisionBlocks}
+      where ${revisionBlocks.revisionId} = ${articleRevisions.id})`.as("has_blocks"),
+  },
 } as const;
 
 export type PublicRead = keyof typeof PUBLIC_PROJECTIONS;
@@ -424,6 +495,45 @@ export const pgPublicReader: PublicArticleReader = {
           ideas: found.revision.hasIdeas,
         },
       });
+    });
+  },
+
+  /**
+   * The six values a `<head>` is filled in from, and the **two** bars a slug
+   * has to clear to get them.
+   *
+   * `hasTree` is the bar the other two reads use. `hasBlocks` is the one this
+   * read adds, and it is not belt-and-braces: `loadArticle` refuses a tree with
+   * no blocks while `loadMetadata` only checks the tree, so a revision exists
+   * that passes the metadata bar and is a page React cannot draw. Answering 200
+   * there would put a title and a description on a link to a blank screen —
+   * worse than no preview, because a preview is a claim. GPT Sol, 2026-08-29.
+   *
+   * **The same `notShared` for all of it**, so a private slug, an absent one and
+   * a broken revision are one answer here exactly as they are everywhere else in
+   * this file. The head is a new surface and it must not become the one place a
+   * stranger can tell those apart — a 404 whose `<title>` differs is as much of
+   * a disclosure as a 403.
+   */
+  async loadHead(slug: string): Promise<PublicHead> {
+    requireSlug(slug);
+    return scrubbed("head", async () => {
+      const db = getDb();
+      const [found] = await publicCurrentRevisionQuery(db, slug, "head");
+      if (!found) throw notShared(slug);
+      if (!found.revision.hasTree || !found.revision.hasBlocks) throw notShared(slug);
+
+      return {
+        slug: found.slug,
+        /* `??` and not `||`: an empty-string title is not a title, but neither
+           is it the *absence* of one, and the heading fallback is already `null`
+           when there is no `<h1>` — so `||` would turn "" into null twice over
+           and hide which of the two the row actually has. The composer clamps
+           and escapes; deciding what is missing is this file's job. */
+        title: found.revision.title ?? found.revision.headingTitle,
+        gist: found.revision.rootGist,
+        canonical: found.revision.finalUrl,
+      };
     });
   },
 };

@@ -26,8 +26,10 @@ import { lockedArticleQuery } from "../src/store/pg-visibility.js";
 
 const articleQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "article").toSQL();
 const metadataQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "metadata").toSQL();
+const headQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "head").toSQL();
 const article = articleQuery.sql;
 const metadata = metadataQuery.sql;
+const headSql = headQuery.sql;
 const blocks = publicBlocksQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
 
 describe("the public revision read", () => {
@@ -45,6 +47,11 @@ describe("the public revision read", () => {
     for (const [name, q] of [
       ["article", articleQuery],
       ["metadata", metadataQuery],
+      /* Stage 2's head read joined this loop the day it was written, rather
+         than getting its own copy of the assertion later. A new projection is
+         exactly the shape that acquires an unfiltered query — it is not the
+         reading view, so nobody pictures a stranger on it. */
+      ["head", headQuery],
     ] as const) {
       expect(q.sql, name).toMatch(/"articles"\."slug" = \$1 and "spideryarn"\."articles"\."visibility" = \$2/);
       expect(q.params, name).toEqual(["a-slug", "public", 1]);
@@ -60,6 +67,7 @@ describe("the public revision read", () => {
   it("does not mention owner_id at all", () => {
     expect(article).not.toContain("owner_id");
     expect(metadata).not.toContain("owner_id");
+    expect(headSql).not.toContain("owner_id");
   });
 
   /**
@@ -149,6 +157,93 @@ describe("the public revision read", () => {
     /* And the documents themselves are not selected — the `is not null` above is
        the only place these column names appear. */
     expect(metadata.match(/"glossary"/g)).toHaveLength(1);
+  });
+});
+
+/**
+ * **The head read, which is a new surface on the same row.**
+ *
+ * Stage 2 fills in a `<title>` and the `og:*` tags from the database before the
+ * bundle loads, so a shared link previews as something. Everything above about
+ * the article read applies to it — it is in the visibility loop and the
+ * `owner_id` assertion — and these are the things that are true of it alone.
+ * docs/plans/public-read-only-access.md § Stage 2.
+ */
+describe("the public head read", () => {
+  /**
+   * **It asks for the six values and nothing that renders.**
+   *
+   * The line the design draws is that the function fills in a head and serves
+   * the same bundle; the moment it produces body HTML we own two reading views.
+   * The cheapest place to hold that is the `select`: it cannot render a body
+   * from a projection the blocks are not in.
+   */
+  it("takes what a head needs, and nothing a renderer would want", () => {
+    expect(headSql).toContain("root_gist");
+    expect(headSql).toContain("final_url");
+    expect(headSql).toContain("heading_title");
+    /**
+     * **A selected column, not a mentioned one**, and the difference is why the
+     * first version of this assertion could not fail.
+     *
+     * It looked for `"tree" as`, on the assumption that a selected column is
+     * aliased. Drizzle does not alias a plain column, so the needle appeared
+     * nowhere and the test passed with `tree: articleRevisions.tree` added to
+     * the projection — the exact mutation it existed to catch.
+     *
+     * `"tree"` is also genuinely *present* in this statement, inside
+     * `"…"."tree" is not null as "has_tree"`, so a bare `not.toContain('"tree"')`
+     * would fail on correct code. What separates the two is the punctuation
+     * after the column: a select-list item is followed by `,` or by ` from`,
+     * and a column inside an expression is followed by ` is not null`.
+     */
+    for (const doc of ["tree", "arc", "glossary", "summary", "ideas", "tweets"]) {
+      const selected = `"spideryarn"."article_revisions"."${doc}"`;
+      expect(headSql, doc).not.toContain(`${selected},`);
+      expect(headSql, doc).not.toContain(`${selected} from`);
+    }
+    /* And the control on the control: the article read *does* select them, so
+       the needle above is one that can be found. Without this the loop passes
+       on a typo in the table name. */
+    expect(article).toContain(`"spideryarn"."article_revisions"."tree",`);
+  });
+
+  /**
+   * **`final_url` is here and is forbidden in the article read**, three tests
+   * above. That is not a contradiction and the difference is worth stating
+   * where somebody will hit it.
+   *
+   * There it is the masthead's provenance and a visitor has no business with
+   * it. Here it never reaches a browser as data: it is the *candidate*
+   * canonical, and `safePublicCanonical` decides whether any tag is published —
+   * refusing outright on a query string, a credential, or a non-web scheme.
+   * The column crossing into a server-side head is a different act from the
+   * column crossing into a payload.
+   */
+  it("asks for the final URL, which the article read must not", () => {
+    expect(headSql).toContain("final_url");
+    expect(article).not.toContain("final_url");
+  });
+
+  /**
+   * **The blocks bar, as SQL rather than as a count.**
+   *
+   * `loadArticle` refuses a tree with no blocks and `loadMetadata` only checks
+   * the tree, so a revision can pass the metadata bar and be a page React
+   * cannot draw. A head that answered 200 there would put a title on a link to
+   * a blank screen. `exists` rather than `count(*)`, because the question is
+   * whether there is at least one and counting a long article to learn that is
+   * work nobody asked for.
+   */
+  it("asks whether any block exists, without counting them", () => {
+    expect(headSql).toMatch(/exists \(\s*select 1 from "spideryarn"\."revision_blocks"/);
+    expect(headSql).toContain("has_blocks");
+    expect(headSql).not.toMatch(/count\(/i);
+  });
+
+  /** And the two bars are separate questions, so both are in the statement. */
+  it("asks about the tree as well", () => {
+    expect(headSql).toContain("has_tree");
   });
 });
 

@@ -46,6 +46,8 @@ import {
   revisionBlocks,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
+import { pgPublicReader } from "../src/store/public-reader.js";
+import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
 import type { Glossary, Ideas, Summaries, TweetThread } from "../src/types.js";
 
@@ -491,6 +493,21 @@ when("sharing one article", { timeout: 60_000 }, () => {
     expect(r.headers["Cache-Control"]).toBe("no-store");
   });
 
+  /**
+   * **And the head is 404 too**, which is the surface stage 2 adds and the one
+   * with no endpoint yet to hide behind.
+   *
+   * Called directly rather than over HTTP because the route is a later slice.
+   * That is exactly why it is worth asserting now: a reader function with no
+   * caller is where a missing visibility clause sits undisturbed until the day
+   * something calls it. The other two reads each had a version of that problem
+   * — `loadMetadata`'s SQL test exercised a helper the real query did not use.
+   */
+  it("and its head is 404 as well, so a preview cannot name it", async () => {
+    expect((await articleRow())?.visibility).toBe("private");
+    await expect(pgPublicReader.loadHead(SLUG)).rejects.toThrow(/No article artefacts/);
+  });
+
   it("refuses to be published without the rights confirmation", async () => {
     const r = await call("PUT", `/api/article/${SLUG}/visibility`, {
       body: { visibility: "public" },
@@ -558,6 +575,38 @@ when("sharing one article", { timeout: 60_000 }, () => {
     const r = await call("GET", `/api/public/article/${SLUG}`);
     expect(r.status).toBe(200);
     expect(JSON.stringify(r.body)).toContain("The prose a visitor is here for");
+  });
+
+  /**
+   * The same fixture, refused above and served here — the positive control that
+   * makes the 404 mean something rather than `publicSlug` matching nothing.
+   */
+  it("and now the head has the four values a preview is built from", async () => {
+    const head = await pgPublicReader.loadHead(SLUG);
+    expect(head.slug).toBe(SLUG);
+    /* Whatever the fixture's title is, it is a string rather than the absence
+       of one — the composer's clamping and escaping are unit-tested in
+       tests/head-text.test.ts and are not what this is about. */
+    expect(typeof head.title).toBe("string");
+    /* **The two fields that exist only on this read.** `gist` is the
+       description, and `canonical` is `final_url`, which the article read is
+       forbidden to select at all — so this is also the assertion that says the
+       two projections really are different, in a database rather than in a
+       generated string. */
+    expect(head).toHaveProperty("gist");
+    /* **The candidate canonical arrives raw, and is refused downstream.** This
+       fixture's `final_url` carries a signed query parameter on purpose, which
+       is the hazard: publishing it would hand out the signature, and stripping
+       the query and publishing the rest would name a different page. So the
+       reader hands the value across untouched and `safePublicCanonical` says
+       no — and this assertion is the seam between the two, which neither the
+       SQL test nor tests/head-text.test.ts can see on its own. */
+    expect(head.canonical).toBe(SIGNED_URL);
+    expect(safePublicCanonical(head.canonical as string)).toBeNull();
+    /* And nothing that renders came with it. A head read that quietly grew a
+       `blocks` or a `tree` key is the failure this whole projection exists to
+       make impossible, and it would not show up in any assertion above. */
+    expect(Object.keys(head).sort()).toEqual(["canonical", "gist", "slug", "title"]);
   });
 
   it("wrote exactly one event, saying who and from what to what", async () => {
@@ -1342,6 +1391,83 @@ when("sharing one article", { timeout: 60_000 }, () => {
     ).rejects.toThrow();
   });
 });
+
+/**
+ * **A public article with a tree and no blocks**, which is the one state the
+ * head read refuses and the two other reads disagree about.
+ *
+ * `loadArticle` refuses it; `loadMetadata` only checks the tree and serves it.
+ * So a revision in this state passes the metadata bar and is a page React
+ * cannot draw — and a head that answered 200 would put a title and a
+ * description on a link to a blank screen, which is worse than no preview
+ * because a preview is a claim.
+ *
+ * **It needs its own fixture, and that is the point.** The main fixture above
+ * has blocks, so deleting `hasBlocks` from the guard leaves every assertion in
+ * this file green: the bar is unreachable from the corpus that exists. A guard
+ * no fixture can redden is a comment. docs/reusable/silent-success.md.
+ */
+const BONELESS_ID = "00000000-0000-4000-8000-0000000000ec";
+const BONELESS_REVISION = "00000000-0000-4000-8000-0000000000ed";
+const BONELESS_SLUG = "test-public-head-no-blocks";
+
+when("a public article whose revision has no blocks", { timeout: 60_000 }, () => {
+  beforeAll(async () => {
+    const db = getDb();
+    await cleanBoneless();
+    await db.insert(articles).values({
+      id: BONELESS_ID,
+      ownerId: OWNER,
+      slug: BONELESS_SLUG,
+      visibility: "public",
+    });
+    await db.insert(articleRevisions).values({
+      id: BONELESS_REVISION,
+      articleId: BONELESS_ID,
+      status: "published",
+      title: "A piece with a tree and nothing under it",
+      /* A tree, so `hasTree` is true and only `hasBlocks` can refuse this. */
+      tree: { version: "test", generator: "test", slug: BONELESS_SLUG, rootId: "n0", nodes: {} },
+    });
+    await db
+      .update(articles)
+      .set({ currentRevisionId: BONELESS_REVISION })
+      .where(eq(articles.id, BONELESS_ID));
+  });
+
+  afterAll(cleanBoneless);
+
+  it("is refused by the head read, though it is genuinely public", async () => {
+    /* The control on the control: it really is public and it really has a
+       tree, so a refusal here cannot be the visibility clause or the tree bar
+       doing the work. */
+    const [row] = await getDb()
+      .select({ visibility: articles.visibility })
+      .from(articles)
+      .where(eq(articles.id, BONELESS_ID));
+    expect(row?.visibility).toBe("public");
+
+    await expect(pgPublicReader.loadHead(BONELESS_SLUG)).rejects.toThrow(/No article artefacts/);
+  });
+
+  /**
+   * **And `loadMetadata` serves it**, which is not a bug to fix here — it is
+   * the disagreement written down. The metadata page is a page about what
+   * exists; a head is a claim about something readable.
+   */
+  it("while the metadata read, which checks only the tree, still answers", async () => {
+    await expect(pgPublicReader.loadMetadata(BONELESS_SLUG)).resolves.toMatchObject({
+      slug: BONELESS_SLUG,
+    });
+  });
+});
+
+async function cleanBoneless() {
+  const db = getDb();
+  await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, BONELESS_ID));
+  await db.delete(articleRevisions).where(eq(articleRevisions.articleId, BONELESS_ID));
+  await db.delete(articles).where(eq(articles.id, BONELESS_ID));
+}
 
 async function clean() {
   const db = getDb();

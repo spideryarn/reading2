@@ -2151,6 +2151,51 @@ information, which is exactly what distinguishes it from the `?id=123` case the 
 Refusing would have thrown away a good canonical. What it needed was `url.search = ""` to keep the
 stray `?` out of the serialisation. The test was right to fail and wrong about which way.
 
+### The head projection, and the bar the other two reads disagree about
+
+The second piece of stage 2 that needs no routing: a `head` projection beside `article` and
+`metadata` in [`public-reader.ts`](../../src/store/public-reader.ts), and `loadHead(slug)`.
+
+Six values — `title`, the `<h1>` fallback, `root_gist`, `final_url`, `hasTree`, `hasBlocks` — and the
+shape is the guard. **The function must not become a second renderer**, and the cheapest place to
+hold that line is the `select`: it cannot render a body from a projection the blocks are not in.
+
+**`final_url` is forbidden in the article read and required here**, which looks like a contradiction
+and is not. There it is the masthead's provenance and a visitor has no business with it. Here it
+never reaches a browser as data — it is the *candidate* canonical, and `safePublicCanonical` decides
+whether any tag is published at all. The fixture's `final_url` carries a signed query parameter on
+purpose, and the pg test asserts both halves of that seam in one line: the reader hands the value
+across untouched, and the sanitiser returns `null`. Neither the SQL test nor the unit tests can see
+that seam on their own.
+
+#### `hasBlocks` is where the two existing reads disagree
+
+`loadArticle` refuses a tree with no blocks. `loadMetadata` checks only the tree. So a revision
+exists that passes the metadata bar and is a page React cannot draw — and a head that answered 200
+there would put a title and a description on a link to a blank screen, which is worse than no preview
+because a preview is a claim. Sol found it by reading both readers.
+
+**Deleting that bar left every assertion in the file green**, because the fixture has blocks: the
+guard was unreachable from the corpus that existed. So there is now a second fixture — a genuinely
+public article with a tree and no blocks — and with it the mutation goes red. The same test also
+pins the disagreement rather than papering over it: `loadMetadata` still answers for that article,
+deliberately, because a metadata page is a page about what exists and a head is a claim about
+something readable.
+
+#### And one assertion that could not fail
+
+The test for *the head selects no document* looked for `"tree" as`, on the assumption that a selected
+column is aliased. Drizzle does not alias a plain column, so the needle appeared nowhere and the test
+passed with `tree: articleRevisions.tree` added to the projection — the exact mutation it existed to
+catch.
+
+`"tree"` is also genuinely present in the correct statement, inside
+`"…"."tree" is not null as "has_tree"`, so the obvious repair — assert the string is absent — fails on
+correct code. What separates the two is the punctuation: a select-list item is followed by `,` or by
+` from`; a column inside an expression is followed by ` is not null`. Both forms are now asserted, and
+there is a control on the control — the *article* read must contain the needle, or the loop passes on
+a typo in the table name.
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next
