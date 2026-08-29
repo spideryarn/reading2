@@ -618,9 +618,10 @@ describe("a signed-out browser on a shared document", () => {
    *
    * Every one of these is a button or a label that only `GlossaryPanel`'s
    * `owner` arm draws, and none of them fires a request until it is *pressed* —
-   * so a panel handed a nulled-out owner shape instead of `owner: null` would
-   * render all of them and leave the trace spotless. src/web/GlossaryPanel.tsx
-   * § GlossaryOwner.
+   * so a panel handed a nulled-out owner shape instead of the visitor arm would
+   * render all of them and leave the trace spotless. The type now forbids that
+   * combination outright; this stays as the runtime half of the same rule.
+   * src/web/GlossaryPanel.tsx § GlossaryAccess.
    */
   it("draws none of the owner's controls on the band it does open", async () => {
     await open("?mode=glossary");
