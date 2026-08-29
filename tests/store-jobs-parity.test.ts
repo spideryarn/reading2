@@ -21,7 +21,8 @@
  * claim somebody checked.
  */
 import { afterAll, afterEach, describe, expect, it } from "vitest";
-import { Pool } from "pg";
+import { randomUUID } from "node:crypto";
+import { Pool, type PoolClient } from "pg";
 import { eq, inArray } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
@@ -66,14 +67,85 @@ loadEnvLocal();
  * own fixtures since it was written. Created once at module load, removed with
  * its jobs in `afterAll`, and nothing else in the suite anywhere near it.
  *
+ * **And a fresh one every run**, which the first version of this was not. A
+ * fixed uuid is one owner shared by every run there has ever been, so it moves
+ * the same hazard rather than removing it: two runs at once put their jobs
+ * under one owner and whichever `afterAll` fires first takes the other's away,
+ * and a run that was killed leaves its rows there for the next one to count.
+ * `on conflict do nothing` on the person does not help with either — it makes
+ * the *seed* survive both, which is what made them look handled.
+ *
+ * The stem is fixed and the tail is random, so the rows are recognisable as
+ * this file's without being shared: `RUBBLE` below sweeps the stem, and that is
+ * the whole cleanup for a run that never reached its teardown. A random owner
+ * is also invisible to tests/fixture-ids.test.ts, which reads uuid *literals* —
+ * no loss, since an id nobody can write down is an id nobody can collide with.
+ *
  * The stranger is this file's own too and is never inserted: it exists only to
  * prove that somebody else's job reads as one that is not there.
  */
-const OWNER = "00000000-0000-4000-8000-0000000000b6" as OwnerId;
+const OWNER_STEM = "000000b6-0000-4000-8000-";
+const OWNER = `${OWNER_STEM}${randomUUID().slice(-12)}` as OwnerId;
+const RUBBLE = `${OWNER_STEM}%`;
 const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
+
+/**
+ * **One run of this file at a time, against one database.**
+ *
+ * A private owner is not enough on its own, because the two rules that matter
+ * most here are not scoped to an owner at all: `jobs_only_one_running` is a
+ * unique index on `(true)` over every running row in the table, and
+ * `failExpired` sweeps the whole table and returns a count this file asserts
+ * exactly. So a second copy holding a claim makes this one's `claimed` come
+ * back `busy`, and its expiries are added to this one's total. Measured with
+ * the lock taken out and the owner already unique per run: two copies at once,
+ * 6 and 9 of the 21 Postgres cases failed. The filesystem side passed both
+ * times — its running slot is a variable in one process.
+ *
+ * **It covers copies of this file and nothing else.** Anything with a `running`
+ * row takes the same one slot — a real ingest on the same laptop will do — and
+ * three claim cases here were watched failing `busy` for exactly that reason on
+ * 2026-08-28, while a peer's job ran. No owner and no lock can help: the index
+ * is global on purpose, because global concurrency 1 is what it is for.
+ *
+ * A session-level advisory lock is what serialises them. Postgres drops it when
+ * the connection goes, so a killed run releases it without anybody's teardown
+ * having to run. The key is arbitrary and this file's; nothing else in the repo
+ * takes an advisory lock, and a collision would only serialise more than needed.
+ */
+const RUN_LOCK = 918_273_645;
+/** Long enough for a whole run of this file (about 12s) several times over. */
+const RUN_LOCK_WAIT_MS = 120_000;
 
 /** Probed at MODULE LOAD so the skip is a real vitest skip rather than a green tick. */
 let reachable = false;
+/** The connection holding `RUN_LOCK`, kept open for the length of the run. */
+let lockPool: Pool | undefined;
+let lockClient: PoolClient | undefined;
+
+/**
+ * Wait for the lock, and say so out loud if it never comes.
+ *
+ * `pg_advisory_lock` would wait for ever, and a run that hangs at module load
+ * looks like a hung machine rather than like a sibling that will not let go.
+ */
+async function takeTheRunLock(client: PoolClient): Promise<void> {
+  const deadline = Date.now() + RUN_LOCK_WAIT_MS;
+  for (;;) {
+    const got = await client.query<{ got: boolean }>("select pg_try_advisory_lock($1) as got", [
+      RUN_LOCK,
+    ]);
+    if (got.rows[0]?.got === true) return;
+    if (Date.now() > deadline) {
+      throw new Error(
+        `Waited ${RUN_LOCK_WAIT_MS}ms for advisory lock ${RUN_LOCK}: another copy of ` +
+          "tests/store-jobs-parity.test.ts is still running against this database.",
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+}
+
 if (process.env.DATABASE_URL) {
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -83,10 +155,9 @@ if (process.env.DATABASE_URL) {
   try {
     const probe = await pool.query("select to_regclass('spideryarn.jobs') is not null as ready");
     reachable = probe.rows[0]?.ready === true;
-    /* Seeded in the same breath as the probe, because a `beforeAll` runs after
-       the describes have been collected and one of them would already have been
-       skipped. `on conflict do nothing` for the run that was killed before its
-       teardown — and for two runs at once, which the local database allows.
+    /* Locked, swept and seeded in the same breath as the probe, because a
+       `beforeAll` runs after the describes have been collected and one of them
+       would already have been skipped.
 
        Not a `catch` that shrugs: if the row cannot be created then every
        Postgres case here is about to fail on a foreign key, and a probe that
@@ -94,13 +165,37 @@ if (process.env.DATABASE_URL) {
        not-null columns and the zero `instance_id` are `auth.users` being
        Supabase's table rather than ours — see scripts/db-seed-owner.ts. */
     if (reachable) {
+      lockPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+      lockClient = await lockPool.connect();
+      await takeTheRunLock(lockClient);
+
+      /* **Every owner this file has ever minted, jobs first.**
+         Not the same thing as the teardown, and not covered by it: teardown
+         does not run when the process is killed, so a run that was interrupted
+         leaves its jobs behind for ever. With a fresh owner each run those rows
+         are invisible to this one's own queries — but not to the database's,
+         and both of the rules this file leans on are global. A leftover
+         `running` row makes every claim here answer `busy` through
+         `jobs_only_one_running`, and a leftover expired one is counted by
+         `failExpired`, which two cases below assert exactly.
+
+         Safe to take the lot because the lock is already held, so no sibling
+         copy can be using any of them; and scoped by the stem, so it can only
+         ever reach rows this file made. */
+      await pool.query(`delete from spideryarn.jobs where owner_id::text like $1`, [RUBBLE]);
+      await pool.query(`delete from auth.users where id::text like $1`, [RUBBLE]);
+
+      /* No `on conflict`: the id is fresh and the rubble is gone, so a conflict
+         here would mean something we have not thought of, and the point of the
+         rethrow above is that this file says so rather than failing later on a
+         foreign key. The email is per-run too — `users_email_partial_key` is
+         unique, so a fixed one is its own way for two runs to collide. */
       await pool.query(
         `insert into auth.users
            (id, instance_id, aud, role, email, encrypted_password, created_at, updated_at)
          values ($1, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-                 'store-jobs-parity@example.invalid', 'x', now(), now())
-         on conflict (id) do nothing`,
-        [OWNER],
+                 $2, 'x', now(), now())`,
+        [OWNER, `store-jobs-parity-${OWNER}@example.invalid`],
       );
     }
   } catch (err) {
@@ -682,6 +777,13 @@ afterAll(async () => {
     await pool.query("delete from auth.users where id = $1", [OWNER]);
   } finally {
     await pool.end();
+    /* And let the next copy in. Not left to the process exiting: vitest keeps
+       its worker alive for the next file, so a sibling would go on waiting long
+       after this file had finished. If we crash instead, Postgres drops the
+       lock with the connection and the sibling is let in anyway. */
+    await lockClient?.query("select pg_advisory_unlock($1)", [RUN_LOCK]);
+    lockClient?.release();
+    await lockPool?.end();
   }
 });
 
