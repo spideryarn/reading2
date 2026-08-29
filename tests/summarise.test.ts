@@ -666,7 +666,15 @@ describe("SummaryPanel", () => {
      infers `status: "ready"` as a literal type, so a spread that overrides it
      with "none" fails to typecheck for a reason that has nothing to do with the
      test. */
-  const base: ComponentProps<typeof SummaryPanel> = {
+  /**
+   * The owner's half — the read's status, the job and the verb.
+   *
+   * A group of its own since slice 1b, because a visitor gets this panel with
+   * `owner: null` and the same ladder: the summaries arrive in the shared
+   * article payload, so there is no status to be in and no button that spends.
+   * src/web/SummaryPanel.tsx § SummariesOwner.
+   */
+  const OWNER: NonNullable<ComponentProps<typeof SummaryPanel>["owner"]> = {
     status: "ready",
     summaries: SUMMARIES,
     stale: false,
@@ -683,6 +691,11 @@ describe("SummaryPanel", () => {
     failed: null,
     write: async () => {},
     cancel: () => {},
+  };
+
+  const base: ComponentProps<typeof SummaryPanel> = {
+    summaries: SUMMARIES,
+    owner: OWNER,
     root: buildSummaryTree(TREE, BLOCKS, SUMMARIES),
     blocks: new Map(BLOCKS.map((b) => [b.id, b.text])),
     rung: "long",
@@ -735,7 +748,7 @@ describe("SummaryPanel", () => {
 
   it("disables the generated rungs when nothing has been written", () => {
     const out = html({
-      status: "none",
+      owner: { ...OWNER, status: "none", summaries: null },
       summaries: null,
       root: buildSummaryTree(TREE, BLOCKS, null),
     });
@@ -749,7 +762,7 @@ describe("SummaryPanel", () => {
   });
 
   it("says so when the article has moved underneath them", () => {
-    expect(html({ stale: true })).toContain("older version of the article");
+    expect(html({ owner: { ...OWNER, stale: true } })).toContain("older version of the article");
   });
 
   it("marks where the reader is, and does not mark the root", () => {
@@ -877,7 +890,7 @@ describe("SummaryPanel", () => {
        summary that looks like an ordinary one is one the reader cannot weigh.
        It is also what explains why a section reads the way it does. */
     const steered: Summaries = { ...SUMMARIES, guidance: "I care about the evidence" };
-    const out = html({ summaries: steered });
+    const out = html({ owner: { ...OWNER, summaries: steered }, summaries: steered });
     expect(out).toContain("summ-steer-box");
     expect(out).toContain("I care about the evidence");
   });
@@ -885,6 +898,6 @@ describe("SummaryPanel", () => {
   it("offers the steer on a stale article too", () => {
     // The foot is hidden while the summaries are stale, so without this the one
     // article most likely to be rewritten is the one you cannot steer.
-    expect(html({ stale: true })).toContain("Steer these summaries");
+    expect(html({ owner: { ...OWNER, stale: true } })).toContain("Steer these summaries");
   });
 });

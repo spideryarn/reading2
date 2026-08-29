@@ -13,7 +13,7 @@
  * automatically the same at every level of granularity, which is the invariant
  * the whole feature rests on.
  */
-import type { Arc, Block, BlockId, NodeId, Summaries, Tree, TreeNode } from "../types.js";
+import type { Arc, Block, BlockId, NodeId, SummaryEntry, Tree, TreeNode } from "../types.js";
 import { supplementIndex } from "../supplement.js";
 import type { Rung } from "./params.js";
 
@@ -477,7 +477,10 @@ export interface SummaryNode {
 export function buildSummaryTree(
   tree: Tree,
   blocks: Block[],
-  summaries: Summaries | null,
+  /* The entries and nothing else, because that is all this reads — and because
+     a visitor's `PublicSummaries` is not a `Summaries` (no generator, no
+     timings, no steer). src/public-types.ts. */
+  summaries: { entries: SummaryEntry[] } | null,
   depthLimit = 2,
 ): SummaryNode | null {
   const order = new Map<BlockId, number>(blocks.map((b, i) => [b.id, i]));

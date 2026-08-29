@@ -87,11 +87,51 @@ import { Tooltip } from "./Tooltip.js";
    Unreachable here — `safeUrl` parsed it server-side before it was stored. */
 import { hostOf, isWebUrl } from "../urls.js";
 import type { UseGlossary } from "./useGlossary.js";
+import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 
-interface Props extends UseGlossary {
+/**
+ * **The owner's half of this panel** — the read's status, the job writing it,
+ * the three verbs and the per-entry web lookup.
+ *
+ * `null` for a visitor, and that is the seam. Since slice 1b a visitor gets the
+ * real glossary: it arrives inside `GET /api/public/article/:slug`, so the list
+ * below is the same list drawn by the same components. What a visitor has no
+ * equivalent of is everything in this type — there is no request to be loading
+ * or to have failed, no job to poll, no button that spends, and no lookup,
+ * because a lookup is the owner's own research and lives in a table the public
+ * graph cannot reach at all.
+ *
+ * **One panel with its data injected, rather than an owner's panel and a
+ * visitor's panel.** Two components for one list is how the two drift into two
+ * designs for one thing, which a browser pass caught once already in a drawer
+ * heading. Only the *hooks* need two components, and they are one level up in
+ * App.tsx. reader-capability.ts says why a boolean could not have done it.
+ *
+ * **`owner.glossary` is the artefact, and the `glossary` prop is the list to
+ * draw.** They are the same object on the owner's path and they must be — the
+ * one thing that reads the artefact is `Foot`, which puts the generator, the
+ * version and the pass count under the list, and every one of those is
+ * provenance a visitor's projection drops. Read `owner.glossary` for nothing
+ * else: the list has one source and it is the prop.
+ */
+export type GlossaryOwner = UseGlossary;
+
+interface Props {
+  /**
+   * The list to draw, or `null` when this piece has none.
+   *
+   * Typed as its entries rather than as `Glossary`, because that is all this
+   * panel and its `Foot` ever read — and because a visitor's
+   * `PublicGlossaryEntry` is a `GlossaryEntry` with the lookup absent
+   * (src/public-types.ts), so both fit without a cast and neither needs a
+   * second component.
+   */
+  glossary: { entries: GlossaryEntry[] } | null;
+  /** Whose article this is, and what comes with it. `null` for a visitor. */
+  owner: GlossaryOwner | null;
   /** The selected term, from `?term=`. Null is a list nobody has picked from. */
   termId: string | null;
   onTerm(id: string | null): void;
@@ -104,31 +144,13 @@ interface Props extends UseGlossary {
    */
   gate: number | null;
   onGate(gate: number | null): void;
-  /* Straight through from `useGlossary`. The panel owns none of this state —
-     the hook does — because a lookup outlives the row that started it: the
-     reader can select another term while one runs. */
-  look(id: string): Promise<void>;
-  looking: string | null;
-  lookFailed: string | null;
   /** Jump the article to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
 }
 
 export function GlossaryPanel({
-  status,
   glossary,
-  stale,
-  outdated,
-  profiled,
-  profileChanged,
-  hasProfile,
-  error,
-  job,
-  failed,
-  find,
-  more,
-  reset,
-  cancel,
+  owner,
   termId,
   onTerm,
   sort,
@@ -136,9 +158,6 @@ export function GlossaryPanel({
   gate: chosenGate,
   onGate,
   onJump,
-  look,
-  looking,
-  lookFailed,
 }: Props) {
   useRenderCount("GlossaryPanel");
   /* `effectiveSort` and not `sort`: `prioritised` is the default, so it arrives
@@ -163,7 +182,7 @@ export function GlossaryPanel({
    * With no glossary yet, `profiled` is false and the default is `true` — the
    * profiled run is the one this app now offers.
    */
-  const [withProfile, setWithProfile] = useState(() => (glossary ? profiled : true));
+  const [withProfile, setWithProfile] = useState(() => (glossary ? (owner?.profiled ?? false) : true));
 
   return (
     <aside className="mode-band gloss" aria-label="Glossary">
@@ -179,7 +198,11 @@ export function GlossaryPanel({
             banner: it is provenance, not a warning. The glossary already made
             this exact choice once — "a label instead of a warning triangle" —
             and the reason holds. src/web/WrittenForYou.tsx. */}
-        {glossary && <WrittenForYou written={profiled} changed={profileChanged} />}
+        {/* Provenance about the owner's own run, so a visitor sees none of it:
+            `profileHash` never leaves the server (src/public-types.ts). */}
+        {glossary && owner && (
+          <WrittenForYou written={owner.profiled} changed={owner.profileChanged} />
+        )}
       </div>
 
       {/* Sorting is only a question once there is a list, and each option is
@@ -198,11 +221,21 @@ export function GlossaryPanel({
         <GateSlider entries={all} gate={gate} moved={chosenGate !== null} onGate={onGate} />
       )}
 
-      {error && <p className="gloss-error">{error}</p>}
+      {owner?.error && <p className="gloss-error">{owner.error}</p>}
 
-      {status === "loading" && <p className="gloss-quiet">Looking for a glossary…</p>}
+      {owner?.status === "loading" && <p className="gloss-quiet">Looking for a glossary…</p>}
 
-      {status === "none" && (
+      {/* **A visitor's list is already here or it is not**, so there is no
+          loading state and no offer to build one — a piece with no glossary
+          never mounts this panel at all, because `visitorGap` answers
+          *not-built* and the band says so instead (src/web/visitor.ts). What is
+          left is the one state absence cannot express: a glossary somebody ran
+          that came back with nothing in it. src/messages.ts. */}
+      {!owner && glossary?.entries.length === 0 && (
+        <p className="gloss-quiet">{builtButEmpty("A glossary")}</p>
+      )}
+
+      {owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has found the terms for this one yet.</p>
           <p className="gloss-hint">
@@ -217,21 +250,21 @@ export function GlossaryPanel({
             <UseProfile
               checked={withProfile}
               onChange={setWithProfile}
-              hasProfile={hasProfile}
-              disabled={job !== null}
+              hasProfile={owner.hasProfile}
+              disabled={owner.job !== null}
             />
             <Progress
-              job={job}
-              failed={failed}
-              onRun={() => find(withProfile)}
-              onCancel={cancel}
+              job={owner.job}
+              failed={owner.failed}
+              onRun={() => owner.find(withProfile)}
+              onCancel={owner.cancel}
               label="Find the terms"
             />
           </div>
         </div>
       )}
 
-      {status === "ready" && glossary && (
+      {glossary && (owner === null || owner.status === "ready") && (
         <>
           {/* The article has moved and the list has not. Said plainly, at the
               top, because every entry below it is now a claim about a version
@@ -253,7 +286,7 @@ export function GlossaryPanel({
 
               Stale wins when both are true — it is the one that makes the
               occurrence links wrong, and two banners stacked is a wall. */}
-          {stale ? (
+          {owner?.stale ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
@@ -263,19 +296,19 @@ export function GlossaryPanel({
                 <UseProfile
                   checked={withProfile}
                   onChange={setWithProfile}
-                  hasProfile={hasProfile}
-                  disabled={job !== null}
+                  hasProfile={owner.hasProfile}
+                  disabled={owner.job !== null}
                 />
                 <Progress
-                  job={job}
-                  failed={failed}
-                  onRun={() => find(withProfile)}
-                  onCancel={cancel}
+                  job={owner.job}
+                  failed={owner.failed}
+                  onRun={() => owner.find(withProfile)}
+                  onCancel={owner.cancel}
                   label="Find them again"
                 />
               </div>
             </div>
-          ) : outdated ? (
+          ) : owner?.outdated ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
@@ -286,14 +319,14 @@ export function GlossaryPanel({
                 <UseProfile
                   checked={withProfile}
                   onChange={setWithProfile}
-                  hasProfile={hasProfile}
-                  disabled={job !== null}
+                  hasProfile={owner.hasProfile}
+                  disabled={owner.job !== null}
                 />
                 <Progress
-                  job={job}
-                  failed={failed}
-                  onRun={() => find(withProfile)}
-                  onCancel={cancel}
+                  job={owner.job}
+                  failed={owner.failed}
+                  onRun={() => owner.find(withProfile)}
+                  onCancel={owner.cancel}
                   label="Find them again"
                 />
               </div>
@@ -329,10 +362,17 @@ export function GlossaryPanel({
                          actually about — and a default order they did not
                          choose needs it more, not less. */
                       showScore={order}
-                      look={look}
-                      looking={looking === entry.id}
-                      lookBusy={looking !== null}
-                      lookFailed={looking === null && entry.id === termId ? lookFailed : null}
+                      /* `null` for a visitor, and the button is not drawn: a
+                         lookup is a model call somebody pays for, and the
+                         answer it keeps is the owner's own research. */
+                      look={owner?.look ?? null}
+                      looking={owner?.looking === entry.id}
+                      lookBusy={(owner?.looking ?? null) !== null}
+                      lookFailed={
+                        owner && owner.looking === null && entry.id === termId
+                          ? owner.lookFailed
+                          : null
+                      }
                       onSelect={() => {
                         // Pressing the selected term again clears it, which is
                         // what takes the underlines back out of the prose.
@@ -351,17 +391,19 @@ export function GlossaryPanel({
             ))}
           </div>
 
-          <Foot
-            glossary={glossary}
-            job={job}
-            failed={failed}
-            onMore={more}
-            onReset={reset}
-            onCancel={cancel}
-            withProfile={withProfile}
-            onWithProfile={setWithProfile}
-            hasProfile={hasProfile}
-          />
+          {owner?.glossary && (
+            <Foot
+              glossary={owner.glossary}
+              job={owner.job}
+              failed={owner.failed}
+              onMore={owner.more}
+              onReset={owner.reset}
+              onCancel={owner.cancel}
+              withProfile={withProfile}
+              onWithProfile={setWithProfile}
+              hasProfile={owner.hasProfile}
+            />
+          )}
         </>
       )}
     </aside>
@@ -929,7 +971,8 @@ function Term({
   entry: GlossaryEntry;
   selected: boolean;
   showScore: TermSort | null;
-  look(id: string): Promise<void>;
+  /** `null` for a visitor: there is no button, because there is nothing to spend. */
+  look: ((id: string) => Promise<void>) | null;
   /** A lookup is running for *this* term. */
   looking: boolean;
   /** A lookup is running for some term — one at a time, so every button waits. */
@@ -1190,7 +1233,7 @@ function Looked({
   failed,
 }: {
   entry: GlossaryEntry;
-  look(id: string): Promise<void>;
+  look: ((id: string) => Promise<void>) | null;
   looking: boolean;
   busy: boolean;
   failed: string | null;
@@ -1198,6 +1241,12 @@ function Looked({
   const lookup = entry.lookup;
 
   if (!lookup) {
+    /* **Nothing at all for a visitor**, rather than a disabled button. The
+       marked-not-hidden rule is about controls a reader would otherwise go
+       looking for; this one they have never seen, and a dead globe on every row
+       of a list they can read perfectly well is furniture. The band's own
+       sentence already tells them what a shared link does not carry. */
+    if (!look) return null;
     return (
       <div className="gloss-look">
         <button
@@ -1342,6 +1391,7 @@ function Foot({
   onReset,
   onCancel,
 }: {
+  /** The whole artefact, because the foot is where its provenance is shown. */
   glossary: Glossary;
   job: Job | null;
   failed: string | null;

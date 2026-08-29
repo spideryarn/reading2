@@ -17,7 +17,7 @@
 import { ArrowLeft } from "lucide-react";
 
 import type { Article } from "../types.js";
-import type { PublicArtefacts } from "../public-types.js";
+import type { PublicArtefacts, PublicTweets } from "../public-types.js";
 import { SHARING_WHAT_VISITORS_SEE } from "../messages.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
@@ -25,7 +25,8 @@ import { carriedSearch, readHref, type ArticleView } from "./router.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice, VisitorNotice } from "./PublicChrome.js";
-import { markedModes, type VisitorGap } from "./visitor.js";
+import { markedModes, notBuiltGap, type VisitorGap } from "./visitor.js";
+import { ThreadCounts, ThreadPosts } from "./Tweets.js";
 
 /** Room for the bottom bar, so the last line of a page is not under it. */
 const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
@@ -49,7 +50,7 @@ export function PublicMetadataPage({
 }: {
   slug: string;
   article: Article;
-  available: PublicArtefacts | null;
+  available: PublicArtefacts;
   /** For the call to action only — reader-capability.ts § signedIn. */
   signedIn: boolean;
 }) {
@@ -89,22 +90,19 @@ export function PublicMetadataPage({
               whole difference between this page and the owner's, and the reason
               `PublicMetadata` is five booleans rather than a projection of
               `ArticleMetadata`. */}
-          {available === null ? (
-            /* The metadata request did not land. Say so rather than drawing five
-               "no"s, which would be a claim about somebody's article made out of
-               a network failure. docs/reusable/silent-success.md. */
-            <p className="tw:m-0 tw:text-sm tw:text-ink-faint">
-              We could not check which of these this piece has.
-            </p>
-          ) : (
-            <ul className="tw:m-0 tw:list-none tw:p-0 tw:text-sm tw:text-ink-faint">
-              <Artefact name="An arc through the argument" has={available.arc} />
-              <Artefact name="A summary" has={available.summary} />
-              <Artefact name="A glossary" has={available.glossary} />
-              <Artefact name="A list of ideas" has={available.ideas} />
-              <Artefact name="A tweet thread" has={available.tweets} />
-            </ul>
-          )}
+          {/* **No "we could not check" arm any more**, and its absence is the
+              slice. These five used to come from a second request whose failure
+              was swallowed to `null`; they are derived from the article payload
+              this page is already drawing, so either it arrived or the reader is
+              looking at *this document isn't shared*.
+              src/web/public-artefacts.ts. */}
+          <ul className="tw:m-0 tw:list-none tw:p-0 tw:text-sm tw:text-ink-faint">
+            <Artefact name="An arc through the argument" has={available.arc} />
+            <Artefact name="A summary" has={available.summary} />
+            <Artefact name="A glossary" has={available.glossary} />
+            <Artefact name="A list of ideas" has={available.ideas} />
+            <Artefact name="A tweet thread" has={available.tweets} />
+          </ul>
         </section>
 
         <section className="tw:mt-8">
@@ -142,12 +140,22 @@ export function VisitorPage({
   article,
   view,
   gap,
+  available,
   signedIn,
 }: {
   slug: string;
   article: Article;
   view: ArticleView;
   gap: VisitorGap;
+  /**
+   * Which artefacts this piece has, for the bar's marked modes.
+   *
+   * It was hardcoded `null` here until slice 1b — the "we could not check"
+   * answer, on a page that had the article in hand — so every dimmed button on
+   * this page said *we could not check* about an article we knew everything
+   * about. There is no `null` to pass now.
+   */
+  available: PublicArtefacts;
   /** For the call to action only — reader-capability.ts § signedIn. */
   signedIn: boolean;
 }) {
@@ -161,7 +169,78 @@ export function VisitorPage({
         </h1>
         <VisitorNotice gap={gap} signedIn={signedIn} />
       </main>
-      <VisitorDock slug={slug} view={view} available={null} signedIn={signedIn} />
+      <VisitorDock slug={slug} view={view} available={available} signedIn={signedIn} />
+    </>
+  );
+}
+
+/**
+ * **The tweet thread, for somebody who does not own the article** — and since
+ * slice 1b it is the real thread rather than a notice about one.
+ *
+ * `Tweets` is not reachable from here and that is the seam rather than an
+ * omission: it fetches `GET /api/tweets/:slug` and mounts `useJobs`, which
+ * polls the private job list for ever. What a visitor gets instead is the two
+ * presentational halves of that page — `ThreadCounts` and `ThreadPosts`, the
+ * same components the owner's page draws — with the thread that arrived inside
+ * `GET /api/public/article/:slug`. src/web/Tweets.tsx.
+ *
+ * **The branch is on the artefact itself, not on a flag beside it.** `thread`
+ * being absent *is* what `available.tweets` was computed from
+ * (src/web/public-artefacts.ts), so branching on the key is what keeps *there
+ * is no thread* and *we say there is no thread* the same fact. The constant this
+ * replaces claimed a thread existed whatever the wire said — GPT Sol,
+ * 2026-08-28 — and the sentence still comes from the one table every other gap
+ * uses.
+ */
+export function VisitorTweetsPage({
+  slug,
+  article,
+  thread,
+  available,
+  signedIn,
+}: {
+  slug: string;
+  article: Article;
+  /** Absent when nobody has written one for this piece. */
+  thread: PublicTweets | undefined;
+  available: PublicArtefacts;
+  signedIn: boolean;
+}) {
+  useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "tweets" }));
+
+  if (thread === undefined) {
+    return (
+      <VisitorPage
+        slug={slug}
+        article={article}
+        view="tweets"
+        gap={notBuiltGap("tweets")}
+        available={available}
+        signedIn={signedIn}
+      />
+    );
+  }
+
+  return (
+    <>
+      <main className={`tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
+        <BackToArticle slug={slug} />
+        <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
+          {article.meta.title}
+        </h1>
+        {/* No `children`: the owner's provenance label reads `profileHash`,
+            which never leaves the server. src/public-types.ts. */}
+        <ThreadCounts thread={thread} article={article} />
+        <ThreadPosts thread={thread} />
+        {/* No provenance footer and no rewrite button: both are the owner's, and
+            one of them spends a model call. What a visitor gets instead is the
+            notice card, which says what a shared link is and what it carries. */}
+        <div className="tw:mt-8 tw:border-t tw:border-border tw:pt-4">
+          <SharedNotice signedIn={signedIn} />
+        </div>
+      </main>
+      <VisitorDock slug={slug} view="tweets" available={available} signedIn={signedIn} />
     </>
   );
 }
@@ -194,7 +273,7 @@ function VisitorDock({
 }: {
   slug: string;
   view: ArticleView;
-  available: PublicArtefacts | null;
+  available: PublicArtefacts;
   signedIn: boolean;
 }) {
   return (

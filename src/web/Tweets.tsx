@@ -67,11 +67,12 @@
  * (docs/project/web-client.md#tailwind-and-shadcn-components). Every class needs
  * the `tw:` prefix — unprefixed names silently do nothing.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, Check, Copy, PenLine, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { THREAD_RECHECK_FAILED } from "../messages.js";
 import type { Article, Job, ThreadResponse, TweetThread } from "../types.js";
+import type { PublicTweets } from "../public-types.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
@@ -438,34 +439,14 @@ function Thread({
   // Seeded from what the thread on screen was written with; the artefact is
   // the memory, so nothing here has to be.
   const [withProfile, setWithProfile] = useState(thread.profileHash != null);
-  const total = thread.tweets.length;
-  const over = thread.tweets.filter((t) => t.chars > thread.limit).length;
-  /* Summed here rather than stored. It is the array's own arithmetic, and a
-     `chars` total in the artefact would be a second copy of a fact the posts
-     already carry — the same reason nothing stores a post number. */
-  const chars = thread.tweets.reduce((n, t) => n + t.chars, 0);
-  const words = useMemo(() => articleStats(article).words, [article]);
-
   return (
     <>
-      <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-3">
-        {/* Three numbers, borrowed from their pill row and said as a sentence.
-            The document's word count is the one that earns its place: on its
-            own "1,842 characters" is a fact about nothing, and beside 8,275
-            words it is the compression the reader is being asked to trust. */}
-        <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
-          A thread, {total} {total === 1 ? "post" : "posts"} · {chars.toLocaleString()} characters
-          from {words.toLocaleString()} words
-        </p>
+      <ThreadCounts thread={thread} article={article}>
         {/* Provenance, beside the counts rather than in a banner: it describes
-            what is on screen. src/web/WrittenForYou.tsx. */}
+            what is on screen. src/web/WrittenForYou.tsx. Owner-only, because
+            `profileHash` never leaves the server. src/public-types.ts. */}
         <WrittenForYou written={thread.profileHash != null} changed={profileChanged} />
-        <CopyButton
-          text={() => threadMarkdown(thread, article)}
-          label="Copy the thread"
-          className="tw:ml-auto"
-        />
-      </div>
+      </ThreadCounts>
 
       {/* The article has moved and the thread has not. Said plainly, at the
           top, because everything below it is now a claim about a version of
@@ -500,6 +481,108 @@ function Thread({
         </div>
       )}
 
+      <ThreadPosts thread={thread} />
+
+      {/* A hairline and then the provenance: the end of the thread, said with a
+          rule rather than with their "🏁 End of thread" pill. In a list of
+          fifteen cards the reader does want to know they have reached the
+          bottom; it just does not need an emoji to say so. */}
+      <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:border-t tw:border-border tw:pt-4">
+        <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
+          Written by {thread.generator} · {thread.version} · {whenWritten(thread.generatedAt)} ·{" "}
+          {howLong(thread.elapsedMs)}
+        </p>
+        {/* Only when the thread is fine. A stale one already has a button, at
+            the top, inside the paragraph explaining why it needs pressing —
+            two of them would be one too many, and the wrong one is the one
+            further from the reason. */}
+        {!stale && (
+          <>
+            {/* Beside the deliberate rewrite, which is where the spend already
+                has a confirmation of its own. src/web/WrittenForYou.tsx. */}
+            <UseProfile
+              checked={withProfile}
+              onChange={setWithProfile}
+              hasProfile={hasProfile}
+              disabled={job !== null}
+            />
+            <Rewrite
+              job={job}
+              failed={failed}
+              onWrite={(force) => onWrite(force, withProfile)}
+              onCancel={onCancel}
+            />
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * **The thread's three numbers**, said as a sentence.
+ *
+ * Borrowed back from the original version's pill row, 2026-08-25: the three
+ * facts were the good part and the pills were not. The document's word count is
+ * the one that earns its place — on its own "1,842 characters" is a fact about
+ * nothing, and beside 8,275 words it is the compression the reader is being
+ * asked to trust.
+ *
+ * **Shared with the visitor's page**, which is why it takes a `PublicTweets`
+ * rather than the whole artefact: the counts are arithmetic over the posts, and
+ * a visitor is looking at the same posts. `children` is where the owner puts
+ * their own provenance label, which a visitor has none of.
+ */
+export function ThreadCounts({
+  thread,
+  article,
+  children,
+}: {
+  thread: PublicTweets;
+  article: Article;
+  children?: ReactNode;
+}) {
+  const total = thread.tweets.length;
+  /* Summed here rather than stored. It is the array's own arithmetic, and a
+     `chars` total in the artefact would be a second copy of a fact the posts
+     already carry — the same reason nothing stores a post number. */
+  const chars = thread.tweets.reduce((n, t) => n + t.chars, 0);
+  const words = useMemo(() => articleStats(article).words, [article]);
+
+  return (
+    <div className="tw:mt-2 tw:flex tw:flex-wrap tw:items-center tw:gap-3">
+      <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
+        A thread, {total} {total === 1 ? "post" : "posts"} · {chars.toLocaleString()} characters
+        from {words.toLocaleString()} words
+      </p>
+      {children}
+      <CopyButton
+        text={() => threadMarkdown(thread, article)}
+        label="Copy the thread"
+        className="tw:ml-auto"
+      />
+    </div>
+  );
+}
+
+/**
+ * **The posts themselves** — one numbered card each, and the over-limit line
+ * above them.
+ *
+ * One component for the owner and for a visitor, which is the rule the whole of
+ * slice 1b follows: the hooks need two components, the thing on screen does not.
+ * Two lists for one thread is how the two drift into two designs for one thing.
+ * src/web/reader-capability.ts.
+ *
+ * It takes a `PublicTweets` — `limit` and the posts — because that is every
+ * field it reads. The provenance footer is the owner's and lives in `Thread`.
+ */
+export function ThreadPosts({ thread }: { thread: PublicTweets }) {
+  const total = thread.tweets.length;
+  const over = thread.tweets.filter((t) => t.chars > thread.limit).length;
+
+  return (
+    <>
       {/* Only a real violation. `thread.limit` and not 280: the artefact says
           what it was counted against, and a thread written under a different
           limit should not be re-judged under this one. */}
@@ -545,39 +628,6 @@ function Thread({
           </li>
         ))}
       </ol>
-
-      {/* A hairline and then the provenance: the end of the thread, said with a
-          rule rather than with their "🏁 End of thread" pill. In a list of
-          fifteen cards the reader does want to know they have reached the
-          bottom; it just does not need an emoji to say so. */}
-      <div className="tw:mt-8 tw:flex tw:flex-wrap tw:items-center tw:gap-x-3 tw:gap-y-2 tw:border-t tw:border-border tw:pt-4">
-        <p className="tw:m-0 tw:text-xs tw:text-ink-faint">
-          Written by {thread.generator} · {thread.version} · {whenWritten(thread.generatedAt)} ·{" "}
-          {howLong(thread.elapsedMs)}
-        </p>
-        {/* Only when the thread is fine. A stale one already has a button, at
-            the top, inside the paragraph explaining why it needs pressing —
-            two of them would be one too many, and the wrong one is the one
-            further from the reason. */}
-        {!stale && (
-          <>
-            {/* Beside the deliberate rewrite, which is where the spend already
-                has a confirmation of its own. src/web/WrittenForYou.tsx. */}
-            <UseProfile
-              checked={withProfile}
-              onChange={setWithProfile}
-              hasProfile={hasProfile}
-              disabled={job !== null}
-            />
-            <Rewrite
-              job={job}
-              failed={failed}
-              onWrite={(force) => onWrite(force, withProfile)}
-              onCancel={onCancel}
-            />
-          </>
-        )}
-      </div>
     </>
   );
 }
@@ -768,7 +818,7 @@ function CopyButton({
  * Exported for tests: this is the only pure thing on the page, and it is the
  * part that has a right answer.
  */
-export function threadMarkdown(thread: TweetThread, article: Article): string {
+export function threadMarkdown(thread: PublicTweets, article: Article): string {
   const head = [article.meta.title, article.meta.url].filter(Boolean).join("\n");
   const posts = thread.tweets.map((t, i) => `${i + 1}/${thread.tweets.length} ${t.text}`);
   return [head, ...posts].join("\n\n");

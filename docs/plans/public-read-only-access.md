@@ -1645,7 +1645,35 @@ of a guess, and running it against the six files in this commit is what ended it
 | `src/messages.ts` | `builtButEmpty(noun)`, because *ready and empty* and *never built* are different sentences |
 | `tests/visitor-gaps.test.ts`, `tests/public-network-trace.test.tsx` | the gap table and the one-request assertion, both rewritten around the smaller union |
 
+| `src/web/tree.ts` | `buildSummaryTree` now takes `{entries}` rather than a whole `Summaries`, because that is all it reads and a visitor's `PublicSummaries` has no generator, timings or steer |
+| `src/web/IdeasPanel.tsx`, `GlossaryPanel.tsx`, `SummaryPanel.tsx`, `Tweets.tsx`, `PublicPages.tsx` | each panel's `Props` split so the artefact and the owner-only job controls are separate fields, and the visitor passes the first without the second |
+| `tests/summarise.test.ts`, `tests/summary-expand.test.tsx` | follow the `Props` split |
+
 `npm test` is green across 304 files and 5534 tests; all three typecheck projects are clean.
+
+#### And then this slice made the mistake it had just written up
+
+The first commit of the client half, `113ce17`, **did not compile at `HEAD`**, with nine errors — a
+day after the section above was written about exactly this, by the person who wrote it. `App.tsx`
+went in; the five panel files whose `Props` it had reshaped, and `tree.ts` whose signature it had
+widened, stayed in the working tree. The gate was green here the whole time, for the documented
+reason: this tree holds everyone's unfinished work, including my own.
+
+The import check *passed*, correctly and uselessly — every file `App.tsx` imports was tracked. It
+answers "can this file be resolved", and the question that mattered was **"can it be typechecked"**.
+A reshaped `Props` in an already-tracked file is invisible to it.
+
+So the check that actually works, and that both remaining commits were verified against, is neither
+of those:
+
+> Check `HEAD` out into a clean worktree, copy in the files you are *about* to commit, and typecheck
+> that. Not "does my tree compile" and not "does `HEAD` compile", but **"does `HEAD` plus exactly
+> this commit compile"** — which is the only version of the question with an answer you can act on
+> before pushing rather than after.
+
+Run that way it took two iterations to converge: five files fixed six errors and surfaced three more
+in the summary tests, and `tree.ts` plus those two test files closed it. Both of those iterations
+would otherwise have been a broken `main` that somebody else discovered.
 
 ## Open questions
 

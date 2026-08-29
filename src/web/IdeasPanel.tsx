@@ -44,12 +44,29 @@ import type { UseIdeas } from "./useIdeas.js";
 import type { Found } from "./search-hits.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
 import { BlockRef } from "./BlockRef.js";
+import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import type { BlockId } from "../types.js";
 import { useRenderCount } from "./perf.js";
 
-interface Props extends UseIdeas {
+/**
+ * **The owner's half of this panel** — the read's status, the job finding the
+ * ideas, and the one verb.
+ *
+ * `null` for a visitor. The list itself arrives inside
+ * `GET /api/public/article/:slug` since slice 1b, so it is the same list drawn
+ * by the same rows; what a visitor has no equivalent of is everything here.
+ * GlossaryPanel.tsx § GlossaryOwner has the argument for one panel with its
+ * data injected rather than two panels for one list.
+ */
+export type IdeasOwner = UseIdeas;
+
+interface Props {
+  /** The list to draw, or `null` when this piece has none. */
+  ideas: { ideas: Idea[] } | null;
+  /** Whose article this is, and what comes with it. `null` for a visitor. */
+  owner: IdeasOwner | null;
   /** Which idea is open, from `?idea=`. */
   ideaId: string | null;
   onIdea(id: string | null): void;
@@ -88,18 +105,8 @@ const GROUPS = [
 ];
 
 export function IdeasPanel({
-  status,
   ideas,
-  stale,
-  outdated,
-  profiled,
-  profileChanged,
-  hasProfile,
-  error,
-  job,
-  failed,
-  find,
-  cancel,
+  owner,
   ideaId,
   onIdea,
   found,
@@ -112,29 +119,33 @@ export function IdeasPanel({
      in the state the reader last chose and nothing has to remember it between
      visits: the artefact does. `useState`'s initialiser rather than an effect,
      because re-seeding on every poll would fight a reader who just unticked it. */
-  const [withProfile, setWithProfile] = useState(() => (ideas ? profiled : true));
+  const [withProfile, setWithProfile] = useState(() => (ideas ? (owner?.profiled ?? false) : true));
 
   const all = ideas?.ideas ?? [];
-  const run = (label: string) => (
-    <div className="gloss-run">
-      <UseProfile
-        checked={withProfile}
-        onChange={setWithProfile}
-        hasProfile={hasProfile}
-        disabled={job !== null}
-      />
-      <JobProgress
-        job={job}
-        failed={failed}
-        onRun={() => find(withProfile)}
-        onCancel={cancel}
-        label={label}
-        step="ideas"
-        icon={<Lightbulb size={13} />}
-        runningLabel="Finding…"
-      />
-    </div>
-  );
+  /* **Returns nothing for a visitor**, which is what makes every call site
+     below one line rather than a conditional: this whole block is a profile
+     tick and a button that spends a model call, and a visitor has neither. */
+  const run = (label: string) =>
+    owner && (
+      <div className="gloss-run">
+        <UseProfile
+          checked={withProfile}
+          onChange={setWithProfile}
+          hasProfile={owner.hasProfile}
+          disabled={owner.job !== null}
+        />
+        <JobProgress
+          job={owner.job}
+          failed={owner.failed}
+          onRun={() => owner.find(withProfile)}
+          onCancel={owner.cancel}
+          label={label}
+          step="ideas"
+          icon={<Lightbulb size={13} />}
+          runningLabel="Finding…"
+        />
+      </div>
+    );
 
   return (
     <aside className="mode-band gloss ideas" aria-label="Ideas">
@@ -150,14 +161,24 @@ export function IdeasPanel({
             banner: it is provenance, not a warning. It matters more here than
             anywhere else it appears — a changed profile does not merely re-pitch
             these, it changes what "assumed" means. */}
-        {ideas && <WrittenForYou written={profiled} changed={profileChanged} />}
+        {/* Provenance about the owner's own run: `profileHash` never leaves the
+            server, so a visitor sees none of it. src/public-types.ts. */}
+        {ideas && owner && (
+          <WrittenForYou written={owner.profiled} changed={owner.profileChanged} />
+        )}
       </div>
 
-      {error && <p className="gloss-error">{error}</p>}
+      {owner?.error && <p className="gloss-error">{owner.error}</p>}
 
-      {status === "loading" && <p className="gloss-quiet">Looking for the ideas…</p>}
+      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the ideas…</p>}
 
-      {status === "none" && (
+      {/* A piece with no ideas never mounts this panel for a visitor —
+          `visitorGap` answers *not-built* and the band says so instead. What is
+          left is the state absence cannot express: a list somebody ran that came
+          back with nothing in it. src/messages.ts § builtButEmpty. */}
+      {!owner && all.length === 0 && <p className="gloss-quiet">{builtButEmpty("A list of ideas")}</p>}
+
+      {owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has found the ideas for this one yet.</p>
           <p className="gloss-hint">
@@ -168,7 +189,7 @@ export function IdeasPanel({
         </div>
       )}
 
-      {status === "ready" && ideas && (
+      {ideas && (owner === null || owner.status === "ready") && (
         <>
           {/* Stale wins when both are true: it is the one that makes the
               occurrence links wrong, and two banners stacked is a wall. Same
@@ -180,7 +201,7 @@ export function IdeasPanel({
               even when every paragraph is byte-identical — which is right,
               because the model judged what the argument rests on from the
               skeleton. */}
-          {stale ? (
+          {owner?.stale ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
@@ -188,7 +209,7 @@ export function IdeasPanel({
               </p>
               {run("Find them again")}
             </div>
-          ) : outdated ? (
+          ) : owner?.outdated ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />
@@ -268,7 +289,9 @@ export function IdeasPanel({
 
           {/* Below the list, not above it: this is the thing you reach for
               after reading them and disagreeing, not before. */}
-          {!stale && !outdated && <div className="ideas-again">{run("Find them again")}</div>}
+          {owner && !owner.stale && !owner.outdated && (
+            <div className="ideas-again">{run("Find them again")}</div>
+          )}
         </>
       )}
     </aside>

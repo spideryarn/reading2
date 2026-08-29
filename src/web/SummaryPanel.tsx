@@ -77,7 +77,7 @@
  */
 import { type MouseEvent, useRef, useState } from "react";
 import { ChevronRight, Compass, Layers, RotateCcw, TriangleAlert } from "lucide-react";
-import type { BlockId, Job } from "../types.js";
+import type { BlockId, Job, SummaryEntry } from "../types.js";
 import { BlockRange } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
 import { TooltipGroup } from "./Tooltip.js";
@@ -90,7 +90,36 @@ import { JobProgress } from "./JobProgress.js";
 import { UseProfile, WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 
-interface Props extends UseSummaries {
+/**
+ * **The owner's half of this panel** — the read's status, the job writing the
+ * two longer rungs, the steer box and the button that spends.
+ *
+ * `null` for a visitor. Since slice 1b the summaries arrive inside
+ * `GET /api/public/article/:slug`, so the ladder below is the same ladder drawn
+ * by the same components; what a visitor has no equivalent of is everything
+ * here. One panel with its data injected rather than an owner's panel and a
+ * visitor's panel — see GlossaryPanel.tsx § GlossaryOwner for why that matters
+ * more than the duplication it saves.
+ *
+ * **`owner.summaries` is the artefact and `summaries` is the ladder to draw.**
+ * The only thing that reads the artefact is `guidance`, the owner's own steer,
+ * which the public projection drops on purpose (src/public/dto.ts).
+ */
+export type SummariesOwner = UseSummaries;
+
+interface Props {
+  /**
+   * The ladder to draw, or `null` when this piece has none — which is an
+   * ordinary state rather than a fault, because every internal tree node
+   * already carries a one-sentence gist and the panel works without any of
+   * this.
+   *
+   * Typed as what it is read for rather than as `Summaries`: a visitor's
+   * `PublicSummaries` is exactly these two fields (src/public-types.ts).
+   */
+  summaries: { entries: SummaryEntry[]; missing: number } | null;
+  /** Whose article this is, and what comes with it. `null` for a visitor. */
+  owner: SummariesOwner | null;
   /** The tree, joined to whatever summaries exist. Null if the tree is unusable. */
   root: SummaryNode | null;
   /**
@@ -124,17 +153,8 @@ const RUNG_LABELS: Record<Rung, { label: string; blurb: string }> = {
 const DEPTH_LABELS = ["article", "parts", "sections"];
 
 export function SummaryPanel({
-  status,
   summaries,
-  stale,
-  profiled,
-  profileChanged,
-  hasProfile,
-  error,
-  job,
-  failed,
-  write,
-  cancel,
+  owner,
   root,
   blocks,
   rung,
@@ -219,9 +239,13 @@ export function SummaryPanel({
    */
   /* Seeded from what the artefact on screen was written with, so nothing has to
      remember the reader's last choice between visits — the file does. */
-  const [withProfile, setWithProfile] = useState(() => (summaries ? profiled : true));
+  const [withProfile, setWithProfile] = useState(() =>
+    summaries ? (owner?.profiled ?? false) : true,
+  );
   const [steer, setSteer] = useState<string | null>(null);
-  const guidance = steer ?? summaries?.guidance ?? "";
+  /* The owner's own artefact, because the steer is the owner's own sentence and
+     never crosses to a visitor. src/public/dto.ts § publicSummaries. */
+  const guidance = steer ?? owner?.summaries?.guidance ?? "";
 
   /* Whether the two longer rungs exist at all. Not `status === "ready"`: an
      artefact can be present and still have holes in it, and what decides
@@ -236,7 +260,11 @@ export function SummaryPanel({
         <h2>Summary</h2>
         {/* Provenance, on the head line. A label rather than a control for the
             reason src/web/WrittenForYou.tsx gives. */}
-        {summaries && <WrittenForYou written={profiled} changed={profileChanged} />}
+        {/* Provenance about the owner's own run: `profileHash` never leaves the
+            server, so a visitor sees none of it. src/public-types.ts. */}
+        {summaries && owner && (
+          <WrittenForYou written={owner.profiled} changed={owner.profileChanged} />
+        )}
       </div>
 
       <div className="summ-controls">
@@ -298,9 +326,9 @@ export function SummaryPanel({
         </fieldset>
       </div>
 
-      {error && <p className="summ-error">{error}</p>}
+      {owner?.error && <p className="summ-error">{owner.error}</p>}
 
-      {stale && (
+      {owner?.stale && (
         <div className="summ-stale">
           <p>
             <TriangleAlert size={13} />
@@ -309,7 +337,7 @@ export function SummaryPanel({
           {/* The box is here too, and not only in the foot below: the foot is
               hidden while the summaries are stale, so without this the one
               article most likely to be rewritten is the one you cannot steer. */}
-          <Steer value={guidance} onChange={setSteer} disabled={job !== null} />
+          <Steer value={guidance} onChange={setSteer} disabled={owner.job !== null} />
           {/* Beside the steer and the button, because all three describe the
               same forthcoming run. Two boxes about intent and one checkbox
               about whose intent — the profile is durable and about the reader,
@@ -319,16 +347,16 @@ export function SummaryPanel({
           <UseProfile
             checked={withProfile}
             onChange={setWithProfile}
-            hasProfile={hasProfile}
-            disabled={job !== null}
+            hasProfile={owner.hasProfile}
+            disabled={owner.job !== null}
           />
           {/* No `force` needed: the step's own freshness check already knows
               this artefact is out of date, so an ordinary run rewrites it. */}
           <Progress
-            job={job}
-            failed={failed}
-            onRun={() => write(false, guidance, withProfile)}
-            onCancel={cancel}
+            job={owner.job}
+            failed={owner.failed}
+            onRun={() => owner.write(false, guidance, withProfile)}
+            onCancel={owner.cancel}
             label="Rewrite them"
           />
         </div>
@@ -363,84 +391,93 @@ export function SummaryPanel({
       </div>
 
       {/* The offer, at the bottom rather than in place of the outline: there is
-          always something to read here, so this is never an empty state. */}
-      {status !== "loading" && !stale && (
-        <div className="summ-foot">
-          {status === "none" ? (
-            <>
-              <p className="summ-hint">
-                Only the one-sentence gists so far. Writing the longer two rungs is a few model
-                calls over the whole article and takes a minute or two — done once and kept.
-              </p>
-              <Steer value={guidance} onChange={setSteer} disabled={job !== null} />
-          {/* Beside the steer and the button, because all three describe the
-              same forthcoming run. Two boxes about intent and one checkbox
-              about whose intent — the profile is durable and about the reader,
-              the steer is about this rewrite, and SYSTEM states that the steer
-              wins where they pull different ways.
-              docs/project/reader-profile.md. */}
-          <UseProfile
-            checked={withProfile}
-            onChange={setWithProfile}
-            hasProfile={hasProfile}
-            disabled={job !== null}
-          />
-              <Progress
-                job={job}
-                failed={failed}
-                onRun={() => write(false, guidance, withProfile)}
-                onCancel={cancel}
-                label="Write the summaries"
-              />
-            </>
-          ) : (
-            hasLadder && (
-              <>
-                {/* Written down rather than smoothed over. A section that got
-                    nothing back falls all the way to its gist, which looks
-                    exactly like a section the model had less to say about — the
-                    number is what tells the two apart.
+          always something to read here, so this is never an empty state.
 
-                    Note what `missing` counts, precisely: sections with **no
-                    entry at all**, not sections that got a `short` and no
-                    `long`. Those are marked individually on the row instead,
-                    which is the more useful place for a fact about one row. */}
-                {summaries.missing > 0 && (
-                  <p className="summ-hint">
-                    {summaries.missing} {summaries.missing === 1 ? "section" : "sections"} got
-                    nothing back and fall back to their one-sentence gist.
-                  </p>
-                )}
-                <Steer value={guidance} onChange={setSteer} disabled={job !== null} />
-          {/* Beside the steer and the button, because all three describe the
-              same forthcoming run. Two boxes about intent and one checkbox
-              about whose intent — the profile is durable and about the reader,
-              the steer is about this rewrite, and SYSTEM states that the steer
-              wins where they pull different ways.
-              docs/project/reader-profile.md. */}
-          <UseProfile
-            checked={withProfile}
-            onChange={setWithProfile}
-            hasProfile={hasProfile}
-            disabled={job !== null}
-          />
+          **The `missing` count is above the offer and outside it**, because it
+          is a fact about the ladder rather than an invitation to rewrite one —
+          and a visitor gets it too. It is the reader's only sign that an
+          apparently complete summary is partial, which is why `missing` is one
+          of the two fields that cross in `PublicSummaries`. */}
+      {/* A visitor's foot is the `missing` line or nothing at all — no empty
+          bordered strip under the ladder when there is nothing to put in it. */}
+      {(owner
+        ? owner.status !== "loading" && !owner.stale
+        : hasLadder && summaries.missing > 0) && (
+        <div className="summ-foot">
+          {/* Written down rather than smoothed over. A section that got nothing
+              back falls all the way to its gist, which looks exactly like a
+              section the model had less to say about — the number is what tells
+              the two apart.
+
+              Note what `missing` counts, precisely: sections with **no entry at
+              all**, not sections that got a `short` and no `long`. Those are
+              marked individually on the row instead, which is the more useful
+              place for a fact about one row. */}
+          {hasLadder && summaries.missing > 0 && (
+            <p className="summ-hint">
+              {summaries.missing} {summaries.missing === 1 ? "section" : "sections"} got nothing
+              back and fall back to their one-sentence gist.
+            </p>
+          )}
+          {/* And this half is the owner's: a steer box, a profile tick and a
+              button that spends. A visitor has none of the three, and the band
+              they can open instead is the same band with this part absent
+              rather than a second design for one panel. */}
+          {owner &&
+            (owner.status === "none" ? (
+              <>
+                <p className="summ-hint">
+                  Only the one-sentence gists so far. Writing the longer two rungs is a few model
+                  calls over the whole article and takes a minute or two — done once and kept.
+                </p>
+                <Steer value={guidance} onChange={setSteer} disabled={owner.job !== null} />
+                {/* Beside the steer and the button, because all three describe
+                    the same forthcoming run. Two boxes about intent and one
+                    checkbox about whose intent — the profile is durable and
+                    about the reader, the steer is about this rewrite, and
+                    SYSTEM states that the steer wins where they pull different
+                    ways. docs/project/reader-profile.md. */}
+                <UseProfile
+                  checked={withProfile}
+                  onChange={setWithProfile}
+                  hasProfile={owner.hasProfile}
+                  disabled={owner.job !== null}
+                />
                 <Progress
-                  job={job}
-                  failed={failed}
-                  // Forced: the step believes this artefact is current, and it
-                  // is right — the reader is asking for it anyway. Which is
-                  // also why the steer does not go anywhere near
-                  // `summariesAreCurrent`: a note about what you are reading
-                  // for is not a reason for the *next* ordinary run to decide
-                  // the artefact has gone stale.
-                  onRun={() => write(true, guidance)}
-                  onCancel={cancel}
-                  label="Write them again"
-                  icon="redo"
+                  job={owner.job}
+                  failed={owner.failed}
+                  onRun={() => owner.write(false, guidance, withProfile)}
+                  onCancel={owner.cancel}
+                  label="Write the summaries"
                 />
               </>
-            )
-          )}
+            ) : (
+              hasLadder && (
+                <>
+                  <Steer value={guidance} onChange={setSteer} disabled={owner.job !== null} />
+                  <UseProfile
+                    checked={withProfile}
+                    onChange={setWithProfile}
+                    hasProfile={owner.hasProfile}
+                    disabled={owner.job !== null}
+                  />
+                  <Progress
+                    job={owner.job}
+                    failed={owner.failed}
+                    // Forced: the step believes this artefact is current, and it
+                    // is right — the reader is asking for it anyway. Which is
+                    // also why the steer does not go anywhere near
+                    // `summariesAreCurrent`: a note about what you are reading
+                    // for is not a reason for the *next* ordinary run to decide
+                    // the artefact has gone stale.
+                    onRun={() => owner.write(true, guidance)}
+                    onCancel={owner.cancel}
+                    label="Write them again"
+                    icon="redo"
+                  />
+                </>
+              )
+            ))}
         </div>
       )}
     </aside>
