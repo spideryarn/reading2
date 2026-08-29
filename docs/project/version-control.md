@@ -159,6 +159,35 @@ unset and confirm it prints `.git/index` and exits non-zero; only then does the 
 anything. A guard you have never seen trip is not evidence it is guarding — and this one sits in
 front of the operation that has already reverted other people's work five times in a day.
 
+**The recipe can print `COMMITTED` having committed nothing.** The block above ends by *doing* things
+and never by *asking whether they happened*, and on 2026-08-29 that cost a minute of believing work
+was landed that was not. A heredoc writing `msg.txt` was blocked by a permission prompt, so
+`git commit-tree -F msg.txt` failed on a missing file, `NEW` came back **empty**, and
+
+```sh
+git update-ref refs/heads/main "$NEW" "$BASE" && echo "COMMITTED $NEW on $BASE"
+```
+
+still printed its success line. The only tell was a **doubled space** where the commit id belongs —
+`COMMITTED  on 75ef7e5` — which nobody proofreads. `main` was untouched, so there was no damage that
+time; the damage is that the next thing you do is move on.
+
+It is the same shape as the index bug one level up: **the line reports on the command it ran, not on
+the state that command was supposed to produce.** So guard the inputs, and finish by asking the
+repository:
+
+```sh
+[ -s msg.txt ] || { echo "ABORT: no message file"; exit 1; }   # a blocked heredoc leaves no file
+NEW=$(git commit-tree "$TREE" -p "$BASE" -F msg.txt) || exit 1
+[ -n "$NEW" ] || { echo "ABORT: empty commit id"; exit 1; }
+git update-ref refs/heads/main "$NEW" "$BASE" || exit 1
+[ "$(git rev-parse HEAD)" = "$NEW" ] || { echo "ABORT: HEAD is not the new commit"; exit 1; }
+```
+
+A missing input file is worth calling out on its own: in an agent harness a blocked or denied tool
+call is **routine, not an edge case**, and most recipes treat a missing input as an error that will
+obviously propagate. Here it propagated into a success message.
+
 **Two dated headings, one trap.** If you link to a heading here that ends `… — 2026-08-29`, the gate
 and GitHub disagree: `tests/doc-links.test.ts` strips the em dash as a non-word character and then
 collapses the remaining whitespace with a single `\s+` match, so it wants **one** hyphen before the
@@ -170,12 +199,57 @@ form, and check it by running the gate's own slug over the heading text rather t
 heading.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, "").replace(/\s+/g, "-")
 ```
 
+For a link **into another file**, a5's rule is simpler and worth preferring: link the file and drop
+the fragment entirely, rather than guessing which convention applies. Within one file that makes the
+link useless, so there you do have to get the slug right.
+
 
 **Why this went unattributed for a whole day.** On 2026-08-29 the shared index was rewritten at least
 five times with a 65-file, ~7,000-deletion revert, and each time the person who looked likeliest
 honestly said it was not them. It was not carelessness — **the agent following the recipe most
 carefully is the likeliest source**, because they are the only one running `read-tree` at all. The
 instruction was the defect, not the person.
+
+**It is two faults multiplied, not one.** a5's reconstruction, and it explains a shape that a single
+stale snapshot cannot produce:
+
+- An absent `GIT_INDEX_FILE` decides **where** the write lands — the shared `.git/index` rather than
+  a private one.
+- A `BASE` captured once and reused on a later retry decides **how stale** the tree written there is.
+
+Either alone is survivable. A private index with a stale `BASE` writes an old tree somewhere nobody
+reads; a shared index with a fresh `BASE` is close to a no-op. Together they write an increasingly
+old snapshot into the index everybody shares, and it reads as a precise, deliberate back-out of
+exactly the work that landed in between.
+
+The ordering is the evidence. On 2026-08-29, `tests/note-carry-over.test.ts` and the footnotes review
+docs from `7edad4f` were staged as deleted, *and* `tests/arc-freshness.test.ts` from `0aa30ac` was
+staged as deleted within minutes of landing. One stale snapshot cannot do both — the tree would have
+to predate `7edad4f` and postdate `0aa30ac` at once. A repeatedly-reused stale `BASE` does exactly
+that, because each retry rewrites the index from the same old tree while HEAD keeps moving.
+
+**The same recipe can also print `COMMITTED` having committed nothing.** a5 hit this one themselves.
+The heredoc writing the message file was stopped by a permission prompt, so `git commit-tree -F` failed
+on a missing file, `$C` came back **empty**, and
+
+```sh
+git update-ref refs/heads/main $C $BASE && echo "COMMITTED $C on $BASE"
+```
+
+still printed `COMMITTED  on <base>` — the only tell being a double space where the commit id should
+be. `main` was untouched, so nothing was damaged, but for a minute they believed they had committed
+something they had not, which in a shared tree is worse than the damage because the next thing you do
+is move on. Quote the variables, and assert the outcome rather than the exit status:
+
+```sh
+C=$(git commit-tree "$TREE" -p "$BASE" -F "$MSG") || return 1
+[ -n "$C" ] || { echo "ABORT: empty commit id"; return 1; }
+git update-ref refs/heads/main "$C" "$BASE" || return 1
+[ "$(git rev-parse HEAD)" = "$C" ] || { echo "ABORT: HEAD is not the new commit"; return 1; }
+```
+
+The last line is the one that matters, and it is the same move as the index assertion above: **ask
+the repository what happened, rather than the pipeline that was supposed to make it happen.**
 
 **The one number that settles who did it.** Compare each staged path's blob against `git hash-object`
 of the file on disk. Anything a person deliberately staged matches disk; a stale `read-tree` matches
