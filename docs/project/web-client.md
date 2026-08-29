@@ -492,16 +492,35 @@ calling the loader directly, because calling it directly passes on a hook whose
 opening read, so "keeps the list" cannot pass by never reporting a failure at
 all.
 
-**And `postFailed` does not mean the request never landed.** `queue.run` returns
+**And a failed POST does not mean the request never landed.** `queue.run` returns
 `null` for *any* throw, including `readJson` on a 4xx or 5xx
 ([`useJobs.ts`](../../src/web/useJobs.ts) § `act`) — so a job the server received
-and refused is one of these. Every surface says
-`postFailed ? (queue.error ?? "Couldn't start the job.") : stopped`, read at
-render rather than inside the click handler; reading it inside gives you the
-value from the render that created the closure, which is the previous error or
-none at all. `useIdeas` claimed *"The request did not reach the server."* until
-2026-08-28, which threw the server's own reason away and replaced it with a
-false one.
+and **refused**, for quota or auth or a bad step, is one of these. `useIdeas`
+claimed *"The request did not reach the server."* until 2026-08-28, which threw
+the server's own reason away and replaced it with a false one.
+
+**Both obvious ways of getting that reason back are wrong**, and the second one
+was the fix for the first. Reading `queue.error` *inside* the click handler gives
+you the value from the render that created the closure — `useJobs` sets it during
+the same `await` — so what you read is the previous error, or nothing. Reading it
+*at render* is right for about one frame: `error` is shared with the poller, and
+`act`'s own `finally` starts a poll the instant the POST fails, so the poll
+succeeds and its `setError(null)` takes the sentence away again. All four
+surfaces had that second spelling; the test that came with it used a posed queue,
+which has no poll, so it proved the ternary and not the sequence.
+
+So the reason is **snapshotted at the one instant it is available** — in
+`start`, out of `queue.lastFailure()`, a ref only the actions write and no poll
+can clear — and held until the next press. It lives once, in
+[`useStepJob`](../../src/web/useStepJob.ts) § `failed`, with the failure and its
+reason as **one value** rather than a boolean beside a string, so no later edit
+can set one and forget the other — which is how the four copies drifted in the
+first place. `tests/refused-job-reason-survives.test.tsx` drives the real
+sequence, polls and all.
+
+`useGlossary`, `useIdeas` and `useSummaries` are on it.
+[`Tweets.tsx`](../../src/web/Tweets.tsx) is the fourth and is still hand-rolled,
+so it still reads `queue.error` at render and still carries the bug.
 
 ### The waiting state
 

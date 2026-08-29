@@ -301,16 +301,34 @@ line count:
   and the reason `onFinished` is a parameter rather than something the hook does itself. 2.6's
   territory.
 
-**Owed, and blocked on a peer.** `docs/project/web-client.md:536` still says *"Every surface says
-`postFailed ? (queue.error ?? …) : stopped`, read at render rather than inside the click handler."*
-Three of the four no longer do, and reading `queue.error` at render is now the documented **wrong**
-answer. The file has 41 lines of another session's work in it, so `git commit -- <path>` would take
-their draft with it. Fix it when that file is quiet, and say: the reason is snapshotted out of
-`queue.lastFailure()` because `error` is shared with the poller and the failed POST's own `finally`
-starts the poll that wipes it; `Tweets.tsx` is still the old shape and still carries the bug.
+**Both stale citations are now fixed — 2026-08-29.** `docs/project/web-client.md` had said *"Every
+surface says `postFailed ? (queue.error ?? …) : stopped`, read at render rather than inside the click
+handler"*, which was the documented **wrong** answer the moment 2.1 landed. It now says what
+`useStepJob` § `failed` says: both obvious readings are wrong, the second was the fix for the first,
+and the reason is snapshotted out of `queue.lastFailure()` at the one instant it is available. It
+also names `Tweets.tsx` as the fourth surface, still hand-rolled and still carrying the bug — a
+pointer worth more than the paragraph, because that is how the next person finds it. And the plan's
+own `FORCE_ONLY_WHEN_NAMED` citation moved from `useIdeas.ts:156-166` to `src/pipeline.ts:202`.
+Rule 3, as predicted.
 
-Also stale, and cheap: the plan cites `useIdeas.ts:156-166` for `FORCE_ONLY_WHEN_NAMED`. The set is
-`src/pipeline.ts:202`. Rule 3, as predicted.
+### The missing converse test — 2026-08-29
+
+`tests/converse-citations.test.ts`, the one gap Sol named that was not a defect. Every `url_citation`
+in the suite was in `tests/explain.test.ts`, so **nothing asserted the thing that is true of
+`converse` and not of the collector**: the map lives above the round loop, so a page cited in round
+one is still cited after round two.
+
+Worth having because the two ways it breaks fail in opposite directions and both are quiet — reset
+the map and round one's reading disappears; keep it but let a later sighting win and the *title*
+changes under the reader, which is the field a provider is least consistent about between rounds.
+`searches` was broken in exactly this way in exactly this loop three days earlier, and stored an
+answer saying the model had not searched while showing its citations.
+
+Two tests, real `converse` over a stubbed two-round `fetch`, and both red controls run against the
+committed code before either was written up: `citations.clear()` at the top of the round loop reddens
+both; deleting the `into.has(c.url)` half of the guard reddens the first. The fixture cites one page
+under **two different titles** on purpose — identical duplicates would have passed with the dedupe
+deleted, which is the mistake `tests/collect-citations.test.ts` was itself making until this stage.
 
 ### What the Tier 2 code review changed — 2026-08-28
 
@@ -964,7 +982,7 @@ the "two quite different silences" paragraph, and the `queue.error`-at-render tr
 once. **0.3 stops being possible to get wrong.**
 
 Careful: `force` must stay `force: [step]` naming the step, not a bare boolean, because `ideas` is
-in `FORCE_ONLY_WHEN_NAMED` (`useIdeas.ts:156-166`).
+in `FORCE_ONLY_WHEN_NAMED` (`src/pipeline.ts:202`).
 
 **Effort** M · **Value** high · **Risk** low — pure lift-and-shift of already-identical code. Do
 0.2 and 0.3 first; their tests are this extraction's net.
