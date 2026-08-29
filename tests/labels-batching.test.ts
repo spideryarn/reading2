@@ -867,6 +867,37 @@ describe("batchParts — the cache boundary", () => {
  * finished. So most of what follows is checking that things are *refused*.
  */
 describe("batchFingerprint", () => {
+  /**
+   * **Every real fingerprint is a key the checkpoint store would accept.**
+   *
+   * `docs/plans/delete-the-importer.md` § B3 moves this checkpoint into a
+   * `checkpoints` table whose `key` column carries a CHECK constraint,
+   * `^[a-z0-9][a-z0-9_-]{0,127}$` — narrower than "any string", because the
+   * filesystem adapter turns the key into a file name and macOS is
+   * case-insensitive. This is the real function's real output, over a whole
+   * plan's worth of batches, rather than an agreement that hex looks fine.
+   *
+   * Upper-case hex, a `:` or `=` separator, a base64url `+`, or anything past
+   * 128 characters would all survive every other test in this file and then be
+   * rejected by the database in landing D — landing cleanly and breaking later.
+   * `docs/reusable/silent-success.md`.
+   *
+   * The regex is spelt out rather than imported on purpose: importing
+   * `src/store/checkpoints.ts` here would let a change to the constraint relax
+   * this assertion in the same edit. If the two ever disagree, one is wrong and
+   * somebody should look.
+   */
+  it("mints keys the checkpoint store's key constraint accepts", () => {
+    const { tree, blocks } = fixture(6, 7);
+    const outline = renderOutline(tree);
+    const batches = planBatches(tree, blocks);
+    /* Not vacuous: an empty plan would pass every assertion in the loop. */
+    expect(batches.length).toBeGreaterThan(0);
+    for (const batch of batches) {
+      expect(batchFingerprint(batch, blocks, outline)).toMatch(/^[a-z0-9][a-z0-9_-]{0,127}$/);
+    }
+  });
+
   it("is stable across calls with the same inputs", () => {
     const { tree, blocks } = fixture(6, 7);
     const outline = renderOutline(tree);

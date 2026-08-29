@@ -108,6 +108,7 @@
  */
 
 import { ChatConflict } from "../chat.js";
+import { CheckpointRequestError } from "./checkpoints.js";
 import { log } from "../log.js";
 import { STORAGE_BUSY, STORAGE_FAILED } from "../messages.js";
 import { StaleAttemptError } from "./jobs.js";
@@ -249,6 +250,11 @@ function framesOf(err: unknown): string | undefined {
 /** May this error go out as it is? See the header — it is an allowlist. */
 function mayPassThrough(err: unknown): boolean {
   if (err instanceof ChatConflict) return true;
+  /* The checkpoint store refusing its own arguments — a bad key, the wrong
+     slug, a value that will not serialise. None of these reached the database,
+     so scrubbing them would blame it for a wiring bug and drop the sentence
+     saying which rule was broken. src/store/checkpoints.ts. */
+  if (err instanceof CheckpointRequestError) return true;
   if (err instanceof StaleAttemptError) return true;
   if (err instanceof IllegalTransition) return true;
   return typeof (err as { status?: unknown }).status === "number";

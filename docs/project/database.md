@@ -58,6 +58,11 @@ data/_uploads/
   <uuid>.json   one file per upload attempt   (files store only — see below)
 ```
 
+**And one thing in there is not an artefact.** `labels-progress.json` and `pdf-chunks/<key>.json`
+are **checkpoints**: work a failed attempt already paid for, kept so the retry does not buy it
+again. They are not published, nothing reads them as "this step is done", and they survive a run
+that died — which is the entire point of them. See § Checkpoints below.
+
 **And, since 2026-08-27, one thing that is deliberately not a file here at all.** An uploaded PDF's
 bytes go to **Supabase Storage**, in the private `sources` bucket, because the browser has to be
 able to write them without passing through our server — a serverless function refuses a body over
@@ -136,10 +141,10 @@ it; the app is still entirely on files. What is built:
 
 | File | What it is |
 |---|---|
-| [`src/db/schema.ts`](../../src/db/schema.ts) | the nine tables, in TypeScript. The source of truth |
+| [`src/db/schema.ts`](../../src/db/schema.ts) | the tables, in TypeScript. The source of truth. There were nine when this line was written and eighteen on 2026-08-29; `tests/db-schema-drift.test.ts` holds the current list, and holds it as a *set* rather than a count so that one table swapped for another is still somebody's job to look at |
 | [`drizzle/0000_initial_schema.sql`](../../drizzle/0000_initial_schema.sql) | generated from it by `npm run db:generate` |
 | [`drizzle/0001_auth_fks_and_guards.sql`](../../drizzle/0001_auth_fks_and_guards.sql) | hand-written: the `auth.users` FKs, the current-revision pointer, the indexes, and the two guards that make global concurrency 1 a database fact rather than a convention |
-| [`tests/db-schema.test.ts`](../../tests/db-schema.test.ts) | nine assertions that the schema *enforces* what the plan promises |
+| [`tests/db-schema.test.ts`](../../tests/db-schema.test.ts) | that the schema *enforces* what the plan promises — nine cases when this line was written, 23 on 2026-08-29. Run it rather than counting from here |
 | [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) | `npm run db:migrate` |
 
 ```bash
@@ -632,6 +637,45 @@ because the type system will not.
 - **The old project has a live trigger on `auth.users`.** It is `SECURITY DEFINER` and writes
   `public.profiles`, so every future Spideryarn signup writes a row into the *old* app — and a failure
   there fails the signup. Greg's own login won't fire it, so it will not show up in testing.
+
+## Checkpoints — work a failed attempt already paid for
+
+Two stages keep working state that has to **survive their own failure**: `toc` writes a batch of nav
+labels to `labels-progress.json` as each one comes back, and the PDF reader writes each transcribed
+chunk to `pdf-chunks/<key>.json`. A 429 eight batches into a book then costs one batch rather than
+eight, and these are the expensive calls.
+
+They live behind [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts) since 2026-08-29 —
+`checkpoints-fs.ts` for the layout above, `checkpoints-pg.ts` for the `checkpoints` table — because
+landing D of [delete-the-importer.md](../plans/delete-the-importer.md) takes `data/<slug>/` away.
+**Nothing calls the store yet**; the two stages still write their own files. The plan's § B3 has the
+three decisions and the reasoning. What to know before touching any of it:
+
+- **The key is the article and the question, never the revision.** A retry is a new job and a new job
+  begins a new draft revision, so a checkpoint keyed on the revision is written on every run and read
+  on none. Nothing errors; the bill goes up. It is the one way this table could have been useless.
+- **The store never interprets the key**, so *the caller* has to put every input the work depends on
+  into it — including the reader's own, if there ever is one. Neither existing key has a person in it
+  and neither piece of work depends on one.
+- **No `owner_id`,** because `article_id` is `not null` and `articles.owner_id` is the owner — the
+  rule [`src/owner.ts`](../../src/owner.ts) states. `on delete cascade` is privacy work rather than
+  tidiness: a checkpoint holds a transcription of the reader's own document.
+- **`on delete cascade` is the retention policy; the sweep is the leftovers.** The only deletion with
+  a deadline is an article going away, and that is automatic — the transcription goes with it. There
+  are no orphans in either store. What the sweep is for is the narrow case of a *live* article whose
+  checkpoints are dead because the question changed (prompt version, model, or re-extracted text):
+  ninety days on `last_used_at`, `npx tsx scripts/checkpoints-sweep.ts` to report, `--delete` to do
+  it. Nothing schedules it, and what makes that safe is that every row costs a paid model call to
+  create, so the table cannot grow faster than the bill.
+- **The key is 16 lower-case hex characters**, and the `checkpoints_key_format` CHECK says so. Both
+  producers are checked against it by the tests that own them — `tests/labels-batching.test.ts` on
+  the real `batchFingerprint`, `tests/pdf-read.test.ts` on the file names a real run writes. Add a
+  third checkpoint and its key has to satisfy that too; a `:` separator or upper-case hex would land
+  cleanly and be rejected by the database later.
+
+A checkpoint write deliberately does **not** join the artefact transaction — preserving the work of a
+*failed* attempt is the whole point, and one rolled back with the attempt is worthless. The Postgres
+adapter uses `getDb()` and takes no `tx`.
 
 ## What is not done yet
 

@@ -1912,3 +1912,96 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
   profile: text("profile"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/* ----------------------------------------------------------- checkpoints -- */
+
+/**
+ * **Work a failed attempt already paid for, so the next attempt does not buy it
+ * again.** The Postgres home of `labels-progress.json` and `pdf-chunks/<key>.json`
+ * — docs/plans/delete-the-importer.md § B3.
+ *
+ * ## The key is the article and the question, never the revision
+ *
+ * A retry is a **new job** (src/jobs.ts), and a new job begins a new draft
+ * revision. So a checkpoint keyed on `revision_id` is written on every run and
+ * read on none, and the only symptom is a larger bill — the plan's own § *B3's
+ * key is not the revision* says this at length. `article_id` is stable across
+ * every attempt, so it may be in the key and `revision_id` may not.
+ *
+ * `key` is a caller-supplied content address — a digest over everything the
+ * work was about. Nothing here interprets it, and nothing may start to: what
+ * makes an entry reusable is that the question is identical, and what makes it
+ * unusable is that the question changed. Both are the same sentence, which is
+ * why no part of this table ever has to invalidate anything.
+ *
+ * ## Why `article_id` and not a globally shared row
+ *
+ * A pure content address with no article would let two readers who uploaded the
+ * same PDF share one transcription. That is not today's behaviour — the labels
+ * checkpoint already gates on `slug`, and `pdf-chunks/` already lives inside
+ * `data/<slug>/` — so removing the article would be *adding* cross-reader
+ * sharing, which nobody asked for and which would need its own argument about
+ * what a cache hit tells a stranger. Scoping to the article keeps every reuse
+ * that matters (every retry, and every re-run of the same article) and costs
+ * only the reuse nobody has ever had.
+ *
+ * ## And therefore no `owner_id`
+ *
+ * `article_id` is `not null`, so every row belongs to exactly one article, and
+ * `articles.owner_id` is the owner. That is the rule src/owner.ts states and
+ * `revision_blocks`, `revision_step_runs` and `block_identities` all follow:
+ * carrying the owner twice is a second copy to disagree with the first.
+ * `ai_calls` is the documented exception because its `article_id` is `on delete
+ * set null` and half its rows have no article at all — neither is true here.
+ *
+ * `on delete cascade` is doing privacy work, not tidiness: a checkpoint holds a
+ * transcription of the reader's own document, and deleting the article has to
+ * take it with it rather than leave it for a sweep.
+ *
+ * ## Retention
+ *
+ * `last_used_at` is bumped on every hit as well as on the write, because
+ * `created_at` cannot tell a hot cache entry from a dead one — an article
+ * re-read every week would be swept on its birthday. The sweep is
+ * `scripts/checkpoints-sweep.ts`; nothing schedules it yet, and
+ * docs/plans/delete-the-importer.md § B3 says why that is safe.
+ */
+export const checkpoints = spideryarn.table(
+  "checkpoints",
+  {
+    articleId: uuid("article_id")
+      .notNull()
+      .references(() => articles.id, { onDelete: "cascade" }),
+    /**
+     * Which checkpoint this is. **Deliberately not a `StepName`** — `labels` is
+     * not a step (the `revision_step_runs_step` CHECK rejects it, and the plan
+     * has already been bitten once by that), and two different checkpoints
+     * under one step name would share a key space for no reason. A closed set,
+     * with the CHECK below, for the same reason `revision_step_runs_step` is
+     * closed: a typo would otherwise open a namespace nothing ever reads.
+     */
+    namespace: text("namespace").notNull(),
+    /** The content address. Opaque here; `CHECKPOINT_KEY_RE` in src/store/checkpoints.ts. */
+    key: text("key").notNull(),
+    value: jsonb("value").notNull(),
+    createdAt: createdAt(),
+    /** When something last asked this question and got this answer. */
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.articleId, t.namespace, t.key] }),
+    check("checkpoints_namespace", sql`${t.namespace} in ('toc-labels','pdf-chunk')`),
+    /**
+     * The same rule as `CHECKPOINT_KEY_RE`, here as well, because the
+     * filesystem adapter turns this string into a **file name**. A key the
+     * database would take and the filesystem would not is a divergence that
+     * shows up as one store working and the other quietly not — and no dot is
+     * allowed at all, so `..` is impossible by construction rather than by a
+     * second check. Lower case only: macOS filesystems are case-insensitive, so
+     * two keys differing only in case would be one file and two rows.
+     */
+    check("checkpoints_key_format", sql`${t.key} ~ '^[a-z0-9][a-z0-9_-]{0,127}$'`),
+    /** The sweep's only query. */
+    index("checkpoints_last_used_at").on(t.lastUsedAt),
+  ],
+);

@@ -51,6 +51,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ChatConflict } from "../src/chat.js";
 import { guardDbStore, isGuardedStore } from "../src/store/db-errors.js";
+import { CheckpointRequestError } from "../src/store/checkpoints.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
 import { IllegalTransition } from "../src/store/uploads.js";
 
@@ -102,6 +103,36 @@ describe("the stores selected outside src/store/index.ts", () => {
   it("hand out a guarded upload store", async () => {
     const { pgUploadStore } = await import("../src/store/pg-uploads.js");
     expect(isGuardedStore(pgUploadStore)).toBe("uploads");
+  });
+
+  /**
+   * The checkpoint store is a **factory**, not a singleton, so the guard has to
+   * be applied to what it returns rather than to an export — and the object a
+   * caller gets is the only thing that can be asked. Nothing calls it yet
+   * (landing D does), which is why the assertion is here: "nothing calls it" is
+   * a fact about the wiring that expires the moment somebody wires it up, and
+   * the person wiring it up reads the call site, not the module header.
+   *
+   * Constructing one touches no database — `getDb()` is called inside the
+   * methods — so this needs no connection.
+   */
+  it("hand out a guarded checkpoint store, per article", async () => {
+    const { createPgCheckpointStore } = await import("../src/store/checkpoints-pg.js");
+    const store = createPgCheckpointStore({
+      /* Its own uuid rather than the all-zeros one, which
+         tests/store-checkpoints.test.ts already declares — `tests/fixture-ids.test.ts`
+         refuses an id claimed by two files, and it caught this. No row is ever
+         inserted under it (nothing here calls a method), so an exemption in that
+         guard's `NOT_A_ROW` would also have been legal; a distinct literal
+         leaves no hole for a later file to hide in. */
+      articleId: "00000000-0000-4000-8000-0000000c4eca",
+      /* `CheckpointArticleRef` carries the slug too — it is what `read` and
+         `write` assert their caller against. Nothing here calls either, so any
+         name does; it is spelt out rather than left off because leaving it off
+         is what made `npm run typecheck` red while all 186 tests were green. */
+      slug: "guarded-checkpoint-store",
+    });
+    expect(isGuardedStore(store)).toBe("checkpoints");
   });
 
   /**
@@ -286,6 +317,29 @@ describe("the errors the guard must not eat", () => {
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(IllegalTransition);
     expect((err as Error).message).toContain("pending to verified");
+  });
+
+  /**
+   * The fifth entry, added 2026-08-29 with the checkpoint store
+   * (docs/plans/delete-the-importer.md § B3). It is here for the reason the
+   * fourth one is: the only other coverage lives in a suite whose Postgres half
+   * skips itself without a database, and a skipped test protects nothing. This
+   * needs none.
+   *
+   * What it protects is a *diagnosis*. `assertCheckpointRequest` refuses a bad
+   * key, the wrong slug and an undeclared namespace, and `checkpointJson`
+   * refuses a value that will not serialise — none of which ever reaches the
+   * database. Scrubbed, all four become "this app asked its database for
+   * something it would not do", the guard logs `database call failed` for a
+   * call that was never made, and the one sentence saying which rule was broken
+   * is gone.
+   */
+  it("lets a checkpoint's own refusal through as itself", async () => {
+    const err = await throwing(new CheckpointRequestError("\"abc\" is not a usable checkpoint key"))
+      .go()
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CheckpointRequestError);
+    expect((err as Error).message).toContain("not a usable checkpoint key");
   });
 
   /** The one that was already on the list, kept honest. */

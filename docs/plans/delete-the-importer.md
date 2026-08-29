@@ -678,6 +678,366 @@ Two more things the inventory turned up:
   run's stamp. It needs porting in D, and it is listed here because a sweep for "reads a file it
   wrote last time" finds it and it is the wrong drawer.
 
+#### Built, 2026-08-29 — the store, both adapters, and the three decisions
+
+Nothing calls it yet; porting `labels.ts` and `pdf-read.ts` onto it is landing D. What exists is the
+seam D writes through.
+
+| | |
+|---|---|
+| [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts) | the contract, the key rule, the retention constant. A **leaf** |
+| [`src/store/checkpoints-fs.ts`](../../src/store/checkpoints-fs.ts) | `<dir>/checkpoints/<namespace>/<key>.json`, and the sweep |
+| [`src/store/checkpoints-pg.ts`](../../src/store/checkpoints-pg.ts) | the `checkpoints` table, and the sweep |
+| [`scripts/checkpoints-sweep.ts`](../../scripts/checkpoints-sweep.ts) | the sweep's one caller. Reports by default |
+| `drizzle/0028_foamy_cassandra_nova.sql` | one table, one FK, one index, two CHECKs |
+| [`tests/store-checkpoints.test.ts`](../../tests/store-checkpoints.test.ts) | 25 cases, every one watched failing |
+
+##### 1. Scope and ownership — **the article is in the key, and there is no owner column**
+
+The plan says *content-addressed*, and the obvious reading of that is a globally shared row: two
+readers who upload the same PDF share one transcription. **That is not what was built**, and the
+reason is that it would have been an addition rather than a preservation. Both existing checkpoints
+are already article-scoped — `labels-progress.json` gates on `slug`
+([`src/labels.ts:683`](../../src/labels.ts)), and `pdf-chunks/` lives inside `data/<slug>/` — so
+removing the article would have *added* cross-reader sharing, which nobody asked for and which needs
+its own argument about what a cache hit tells a stranger about a document they already hold.
+
+`article_id` costs nothing the plan wanted. **A retry is a new revision, not a new article**, so
+every reuse that matters still lands: every retry, and every re-run of the same article. The only
+reuse it gives up is the one nobody has ever had.
+
+**Two readers therefore cannot land on the same row**, and the question of an owner column does not
+arise as a security question at all. It does not arise as a cleanup question either: `article_id` is
+`not null`, so every row belongs to an article, and `articles.owner_id` is the owner. That is the
+rule [`src/owner.ts`](../../src/owner.ts) states and `revision_blocks`, `revision_step_runs` and
+`block_identities` all follow — carrying the owner twice is a second copy to disagree with the first.
+`ai_calls` is the documented exception, and both of its reasons are absent here: its `article_id` is
+`on delete set null`, and half its rows have no article.
+
+**The step that makes the whole argument work, checked rather than assumed:
+`articles.slug` is globally unique** — `slug: text("slug").notNull().unique()`,
+[`src/db/schema.ts:142`](../../src/db/schema.ts), with no owner in the key, and the comment above it
+says why: it is the URL contract. So an article id maps to exactly one owner, one owner's article
+cannot share a slug with another's, and the `slug` gate already in `usableCheckpoint` was *already*
+keeping the labels checkpoint per-reader before any of this. `src/owner.ts` notes the consequence
+that two people ingesting the same URL is an open question rather than a thing that works; nothing
+here changes that either way.
+
+##### What `article_id` in the primary key costs, said out loud
+
+It is not free, and the schema should not be left to imply it. **The same PDF ingested as two
+articles pays for its chunks twice.** Two readers who upload the same paper each buy the whole
+transcription; so does one reader who ingests it twice under two slugs.
+
+That is the right price, for three reasons and in this order:
+
+1. **It is not a regression.** `pdf-chunks/` already lives inside `data/<slug>/`, so the filesystem
+   version pays twice for exactly the same case, today. Keying on content alone would be *adding*
+   cross-article reuse, not preserving it.
+2. **It is what makes "no owner column" safe** rather than merely convenient. A shared row is one
+   reader's paid model output served to another, and defending that needs an argument about what a
+   cache hit tells a stranger — a reader who possesses the bytes learns that somebody else possessed
+   them too, which is a real if small thing to have to argue. Scoping to the article removes the
+   question instead of answering it.
+3. **`on delete cascade` makes deletion honest.** A checkpoint holds a transcription of the reader's
+   own document. With the article in the key, deleting the article takes the transcription with it,
+   in the same statement, with no sweeper to run and nothing to get wrong. A content-only row would
+   outlive the article that paid for it and would have to be reasoned about — *whose* is a row two
+   readers both reference?
+
+The saving given up is a duplicate upload, which nobody has ever had and which is not a case this
+tool is for. The cost avoided is a shared cache of model output derived from readers' documents.
+
+What the two keys actually contain, checked rather than assumed:
+
+| | what is in it |
+|---|---|
+| `labels` | `PROMPT_VERSION`, the model, the effort, the system prompt, the batch's block ids, `setStarts`, the sibling sets, and the rendered prose. Gated separately on version, generator, **slug** and `sourceHash` |
+| `pdf-chunks` | a sha256 over `rawSha256`, the chunk's pages, its context, the prompt fingerprint, `reader.id` and `maxTokens` |
+
+**One correction to this plan's own text.** It describes the `pdf-chunks` key as containing *"the
+reader id"*, which reads as a person. It is `PdfReader.id`
+([`src/pdf-read.ts:330`](../../src/pdf-read.ts)) — `model/promptVersion`, the vision model's own
+name. **Neither key has a person in it**, which is correct today because neither piece of work
+depends on one.
+
+That is the rule the store cannot enforce and D must keep:
+
+> **Every input the work depends on has to be in the key. Including the reader's own, if there ever
+> is one.**
+
+`ideas` already carries a `profileHash`. A future checkpoint over anything shaped by
+`reader_profiles` has to hash the profile in, or two attempts at different times answer each other's
+question. Rows are per-article and an article has one owner, so today that is a correctness rule
+rather than a privacy one — and it stops being only that the day anything un-scopes these rows.
+
+`on delete cascade` is the last piece, and it is doing **privacy** work rather than tidiness: a
+checkpoint holds a transcription of the reader's own document, so deleting the article has to take it
+along rather than leave it for a sweep to find in ninety days.
+
+##### 2. Retention — **ninety days on `last_used_at`, swept by hand, and nothing schedules it**
+
+Today's answer is *unbounded, by silence*. This is the answer instead.
+
+An entry is dead when nothing will ever ask its question again — the prompt version moves, the model
+moves, or the text moves. All three are in the key, so a dead entry stops being *read* the instant it
+dies and nothing has to invalidate anything. What is left is only storage, and the sweep is a proxy:
+if nothing has asked in ninety days, probably nothing will. The number is a judgement — long enough
+that coming back to an article next quarter still hits, short enough that a year of superseded prompt
+versions does not pile up — and it is one constant.
+
+**`last_used_at` rather than `created_at`, and that is the half that had to exist on day one.** An
+entry hit every week is not old however long ago it was written, and a sweep on `created_at` deletes
+exactly the entries that were earning their keep — invisibly, with the bill as the only symptom.
+Adding the column later would not repair it, because the first sweep after it was added could not
+know which rows were hot. So `read` stamps it, in the same statement that serves the value, so a hit
+cannot be served without being recorded.
+
+**The sweep is not the retention policy, and an earlier draft of this section overstated it.**
+`on delete cascade` is the policy for the only case with a deadline. An article being deleted takes
+its checkpoints with it, in the same statement, and that is the case that matters — a transcription
+of the reader's own document must not outlive the article by ninety days waiting for a cron nobody
+wrote. The filesystem side gets the same thing for free, because the entries live inside
+`data/<slug>/`.
+
+**And there are no orphans**, in either store: the FK is `not null` with a cascade, and on disk the
+entries are inside the directory. So what is actually left for the sweep is one narrow case —
+
+> a **live** article whose checkpoints are dead because the question changed: the prompt version was
+> bumped, the model was swapped, or the text was re-extracted.
+
+Those rows are never read again and nothing will ever delete them by itself. That is a much smaller
+claim than "the sweep is the retention policy", and it is the honest one.
+
+**Nothing runs it, and that is stated rather than inherited.** `scripts/checkpoints-sweep.ts` is the
+one caller and it reports by default; `--delete` is the opt-in, because a sweep whose cutoff nobody
+has ever seen the effect of is one you find out about by paying for the work again. What makes no
+schedule safe is that **every row costs a paid model call to create**, so the table cannot grow
+faster than the bill — and the deletion with a deadline is already automatic, above. Housekeeping
+nobody runs leaves a growing table, not a broken one.
+
+##### 3. The interface — `CheckpointStore`, two methods, and no `delete`
+
+```ts
+read<T>(slug, namespace, keys): Promise<Map<string, T>>
+write(slug, namespace, key, value): Promise<void>
+```
+
+- **`read` is batched** because both callers know every key before they start — `labels.ts` computes
+  a fingerprint per batch from its plan, `pdf-read.ts` a key per chunk from its chunk list. One round
+  trip, and no single-key method, because a caller with one key passes an array of one.
+- **`write` is singular** because surviving a crash *mid-run* is the point.
+- **`slug` on every method** is the mandatory assertion against the bound article, the same thing a
+  review asked of `JobDraftRef` in `artifacts-pg.ts`: build a store for A, call it for B, and it
+  throws before reading or writing anything.
+- **The namespace is not a `StepName`.** `labels` is not a step — the `revision_step_runs_step` CHECK
+  rejects it, and this plan has been bitten by that once — so it is a closed set of its own,
+  `'toc-labels' | 'pdf-chunk'`, with a CHECK to match. See below: closing it is arguable.
+- **`read` returns the value as written and does not check its shape.** `usableCheckpoint` and
+  `checkChunk` are the real gates and are stricter than anything a store could be; teaching the store
+  what a batch is would put pipeline logic in storage. A miss and an unreadable entry are the same
+  answer here — *buy it again* — which is the only thing a caller can do about either. (That is the
+  opposite of `readBaseline` on the artefact store, deliberately: there, absent and corrupt lead to
+  *opposite* decisions.)
+- **No `has`, no `describe`, no `delete`.**
+
+**The missing `delete` is the one worth arguing.** `labels.ts` today mints a random `runId`, stamps
+every write with it, and has `clearCheckpoint` refuse to delete a file that is not its own. That
+machinery exists because *the unit of deletion was larger than the unit of work*: one file held every
+batch, so clearing it could destroy a live run's paid work. **One row per entry removes the hazard
+instead of guarding it**, and D drops the `runId` along with the file. The file also had to be
+cleared or it would carry stale entries forward for ever — the code says so — and rows do not have
+that problem, because each is addressed independently and a stale one is simply never asked for.
+
+So there is a behaviour change for D to make deliberately: **the labels checkpoint stops being
+deleted on success.** It is not correctness — `usableCheckpoint` plus a fingerprint match means a
+stale entry can never be used wrongly — and it buys something, since a later re-run of `toc` over the
+same tree resumes for free rather than re-buying every batch. Retention is the sweep. If D finds it
+genuinely needs a `delete`, that is one method to add then.
+
+##### The closed namespace, argued both ways
+
+`checkpoints_namespace` is `in ('toc-labels','pdf-chunk')`, and that sits against this plan's own
+sentence — *"the interface takes a namespace and an opaque content key, and the store never
+interprets either"*. Worth being explicit about, because it is a real tension and not a slip.
+
+**Against closing it.** Adding a third checkpoint costs a migration, which is a chore in the way of a
+small change; and the plan asked for the store not to interpret the namespace.
+
+**For closing it, which is what was built.** The two are not the same claim. *Interpreting* a
+namespace would be branching on it — a different table, a different lifetime, a different shape per
+namespace — and **nothing does that**: `nsDir` uses it as a path segment, the Postgres adapter binds
+it as a `where` value and an insert value, and no code path anywhere reads it to decide behaviour.
+What the CHECK does is refuse a namespace nobody declared, which is the same thing
+`revision_step_runs_step` does one table over and for the same reason: a typo would otherwise open a
+namespace that is written to and never read from, which is this landing's signature failure and the
+one that shows up only as a bill.
+
+The cost is one migration per new checkpoint, and that is the right moment to be made to think —
+a new checkpoint needs somebody to decide what its key contains, which is the rule the store cannot
+enforce. **If it ever becomes a nuisance, drop the CHECK and keep the TypeScript union**: the union
+is what makes a typo a compile error, and the CHECK is only the second line.
+
+##### And the key format, proved rather than agreed with
+
+`checkpoints_key_format` is `^[a-z0-9][a-z0-9_-]{0,127}$` — no dot at all, so `..` cannot be spelt;
+no `/`; lower case only, because macOS filesystems are case-insensitive and `AB`/`ab` would be one
+file and two rows. It is narrower than "any string" and a real key that failed it would land cleanly
+now and break in D, which is the worst available shape.
+
+So both real keys are checked **against the expressions that actually mint them**, not against a copy
+written into a test:
+
+| | what it emits | how it is proved |
+|---|---|---|
+| `batchFingerprint` ([`src/labels.ts`](../../src/labels.ts)) | `createHash("sha256")…digest("hex").slice(0, 16)` — 16 lower-case hex | `tests/labels-batching.test.ts` imports the real function and asserts every batch of a whole plan |
+| the chunk key ([`src/pdf-read.ts`](../../src/pdf-read.ts)) | the same construction over `rawSha256`, pages, context, prompt fingerprint, `reader.id` and `MAX_TOKENS` | it is **inline and not exported**, so `tests/pdf-read.test.ts` runs the stage over the real fixture PDF with a stub reader and asserts the file names it actually wrote |
+
+Both were watched red: digesting to `base64` instead of hex, upper-casing the hex, and — the one
+worth naming, because it is the plausible future edit — giving the chunk key a readable `chunk:`
+prefix. Each reddened its test and nothing else.
+
+Two notes for D. `reader.id` is `${model}/${PROMPT_VERSION}` and **contains a `/`**, which the key
+constraint would reject — it is safe only because it goes into the *hash input* and never into the
+key. And the pdf key being unexported is the one seam worth opening: a test can only reach it by
+running the whole stage, so **D should extract it into an exported function** and have the caller and
+the test share it. This repo has already paid for the other arrangement — see the memory about
+testing the value that crosses the seam.
+
+##### And the concurrency property, kept two different ways
+
+**The last write wins**, both adapters: `rename` on the filesystem, and `onConflictDoUpdate` setting
+`value` as well as `last_used_at` in Postgres. Two attempts answering one content-addressed question
+produce interchangeable answers — the PDF reader is nondeterministic, so they will not be
+byte-identical and it does not matter which survives — and since `write` is only ever reached after a
+failed read, the newest one is always the better-informed.
+
+This section originally said the *first* write wins, and the review found what that cost; the
+reasoning is in § What the code review found below, and it is worth reading before anybody proposes
+it again.
+
+**Outside the transaction, with a test that proves it.** The Postgres adapter uses `getDb()` — the
+pool — so a write lands on a different connection from any transaction the coordinator holds. There
+is no `tx` parameter anywhere in the file and adding one would silently undo the whole point; *a
+checkpoint survives the rollback of the attempt that wrote it* is the test that would go red.
+
+##### What the tests were watched failing against
+
+Thirty-three cases, of which **thirty have been watched red** against a named mutation applied to the
+real source and reverted; the table and the three exceptions are in the file's header. An earlier
+version of this line said "every one", over a list of exceptions — the two halves contradicted each
+other and the review caught it by counting. The two that matter:
+
+- *a retry after a new revision does not buy the work twice* — mutated by making the store prefix
+  every key with the article's newest revision id, which is the design the plan warned about. It
+  fails with **`expected 5 to be 3`**: the retry re-bought all three batches on top of the two
+  already paid for. That is the bug's exact signature, and it is why the test **counts paid calls**
+  rather than asserting a row exists — the row exists either way.
+- *a checkpoint survives the rollback of the attempt that wrote it* — mutated by writing through the
+  test's own transaction instead of the store.
+
+Three cases have no mutation. Two would need DDL — *the database refuses a key the code refuses*
+(which carries its own `IT WAS ACCEPTED` control instead) and *deleting the article takes its
+checkpoints with it* (which has none, and is the weakest assertion in the file). The third,
+*returns an empty map for an empty key list*, is unobservable on the filesystem by construction: the
+loop it guards is empty either way. Its Postgres twin is observable and has its own test.
+
+#### What the code review found — [b3-checkpoints-sol.md](b3-checkpoints-sol.md)
+
+**NO-SHIP, and the first finding was a bug I introduced in the name of concurrency.** Worth writing
+out, because the wrong answer sounded better than the right one.
+
+**A broken entry could never heal, and the sweep protected it.** The store used `link()` so the
+*first* write would win. A half-written entry reads as a miss, so the caller re-bought the work — and
+then could not store the answer, because `link` refuses with `EEXIST` when the file is there. The
+`EEXIST` branch bumped the file's mtime, so the sweep, the one thing that would eventually have
+removed it, was taught the entry was hot. Every attempt paid again, for ever, and nothing errored.
+
+That is **strictly worse than what it replaced**. The postmortem this design cites,
+[pdf-chunk-cache-corrupt-entry.md](../postmortems/pdf-chunk-cache-corrupt-entry.md), is about a
+corrupt entry that wedged an article *loudly* — a bug you find in an afternoon. A quiet permanent
+charge is one you find in the billing. And `src/pdf-read.ts` has always used a plain `rename`, so the
+`link` was not preserving today's behaviour either; it was inventing new behaviour and getting it
+wrong.
+
+**The fix is `rename` and `set: { value, … }` — last write wins, both adapters** — and the argument
+is one fact about the callers:
+
+> **`write` is only ever called by a caller that has just failed to read.**
+
+Both read first and buy only on a miss. So a write is never a second opinion about a good entry; it
+is always somebody reporting that what was there was *not usable*, and paying to find out. Keeping
+the older value discards exactly those answers. **And nothing was lost by giving first-write-wins
+up**: whole-or-absent is bought by the temp file and the rename, not by refusing to overwrite. All
+the refusal added was stopping one valid answer replacing another valid answer, and those are
+interchangeable by construction — the hazard it guarded against did not exist.
+
+The other four, and what each turned into:
+
+| finding | what it was | what changed |
+|---|---|---|
+| `write(…, undefined)` wrote the word `undefined` | `JSON.stringify(undefined)` is `undefined`, and a template literal makes nine characters of it. The file parses as nothing and reads as a miss for ever; Postgres refused the same value, so the two stores disagreed about a legal write | one shared `checkpointJson`, called by **both** adapters, and called *before* `mkdir` so a refusal leaves nothing behind |
+| filesystem faults were swallowed | `.catch(() => null)` turned `EACCES`/`EIO` into "no checkpoint", and `readdir(root).catch(() => [])` made an unreadable root report `{swept: 0}` and a success line — identical to a healthy tree with nothing old in it | `ENOENT` only; everything else goes up. `utimes` stays best-effort but now logs |
+| the empty-key test proved half its name | deleting either early return left it green | renamed to what it proves; the Postgres half got a real test that uses a non-uuid `articleId` so the database itself is the witness |
+| the regex accepts Windows reserved names | `con`, `nul`, `com1` | **not handled**, deliberately: there is no Windows path, and dead code that reads like a live rule is worse. Instead the contract now says the regex is the rule and 16-character hex is the practice |
+
+##### And a green report over a red gate — a third way, and it is not either of the two we had written down
+
+`npm run typecheck` was **red in a file I had created**, and I reported it clean. Worth the paragraph,
+because the two failure modes this repo already documents did not cause it and would not have caught
+it.
+
+What [typechecking.md](../project/typechecking.md) already warns about: run the **gate**, not the
+tool it wraps — `npx tsc -p tsconfig.json` misses the other two projects and reports clean; and read
+all three results rather than stopping at the first name you recognise. **Neither applies here.** I
+ran the real gate, on all three projects, and read it correctly.
+
+**The mistake was that I edited source afterwards and never re-ran it.** The last gate run was before
+the final fix; the report went out after. The result was true when it was produced and stale when it
+was quoted, which is a state no amount of reading the output more carefully would have revealed.
+
+Two things let it travel that far, and both are worth fixing as habits rather than as facts:
+
+1. **My standard gate command hid the evidence.** I ran `npm run typecheck 2>&1 | grep -E "^✓|^✗"`.
+   The per-error lines are *indented*, so that filter prints `✗ tests/tsconfig.json (607 files, 1
+   errors)` — a count with **no file name** — and drops every name beneath it. The repo's rule is
+   *filter the output, don't narrow the input*; this filtered so hard it removed the thing the filter
+   was for. A count told me "one error, and I know which one", and knowing which one came from a
+   separate `tsc -p … | head -5` whose `head` would have truncated a longer list.
+2. **186 tests were green across six suites while the gate was red**, because vitest does not
+   typecheck. Every check I ran after the offending edit was a check that could not see it. That is
+   [silent-success.md](../reusable/silent-success.md) exactly: the natural check shares an assumption
+   with the code — here, that a test run says something about types.
+
+The rule that covers it: **the gate must be the last thing you run before you report, not the last
+thing you remember running.** An edit after a gate run invalidates the gate run, including —
+especially — a one-line edit made to satisfy a *different* gate. The offending edit was the fix for
+`tests/fixture-ids.test.ts`, and it dropped a required field while replacing an object literal.
+
+And two the review did not raise, both from doing the work:
+
+- **`guardDbStore` is applied now, not left to D.** The header used to say D must do it — a
+  protection that expires the moment somebody wires the store up, and the person wiring it up reads
+  the call site rather than the header. `tests/store-guarded.test.ts` asks the object.
+- **Wrapping it exposed a second problem.** `guardDbStore`'s pass-through list is an allowlist, so it
+  scrubbed the store's *own* argument refusals — a bad key, the wrong slug — into "this app asked its
+  database for something it would not do", and logged `database call failed` for a call that was
+  never made. `CheckpointRequestError` now joins `ChatConflict`, `StaleAttemptError` and
+  `IllegalTransition` on that list, with its own test there, because the existing coverage for those
+  entries lives in a suite that skips itself without a database.
+
+Two of the failures found along the way were the tests defeating themselves rather than the store
+failing, and both are recorded in the file: reusing a key across Postgres cases (first-write-wins
+returned the earlier test's value), and checking "still there" **through the store** in the sweep
+test — which stamps `last_used_at`, so the check made the entry it was checking survive the sweep.
+
+##### One thing the drift guard did, unprompted
+
+Adding the table to `src/db/schema.ts` turned `tests/db-schema-drift.test.ts` red before the
+migration was applied anywhere, naming all six columns. That is the guard working as designed and
+worth recording as a datum rather than a chore: schema-drift-guard.md's mechanism caught a real
+undeclared-in-the-database table on its first outing after the plan that built it.
+
 ### C — the Postgres artefact adapter, plus the three replacement suites
 
 The `raw` kind writes a `raw_sources` row and the revision's reference columns rather than seven

@@ -391,6 +391,42 @@ describe("the whole stage, with the model stubbed out", () => {
       return names.filter((n) => n.endsWith(".json")).sort();
     }
 
+    /**
+     * **Every real cache key is one the checkpoint store would accept.**
+     *
+     * `docs/plans/delete-the-importer.md` § B3 moves these entries into a
+     * `checkpoints` table whose `key` column carries a CHECK constraint,
+     * `^[a-z0-9][a-z0-9_-]{0,127}$` — narrower than "any string", because the
+     * filesystem adapter turns the key into a file name and macOS is
+     * case-insensitive.
+     *
+     * This asserts it against **the keys this code actually mints**, not
+     * against a copy of the expression written into a test. The key is computed
+     * inline in `runPdfExtract` and is not exported, so the only honest way to
+     * see one is to run the stage and read the file names back — which is what
+     * `cacheFiles` already does for the tests below. Upper-case hex, a `:` or
+     * `=` separator, or a base64url `+` would every one of them pass a test
+     * that re-derived the key, and then be rejected by the database in landing
+     * D. `docs/reusable/silent-success.md`.
+     *
+     * The regex is duplicated here rather than imported, deliberately: importing
+     * `src/store/checkpoints.ts` from a stage test would let a change to the
+     * constraint silently relax this assertion at the same moment. If the two
+     * disagree, one of them is wrong and somebody should look.
+     */
+    it("mints cache keys the checkpoint store's key constraint accepts", async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-key-"));
+      await run(undefined, dir);
+      const names = await cacheFiles(dir);
+      /* Not vacuous: a run that cached nothing would pass every assertion
+         below about the contents of an empty list. */
+      expect(names.length).toBeGreaterThan(0);
+      for (const name of names) {
+        expect(name.endsWith(".json")).toBe(true);
+        expect(name.replace(/\.json$/, "")).toMatch(/^[a-z0-9][a-z0-9_-]{0,127}$/);
+      }
+    }, 60_000);
+
     it("reads a well-formed entry back rather than paying for the call again", async () => {
       const dir = await mkdtemp(path.join(tmpdir(), "spya-pdf-cache-"));
       const first = await run(undefined, dir);
