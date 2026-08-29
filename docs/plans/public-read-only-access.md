@@ -1974,6 +1974,52 @@ review. Two of the five findings in the code review above are about this state, 
 as live bugs by me and by the reviewer, because the plan asserted the state occurred and neither of us
 went and read the four builders. A rationale in a comment is not evidence; the throw is.
 
+### The logo sat on the sentence
+
+The browser pass, 2026-08-29, on the real article at 820px and 390px. One bug, and it is the kind
+only eyes find: **the corner logo and the visitor's notice were drawn on top of each other**, both
+illegible where they crossed, whenever a mode band was open.
+
+| | logo | notice | overlap |
+|---|---|---|---|
+| 820px, `?mode=glossary` | `(0,0,136,44)` | `(32,0,768,66)` | **4,576px²** |
+| 390px, `?mode=glossary` | `(0,0,42,44)` | `(12,0,378,106)` | **1,320px²** |
+
+At `scrollY: 0`, so it is not content sliding under a fixed element — it is the top of the page.
+
+**The cause is a rule that named one of the two things in a strip.** At iPad-portrait and below the
+band goes full width, so `styles.css` hides the article's masthead while one is open, and the
+reasoning there ends *"the controls bar sticks at zero immediately and the band sits exactly
+underneath it"*. The controls bar **was** the next element when that was written. It is not, for a
+visitor: `SharedNotice` sits between the two and nothing hid it, so it became the first thing on the
+page at `y: 0` — under `.logo-home`, which is `position: fixed` at the same origin and cannot be
+pushed by anything in flow.
+
+The fix is the same rule, extended, and it is right on its own terms rather than merely expedient:
+this is the half of the statement that belongs **with the title**, and the title is gone. The half
+meant to survive is the `ViewOnlyChip` in the controls bar, which is sticky — that split is the whole
+reason there are two of these. Confirmed in the browser across six cases (390 and 820 × plain,
+glossary, summary): overlap zero everywhere, the notice visible in the plain view at both widths and
+hidden under a band, and *"View only"* and *"Make a free account"* on screen in **all six**. The
+visitor is never left without the statement.
+
+Controlled by removing the rule and re-measuring: the overlap comes straight back at both widths, at
+the numbers in the table. Red, green, red, green.
+
+`tests/shared-notice-hides-with-the-masthead.test.tsx` holds the two halves together, and is honest
+about which half is worth what: the class assertion runs the component, the CSS assertion reads the
+file. Three controls, all red — drop the class, delete the rule, or move the rule out of the `@media`
+block, which would hide the notice at every width including the reading view where it is the point.
+
+**What the pass found by not finding it.** Everything else was clean, and two of them are worth
+recording because they are regressions that had already been caught once: hovering the article's own
+external links fired **no** request — neither the authenticated `/api/library` nor the off-origin
+Wikipedia call — and no owner control appeared on any band, drawer or page. The server log agrees
+from the other side: across 28 loads, `/api/public/article/…` and nothing else, plus two `404`s on
+`/api/article/…`, which is the designed first step of the two-step. Two, not twenty-eight — the
+client caches the *not yours* answer rather than re-probing an authenticated endpoint on every
+navigation.
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next

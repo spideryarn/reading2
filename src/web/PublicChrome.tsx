@@ -82,7 +82,20 @@ export function ViewOnlyChip() {
  */
 export function SharedNotice({ signedIn }: { signedIn: boolean }) {
   return (
-    <div className="tw:mx-auto tw:mb-4 tw:max-w-3xl tw:rounded-md tw:border tw:border-rule tw:bg-surface-raised tw:px-4 tw:py-3 tw:font-sans tw:text-sm tw:text-ink-faint">
+    /* **`shared-notice` is a hook for one rule and not styling.** In the reading
+       view this box sits between the masthead and the controls bar, and at
+       iPad-portrait and below `.reader:has(.mode-band) .masthead` is
+       `display: none` — the band goes full width and the article's identity
+       goes with it (styles.css § a narrow window). Without the same rule here
+       the notice became the first element on the page, at `y: 0`, underneath
+       the fixed corner logo: measured 2026-08-29 at 820px, logo `(0,0,136,44)`
+       against notice `(32,0,768,66)`, both illegible where they crossed.
+
+       Hiding it is right rather than expedient. This is the half of the
+       statement that belongs *with the title*, and the title is gone; the half
+       that has to survive is the `ViewOnlyChip` in the controls bar, which is
+       sticky and stays. That split is why there are two of these at all. */
+    <div className="shared-notice tw:mx-auto tw:mb-4 tw:max-w-3xl tw:rounded-md tw:border tw:border-rule tw:bg-surface-raised tw:px-4 tw:py-3 tw:font-sans tw:text-sm tw:text-ink-faint">
       <p className="tw:m-0">{SHARED_WITH_YOU}</p>
       {/* **What an account actually gets them**, and it is not this article.
           The offer used to promise chat, a glossary and a shelf entry *for this

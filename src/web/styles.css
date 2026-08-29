@@ -8340,6 +8340,17 @@ tr:hover .block-chat,
      exactly underneath it — which is what says which mode you are in and offers
      the way back. */
   .reader:has(.mode-band) .masthead { display: none; }
+  /* **And a visitor's notice goes with it**, for the reason above and one more.
+     It sits between the masthead and the controls bar, so with the masthead
+     gone it became the first thing on the page at `y: 0` — directly under the
+     fixed corner logo, which is `position: fixed` at the same origin and cannot
+     be pushed by anything in flow. Found by a browser pass, 2026-08-29; the
+     rects were logo `(0,0,136,44)` against notice `(32,0,768,66)`.
+
+     Not merely a collision fix: the sentence and the ask belong with the
+     title, and the chip in the controls bar is the half that was always meant
+     to survive a scroll. src/web/PublicChrome.tsx § SharedNotice. */
+  .reader:has(.mode-band) .shared-notice { display: none; }
 }
 
 /* ----------------------------------------------------- § a small device ----
