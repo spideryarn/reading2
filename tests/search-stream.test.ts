@@ -275,6 +275,41 @@ describe("a malformed SSE frame mid-stream", () => {
 });
 
 /**
+ * A `fetch` that honours the signal it is given, as the real one does — see
+ * tests/converse-stop.test.ts.
+ *
+ * Module scope rather than inside `describe("cancellation")` because the two
+ * clocks below abort through the *same* composite signal a reader's stop does,
+ * and a second copy of this would be a second chance for the two to drift.
+ */
+function stubFetch(make: () => Response | Promise<Response>) {
+  return vi.fn((_url: string, init: RequestInit) => {
+    const signal = init.signal as AbortSignal;
+    return new Promise<Response>((resolve, reject) => {
+      if (signal.aborted) return reject(signal.reason);
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      void Promise.resolve(make()).then(resolve, reject);
+    });
+  });
+}
+
+/** A response body that emits `frames` and then stays open until something aborts it. */
+function hangingBody(frames: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let sent = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (sent < frames.length) {
+        controller.enqueue(encoder.encode(frames[sent] as string));
+        sent++;
+        return;
+      }
+      return new Promise<void>(() => {}); // never resolves; the abort is what ends it
+    },
+  });
+}
+
+/**
  * Cancellation — `signal` on `SearchRequest`.
  *
  * Search has no stop button (unlike chat's `converse`) and its payload is one
@@ -286,34 +321,6 @@ describe("a malformed SSE frame mid-stream", () => {
  * JSON object is not a usable partial answer the way half a sentence is.
  */
 describe("cancellation", () => {
-  /** A `fetch` that honours the signal it is given, as the real one does — see tests/converse-stop.test.ts. */
-  function stubFetch(make: () => Response | Promise<Response>) {
-    return vi.fn((_url: string, init: RequestInit) => {
-      const signal = init.signal as AbortSignal;
-      return new Promise<Response>((resolve, reject) => {
-        if (signal.aborted) return reject(signal.reason);
-        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-        void Promise.resolve(make()).then(resolve, reject);
-      });
-    });
-  }
-
-  /** A response body that emits `frames` and then stays open until cancelled. */
-  function hangingBody(frames: string[]): ReadableStream<Uint8Array> {
-    const encoder = new TextEncoder();
-    let sent = 0;
-    return new ReadableStream<Uint8Array>({
-      pull(controller) {
-        if (sent < frames.length) {
-          controller.enqueue(encoder.encode(frames[sent] as string));
-          sent++;
-          return;
-        }
-        return new Promise<void>(() => {}); // never resolves; the abort is what ends it
-      },
-    });
-  }
-
   it("cancelling before the first byte throws — nothing was ever shown, because there was nothing to show", async () => {
     const controller = new AbortController();
     vi.stubGlobal("fetch", stubFetch(() => new Promise<Response>(() => {}))); // never replies
