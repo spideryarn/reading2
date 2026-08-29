@@ -25,6 +25,7 @@ import { Readability } from "@mozilla/readability";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fetchHtml } from "./fetch.js";
+import { escapeHtml } from "./html.js";
 import { slugFromUrl } from "./ingest.js";
 import { isMain } from "./is-main.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
@@ -46,13 +47,13 @@ import type { Meta } from "./types.js";
  * All five characters, not the three that "look like markup". `"` is what holds
  * `lang` inside its attribute, and the source page's `lang` is the only one of
  * these that lands in an attribute rather than in text.
+ *
+ * **The function itself moved to [`src/html.ts`](html.ts)** on 2026-08-29,
+ * unchanged, when stage 2 of the public-link work needed a third caller: a
+ * serverless function composing a `<head>` before the bundle loads. This copy
+ * and the one still in `pdf-read.ts` had already drifted apart by one character
+ * class, which is the argument for a shared module rather than a fourth copy.
  */
-const escapeHtml = (s: string): string =>
-  s.replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string,
-  );
 
 /**
  * The standalone, styled debug page. Not what the reading view renders — and

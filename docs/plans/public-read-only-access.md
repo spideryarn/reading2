@@ -2092,6 +2092,65 @@ from the other side: across 28 loads, `/api/public/article/…` and nothing else
 client caches the *not yours* answer rather than re-probing an authenticated endpoint on every
 navigation.
 
+### Stage 2, the part that needed nobody's permission
+
+Slice 1 opens with a `/read/:slug` rewrite that has to sit ahead of the SPA catch-all in
+`vercel.json`, and a peer was mid-deploy through that same file. So the routing waited and the pure
+half went first: [`src/html.ts`](../../src/html.ts) — `escapeHtml` and `headText` — plus
+`safePublicCanonical` in [`src/urls.ts`](../../src/urls.ts). No routing, no build, no deploy.
+
+`escapeHtml` existed twice already and **the two copies had drifted**: `src/extract.ts` escaped all
+five characters, `src/pdf-read.ts` four, missing `'`. Nobody chose that; it is what happens to a
+four-line helper written twice. `extract.ts` now imports the shared one — behaviour identical, so
+zero risk.
+
+**`pdf-read.ts` deliberately does not**, against the review's advice, and the reason is worth
+recording. Its copy escapes four characters, so unifying it changes the generated HTML for every PDF
+containing an apostrophe — which is nearly all of them. That HTML is stored, and re-extraction is not
+free. `hashBlocks` reads `text` rather than markup so the fingerprint is probably unaffected, but
+*probably* is the wrong standard for the file that mints block ids
+([block-ids.md](../project/block-ids.md)). It is a separate piece of work with a re-extraction cost,
+and it now has a comment at each end saying so.
+
+#### Three tests that passed for the wrong reason, found by mutating
+
+Every case has a mutation that must redden it, from the design's § 6. Running them found the tests
+wrong three times, and each is a different way to be inert.
+
+**The attribute test was checking the wrong rule.** It used the obvious payload — close the
+attribute, close the tag, open a new `<meta>` — and counted elements. Mapping `"` to itself left it
+**green**, because that payload also needs `<` and `>`, which a different entry escapes. The test was
+passing on the `<` rule while claiming to cover the `"` one. The payload that needs `"` and nothing
+else does not open a tag at all: it adds an **attribute** to the tag it is already inside,
+`" onload="alert(1)`. So the assertion is now the attribute *list*, and it reddens on exactly that
+mutation — as does its single-quote twin, which is why the table has five entries.
+
+**The title test was reading through the escaping it was checking.** It asserted `doc.title`
+contained `</title>`; `.title` returns *decoded* text, so `</title&gt;` decodes back and it passed
+with `<` unescaped. Switching to `innerHTML` did not help either — that re-serialises, so both inputs
+give byte-identical output. Measured both. **An assertion that reads through a normalising layer
+cannot see the thing that layer normalises**, and every reader of a parsed DOM normalises something.
+
+That one has a real conclusion rather than only a fix: escaping `>` alone already stops the title
+payload, because `<title>` is RCDATA and breaking out needs the exact string `</title>`. `<` and `>`
+are load-bearing **together** there. So the structural test now claims only what it proves — one
+element in, one element out — and a blunt per-character assertion covers the mappings, because that
+is the only shape a single-mapping mutation cannot survive.
+
+**And the mutation harness itself reported green while the test was red.** Its
+`grep -q "Tests .*failed"` missed vitest's coloured summary line, so two real failures were logged as
+"STILL GREEN". Caught by re-running one of them by hand and seeing three tests fail. The check on the
+check, again.
+
+#### One assertion the code lost an argument to
+
+`safePublicCanonical` was written to refuse any query string, and the test asserted that a trailing
+bare `?` was refused too. It was not. The URL standard parses `https://example.com/a?` to an *empty*
+query, so it never reaches the refusal — and on reflection it should not: a bare `?` carries no
+information, which is exactly what distinguishes it from the `?id=123` case the rule exists for.
+Refusing would have thrown away a good canonical. What it needed was `url.search = ""` to keep the
+stray `?` out of the serialisation. The test was right to fail and wrong about which way.
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next

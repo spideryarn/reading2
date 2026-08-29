@@ -44,6 +44,68 @@ export function isWebUrl(value: string): boolean {
 }
 
 /**
+ * **The article's own address, or nothing — for a `<link rel="canonical">`.**
+ *
+ * Stricter than `isWebUrl` above, and every extra rule is about the fact that
+ * this one is *published*: a canonical tag is a public statement, made in a
+ * document a stranger's link preview will fetch, about a URL we did not write.
+ * `meta.url` is the final address the fetcher landed on after redirects, so it
+ * carries whatever the site put there.
+ *
+ * The policy, and the one clause that is a judgement rather than a rule:
+ *
+ * 1. It must parse, and be `http:` or `https:`.
+ * 2. **No username or password.** `https://user:pw@example.com/a` is a valid
+ *    URL and publishing it hands out a credential.
+ * 3. **Any query string at all and we emit nothing.** This is the judgement.
+ *    The tempting move is to strip the query and publish the rest, and it is
+ *    wrong in both directions: a signed or tracking query is unsafe to publish,
+ *    and on a great many sites `?id=123` *is* the article's identity, so the
+ *    stripped URL names a different document — usually a section index. A
+ *    canonical pointing at the wrong page is worse than no canonical, because a
+ *    search engine believes it. Refusing is the honest answer to *I cannot tell
+ *    which of those this is*. GPT Sol, 2026-08-29.
+ * 4. **The fragment goes.** `#section-3` never identifies a different document,
+ *    and it is the one part of a URL droppable without changing which page is
+ *    meant.
+ * 5. **2,048 characters**, on the serialised result. Not a security limit — a
+ *    URL that long is a tracking payload in disguise, not a canonical address.
+ *
+ * Escaping is **not** done here. The caller escapes once at the HTML boundary
+ * ([`src/html.ts`](html.ts) § `escapeHtml`), because a function returning
+ * pre-escaped text is the kind that gets escaped twice by the next person.
+ *
+ * Returns the URL to publish, or `null` to omit the tag. There is no third
+ * answer: this is only ever called to decide whether one line goes into a head.
+ */
+export function safePublicCanonical(value: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  /* Both, and not only `username`: a URL may carry a password with an empty
+     username, and `new URL` keeps them in separate fields. */
+  if (url.username !== "" || url.password !== "") return null;
+  /* `search` is `""` when there is no query — **including** for a bare trailing
+     `?`, which the URL standard parses to an empty query rather than to a
+     one-character one. So that case reaches here, and the assignment below is
+     what removes the stray `?` from the serialisation: `url.toString()` keeps
+     it otherwise, and `https://example.com/a?` is a worse canonical than
+     `https://example.com/a` for no gain. Nothing is being decided away — a bare
+     `?` carries no information, which is exactly what makes it different from
+     the queries above. Found by the test, which had been written to expect a
+     refusal. */
+  if (url.search !== "") return null;
+  url.search = "";
+  url.hash = "";
+  const out = url.toString();
+  return out.length > 2048 ? null : out;
+}
+
+/**
  * The hostname, with a leading `www.` dropped — or `""` if the string will not
  * parse.
  *
