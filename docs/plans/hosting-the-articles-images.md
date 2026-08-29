@@ -500,6 +500,10 @@ future reader would not know to preserve. The tax is real and it is the cheaper 
    at `blobs-supabase.ts:29`.
 4. `fetchBytes` split out of `fetchDocument`, `fetchAsset` beside it. Existing fetch tests stay green
    unchanged — that is the whole safety argument for the surgery.
+   **This also clears a debt step 1 took on:** pinning pushed `attemptFetch` from under Biome's
+   cognitive-complexity limit to 28 against a max of 25. Lint is advice here rather than a gate, and
+   refactoring the function now would be undone by this step — but it is a regression step 1 caused,
+   so it is written down here rather than left to be noticed.
 5. The `assets` artefact through all 13 places, plus both read projections.
    `tests/store-artefacts-pg.test.ts` is the oracle.
 6. The `assets` step.

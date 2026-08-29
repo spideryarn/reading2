@@ -38,6 +38,7 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import path from "node:path";
 import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
+import { Agent } from "undici";
 import sniffHTMLEncoding from "html-encoding-sniffer";
 import { slugFromUrl } from "./ingest.js";
 import { isMain } from "./is-main.js";
@@ -481,12 +482,18 @@ export function parseTarget(input: string): URL {
  * `http://169.254.169.254/` are never articles, and refusing them by name costs
  * one function.
  *
- * **The known gap, stated on purpose:** we resolve the hostname and then let
- * `fetch` resolve it again to connect, so a DNS answer that changes in between
- * slips past. Closing that means pinning the resolved address through a custom
- * undici dispatcher, which is a dependency and a lot of machinery for an
- * attacker who would already need to control both a domain's DNS and Greg's
- * clipboard. Revisit if this ever accepts a URL from anyone else.
+ * **This used to be half a guard, and the other half is now `pinnedAgent`.**
+ * The check below runs against a resolver answer, and `fetch` then resolved the
+ * name *again* to open the socket — two lookups with nothing requiring them to
+ * agree, so a name answering `93.184.216.34` here and `127.0.0.1` there walked
+ * through a guard that reported success. That was written down as knowingly
+ * open, on the argument that an attacker needed a domain's DNS *and* Greg's
+ * clipboard.
+ *
+ * Fetching an article's own images ended that argument — the URLs come from the
+ * page, so a publisher chooses them, and there may be hundreds of them. The
+ * connection is now pinned to the address this function approved. GPT Sol,
+ * 2026-08-29; docs/plans/hosting-the-articles-images.md.
  */
 export function isBlockedAddress(address: string): boolean {
   const kind = isIP(address);
@@ -579,13 +586,26 @@ function isBlockedIPv6(address: string): boolean {
   return false;
 }
 
-async function guardAddress(url: URL, opts: Resolved, signal: AbortSignal): Promise<void> {
+/**
+ * The addresses this hop may dial, or `null` when the host is already one.
+ *
+ * **The return value is the load-bearing part**, and it used to be `void`. The
+ * caller pins the connection to exactly these, so what this function approves
+ * and what the socket does can no longer be two different answers — see
+ * `pinnedAgent`. A literal-IP host gives `null` because there is nothing to
+ * resolve and so nothing to disagree with.
+ */
+async function guardAddress(
+  url: URL,
+  opts: Resolved,
+  signal: AbortSignal,
+): Promise<string[] | null> {
   const host = url.hostname.replace(/^\[|\]$/g, "");
   if (isIP(host)) {
     if (isBlockedAddress(host)) {
       throw new FetchFailure("blocked-address", url.toString(), `${host} is not a public address.`);
     }
-    return;
+    return null;
   }
   if (host === "localhost" || host.endsWith(".localhost")) {
     throw new FetchFailure("blocked-address", url.toString(), "localhost is not an article.");
@@ -605,6 +625,78 @@ async function guardAddress(url: URL, opts: Resolved, signal: AbortSignal): Prom
       `${host} resolves to ${blocked}, which is not a public address.`,
     );
   }
+  /* An empty answer is not an approval. `find` on `[]` is `undefined`, which
+     reads exactly like "nothing blocked" — so without this, a resolver that
+     returned nothing would produce an empty pin list, and the lookup below
+     would refuse the connection with a confusing error instead of this one. */
+  if (addresses.length === 0) {
+    throw new FetchFailure("dns", url.toString(), `${host} has no address.`);
+  }
+  return addresses;
+}
+
+/**
+ * A dispatcher that dials **only** addresses `guardAddress` already approved.
+ *
+ * This is the half of the SSRF guard that closes the gap between checking a
+ * name and connecting to it. Node's `fetch` would otherwise resolve the
+ * hostname a second time, and a name that answers differently on the second
+ * lookup — DNS rebinding — is through.
+ *
+ * `connect.lookup` is undici's seam for exactly this. The **hostname is left
+ * alone**: it still goes into the `Host` header, the TLS SNI and the
+ * certificate check, so a pinned request to a virtual host reaches the right
+ * site and a forged certificate is still caught. Only the address the socket
+ * opens against is ours to decide.
+ *
+ * **A hostname absent from the map is refused rather than resolved.** Anything
+ * reaching the socket without having passed the guard is a bug above this line,
+ * and the safe reading of a bug is "do not dial". Defence in depth: nothing
+ * should ever get here.
+ *
+ * `pinned` is attached to the returned agent so a test can assert the real map
+ * the lookup closes over, rather than a copy that could drift from it.
+ */
+export function pinnedAgent(pinned: Map<string, readonly string[]>): Agent & {
+  pinned: Map<string, readonly string[]>;
+} {
+  const agent = new Agent({
+    connect: {
+      lookup: (
+        hostname: string,
+        options: { all?: boolean | undefined; family?: number | "IPv4" | "IPv6" | undefined },
+        callback,
+      ) => {
+        const approved = pinned.get(hostname.toLowerCase());
+        if (!approved || approved.length === 0) {
+          callback(new Error(`${hostname} was not checked by the address guard`), "", 0);
+          return;
+        }
+        /* `family` is a filter, not a preference: undici asks for 4 or 6 when
+           it means it, and handing back the other one connects to an address
+           the caller has already ruled out. 0 means either.
+
+           **It is not always a number.** Node accepts `"IPv4"` and `"IPv6"`
+           here as well, and the obvious `options.family ?? 0` reads either
+           string as a truthy non-4, non-6 value — so every address gets
+           filtered out and the connection fails with "no approved address" on
+           a request that was perfectly fine. */
+        const family = options?.family;
+        const wanted = family === "IPv4" ? 4 : family === "IPv6" ? 6 : (family ?? 0);
+        const entries = approved
+          .map((address) => ({ address, family: isIP(address) }))
+          .filter((entry) => entry.family !== 0 && (wanted === 0 || entry.family === wanted));
+        const first = entries[0];
+        if (!first) {
+          callback(new Error(`${hostname} has no approved IPv${wanted} address`), "", 0);
+          return;
+        }
+        if (options?.all) callback(null, entries as never);
+        else callback(null, first.address as never, first.family as never);
+      },
+    },
+  });
+  return Object.assign(agent, { pinned });
 }
 
 /* ------------------------------------------------------------------ *
@@ -1068,8 +1160,20 @@ async function attemptFetch(target: URL, requestedUrl: string, opts: Resolved): 
   const chain: string[] = [];
   let current = target;
 
+  /* **One agent for the whole attempt, and one map it reads.** Each hop adds
+     the addresses its own `guardAddress` approved, so a redirect is pinned to
+     what *it* was checked against rather than to the first host's answer. Built
+     lazily, because a chain of literal-IP hosts needs no dispatcher at all. */
+  const pinned = new Map<string, readonly string[]>();
+  let agent: (Agent & { pinned: Map<string, readonly string[]> }) | null = null;
+
+  try {
   for (let hop = 0; hop <= opts.maxRedirects; hop++) {
-    await guardAddress(current, opts, signal);
+    const approved = await guardAddress(current, opts, signal);
+    if (approved) {
+      pinned.set(current.hostname.replace(/^\[|\]$/g, "").toLowerCase(), approved);
+      agent ??= pinnedAgent(pinned);
+    }
     const here = current.toString();
     chain.push(here);
 
@@ -1082,6 +1186,10 @@ async function attemptFetch(target: URL, requestedUrl: string, opts: Resolved): 
       res = await opts.fetchImpl(here, {
         redirect: "manual",
         signal,
+        /* The pin. Undefined for a literal-IP host, where there is no name to
+           resolve twice — and undefined is also what every injected `fetchImpl`
+           in the tests sees, which is why they did not have to change. */
+        ...(agent ? { dispatcher: agent } : {}),
         headers: {
           "User-Agent": opts.userAgent,
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.9,*/*;q=0.8",
@@ -1147,6 +1255,14 @@ async function attemptFetch(target: URL, requestedUrl: string, opts: Resolved): 
     chain.at(-1) ?? requestedUrl,
     `That address redirected more than ${opts.maxRedirects} times.`,
   );
+  } finally {
+    /* **After the body, not after the response.** `readDocument` above reads
+       the whole body before returning, so by the time this runs there is
+       nothing still streaming through the agent's sockets. Closing it any
+       earlier would truncate a document; not closing it at all leaks a
+       connection pool per attempt, and this function runs once per retry. */
+    if (agent) await agent.close().catch(() => {});
+  }
 }
 
 async function readDocument(

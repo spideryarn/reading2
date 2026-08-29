@@ -832,15 +832,24 @@ is a kilobyte. The fix that actually closes it is an allowlist of URLs already i
 article, URLs the reader typed, citations from this turn's web search) and it is in
 [chat-tools.md § Still open](chat-tools.md#still-open).
 
-### The address guard does not survive DNS rebinding
+### The address guard now survives DNS rebinding <a id="dns-rebinding"></a>
 
-Also from that review, and also worth stating plainly: `guardAddress` resolves the hostname, checks
-the addresses against `isBlockedAddress`, and then `fetch` **resolves it again**. A hostname the
-attacker controls can answer publicly for the check and `127.0.0.1` or `169.254.169.254` for the
-connection. This is not new and was not introduced here — but this feature is what makes it matter,
-because the hostname used to come from the reader and now comes from a model that a page can argue
-with. The real fix is connecting to the address that was checked instead of re-resolving, which is
-`src/fetch.ts`'s to make.
+**Closed 2026-08-29.** It read, until then: `guardAddress` resolves the hostname, checks the
+addresses against `isBlockedAddress`, and then `fetch` **resolves it again** — so a hostname the
+attacker controls could answer publicly for the check and `127.0.0.1` or `169.254.169.254` for the
+connection. Two lookups, and nothing requiring them to agree.
+
+The fix is the one this section named: connect to the address that was checked instead of resolving
+again. `guardAddress` returns its approved addresses and `pinnedAgent` pins the socket to them
+through an undici dispatcher, per hop, with the hostname left alone for `Host`, SNI and certificate
+validation ([fetching.md § Addresses we won't dial](fetching.md#addresses-we-wont-dial)).
+
+What forced it was scope, not a new bug: [hosting the article's own
+images](../plans/hosting-the-articles-images.md) makes the fetcher follow URLs *a publisher chose*,
+hundreds per article, and the standing justification for the gap was that an attacker needed Greg's
+clipboard. `tests/fetch-dns-pinning.test.ts` stages the rebind — a resolver whose answer changes
+after the guard has accepted it — and proves the pin holds against a real socket, with an unpinned
+control that must not arrive.
 
 ### What does still hold
 
@@ -997,15 +1006,15 @@ Honest list. None is a reason to delay the fix above; all are worth knowing.
   while it is there. Every path to the queue goes through it, so the check cannot be bypassed by
   posting to the API directly.
 
-  **What it does not stop, stated plainly:** a *name* that resolves into the private range, a
-  redirect from a public URL into it, and a DNS rebind between the check and the connection. All
-  three can only be caught at connect time, which means inside the fetch stage
-  ([fetching.md](fetching.md)) — an allowlist of resolved addresses checked per connection, with
-  redirects re-checked. That belongs to that stage rather than to this one
-  ([architecture.md § Stage ownership](architecture.md#stage-ownership)), and is the single most
-  valuable thing left on this list now that the sanitiser holes are closed. Note the app is behind
-  a one-email gate ([auth.md](auth.md)), which narrows who can be sent such a link but does not make
-  the link safe.
+  **What it does not stop on its own:** a *name* that resolves into the private range, a redirect
+  from a public URL into it, and a DNS rebind between the check and the connection. All three can
+  only be caught at connect time, which means inside the fetch stage
+  ([architecture.md § Stage ownership](architecture.md#stage-ownership)) — and **all three are
+  caught there now**: `guardAddress` resolves and checks every hop, and since 2026-08-29 the
+  connection is pinned to the addresses it approved
+  ([above](#dns-rebinding), [fetching.md](fetching.md#addresses-we-wont-dial)). This was the single
+  most valuable thing left on this list; what remains here is that the queue's own check is a first
+  line rather than the line.
 
 ## If you are changing any of this
 

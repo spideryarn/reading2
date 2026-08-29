@@ -345,12 +345,25 @@ NAT, multicast and reserved ranges, including an IPv4 address wearing an IPv6 co
 (`::ffff:127.0.0.1`) and the cloud metadata address `169.254.169.254`. Every redirect hop is checked
 too, not just the first.
 
-This is a cheap baseline, not a hardened boundary, and the difference is worth stating: the app is
-one person's and the URL comes from their own text box. **The known gap** is DNS rebinding — we
-resolve, then `fetch` resolves again to connect, so an answer that changes in between slips past.
-Closing it means pinning the resolved address through a custom undici dispatcher: a dependency and a
-good deal of machinery, against an attacker who would need to control both a domain's DNS and Greg's
-clipboard. Revisit if this ever accepts a URL from anyone else.
+**DNS rebinding is closed, since 2026-08-29.** It was the known gap here for months, and the
+argument for leaving it open was that the URL comes from Greg's own text box, so an attacker would
+need a domain's DNS *and* his clipboard. [Hosting the article's own
+images](../plans/hosting-the-articles-images.md) ends that argument — those URLs come from the page,
+so a publisher picks them, and there can be hundreds per article.
+
+So `guardAddress` now **returns** the addresses it approved, and the connection is pinned to them
+through an undici dispatcher (`pinnedAgent`). The hostname is untouched, so it still goes into the
+`Host` header, the TLS SNI and the certificate check — only the address the socket opens against is
+ours to choose. One agent serves a whole redirect chain, and each hop adds what *its* own guard
+approved, so a redirect is pinned to its own answer rather than the first host's. A hostname absent
+from that map is refused rather than resolved: anything reaching the socket unguarded is a bug above
+that line, and the safe reading of a bug is *do not dial*.
+
+`undici` is now a declared dependency rather than one reached through Node's internals — the same
+call made for `html-encoding-sniffer` above.
+
+The rest is still a cheap baseline rather than a hardened boundary, and the difference is worth
+stating: the app is one person's, and everything else here refuses by name rather than by proof.
 
 The previous version had **no check at all** beyond the protocol
 ([original-version/extraction.md](original-version/extraction.md)), which is worth closing on
