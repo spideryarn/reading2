@@ -2170,6 +2170,31 @@ So this is the durable copy of what those files said. Rebuilding takes no model 
   hierarchy to derive. Its `raw.html` is kept in `data/` because it is a genuine fetch of the live
   Substack page and nobody need re-fetch it. Use fn-wikipedia for anything to do with footnotes.
 
+**Diagram mode, measured on the real article instead.** Diagram mode is owners-only by design
+(`src/web/visitor.ts` § `COSTS`, and `/api/similar` and `/api/projection` sit behind `requireUser`),
+so a signed-out browser cannot reach it and no browser evidence for it exists. The graph half of the
+fix was instead measured directly against `data/scaling-hypothesis`, which is a stronger test than
+the synthetic fixture the unit tests use (`output/graph-real.mts`):
+
+| | |
+|---|---|
+| vocabulary appearing **only** in the footnotes | 505 terms |
+| distinct terms across all 43 drawn nodes | 292 |
+| of those, footnote-only | **0** |
+| apparatus nodes drawn | **0** of 43 |
+| `totalWords` | 12,646 — the body exactly, not 16,855 |
+
+The apparatus is 4,209 words, a **quarter** of this article, so the word count is not a rounding
+difference: Force divides each node's position by that total, and counting the notes in the
+denominator squeezed the whole argument into the top three-quarters of the panel.
+
+**The first version of that probe was vacuous and said so by accident.** `GraphNode.terms` is an
+*array*, and reading it with `Object.keys()` collected the indices `"0"`–`"9"`, so it reported a
+graph vocabulary of ten terms and no leak — a clean result from a check that could not have found
+one. Ten terms across forty-three nodes is what gave it away. The probe now asserts the opposite
+direction too: that every one of the 292 terms it does see is a body term, so the extraction is
+working and a footnote term would be visible to it. **A count that looks too small is the tell.**
+
 **A false trail worth keeping.** The first fisheye reading looked exactly like the bug the plan
 warns about — the current tier moved to "Notes" while a separate ancestor highlight stayed stuck on
 an earlier part, which is "the panel claims the reader is still in the argument while they stand in
