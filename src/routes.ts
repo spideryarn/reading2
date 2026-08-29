@@ -1719,7 +1719,7 @@ function summarise(thread: ChatThread): ThreadSummary {
        anchored — but it still needs this. `?thread=` opens the floating
        `ChatDialog` in every mode but the two conversation modes, and that
        dialog is chat's UI asking with chat's prompt; a pasted
-       `?mode=toc&thread=<a review>` would continue a review as a chat. The
+       `?mode=hierarchy&thread=<a review>` would continue a review as a chat. The
        overlay is gated on this. src/web/App.tsx § overlay. */
     kind: thread.kind,
     turns: thread.messages.filter((m) => m.role === "user").length,

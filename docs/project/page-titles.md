@@ -109,9 +109,9 @@ has.
 Six of the seven modes are named in the title. `toc` — the table-of-contents columns, which is the
 default — is not.
 
-This looks like an omission and is the point. `toc` is where a reader spends most of their time, so a
-"Contents" in nearly every tab distinguishes nearly nothing, while spending eleven characters at the
-end of a string that is already being cut. **Front-loading is not only about order; it is about only
+This looks like an omission and is the point. `hierarchy` is where a reader spends most of their
+time, so a "Hierarchy" in nearly every tab distinguishes nearly nothing, while spending twelve
+characters at the end of a string that is already being cut. **Front-loading is not only about order; it is about only
 saying what is different about this tab.**
 
 It also agrees with the URL, which leaves the default mode out for a related reason
@@ -287,8 +287,8 @@ be a wrong one.
   name is last on every page but the two homepages.
 - **Adding the strapline "for consistency".** Same shape: reads as tidier, and is the thing Google's
   guidance names as the reason it overrides titles. There is a test for that too.
-- **Spelling out `Contents` for the default mode.** Reads like completing a list. Costs every tab in
-  the window eleven characters to say the thing they all have in common.
+- **Spelling out `Hierarchy` for the default mode.** Reads like completing a list. Costs every tab in
+  the window twelve characters to say the thing they all have in common.
 - **A new page with no `useDocumentTitle`.** It inherits whatever the last page set, so a stale title
   sits on the new page looking entirely plausible. Nothing catches this but noticing.
 - **A live region created and written in the same tick**, or emptied and refilled in one. Both are

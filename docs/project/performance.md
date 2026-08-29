@@ -498,7 +498,8 @@ that cannot see the page cannot tell you the page is broken.
 
 ## Scrolling, 2026-08-27
 
-Greg: *"it looks like CPU usage spikes briefly e.g. when I scroll in the main Contents & Text
+Greg (the Contents mode was renamed Hierarchy on 2026-08-29): *"it looks like CPU usage spikes
+briefly e.g. when I scroll in the main Contents & Text
 view."*
 
 That is work a reader asked for, so it is allowed to cost something. It was costing a re-render of

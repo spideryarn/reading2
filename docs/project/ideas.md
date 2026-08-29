@@ -62,7 +62,7 @@ answers to.
  │             │ Ideas you could carry │                            │   │
  │             │ out of it …           │                            │   │
  ├─────────────┴───────────────────────┴────────────────────────────┴───┤
- │ ⊞Contents ▤Summary 📖Glossary 💡Ideas ● 🔍Search ⌸Chat  …              │
+ │ ⊞Hierarchy ▤Summary 📖Glossary 💡Ideas ● 🔍Search ⌸Chat  …             │
  └───────────────────────────────────────────────────────────────────────┘
 
  The heading over the passages is the whole of "this is a hypothesis". An

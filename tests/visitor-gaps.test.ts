@@ -95,8 +95,8 @@ describe("what a visitor is told, mode by mode", () => {
   it("gives the table of contents away, which is the whole feature", () => {
     // The tree, the zoom, the spine — all drawn from the payload the visitor
     // already holds, and none of it costs anything to serve.
-    expect(visitorGap("toc", EVERYTHING_BUILT)).toBeNull();
-    expect(visitorGap("toc", NOTHING_BUILT)).toBeNull();
+    expect(visitorGap("hierarchy", EVERYTHING_BUILT)).toBeNull();
+    expect(visitorGap("hierarchy", NOTHING_BUILT)).toBeNull();
   });
 
   /**
@@ -188,7 +188,7 @@ describe("what a visitor is told, mode by mode", () => {
        contents it is drawn from the tree in the payload they already hold and
        reaches no artefact at all. docs/plans/outline-mode.md. */
     expect([...markedModes(NOTHING_BUILT).keys()].sort()).toEqual(
-      MODES.filter((m: Mode) => m !== "toc" && m !== "outline")
+      MODES.filter((m: Mode) => m !== "hierarchy" && m !== "outline")
         .slice()
         .sort(),
     );
@@ -207,7 +207,7 @@ describe("what a visitor is told, mode by mode", () => {
     for (const mode of MODES) {
       const gap = visitorGap(mode, EVERYTHING_BUILT);
       if (
-        mode === "toc" ||
+        mode === "hierarchy" ||
         mode === "outline" ||
         mode === "glossary" ||
         mode === "summary" ||

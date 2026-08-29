@@ -199,8 +199,12 @@ Anything expensive is cached on a content hash. `tree.json` is keyed on
 **That was aspirational until 2026-08-25, and now one artefact really does it.** `tweets.json`
 carries a `sourceHash` and the pipeline reads it (`isDone` on a step, see
 [ingest-queue.md](ingest-queue.md#a-step-can-now-say-whether-its-artefact-is-current-not-just-present));
-`tree.json` and `arc.json` still carry no hash, so for them "cached" still means "the file is
-there", and they still rely on the force-cascade to notice that something upstream moved.
+**`arc.json` joined it on 2026-08-29** and carries a `sourceHash` over the blocks, the tree and the
+metadata its prompt uses ([`src/arc.ts`](../../src/arc.ts) § `inputFingerprint`), read through a
+`stamp` on the step. `tree.json` still carries no hash, so for it "cached" still means "the file is
+there" and it still relies on the force-cascade to notice that something upstream moved — see
+[`src/pipeline.ts`](../../src/pipeline.ts) § `toc`, where a stamp was written and withdrawn because
+it needs consumer invalidation first.
 
 `blocks.json` is the exception: it is a **source artefact, not a cache**. It is the only place the
 ids live, and stage 3 carries them forward by matching text on re-run — so deleting it destroys

@@ -47,7 +47,7 @@
  * docs/project/url-state.md for the state these titles are drawn from.
  */
 import { useEffect } from "react";
-import type { Mode } from "./params.js";
+import { DEFAULT_MODE, type Mode } from "./params.js";
 import type { AdminPage, ArticleView } from "./router.js";
 
 /** The product. `spideryarn2` is the working directory; this is the name. */
@@ -95,7 +95,7 @@ export const CLAMP = 64;
 
 /** Which of an article's nine middle-band modes, by the name the Dock uses. */
 const MODE_LABEL: Record<Mode, string> = {
-  toc: "Contents",
+  hierarchy: "Hierarchy",
   outline: "Outline",
   summary: "Summary",
   glossary: "Glossary",
@@ -238,7 +238,7 @@ function segments(spec: TitleSpec): string[] {
  * where it says nothing at all:
  *
  * **The default mode is left out.** `toc` is where a reader spends most of
- * their time, so a "Contents" in nearly every tab distinguishes nearly
+ * their time, so a "Hierarchy" in nearly every tab distinguishes nearly
  * nothing, while costing every tab eleven characters at the end of a string
  * that is already being cut. Front-loading is not just about order; it is about
  * only saying what is *different* about this tab. The URL leaves the default
@@ -248,8 +248,8 @@ function segments(spec: TitleSpec): string[] {
 function readTitle(spec: Extract<TitleSpec, { kind: "read" }>): string[] {
   const title = clamp(spec.title.trim()) || "Untitled";
   if (spec.view !== "article") return [title, VIEW_LABEL[spec.view]];
-  const mode = spec.mode ?? "toc";
-  return mode === "toc" ? [title] : [title, MODE_LABEL[mode]];
+  const mode = spec.mode ?? DEFAULT_MODE;
+  return mode === DEFAULT_MODE ? [title] : [title, MODE_LABEL[mode]];
 }
 
 /** Drop the empties, then join. See `pageTitle` for why the empties happen. */
@@ -335,7 +335,7 @@ export function host(text: string): string {
  * ## What is announced, and when
  *
  * **Everything but the app's name.** Not just the leading segment: switching
- * mode changes the tab from `… · Contents` to `… · Glossary`, and announcing
+ * mode changes the tab from `… · Hierarchy` to `… · Glossary`, and announcing
  * the first segment alone would repeat the article's title and say nothing
  * about what the reader had just pressed. And not the app's name either —
  * hearing *"· Spideryarn"* after every navigation is the audible version of the

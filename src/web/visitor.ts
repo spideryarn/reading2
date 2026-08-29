@@ -160,7 +160,7 @@ export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap |
   /* The table of contents, the granularity zoom and the spine are the whole
      point of the feature and cost nothing: they are drawn from the tree in the
      payload the visitor already has. */
-  if (mode === "toc") return null;
+  if (mode === "hierarchy") return null;
 
   /* Outline is the same bargain and had to be named to get it. The fall-through
      below is deliberately fail-closed, so a mode added later is owners-only

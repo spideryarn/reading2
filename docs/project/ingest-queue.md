@@ -426,8 +426,16 @@ forces the thread; `force: ["tweets"]` still does, which is the rewrite button.
 
 **Read that together with the next section, because neither half is safe alone.** Taking a step out
 of the cascade is only defensible when the step can tell for itself whether it is current — and
-`tweets` can. `arc` deliberately stays *in* the cascade for the inverse reason: it has no freshness
-check, so its position is the only signal it has. Give it one and it belongs in the set too.
+`tweets` can. `arc` stayed *in* the cascade for the inverse reason — it had no freshness check, so
+its position was the only signal it had.
+
+**It has one as of 2026-08-29** ([`src/arc.ts`](../../src/arc.ts) § `inputFingerprint`, over the
+blocks, the tree and the metadata the prompt carries), which by that rule makes it a candidate for
+the set. It is worth knowing *why* it needed one: position was never quite the signal it looked
+like. `cascadeForce` only names steps already in the job, so a forced `{ steps: ["toc"] }` never
+reached `arc` at all — the tree was re-cut, `arc.json` stayed, and the reading view silently dropped
+every arc entry whose range no longer matched a node, because the join is by exact block range.
+docs/plans/defer-arc-and-rename-hierarchy.md § 2.1.
 
 ### A step can now say whether its artefact is *current*, not just present
 

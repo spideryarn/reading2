@@ -385,7 +385,31 @@ describe("search mode parameters", () => {
     expect(modeParam.parse("search")).toBe("search");
     // And a mode from a later version still shows the article.
     expect(modeParam.parse("summaries")).toBeNull();
-    expect(modeParam.defaultValue).toBe("toc");
+    expect(modeParam.defaultValue).toBe("hierarchy");
+  });
+
+  /**
+   * **The one test standing between every pre-rename link and a broken page.**
+   *
+   * The mode was called `toc` until 2026-08-29. A first draft of that rename
+   * argued the change could not break a link, because `toc` was the default and
+   * "the default never appears in a URL" — which was false: `withMode` in
+   * src/web/Dock.tsx wrote the parameter unconditionally, default included, so
+   * every dock navigation stamped `?mode=toc` into a URL a reader could copy.
+   * GPT Sol caught it.
+   *
+   * What actually keeps those links working is the unknown-value rule: `toc` is
+   * now simply unrecognised, and an unrecognised mode falls back to the default
+   * — which is `hierarchy`, the very view `toc` named. That is a safety net
+   * rather than a plan, and until this test existed it was an argument rather
+   * than an observation.
+   */
+  it("still shows the hierarchy for a link written before the rename", () => {
+    expect(MODES).not.toContain("toc");
+    expect(modeParam.parse("toc")).toBeNull();
+    // null is what `withDefault` turns into the default, so the reader lands on
+    // the same view the old link meant rather than on an error.
+    expect(modeParam.defaultValue).toBe("hierarchy");
   });
 });
 

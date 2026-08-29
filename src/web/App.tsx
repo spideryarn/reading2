@@ -1119,20 +1119,20 @@ function Reader({
    */
   const [mode, setMode] = useQueryState("mode", modeParam);
 
-  /* The tab: the article first, then the mode — and nothing for `toc`, which is
-     the mode most tabs are in and so the one that distinguishes nothing. See
-     src/web/page-title.ts. */
+  /* The tab: the article first, then the mode — and nothing for `hierarchy`,
+     which is the mode most tabs are in and so the one that distinguishes
+     nothing. See src/web/page-title.ts. */
   useDocumentTitle(pageTitle({ kind: "read", title: article.meta.title, view: "article", mode }));
-  /* Any mode that is not the table of contents takes the band. Written as
-     "not toc" rather than as `chat || glossary` on purpose: the third mode cost
-     this line nothing, which is the property the slot was built for, and the
-     fourth should cost it nothing either. */
-  const inMode = mode !== "toc";
+  /* Any mode that is not the hierarchy takes the band. Written as
+     "not hierarchy" rather than as `chat || glossary` on purpose: the third mode
+     cost this line nothing, which is the property the slot was built for, and
+     the fourth should cost it nothing either. */
+  const inMode = mode !== "hierarchy";
 
   /**
    * What stands between a visitor and the mode they have opened, if anything.
    *
-   * `null` for the owner and `null` for `toc`, which is the mode the whole
+   * `null` for the owner and `null` for `hierarchy`, which is the mode the whole
    * feature is about: the table of contents, the granularity zoom and the spine
    * are drawn from the tree in the payload the visitor already holds, so they
    * cost nothing and a stranger gets all of them. visitor.ts.
@@ -1814,7 +1814,7 @@ function Reader({
             <button
               type="button"
               className="linky"
-              onClick={() => void setMode("toc")}
+              onClick={() => void setMode("hierarchy")}
               title="Back to the table of contents columns"
             >
               back to contents

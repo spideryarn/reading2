@@ -85,10 +85,10 @@ still true. It is not a promise the reader cannot put the rail away themselves: 
 the controls bar does exactly that, in every mode, and it is the one granularity-bar control that
 stays on screen in one ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail),
 [url-state.md](url-state.md) for `?spine=`). The prose is the half with no off switch: `?text=0` hides it
-in the table-of-contents mode and nowhere else, which is what `proseVisible` in
+in the hierarchy mode and nowhere else, which is what `proseVisible` in
 [`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice.
 
-Chat is the first mode that is not the table of contents
+Chat is the first mode that is not the hierarchy
 ([chat-mode.md](../plans/chat-mode.md)). Adding a second — the Glossary in Greg's example — is a
 value in `MODES`, a component, and a width; it is deliberately not a new negotiation with
 `layout.ts` each time.

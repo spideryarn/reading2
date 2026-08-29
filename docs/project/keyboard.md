@@ -107,7 +107,8 @@ to whatever is under the pointer. You can hold a level without holding your hand
 it back by doing the thing you were going to do anyway. Nothing to get stuck in, because the way out
 is the way you already navigate.
 
-**Clicking a bar button must not take the keys.** Greg, same day:
+**Clicking a bar button must not take the keys.** Greg, same day, when the button was
+still called Contents:
 
 > I noticed that if I'd just clicked the bottom-bar "Contents" button, say, then left/right changed
 > within that radio group, rather than the Contents columns (which should be the priority for those
@@ -115,8 +116,8 @@ is the way you already navigate.
 
 The bottom bar's mode switch is a `role="radiogroup"`, and that role is a promise about the arrow
 keys, so it takes them whenever focus is inside it. Which is right when the reader *tabbed* there,
-and wrong when they clicked — clicking Contents is how you get to the contents, so the next arrow
-you press is meant for the contents, and nobody thinks the button they let go of is still listening.
+and wrong when they clicked — clicking Hierarchy is how you get to the hierarchy, so the next arrow
+you press is meant for it, and nobody thinks the button they let go of is still listening.
 So a pointer-driven click blurs the button afterwards and a keyboard-driven one does not
 (`e.detail > 0` tells them apart — Enter and Space report 0). The role keeps every promise it made
 to anyone who arrived by keyboard. See [`Dock.tsx`](../../src/web/Dock.tsx) § The one collision.

@@ -169,8 +169,12 @@ instead of on a 404.
 
 **A mode is a parameter, not a segment.** `?mode=chat`, `?mode=glossary` and `?mode=search` replace
 the middle band between the spine and the prose ([chat-mode.md](../plans/chat-mode.md),
-[glossary.md](glossary.md), [search.md](search.md)); the default, `toc`, is the gist columns and
-never appears in a URL. They push history, because a mode is where you are rather than a glance. Each
+[glossary.md](glossary.md), [search.md](search.md)); the default, `hierarchy`, is the gist columns.
+It was called `toc` until 2026-08-29, and this paragraph used to add "and never appears in a URL",
+which was false — `withMode` in [`Dock.tsx`](../../src/web/Dock.tsx) wrote the parameter for every
+mode including the default, so links carrying `?mode=toc` are real. They still work, because an
+unrecognised mode falls back to the default; `withMode` now omits the parameter when it is the
+default, so new links are canonical. They push history, because a mode is where you are rather than a glance. Each
 carries its own parameters — `?thread=` for the open conversation, `?term=` for the selected glossary
 term, `?run=` for the saved search being shown, all `replace` because stepping between them is
 browsing. `?sort=` orders the glossary and `?order=` orders the search results; both push, because

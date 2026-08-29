@@ -46,7 +46,7 @@ Code: [`src/search.ts`](../../src/search.ts) (the model call),
  │              │       An example, not    │  There is nothing it is like to   │
  │              │       an argument        │  be one.                          │
  ├──────────────┴──────────────────────────┴───────────────────────────────────┤
- │ ⊞Contents ▤Summary 𝐀Glossary 🔍Search ⌸Chat │ ✳Questions ≡Tweets ⓘMetadata   │
+ │ ⊞Hierarchy ▤Summary 𝐀Glossary 🔍Search ⌸Chat │ ✳Questions ≡Tweets ⓘMetadata  │
  └─────────────────────────────────────────────────────────────────────────────┘
 
    ▐92▌ the model's confidence, printed as well as drawn

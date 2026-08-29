@@ -58,7 +58,7 @@ until you know what they are for.
  │             ├─────────────────────┤                         │
  │             │ Find more · Start   │                         │
  ├─────────────┴─────────────────────┴─────────────────────────┤
- │ ⊞Contents ▤Summary 📖Glossary ● 🔍Search ⌸Chat  …             │
+ │ ⊞Hierarchy ▤Summary 📖Glossary ● 🔍Search ⌸Chat  …            │
  └─────────────────────────────────────────────────────────────┘
 
  The bar's five modes, with Glossary lit. Questions, Tweets and Metadata sit
@@ -121,7 +121,7 @@ So the glossary is the third implementation of the slot described in
 [chat-mode.md](../plans/chat-mode.md), and it needed **no new layout arithmetic at all**. `fitView`
 in [`layout.ts`](../../src/web/layout.ts) already knew about the slot rather than about chat; the
 whole change there was one line in [`App.tsx`](../../src/web/App.tsx) — `chatting` became
-`mode !== "toc"`. That is the evidence that the reframing was right, and it is worth recording
+`mode !== "hierarchy"` (`toc` until the mode was renamed on 2026-08-29). That is the evidence that the reframing was right, and it is worth recording
 because the reframing looked at the time like extra ceremony for one feature.
 
 Two consequences worth knowing:
@@ -131,7 +131,8 @@ Two consequences worth knowing:
   agree. Each panel keeps a class of its own for whatever only it needs.
 - The Dock's `DockMode` docstring said it should become a `role="radiogroup"` once there were three
   modes. There are three, and **it stayed a toggle** — see [Dock.tsx](../../src/web/Dock.tsx) for
-  why the count was the wrong trigger. The bar shows two of the three modes, because `toc` has no
+  why the count was the wrong trigger. The bar shows two of the three modes, because `hierarchy`
+  (then called `toc`) had no
   button, and a radiogroup naming two options is a worse lie than `aria-pressed`.
 
 ## What is generated, and when

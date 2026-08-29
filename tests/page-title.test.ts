@@ -59,7 +59,7 @@ describe("an article", () => {
   });
 
   it("says nothing about the default mode — that is the point of it", () => {
-    expect(pageTitle({ kind: "read", title, view: "article", mode: "toc" })).toBe(
+    expect(pageTitle({ kind: "read", title, view: "article", mode: "hierarchy" })).toBe(
       `${title}${SEP}${APP_NAME}`,
     );
   });
@@ -79,7 +79,7 @@ describe("an article", () => {
     };
     for (const mode of MODES) {
       const t = pageTitle({ kind: "read", title, view: "article", mode });
-      if (mode === "toc") {
+      if (mode === "hierarchy") {
         expect(t).toBe(`${title}${SEP}${APP_NAME}`);
         continue;
       }

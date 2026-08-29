@@ -208,18 +208,27 @@ export const panelParam = createParser<Panel>({
  * > middle sections are just such a mode that can be chosen from the bottom-bar
  * > (the default).
  *
- * So `toc` is a real value with a real name, even though it is the default and
- * therefore never appears in a URL. Naming it is what makes the next mode an
- * addition to a list rather than a second special case.
+ * So `hierarchy` is a real value with a real name, even though it is the default.
+ * Naming it is what makes the next mode an addition to a list rather than a
+ * second special case.
+ *
+ * **It does appear in URLs, and a first draft of this file's rename said it did
+ * not.** `withMode` in src/web/Dock.tsx wrote the parameter unconditionally,
+ * default included, so links carrying the old `?mode=toc` are real and shared.
+ * They still work — see the unknown-value rule below — and `withMode` now omits
+ * the parameter when the mode is the default, so URLs made from here on are
+ * canonical. GPT Sol caught this, 2026-08-29.
  *
  * **`push`, unlike `?panel=`.** A drawer is a glance; a mode is where you are.
  * Switching to chat and pressing Back should put the table of contents back,
  * the same way toggling a column does — and unlike opening and closing a panel,
  * you do not do it twice in ten seconds, so it will not fill the history.
  *
- * An unknown value parses to `toc` rather than throwing, so a link from a
+ * An unknown value parses to `hierarchy` rather than throwing, so a link from a
  * future version with a mode this one has not got degrades to the article
- * instead of to an error. Same rule as `parseAsBlockId` and `panelParam`.
+ * instead of to an error. **This is also what keeps every pre-2026-08-29
+ * `?mode=toc` link working**: `toc` is now simply an unrecognised value, and an
+ * unrecognised value lands on the default, which is the very view `toc` named. Same rule as `parseAsBlockId` and `panelParam`.
  *
  * The Glossary that paragraph used to name as hypothetical arrived on
  * 2026-08-25 (docs/project/glossary.md), which is the first evidence that the
@@ -230,7 +239,13 @@ export const panelParam = createParser<Panel>({
  * (docs/project/diagram.md), and it cost this list one word as well.
  */
 export const MODES = [
-  "toc",
+  /* Renamed from `toc` on 2026-08-29, at Greg's request: the reader sees
+     "Hierarchy" and the code now says the same word. It also ends a collision
+     that had lasted as long as the list — `toc` was simultaneously this mode and
+     the *pipeline step* that builds tree.json (src/pipeline.ts § STEP_ORDER), so
+     one word meant two things in one repo. The step keeps the name; the mode
+     gives it up. docs/plans/defer-arc-and-rename-hierarchy.md § 3. */
+  "hierarchy",
   "chat",
   "glossary",
   "search",
@@ -260,11 +275,21 @@ export const MODES = [
 ] as const;
 export type Mode = (typeof MODES)[number];
 
+/**
+ * The mode a reader lands in, named once.
+ *
+ * Two places need it — `modeParam`'s fallback below, and `withMode` in
+ * src/web/Dock.tsx, which omits the parameter when it is writing this value. A
+ * literal in both would be two copies of one decision, and the copy that drifts
+ * is the one that puts a redundant `?mode=` back into every URL.
+ */
+export const DEFAULT_MODE: Mode = "hierarchy";
+
 export const modeParam = createParser<Mode>({
   parse: (v) => (MODES.includes(v as Mode) ? (v as Mode) : null),
   serialize: (v) => v,
 })
-  .withDefault("toc")
+  .withDefault(DEFAULT_MODE)
   .withOptions({ history: "push" });
 
 /**

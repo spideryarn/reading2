@@ -4928,7 +4928,7 @@ td.text.has-hit[data-hues="8"] {
 }
 
 /* ------------------------------------------------------- the mode switch --
-   The three things the middle band can be — Contents, Chat, Glossary — drawn
+   The three things the middle band can be — Hierarchy, Chat, Glossary — drawn
    as one control rather than three buttons that happen to be adjacent. See
    DockModes in Dock.tsx, and docs/plans/chat-mode.md for what a mode is.
 

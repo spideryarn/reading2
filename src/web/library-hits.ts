@@ -106,7 +106,7 @@ export function queryTerms(query: string): string[] {
  *
  * - `at` — the block to scroll to. Without it you land at the top.
  * - `mode=search` — the reading view mounts the band that *draws* the marks only
- *   in search mode, and the default mode is `toc`. Without this the other two
+ *   in search mode, and the default mode is `hierarchy`. Without this the other two
  *   parameters arrive at a page with nothing listening for them: right
  *   paragraph, nothing highlighted, no error. This is the one that was missing.
  * - `find` — the words themselves. **One term, not the query**: in-article

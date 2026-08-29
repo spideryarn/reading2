@@ -111,7 +111,7 @@ export interface Fit extends Layout {
    * It is `0` in two cases, and reading it as "there is no band" is wrong in
    * the second: the table-of-contents mode, where there genuinely is no band —
    * and **a window under 844px, where there is one and it takes no room from
-   * the table because it covers it instead** (`fitMode`). Ask `mode !== "toc"`
+   * the table because it covers it instead** (`fitMode`). Ask `mode !== "hierarchy"`
    * if what you want to know is whether a band is open.
    */
   modeW: number;
@@ -393,7 +393,7 @@ function fitMode(windowWidth: number, showSpine: boolean | null = null): Fit {
    * The prose does not go away, for the reason `proseVisible` exists: a mode
    * with no article behind it is how the outline-mode bug produced an empty
    * table beside a chat panel. It is still there, still full width, one tap on
-   * the dock's Contents button away.
+   * the dock's Hierarchy button away.
    */
   /**
    * **This crossover is conditional and the stylesheet's is not, so with the

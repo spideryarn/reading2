@@ -42,7 +42,7 @@
  *
  * The bar used to be uniform: every button opened a drawer. It isn't any more.
  * `Tweets` and `Metadata` navigate; `Questions` opens a drawer *on the
- * reading view* and navigates everywhere else; `Contents` / `Summary` /
+ * reading view* and navigates everywhere else; `Hierarchy` / `Summary` /
  * `Glossary` / `Search` / `Chat`
  * choose what the middle of the page **is**. That is three real differences and
  * the markup has to tell the truth about each — a link gets
@@ -73,15 +73,15 @@
  *
  * ## The order, which Greg set by hand
  *
- * Left to right: Contents, Summary, Glossary, Search, Chat, Questions, Tweets,
+ * Left to right: Hierarchy, Summary, Glossary, Search, Chat, Questions, Tweets,
  * Metadata. Greg, 2026-08-26 — *"Rearrange the buttons in the bottom-bar. It
- * should be Contents, Summary, Glossary, Search, Chat, Questions, Thread
+ * should be Hierarchy, Summary, Glossary, Search, Chat, Questions, Thread
  * (renamed to 'Tweets'), Metadata."*
  *
  * It is not arbitrary, and the shape is worth naming so the next button knows
  * where to go: **the five modes come first, then the things that leave the
  * band.** Inside the modes it runs from the article's own words outwards —
- * Contents and Summary are the article restated, Glossary and Search are ways
+ * Hierarchy and Summary are the article restated, Glossary and Search are ways
  * into it, Chat is a conversation about it. Then Questions (yours), Tweets
  * (the article rewritten for somewhere else) and Metadata (the machinery).
  * A new mode goes in MODES_UI; anything else goes after them.
@@ -112,7 +112,7 @@ import {
   X,
 } from "lucide-react";
 import type { Comment } from "../types.js";
-import type { Mode, Panel } from "./params.js";
+import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
 import { Link } from "./Link.js";
 import { type ArticleView, carriedSearch, readHref } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -289,12 +289,12 @@ interface Props {
  */
 const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[] = [
   {
-    mode: "toc",
+    mode: "hierarchy",
     icon: ListTree,
-    label: "Contents",
+    label: "Hierarchy",
     blurb: "The article's own shape, one column per level of detail",
   },
-  /* Straight after Contents, because it answers the same question — what shape
+  /* Straight after Hierarchy, because it answers the same question — what shape
      is this piece, and where am I in it — with one nested list instead of
      columns you read across. Greg set this order by hand and it runs from the
      article's own words outwards, so the two structural views belong together
@@ -649,9 +649,19 @@ function withPanel(search: string, panel: Panel): string {
  * already be in the carried string, and `mode=toc&mode=chat` is a URL whose
  * meaning depends on which one the parser happens to read first.
  */
-function withMode(search: string, mode: Mode): string {
+export function withMode(search: string, mode: Mode): string {
   const params = new URLSearchParams(search);
-  params.set("mode", mode);
+  /* **Delete rather than write when it is the default**, since 2026-08-29.
+     This used to `set` unconditionally, which meant every navigation through the
+     dock stamped `?mode=toc` into a URL a reader could copy and share — so when
+     the mode was renamed there really were links in the wild carrying the old
+     name, and the first draft of that rename claimed there could not be. They
+     survive because an unrecognised mode falls back to the default
+     (src/web/params.ts § modeParam), but that is a safety net rather than a
+     plan. Omitting the default keeps new URLs canonical and stops the next
+     rename inheriting the same problem. GPT Sol, 2026-08-29. */
+  if (mode === DEFAULT_MODE) params.delete("mode");
+  else params.set("mode", mode);
   return params.toString();
 }
 
@@ -662,10 +672,11 @@ function withMode(search: string, mode: Mode): string {
  *
  * It was two independent `aria-pressed` toggles, and a note here argued — at
  * length, and correctly for the time — that a radiogroup would be the *worse*
- * lie: the bar showed Chat and Glossary but not `toc`, so a two-option
+ * lie: the bar showed Chat and Glossary but not `hierarchy`, so a two-option
  * radiogroup would have asserted that the band was one of two things while it
  * was routinely neither. That note named the trigger for changing it, and the
- * trigger was not a third mode arriving. It was **a Contents button existing**,
+ * trigger was not a third mode arriving. It was **a Hierarchy button existing**
+ * (it was called Contents until 2026-08-29),
  * which is what makes "one of these several" a true sentence.
  *
  * Greg asked for the group on 2026-08-25 and the button came with it, so the
@@ -697,14 +708,15 @@ function withMode(search: string, mode: Mode): string {
  * the mode *and* scroll the article. **While focus is genuinely inside the
  * group, focus wins**, which is the whole reason the pattern promises the keys.
  *
- * **But a mouse click must not put focus here.** Greg, 2026-08-26:
+ * **But a mouse click must not put focus here.** Greg, 2026-08-26, when the
+ * button was still called Contents:
  *
  * > if I'd just clicked the bottom-bar "Contents" button, say, then left/right
  * > changed within that radio group, rather than the Contents columns (which
  * > should be the priority for those keys)
  *
- * Clicking a bar button is how you *get to* the contents, so the arrows you
- * press next are meant for the contents — and the reader has no reason to think
+ * Clicking a bar button is how you *get to* the hierarchy, so the arrows you
+ * press next are meant for it — and the reader has no reason to think
  * the button they let go of is still listening. So a pointer-driven click blurs
  * the button afterwards (`e.detail > 0`, which is 0 for a click synthesised by
  * Enter or Space) and the arrows go back to the article. Tab into the group and

@@ -128,9 +128,16 @@ exactly two stages of seven: `tweets` and `glossary`, via `hashBlocks` in
 [`src/source-hash.ts`](../../src/source-hash.ts) and the optional `isDone(ctx)` hook on
 `PipelineStep`. (That helper began life inside `src/tweets.ts` and moved out when the glossary needed
 the identical question answered — two stages computing "the same" fingerprint two ways can only ever
-disagree.) `toc` and `arc` still use `stepIsDone`, an
+disagree.) **`arc` joined them on 2026-08-29** — `arc.json` now records the blocks, the tree *and* the three
+metadata fields its prompt carries, and the step has a `stamp` rather than an existence check
+([`src/arc.ts`](../../src/arc.ts) § `inputFingerprint`). It hashes more than `tweets` and `glossary`
+do, on purpose: those two hash the blocks alone, which cannot see a tree re-cut without a block
+changing — and the arc writes one sentence per *part*, so a re-cut article is a different question.
+`toc` still uses `stepIsDone`, an
 `access()` existence check — a file exists, therefore the step is done, whatever it was generated
-from. When it comes to generalising this, copy their choice of **hash input**, not just the idea:
+from. That is deliberate rather than pending, and
+[`src/pipeline.ts`](../../src/pipeline.ts) § `toc` explains at length why a stamp there needs
+consumer invalidation first. When it comes to generalising this, copy their choice of **hash input**, not just the idea:
 it hashes `id \t text` per block, deliberately *not* the bytes of `blocks.json`, because those bytes
 change when an unread field is recomputed and *don't* change when two blocks swap ids.
 
