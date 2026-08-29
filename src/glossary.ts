@@ -51,7 +51,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
 import { formsOf, termAppears, termPattern } from "./term-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import { parseJsonFrom } from "./parse-json.js";
+import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -64,6 +64,7 @@ import type {
   Meta,
   Tree,
 } from "./types.js";
+import type { ArtifactStore } from "./store/artifacts.js";
 import { withLedger } from "./cli-ledger.js";
 
 /**
@@ -711,17 +712,93 @@ export function isStale(glossary: Glossary, blocks: BlockFingerprint[]): boolean
   return glossary.sourceHash !== hashBlocks(blocks);
 }
 
-async function readJson<T>(file: string): Promise<T | null> {
-  try {
-    return JSON.parse(await readFile(file, "utf-8")) as T;
-  } catch {
-    return null;
+/**
+ * The glossary on disk, or null — for the API and this file's own CLI, and
+ * since 2026-08-28 **not for the pipeline**.
+ *
+ * The swallowed error is why. "There is no glossary" and "there is a glossary I
+ * could not read" come back as the same `null`, and the second one costs every
+ * `?term=` link a reader holds. `previousGlossaryFrom` below is what the
+ * pipeline asks instead.
+ */
+export async function readGlossary(dir: string): Promise<Glossary | null> {
+  return readJsonOrNull<Glossary>(path.join(dir, "glossary.json"));
+}
+
+/**
+ * There is a previous glossary, this store cannot read it, and we are not
+ * guessing which of the two harmless cases it would have been.
+ *
+ * Its own error type, and the message says the four things somebody reading a
+ * failed job needs: what was being read, why stopping beats continuing, that
+ * nothing has been written, and what to do about it. Modelled on
+ * `BaselineMissing` in src/blocks.ts and for the same reason — a stage that
+ * stops with something actionable is fine; a stage that continues and orphans
+ * every stored lookup is not.
+ */
+export class GlossaryBaselineUnusable extends Error {
+  constructor(readonly slug: string) {
+    super(
+      `glossary "${slug}": there is a previous glossary and this store cannot read it — it will ` +
+        "not parse, is of the wrong shape, or is past the size the store reads back.\n" +
+        "Every entry id in it is one a reader's `?term=` links and their stored lookups name " +
+        "(docs/project/glossary.md), so carrying on would mint a fresh id for every term and " +
+        "orphan all of them, quietly.\n" +
+        "Nothing has been written — the glossary is still the previous run's.\n" +
+        "Put it back from a backup, or delete it deliberately if this article's glossary really " +
+        "is starting again from nothing.",
+    );
+    this.name = "GlossaryBaselineUnusable";
   }
 }
 
-/** The glossary on disk, or null. Exported so the step and the API read it one way. */
-export async function readGlossary(dir: string): Promise<Glossary | null> {
-  return readJson<Glossary>(path.join(dir, "glossary.json"));
+/**
+ * The previous glossary, **from the store** — for both of the jobs the file
+ * read did, and refusing where it used to guess.
+ *
+ * Until 2026-08-28 this was `readGlossary(opts.dir)` inside `generateGlossary`,
+ * whose `catch` returns `null` for everything. Landing D of
+ * docs/plans/delete-the-importer.md takes the file away, so that read starts
+ * failing on every run while reporting *first run for this article*: `taken` is
+ * empty, every entry id is re-minted, every `?term=` link goes dead and every
+ * stored lookup is orphaned. The comment inside `generateGlossary` has
+ * described that failure since somebody fixed it from the other end; D undoes
+ * it.
+ *
+ * **Four states, not three, and the middle two are the whole job.** Stage 3
+ * wants its baseline unconditionally; this one is gated on a `sourceHash` match
+ * downstream, so a mismatch is a legitimate reason not to inherit:
+ *
+ * | | what it means | what happens |
+ * |---|---|---|
+ * | no previous glossary | a first run for this article | mint, quietly |
+ * | one whose `sourceHash` differs | the article's text moved | mint, quietly — **correct, not an error** |
+ * | one this store cannot read | we cannot tell which of those two it was | **the stage fails** |
+ * | the store read throws | an infrastructure fault | **propagates; the stage fails** |
+ *
+ * The second row is why this hands back the artefact rather than deciding
+ * anything: whether a given previous list may be *appended to*, may only lend
+ * its *ids* to a rewrite, or is no use at all is `existingFor`'s and
+ * `idsByTerm`'s to answer, and between them they have three answers where this
+ * has one.
+ *
+ * The third row is the one that cannot be folded into either neighbour, and it
+ * is the mistake `hasEarlierBlocks` was made to stop arriving through a
+ * different door. A truncated `glossary.json` still holds every id the reader's
+ * links name; somebody with a backup or a Dropbox history can put it back, and
+ * minting over it takes that possibility away while reporting success. Whether
+ * the ids are recoverable is a different question from whether to proceed.
+ *
+ * A store read that throws is left alone. It is an infrastructure fault, and the
+ * one thing that must not happen to it is being turned into an answer.
+ */
+export async function previousGlossaryFrom(
+  store: Pick<ArtifactStore, "readBaseline">,
+  slug: string,
+): Promise<Glossary | null> {
+  const outcome = await store.readBaseline(slug, "glossary", "glossary");
+  if (outcome.state === "unusable") throw new GlossaryBaselineUnusable(slug);
+  return outcome.state === "ok" ? outcome.value : null;
 }
 
 /* ------------------------------------------------------------- the prompt --
@@ -974,19 +1051,15 @@ ${skeleton}`;
 }
 
 /**
- * Strip a stray code fence if the model wraps its JSON despite instructions.
+ * Read the model's answer, fence and all.
  *
- * The parse goes through src/parse-json.ts, and the reason is that **nothing in
- * this file logs**. A step that throws is logged by src/jobs.ts with
- * `errorFields`, which keeps `message` *and* `stack` — and V8's own parse error
- * quotes the first characters of whatever it was handed. So a plain
- * `JSON.parse` here writes part of the model's writing about the article into
- * the log, from a file that never calls the logger at all. An error is a value
- * that travels, and where it is thrown is not where it is written down.
+ * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` — src/parse-json.ts
+ * § `stripFence` has the reasoning, and the short version is that nothing in this
+ * file logs and that is not enough, because a thrown error is logged where it is
+ * caught and V8 quotes the input in it.
  */
 function parseJson(raw: string): { entries?: unknown } {
-  const trimmed = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim();
-  return parseJsonFrom(trimmed, "the glossary response");
+  return parseJsonFrom(stripFence(raw), "the glossary response");
 }
 
 export interface GlossaryRun {
@@ -1059,7 +1132,25 @@ export async function generateGlossary(opts: {
    * profileIsStale.
    */
   profile?: string | null;
-
+  /**
+   * The glossary this article already has, or `null` **only** when it genuinely
+   * has none — `previousGlossaryFrom` above is how the pipeline gets it.
+   *
+   * **Required, and that is the point of it.** It used to be read here, from
+   * `opts.dir`, through a `readGlossary` whose `catch` returns `null` for
+   * everything — so the day the pipeline's artefacts leave the filesystem that
+   * read fails on every run, every article looks like a first pass, and every
+   * entry id in the database is re-minted while the step reports success. An
+   * optional parameter is exactly what landing D could drop and still compile;
+   * a required one cannot be.
+   *
+   * It does **two** jobs downstream and both matter: `existingFor` decides
+   * whether this run appends to the list ("find more terms") rather than
+   * replacing it, and `idsByTerm` lends its ids to a rewrite. A change that
+   * kept the ids and quietly stopped appending would pass every id test there
+   * is — see tests/glossary-ideas-baseline.test.ts.
+   */
+  previous: Glossary | null;
 }): Promise<GlossaryRun> {
   /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
      own parse error quotes the first characters of what it was handed. Nothing
@@ -1080,7 +1171,13 @@ export async function generateGlossary(opts: {
     .catch(() => null);
 
   const sourceHash = hashBlocks(blocks);
-  const onDisk = await readGlossary(opts.dir);
+  /* **Handed in, not read from `opts.dir`** — see `previous` on the options
+     above, and `previousGlossaryFrom` for the four states the caller had to
+     tell apart before it could pass one. The name stays `onDisk` because
+     everything below reads better for it and because that is what it is on the
+     filesystem; in Postgres it is the `glossary` column `beginDraftIn` carried
+     into this draft. */
+  const onDisk = opts.previous;
   /* Two questions, and they took three attempts to separate.
 
      **Append** only to a list that describes this same text AND was written by
@@ -1290,6 +1387,12 @@ async function main(): Promise<void> {
   console.log(`Finding the terms with ${CAPABLE_MODEL}…`);
   const run = await generateGlossary({
     dir,
+    /* The CLI has files and no store, so it reads the file — and `readGlossary`
+       swallows the difference between "no glossary" and "a glossary I cannot
+       read", which is exactly why this is not the pipeline's path any more.
+       Acceptable here: a person is watching, and the worst case is a top-up
+       that starts a fresh list in a directory they chose by hand. */
+    previous: await readGlossary(dir),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 

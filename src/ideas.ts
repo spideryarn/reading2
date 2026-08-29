@@ -57,7 +57,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { hashBlocks, structureHash, type BlockFingerprint } from "./source-hash.js";
 import { findQuote } from "./quote-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
-import { parseJsonFrom } from "./parse-json.js";
+import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
 import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { loadEnvLocal } from "./env.js";
@@ -72,6 +72,7 @@ import type {
   Meta,
   Tree,
 } from "./types.js";
+import type { ArtifactStore } from "./store/artifacts.js";
 import { withLedger } from "./cli-ledger.js";
 
 /**
@@ -495,21 +496,84 @@ export function isStale(ideas: Ideas, blocks: readonly BlockFingerprint[], tree:
   return ideas.sourceHash !== inputFingerprint(blocks, tree);
 }
 
-async function readJson<T>(file: string): Promise<T | null> {
-  try {
-    return JSON.parse(await readFile(file, "utf-8")) as T;
-  } catch {
-    return null;
-  }
-}
-
+/**
+ * The ideas on disk, or null — for the API and this file's own CLI, and since
+ * 2026-08-28 **not for the pipeline**, which asks `previousIdeasFrom` below.
+ *
+ * Every road to `null` here is the same road: no file, a truncated one, a
+ * document of the wrong shape. That is right for the panel, which has one thing
+ * to say either way, and wrong for the stage, which loses every `?idea=` link
+ * on one of them.
+ */
 export async function readIdeas(dir: string): Promise<Ideas | null> {
-  const found = await readJson<Ideas>(path.join(dir, "ideas.json"));
+  const found = await readJsonOrNull<Ideas>(path.join(dir, "ideas.json"));
   /* A truncated write parses as `null`, and `null` is a perfectly good JSON
      document. Without this check the panel reports "nobody has found the ideas
      for this one yet" — the artefact gone, and nothing anywhere saying so. */
   if (!found || typeof found !== "object" || !Array.isArray(found.ideas)) return null;
   return found;
+}
+
+/**
+ * There is a previous `ideas` artefact, this store cannot read it, and we are
+ * not guessing which of the two harmless cases it would have been.
+ *
+ * The sibling of `GlossaryBaselineUnusable` in src/glossary.ts, and a separate
+ * type rather than a shared one because the sentence a person needs is about
+ * *this* artefact: which links go dead, and where to put the file back.
+ */
+export class IdeasBaselineUnusable extends Error {
+  constructor(readonly slug: string) {
+    super(
+      `ideas "${slug}": there is a previous ideas artefact and this store cannot read it — it ` +
+        "will not parse, is of the wrong shape, or is past the size the store reads back.\n" +
+        "Every id in it is one a reader's `?idea=` links name (docs/project/ideas.md), so " +
+        "carrying on would mint a fresh id for every idea and orphan all of them, quietly.\n" +
+        "Nothing has been written — the ideas are still the previous run's.\n" +
+        "Put it back from a backup, or delete it deliberately if this article's ideas really are " +
+        "starting again from nothing.",
+    );
+    this.name = "IdeasBaselineUnusable";
+  }
+}
+
+/**
+ * The previous ideas, **from the store** — the only thing this stage reads the
+ * old artefact for, and the thing landing D would otherwise take away.
+ *
+ * Until 2026-08-28 this was `readIdeas(opts.dir)` inside `generateIdeas`, whose
+ * every failure is `null`. After landing D of
+ * docs/plans/delete-the-importer.md that read fails on every run while looking
+ * exactly like a first pass, and every `?idea=` link a reader holds goes dead
+ * with nothing anywhere saying so.
+ *
+ * **Four states, and the same table as the glossary's**, for the same reason:
+ * this stage inherits ids **only when `sourceHash` matches**, so a mismatch is
+ * a legitimate refusal to inherit rather than a fault.
+ *
+ * | | what it means | what happens |
+ * |---|---|---|
+ * | no previous ideas | a first run for this article | mint, quietly |
+ * | ones whose `sourceHash` differs | the article's text or its tree moved | mint, quietly — **correct, not an error** |
+ * | ones this store cannot read | we cannot tell which of those two it was | **the stage fails** |
+ * | the store read throws | an infrastructure fault | **propagates; the stage fails** |
+ *
+ * Row two is `generateIdeas`'s to decide and not this function's, which is why
+ * this hands back the artefact rather than a map of ids: an id inherited across
+ * a re-extraction would carry a reader's link onto an idea about a different
+ * text, and the comparison that stops that wants the whole artefact.
+ *
+ * Row three is the one that has to be told from row one. A truncated
+ * `ideas.json` still holds every id; a person with a backup can put it back,
+ * and minting over it takes that away while reporting success.
+ */
+export async function previousIdeasFrom(
+  store: Pick<ArtifactStore, "readBaseline">,
+  slug: string,
+): Promise<Ideas | null> {
+  const outcome = await store.readBaseline(slug, "ideas", "ideas");
+  if (outcome.state === "unusable") throw new IdeasBaselineUnusable(slug);
+  return outcome.state === "ok" ? outcome.value : null;
 }
 
 export interface IdeasRun {
@@ -720,9 +784,14 @@ ${who ? `\n${who}\n` : ""}
 ${skeleton}`;
 }
 
+/**
+ * Read the model's answer, fence and all.
+ *
+ * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` — src/parse-json.ts
+ * § `stripFence` has the reasoning.
+ */
 function parseJson(raw: string): { ideas?: unknown } {
-  const fenced = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  return parseJsonFrom<{ ideas?: unknown }>(fenced, "the model's answer");
+  return parseJsonFrom<{ ideas?: unknown }>(stripFence(raw), "the model's answer");
 }
 
 export async function generateIdeas(opts: {
@@ -733,6 +802,17 @@ export async function generateIdeas(opts: {
   cacheArticle?: boolean;
   /** Frozen by whoever queued the job, never read here. */
   profile?: string | null;
+  /**
+   * The ideas this article already has, or `null` **only** when it genuinely
+   * has none — `previousIdeasFrom` above is how the pipeline gets it.
+   *
+   * **Required, for the reason `runBlocks`'s baseline is** (src/blocks.ts): an
+   * optional parameter is precisely what landing D could drop while still
+   * compiling, and the result would be a stage that re-mints every id on every
+   * run and reports success. There is only one thing this is read for — ids,
+   * and only when `sourceHash` matches — so nothing else here would notice.
+   */
+  previous: Ideas | null;
 }): Promise<IdeasRun> {
   /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
      own parse error quotes the first characters of what it was handed. */
@@ -761,7 +841,12 @@ export async function generateIdeas(opts: {
      is read for is its ids — and only when it describes the same article, since
      an id inherited across a re-extraction would carry a reader's link onto an
      idea about a different text. */
-  const onDisk = await readIdeas(opts.dir);
+  /* **Handed in, not read from `opts.dir`** — see `previous` on the options
+     above. The `sourceHash` comparison stays exactly here: a mismatch means the
+     article moved and the old ids describe text that is gone, which is a
+     legitimate reason not to inherit and not something the caller could tell
+     apart from having no artefact at all. */
+  const onDisk = opts.previous;
   const inherit = onDisk && onDisk.sourceHash === sourceHash ? idsByName(onDisk) : null;
 
   /* **The argument, not the apparatus.** Applied here at the call site rather
@@ -937,6 +1022,12 @@ async function main(): Promise<void> {
   console.log(`Finding the ideas with ${CAPABLE_MODEL}…`);
   const run = await generateIdeas({
     dir,
+    /* The CLI has files and no store, so it reads the file — and `readIdeas`
+       gives one `null` for every kind of failure, which is exactly why this is
+       not the pipeline's path any more. Acceptable here: a person is watching,
+       and the worst case is a re-run that mints fresh ids in a directory they
+       named by hand. */
+    previous: await readIdeas(dir),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 

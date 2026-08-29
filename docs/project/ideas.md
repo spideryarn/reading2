@@ -231,6 +231,15 @@ point, because **inheriting an id wrongly is worse than minting a new one**: a l
 nothing is a dead end the reader can see, and one that lands on a *different* idea is a dead end that
 looks like it worked.
 
+**The previous artefact comes from the `ArtifactStore`** — `previousIdeasFrom` in
+[`src/ideas.ts`](../../src/ideas.ts), since 2026-08-28, and it is the only thing that artefact is read
+for. Four answers, the same table as
+[glossary.md](glossary.md#where-the-previous-list-comes-from-and-the-four-answers-it-can-give): no
+previous ideas and a `sourceHash` that no longer matches both mint quietly, an artefact the store
+cannot read **fails the stage**, and a read that throws propagates. A truncated `ideas.json` still
+holds every id a `?idea=` link names, and minting over it would take the chance to restore it away
+without saying so. `npm run ideas -- <dir>` still reads the file; a CLI has no store to ask.
+
 ## Drawing it: the third arm of one pipe
 
 [`search-hits.ts`](../../src/web/search-hits.ts) already described itself as *two matchers, one

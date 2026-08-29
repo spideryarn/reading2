@@ -81,12 +81,15 @@ import {
   PIPELINE_RUN,
   STAMP_SOURCE,
   assertStampAgrees,
+  metaRawSha256,
   stampOf,
   whyUnusable,
+  whyUnusableAsBaseline,
 } from "./artifacts.js";
 import type {
   ArtifactKind,
   ArtifactMap,
+  ArtifactOutcome,
   ArtifactParts,
   ArtifactStore,
   StepStamp,
@@ -287,7 +290,9 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     source: row.source as Meta["source"],
     method: row.extractMethod,
     pages: row.pages,
-    rawSha256: row.rawSha256,
+    /* Not `row.rawSha256`. The column is stage 1's hash of whatever it fetched
+       and an HTML page has one; `Meta.rawSha256` is PDFs only. */
+    rawSha256: metaRawSha256(row),
     unverified: row.unverified,
     recall: row.recall,
     pagesChecked: row.pagesChecked,
@@ -519,6 +524,36 @@ export async function readArtefact<K extends ArtifactKind>(
   step: StepName,
   kind: K,
 ): Promise<ArtifactMap[K] | null> {
+  const outcome = await readArtefactOutcome(ref, exec, slug, step, kind);
+  return outcome.state === "ok" ? outcome.value : null;
+}
+
+/**
+ * The same read, saying **which** of the two `null`s it found.
+ *
+ * `readArtefact` above is this function with the answer flattened, so the two
+ * cannot disagree about a column: one query, one shape check, one log line.
+ *
+ * The distinction is real here and not merely mirrored from the filesystem. A
+ * JSONB column cannot be half-written, so `unusable` is never a truncation — it
+ * is a value that is *there* and that `whyUnusable` will not accept, which is
+ * what an older writer or a hand-edit leaves behind. For the two stages that
+ * inherit their ids from their own previous artefact (src/glossary.ts,
+ * src/ideas.ts) that is the state where minting a fresh identity set would
+ * silently throw away ids that are sitting right there in the column.
+ *
+ * **A missing revision row is `absent`**, which is the behaviour `readArtefact`
+ * has always had and is worth naming rather than inheriting by accident: this
+ * store is bound to a draft, so the row not being there is not a corrupt
+ * artefact and there is nothing for a person to restore.
+ */
+export async function readArtefactOutcome<K extends ArtifactKind>(
+  ref: JobDraftRef,
+  exec: Executor,
+  slug: string,
+  step: StepName,
+  kind: K,
+): Promise<ArtifactOutcome<ArtifactMap[K]>> {
   requireBound(ref, slug);
   const site = siteFor(step, kind);
 
@@ -531,16 +566,48 @@ export async function readArtefact<K extends ArtifactKind>(
     return readRaw(row, slug, await sourceRowFor(exec, row));
   })();
 
-  if (value === null || value === undefined) return null;
+  if (value === null || value === undefined) return { state: "absent" };
   const why = whyUnusable(kind, value);
   if (why) {
     /* `debug`, not `warn`: a half-ingested article is the ordinary state of one
        nobody has finished. And the reason names a field and never the value —
        that is article prose (docs/project/logging.md). */
     alog.debug({ slug, step, kind, why }, `artefact unusable: ${kind} for ${slug}`);
-    return null;
+    return { state: "unusable" };
   }
-  return value as ArtifactMap[K];
+  return { state: "ok", value: value as ArtifactMap[K] };
+}
+
+/**
+ * The same read again, with the **baseline** question on top of the shape one.
+ *
+ * A layer rather than a flag on `readArtefactOutcome`, so that `readArtefact` —
+ * which is `read`, and which the metadata page and `stepIsDone` reach through —
+ * cannot pick up the stricter rule by accident. `has` and `read` still mean
+ * *the artefact survived being written*; only this means *it can carry identity
+ * forward*.
+ *
+ * The check itself is `whyUnusableAsBaseline`, the **same table** the file
+ * adapter uses, which is the whole claim: a glossary with a null `sourceHash`
+ * in a JSONB column and one in a truncated file are the same answer, and it is
+ * `unusable` in both. Before 2026-08-28 it was `ok` in both, and the stage
+ * minted every entry id and reported success.
+ */
+async function baselineOutcome<K extends ArtifactKind>(
+  ref: JobDraftRef,
+  exec: Executor,
+  slug: string,
+  step: StepName,
+  kind: K,
+): Promise<ArtifactOutcome<ArtifactMap[K]>> {
+  const outcome = await readArtefactOutcome(ref, exec, slug, step, kind);
+  if (outcome.state !== "ok") return outcome;
+  const why = whyUnusableAsBaseline(kind, outcome.value);
+  if (why) {
+    alog.debug({ slug, step, kind, why }, `baseline unusable: ${kind} for ${slug}`);
+    return { state: "unusable" };
+  }
+  return outcome;
 }
 
 /* ---------------------------------------------------------------- has -- */
@@ -1292,6 +1359,12 @@ export function pgArtifactsIn(ref: JobDraftRef, tx: Tx): ArtifactStore {
   const job = { id: ref.jobId, attemptId: ref.attemptId };
   return {
     ...readOnlyPgArtifacts(ref, tx),
+    /* Not in the read-only view, and that is a scope decision rather than a
+       technical one: the only callers are the two stages that inherit ids from
+       their own previous artefact, and both run inside the job's transaction.
+       Widening the view to something nothing outside it asks for would make the
+       four questions it names into five with no fifth caller. */
+    readBaseline: (slug, step, kind) => baselineOutcome(ref, tx, slug, step, kind),
     async hasEarlierBlocks(slug) {
       requireBound(ref, slug);
       return articleHasPublishedBlocks(tx, ref.articleId);

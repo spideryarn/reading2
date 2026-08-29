@@ -25,10 +25,15 @@ import { generateArc } from "./arc.js";
 import { previousBlocksFrom, runBlocks } from "./blocks.js";
 import { runExtract } from "./extract.js";
 import { fetchDocument, type RawManifest, readRaw, writeRaw } from "./fetch.js";
-import { generateGlossary, PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "./glossary.js";
+import {
+  generateGlossary,
+  previousGlossaryFrom,
+  PROMPT_VERSION as GLOSSARY_PROMPT_VERSION,
+} from "./glossary.js";
 import {
   generateIdeas,
   inputFingerprint as ideasFingerprint,
+  previousIdeasFrom,
   PROMPT_VERSION as IDEAS_PROMPT_VERSION,
 } from "./ideas.js";
 import { stageFailure } from "./job-failure.js";
@@ -1279,9 +1284,30 @@ export const STEPS: Record<StepName, PipelineStep> = {
       if (!inputHash) return null;
       return { inputHash, promptVersion: GLOSSARY_PROMPT_VERSION, model: CAPABLE_MODEL };
     },
-    async run(ctx) {
+    async run(ctx, store) {
+      /*
+       * **The store, not a path, and read before the stage runs.**
+       *
+       * The glossary's own file does two jobs at once, and landing D takes both
+       * away in one move: `existingFor` decides whether this run *appends* to
+       * the list — which is what the "Find more terms" button is — and
+       * `idsByTerm` lends the list's ids to a rewrite. After D the file read
+       * fails on every run and looks like a first pass, so "find more terms"
+       * quietly becomes "replace the glossary", `passes` resets to 1, every
+       * `?term=` link goes dead and every stored lookup is orphaned. Nothing
+       * throws. docs/plans/delete-the-importer.md § Three stages carry identity
+       * in a file.
+       *
+       * `previousGlossaryFrom` asks the store instead, and refuses rather than
+       * minting when there is a previous glossary it cannot read. A previous
+       * glossary whose `sourceHash` no longer matches is *not* that case — the
+       * article moved, and starting again is correct — which is the one
+       * distinction this stage has that stage 3 does not.
+       */
+      const previous = await previousGlossaryFrom(store, ctx.slug);
       const run = await generateGlossary({
         dir: ctx.dir,
+        previous,
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
@@ -1419,9 +1445,19 @@ export const STEPS: Record<StepName, PipelineStep> = {
         profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
       };
     },
-    async run(ctx) {
+    async run(ctx, store) {
+      /*
+       * **The store, not a path.** The only thing the previous artefact is read
+       * for is its ids, and only when `sourceHash` matches — so after landing D
+       * this stage would keep working in every visible way while every `?idea=`
+       * link a reader holds went dead. `previousIdeasFrom` refuses when there
+       * is a previous artefact it cannot read, and returns `null` quietly when
+       * there is none.
+       */
+      const previous = await previousIdeasFrom(store, ctx.slug);
       const run = await generateIdeas({
         dir: ctx.dir,
+        previous,
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,

@@ -79,7 +79,7 @@ import type {
   TweetThread,
   Visibility,
 } from "../types.js";
-import { sameStamp } from "./artifacts.js";
+import { metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArticleReader } from "./contracts.js";
 import { pgReaderStore } from "./pg-reader.js";
 
@@ -697,6 +697,7 @@ function metaFrom(
   headingTitle: string | null,
 ): Meta {
   const title = revision.title ?? headingTitle ?? slug;
+  const rawSha256 = metaRawSha256(revision);
 
   return {
     slug,
@@ -708,14 +709,19 @@ function metaFrom(
     ...(revision.fetchedAt === null ? {} : { fetchedAt: revision.fetchedAt.toISOString() }),
     ...(revision.excerpt === null ? {} : { excerpt: revision.excerpt }),
     ...(revision.note === null ? {} : { note: revision.note }),
-    /* PDF provenance. Null on every web page, so the spread pattern above is
-       load-bearing here too: `source: null` in `meta.json` is not the same
-       artefact as no `source` key, and the round-trip test compares them.
-       docs/plans/pdf-ingestion.md. */
+    /* PDF provenance, so the spread pattern above is load-bearing here too:
+       `source: null` in `meta.json` is not the same artefact as no `source`
+       key, and the round-trip test compares them. docs/plans/pdf-ingestion.md.
+
+       **All of these are null on every web page except `raw_sha256`**, which
+       used to be the sentence this comment led with. That column is stage 1's
+       hash of whatever it fetched and an HTML page has one, so reading it
+       straight put a PDF-only field on every web page — `metaRawSha256` is the
+       rule, and src/store/artifacts.ts is where it says why. */
     ...(revision.source === null ? {} : { source: revision.source as "pdf" }),
     ...(revision.extractMethod === null ? {} : { method: revision.extractMethod }),
     ...(revision.pages === null ? {} : { pages: revision.pages }),
-    ...(revision.rawSha256 === null ? {} : { rawSha256: revision.rawSha256 }),
+    ...(rawSha256 === null ? {} : { rawSha256 }),
     ...(revision.unverified === null ? {} : { unverified: revision.unverified }),
     ...(revision.recall === null ? {} : { recall: revision.recall }),
     ...(revision.pagesChecked === null ? {} : { pagesChecked: revision.pagesChecked }),

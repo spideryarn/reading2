@@ -1567,6 +1567,35 @@ pass every id assertion there is. It is watched red on its own: making `generate
   database's single `running` slot. It cost four failures in a full-suite run before it came out.
   `store.write` for these kinds is covered by `tests/store-artefacts-pg.test.ts`.
 
+#### And a second bug, found by reading the column the baseline work walked past
+
+`Meta.rawSha256` is **PDFs only** — it is the hash of the file a person uploaded, and the round-trip
+test compares an absent key against a null one. `article_revisions.raw_sha256` is a different thing
+wearing the same name: stage 1's hash of whatever it fetched, and **every** fetch has one. Three
+places read the column straight into the field — [`src/store/pg.ts`](../../src/store/pg.ts)'s
+`metaFrom`, the same reassembly in [`src/store/artifacts-pg.ts`](../../src/store/artifacts-pg.ts),
+and [`src/store/export.ts`](../../src/store/export.ts) — so every web page that came back out of
+Postgres carried a PDF-only field, and `db:export` wrote it into the `meta.json` of every HTML
+article it touched.
+
+`metaRawSha256(row)` in [`src/store/artifacts.ts`](../../src/store/artifacts.ts) is the one rule now,
+`row.source === "pdf" ? row.rawSha256 : null`, and all three call it. It is here rather than in its
+own commit because it is the same seam: the null-versus-absent contract that the baseline work had to
+write down is exactly what makes this a bug rather than a spare field.
+
+**Why no test caught it.** The fidelity suite round-trips the fixtures we have, and no HTML fixture
+had a `raw_sha256` worth noticing — the same shape as
+`docs/reusable/silent-success.md` § *a corpus cannot report what it lacks*. The new case in
+`tests/store-artefacts-pg.test.ts` makes the state instead of borrowing it.
+
+#### The ten lines in this commit that are not mine
+
+`src/glossary.ts` and `src/ideas.ts` each carry a third session's conversion to `stripFence` /
+`readJsonOrNull` — an import, a read and a parse call, six lines in total, interleaved with mine at
+hunk granularity so there was no honest way to split them. They sat untouched for fifteen hours while
+this landing waited on them; `src/parse-json.ts` already had both exports in `HEAD`, so committing
+them breaks nothing. Recorded here because the commit message cannot be the only place it is said.
+
 ### Greg's steer, 2026-08-28 — and what it does *not* remove
 
 > **Re-fetch is fine. Or even drop it. I don't care much about the data we have so far. I just want

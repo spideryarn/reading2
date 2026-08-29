@@ -47,6 +47,7 @@ import {
 import { blocksArtefact } from "../blocks.js";
 import { type DocumentKind, type RawManifest, sniffKind } from "../fetch.js";
 import { canonicalKey } from "../source.js";
+import { metaRawSha256 } from "./artifacts.js";
 import { type RawSourceStore, postgresBlobStore } from "./blobs.js";
 import { ownedByReader, ownedSlug } from "./pg.js";
 import { log } from "../log.js";
@@ -397,7 +398,11 @@ export async function exportArticle(
     source: revision.source,
     method: revision.extractMethod,
     pages: revision.pages,
-    rawSha256: revision.rawSha256,
+    /* Not `revision.rawSha256`. `raw.json` beside this file gets that column —
+       it is stage 1's hash and every fetch has one. `Meta.rawSha256` is PDFs
+       only, and writing the column here put the field into the `meta.json` of
+       every HTML article an export touched. src/store/artifacts.ts. */
+    rawSha256: metaRawSha256(revision),
     unverified: revision.unverified,
     recall: revision.recall,
     pagesChecked: revision.pagesChecked,

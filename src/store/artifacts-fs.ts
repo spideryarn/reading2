@@ -37,10 +37,17 @@ import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import { parseJsonFrom } from "../parse-json.js";
 import type { StepName } from "../types.js";
-import { STAMP_SOURCE, assertStampAgrees, stampOf, whyUnusable } from "./artifacts.js";
+import {
+  STAMP_SOURCE,
+  assertStampAgrees,
+  stampOf,
+  whyUnusable,
+  whyUnusableAsBaseline,
+} from "./artifacts.js";
 import type {
   ArtifactKind,
   ArtifactMap,
+  ArtifactOutcome,
   ArtifactParts,
   ArtifactStore,
 } from "./artifacts.js";
@@ -242,21 +249,20 @@ export function pathFor(at: ArtifactLocations, step: StepName, kind: ArtifactKin
  * that is deciding whether to re-run a step: both answers mean *do the work
  * again*, and the work rewrites the file either way.
  *
- * `hasEarlierBlocks` is the one caller for which they are opposite answers. It
- * is asking whether this article has an identity from an earlier run, and a
- * corrupt `data/<slug>/blocks.json` says **yes, and I cannot read it** — which
- * has to stop the run. Flattened to `null` it said *no earlier run*, and stage 3
- * minted a fresh identity set over an article that already had one, quietly.
- * GPT Sol, 2026-08-28.
+ * Three callers need them apart. `hasEarlierBlocks` is asking whether this
+ * article has an identity from an earlier run, and a corrupt
+ * `data/<slug>/blocks.json` says **yes, and I cannot read it** — which has to
+ * stop the run. Flattened to `null` it said *no earlier run*, and stage 3 minted
+ * a fresh identity set over an article that already had one, quietly. GPT Sol,
+ * 2026-08-28. `readBaseline` is the other two: the glossary and the ideas
+ * inherit their entry ids from their own previous artefact, and a truncated one
+ * still holds every id a reader's `?term=` or `?idea=` link names.
  *
- * There is deliberately no reason string on `unusable`: the reason is already in
- * the log line `readOne` writes, and a reason carried up here would be a second
- * copy of it with nothing reading it.
+ * **The type is `ArtifactOutcome` in src/store/artifacts.ts**, not a local one,
+ * because the Postgres adapter has to answer the same three-state question and
+ * two copies of an enum drift.
  */
-type ReadOutcome =
-  | { state: "ok"; value: unknown }
-  | { state: "absent" }
-  | { state: "unusable" };
+type ReadOutcome = ArtifactOutcome<unknown>;
 
 /**
  * Read one artefact, saying which of the three things happened.
@@ -427,6 +433,38 @@ export function createFsArtifactStore(
     async read(slug, step, kind) {
       const value = await readOne(locate(slug), slug, step, kind);
       return value as ArtifactMap[typeof kind] | null;
+    },
+
+    /**
+     * The same read as `read`, unflattened — one call to `readOutcome`, whose
+     * three states this store has had since 2026-08-28 and which only
+     * `hasEarlierBlocks` could see — **and then the deeper question**.
+     *
+     * `read` above is `readOne` is `readOutcome`, so the two cannot answer
+     * differently about the file itself: there is one parse, one ceiling and
+     * one shape check underneath both.
+     *
+     * `whyUnusableAsBaseline` on top of that is the fix for the hole a review
+     * found on 2026-08-28: `SHAPE.glossary` only asks whether `entries` is an
+     * array, so a glossary with no `sourceHash` read back as `ok`, failed the
+     * ordinary staleness comparison, and made the stage mint every id quietly.
+     * It runs **only here** — `read` and `has` are untouched, because a
+     * half-formed artefact is still a perfectly good answer to *is this step
+     * done* and *what does the panel draw*.
+     */
+    async readBaseline(slug, step, kind) {
+      const outcome = await readOutcome(locate(slug), slug, step, kind);
+      if (outcome.state !== "ok") return outcome;
+      const why = whyUnusableAsBaseline(kind, outcome.value);
+      if (why) {
+        /* `debug` and a *reason*, never the value — that is article prose
+           (docs/project/logging.md). The reason reaches a person through the
+           stage's own error, which says what to restore; this line is for
+           somebody reading the log afterwards. */
+        alog.debug({ slug, step, kind, why }, `baseline unusable: ${kind} for ${slug}`);
+        return { state: "unusable" };
+      }
+      return { state: "ok", value: outcome.value as ArtifactMap[typeof kind] };
     },
 
     /**

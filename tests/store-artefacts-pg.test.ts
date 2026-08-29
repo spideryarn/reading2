@@ -475,10 +475,77 @@ when("reassembling meta and raw from their columns", () => {
       url: "https://example.test/landed",
       fetchedAt: "2026-03-04T05:06:07.000Z",
       excerpt: "Two sentences of it.",
-      /* Stage 2 writes this so that "is this the same document?" has an answer.
-         The **network** hash, matching `db:export`, and note it is not the same
-         number as the manifest's `storedSha256`. */
-      rawSha256: NETWORK_SHA,
+      /* **And no `rawSha256`**, which this asserted until 2026-08-29 with a
+         comment saying stage 2 writes it "so that 'is this the same document?'
+         has an answer". Stage 2 writes no such thing for a web page: the field
+         is PDFs only (src/types.ts) and src/pdf-read.ts is its only writer,
+         while this fixture is Readability's HTML — `raw_source_kind` is `html`
+         and there is no `source` column set.
+         `article_revisions.raw_sha256` above is stage 1's hash of what it
+         fetched and every fetch has one, so reading it straight into `Meta` put
+         a PDF field on every HTML article. The question the old comment asked
+         is a real one and `raw.json` is where it is answered — `readRaw` below
+         puts the same `NETWORK_SHA` in `RawManifest.sha256`, which is the
+         artefact that owns it. */
+    });
+  });
+
+  /**
+   * **The two directions of `Meta.rawSha256`, which one test cannot cover.**
+   *
+   * The fixture is Readability's HTML with a non-null `raw_sha256`, so the case
+   * above already pins the direction that was broken: the column is there and
+   * the field must not be. But a rule that returned nothing at all would pass
+   * that perfectly, and would break every PDF instead — the same bug pointed
+   * the other way, and quieter, because no fixture in `data/` would notice a
+   * hash going missing from a PDF until somebody compared two files by hand.
+   *
+   * So the second one flips exactly one field. `source` is what the rule reads,
+   * and it is the only thing that differs between the two rows.
+   *
+   * **Why `source` is the key**, checked against the database rather than
+   * argued from the types (2026-08-29): `article_revisions.source` is nullable
+   * text with no default, and across every revision it holds `'pdf'` or null
+   * and nothing else. It agrees with stage 1's independent `raw_source_kind` on
+   * every row — no PDF has a null `source`, and no `source: 'pdf'` sits on a
+   * row stage 1 called HTML. On disk the pairing is just as tight: all six
+   * `meta.json` files carrying a `rawSha256` also carry `source: "pdf"`, and
+   * none has one without the other. That is what src/pdf-read.ts guarantees by
+   * writing the two in a single object literal.
+   */
+  it("gives a PDF back its hash, which is the direction a null rule would break", async () => {
+    const db = getDb();
+    /* One field, so the fixture cannot pass by accident: everything else about
+       this row still says HTML. */
+    await db
+      .update(articleRevisions)
+      .set({ source: "pdf" })
+      .where(eq(articleRevisions.id, ref.revisionId));
+    try {
+      expect(await readArtefact(ref, getDb(), SLUG, "extract", "meta")).toMatchObject({
+        source: "pdf",
+        rawSha256: NETWORK_SHA,
+      });
+    } finally {
+      await db
+        .update(articleRevisions)
+        .set({ source: null })
+        .where(eq(articleRevisions.id, ref.revisionId));
+    }
+  });
+
+  it("withholds the hash from a web page, whose meta.json never had one", async () => {
+    /* The restored fixture: `raw_sha256` populated by stage 1, no `source`.
+       Named separately from "rebuilds meta.json" above because that one would
+       still pass if `rawSha256` were dropped for *every* article, and this says
+       which article it is about. */
+    const meta = await readArtefact(ref, getDb(), SLUG, "extract", "meta");
+    expect(meta).toBeDefined();
+    expect(meta && "rawSha256" in meta).toBe(false);
+    /* And the hash is not lost — it lives in the artefact that owns it. */
+    expect(await readArtefact(ref, getDb(), SLUG, "fetch", "raw")).toMatchObject({
+      kind: "html",
+      sha256: NETWORK_SHA,
     });
   });
 

@@ -544,6 +544,31 @@ what *Find them again* promises; `idsByTerm` gives a fresh entry the id the old 
 name or alias, so `?term=` links and stored lookups survive a rewrite that the sentences do not. Names
 are display; ids are identity.
 
+### Where the previous list comes from, and the four answers it can give
+
+**From the `ArtifactStore`, not from a path** — `previousGlossaryFrom` in
+[`src/glossary.ts`](../../src/glossary.ts), since 2026-08-28. Both jobs above depend on it: whether
+to *append* (`existingFor`) and whose ids to *inherit* (`idsByTerm`). Until then it was
+`readGlossary(dir)` inside the stage, whose every failure is one `null` — and the moment the
+pipeline's artefacts leave the filesystem that read fails on every run while looking exactly like a
+first pass, so *Find more terms* silently becomes *replace the glossary*, `passes` resets to 1, and
+every `?term=` link goes dead ([delete-the-importer.md](../plans/delete-the-importer.md)).
+
+| | what it means | what happens |
+|---|---|---|
+| no previous glossary | a first run | mint, quietly |
+| one whose `sourceHash` differs | the article's text moved | mint, quietly — **correct, not an error** |
+| one the store cannot read | we cannot tell which of the two it was | **the stage fails** |
+| the store read throws | an infrastructure fault | **propagates; the stage fails** |
+
+The third row is the one worth the table. A `glossary.json` that will not parse still holds every id
+the reader's links name, so somebody with a backup can put it back — and minting over it takes that
+possibility away while reporting success. Whether the ids are recoverable is a different question
+from whether to proceed; the same argument, and the same mistake made first, is in
+[block-ids.md](block-ids.md#where-the-previous-run-comes-from-and-the-three-answers-it-can-give).
+
+`npm run glossary -- <dir>` still reads the file, because a CLI has no store to ask.
+
 ## The scores, and the condition attached to keeping them
 
 Every entry may carry `difficulty` and `centrality`, 0–1, the model's own judgment. Our review of

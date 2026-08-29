@@ -127,6 +127,32 @@ export interface ArtifactMap {
 /** Some or all of one step's artefacts, handed to `write` in one call. */
 export type ArtifactParts = Partial<{ [K in ArtifactKind]: ArtifactMap[K] }>;
 
+/**
+ * What a read found, with **"there is no artefact" kept apart from "there is
+ * one I cannot use"**.
+ *
+ * One definition, in the leaf module both adapters already import, for the same
+ * reason `SHAPE` lives here: the whole claim the seam makes is that the two
+ * stores agree about what a usable artefact is, and two copies of a three-state
+ * enum agree on the day they are written and drift silently afterwards.
+ *
+ * The two states are not the same *thing* in the two stores, and that is a
+ * difference in what each can be corrupted by rather than a difference in the
+ * rule. On the filesystem `unusable` is a file that will not parse, is of
+ * entirely the wrong shape, or is past the ceiling this store can read back. In
+ * Postgres a JSONB column cannot be half-written, so it is only the shape check
+ * — a value some older code path wrote that no reader can use.
+ *
+ * There is deliberately no reason string on `unusable`: the adapters already
+ * log one, and a second copy carried up here would have nothing reading it.
+ * Neither may go near the *value* — that is article prose, which
+ * docs/project/logging.md forbids outright.
+ */
+export type ArtifactOutcome<T> =
+  | { state: "ok"; value: T }
+  | { state: "absent" }
+  | { state: "unusable" };
+
 /* ------------------------------------------------- what a usable one looks like -- */
 
 /**
@@ -212,6 +238,208 @@ export function whyUnusable(kind: ArtifactKind, value: unknown): string | null {
   if (field === null) return ok(value) ? null : "empty";
   if (!isObject(value)) return "not an object";
   return ok((value as Record<string, unknown>)[field]) ? null : `no usable "${field}"`;
+}
+
+/* ------------------------------------------- and what a *baseline* needs -- */
+
+/**
+ * What a kind needs before it may be believed as an **identity baseline**.
+ *
+ * ## Why this is not `SHAPE` with more fields in it
+ *
+ * `SHAPE` answers *did this artefact survive being written* and is asked on
+ * every read, by `has`, by `read` and by the metadata page. This answers a
+ * different question — *can this artefact carry identity forward* — and it is
+ * asked only by `readBaseline`. Folding the two together would make an `arc`,
+ * which carries no `sourceHash` at all, refuse to be read.
+ *
+ * ## The rule that made it necessary, which is the general one
+ *
+ * **The check that decides "unusable" cannot be shallower than the decision it
+ * protects.** `SHAPE.glossary` is `{ field: "entries", ok: isArray }`, so
+ * `{entries: [...]}` with no `sourceHash` was classified `ok`. The helper handed
+ * it back as a valid baseline, the ordinary `onDisk.sourceHash === sourceHash`
+ * comparison then failed the way a genuinely stale artefact fails, and the stage
+ * minted every id, reset `passes` and overwrote the baseline **reporting
+ * success**. That is the forbidden *unusable → looks like an ordinary mismatch →
+ * mint quietly* path, arriving by the one door the four-state table did not
+ * cover. GPT Sol, 2026-08-28.
+ *
+ * Staleness is judged on the hash, so a classifier that never reads the hash
+ * cannot tell a stale artefact from a broken one. Identity is carried by the
+ * item ids, so an artefact whose ids are missing or duplicated is not a usable
+ * baseline either, hash or no hash.
+ *
+ * ## What it deliberately does not check
+ *
+ * **Not the whole schema** — only what the two decisions read. The prose
+ * fields, the aliases, the occurrences and the scores can all be wrong without
+ * making the *identity* unreadable, and a stage that refused over a missing
+ * `background` would be refusing over something it is about to rewrite anyway.
+ *
+ * **And not the hash's shape.** `hashBlocks` is 16 hex characters today and
+ * `inputFingerprint` is two of them with a dot between; pinning either here
+ * would mean that the day the digest changes, every artefact on every shelf
+ * becomes "unusable" and every one of these stages stops — turning a routine
+ * staleness into a hard failure across the whole corpus. An old hash from a
+ * scheme we no longer compute is *stale*, which is row two of the table and
+ * correct. So the test is only that the comparison **can be made at all**: a
+ * string, not empty, and with no whitespace in it, because a hash never
+ * contains whitespace and a value that does has been hand-edited or truncated
+ * rather than written by an older us.
+ */
+export interface BaselineRule {
+  /**
+   * The field the staleness comparison reads, or `null` for a kind that has no
+   * such comparison and must not be made to require one.
+   *
+   * `STAMP_SOURCE`'s own note says `fetch`, `extract` and `blocks` write no
+   * `sourceHash`, and that `tree.json` and `arc.json` carry none at all.
+   */
+  readonly hashField: string | null;
+  /** The array whose elements carry the identity. */
+  readonly itemsField: string;
+  /** The field on each element that **is** the identity. */
+  readonly idField: string;
+  /**
+   * The field each element is looked up *by* when identity is inherited —
+   * `idsByTerm` and `idsByName` both key on `name`.
+   *
+   * Included because an element with an id and no key cannot lend that id to
+   * anything, and because both of those functions call `normalise…(entry.name)`
+   * on it, which throws on an absent one. Loud rather than silent, so this is
+   * not the data-loss class — it is a `TypeError` from inside a matcher turned
+   * into a sentence that says which artefact to restore.
+   */
+  readonly keyField: string;
+}
+
+/**
+ * Every kind that may be read as an identity baseline, and what one needs.
+ *
+ * **A kind absent from this table cannot be read as a baseline at all** —
+ * `readBaseline` throws rather than skipping the check. That is the point of
+ * the shape: the alternative, returning `ok` for an undeclared kind, is a
+ * check that silently covers nothing, which is the whole family of bug this
+ * table was added to close. Adding a third identity-carrying stage therefore
+ * means writing down what its baseline is, which is exactly the moment to think
+ * about it.
+ *
+ * `blocks` is not here because stage 3 does not come through this door: its
+ * second question is `hasEarlierBlocks`, asked of a *different* artefact,
+ * because its own artefact is the baseline. If it ever moves over, its row is
+ * `{ hashField: null, itemsField: "blocks", idField: "id", keyField: "text" }`
+ * — and `hashField: null` is why that field is nullable.
+ */
+export const BASELINE: Partial<Record<ArtifactKind, BaselineRule>> = {
+  glossary: {
+    hashField: "sourceHash",
+    itemsField: "entries",
+    idField: "id",
+    keyField: "name",
+  },
+  ideas: { hashField: "sourceHash", itemsField: "ideas", idField: "id", keyField: "name" },
+};
+
+/** A hash we could compare — see `BaselineRule` for why the test is this weak. */
+function isComparableHash(v: unknown): boolean {
+  return typeof v === "string" && v.length > 0 && !/\s/.test(v);
+}
+
+/**
+ * Why this value cannot be believed as a baseline for this kind, or `null` when
+ * it can.
+ *
+ * Shared by both adapters, like `whyUnusable`, and for the identical reason:
+ * the claim the seam makes is that the two stores agree about what a usable
+ * baseline is, and two copies of the rule agree on the day they are written.
+ *
+ * **The reason never quotes the value.** It names a field and an index — that
+ * is article prose in there (docs/project/logging.md).
+ *
+ * **It reports the first fault, not all of them.** A baseline is restored
+ * whole; a list of six broken entries and a list of one are the same action.
+ */
+export function whyUnusableAsBaseline(kind: ArtifactKind, value: unknown): string | null {
+  const shape = whyUnusable(kind, value);
+  if (shape) return shape;
+
+  const rule = BASELINE[kind];
+  if (!rule) {
+    /* Not a silent pass. A caller asking for a baseline of a kind nobody has
+       said what a baseline means for is a programming error, and answering
+       "fine" would be a check that covers nothing. */
+    throw new Error(
+      `"${kind}" has no BaselineRule, so it cannot be read as an identity baseline ` +
+        "(src/store/artifacts.ts § BASELINE). Add a row saying which field carries the " +
+        "staleness hash, which array carries the identity, and what its id and key are.",
+    );
+  }
+
+  const record = value as Record<string, unknown>;
+  if (rule.hashField !== null && !isComparableHash(record[rule.hashField])) {
+    return `no comparable "${rule.hashField}"`;
+  }
+
+  const items = record[rule.itemsField] as unknown[];
+  const seen = new Set<string>();
+  for (const [i, item] of items.entries()) {
+    if (!item || typeof item !== "object") return `${rule.itemsField}[${i}] is not an object`;
+    const row = item as Record<string, unknown>;
+    const id = row[rule.idField];
+    if (typeof id !== "string" || id.length === 0) {
+      return `${rule.itemsField}[${i}] has no "${rule.idField}"`;
+    }
+    /* Duplicates are the quiet half. `idsByTerm` and `idsByName` are both
+       first-writer-wins, so the second holder of a repeated id loses it and
+       mints a fresh one — and every `?term=` link that meant the second now
+       resolves to the first. A link that lands on the wrong entry is worse
+       than one that lands on nothing. */
+    if (seen.has(id)) return `two ${rule.itemsField} share one "${rule.idField}"`;
+    seen.add(id);
+    const key = row[rule.keyField];
+    if (typeof key !== "string" || key.trim().length === 0) {
+      return `${rule.itemsField}[${i}] has no "${rule.keyField}" to be matched by`;
+    }
+  }
+  return null;
+}
+
+/* ----------------------------------------- one column, two different facts -- */
+/**
+ * `Meta.rawSha256` rebuilt from a revision's columns — **the PDF's hash, or
+ * nothing at all.**
+ *
+ * `article_revisions.raw_sha256` and `Meta.rawSha256` have the same name and
+ * are not the same fact, which is the whole reason this function exists:
+ *
+ * - **The column is stage 1's**, written from `RawManifest.sha256` by the `raw`
+ *   write, and it is populated for *every* fetch. An HTML page has one.
+ * - **The field is stage 2's, and PDFs only.** src/types.ts calls it "PDFs
+ *   only. Absent on everything Readability extracted", and src/pdf-read.ts is
+ *   the only thing that writes it — in the same object literal as
+ *   `source: "pdf"`.
+ *
+ * So `source` is what this reads, and deliberately not the raw document's kind:
+ * the question is *did stage 2 put this in `meta.json`*, and `source: "pdf"`
+ * and `rawSha256` come from one producer in one literal. The two can never
+ * disagree, which a kind sniffed from the bytes could.
+ *
+ * Handing the column straight to `Meta` puts a PDF-only field on every HTML
+ * article that has been fetched since the raw manifest landed. That was true in
+ * all three places that rebuild a `Meta` from columns — `readMeta`
+ * (src/store/artifacts-pg.ts), `metaFrom` (src/store/pg.ts) and the `meta.json`
+ * the exporter writes (src/store/export.ts) — and invisible until 2026-08-28,
+ * because until then no HTML article in `data/` had a `raw.json` at all and so
+ * every row with a hash really was a PDF. One rule in one place rather than the
+ * same condition spelled three times, because it has already survived being
+ * copied three times.
+ */
+export function metaRawSha256(row: {
+  source: string | null;
+  rawSha256: string | null;
+}): string | null {
+  return row.source === "pdf" ? row.rawSha256 : null;
 }
 
 /* ------------------------------------------------------ the two constants -- */
@@ -475,6 +703,56 @@ export interface ArtifactStore {
     step: StepName,
     kind: K,
   ): Promise<ArtifactMap[K] | null>;
+  /**
+   * The same read, with **"there is none" kept apart from "there is one I
+   * cannot use"** — for the callers where those are opposite answers.
+   *
+   * `read` flattens both to `null`, which is right for every caller deciding
+   * whether to re-run a step: both mean *do the work again*, and the work
+   * rewrites the artefact either way.
+   *
+   * It is wrong for the two stages that read their **own previous artefact to
+   * keep identity across runs**. `glossary` inherits its entry ids from the
+   * previous list, and `ideas` inherits its idea ids; a `null` there means
+   * *first run, mint everything*, and that is correct exactly when there was
+   * nothing to inherit. A `glossary.json` truncated by a kill mid-write is not
+   * that case: every id the reader's `?term=` links name is still in those
+   * bytes, somebody with a backup can put the file back, and minting over it
+   * takes that possibility away while reporting success. So those two ask this
+   * instead, and refuse on `unusable` — see `previousGlossaryFrom` in
+   * src/glossary.ts and `previousIdeasFrom` in src/ideas.ts.
+   *
+   * **This is the same distinction `hasEarlierBlocks` makes and deliberately
+   * not the same question.** Stage 3 cannot ask it of its own artefact, because
+   * its own artefact *is* the baseline and a missing one could only ever report
+   * that it is missing; it has to ask a second source — stage 4's copy on the
+   * filesystem, the published-revision pointer in Postgres. Glossary and ideas
+   * have one copy each, so the honest second question is about that same copy,
+   * and it is this one. Two shapes of question, because there are two shapes of
+   * artefact, and collapsing them would mean one of the two lying.
+   *
+   * Errors are **not** an outcome here: a connection that dropped or a
+   * permission Postgres refused propagates, exactly as it does through `read`.
+   * Turning an infrastructure fault into an answer is how a database hiccup
+   * becomes permanent identity loss.
+   *
+   * **`unusable` here is a deeper question than `read`'s**, and that is the
+   * whole reason this is a separate method rather than a wrapper. It runs
+   * `whyUnusableAsBaseline`, not just `SHAPE`: an artefact with a usable array
+   * and no `sourceHash` passes the shape check, and then the staleness
+   * comparison fails exactly the way a genuinely stale one fails — so the stage
+   * mints every id and reports success. Only `readBaseline` asks the deeper
+   * question, so nothing that merely reads an artefact changes behaviour.
+   *
+   * **A kind with no `BaselineRule` throws.** There are two callers and two
+   * rows in `BASELINE`; a third stage has to say what its baseline is before it
+   * can ask for one.
+   */
+  readBaseline<K extends ArtifactKind>(
+    slug: string,
+    step: StepName,
+    kind: K,
+  ): Promise<ArtifactOutcome<ArtifactMap[K]>>;
   /**
    * Write everything this step produced, in one call.
    *

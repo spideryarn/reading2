@@ -101,13 +101,22 @@ only one of them mints:
 `ArtifactStore.hasEarlierBlocks` is the second question, and each store answers it with the thing it
 actually knows: Postgres asks whether `articles.current_revision_id` points at a published revision
 (one cannot exist without blocks), the filesystem asks whether stage 4's `data/<slug>/blocks.json`
-is there. **Warning and minting is not an option** — it turns a database hiccup into permanent,
-silent reader data loss, and the reader finds out by scrolling.
+is there — **there, not readable**. A half-written or over-sized copy of that file answers *yes*, so
+it lands in the middle row of the table and stops the stage. That distinction was missing until
+2026-08-28: the store read the file the way every other caller does, where absent and corrupt are
+one answer, so a truncated stage-4 copy said *first ingest* and every paragraph got a new id.
+Whether those ids are still recoverable is a different question from whether to proceed — somebody
+with a backup can put the file back, and minting takes that away without saying so.
+
+**Warning and minting is not an option** — it turns a database hiccup into permanent, silent reader
+data loss, and the reader finds out by scrolling.
 
 There is a second guard behind that one, because a baseline that is present is not a baseline that
 was used. `assertIdsCarried` compares the baseline's ids against the ones this run produced: a
-non-empty baseline and a non-empty output that share **nothing** stops the stage, before either
-artefact is written. Ids and not counts — two runs of three paragraphs sharing none of their ids
+non-empty baseline and an output that shares **nothing** with it stops the stage, before either
+artefact is written. An output with no blocks at all is that case and not an exception to it — a
+paywall, an error page or an empty shell all extract to nothing, and until 2026-08-28 they were let
+through and written over the article. Ids and not counts — two runs of three paragraphs sharing none of their ids
 would pass a count. A *partial* loss is deliberately not an error; any threshold would be a guess.
 There is no exemption for a deliberate whole-article replacement because no such operation exists:
 `force` on a step means *run it again*, which is the ordinary idempotent path and must keep its ids.

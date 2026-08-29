@@ -41,7 +41,7 @@ import {
   PATHS,
   pathFor,
 } from "../src/store/artifacts-fs.js";
-import { sameStamp } from "../src/store/artifacts.js";
+import { metaRawSha256, sameStamp } from "../src/store/artifacts.js";
 import type { ArtifactKind, ArtifactMap } from "../src/store/artifacts.js";
 import type { StepContext } from "../src/pipeline.js";
 import type { Block, StepName, Tree } from "../src/types.js";
@@ -586,6 +586,42 @@ describe("sameStamp", () => {
 });
 
 /**
+ * **The web page with a hash, which is the whole bug.**
+ *
+ * `article_revisions.raw_sha256` is stage 1's hash of whatever it fetched and
+ * an HTML page has one; `Meta.rawSha256` is PDFs only (src/types.ts). All three
+ * places that rebuild a `Meta` from columns read the column straight through,
+ * so every HTML article came back carrying a PDF field — through
+ * `pgArticleReader.loadArticle`, through `readMeta`, and into the `meta.json`
+ * that `db:export` writes to disk.
+ *
+ * **Written here, and not left to the two corpus tests that caught it.**
+ * tests/store-parity.test.ts and tests/store-roundtrip.test.ts only went red
+ * because one article in the gitignored `data/` happened to be an HTML page
+ * fetched after the raw manifest landed — the first one ever, on 2026-08-28.
+ * Every other fixture with a hash is a PDF, where the field belongs. Delete
+ * that one directory and the bug is silent again, so the case that decides it
+ * should not depend on which articles somebody has on their laptop.
+ */
+describe("metaRawSha256", () => {
+  it("keeps the hash for a PDF and withholds it from a web page", () => {
+    const hash = "65c45ef7b1bbe4016f42724f4a11d24806fd276db8dbd95e13b116b53927f76f";
+    /* The two rows differ in `source` and in nothing else — that is the field
+       the rule arbitrates, so a fixture that varied the hash too could pass
+       with the condition inverted. */
+    expect(metaRawSha256({ source: "pdf", rawSha256: hash })).toBe(hash);
+    expect(metaRawSha256({ source: null, rawSha256: hash })).toBe(null);
+  });
+
+  /* A PDF whose stage 1 recorded no hash still has no hash. The `?? null` this
+     replaces was never the part that was wrong. */
+  it("has nothing to give when the column is null", () => {
+    expect(metaRawSha256({ source: "pdf", rawSha256: null })).toBe(null);
+    expect(metaRawSha256({ source: null, rawSha256: null })).toBe(null);
+  });
+});
+
+/**
  * `glossary` is the first step whose freshness goes through `stamp` +
  * `sameStamp` rather than through a `…IsCurrent` function of its own, so these
  * were `glossaryIsCurrent`'s own conditions, and since that function was deleted
@@ -855,6 +891,20 @@ describe("blocks is only done if the HTML really carries its ids", () => {
     // `extract` itself is done — it wrote the HTML it was asked for. Only the
     // step whose output the re-extraction invalidated is not.
     expect(await stepIsDone(STEPS.extract, ctxAt(at), store)).toBe(true);
+  });
+
+  /**
+   * **`every` over nothing is true**, and that is not an answer about the HTML.
+   * A `blocks.json` listing no ids passed the binding check vacuously, so a
+   * stage 3 that produced nothing — a first ingest of a paywall or an error
+   * page, where the runtime guard has no baseline to refuse against — reported
+   * itself done having retained zero ids, and the stages after it read an
+   * article with no blocks in it. GPT Sol, 2026-08-28.
+   */
+  it("not done when blocks.json lists no ids at all", async () => {
+    await writeWholeArticle(at);
+    await writeJson(pathFor(at, "blocks", "blocks"), { blocks: [] });
+    expect(await stepIsDone(STEPS.blocks, ctxAt(at), store)).toBe(false);
   });
 
   it("not done when the HTML carries only some of the ids", async () => {
