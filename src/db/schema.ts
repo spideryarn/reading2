@@ -64,6 +64,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { ID_PATTERN } from "../ids.js";
+import type { Assets } from "../assets.js";
 import type { LabelsFile } from "../labels.js";
 import type {
   Arc,
@@ -568,6 +569,37 @@ export const articleRevisions = spideryarn.table(
      * article"* rather than take a delete with it or block one.
      */
     ideas: jsonb("ideas").$type<Ideas>(),
+
+    /**
+     * The article's own images, and what became of each — `Assets`,
+     * src/assets.ts, written by the `assets` step.
+     *
+     * **The manifest, never the bytes.** Each stored image is a
+     * content-addressed object in the `sources` bucket at `sha256/<hash>.<ext>`,
+     * written through `storeRawSource`, and this column is the list saying
+     * which of those objects are this article's. That is what replaces the
+     * per-article folder Greg pictured: content addressing dedups a publisher's
+     * logo across forty articles, and a name that IS the hash of its contents
+     * can always be re-checked against them.
+     * docs/plans/hosting-the-articles-images.md § Where the bytes go.
+     *
+     * **No foreign key to `raw_sources`, and no row there either**, which is
+     * the decision most likely to be undone by somebody tidying. That table
+     * exists so a revision can point at *the document* it was made from, and
+     * its `kind` CHECK is `in ('pdf','html')`. An image is not the document: it
+     * has no revision pointing at it, no `raw_sources_kind` value, and nothing
+     * to certify. The manifest IS the record. Objects nothing references are
+     * kept on purpose — there is no sweeper to race — so orphaned image bytes
+     * are a known, accepted cost.
+     *
+     * The WHOLE artefact, like the five above. `sourceHash` is the blocks it
+     * was built from and `version` is the code that built it, and dropping
+     * either would leave the step unable to say whether the article has moved
+     * underneath its images. Three states, not two: a `failed` entry, a
+     * `stored` entry, and **no column at all**, which means this step never ran
+     * on this article and the reader must hot-link exactly as before.
+     */
+    assets: jsonb("assets").$type<Assets>(),
 
     /**
      * The tree's navigation labels — `LabelsFile`, stage 4's second model pass.
@@ -1236,7 +1268,7 @@ export const revisionStepRuns = spideryarn.table(
        * with the `toc` row. Verified against src/pipeline.ts rather than
        * inferred from the file existing.
        */
-      sql`${t.stepName} in ('fetch','extract','blocks','toc','arc','tweets','glossary','summary','ideas')`,
+      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','summary','ideas')`,
     ),
     check(
       "revision_step_runs_status",

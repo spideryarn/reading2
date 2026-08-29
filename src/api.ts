@@ -38,6 +38,7 @@ import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "./lib
 import { readingMinutes } from "./reading-time.js";
 import { sanitizeStoredBlocks } from "./sanitize.js";
 import { isStale } from "./tweets.js";
+import type { Assets } from "./assets.js";
 import type {
   Arc,
   Article,
@@ -205,6 +206,15 @@ export async function loadArticle(slug: string): Promise<Article> {
     // Absent means the L0 column falls back to the root gist.
     const arc = await readJson<Arc>(path.join(dir, "arc.json"));
 
+    /* The image manifest, and **absent is a third state rather than an empty
+       one**: no `assets.json` means the step has never run on this article —
+       every article ingested before it existed — and the reading view must
+       hot-link exactly as it always did. An `Assets` whose `entries` is empty
+       means it ran and the article has no images. Collapsing those two is how a
+       feature that has not shipped gets reported as one that failed
+       (src/assets.ts). */
+    const assets = (await readJson<Assets>(path.join(dir, "assets.json"))) ?? undefined;
+
     /* The one read of blocks.json that hands `html` to a renderer, and so the
        one that has to answer for an artefact written before the sanitiser it
        is being trusted against. `sanitizeStoredBlocks` compares the stamp and
@@ -228,7 +238,11 @@ export async function loadArticle(slug: string): Promise<Article> {
       );
     }
 
-    return { meta, blocks, tree, ...(arc ? { arc } : {}) };
+    /* `assets` is named rather than spread conditionally, because the key is
+       required on `Article` and the omission this guards against is silent —
+       see the field's note in src/types.ts. `readJson` answers `null` for a
+       file that is not there, and the reader's third state is `undefined`. */
+    return { meta, blocks, tree, ...(arc ? { arc } : {}), assets };
   }
   // Tagged 404 rather than left for routes.ts to infer. Inferring it meant
   // every unclassified fault — a corrupt tree.json, a permissions problem —

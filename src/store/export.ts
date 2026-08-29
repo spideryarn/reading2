@@ -440,6 +440,13 @@ export async function exportArticle(
 
   if (revision.tree) await put("tree.json", revision.tree);
   if (revision.arc) await put("arc.json", revision.arc);
+  /* The manifest only. The image bytes it names are content-addressed objects in
+     the `sources` bucket, and this export writes an article's *artefacts* — the
+     document's own bytes come back through `writeRawDocument` below and nothing
+     else does. An exported article therefore names objects it can only fetch
+     from the bucket it came from, which is the same contract `raw_source_sha256`
+     already has. docs/plans/hosting-the-articles-images.md. */
+  if (revision.assets) await put("assets.json", revision.assets);
   if (revision.tweets) await put("tweets.json", revision.tweets);
   if (revision.glossary) await put("glossary.json", revision.glossary);
   if (revision.summary) await put("summary.json", revision.summary);

@@ -53,6 +53,7 @@ import type {
 } from "../types.js";
 import type { LabelsFile } from "../labels.js";
 import type { RawManifest } from "../fetch.js";
+import type { Assets } from "../assets.js";
 
 /**
  * Every kind of thing the pipeline durably produces.
@@ -76,6 +77,7 @@ export type ArtifactKind =
   | "stampedHtml"
   | "tree"
   | "labels"
+  | "assets"
   | "arc"
   | "tweets"
   | "glossary"
@@ -117,6 +119,16 @@ export interface ArtifactMap {
   stampedHtml: string;
   tree: Tree;
   labels: LabelsFile;
+  /**
+   * The article's own images and what became of each — src/assets.ts.
+   *
+   * The **manifest**, never the bytes: those are content-addressed objects in
+   * the `sources` bucket, written through `storeRawSource`, and this is the
+   * list saying which of them are this article's. That is deliberately not a
+   * folder per article — docs/plans/hosting-the-articles-images.md § Where the
+   * bytes go.
+   */
+  assets: Assets;
   arc: Arc;
   tweets: TweetThread;
   glossary: Glossary;
@@ -216,6 +228,10 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
   blocks: { field: "blocks", ok: isArray },
   tree: { field: "nodes", ok: isObject },
   labels: { field: "labels", ok: isObject },
+  /* An `entries` array, like the arc — and an EMPTY one is perfectly usable:
+     an article with no images has a manifest that says so, which is a different
+     fact from having no manifest at all (src/assets.ts). */
+  assets: { field: "entries", ok: isArray },
   arc: { field: "entries", ok: isArray },
   tweets: { field: "tweets", ok: isArray },
   glossary: { field: "entries", ok: isArray },
@@ -564,6 +580,7 @@ export interface StepStamp {
  */
 export const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
   toc: "labels",
+  assets: "assets",
   arc: "arc",
   tweets: "tweets",
   glossary: "glossary",
@@ -828,6 +845,38 @@ export interface ArtifactStore {
   /** Did a run of this step start and never finish? */
   interrupted(slug: string, step: StepName): Promise<boolean>;
 }
+
+/**
+ * Everything the **run phase** of a step may ask, and nothing it may do.
+ *
+ * A stage decides what to make by reading; it should not be able to write while
+ * it decides. Handing `run` the whole `ArtifactStore` let it, and under Postgres
+ * that means a write landing outside the transaction that is supposed to hold
+ * the step together — so the seam is a type rather than a rule anybody has to
+ * remember. `ArtifactStore` is assignable to this, so a caller with the real
+ * thing passes it unchanged.
+ *
+ * **The six are what the stages actually ask for**, checked rather than
+ * guessed: `read` and `hasEarlierBlocks` (src/blocks.ts § `previousBlocksFrom`),
+ * `readBaseline` (src/glossary.ts, src/ideas.ts), and `has`, `interrupted` and
+ * `stampFor`, which are `stepIsDone`'s three questions (src/pipeline.ts) — the
+ * preflight that decides whether `run` is called at all.
+ *
+ * **Not the same thing as `ReadOnlyArtifactStore`** (src/store/artifacts-pg.ts),
+ * which names four, and the difference is deliberate on both sides. That one is
+ * a *view a Postgres executor can serve outside a transaction*, and it stops at
+ * four because `readBaseline` and `hasEarlierBlocks` have no caller out there:
+ * the two stages that inherit ids from their own previous artefact run inside
+ * the job's transaction. This one is a *capability the run phase is given*, and
+ * it has to cover every read those stages make, transaction or not. So the
+ * Postgres session's `reads` is the four-method view **plus** those two, and
+ * naming them separately is what keeps "what an executor can serve" from
+ * quietly becoming "what a stage may ask".
+ */
+export type ArtifactReads = Pick<
+  ArtifactStore,
+  "has" | "hasEarlierBlocks" | "read" | "readBaseline" | "stampFor" | "interrupted"
+>;
 
 /**
  * The stamp a caller passes to `write` must be the stamp inside the artefact.

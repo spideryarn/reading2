@@ -35,8 +35,7 @@
  */
 import { createHash } from "node:crypto";
 
-import type { DocumentKind } from "../fetch.js";
-import { canonicalKey } from "../source.js";
+import { canonicalKey, type StoredKind } from "../source.js";
 import { fsBlobs } from "./blobs-fs.js";
 import { supabaseBlobs } from "./blobs-supabase.js";
 
@@ -102,10 +101,28 @@ export interface UploadGrants {
   sign(key: string): Promise<{ url: string; token: string; expiresAt: string }>;
 }
 
-/** The content type an object of this media kind is stored with. */
-export const CONTENT_TYPE: Record<DocumentKind, string> = {
+/**
+ * The content type an object of this media kind is stored with.
+ *
+ * **Every value here must be in the bucket's `allowed_mime_types`**, and that
+ * list is a property of the live bucket rather than of `config.toml` — Storage
+ * enforces it against the service key, and adding a type to the declaration
+ * without PATCHing the bucket buys a measured `415 InvalidMimeType` and seven
+ * hours (docs/postmortems/the-config-file-is-not-the-bucket.md). The three
+ * image types were added to the local bucket by hand in stage 3 of
+ * docs/plans/hosting-the-articles-images.md; `scripts/check-buckets.ts` reads
+ * the bucket's real state.
+ *
+ * The type stored is the one the **bytes** earned from `sniffImage`
+ * (src/assets.ts), never the one the origin's header claimed — publishers serve
+ * PNGs as `application/octet-stream` and bot walls serve HTML as `image/jpeg`.
+ */
+export const CONTENT_TYPE: Record<StoredKind, string> = {
   pdf: "application/pdf",
   html: "text/html",
+  png: "image/png",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
 };
 
 /**
@@ -372,7 +389,7 @@ export interface StoredRawSource {
  */
 export async function storeRawSource(
   bytes: Uint8Array,
-  kind: DocumentKind,
+  kind: StoredKind,
   store: RawSourceStore = blobStore(),
 ): Promise<StoredRawSource> {
   const sha256 = createHash("sha256").update(bytes).digest("hex");

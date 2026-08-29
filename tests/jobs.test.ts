@@ -158,6 +158,14 @@ describe("cascadeForce", () => {
       "extract",
       "blocks",
       "toc",
+      /* `assets` IS swept in, unlike the four steps after `arc`, and the reason
+         is the one the cascade encodes: a refresh from source is a request to
+         get this article again, and the article's figures are part of it.
+         Hot-links rot — five of the corpus's thirteen images sit behind an
+         imgix signature that can be rotated — so a forced re-fetch is exactly
+         when you want to find out. src/pipeline.ts § FORCE_ONLY_WHEN_NAMED
+         names the other four and deliberately not this one. */
+      "assets",
       "arc",
     ]);
   });
@@ -166,6 +174,7 @@ describe("cascadeForce", () => {
     expect([...cascadeForce([...STEP_ORDER], new Set(["arc", "blocks"]))]).toEqual([
       "blocks",
       "toc",
+      "assets",
       "arc",
     ]);
   });
@@ -217,6 +226,7 @@ describe("cascadeForce", () => {
     expect([...cascadeForce(["tweets"], new Set(["tweets"]))]).toEqual(["tweets"]);
     expect([...cascadeForce([...STEP_ORDER], new Set(["toc", "tweets"]))]).toEqual([
       "toc",
+      "assets",
       "arc",
       "tweets",
     ]);
@@ -228,7 +238,17 @@ describe("cascadeForce", () => {
     // re-run on its own when the article moves. `arc` has no such check, so
     // its position is the only signal there is that it has gone stale.
     expect(FORCE_ONLY_WHEN_NAMED.has("arc")).toBe(false);
-    expect([...cascadeForce([...STEP_ORDER], new Set(["toc"]))]).toEqual(["toc", "arc"]);
+    /* `assets` is in the cascade too, and for a third reason again: it *can*
+       check itself — it has a stamp over the blocks hash — but a forced
+       re-fetch is a request to go and look at the publisher again, which is the
+       one thing the stamp cannot answer. A rotated imgix signature changes
+       nothing about the blocks. */
+    expect(FORCE_ONLY_WHEN_NAMED.has("assets")).toBe(false);
+    expect([...cascadeForce([...STEP_ORDER], new Set(["toc"]))]).toEqual([
+      "toc",
+      "assets",
+      "arc",
+    ]);
   });
 });
 
@@ -1089,7 +1109,7 @@ describe("advancing a job one step at a time", () => {
        happily having written nothing is caught, and should be. */
     const fetched = vi.spyOn(STEPS.fetch, "run").mockImplementation(async () => {
       await fixtureWithRawJson(slug);
-      return "stubbed";
+      return { detail: "stubbed" };
     });
     await pause(job, 0);
 
@@ -1145,7 +1165,7 @@ describe("advancing a job one step at a time", () => {
       await new Promise((r) => setTimeout(r, 30));
       running--;
       await fixtureWithRawJson(slug);
-      return "stubbed";
+      return { detail: "stubbed" };
     });
     await pause(job, 0);
 

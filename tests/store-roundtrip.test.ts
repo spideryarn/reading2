@@ -60,6 +60,7 @@ const ARTEFACTS = [
   "meta.json",
   "blocks.json",
   "tree.json",
+  "assets.json",
   "arc.json",
   "tweets.json",
   "glossary.json",

@@ -82,6 +82,7 @@ import { parseJsonFrom } from "../parse-json.js";
 import { hashBlocks } from "../source-hash.js";
 import { deriveLibraryScalars } from "./pg-revisions.js";
 import type { LabelsFile } from "../labels.js";
+import type { Assets } from "../assets.js";
 import type { Arc, Block, Glossary, Ideas, Meta, Summaries, Tree, TweetThread } from "../types.js";
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 
@@ -366,6 +367,8 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
   if (!meta) absent.push("meta.json");
   const arc = await readJson<Arc>(path.join(dir, "arc.json"));
   if (!arc) absent.push("arc.json");
+  const assets = await readJson<Assets>(path.join(dir, "assets.json"));
+  if (!assets) absent.push("assets.json");
   const tweets = await readJson<TweetThread>(path.join(dir, "tweets.json"));
   if (!tweets) absent.push("tweets.json");
   const glossary = await readJson<Glossary>(path.join(dir, "glossary.json"));
@@ -690,6 +693,7 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
       stampedHtml: stampedHtml ?? null,
       tree,
       arc: arc ?? null,
+      assets: assets ?? null,
       tweets: tweets ?? null,
       glossary: glossary ?? null,
       summary: summaries ?? null,
@@ -973,6 +977,7 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
       { step: "extract", present: Boolean(meta) },
       { step: "blocks", present: blocks.length > 0 },
       { step: "toc", present: Boolean(tree) },
+      { step: "assets", present: Boolean(assets) },
       { step: "arc", present: Boolean(arc) },
       { step: "tweets", present: Boolean(tweets) },
       { step: "glossary", present: Boolean(glossary) },

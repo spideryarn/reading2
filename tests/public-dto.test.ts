@@ -27,6 +27,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { Assets } from "../src/assets.js";
 import { publicArticle, publicMetadata } from "../src/public/dto.js";
 import type {
   Arc,
@@ -199,6 +200,37 @@ const ARC: Arc = {
 };
 
 /**
+ * One image we hold and one we do not, so the key list pins **both arms** of
+ * `AssetEntry` rather than whichever one the fixture happened to have.
+ *
+ * The stored URL carries a query string on purpose: `blocks.json` holds
+ * `&amp;s=…` and `getAttribute("src")` returns `&s=…`, and the manifest is
+ * keyed on the second spelling — five of the corpus's thirteen images are like
+ * this, and getting it wrong is invisible (src/assets.ts).
+ */
+const ASSETS: Assets = {
+  version: "assets/1",
+  sourceHash: "abc123",
+  fetchedAt: "2026-08-29T00:00:00.000Z",
+  entries: [
+    {
+      url: "https://noemamag.imgix.net/a.jpg?fm=pjpg&s=7a8b90d8",
+      status: "stored",
+      sha256: "f".repeat(64),
+      ext: "jpeg",
+      contentType: "image/jpeg",
+      bytes: 49_152,
+    },
+    {
+      url: "https://noemamag.imgix.net/b.svg",
+      status: "failed",
+      reason: "unsupported-format",
+      at: "2026-08-29T00:00:00.000Z",
+    },
+  ],
+};
+
+/**
  * The whole owner-side row, with every field the payload table in
  * docs/plans/public-read-only-access.md § The payload names as forbidden.
  *
@@ -239,6 +271,12 @@ describe("the public article payload", () => {
     blocks: [HEADING, BLOCK],
     tree: TREE,
     arc: ARC,
+    /* **A real manifest, not `null`**, and the difference is what this test is
+       for. With `null` in, every image assertion below would hold for a payload
+       that carries nothing about images at all — a check agreeing with the code
+       because both are empty. One `stored` entry and one `failed` one, so the
+       key list pins both arms of `AssetEntry`. src/assets.ts. */
+    assets: ASSETS,
     ...NO_ARTEFACTS,
   });
 
@@ -252,6 +290,32 @@ describe("the public article payload", () => {
         "arc.generator",
         "arc.slug",
         "arc.version",
+        /* **Every field of the manifest crosses, both arms.** Nothing in it is
+           about a person: the URLs are the publisher's own and are already in
+           `blocks[].html` in this same payload, and the rest is a hash, a
+           format, a byte count and the reason an image was not stored. What is
+           *not* here is the point of the list — if a future `AssetEntry` grows
+           a field that is about us, its fate gets decided here.
+
+           `assets` itself is present-with-a-value rather than present-or-absent
+           like the four artefacts below, because `PublicArticle.assets` is a
+           required key holding `Assets | undefined`. `JSON.stringify` drops an
+           undefined value, so an article with no manifest still sends no
+           `assets` key over the wire — the shape is a compile-time discipline,
+           not a wire change. src/public-types.ts. */
+        "assets",
+        "assets.entries",
+        "assets.entries[].at",
+        "assets.entries[].bytes",
+        "assets.entries[].contentType",
+        "assets.entries[].ext",
+        "assets.entries[].reason",
+        "assets.entries[].sha256",
+        "assets.entries[].status",
+        "assets.entries[].url",
+        "assets.fetchedAt",
+        "assets.sourceHash",
+        "assets.version",
         "blocks",
         "blocks[].gistable",
         "blocks[].html",
@@ -438,6 +502,7 @@ describe("the public article payload", () => {
       blocks: [EVERY_BLOCK_FIELD],
       tree: TREE,
       arc: null,
+      assets: null,
       ...NO_ARTEFACTS,
     });
 
@@ -486,6 +551,7 @@ describe("the public article payload", () => {
       blocks: [BLOCK],
       tree: withExtra,
       arc: null,
+      assets: null,
       ...NO_ARTEFACTS,
     });
     expect(JSON.stringify(out)).not.toContain("whoAsked");
@@ -504,6 +570,7 @@ describe("the public article payload", () => {
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
+      assets: null,
       ...NO_ARTEFACTS,
     });
     expect(Object.keys(bare.meta)).toEqual(["slug", "title"]);
@@ -524,6 +591,7 @@ describe("the public article payload", () => {
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
+      assets: null,
       ...NO_ARTEFACTS,
     });
     expect(bare.meta.title).toBe("noema");
@@ -669,6 +737,7 @@ describe("the four artefacts a shared link carries", () => {
     blocks: [BLOCK],
     tree: TREE,
     arc: null,
+    assets: null,
     glossary: GLOSSARY,
     summary: SUMMARIES,
     ideas: IDEAS,
@@ -782,6 +851,7 @@ describe("the four artefacts a shared link carries", () => {
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
+      assets: null,
       glossary: { ...GLOSSARY, entries: [] },
       summary: null,
       ideas: { ...IDEAS, ideas: [] },
@@ -807,6 +877,7 @@ describe("the four artefacts a shared link carries", () => {
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
+      assets: null,
       ...NO_ARTEFACTS,
     });
     for (const key of ["glossary", "summary", "ideas", "tweets"]) {

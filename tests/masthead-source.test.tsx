@@ -72,6 +72,9 @@ const ARTICLE: Article = {
       gistable: true,
     },
   ],
+  /* Absent, and that is the third state: this article has never been through the
+     `assets` step, so the reader hot-links exactly as before. src/assets.ts. */
+  assets: undefined,
   tree: {
     version: "t",
     generator: "t",

@@ -66,6 +66,11 @@ const HOMES: Record<string, string> = {
   "blocks.json": "revision_blocks (+ block_identities)",
   "tree.json": "article_revisions.tree",
   "labels.json": "article_revisions.labels — a `toc` output, NOT a step of its own",
+  /* The manifest is the column. The image bytes are content-addressed objects
+     in the `sources` bucket and get no row of their own — an image is not the
+     document, so `raw_sources.kind` stays `in ('pdf','html')`.
+     docs/plans/hosting-the-articles-images.md. */
+  "assets.json": "article_revisions.assets",
   "arc.json": "article_revisions.arc",
   "tweets.json": "article_revisions.tweets",
   "glossary.json": "article_revisions.glossary",
@@ -117,6 +122,29 @@ const NOT_MIGRATED: Record<string, string> = {
   steps: "revision_step_runs.status — the run marker, not an artefact",
 };
 
+/**
+ * Artefacts that have a home and **no example on disk yet**, because the step
+ * that writes them has only just been built.
+ *
+ * A third list, and it earns its place for the reason the header of
+ * `NOT_MIGRATED` gives about the second one: "we decided this never appears"
+ * and "nothing has written one yet" look identical in a single exemption, and
+ * only one of them is finished. This one is the temporary kind.
+ *
+ * **It clears itself.** The check below fails if a name here *does* turn up —
+ * so the first real run of the step is what forces the entry to be deleted,
+ * rather than leaving an exemption that goes on quietly excusing a rotted
+ * manifest entry for ever. That is the failure this whole file exists to catch,
+ * and an exemption with no expiry would reintroduce it by the back door.
+ */
+const NOT_YET_WRITTEN: Record<string, string> = {
+  /* The `assets` step landed 2026-08-29 and needs the network to produce
+     anything, so no article in `data/` and no fixture in `example/` has one
+     yet. Delete this line the moment one does — the assertion below will make
+     you. docs/plans/hosting-the-articles-images.md, stage B. */
+  "assets.json": "the assets step is new and has not been run against a real article",
+};
+
 describe("the artefact manifest", () => {
   it("covers every file present in data/", async () => {
     const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true }).catch(
@@ -156,22 +184,59 @@ describe("the artefact manifest", () => {
        `example/` counts as well as `data/`, because the fixture is the only
        place some artefacts survive on a fresh clone. */
     const seen = new Set<string>();
+    /**
+     * The same set, minus other test files' fixtures.
+     *
+     * The two assertions below want different evidence and this is the
+     * difference. "Nothing writes this any more" is generous on purpose — a
+     * fixture is enough to show the name is still in use. "This has arrived, so
+     * delete the exemption" must not be: a `data/test-…` directory is another
+     * suite's fixture, created and removed while this one runs, so counting it
+     * would make the exemption clear itself on a *test* having written the file
+     * — intermittently, depending on which suite is mid-run — rather than on
+     * the pipeline having produced one.
+     */
+    const outsideFixtures = new Set<string>();
     const roots = [path.join(ROOT, "data"), path.join(ROOT, "example")];
     for (const root of roots) {
       const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
       if (entries.some((e) => e.isFile())) {
-        for (const entry of entries) if (entry.isFile()) seen.add(entry.name);
+        for (const entry of entries) {
+          if (entry.isFile()) {
+            seen.add(entry.name);
+            outsideFixtures.add(entry.name);
+          }
+        }
       }
       for (const entry of entries) {
         if (!entry.isDirectory() || entry.name.startsWith("_")) continue;
         const files = await readdir(path.join(root, entry.name)).catch(() => []);
-        for (const file of files) seen.add(file);
+        for (const file of files) {
+          seen.add(file);
+          if (!entry.name.startsWith("test-")) outsideFixtures.add(file);
+        }
       }
     }
 
+    /* **The exemption is checked before it is used**, so it cannot outlive the
+       thing it excuses. A name in `NOT_YET_WRITTEN` that has now appeared is a
+       step that has run for real, and the entry has to go — otherwise the
+       exemption goes on quietly excusing the same name the day the file stops
+       being written, which is the exact rot the assertion below is for. */
+    const arrived = Object.keys(NOT_YET_WRITTEN).filter((file) => outsideFixtures.has(file));
+    expect(
+      arrived,
+      arrived.length
+        ? `These have arrived, so delete them from NOT_YET_WRITTEN:\n  ${arrived.join("\n  ")}`
+        : "",
+    ).toEqual([]);
+
     // Only warn about the ones we claim to migrate; NOT_MIGRATED entries are
-    // about files that may legitimately never appear.
-    const stale = Object.keys(HOMES).filter((file) => !seen.has(file));
+    // about files that may legitimately never appear, and NOT_YET_WRITTEN ones
+    // about a step too new to have produced an example.
+    const stale = Object.keys(HOMES).filter(
+      (file) => !seen.has(file) && !(file in NOT_YET_WRITTEN),
+    );
     expect(
       stale,
       stale.length

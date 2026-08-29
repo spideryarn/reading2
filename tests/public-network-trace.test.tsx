@@ -178,6 +178,10 @@ const SUMMARY_ENTRY: SummaryEntry = {
 
 const ARTICLE: PublicArticle = {
   meta: { slug: SLUG, title: "A piece", byline: "Somebody" },
+  /* Absent: this fixture has never been through the `assets` step, so the
+     reader hot-links exactly as it always did. The third state, and it is
+     what the publisher-host assertions below are measured against. */
+  assets: undefined,
   blocks: [
     {
       id: "spya-aaaaaa",
@@ -311,6 +315,7 @@ const OWNED: Article = {
      below prove less than it says. */
   blocks: ARTICLE.blocks,
   tree: ARTICLE.tree,
+  assets: undefined,
   meta: {
     ...ARTICLE.meta,
     ...PDF_META,

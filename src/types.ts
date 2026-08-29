@@ -11,12 +11,16 @@
  *
  * `TreeNode` must stay in sync with docs/project/granularity-zoom.md#node-shape.
  *
- * The one import, and it is a type: `FailureKind` belongs to src/messages.ts,
+ * Two imports, and both are types. `FailureKind` belongs to src/messages.ts,
  * where the four kinds are defined and where `canRetry` decides what each one
  * means. Writing the union out a second time here would let the two drift, and
  * the drift would show up as a Retry button under a failure that cannot succeed.
+ * `Assets` belongs to src/assets.ts for the same reason, and that module is a
+ * leaf with no imports of its own precisely so both the pipeline and the
+ * browser can reach it.
  */
 import type { FailureKind } from "./messages.js";
+import type { Assets } from "./assets.js";
 
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
@@ -1051,6 +1055,24 @@ export interface Article {
   tree: Tree;
   /** Absent until `npm run arc` has been run — the L0 column falls back to the root gist. */
   arc?: Arc;
+  /**
+   * The article's own images, and which of them we hold — `Assets`
+   * (src/assets.ts), written by the `assets` step.
+   *
+   * **A required key holding `Assets | undefined`, not an optional one**, and
+   * the difference is the whole reason it is written this way. There are two
+   * places that build an `Article` — the filesystem loader (src/api.ts) and the
+   * Postgres projection (src/store/pg.ts) — and with `assets?:` an omission in
+   * either would typecheck perfectly while the reader went on hot-linking every
+   * image to the publisher: the feature reporting success by doing nothing,
+   * which is docs/reusable/silent-success.md in one field.
+   * `exactOptionalPropertyTypes` is on, so this form makes the compiler ask.
+   *
+   * `undefined` is a real answer and the third state: an article ingested
+   * before this step existed has no manifest at all, and the reader must
+   * hot-link exactly as before rather than read it as "every image failed".
+   */
+  assets: Assets | undefined;
 }
 
 /**
@@ -1594,7 +1616,7 @@ export interface Comment {
  * docs/project/glossary.md and docs/project/summaries.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "toc" | "arc" | "tweets" | "glossary" | "summary" | "ideas";
+  | "fetch" | "extract" | "blocks" | "toc" | "assets" | "arc" | "tweets" | "glossary" | "summary" | "ideas";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";

@@ -157,6 +157,7 @@ type WholeColumn =
   | "stampedHtml"
   | "tree"
   | "labels"
+  | "assets"
   | "arc"
   | "tweets"
   | "glossary"
@@ -221,6 +222,12 @@ export const STORAGE: {
      */
     blocks: { at: "blocks" },
   },
+  /* One column, like the arc — the manifest is a document, and the objects it
+     names live in the `sources` bucket rather than in a table. There is
+     deliberately no `raw_sources` row per image: that table exists so
+     `article_revisions` can foreign-key to *the document*, and an image is not
+     the document. docs/plans/hosting-the-articles-images.md § Where the bytes go. */
+  assets: { assets: { at: "column", column: "assets" } },
   arc: { arc: { at: "column", column: "arc" } },
   tweets: { tweets: { at: "column", column: "tweets" } },
   glossary: { glossary: { at: "column", column: "glossary" } },

@@ -204,6 +204,13 @@
       "when": 1787983944815,
       "tag": "0028_foamy_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788070344815,
+      "tag": "0029_assets",
+      "breakpoints": true
     }
   ]
 }

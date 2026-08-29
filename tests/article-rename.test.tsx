@@ -65,6 +65,9 @@ function article(title: string): Article {
     blocks: [
       { id, tag: "p", kind: "text", text: "Owls are quiet.", words: 3, html: "<p>Owls are quiet.</p>", gistable: true },
     ],
+    /* Absent, and that is the third state: this article has never been through the
+       `assets` step, so the reader hot-links exactly as before. src/assets.ts. */
+    assets: undefined,
     tree: {
       version: "1",
       generator: "test",

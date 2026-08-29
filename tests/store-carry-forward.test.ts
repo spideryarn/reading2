@@ -54,6 +54,8 @@ import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { articleMetadata as fsArticleMetadata } from "../src/api.js";
+import type { Assets } from "../src/assets.js";
+import { ASSETS_VERSION } from "../src/collect-assets.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import {
   articleRevisions,
@@ -195,6 +197,22 @@ function treeFor(blocks: Block[]): Tree {
     },
   } as Tree;
 }
+
+const assetsFor = (sourceHash: string): Assets => ({
+  version: "assets/1",
+  sourceHash,
+  fetchedAt: "2026-08-29T00:00:00.000Z",
+  entries: [
+    {
+      url: "https://cdn.example.com/figure.png",
+      status: "stored",
+      sha256: "a".repeat(64),
+      ext: "png",
+      contentType: "image/png",
+      bytes: 1024,
+    },
+  ],
+});
 
 const arcFor = (blocks: Block[]): Arc => ({
   version: "arc/1",
@@ -374,6 +392,9 @@ async function writeTheFiles(): Promise<void> {
     labels: {},
   });
   await writeFileJson("arc.json", arcFor(B2));
+  /* Stamped against B1, like the three below it: the blocks moved and this
+     manifest did not, so both stores have to say the images want re-fetching. */
+  await writeFileJson("assets.json", assetsFor(HASH1));
   await writeFileJson("glossary.json", glossaryFor(HASH1));
   await writeFileJson("tweets.json", tweetsFor(HASH1));
   await writeFileJson("summary.json", summaryFor(HASH1));
@@ -421,6 +442,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
         stampedHtml: B1.map((b) => b.html).join("\n"),
         tree: treeFor(B1),
         arc: arcFor(B1),
+        assets: assetsFor(HASH1),
         tweets: tweetsFor(HASH1),
         glossary: glossaryFor(HASH1),
         summary: summaryFor(HASH1),
@@ -431,6 +453,16 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
       await step(firstRevision, name);
     }
     await step(firstRevision, "toc", { inputHash: HASH1 });
+    /* **A `done` run row for `assets` as well as the column**, and it is the
+       row that makes the staleness assertion below mean anything: `done` on the
+       metadata page is `run.status === "done" && isCurrent(step)`, so without a
+       row the step reads not-done whatever `isCurrent` says — and deleting
+       `case "assets"` from src/store/pg.ts would redden nothing. Checked by
+       doing exactly that. No `model`: this step makes no model call. */
+    await step(firstRevision, "assets", {
+      inputHash: HASH1,
+      promptVersion: ASSETS_VERSION,
+    });
     await step(firstRevision, "arc", { inputHash: HASH1 });
     await step(firstRevision, "tweets", {
       inputHash: HASH1,
@@ -488,11 +520,16 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
        paragraphs; without the step runs the metadata page reports a stage that
        never ran while the column beside it holds a thread. */
     expect(begun.blocksCopied).toBe(3);
-    expect(begun.stepRunsCopied).toBe(8);
+    expect(begun.stepRunsCopied).toBe(9);
 
     const draft = await revisionRow(secondRevision);
     expect(draft?.status).toBe("draft");
-    for (const column of ["tree", "arc", "tweets", "glossary", "summary"] as const) {
+    /* `assets` is in this list for a reason worth stating: the objects it names
+       are content-addressed and never deleted, so a carried manifest cannot come
+       to point at bytes that have gone — and NOT carrying it would leave an
+       article hot-linking every image again after an unrelated `{steps:
+       ["blocks"]}` run, with nothing anywhere saying so. */
+    for (const column of ["tree", "arc", "assets", "tweets", "glossary", "summary"] as const) {
       expect(draft?.[column], `${column} should have been carried`).not.toBeNull();
     }
 
@@ -574,7 +611,15 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     const pg = doneIn(fromPg);
     const files = doneIn(fromFiles);
 
-    for (const name of ["glossary", "tweets", "summary"] as StepName[]) {
+    /* **`assets` is in this list, and it is the one that would have diverged.**
+       The filesystem asks the step's own `stamp`, so it gets this right for
+       free; Postgres has a hand-written `isCurrent` switch whose `default` arm
+       returns `true`, so a manifest with no case there would report itself
+       current on this page while the files said the opposite about the same
+       article. Delete `case "assets"` from src/store/pg.ts and the `pg` half of
+       this goes red while the `files` half stays green — which is exactly the
+       divergence a parity test is for. */
+    for (const name of ["assets", "glossary", "tweets", "summary"] as StepName[]) {
       expect(pg[name], `Postgres should offer to regenerate ${name}`).toBe(false);
       expect(files[name], `the files should offer to regenerate ${name}`).toBe(false);
     }

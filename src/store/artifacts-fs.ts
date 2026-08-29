@@ -129,6 +129,12 @@ export const PATHS: {
     labels: (at) => path.join(at.dir, "labels.json"),
     blocks: (at) => path.join(at.dir, "blocks.json"),
   },
+  /* Beside the article, not in a folder of its own: the bytes are
+     content-addressed objects in the `sources` bucket and this is only the list
+     saying which of them belong here. docs/plans/hosting-the-articles-images.md. */
+  assets: {
+    assets: (at) => path.join(at.dir, "assets.json"),
+  },
   arc: {
     arc: (at) => path.join(at.dir, "arc.json"),
   },
@@ -224,6 +230,10 @@ const DECODERS: Record<ArtifactKind, Decoder> = {
   blocks: { maxBytes: 32 * MiB, decode: json("blocks") },
   tree: { maxBytes: 32 * MiB, decode: json("tree") },
   labels: { maxBytes: 32 * MiB, decode: json("labels") },
+  /* Two hundred entries at most (`MAX_IMAGES` in src/collect-assets.ts), each a
+     URL and five short fields — tens of kilobytes in practice. The ceiling is a
+     guard against a corrupt or hostile file, not an estimate. */
+  assets: { maxBytes: 4 * MiB, decode: json("assets") },
   arc: { maxBytes: 16 * MiB, decode: json("arc") },
   tweets: { maxBytes: 16 * MiB, decode: json("tweets") },
   glossary: { maxBytes: 32 * MiB, decode: json("glossary") },

@@ -49,6 +49,7 @@
  * it.
  */
 
+import type { Assets } from "./assets.js";
 import type {
   Arc,
   BlockId,
@@ -130,6 +131,31 @@ export interface PublicArticle extends PublicArtefactSet {
   blocks: PublicBlock[];
   tree: Tree;
   arc?: Arc;
+  /**
+   * The article's own images and which of them we hold — the same `Assets` the
+   * owner gets, and for the same reason `tree` and `arc` are not forked: it
+   * says nothing about a person. Every URL in it is already in the `blocks`
+   * beside it, and the rest is a hash, a format and a byte count.
+   *
+   * **A required key holding `Assets | undefined`, exactly like `Article`'s**,
+   * and the two facts that shape depends on are worth stating together:
+   *
+   * 1. The public path is not optional. `App` falls back to public article
+   *    loading for signed-out and non-owning readers, and those readers can
+   *    never reach an authenticated route — so an owner-only design would leave
+   *    every public article hot-linking while looking finished from the owner's
+   *    chair (docs/plans/hosting-the-articles-images.md#delivery).
+   * 2. The reading view takes an `Article`, and a public payload reaches it by
+   *    being structurally one. An optional key here would not satisfy that
+   *    required one, so this is also what keeps the two projections honest with
+   *    each other rather than only with themselves.
+   *
+   * So it is **not** the "absent means never built" rule its four siblings
+   * follow. `undefined` carries that same meaning in the value instead, which
+   * is what makes an omission in `publicArticle` a type error rather than an
+   * article that quietly goes on hot-linking.
+   */
+  assets: Assets | undefined;
 }
 
 /**

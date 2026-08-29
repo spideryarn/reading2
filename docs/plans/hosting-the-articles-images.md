@@ -505,12 +505,12 @@ starts. **Nothing a reader sees changes until stage D.**
 | 2 | **The pure module** | `src/assets.ts` — URL extraction, sniffing, the index | ✅ `82f11b1` |
 | 3 | **The bucket** | `sources` accepts png/jpeg/gif, locally | ✅ `e5f421c` |
 | A | **`fetchAsset`** | `fetchBytes` split out of `fetchDocument`; images fetchable | ✅ |
-| B | **The artefact and the step** | `assets` through all its homes, the migration, the step that fills it | in progress |
+| B | **The artefact and the step** | `assets` through all its homes, the migration, the step that fills it | ✅ |
 | C | **Delivery** | the owned route and the public one | |
 | D | **The reading view** | `rehostImages`, and images that come from us | |
 | E | **Proof and docs** | the browser pass, `architecture.md`, `deployment.md`, Q11 | |
 
-A and B are built in parallel against **one agreed seam**, so neither waits on the other:
+A and B were built in parallel against **one agreed seam**, so neither waited on the other:
 
 ```ts
 /** What the assets step needs from the network, and all it needs. */
@@ -520,7 +520,22 @@ export type AssetFetch = (
 ) => Promise<{ bytes: Uint8Array; contentType: string | null; finalUrl: string }>;
 ```
 
-Stage A implements it as `fetchAsset`; stage B consumes it and injects a fake in tests. **That is
+Stage A implements it as `fetchAsset`; stage B consumes it and injects a fake in tests.
+
+**Stage B improved on one rule in this plan and the better version is the one that shipped.** The
+[limits](#limits) below say the article byte counter must charge bytes *as they arrive*, because
+summing completed downloads lets concurrent responses overshoot between them. Through the agreed
+seam, arrival is not observable — `AssetFetch` hands back a whole buffer. So each fetch instead
+**reserves** its slice of the remaining budget *before* it starts and is given that slice as its own
+`maxBytes`; the bytes in flight can never exceed what the article has left, and the reservation is
+released and the real size charged on completion. That is stronger than the rule rather than a way
+around it: two downloads cannot overshoot between them because neither was allowed to start without
+room for its worst case.
+
+**One guard in stage B has no probe, and it is written down rather than glossed.** `attempts: 2` at
+the `fetchAsset` call site cannot be reached through the seam — which is the seam's whole point — so
+breaking it reddens nothing. Covering it means making retries an injectable limit beside the others.
+Until that lands, it is the one thing here resting on a comment. **That is
 exactly the shape where both sides go green and the value crossing between them is never
 exercised**, so a stage-B test must import the *real* `fetchAsset` and assert it satisfies
 `AssetFetch` — a type-level check is not enough, because the failure would be a runtime shape, not a

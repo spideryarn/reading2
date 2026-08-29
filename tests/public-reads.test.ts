@@ -120,6 +120,17 @@ describe("the public revision read", () => {
     for (const column of ["glossary", "summary", "ideas", "tweets"]) {
       expect(article, column).toContain(`"${column}"`);
     }
+    /* **And the image manifest, on this same statement.** It is the half of
+       hosting an article's images that is easiest to leave out and hardest to
+       notice missing: a signed-out reader can never reach an authenticated
+       route, so an owner-only projection would leave every shared article
+       hot-linking to the publisher — the privacy leak the whole feature exists
+       to close — while looking finished from the owner's chair. Nothing
+       downstream throws; the pictures just carry on coming from Noema's CDN.
+       Dropping `assets` from `PUBLIC_PROJECTIONS` is a typecheck error, and
+       this is the assertion that says the *query* carries it.
+       docs/plans/hosting-the-articles-images.md#delivery. */
+    expect(article, "assets").toContain('"assets"');
     /* The predicate, restated against this same statement rather than trusted
        from the case above — the two facts are only worth anything together. */
     expect(articleQuery.sql).toMatch(/"visibility" = \$2/);

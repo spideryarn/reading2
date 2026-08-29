@@ -174,6 +174,14 @@ const PUBLIC_PROJECTIONS = {
     excerpt: articleRevisions.excerpt,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
+    /* **The image manifest, and this is the half of the feature that is easy to
+       leave out.** Signed-out and non-owning readers cannot reach an
+       authenticated route at all, so an owner-only projection would leave every
+       public article hot-linking to the publisher — the privacy leak this whole
+       feature exists to close, happening on exactly the page we invite
+       strangers to, while looking finished from the owner's chair.
+       docs/plans/hosting-the-articles-images.md#delivery. */
+    assets: articleRevisions.assets,
     /**
      * **The four artefacts slice 1b carries, off the same row.**
      *
@@ -380,6 +388,7 @@ export const pgPublicReader: PublicArticleReader = {
         blocks,
         tree,
         arc: found.revision.arc,
+        assets: found.revision.assets,
         glossary: found.revision.glossary,
         summary: found.revision.summary,
         ideas: found.revision.ideas,

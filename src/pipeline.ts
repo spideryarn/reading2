@@ -23,6 +23,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { generateArc } from "./arc.js";
 import { type BlocksRun, NoBlocksProduced, previousBlocksFrom, runBlocks } from "./blocks.js";
+import { ASSETS_VERSION, collectAssets, writeAssets } from "./collect-assets.js";
 import { runExtract } from "./extract.js";
 import { fetchDocument, type RawManifest, readRaw, writeRaw } from "./fetch.js";
 import {
@@ -49,7 +50,8 @@ import { fsLocations } from "./store/artifacts-fs.js";
 import { blobStore, CONTENT_TYPE, storeRawSource } from "./store/blobs.js";
 import {
   type ArtifactKind,
-  type ArtifactStore,
+  type ArtifactParts,
+  type ArtifactReads,
   sameStamp,
   type StepStamp,
 } from "./store/artifacts.js";
@@ -107,6 +109,14 @@ export const STEP_ORDER: StepName[] = [
   "extract",
   "blocks",
   "toc",
+  /* After `toc` because it reads stage 4's `blocks.json` — the copy the reader
+     will actually render, and the one `inputHashFor` already hashes, so
+     freshness comes free from the machinery that is here rather than from a
+     second one invented for this step. Before `arc` because everything up to
+     `arc` is what makes the article readable, and an article whose figures are
+     still being fetched from the publisher is not finished being ingested.
+     docs/plans/hosting-the-articles-images.md#the-step. */
+  "assets",
   "arc",
   "tweets",
   "glossary",
@@ -126,7 +136,19 @@ export const STEP_ORDER: StepName[] = [
  * and it is the most expensive of the three — several batched calls rather than
  * one. See docs/project/summaries.md.
  */
-export const DEFAULT_INGEST_STEPS: StepName[] = ["fetch", "extract", "blocks", "toc", "arc"];
+export const DEFAULT_INGEST_STEPS: StepName[] = [
+  "fetch",
+  "extract",
+  "blocks",
+  "toc",
+  /* In the default, unlike the four steps after `arc`: it costs no model call,
+     and an article whose images are still hot-linked to the publisher announces
+     the reader's IP to that publisher on every single read. That is the privacy
+     leak this step exists to close, so closing it cannot be something somebody
+     has to ask for. docs/plans/hosting-the-articles-images.md. */
+  "assets",
+  "arc",
+];
 
 /**
  * Will any of `later` read the cached article that `step` is about to write?
@@ -276,8 +298,114 @@ export interface StepContext {
   cacheArticle: boolean;
 }
 
-export interface PipelineStep {
-  name: StepName;
+/**
+ * What a step hands back when it is done: the line to show, and — once the step
+ * has been converted — the artefacts it made.
+ *
+ * **`run` used to return a `string`, and the string is still here as `detail`.**
+ * The rest is the seam this whole migration turns on:
+ *
+ * > A stage stops writing. It returns a product. A short commit afterwards
+ * > writes the product, checks it, and finishes the step.
+ *
+ * On the filesystem that buys nothing — there is no transaction to hold — and
+ * that is exactly why the shape lands first, with nothing converted, so the
+ * boundary exists before anything depends on it (docs/plans/delete-the-importer.md
+ * § D1a). Under Postgres it is the difference between a step's artefacts, its
+ * postcondition and its completion committing together or one at a time.
+ *
+ * **`parts` is optional and `UNCONVERTED_STEPS` is what makes that safe.** A
+ * stage that still writes its own files during `run` returns `{ detail }` alone,
+ * and the session refuses that for any step not on the list — because under a
+ * transactional session the same stage would write nothing, pass its
+ * postcondition against the artefacts the draft carried forward, and report
+ * success. See `checkProduct` in src/store/session.ts.
+ *
+ * `stamp` is what the store records about this run, passed straight to `write`.
+ * It is separate from `parts` because on the filesystem the stamp is a field
+ * *inside* the artefact and the argument is checked against it rather than
+ * stored (src/store/artifacts.ts § `write`).
+ */
+export interface StepProduct {
+  /** One line about what happened, kept on the finished step and shown to the reader. */
+  detail: string;
+  /** The artefacts this run made, for the commit to write. Absent until the step is converted. */
+  parts?: ArtifactParts;
+  /** What the store should record about this run. */
+  stamp?: StepStamp;
+}
+
+/**
+ * The steps that still write their own artefacts inside `run`, and so are
+ * allowed to return a product with no `parts` in it.
+ *
+ * **All nine, today.** D3, D4 and D5 convert them a stage at a time, and each
+ * conversion is a name deleted from here — which is the point of the list being
+ * an explicit, greppable, tested thing rather than a default. A step removed
+ * from it that still writes during `run` is refused loudly at commit; a step
+ * left on it that has been converted still has its `parts` validated. Neither
+ * direction can drift quietly.
+ *
+ * **A step added to the pipeline is converted by default, and this list is the
+ * only way out of that.** It said the opposite for a few hours on 2026-08-29 —
+ * a test held this against `STEP_ORDER`, so a new step was *forced* onto the
+ * exemption to make the suite green. That is fail-open, and GPT Sol was right
+ * about it: the unsafe answer must never be the one you get by doing nothing.
+ * A name is added here only by somebody who has looked at the stage and knows
+ * it still writes its own files.
+ *
+ * The type system says the same thing, so it is not only a runtime rule:
+ * `PipelineStep<N>`'s `run` returns `ConvertedProduct` — `parts` **required** —
+ * for every name outside `LegacyUnconvertedStep`. A new step returning
+ * `{ detail }` alone does not compile.
+ *
+ * The filesystem session consults this. A transactional one must not: it passes
+ * an empty set, because a stage writing outside the transaction is the failure
+ * the transaction exists to prevent (docs/plans/delete-the-importer.md § D1b).
+ */
+export const LEGACY_UNCONVERTED_STEPS = [
+  "fetch",
+  "extract",
+  "blocks",
+  "toc",
+  /* New on 2026-08-29 and arriving unconverted like its nine neighbours: it
+     writes its own `assets.json` inside `run`. Converting it is the same one
+     deletion here plus a `parts` on the return that D3–D5 will make for all of
+     them; landing it on the same footing as the rest is what keeps that a
+     single uniform change rather than a special case. */
+  "assets",
+  "arc",
+  "tweets",
+  "glossary",
+  "summary",
+  "ideas",
+] as const;
+
+/** A step still on the exemption above — see `LEGACY_UNCONVERTED_STEPS`. */
+export type LegacyUnconvertedStep = (typeof LEGACY_UNCONVERTED_STEPS)[number];
+
+/**
+ * The same list as a set, for `checkProduct` — one source, so the runtime rule
+ * and the type rule cannot disagree.
+ */
+export const UNCONVERTED_STEPS: ReadonlySet<StepName> = new Set<StepName>(
+  LEGACY_UNCONVERTED_STEPS,
+);
+
+/**
+ * What a **converted** step returns: the same product, with `parts` required.
+ *
+ * This is finding 3 of the D1a review made static. The runtime guard in
+ * `checkProduct` refuses an absent `parts` for any step off the legacy list, and
+ * this is the same refusal at compile time, so a new stage cannot reach the
+ * runtime guard by accident.
+ */
+export interface ConvertedProduct extends StepProduct {
+  parts: ArtifactParts;
+}
+
+export interface PipelineStep<N extends StepName = StepName> {
+  name: N;
   /** Present tense, naming the actual thing — "Fetching the page", never "Loading". */
   label: string;
   /**
@@ -330,7 +458,7 @@ export interface PipelineStep {
    * function, which is the point. Neither has one yet, and the interface says
    * so out loud rather than letting bare existence look like freshness.
    */
-  stamp?(ctx: StepContext, store: ArtifactStore): Promise<StepStamp | null>;
+  stamp?(ctx: StepContext, store: ArtifactReads): Promise<StepStamp | null>;
   /**
    * Optional: is this step's artefact not merely present but **current**?
    *
@@ -367,20 +495,30 @@ export interface PipelineStep {
    * both of these `isDone` implementations read `ctx.dir`, and under Postgres
    * there is no directory to read. docs/plans/transactional-stage-runner.md § D.
    */
-  isDone?(ctx: StepContext, store: ArtifactStore): Promise<boolean>;
+  isDone?(ctx: StepContext, store: ArtifactReads): Promise<boolean>;
   /**
-   * Do the work. The returned string is the one-line summary kept on the
-   * finished step.
+   * Do the work, and hand back what was done — see `StepProduct`.
    *
-   * **The store is an argument, like `isDone`'s and `stamp`'s, and it has no
-   * default** — for the reason `stepIsDone` gives at length: a default lets a
-   * Postgres caller that forgot it compile cleanly and get a confident answer
-   * about the filesystem. Only `blocks` reads it today, because stage 3 is the
-   * only stage whose *previous output* is an input it cannot do without
+   * **It returned the one-line summary as a bare `string` until 2026-08-29.**
+   * Now that line is `product.detail` and the product has room for the
+   * artefacts as well, so that a converted stage can stop writing and let the
+   * commit after it do the writing inside one transaction. Nothing is converted
+   * yet: all nine still write their own files and return `{ detail }` alone.
+   *
+   * **The store is `ArtifactReads`, not the whole store, and it has no default.**
+   * Read-only because this half runs *outside* the commit and a write from here
+   * would land outside the transaction that is supposed to hold the step
+   * together. No default for the reason `stepIsDone` gives at length: a default
+   * lets a Postgres caller that forgot it compile cleanly and get a confident
+   * answer about the filesystem. Only `blocks` reads it today, because stage 3
+   * is the only stage whose *previous output* is an input it cannot do without
    * (docs/project/block-ids.md); the two stages with the same shape, `glossary`
    * and `ideas`, are the next piece of work and this is the seam they take.
    */
-  run(ctx: StepContext, store: ArtifactStore): Promise<string>;
+  run(
+    ctx: StepContext,
+    store: ArtifactReads,
+  ): Promise<N extends LegacyUnconvertedStep ? StepProduct : ConvertedProduct>;
 }
 
 /**
@@ -431,7 +569,7 @@ export interface PipelineStep {
  * direction it can be wrong — stage 3 makes no model call, and re-running it
  * carries the ids over rather than minting new ones.
  */
-async function htmlCarriesItsIds(ctx: StepContext, store: ArtifactStore): Promise<boolean> {
+async function htmlCarriesItsIds(ctx: StepContext, store: ArtifactReads): Promise<boolean> {
   const file = await store.read(ctx.slug, "blocks", "blocks");
   const html = await store.read(ctx.slug, "blocks", "stampedHtml");
   if (!file?.blocks?.length || !html) return false;
@@ -504,7 +642,7 @@ function blocksPathFor(ctx: StepContext): string {
 export async function stepIsDone(
   step: PipelineStep,
   ctx: StepContext,
-  store: ArtifactStore,
+  store: ArtifactReads,
 ): Promise<boolean> {
   if (await store.interrupted(ctx.slug, step.name)) return false;
   if (!(await store.has(ctx.slug, step.name, step.produces))) return false;
@@ -528,7 +666,7 @@ export async function stepIsDone(
  * must not be confused with a hash that fails to match. Both answer
  * not-current; only one of them is a stale artefact.
  */
-async function inputHashFor(ctx: StepContext, store: ArtifactStore): Promise<string | null> {
+async function inputHashFor(ctx: StepContext, store: ArtifactReads): Promise<string | null> {
   const file = await store.read(ctx.slug, "toc", "blocks");
   if (!file?.blocks) return null;
   return hashBlocks(file.blocks);
@@ -562,7 +700,7 @@ async function inputHashFor(ctx: StepContext, store: ArtifactStore): Promise<str
 export async function assertProduced(
   step: PipelineStep,
   ctx: StepContext,
-  store: ArtifactStore,
+  store: ArtifactReads,
 ): Promise<void> {
   const missing: ArtifactKind[] = [];
   for (const kind of step.produces) {
@@ -843,7 +981,12 @@ const READABILITY_REFUSED = /^Readability could not parse this page\./;
  * blocks.json is already safe and no later consumer has to remember. See
  * src/sanitize.ts.
  */
-export const STEPS: Record<StepName, PipelineStep> = {
+/**
+ * **`{ [K in StepName]: PipelineStep<K> }`, not `Record<StepName, PipelineStep>`.**
+ * Each entry is bound to its own name, which is what lets `run`'s return type
+ * depend on whether that name is still on `LEGACY_UNCONVERTED_STEPS`.
+ */
+export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   /* Stage 1. Its own step, and its own artefact, so that a failed or wrong
      extraction can be retried without asking the publisher again — and without
      the answer being different because they changed the page in between.
@@ -871,7 +1014,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
          so this half verifies them and writes the same manifest the other half
          does. See `acquireUpload`, and the label this step shows, which is not
          "Fetching the page" when there is nothing to fetch. */
-      if (ctx.upload) return await acquireUpload(ctx, ctx.upload);
+      if (ctx.upload) return { detail: await acquireUpload(ctx, ctx.upload) };
       const url = requireUrl(ctx);
       const host = new URL(url).hostname;
       ctx.report(host);
@@ -888,7 +1031,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
          when a page comes back suspiciously small, or when one publisher keeps
          failing. See log.ts's note on `url` not being redacted, and why. */
       plog.debug({ slug: ctx.slug, step: "fetch", host, kb }, `fetch ${ctx.slug}: ${kb} KB`);
-      return `${kb} KB`;
+      return { detail: `${kb} KB` };
     },
   },
 
@@ -925,7 +1068,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
         const html = await readFile(path.join(ctx.dir, manifest?.file ?? "raw.html"), "utf8");
         try {
           const result = await runExtract({ html, url, outFile: ctx.htmlFile, dataDir: ctx.dir });
-          return result.meta.title;
+          return { detail: result.meta.title };
         } catch (err) {
           /* Only the one sentence. Everything else this can throw — a full
              disk, a directory that vanished — is ordinary bad luck, and hiding
@@ -974,7 +1117,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
         },
         `extract ${ctx.slug}: ${result.pages} pages of PDF in ${result.chunks} chunks`,
       );
-      return result.meta.title;
+      return { detail: result.meta.title };
     },
   },
 
@@ -1099,7 +1242,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
        * ignored. `previousBlocks`, `carried` and `reused` are all in the info
        * line above, so that case is one query away instead.
        */
-      return `${total} blocks, ${minted} new ids (${kept} kept)`;
+      return { detail: `${total} blocks, ${minted} new ids (${kept} kept)` };
     },
   },
 
@@ -1195,7 +1338,77 @@ export const STEPS: Record<StepName, PipelineStep> = {
         },
         `toc ${ctx.slug}: ${run.internal} sections over ${run.blocks} blocks`,
       );
-      return `${run.internal} sections over ${run.blocks} blocks`;
+      return { detail: `${run.internal} sections over ${run.blocks} blocks` };
+    },
+  },
+
+  /* Stage 4.5 — the article's own images, fetched and kept beside it.
+     src/collect-assets.ts does the work; src/assets.ts is its pure half.
+
+     **The only step with no model call and a network cost**, which is why it is
+     in DEFAULT_INGEST_STEPS while the four after `arc` are not: nobody has to
+     ask for it, because leaving it undone means every reader's browser
+     announces itself to the publisher's CDN once per image, per read.
+
+     It reads stage 4's `blocks.json` rather than the extracted HTML, so it
+     fetches exactly the URLs the reader will ask for — and so its freshness is
+     the `inputHashFor` hash the other stamped steps already use. */
+  assets: {
+    name: "assets",
+    label: "Fetching the images",
+    outputs: (ctx) => [path.join(ctx.dir, "assets.json")],
+    produces: ["assets"],
+    /* Two values, not three: the blocks it would be built from, and this step's
+       own version. **No model**, so no `generator` on the artefact and no
+       `model` here — `sameStamp` compares only the fields the expected stamp
+       declares, so naming one nothing writes would make every manifest look
+       stale for ever. `ASSETS_VERSION` is the string the artefact carries; it
+       is imported rather than spelled again here, because two copies of one
+       version string that drift show up as an artefact that never regenerates. */
+    stamp: async (ctx, store) => {
+      const inputHash = await inputHashFor(ctx, store);
+      if (!inputHash) return null;
+      return { inputHash, promptVersion: ASSETS_VERSION };
+    },
+    async run(ctx, store) {
+      const file = await store.read(ctx.slug, "toc", "blocks");
+      if (!file?.blocks) {
+        /* `ours` rather than a fetch failure: nothing was refused, we simply
+           cannot find the blocks this step is defined against. */
+        throw stageFailure("ours", `No blocks for "${ctx.slug}" — run the toc step first.`);
+      }
+      const run = await collectAssets({
+        blocks: file.blocks,
+        signal: ctx.signal,
+        onProgress: (done, total) => ctx.report(`${done}/${total} images`),
+      });
+      await writeAssets(ctx.dir, run.assets);
+      /* No URLs and no hostnames. A log of the images in somebody's article is
+         a reading history one step removed, and the counts are what an operator
+         wants: `deduped` going from sometimes to never is how you find out the
+         canonical keys have stopped being content hashes, and `failed` rising
+         is how you find out a publisher has started refusing us. */
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "assets",
+          images: run.assets.entries.length,
+          stored: run.stored,
+          failed: run.failed,
+          deduped: run.deduped,
+          kb: Math.round(run.bytes / 1024),
+          ms: run.elapsedMs,
+          /* Error *names* only, from `collectAssets`, and only when there are
+             any. A `CorruptObject` here means something is at a canonical name
+             that does not hash to it, which needs a person with the service
+             key — and it is the one failure in this step that is about us
+             rather than about the publisher. src/store/blobs.ts. */
+          ...(run.storageErrors.length ? { storageErrors: run.storageErrors } : {}),
+        },
+        `assets ${ctx.slug}: ${run.stored} stored, ${run.failed} failed`,
+      );
+      const failed = run.failed ? `, ${run.failed} left hot-linked` : "";
+      return { detail: `${run.stored} images stored${failed}` };
     },
   },
 
@@ -1227,7 +1440,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
         },
         `arc ${ctx.slug}: ${run.arc.entries.length} sentences over ${run.parts.length} parts`,
       );
-      return `${run.arc.entries.length} sentences, one per part`;
+      return { detail: `${run.arc.entries.length} sentences, one per part` };
     },
   },
 
@@ -1283,7 +1496,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
         },
         `tweets ${ctx.slug}: ${run.thread.tweets.length} posts${over}`,
       );
-      return `${run.thread.tweets.length} posts${over}`;
+      return { detail: `${run.thread.tweets.length} posts${over}` };
     },
   },
 
@@ -1373,7 +1586,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
         `glossary ${ctx.slug}: ${total} terms (${run.added} new, pass ${run.glossary.passes})`,
       );
       const added = run.glossary.passes > 1 ? `, ${run.added} new` : "";
-      return `${total} ${total === 1 ? "term" : "terms"}${added}`;
+      return { detail: `${total} ${total === 1 ? "term" : "terms"}${added}` };
     },
   },
   summary: {
@@ -1440,7 +1653,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
         `summary ${ctx.slug}: ${run.targets - missing}/${run.targets} sections in ${run.batches} groups`,
       );
       const short = missing > 0 ? `, ${missing} missing` : "";
-      return `${run.targets - missing} of ${run.targets} sections${short}`;
+      return { detail: `${run.targets - missing} of ${run.targets} sections${short}` };
     },
   },
   /* Stage 5f — the ideas. In STEP_ORDER but not in DEFAULT_INGEST_STEPS, for
@@ -1551,7 +1764,7 @@ export const STEPS: Record<StepName, PipelineStep> = {
         },
         `ideas ${ctx.slug}: ${total} ideas (${assumed} to bring)`,
       );
-      return `${total} ${total === 1 ? "idea" : "ideas"}, ${assumed} to bring`;
+      return { detail: `${total} ${total === 1 ? "idea" : "ideas"}, ${assumed} to bring` };
     },
   },
 };

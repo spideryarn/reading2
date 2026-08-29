@@ -1,0 +1,520 @@
+/**
+ * **Fetching the article's own images** — the `assets` step, stage 4.5.
+ *
+ * The impure half of hosting them. [`src/assets.ts`](assets.ts) is the pure
+ * half: which URLs a block would have the reader's browser fetch, what a
+ * downloaded file turns out to be, and the map the reading view looks a URL up
+ * in. This file is the network, the budget and the bucket, and it owns nothing
+ * that could have lived there.
+ *
+ * Step 6 of docs/plans/hosting-the-articles-images.md. The reasoning is in the
+ * plan; five things are worth knowing before editing anything here.
+ *
+ * ## 1. The URLs come from a DOM, never from the stored string
+ *
+ * `blocks.json` holds `…&amp;s=3a2bee…`; `getAttribute("src")` returns
+ * `…&s=3a2bee…`. The reading view will look this manifest up with the second
+ * spelling, so the manifest is keyed on the second spelling — which means
+ * parsing the block HTML here exactly as the browser will, and reading the
+ * attribute exactly as the browser will. Both halves of that live in
+ * `imageSourcesIn`, once, so they cannot drift. Five of the corpus's thirteen
+ * images carry a query string like that, and the failure mode is not an error:
+ * it is every entry missing, the publisher's URL left in place, and a feature
+ * that appears to do nothing.
+ *
+ * ## 2. One bad image must never fail the step
+ *
+ * An article is readable with a broken figure and unreadable with no article.
+ * So every per-image failure — a 404, a timeout, a blocked address, a format we
+ * do not host, a corrupt object at a canonical name — is recorded as a `failed`
+ * entry and the loop carries on. The manifest's three states do the rest: a
+ * `stored` entry is served from us, a `failed` entry stays hot-linked, and a
+ * URL with **no entry at all** means this step never looked at it.
+ *
+ * ## 3. The article budget is reserved before a fetch starts, not charged after
+ *
+ * The plan says the byte counter must charge bytes *as they arrive*, because
+ * summing finished downloads lets two concurrent responses overshoot the cap
+ * between them. The agreed `AssetFetch` seam hands back a whole buffer, so
+ * arrival is not observable from here — and the fix is stronger than the rule
+ * rather than weaker. Each fetch **reserves** its slice of what is left before
+ * it starts and is given that slice as its own `maxBytes`, so the bytes on the
+ * wire at any instant can never exceed the article's remaining budget. On
+ * completion the reservation is released and the real size charged. Two
+ * downloads cannot overshoot between them because neither was ever allowed to
+ * start without room for its worst case.
+ *
+ * ## 4. The queue is global and it is the whole of our politeness
+ *
+ * There is no per-host throttle anywhere in this repo; job concurrency has been
+ * 1 and that was the entire story. One article is now up to 200 requests, so
+ * `GATE` is module-level and admits two at a time **across the process** — not
+ * two per article, which is the same unbounded number wearing a limit's name.
+ *
+ * ## 5. Nothing here trusts the origin's `Content-Type`
+ *
+ * Publishers serve PNGs as `application/octet-stream`; bot walls serve HTML as
+ * `image/jpeg`. The stored extension and the stored content type both come from
+ * `sniffImage`, over the bytes. This is the lesson `sniffKind` already encodes
+ * for documents, and content addressing is what makes it non-negotiable: the
+ * name we store *is* a claim about the contents.
+ */
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
+
+import { JSDOM } from "jsdom";
+
+import {
+  type AssetEntry,
+  type AssetFailure,
+  type Assets,
+  imageSourcesIn,
+  sniffImage,
+} from "./assets.js";
+import { type AssetFetch, fetchAsset, FetchFailure, type FetchFailureCode } from "./fetch.js";
+import { hashBlocks } from "./source-hash.js";
+import { type RawSourceStore, storeRawSource } from "./store/blobs.js";
+import type { Block } from "./types.js";
+
+/**
+ * The artefact's own version, and it is a **string** because `stampOf`
+ * (src/store/artifacts.ts) reads `version` only `if (typeof a.version ===
+ * "string")`. A number here would be silently dropped, and then a change to URL
+ * selection, sniffing or failure handling would leave every existing manifest
+ * reporting itself current on `sourceHash` alone — no article would ever re-run
+ * the step. GPT Sol, 2026-08-29.
+ *
+ * Bump it when what this step *decides* changes: which URLs it picks, which
+ * formats it hosts, how it classifies a failure.
+ */
+export const ASSETS_VERSION = "assets/1" as const;
+
+/* ------------------------------------------------------------------ *
+ * Limits — policy, not measurement
+ * ------------------------------------------------------------------ */
+
+/**
+ * The four caps and the timeout.
+ *
+ * **None of these is derived from the corpus**, and the plan's first draft
+ * implied they were. The measurements say 899 KB largest image, 2.46 MB per
+ * article, 13 images. These are generous guards chosen on purpose, so that a
+ * hostile or broken page cannot cost us an unbounded amount, and so that the
+ * numbers we actually see clear them by a wide margin rather than sitting near
+ * them. docs/plans/hosting-the-articles-images.md#limits--policy-not-measurement.
+ */
+export const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
+export const MAX_ARTICLE_BYTES = 64 * 1024 * 1024;
+/** A runaway guard rather than a budget: no real article has 200 figures. */
+export const MAX_IMAGES = 200;
+export const IMAGE_TIMEOUT_MS = 15_000;
+/** One queue for the whole process. See the header, point 4. */
+export const CONCURRENCY = 2;
+
+/* ------------------------------------------------------------------ *
+ * The global queue
+ * ------------------------------------------------------------------ */
+
+/**
+ * Admit at most `limit` callers at once, process-wide.
+ *
+ * Deliberately the smallest thing that can be one: a count and a queue of
+ * resolvers. `release` is returned rather than exposed as a method so that a
+ * caller cannot release a permit it does not hold, and every caller releases in
+ * a `finally`.
+ */
+class Gate {
+  private free: number;
+  private readonly waiting: (() => void)[] = [];
+
+  constructor(private readonly limit: number) {
+    this.free = limit;
+  }
+
+  async acquire(): Promise<() => void> {
+    if (this.free > 0) this.free -= 1;
+    else await new Promise<void>((resolve) => this.waiting.push(resolve));
+    let released = false;
+    return () => {
+      /* Idempotent, because the alternative is a permit handed out twice by a
+         double release in a `finally` that ran twice — a limit that quietly
+         stops being one, which is the failure this whole class exists for. */
+      if (released) return;
+      released = true;
+      const next = this.waiting.shift();
+      if (next) next();
+      else this.free += 1;
+    };
+  }
+
+  /** How many are in flight. Exported for the test that watches the limit hold. */
+  get inFlight(): number {
+    return this.limit - this.free;
+  }
+}
+
+/** The one queue. Module-level on purpose — see the header, point 4. */
+export const GATE = new Gate(CONCURRENCY);
+
+/**
+ * **`fetchAsset`, with this caller's retry budget said out loud.**
+ *
+ * `fetchAsset` inherits `attempts: 3` from `FetchOptions`' defaults, which is
+ * right for the thing those defaults document: one document a person pasted and
+ * is waiting for. It is wrong here, and invisibly so — the `AssetFetch` seam
+ * exposes only `maxBytes`, `timeoutMs` and `signal`, so the multiplier does not
+ * appear at the call site at all.
+ *
+ * The arithmetic is the problem. The plan's politeness budget counts **images**
+ * — 200 per article, two at a time — and a retryable failure turns each of
+ * those into three requests. 200 images at one host becomes up to 600, which is
+ * a limit that has quietly stopped being one (`trap 6`, and there is no
+ * per-host throttle anywhere in this repo to catch it).
+ *
+ * **Two, not three, and not one.** One would drop an image on a single
+ * connection reset, and a lost figure is permanent until somebody re-runs the
+ * step. Two keeps the one retry that buys most of the reliability and halves
+ * the worst case a publisher can see. Three is a *document's* budget: there is
+ * one of those per article and a person is watching it.
+ *
+ * Stated here rather than by changing the default in src/fetch.ts, which
+ * belongs to stage A and to `fetchDocument`. This is the caller deciding, which
+ * is where a budget belongs.
+ */
+const politeFetch: AssetFetch = (url, opts) => fetchAsset(url, { ...opts, attempts: 2 });
+
+/* ------------------------------------------------------------------ *
+ * Finding the images
+ * ------------------------------------------------------------------ */
+
+/**
+ * Every image URL in the article, in document order, each once.
+ *
+ * **One jsdom for the whole article**, with an inert `<template>` reused per
+ * block — the pattern `articleLinks` (src/chat-tools.ts) established, and for
+ * the same two reasons. A `<base>` element inside a block would change
+ * `document.baseURI` and therefore every resolved URL in it; template content
+ * is parsed into an inert fragment where nothing is connected, so it cannot.
+ * And jsdom runs no scripts and fetches no subresources unless asked, which it
+ * is not.
+ *
+ * The dedupe is across the whole article rather than per block: one picture
+ * used in two places is one object and one request, and the manifest is keyed
+ * by URL, so two entries for one key is a shape `assetIndex` could not
+ * represent honestly.
+ */
+export function imageUrlsIn(blocks: readonly Block[]): string[] {
+  const dom = new JSDOM("<!doctype html><template></template>");
+  const template = dom.window.document.querySelector("template");
+  if (!template) return [];
+  const found: string[] = [];
+  const seen = new Set<string>();
+  for (const block of blocks) {
+    /* Case-insensitive, and a shortcut past the parse rather than a rule:
+       `<IMG SRC=…>` is valid markup, and while this corpus serialises lowercase
+       that is a property of the serialiser and not a promise. Being wrong here
+       silently drops every image in the block. */
+    if (!block.html || !/<img[\s>]/i.test(block.html)) continue;
+    template.innerHTML = block.html;
+    for (const url of imageSourcesIn(template.content)) {
+      if (seen.has(url)) continue;
+      seen.add(url);
+      found.push(url);
+    }
+  }
+  return found;
+}
+
+/* ------------------------------------------------------------------ *
+ * Why an image is not stored
+ * ------------------------------------------------------------------ */
+
+/**
+ * Every fetch failure, mapped to the reason the manifest records.
+ *
+ * **Exhaustive over `FetchFailureCode` on purpose**, with no default arm: a new
+ * code in src/fetch.ts is a typecheck failure here rather than an image
+ * silently classified as whatever the fallback happened to be. The grouping is
+ * about what a *reader* of the manifest would do with it — `blocked` means the
+ * far end or our own guard refused us and trying again changes nothing;
+ * `network` means it might work later.
+ */
+const FAILURE_FOR: Record<FetchFailureCode, AssetFailure> = {
+  "invalid-url": "blocked",
+  "unsupported-scheme": "blocked",
+  /* Our own address guard. The publisher's page chose this URL, so a private
+     address in an `<img src>` is exactly the request shape the guard exists
+     for, and recording it as a refusal rather than as a network fault is what
+     keeps that visible. */
+  "blocked-address": "blocked",
+  unauthorized: "blocked",
+  forbidden: "blocked",
+  "rate-limited": "blocked",
+  "not-found": "not-found",
+  "too-large": "too-big",
+  dns: "network",
+  connection: "network",
+  certificate: "network",
+  timeout: "network",
+  "too-many-redirects": "network",
+  "server-error": "network",
+  "http-error": "network",
+  empty: "network",
+  /* `fetchAsset` does not sniff, so it cannot raise this — but the code is on
+     the shared type and a silent hole in an exhaustive map is worse than a
+     debatable classification. */
+  "unsupported-type": "network",
+};
+
+/* ------------------------------------------------------------------ *
+ * The run
+ * ------------------------------------------------------------------ */
+
+export interface CollectAssetsOptions {
+  /** Stage 4's blocks — what the reader will actually render. */
+  blocks: readonly Block[];
+  /**
+   * The network, injected.
+   *
+   * The seam is `AssetFetch` and the default is `politeFetch` below, which is
+   * the real `fetchAsset` with this caller's retry budget stated. Tests pass a
+   * fake; **`tests/collect-assets.test.ts` also drives the real one through
+   * this same parameter**, because both sides going green while the value
+   * crossing between them is never exercised is the exact failure this shape
+   * invites.
+   */
+  fetchImpl?: AssetFetch;
+  /** Where the bytes go, injected the same way `storeRawSource` takes it. */
+  blobs?: RawSourceStore;
+  signal?: AbortSignal;
+  /** The clock, so a test can assert on `fetchedAt` and `at`. */
+  now?: () => Date;
+  onProgress?: (done: number, total: number) => void;
+  /**
+   * The three caps, injected, defaulting to the policy above.
+   *
+   * **This exists so the budget arithmetic has a probe, and that is not a
+   * convenience.** The guard being tested is "a fetch may not start unless the
+   * article has room for its worst case", and the real numbers are 16 MiB and
+   * 64 MiB — so exercising the arm where the article budget is the binding
+   * constraint would mean allocating 64 MiB of fixtures to watch four bytes of
+   * arithmetic. Every fixture would then sit under the limit and the cap would
+   * be tested by nothing at all, which is a shape this repo has been bitten by
+   * more than once (docs/reusable/silent-success.md). Production never passes
+   * this; tests set it to numbers they can count.
+   */
+  limits?: Partial<Limits>;
+}
+
+/** The three caps, as one thing, so a test can replace them together. */
+export interface Limits {
+  maxImageBytes: number;
+  maxArticleBytes: number;
+  maxImages: number;
+}
+
+const DEFAULT_LIMITS: Limits = {
+  maxImageBytes: MAX_IMAGE_BYTES,
+  maxArticleBytes: MAX_ARTICLE_BYTES,
+  maxImages: MAX_IMAGES,
+};
+
+export interface AssetsRun {
+  assets: Assets;
+  /** How many entries came back `stored`. */
+  stored: number;
+  failed: number;
+  /** Of the stored ones, how many were already in the bucket. */
+  deduped: number;
+  /** Bytes actually downloaded. */
+  bytes: number;
+  /**
+   * The error names behind every `storage` failure, deduplicated, for the
+   * caller to log. Names only — never a message, which can carry a key, and
+   * never a URL, which is somebody's reading.
+   */
+  storageErrors: string[];
+  elapsedMs: number;
+}
+
+/**
+ * Fetch every image this article's blocks would have a browser fetch, and say
+ * what became of each.
+ *
+ * Writes nothing to disk — the caller does that, so this stays testable without
+ * one and so the step is the only thing that knows where an artefact lives.
+ */
+export async function collectAssets(options: CollectAssetsOptions): Promise<AssetsRun> {
+  const {
+    blocks,
+    fetchImpl = politeFetch,
+    blobs,
+    signal,
+    now = () => new Date(),
+    onProgress,
+  } = options;
+  const limits: Limits = { ...DEFAULT_LIMITS, ...options.limits };
+  const startedAt = Date.now();
+
+  const urls = imageUrlsIn(blocks);
+  /* Everything past the runaway guard is recorded rather than dropped, so that
+     "no entry" keeps meaning "this step never looked at it" for every URL in
+     the article. A dropped URL and an unvisited one are indistinguishable to
+     every later reader, and only one of them is a decision. */
+  const fetchable = urls.slice(0, limits.maxImages);
+  const overflow = urls.slice(limits.maxImages);
+
+  /**
+   * The two halves of the article budget.
+   *
+   * `spent` is bytes that have finished arriving; `reserved` is the worst case
+   * of everything still on the wire. A fetch may start only if
+   * `maxArticleBytes - spent - reserved` is positive, and it is handed exactly
+   * that much (capped at `maxImageBytes`) as its own limit. See the header,
+   * point 3.
+   */
+  let spent = 0;
+  let reserved = 0;
+
+  const entries = new Map<string, AssetEntry>();
+  let stored = 0;
+  let failed = 0;
+  let deduped = 0;
+  let done = 0;
+  const storageErrors: string[] = [];
+
+  const fail = (url: string, reason: AssetFailure): void => {
+    entries.set(url, { url, status: "failed", reason, at: now().toISOString() });
+    failed += 1;
+  };
+
+  for (const url of overflow) fail(url, "budget");
+
+  const one = async (url: string): Promise<void> => {
+    /*
+     * **The queue first, the budget second, and the order is load-bearing.**
+     *
+     * `Promise.all` starts every one of these at once, and everything before
+     * the first `await` runs synchronously for all of them. Reserving ahead of
+     * the gate therefore has all 200 images reserve 16 MiB apiece against a
+     * 64 MiB article — four get budget and the rest come back `budget` — on an
+     * article whose images total 2.46 MB. The reservation has to be taken by
+     * the caller that is actually about to fetch, which is the one holding a
+     * permit. tests/collect-assets.test.ts pins this with an article of more
+     * images than the reservation arithmetic would leave room for.
+     */
+    const release = await GATE.acquire();
+    let budget = 0;
+    let charge = 0;
+    try {
+      const room = limits.maxArticleBytes - spent - reserved;
+      if (room <= 0) {
+        fail(url, "budget");
+        return;
+      }
+      budget = Math.min(limits.maxImageBytes, room);
+      reserved += budget;
+
+      const got = await fetchImpl(url, {
+        maxBytes: budget,
+        timeoutMs: IMAGE_TIMEOUT_MS,
+        ...(signal ? { signal } : {}),
+      });
+      charge = got.bytes.byteLength;
+
+      const sniffed = sniffImage(got.bytes);
+      if (!sniffed) {
+        /* Every WebP, AVIF and SVG, and anything that is not an image at all —
+           a bot wall's HTML page served as `image/jpeg` lands here too, which
+           is the point of sniffing rather than believing the header. The image
+           stays hot-linked. */
+        fail(url, "unsupported-format");
+        return;
+      }
+
+      const put = blobs
+        ? await storeRawSource(got.bytes, sniffed.ext, blobs)
+        : await storeRawSource(got.bytes, sniffed.ext);
+      if (put.outcome === "already-there") deduped += 1;
+      entries.set(url, {
+        url,
+        status: "stored",
+        sha256: put.sha256,
+        ext: sniffed.ext,
+        contentType: sniffed.contentType,
+        bytes: got.bytes.byteLength,
+      });
+      stored += 1;
+    } catch (err) {
+      if (err instanceof FetchFailure) {
+        /* A `too-large` refusal means at least the whole budget arrived before
+           the cap bit, so it is charged rather than refunded. Every other typed
+           failure either never got a body or got one we did not read. */
+        if (err.code === "too-large") charge = budget;
+        fail(url, FAILURE_FOR[err.code]);
+        return;
+      }
+      /* Anything else — a `CorruptObject` at a canonical name, a Storage
+         outage, a bug. **Recorded and carried past**, because one image must
+         never fail the step.
+
+         The error's *name* is handed back for the caller to log, and nothing
+         here logs it itself: this module is not in src/log.ts's component list
+         and should not be, so the one place that already owns a `pipeline`
+         logger does the saying. A corrupt canonical object needs a human, and a
+         count with no name in it would not tell anybody which human. */
+      storageErrors.push((err as Error).name || "Error");
+      fail(url, "storage");
+    } finally {
+      release();
+      reserved -= budget;
+      spent += charge;
+      done += 1;
+      onProgress?.(done, fetchable.length);
+    }
+  };
+
+  /**
+   * Run them through the queue.
+   *
+   * `Promise.all` over every URL at once is safe *because* `GATE` is what
+   * bounds the concurrency — two in flight across the process, however many
+   * promises are pending.
+   */
+  await Promise.all(fetchable.map((url) => one(url)));
+
+  /* Document order, not completion order. The manifest is read beside the
+     article, and a list that reshuffles itself on every run is a diff nobody
+     can read. */
+  const ordered: AssetEntry[] = [];
+  for (const url of urls) {
+    const entry = entries.get(url);
+    if (entry) ordered.push(entry);
+  }
+
+  return {
+    assets: {
+      version: ASSETS_VERSION,
+      sourceHash: hashBlocks([...blocks]),
+      fetchedAt: now().toISOString(),
+      entries: ordered,
+    },
+    stored,
+    failed,
+    deduped,
+    bytes: spent,
+    storageErrors: [...new Set(storageErrors)],
+    elapsedMs: Date.now() - startedAt,
+  };
+}
+
+/**
+ * The artefact, on disk beside the article.
+ *
+ * Split from `collectAssets` so the work above needs no filesystem, and so the
+ * one place that knows the filename is this one — matching every other stage
+ * that still writes its own output.
+ */
+export async function writeAssets(dir: string, assets: Assets): Promise<void> {
+  await writeFile(path.join(dir, "assets.json"), `${JSON.stringify(assets, null, 2)}\n`, "utf8");
+}

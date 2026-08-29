@@ -42,6 +42,7 @@
  * *person*, and there is no person here.
  */
 
+import type { Assets } from "../assets.js";
 import type {
   Arc,
   ArcEntry,
@@ -111,14 +112,15 @@ function publicMeta(row: {
  * Every field in this file is named on purpose, and until 2026-08-29 the idiom
  * for an optional one spread a fresh object literal into the result, naming the
  * key twice. That idiom has a hole, confirmed by GPT Sol's sixth review and
- * then measured: spelling the key `treatmnt` inside the spread compiles
- * **clean**. TypeScript's excess-property check does not look at keys
- * contributed through a spread, and an outer `satisfies` on the whole object
- * does not repair it. So the one mistake this file cannot afford — a field that
- * silently fails to cross — was the one mistake the compiler would not catch.
- * `publicTree` dropping `treatment` reverted the entire footnotes feature for
- * anyone following a shared link, and that was an omission rather than a typo;
- * a typo would have looked identical and been harder to see.
+ * then measured:
+ * spelling the key `treatmnt` inside the spread compiles **clean**. TypeScript's
+ * excess-property check does not look at keys contributed through a spread, and
+ * an outer `satisfies` on the whole object does not repair it. So the one
+ * mistake this file cannot afford — a field that silently fails to cross — was
+ * the one mistake the compiler would not catch. `publicTree` dropping
+ * `treatment` reverted the entire footnotes feature for anyone following a
+ * shared link, and that was an omission rather than a typo; a typo would have
+ * looked identical and been harder to see.
  *
  * `K extends keyof T` closes it: the field name is a checked literal, so a typo
  * is a compile error, and it still reads at the call site as this file naming
@@ -366,6 +368,7 @@ export function publicArticle(row: {
   blocks: (Block | PublicBlock)[];
   tree: Tree;
   arc: Arc | null;
+  assets: Assets | null;
   glossary: Glossary | null;
   summary: Summaries | null;
   ideas: Ideas | null;
@@ -376,6 +379,18 @@ export function publicArticle(row: {
     blocks: row.blocks.map(publicBlock),
     tree: publicTree(row.tree),
     ...(row.arc ? { arc: publicArc(row.arc) } : {}),
+    /* **Named, not spread**, and passed through whole rather than rebuilt field
+       by field like the tree and the arc beside it. Nothing in an `Assets` is
+       about a person: the URLs are the publisher's own and are already in the
+       `blocks` in this same payload, and the rest of each entry is a hash, a
+       format, a byte count, or the reason an image was not stored.
+
+       `?? undefined` rather than a conditional spread, because
+       `PublicArticle.assets` is a required key holding `Assets | undefined` —
+       which is what makes leaving this line out a type error instead of a
+       public article that silently hot-links every image. See the field's note
+       in src/public-types.ts. */
+    assets: row.assets ?? undefined,
     /* `!== null` rather than truthiness, on all four. An artefact is an object
        and so always truthy, so the two agree today — but the day one of these
        becomes a value that can be falsy while present, truthiness silently

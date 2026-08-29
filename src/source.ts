@@ -50,6 +50,7 @@
  *
  * See docs/plans/pdf-upload-and-storage.md § What was measured, not read.
  */
+import type { AssetExt } from "./assets.js";
 import type { DocumentKind } from "./fetch.js";
 import {
   type ReaderFacingFailure,
@@ -123,7 +124,32 @@ const SHA256_RE = /^[0-9a-f]{64}$/;
 /** Our own upload ids: a UUID, lower-case, as Postgres hands them back. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-const EXTENSION: Record<DocumentKind, string> = { html: "html", pdf: "pdf" };
+/**
+ * Everything the `sources` bucket holds, and so everything a canonical key can
+ * name: the two document kinds, plus the image formats we host.
+ *
+ * **The bucket is one flat content-addressed space and this is the whole of the
+ * naming scheme for it.** Widening it here rather than adding a second key
+ * minter is what keeps the invariant the plan calls load-bearing — a grant is
+ * only ever minted for a `staging/<uuid>` key, a canonical key is never
+ * writable by one, and the bytes at a canonical name can always be re-checked
+ * against the name (docs/plans/hosting-the-articles-images.md).
+ *
+ * **An image gets no `raw_sources` row**, and that is a separate decision from
+ * this one. That table exists so `article_revisions` can foreign-key to *the
+ * document* a revision was made from; an image is not the document, so
+ * `raw_sources.kind`'s `check (kind in ('pdf','html'))` stays exactly as it is
+ * and the `assets` manifest is the record instead.
+ */
+export type StoredKind = DocumentKind | AssetExt;
+
+const EXTENSION: Record<StoredKind, string> = {
+  html: "html",
+  pdf: "pdf",
+  png: "png",
+  jpeg: "jpeg",
+  gif: "gif",
+};
 
 /**
  * Where a browser is allowed to write.
@@ -147,7 +173,7 @@ export function stagingKey(uploadId: string): string {
  * second copy. It also means the name is a claim about the contents that can be
  * checked, which is what makes the grant-replay window harmless.
  */
-export function canonicalKey(sha256: string, media: DocumentKind): string {
+export function canonicalKey(sha256: string, media: StoredKind): string {
   if (!SHA256_RE.test(sha256)) {
     throw new Error(`Not a SHA-256: ${JSON.stringify(sha256)}`);
   }

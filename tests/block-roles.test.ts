@@ -509,13 +509,7 @@ describe("all five roles", () => {
         },
       },
     };
-    /* Assigned to a variable, not passed as a literal, and deliberately: TypeScript
-       applies excess-property checks only to a direct object literal. `publicArticle`
-       is growing artefact parameters in another session's in-flight work, so a
-       literal is rejected by whichever of the two signatures is not current —
-       missing keys against the wider one, excess keys against the narrower. Through
-       a variable this satisfies both, which is what a test in a shared tree needs. */
-    const input = {
+    const built = publicArticle({
       slug: "roles",
       title: "Roles",
       byline: null,
@@ -526,6 +520,7 @@ describe("all five roles", () => {
       blocks: SYNTHETIC,
       tree,
       arc: null,
+      assets: null,
       /* The four artefacts a synthetic article has never generated. Spelled out
          as `null` rather than omitted because `publicArticle` distinguishes
          present from absent by `!== null`, so an omitted key would take the
@@ -534,8 +529,7 @@ describe("all five roles", () => {
       summary: null,
       ideas: null,
       tweets: null,
-    };
-    const built = publicArticle(input);
+    });
     expect(built.blocks.map((b) => b.role)).toEqual([undefined, ...ROLES]);
     expect(built.blocks.filter((b) => b.treatment === "supplement").length).toBe(4);
     expect(built.blocks.filter((b) => b.noteId !== undefined).length).toBe(ROLES.length);

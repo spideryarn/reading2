@@ -31,6 +31,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CAPABLE_MODEL } from "../src/models.js";
+import { ASSETS_VERSION } from "../src/collect-assets.js";
 import { PROMPT_VERSION as GLOSSARY_VERSION } from "../src/glossary.js";
 import {
   inputFingerprint as ideasFingerprint,
@@ -197,6 +198,16 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     structureVersion: "toc/2",
     labels: { n0000: "A title" },
     batches: null,
+  });
+  /* **No `generator`**, and that is the shape rather than an omission: this
+     step makes no model call, so its `stamp` names only `inputHash` and
+     `promptVersion`. Adding a `generator` here would be recorded and never
+     compared, which is the quieter half of the same drift. */
+  await writeJson(pathFor(at, "assets", "assets"), {
+    version: ASSETS_VERSION,
+    sourceHash: SOURCE_HASH,
+    fetchedAt: new Date().toISOString(),
+    entries: [],
   });
   await writeJson(pathFor(at, "arc", "arc"), {
     version: "arc/2",

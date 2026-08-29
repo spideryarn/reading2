@@ -84,7 +84,12 @@ describe("the carry-forward policy", () => {
     /* `tree`, `labels` and `arc` are the ones the plan's three-column reading
        missed. Dropping any of them makes a `{ steps: ["blocks"] }` job publish
        an article with no tree, which is an article nobody can read. */
-    for (const column of ["tree", "labels", "arc", "glossary", "tweets", "summary"]) {
+    /* `assets` joined them on 2026-08-29. Its objects are content-addressed and
+       never deleted, so carrying the manifest cannot make it point at bytes
+       that have gone — and not carrying it is the quiet failure: an article
+       goes back to hot-linking every image after a run that had nothing to do
+       with its figures. docs/plans/hosting-the-articles-images.md. */
+    for (const column of ["tree", "labels", "arc", "assets", "glossary", "tweets", "summary"]) {
       expect(REVISION_CARRY_POLICY[column as never], column).toBe("carry");
     }
   });

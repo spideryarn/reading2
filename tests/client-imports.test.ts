@@ -120,6 +120,21 @@ const SHARED = new Set([
      of an allowlist projection is lost if the browser re-declares its own idea
      of what came back. See docs/plans/public-read-only-access.md § The payload. */
   "public-types.js",
+  /* What we know about the article's own images: which URLs a block would have
+     the browser fetch, what a downloaded file turns out to be, and the map a URL
+     is looked up in. On the list because it qualifies — it imports **nothing at
+     all** — and because being on it is the point rather than a convenience.
+
+     The manifest is built in the pipeline by parsing block HTML with jsdom, and
+     read in the browser by parsing the same HTML with Chrome. Those two have to
+     agree about which elements count and about the exact string
+     `getAttribute("src")` returns, and they cannot agree by care: `blocks.json`
+     stores `…&amp;s=…` while the DOM hands back `…&s=…`, so a second copy of the
+     selection would miss every entry with a query string — five of the corpus's
+     thirteen images — with no error and no broken picture, just the publisher's
+     URL left in place. One module, both callers.
+     See src/assets.ts and docs/plans/hosting-the-articles-images.md. */
+  "assets.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */

@@ -49,13 +49,23 @@
 /** The formats we host. Everything else stays hot-linked — see `sniffImage`. */
 export type AssetExt = "png" | "jpeg" | "gif";
 
-/** Why an image is not stored. Reader-facing nowhere; this is for us. */
+/**
+ * Why an image is not stored. Reader-facing nowhere; this is for us.
+ *
+ * `storage` is the odd one and is the only reason here that is **not about the
+ * image**: the bytes arrived and were a format we host, and putting them in the
+ * bucket failed — a `CorruptObject` at a canonical name, or an outage. It is
+ * separate from `network` because the two need different people. Folding it in
+ * would file "a human with the service key has to look at this" under "try
+ * again later". src/collect-assets.ts.
+ */
 export type AssetFailure =
   | "unsupported-format"
   | "too-big"
   | "not-found"
   | "blocked"
   | "network"
+  | "storage"
   | "budget";
 
 /** One image, as this revision found it. */

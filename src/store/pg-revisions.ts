@@ -218,6 +218,21 @@ export const REVISION_CARRY_POLICY: Record<
   labels: "carry",
   arc: "carry",
 
+  /* The image manifest carries, and the reason is the one thing about it that
+     is not obvious: the objects it names are **content-addressed and never
+     deleted** (src/store/blobs.ts), so a carried manifest cannot come to point
+     at bytes that have gone. A `{ steps: ["blocks"] }` job that does not re-run
+     `assets` therefore keeps a manifest that is still true about every hash in
+     it, and the article goes on serving its own images instead of silently
+     reverting to hot-linking the publisher.
+
+     Its staleness is answered the same way as its neighbours' — `sourceHash` on
+     the artefact against the blocks now — so a manifest that no longer matches
+     the paragraphs is *visible* rather than trusted, and the step re-runs. Not
+     carrying it would be the worse failure: an article that hot-links again
+     after an unrelated re-run, with nothing anywhere saying so. */
+  assets: "carry",
+
   tweets: "carry",
   glossary: "carry",
   summary: "carry",

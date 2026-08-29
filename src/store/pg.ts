@@ -32,6 +32,8 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { describeArticle, titleFor } from "../api.js";
+import type { Assets } from "../assets.js";
+import { ASSETS_VERSION } from "../collect-assets.js";
 import { getDb } from "../db/client.js";
 import {
   articleRevisions,
@@ -310,6 +312,25 @@ const REVISION_READ_POLICY: Record<
   },
   arc: { article: "value", library: "presence" },
 
+  /* **The image manifest, and the reading view is the only read that takes
+     it.** It is what tells the reader which `<img src>` we hold a copy of, so
+     an `article` read without it is an article that hot-links every image to
+     the publisher — the feature reporting success by doing nothing, which is
+     the whole reason `Article.assets` (src/types.ts) is a required key holding
+     `Assets | undefined` rather than an optional one.
+
+     **And on `metadata`, because that page draws a row for every step in
+     `STEP_ORDER` automatically and asks each one "would we write this again
+     today".** Without the column here, `isCurrent` below falls to its
+     `default: true` arm and a manifest built against paragraphs that have since
+     changed reports itself current on the one page whose whole job is to say
+     otherwise — while the filesystem store, which asks the step's own `stamp`,
+     says the opposite about the same article.
+
+     Not on the library: a card says nothing about images, and a presence flag
+     nobody draws is a column in a query for no reason. */
+  assets: { article: "value", metadata: "value" },
+
   /* Each artefact goes to the one read that returns it, and to the metadata
      page, which asks of every artefact "would we write this again today".
 
@@ -398,7 +419,13 @@ const META_COLUMNS = {
  * query obeys the classification.
  */
 export const REVISION_PROJECTIONS = {
-  article: { id: articleRevisions.id, ...META_COLUMNS, tree: articleRevisions.tree, arc: articleRevisions.arc },
+  article: {
+    id: articleRevisions.id,
+    ...META_COLUMNS,
+    tree: articleRevisions.tree,
+    arc: articleRevisions.arc,
+    assets: articleRevisions.assets,
+  },
   /**
    * The shelf. **Five cached scalars and five booleans, and not one document.**
    *
@@ -433,6 +460,7 @@ export const REVISION_PROJECTIONS = {
   metadata: {
     id: articleRevisions.id,
     tree: articleRevisions.tree,
+    assets: articleRevisions.assets,
     tweets: articleRevisions.tweets,
     glossary: articleRevisions.glossary,
     summary: articleRevisions.summary,
@@ -753,6 +781,9 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   extract: ["article_revisions.title", "article_revisions.extracted_html"],
   blocks: ["revision_blocks", "block_identities"],
   toc: ["article_revisions.tree", "article_revisions.labels"],
+  /* The manifest is the column; the bytes it names are objects in the `sources`
+     bucket, which is not a table and so is not listed here. */
+  assets: ["article_revisions.assets"],
   arc: ["article_revisions.arc"],
   tweets: ["article_revisions.tweets"],
   glossary: ["article_revisions.glossary"],
@@ -1185,6 +1216,12 @@ export const pgArticleReader: Pick<
     if (!tree || !blocks.length) throw notFound(slug);
 
     const arc = found.revision.arc;
+    /* **Named, and never spread in from the row.** The key is required on
+       `Article` precisely so that leaving this line out is a type error rather
+       than an article that quietly hot-links every image (src/types.ts). `??
+       undefined` because Postgres hands back `null` for a column nothing has
+       written, and the third state the reader branches on is `undefined`. */
+    const assets = found.revision.assets ?? undefined;
     return {
       /* Through `titleFor`, so the reading view's masthead calls a renamed
          article what the shelf calls it. The filesystem store does the same at
@@ -1193,6 +1230,7 @@ export const pgArticleReader: Pick<
       blocks,
       tree: tree as Tree,
       ...(arc ? { arc: arc as Arc } : {}),
+      assets,
     };
   },
 
@@ -1311,7 +1349,11 @@ export const pgArticleReader: Pick<
    *
    * `fetch`, `extract`, `blocks` and `arc` have no currency rule in **either**
    * store — nothing they write records what it was made from — so they are the
-   * step row alone, exactly as on the filesystem.
+   * step row alone, exactly as on the filesystem. **`assets` is not one of
+   * them**, and the `default` arm below is why it needed a case: its manifest
+   * does record what it was made from, so falling through would have this page
+   * call a stale one current while the filesystem store said otherwise about
+   * the same article.
    */
   async articleMetadata(slug: string): Promise<ArticleMetadata> {
     requireSlug(slug);
@@ -1338,6 +1380,26 @@ export const pgArticleReader: Pick<
         case "toc": {
           if (!revision.tree || !blocksHash) return false;
           return byStep.get("toc")?.inputHash === blocksHash;
+        }
+        /* The same two questions as `toc`, and the same answer — but asked of
+           the artefact rather than of the step row, because the manifest
+           carries its own `sourceHash` and its own version. That second half
+           matters: the step re-runs when what it *decides* changes (which URLs
+           it picks, which formats it hosts), and a page that compared only the
+           blocks would call every old manifest current for ever.
+
+           Written out here rather than shared with the filesystem's `stamp`
+           because there is no seam yet that both stores can reach — the same
+           divergence `glossary` above lives with. What must not happen is this
+           step falling through to `default: true`, which would have the two
+           stores disagree about the same article. */
+        case "assets": {
+          const assets = revision.assets as Assets | null;
+          if (!assets || !blocksHash) return false;
+          return sameStamp(
+            { inputHash: assets.sourceHash, promptVersion: assets.version },
+            { inputHash: blocksHash, promptVersion: ASSETS_VERSION },
+          );
         }
         case "tweets": {
           const thread = revision.tweets as TweetThread | null;
@@ -1370,6 +1432,7 @@ export const pgArticleReader: Pick<
           return ideasAreCurrent(revision, blocks);
         default:
           // fetch, extract, blocks, arc — nothing to compare, in either store.
+          // `assets` is NOT here; it has its own case above.
           return true;
       }
     };
