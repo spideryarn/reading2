@@ -2092,7 +2092,11 @@ check `provenance?.dir === "example"`, which breaks the moment `dir` stops being
 `tests/owner-isolation.test.ts:610` pins that `sendSource` calls the store for authorisation
 **before** it touches `fsLocations`, so any rewrite of that route has to keep the ordering.
 
-#### D's five stages, and what makes each one safe to stop at
+#### The stages, and what makes each one safe to stop at
+
+**The numbering below is the first draft's and is superseded** by § *What the plan review changed*, which
+adds the runner as D1 and pushes the rest along. The reasoning in each entry still holds; read the
+label as the old name in brackets. D0 → D0, D1 → D2, D2 → D3, D3 → D4, D4 → D5.
 
 The ordering principle: **remove code before adding it, and close the identity gap before moving
 anything that depends on identity.**
@@ -2106,7 +2110,7 @@ filesystem store today, and because finding 2 means nothing else should move unt
 **Safe to stop after:** nothing has been converted, two `isDone`s became stamps, and the existing
 suites cover both.
 
-**D1 — the two checkpoint callers.** `pdf-read.ts` first (near drop-in; the key is already the right
+**D2 (was D1) — the two checkpoint callers.** `pdf-read.ts` first (near drop-in; the key is already the right
 16-hex digest, and the batched `read` replaces a `readFile` per chunk inside the loop), then
 `labels.ts`, which *deletes* the `serialise()` mutex, the `kept[]` pruning, `runId` and
 `clearCheckpoint` — all four exist only because the unit of deletion was a whole file. `usableCheckpoint`
@@ -2117,20 +2121,20 @@ that one is not obviously subsumed. **Safe to stop after:** a checkpoint is work
 answer costs money and never correctness, and both callers already treat a miss as *buy it again*.
 This is the cheapest possible place to find out whether B3's interface is right.
 
-**D2 — the five uniform late stages**, one commit each: `arc`, `tweets`, `summary`, `glossary`,
+**D3 (was D2) — the five uniform late stages**, one commit each: `arc`, `tweets`, `summary`, `glossary`,
 `ideas`. All five read `toc/blocks`, `toc/tree` and `extract/meta` and write one artefact. `arc` goes
 first because it has neither a baseline nor a stamp, which makes it the smallest possible first
 production caller of `store.write`. **Safe to stop after each:** the five are independent, only `arc`
 is in `DEFAULT_INGEST_STEPS`, and a half-converted set still runs because each stage's I/O is
 self-contained.
 
-**D3 — `toc`, with `labels` already moved.** Three artefacts written in one call, an input that is
+**D4 (was D3) — `toc`, with `labels` already moved.** Three artefacts written in one call, an input that is
 stage 3's copy rather than stage 4's, and the deliberate `blocks` duplication in `PATHS`
 ([`src/store/artifacts-fs.ts:91`](../../src/store/artifacts-fs.ts)) that has to survive the move. Its
 own stage because it is the one place where *write everything at once* has an atomicity story the
 filesystem adapter cannot honour and Postgres can.
 
-**D4 — `fetch`, `extract`, `blocks`, and the source route.** Bytes rather than JSON; two acquisition
+**D5 (was D4) — `fetch`, `extract`, `blocks`, and the source route.** Bytes rather than JSON; two acquisition
 paths, including the inline duplicate at [`src/pipeline.ts:742`](../../src/pipeline.ts) that bypasses
 `writeRaw` entirely; the `extractedHtml`/`stampedHtml` split becoming real; and `sendSource` moving
 onto the reference. **Last, because it is the only part of D where getting it wrong loses a reader's
@@ -2279,6 +2283,176 @@ interruption after each part.
 checkpoint callers, D3 the five uniform late stages with a fingerprint that covers their real inputs,
 D4 `toc`, D5 the bytes and the source route. The review agreed D0 is still the right first stage once
 its contract is fixed.
+
+#### The `blocks` check — priced twice, and it belongs in D5, not D0
+
+The review left this open: put the stage-2 fingerprint in the `blocks` artefact, and either keep
+`htmlCarriesItsIds` on the filesystem or split the two HTML paths. Both halves were priced before
+anything was built. Both answers came back no, and the second one moves the work to a different stage.
+
+**The path split had already been rejected once, on the same evidence.**
+
+> **The HTML collision is closed by binding, not by moving the file.** Giving `extractedHtml` and
+> `stampedHtml` distinct paths was the review's first suggestion and would have changed the layout on
+> disk, the importer, the exporter and the manifest test. Instead `blocks` gained the one check that
+> can tell the two apart.
+>
+> — [postgres-storage-implementation.md](postgres-storage-implementation.md), 2026-08-26
+
+So `htmlCarriesItsIds` is not the fallback design; it is the considered one. The pricing added one
+fact that decision did not have: **an existing article cannot be backfilled.** Stage 3 destroyed the
+unstamped copy the first time it ran, for every article in `data/` and all eighteen checked-in
+`output/*.html` fixtures. A split leaves every existing article's new extracted slot empty — the one
+state Postgres guarantees cannot exist — or fills it with the stamped file, which is wrong data
+wearing the right name.
+
+**And the generation token the code names as the stronger version does not help.** A token written by
+stage 3 into both `blocks.json` and the HTML survives a re-extraction on Postgres untouched, because
+the re-extraction writes `extracted_html` and never touches `stamped_html`. Anything written into
+stage 3's *output* is blind to a change in stage 3's *input*, on that adapter, by construction.
+
+**Then the field itself turned out to have nowhere to live.** Postgres stores blocks as **rows** in
+`revision_blocks`, one per block ([`src/store/artifacts-pg.ts:436`, `:1213`](../../src/store/artifacts-pg.ts)) —
+there is no per-artefact JSON column, and `writeBlocks` takes `value.blocks` and drops everything
+beside it. `sanitizer` already disappears through that path and gets away with it only because it is a
+global constant the exporter re-stamps. A per-run hash is not reconstructible, so it would not.
+`blocksArtefact` is also a choke point called from three sites, and two of them — stage 4's copy at
+[`src/toc.ts:836`](../../src/toc.ts) and the exporter at
+[`src/store/export.ts:439`](../../src/store/export.ts) — have no value to supply and today silently
+drop fields they do not name. Stage 3 would write the field and stage 4 would lose it on the next run,
+with nothing going red.
+
+**The right home was a column that already exists.** `revision_step_runs.input_hash`, which `blocks`
+currently fills with the sentinel `NO_INPUT_HASH`. That removes the JSON shape change entirely: the
+filesystem answers by id-membership and needs no stored hash at all, and Postgres answers from the
+run row. It also removes a name collision — `sourceHash` already means *a `hashBlocks` fingerprint of
+blocks* on five other artefacts, and reusing it for *sha256 of HTML* would give one field name two
+algorithms.
+
+**But it cannot be read through `stampForStep`, and that is not an obstacle — it is the reason this
+moves to D5.** Rule 2 of that function is explicit: the row *"may not fill in `inputHash` where the
+artefact has none … letting the row supply one would give Postgres freshness evidence the filesystem
+does not have, so the same article would be current in one store and stale in the other"*
+([`src/store/artifacts-pg.ts:760`](../../src/store/artifacts-pg.ts)). That rule is right, and `blocks`
+is the case it was not written for: here each store has *different* evidence for the *same* event, and
+both detect a re-extraction. So the question goes on the store by name — the shape `hasEarlierBlocks`
+already has, and not the private rule the `toc` note rejects at
+[`src/pipeline.ts:1120`](../../src/pipeline.ts) — with the filesystem answering by id-membership and
+Postgres by comparing the run row's `input_hash` against the current `extracted_html`.
+
+**Writing that hash requires `blocks` to write through the store, which nothing does until D5.** So
+D0 cannot close this, and neither of the two ways to fake it is acceptable: a Postgres side that
+throws breaks the metadata page, which calls `stepIsDone` with its own store; one that returns `false`
+re-runs stage 3 on every job for ever and reports `blocks` permanently not-done — and because stage 3
+costs no model call, that is exactly the kind of wrong answer that survives unnoticed.
+
+**So the correction to the review's sequencing:** the gap has to close before the **Postgres cutover**,
+not before D2. Nothing between here and there runs on Postgres, and no later stage depends on
+`blocks` freshness — the five late stages read stage 4's copy, not stage 3's. `blocks` converts in D5
+and the cutover is in the demolition after it, so the constraint is met by the order already written
+down. **`htmlCarriesItsIds` stays exactly as it is until D5**, where the store question and the
+Postgres answer land in the same commit that makes `blocks` write through the store.
+
+**What that leaves in D0:** the two stamps, and the empty-blocks half of `htmlCarriesItsIds` becoming
+a **write-time refusal beside `assertIdsCarried`** — refuse to write the artefact at all rather than
+catch it on the next skip check. The `isDone` guard stays as well, because `blocks.json` files already
+on disk can be empty and nothing will rewrite them.
+
+#### D1 — the runner, designed before it is built
+
+The review's second finding is a stage, and this is its shape. Everything the design needs already
+exists; what is missing is the seam between them.
+
+**What the runner does today**, [`src/jobs.ts:351-390`](../../src/jobs.ts): `beginStep`, then
+`STEPS[name].run(ctx, pipelineStore)` — and the stage does its own writing inside `run` — then
+`assertProduced`, then `finishStep`. Four store calls, each of which commits on its own. On the
+filesystem that is fine, because there is nothing to commit. On Postgres each one would be its own
+transaction, and the first of them writes the artefacts.
+
+**What Postgres needs** is the opposite: the write, the postcondition and the step transition in one
+transaction with the job fence taken inside it — and every model call *outside* it. Those two
+requirements are not in tension once you notice they are about different halves of the step. So:
+
+> **A stage stops writing. It returns a product. A short transaction afterwards writes the product,
+> checks it, and finishes the step.**
+
+**The seam.** A `StoreSession`, made once per job, with three members:
+
+- `reads` — an `ArtifactStore` for the run phase, outside any transaction. On Postgres that is
+  `readOnlyPgArtifacts(ref, db)` plus `readBaseline` and `hasEarlierBlocks`; on the filesystem it is
+  `fsArtifacts` itself.
+- `beginStep(slug, step)` → attempt token, unchanged.
+- `commit(slug, step, attempt, fn)` — the short transaction. On Postgres,
+  `db.transaction((tx) => fn(pgArtifactsIn(ref, tx)))`, which is the factory that already exists at
+  [`src/store/artifacts-pg.ts:1358`](../../src/store/artifacts-pg.ts) and already takes a `Tx` and
+  nothing else. On the filesystem, `fn(fsArtifacts)` and no transaction at all.
+
+The runner then reads, in full:
+
+```
+const attempt = await session.beginStep(slug, step);
+const product = await collectSpend(() => STEPS[step].run(ctx, session.reads), …);
+await session.commit(slug, step, attempt, async (store) => {
+  if (product.parts) await store.write(slug, step, product.parts, product.stamp ?? {});
+  await assertProduced(STEPS[step], ctx, store);
+  await store.finishStep(slug, step, attempt);
+});
+```
+
+**`run`'s return type changes from `string` to `{ detail, parts?, stamp? }`** — which is why this is
+a stage rather than a wiring commit, and why it has to come before the nine conversions rather than
+during them.
+
+**The job's own progress note stays outside the transaction, deliberately.** `revision_step_runs` is
+the authority for *is this step done*; `note()` is a progress bar. Pulling the job row into the
+artefact transaction would widen it for a field nothing decides anything on, and a progress bar that
+lags a crash by one step is a cosmetic wrong answer where a revision half-written is not.
+
+**`parts` is optional, and that is the migration path — with a guard, not a hope.** An unconverted
+stage returns `{ detail }` alone and keeps writing its own files during `run`; under the filesystem
+runner that behaves exactly as it does today, which is what makes D3, D4 and D5 landable one stage at
+a time. Under a *Postgres* session the same stage would write nothing and report success — the
+silent-success shape this whole plan exists to remove. So a transactional session **refuses a step
+that returned no `parts`**, by name and loudly. That refusal is what makes the review's warning
+enforceable rather than remembered: a partial conversion is safe under the filesystem runner and is a
+hard error under Postgres, and nobody has to keep the list in their head.
+
+**Nothing switches over in D1.** `src/jobs.ts:57` keeps importing the filesystem store; what changes
+is that it reaches it through a session. The Postgres session is written and tested in this stage and
+wired in the demolition, so the line that picks Postgres stays one line.
+
+**Safe to stop after:** every stage still writes its own artefacts, the runner has grown a bracket
+that currently brackets nothing, and both sessions are covered — including a red-first test that a
+transactional session refuses an unconverted stage.
+
+#### What D0's code review found — [delete-the-importer-d0-sol.md](delete-the-importer-d0-sol.md)
+
+**NO-SHIP, and the finding was that the test proving the fix could not fail.** The stamp conversion
+itself checked out in full — `stampOf` maps the three fields exactly, `stepIsDone` asks `has` before
+the stamp so an absent or malformed artefact is covered, both generators hash the same parsed block
+document `inputHashFor` reads, and nothing in `FORCE_ONLY_WHEN_NAMED` or the force-cascade changed.
+
+The deploy-gate regression test was the problem, and it is the third time today the same shape has
+turned up. It derived its expected value from `GATE_FIXTURES` itself — an expectation computed from
+the list under test agrees with **any** list — and its fake `has()` matched exact strings only, so
+the constructed state left out the bare `"data"` and `"output"` entries. Against the old list both
+sides came out as `["data", "output"]` and the test passed on the bug it was written for. A throwaway
+script had demonstrated the fix; the permanent test had not.
+
+Fixed by putting `"data"` and `"output"` **into** the surviving state — which is what actually
+survives, and is the whole point — and spelling the twelve expected paths out. Proved from outside
+the test: against the old list the state reports `missing: []`, so the assertion goes red; against the
+new list it reports exactly the twelve.
+
+**And one correction to what D0 flagged as deferred: `tweets` reads `meta.json` too**, not only
+`summary`. Both stages also read the tree. Still a pre-existing hole rather than a D0 regression, but
+it widens what D3's canonical fingerprint has to cover — blocks, tree, the metadata each stage
+actually uses, and an explicit answer on the profile.
+
+The review's second finding — that the stale references ran wider than the three comments reported —
+was already half discharged: `docs/project/ingest-queue.md`, `docs/project/testing.md` and
+`docs/project/summaries.md` were swept in this stage. `src/web/SummaryPanel.tsx` and the comments
+inside `src/summarise.ts` wait for the follow-up, because a peer is live in both.
 
 ### The demolition — five steps, not one commit
 

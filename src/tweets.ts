@@ -37,7 +37,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
-import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
+import { parseJsonFrom, stripFence } from "./parse-json.js";
 import { articleText } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -99,44 +99,21 @@ export { hashBlocks };
  * document changes", enforced by a database row nobody re-checked, so a thread
  * outlived the article it summarised with nothing anywhere saying so.
  *
- * Pure, and used at both ends: `GET /api/tweets/:slug` puts the answer in the
- * response so the page can say the thread is out of date, and `threadIsCurrent`
- * below wraps it so the pipeline will not skip a step whose artefact has gone
- * stale.
+ * Pure, and read at both ends: `GET /api/tweets/:slug` puts the answer in the
+ * response so the page can say the thread is out of date, and the step's
+ * `stamp` (src/pipeline.ts) asks the same question of the store so the pipeline
+ * will not skip a step whose artefact has gone stale.
+ *
+ * **`threadIsCurrent` used to sit below this**, wrapping it with the prompt
+ * version and the model id to answer the step's `isDone`. Those are three
+ * comparisons `sameStamp` makes in one place for every stage, so the step now
+ * declares the three values and the function is gone — D0 of
+ * docs/plans/delete-the-importer.md. What went with it is a freshness check
+ * that read `data/<slug>/` directly, which is a second door into the storage
+ * the artefact store exists to be the only one of.
  */
 export function isStale(thread: TweetThread, blocks: BlockFingerprint[]): boolean {
   return thread.sourceHash !== hashBlocks(blocks);
-}
-
-/**
- * Is the thread on disk one we would write again today?
- *
- * This is the step's `isDone` (src/pipeline.ts), and it is the difference
- * between a cache and a file that happens to exist. Every other step answers
- * "is the artefact there"; a thread that is *there* but describes last week's
- * text would make the step report "already done" with a green tick over it, and
- * serve a summary of an article nobody is reading — a
- * [silent success](docs/reusable/silent-success.md) of exactly the kind this
- * repo keeps finding.
- *
- * Three things have to still hold, which is what architecture.md#storage has
- * always specified for a cached artefact and what nothing had implemented: the
- * blocks it was written from, the prompt that wrote it, and the model that ran.
- * Change any one and the thread regenerates by itself, with no `force` and
- * nobody having to remember.
- *
- * Anything unreadable answers **false**. Not-current is the safe way to be
- * wrong: the cost is one model call, where the other way round is a wrong
- * thread served for ever.
- */
-export async function threadIsCurrent(dir: string): Promise<boolean> {
-  const thread = await readJsonOrNull<TweetThread>(path.join(dir, "tweets.json"));
-  if (!thread) return false;
-  if (thread.version !== PROMPT_VERSION) return false;
-  if (thread.generator !== CAPABLE_MODEL) return false;
-  const blocksFile = await readJsonOrNull<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
-  if (!blocksFile?.blocks) return false;
-  return !isStale(thread, blocksFile.blocks);
 }
 
 /**

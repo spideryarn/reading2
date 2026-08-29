@@ -438,11 +438,12 @@ since changed. A [silent success](../reusable/silent-success.md) of the exact ki
 finding, and the reason the plan's `sourceHash` was not enough on its own: **nothing would ever have
 read it.**
 
-`PipelineStep` therefore has an optional `isDone(ctx)`. Existence still runs first and the override
-can only narrow the answer, so a freshness check can never declare a missing file fine. `tweets` is
-the only step that supplies one so far: `threadIsCurrent` in [`src/tweets.ts`](../../src/tweets.ts)
-compares the stored `sourceHash` against the blocks on disk, and checks the prompt version and the
-model id with it — which is what [architecture.md § Storage](architecture.md#storage) has always
+`PipelineStep` therefore has an optional freshness check. Existence still runs first and the override
+can only narrow the answer, so a freshness check can never declare a missing file fine. `tweets` was
+the first step to supply one, as `threadIsCurrent` in `src/tweets.ts`; since D0 on 2026-08-29 it is a
+`stamp` in [`src/pipeline.ts`](../../src/pipeline.ts) like every other stamped step, and `sameStamp`
+compares the stored `sourceHash` against the blocks the store holds, with the prompt version and the
+model id beside it — which is what [architecture.md § Storage](architecture.md#storage) has always
 specified for a cached artefact and what nothing had implemented. Anything unreadable answers *not
 current*: the cost of being wrong that way is one model call, and the other way round is a wrong
 thread served for ever.

@@ -205,8 +205,8 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * Ask for a thread.
    *
    * `force` is the difference between "write one" and "write this one again".
-   * Without it the step's own freshness check (`threadIsCurrent` in
-   * src/tweets.ts) is the arbiter, which is right for an absent thread and
+   * Without it the step's own freshness check — the `tweets` step's `stamp` in
+   * src/pipeline.ts — is the arbiter, which is right for an absent thread and
    * right for a stale one — it agrees the artefact is out of date, so an
    * ordinary run really does rewrite it. It is *wrong* for a thread that is
    * perfectly current: the step would report "already done" and the page would

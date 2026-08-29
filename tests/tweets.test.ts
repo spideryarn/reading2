@@ -10,8 +10,8 @@
  * exported and tested precisely so that only the genuinely nondeterministic
  * part goes untested. See docs/project/testing.md.
  */
-import { afterAll, describe, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -23,8 +23,15 @@ import {
   overLimit,
   suggestedLength,
   TARGET,
-  threadIsCurrent,
 } from "../src/tweets.js";
+import { STEPS, stepIsDone } from "../src/pipeline.js";
+import type { StepContext } from "../src/pipeline.js";
+import {
+  type ArtifactLocations,
+  createFsArtifactStore,
+  pathFor,
+} from "../src/store/artifacts-fs.js";
+import type { ArtifactStore } from "../src/store/artifacts.js";
 import type { Block, TweetThread } from "../src/types.js";
 
 function block(id: string, text: string): Block {
@@ -178,74 +185,165 @@ describe("suggestedLength", () => {
 });
 
 /* ---------------------------------------------------------------------------
-   `threadIsCurrent` — the step's own freshness check, and the difference
-   between a cache and a file that happens to exist.
+   Thread freshness — the difference between a cache and a file that happens to
+   exist, and since D0 (docs/plans/delete-the-importer.md) it is the step's
+   `stamp` rather than a `threadIsCurrent` of its own. The three comparisons are
+   unchanged — the blocks it was written from, the prompt that wrote it, the
+   model that ran — but they are now `sameStamp`'s one comparison, so these
+   cases are asserted through `stepIsDone` and exercise the wiring with them.
 
    Worth real files rather than a stub: it is read as `stepIsDone`'s answer, so
    getting it wrong either serves last week's thread for ever (too permissive)
    or spends a model call on every run (too strict). Both are quiet.
 --------------------------------------------------------------------------- */
 
-const dirs: string[] = [];
+const SLUG = "test-tweets-stamp";
+
+const roots: string[] = [];
 
 afterAll(async () => {
-  for (const dir of dirs) await rm(dir, { recursive: true, force: true });
+  for (const root of roots) await rm(root, { recursive: true, force: true });
 });
 
-/** A data directory holding these blocks and, optionally, a thread. */
-async function fixture(blocks: Block[], thread?: Partial<TweetThread>): Promise<string> {
-  const dir = await mkdtemp(path.join(tmpdir(), "spya-tweets-"));
-  dirs.push(dir);
-  await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks }), "utf8");
-  if (thread) {
-    const full = buildThread(
-      { tweets: ["a post"] },
-      { slug: "s", sourceHash: hashBlocks(blocks), elapsedMs: 0 },
-    );
-    await writeFile(path.join(dir, "tweets.json"), JSON.stringify({ ...full, ...thread }), "utf8");
-  }
-  return dir;
+/** An empty article directory pair, in a temp root that gets cleaned up. */
+async function tempArticle(): Promise<ArtifactLocations> {
+  const root = await mkdtemp(path.join(tmpdir(), "spya-tweets-"));
+  roots.push(root);
+  const at = {
+    dir: path.join(root, "data", SLUG),
+    htmlFile: path.join(root, "output", `${SLUG}.html`),
+  };
+  await mkdir(at.dir, { recursive: true });
+  await mkdir(path.dirname(at.htmlFile), { recursive: true });
+  return at;
 }
 
-describe("threadIsCurrent", () => {
-  it("says yes for a thread written against these very blocks", async () => {
-    expect(await threadIsCurrent(await fixture(BLOCKS, {}))).toBe(true);
+/** A thread as the stage would have written it against `blocks`. */
+function threadFor(blocks: Block[], over: Partial<TweetThread>): TweetThread {
+  const full = buildThread(
+    { tweets: ["a post"] },
+    { slug: SLUG, sourceHash: hashBlocks(blocks), elapsedMs: 0 },
+  );
+  return { ...full, ...over };
+}
+
+/**
+ * A context pointing at a directory that holds nothing.
+ *
+ * **Deliberately not the store's directory.** Freshness is the store's answer
+ * now, and a context whose `dir` agreed with it could not tell the two apart —
+ * on the filesystem they are the same file, so a test that pointed both at one
+ * place would pass just as happily against the path-reading version this
+ * replaced. Nothing here runs, so most of the rest is the type asking.
+ */
+function ctxAt(dir: string): StepContext {
+  return {
+    slug: SLUG,
+    dir,
+    htmlFile: path.join(dir, "page.html"),
+    report: () => undefined,
+    signal: new AbortController().signal,
+    cacheArticle: false,
+  };
+}
+
+async function writeJson(file: string, value: unknown): Promise<void> {
+  await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf-8");
+}
+
+describe("tweets freshness, through the step's stamp", () => {
+  let where: ArtifactLocations;
+  let store: ArtifactStore;
+  /** Stays empty for every case below; see `ctxAt`. */
+  let elsewhere: string;
+
+  beforeAll(async () => {
+    where = await tempArticle();
+    store = createFsArtifactStore(() => where);
+    elsewhere = (await tempArticle()).dir;
   });
 
-  it("says no once the article has changed underneath it", async () => {
-    // THE bug this whole predicate exists for. Without it the file is present,
-    // so the step skips, reports "already done" with a green tick, and the
-    // page serves a thread about text that has since moved —
+  /** Put a thread and some blocks in the store, then ask the pipeline. */
+  async function ask(
+    thread: Partial<TweetThread> | "unreadable" | null,
+    blocks: Block[] | null,
+  ): Promise<boolean> {
+    const file = pathFor(where, "tweets", "tweets");
+    if (thread === "unreadable") await writeFile(file, "{ not json", "utf8");
+    else if (thread) await writeJson(file, threadFor(BLOCKS, thread));
+    else await rm(file, { force: true });
+
+    const blocksFile = pathFor(where, "toc", "blocks");
+    if (blocks) await writeJson(blocksFile, { blocks });
+    else await rm(blocksFile, { force: true });
+
+    return stepIsDone(STEPS.tweets, ctxAt(elsewhere), store);
+  }
+
+  it("says done for a thread written against these very blocks", async () => {
+    expect(await ask({}, BLOCKS)).toBe(true);
+  });
+
+  it("says not-done once the article has changed underneath it", async () => {
+    // THE bug this whole check exists for. Without it the file is present, so
+    // the step skips, reports "already done" with a green tick, and the page
+    // serves a thread about text that has since moved —
     // docs/reusable/silent-success.md.
-    const dir = await fixture(BLOCKS, {});
-    await writeFile(
-      path.join(dir, "blocks.json"),
-      JSON.stringify({ blocks: [...BLOCKS, block("spya-dddddd", "A new paragraph.")] }),
-      "utf8",
-    );
-    expect(await threadIsCurrent(dir)).toBe(false);
+    expect(await ask({}, [...BLOCKS, block("spya-dddddd", "A new paragraph.")])).toBe(false);
   });
 
-  it("says no when the prompt has changed", async () => {
-    expect(await threadIsCurrent(await fixture(BLOCKS, { version: "tweets/0" }))).toBe(false);
+  it("says not-done when the prompt has changed", async () => {
+    expect(await ask({ version: "tweets/0" }, BLOCKS)).toBe(false);
   });
 
-  it("says no when the model has changed", async () => {
-    expect(await threadIsCurrent(await fixture(BLOCKS, { generator: "some-old-model" }))).toBe(
-      false,
-    );
+  it("says not-done when the model has changed", async () => {
+    expect(await ask({ generator: "some-old-model" }, BLOCKS)).toBe(false);
   });
 
-  it("says no when there is no thread, and when there are no blocks", async () => {
-    expect(await threadIsCurrent(await fixture(BLOCKS))).toBe(false);
-    expect(await threadIsCurrent(path.join(tmpdir(), "spya-nothing-here-at-all"))).toBe(false);
+  it("says not-done when there is no thread, and when there are no blocks", async () => {
+    // "We cannot tell" and "it is stale" both answer not-done, and they must:
+    // the alternative is a thread reporting itself current because the blocks
+    // it would have been checked against are missing.
+    expect(await ask(null, BLOCKS)).toBe(false);
+    expect(await ask({}, null)).toBe(false);
   });
 
-  it("says no for an unreadable thread rather than throwing", async () => {
+  it("says not-done for an unreadable thread rather than throwing", async () => {
     // Not-current is the safe way to be wrong: it costs one model call, where
     // the other way round serves a wrong thread for ever.
-    const dir = await fixture(BLOCKS, {});
-    await writeFile(path.join(dir, "tweets.json"), "{ not json", "utf8");
-    expect(await threadIsCurrent(dir)).toBe(false);
+    expect(await ask("unreadable", BLOCKS)).toBe(false);
+  });
+
+  it("says not-done when the thread carries no stamp at all", async () => {
+    await writeJson(pathFor(where, "tweets", "tweets"), { tweets: [], limit: 280 });
+    await writeJson(pathFor(where, "toc", "blocks"), { blocks: BLOCKS });
+    expect(await stepIsDone(STEPS.tweets, ctxAt(elsewhere), store)).toBe(false);
+  });
+
+  /**
+   * The store is the authority, not the path in the context.
+   *
+   * Red before D0: `isDone: (ctx) => threadIsCurrent(ctx.dir)` read `ctx.dir`
+   * and answered *done* about a thread the store does not hold, which is the
+   * whole reason freshness had to move behind the seam.
+   */
+  it("reads the store, not the directory the context happens to name", async () => {
+    const inTheStore = await tempArticle();
+    const onTheSide = await tempArticle();
+    const moved = [...BLOCKS, block("spya-eeeeee", "Rewritten since.")];
+    // What the store holds is stale: written against BLOCKS, and the blocks it
+    // holds have moved on.
+    await writeJson(pathFor(inTheStore, "tweets", "tweets"), threadFor(BLOCKS, {}));
+    await writeJson(pathFor(inTheStore, "toc", "blocks"), { blocks: moved });
+    // `ctx.dir` holds a perfectly current pair, and is the wrong place to look.
+    await writeJson(path.join(onTheSide.dir, "tweets.json"), threadFor(moved, {}));
+    await writeJson(path.join(onTheSide.dir, "blocks.json"), { blocks: moved });
+
+    const done = await stepIsDone(
+      STEPS.tweets,
+      ctxAt(onTheSide.dir),
+      createFsArtifactStore(() => inTheStore),
+    );
+    expect(done).toBe(false);
   });
 });

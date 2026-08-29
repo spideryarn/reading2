@@ -568,7 +568,8 @@ Three smaller decisions worth keeping:
   believes they gave and did not. It is not logged — only its length is — because it is the reader's
   own note about what they are reading for.
 
-It is **not** part of `summariesAreCurrent`. A steer is a reason to force a rewrite, which is what the
+It is **not** part of the `summary` step's freshness stamp (`summariesAreCurrent`, until D0). A steer
+is a reason to force a rewrite, which is what the
 button carrying it already does; it is not a reason for the next ordinary run to decide the artefact
 has gone stale. It *is* part of `sameWork` in [`src/jobs.ts`](../../src/jobs.ts), which is a different
 question — without that, a reader who presses the button, changes their mind, and presses it again

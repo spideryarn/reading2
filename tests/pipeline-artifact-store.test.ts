@@ -13,11 +13,18 @@
  * it read half a JSON document — docs/reusable/silent-success.md, exactly. The
  * truncation block below is that bug, written as a test before it was fixed.
  *
- * **It is red for the steps with no freshness check and green for the three
- * that have one**, and the difference is the whole argument for `has()`
- * parsing. `threadIsCurrent` already reads `tweets.json` and answers false when
- * it will not parse, so `tweets` was never exposed. `arc`, `toc`, `extract` and
- * `blocks` have no such function, and were.
+ * **It was red for the steps with no freshness check and green for the three
+ * that had one**, and that difference is the whole argument for `has()`
+ * parsing. `threadIsCurrent` read `tweets.json` itself and answered false when
+ * it would not parse, so `tweets` was never exposed; `arc`, `toc`, `extract`
+ * and `blocks` had no such function, and were.
+ *
+ * Written in the past tense since D0, because the accident of protection has
+ * gone and the protection has not: `threadIsCurrent` and `summariesAreCurrent`
+ * were replaced by stamps, and `stepIsDone` asks `has()` *before* it computes
+ * one. So every step is now covered by the same parsing check rather than three
+ * of them being covered by a function that happened to parse on its way to
+ * asking something else.
  */
 import { mkdir, mkdtemp, readFile, rm, stat, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

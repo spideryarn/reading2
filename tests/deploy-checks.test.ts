@@ -759,27 +759,62 @@ describe("the fixtures the gate worktree needs before its tests mean anything", 
     (rel: string) =>
       present.includes(rel);
 
-  /* The broken state first: this is what every deploy looked like until
-     2026-08-28. Copying only data/ produced 13 ENOENT failures and 202 cascade
-     skips at every commit, so --force-gate=test became the only way to ship. */
-  it("names output/ when only data/ was copied", () => {
-    expect(missingGateFixtures(has("data"))).toEqual([
+  /* The bug this list replaced: bare "data" and "output" directory checks
+     that could never fail once reader state moved to live inside `data/`
+     too. This is that exact broken state — every article artefact gone,
+     the reader's own files (chat, comments, searches, shelf,
+     glossary-lookups) still there, so `data/writes/` and `data/constitution/`
+     go on existing and non-empty. The old `["data", "output", …]` list
+     reported `missing: []` against it; named sentinel files do not. */
+  it("fails when reader state survives but the article's own files do not", () => {
+    const readerStateOnly = has(
+      /* **The two bare directory names are in this list on purpose, and they
+         are what makes the test able to fail.** They are exactly what survives:
+         reader state lives under `data/<slug>/`, and `output/` holds years of
+         script scratch besides. Leave them out and the old `["data", "output",
+         …]` list reports those two missing, which is indistinguishable from it
+         working. GPT Sol, 2026-08-29. */
+      "data",
       "output",
+      "data/writes/chat.json",
+      "data/writes/comments.json",
+      "data/writes/searches.json",
+      "data/writes/shelf.json",
+      "data/writes/glossary-lookups.json",
+      "data/constitution/chat.json",
       "output/writes.html",
       "output/writes.blocks.json",
+    );
+    /* **Spelled out, not derived from `GATE_FIXTURES`.** An expectation
+       computed from the list under test agrees with any list, including the one
+       this test exists to reject — and including a future list that has quietly
+       lost a sentinel. */
+    expect(missingGateFixtures(readerStateOnly)).toEqual([
+      "data/writes/raw.json",
+      "data/writes/raw.html",
+      "data/writes/meta.json",
+      "data/writes/tree.json",
+      "data/writes/labels.json",
+      "data/writes/blocks.json",
+      "data/writes/arc.json",
+      "data/writes/tweets.json",
+      "data/writes/glossary.json",
+      "data/writes/summary.json",
+      "data/writes/ideas.json",
+      "data/constitution/labels.json",
     ]);
   });
 
-  /* A directory that exists but is empty fails exactly like one that is absent,
-     so the sentinel files are the check, not the directory. */
-  it("is not satisfied by an empty output/", () => {
-    expect(missingGateFixtures(has("data", "output"))).toEqual([
-      "output/writes.html",
-      "output/writes.blocks.json",
-    ]);
+  /* The historical incident, 2026-08-28: copying only data/ (with its
+     artefacts intact) produced 13 ENOENTs and 202 cascade-skips, because
+     output/ — the other half of the artefact store — was never copied at
+     all, and `--force-gate=test` became the only way anyone deployed. */
+  it("names the output artefacts when only data/ was copied", () => {
+    const dataOnly = has(...GATE_FIXTURES.filter((f) => f.startsWith("data/")));
+    expect(missingGateFixtures(dataOnly)).toEqual(["output/writes.html", "output/writes.blocks.json"]);
   });
 
-  it("passes when both halves of the artefact store are there", () => {
+  it("passes when every fixture is there", () => {
     expect(missingGateFixtures(has(...GATE_FIXTURES))).toEqual([]);
   });
 });

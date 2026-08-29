@@ -38,7 +38,7 @@ import {
 } from "./ideas.js";
 import { stageFailure } from "./job-failure.js";
 import { runPdfExtract } from "./pdf-read.js";
-import { generateSummaries, summariesAreCurrent } from "./summarise.js";
+import { generateSummaries, PROMPT_VERSION as SUMMARY_PROMPT_VERSION } from "./summarise.js";
 import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
 import { hashBlocks } from "./source-hash.js";
@@ -54,7 +54,7 @@ import {
   type StepStamp,
 } from "./store/artifacts.js";
 import { generateToc } from "./toc.js";
-import { generateTweets, threadIsCurrent } from "./tweets.js";
+import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
 import type { JobUpload, Meta, StepName } from "./types.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -193,8 +193,8 @@ export function sharesArticleCache(step: StepName, later: readonly StepName[]): 
  * lengthen the reader's glossary as a side effect of re-fetching the article.
  *
  * `summary` is here on the same two grounds as `tweets` — it reads the blocks
- * and the tree, nothing reads what it writes, and `summariesAreCurrent` compares
- * its stored `sourceHash`, prompt version and model against what is on disk. It
+ * and the tree, nothing reads what it writes, and its `stamp` compares its
+ * stored `sourceHash`, prompt version and model against what the store has. It
  * is also the one step where being swept in costs the most: it is not one model
  * call but one per part, so a cascade would multiply a wasted regeneration by
  * the width of the article.
@@ -239,10 +239,11 @@ export interface StepContext {
    * an argument for the same reason `url` is: a step's inputs arrive one way,
    * and the queue does not need to know which steps care.
    *
-   * **It is not part of any step's `isDone`.** A steer is a reason to force a
-   * rewrite — which is what the button carrying it does — not a reason for the
-   * next ordinary run to believe the artefact has gone stale. See
-   * `summariesAreCurrent` in src/summarise.ts.
+   * **It is not part of any step's freshness check.** A steer is a reason to
+   * force a rewrite — which is what the button carrying it does — not a reason
+   * for the next ordinary run to believe the artefact has gone stale. See the
+   * `summary` step's `stamp` below, and the note it points at in
+   * src/summarise.ts.
    */
   guidance?: string;
   /**
@@ -1207,19 +1208,27 @@ export const STEPS: Record<StepName, PipelineStep> = {
   /* Stage 5c — the thread. In this list but not in DEFAULT_INGEST_STEPS: it
      runs when somebody asks for a thread, not on every ingest.
 
-     The one step so far that knows whether its artefact is *current* rather
-     than merely present — `threadIsCurrent` compares the stored `sourceHash`
-     against the blocks on disk, and checks the prompt version and model id
-     with it. Which is why `tweets` is also in FORCE_ONLY_WHEN_NAMED: it does
-     not need the positional force-cascade to notice that the article moved,
-     and being swept into one would only cost a model call for nothing. Read
-     those two notes together; neither is safe on its own. */
+     It knows whether its artefact is *current* rather than merely present: the
+     stamp compares the stored `sourceHash` against the blocks the store holds,
+     and the prompt version and model id with it. Which is why `tweets` is also
+     in FORCE_ONLY_WHEN_NAMED: it does not need the positional force-cascade to
+     notice that the article moved, and being swept into one would only cost a
+     model call for nothing. Read those two notes together; neither is safe on
+     its own. */
   tweets: {
     name: "tweets",
     label: "Writing the thread",
     outputs: (ctx) => [path.join(ctx.dir, "tweets.json")],
     produces: ["tweets"],
-    isDone: (ctx) => threadIsCurrent(ctx.dir),
+    /* Was `threadIsCurrent(ctx.dir)`, which did these same three comparisons by
+       hand and read the article's directory rather than the store — deleted in
+       D0 (docs/plans/delete-the-importer.md). The comparison belongs in one
+       place (`sameStamp`); only the three values belong to the stage. */
+    stamp: async (ctx, store) => {
+      const inputHash = await inputHashFor(ctx, store);
+      if (!inputHash) return null;
+      return { inputHash, promptVersion: TWEETS_PROMPT_VERSION, model: CAPABLE_MODEL };
+    },
     async run(ctx) {
       const run = await generateTweets({
         dir: ctx.dir,
@@ -1230,9 +1239,9 @@ export const STEPS: Record<StepName, PipelineStep> = {
       });
       const over = run.over > 0 ? `, ${run.over} over ${run.thread.limit}` : "";
       /* `run.thread.generator` is this stage's model id — it is already stored
-         on the thread, because `threadIsCurrent` compares it to decide whether a
-         thread needs rewriting. So unlike toc and arc, nothing had to be added
-         to src/tweets.ts to log it. */
+         on the thread, because the stamp compares it to decide whether a thread
+         needs rewriting. So unlike toc and arc, nothing had to be added to
+         src/tweets.ts to log it. */
       plog.info(
         {
           slug: ctx.slug,
@@ -1346,7 +1355,15 @@ export const STEPS: Record<StepName, PipelineStep> = {
     label: "Writing the summaries",
     outputs: (ctx) => [path.join(ctx.dir, "summary.json")],
     produces: ["summary"],
-    isDone: (ctx) => summariesAreCurrent(ctx.dir),
+    /* Was `summariesAreCurrent(ctx.dir)` — the same three comparisons by hand,
+       against the article's directory rather than the store. D0, as `tweets`
+       above. The function is still in src/summarise.ts and now has no caller;
+       it goes in a follow-up, because that file is being edited elsewhere. */
+    stamp: async (ctx, store) => {
+      const inputHash = await inputHashFor(ctx, store);
+      if (!inputHash) return null;
+      return { inputHash, promptVersion: SUMMARY_PROMPT_VERSION, model: CAPABLE_MODEL };
+    },
     async run(ctx) {
       const run = await generateSummaries({
         dir: ctx.dir,
