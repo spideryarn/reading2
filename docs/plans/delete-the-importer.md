@@ -2209,6 +2209,77 @@ that waits for a one-line follow-up once the peer commits. The real test cost is
 `tests/tweets.test.ts` has a six-assertion `describe("threadIsCurrent")` block to rewrite against the
 stamp, and both of those files are clean.
 
+#### What the plan review changed — [delete-the-importer-d-plan-sol.md](delete-the-importer-d-plan-sol.md)
+
+**NO-SHIP, seven findings, and one of them is a stage this plan never had.** Each was checked against
+the code before being accepted.
+
+**There is no runner conversion anywhere in D, and without it `arc` cannot be the first production
+caller of `store.write`.** [`src/jobs.ts:57`](../../src/jobs.ts) imports `fsArtifacts as
+pipelineStore` — one hardcoded line, whose own comment says it is *"the single line that picks
+Postgres instead"* and defers that to a step this plan later reorganised away. Meanwhile the Postgres
+adapter's `write` takes `tx` and **not** `Db | Tx`, deliberately
+([`src/store/artifacts-pg.ts:1133`](../../src/store/artifacts-pg.ts)): a write that could run outside
+the transaction would commit artefacts and then find the job fence refusing, leaving a revision full
+of a dead worker's output with nothing owning it. But a stage makes model calls, so no transaction can
+be held open across one.
+
+Those two facts together are a stage in their own right, and it is the shape of the whole conversion
+rather than a wiring detail: **a stage stops doing its own I/O and instead returns a product; a short
+transaction afterwards writes it, checks it, finishes the step and advances the job.** That is what
+makes every later stage conversion mechanical, and it lands on the filesystem runner so nothing
+switches over. It goes immediately after D0 and before anything else, and the note that a partial D2
+is *"safe to leave for a week"* is only true under the filesystem runner — not after a cutover.
+
+**The `blocks` stamp as I wrote it does not work on either adapter.** On the filesystem
+`extract.extractedHtml` and `blocks.stampedHtml` are **the same path**
+([`src/store/artifacts-fs.ts:119`, `:123`](../../src/store/artifacts-fs.ts) — both `at.htmlFile`), so
+a stamp over the stage-2 HTML self-invalidates the moment stage 3 overwrites that file: hash recorded,
+file replaced, never current again. And on Postgres, recording the run row's `input_hash` does not
+help either, because `stampForStep` treats the **artefact** as the freshness authority and does not
+fill a missing artefact hash from the row ([`src/store/artifacts-pg.ts:750`](../../src/store/artifacts-pg.ts)).
+So the fingerprint has to go in the `blocks` artefact itself, and the validation has to be honestly
+adapter-specific — Postgres compares the stamp; the filesystem keeps `htmlCarriesItsIds` unless the
+two HTML paths are split, which is the alternative worth pricing. Three red-first tests on **both**
+adapters: first run, second-run skip, re-extraction invalidation.
+
+**The five late stages need a fingerprint over everything they read, before D3.** The shared one
+hashes blocks only ([`src/pipeline.ts:524`](../../src/pipeline.ts)), while `arc`, `tweets`, `summary`,
+`glossary` and `ideas` all read blocks *and* tree *and* metadata. The code already warns that turning
+on `toc` freshness before consumer invalidation can make summaries and arcs disappear when ranges move
+([`src/pipeline.ts:1094`](../../src/pipeline.ts)). Metadata is a real prompt input, so blocks-plus-tree
+is still short.
+
+**The deploy-gate finding was half right, and the wrong half is the dangerous one.** `GATE_FIXTURES`
+does require `data/` — but D deliberately leaves reader state there, so the directory survives, the
+gate passes, and it stops meaning anything the moment the article fixtures beneath it are gone. A
+directory check that cannot fail is another silent success. It needs named article fixtures, and the
+old gate has to be watched failing before it is changed.
+
+**The CLI `dataDir` defaults are an undecided second write path, not a hazard to mention.** Decided
+here: every slug CLI requires an explicit store mode, a filesystem run requires an explicit path, and
+`previousBlocksInFile` stops swallowing — only `ENOENT` may mean *first run*, and a corrupt or
+unreadable baseline must fail rather than remint.
+
+**D4 has no seam to move to yet.** `RawSourceStore` exposes an object `get`
+([`src/store/blobs.ts:59`](../../src/store/blobs.ts)) and there is no download-signing or
+owner-filtered reference resolution. D4 must specify a source-reader operation that authorises and
+resolves the revision *first* and then proxies or signs — preserving the ordering
+`tests/owner-isolation.test.ts:610` pins — and it must land in the **same commit** that stops relying
+on raw files.
+
+**And `toc`'s one-call write is not atomic on the filesystem.** The adapter loops and renames each
+part separately ([`src/store/artifacts-fs.ts:506`](../../src/store/artifacts-fs.ts)). The interrupted
+marker stops a later *done*, but a concurrent reader can still see mixed generations. The honest
+contract, written down rather than implied: Postgres has transaction-wide atomicity; the filesystem
+has whole-file writes plus interrupted-run detection, and not atomic visibility across a set. Test an
+interruption after each part.
+
+**So D is six stages, not five:** D0 the stamps (corrected as above), **D1 the runner**, D2 the
+checkpoint callers, D3 the five uniform late stages with a fingerprint that covers their real inputs,
+D4 `toc`, D5 the bytes and the source route. The review agreed D0 is still the right first stage once
+its contract is fixed.
+
 ### The demolition — five steps, not one commit
 
 The first draft bundled everything into one commit on the reasoning that splitting them leaves a
