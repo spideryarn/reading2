@@ -123,7 +123,7 @@ export function ProseHoverCard({
    * thirteen back-links all look alike, and only the caller can say which one
    * the reader should be looking at when they land.
    */
-  onFollowNote(from: BlockId | null, to: BlockId): void;
+  onFollowNote(from: BlockId | null, marker: NoteMarker): void;
   /**
    * **May this card look a link up, or only describe it?**
    *
@@ -259,7 +259,7 @@ export function ProseHoverCard({
          which is why the swallowed navigation is not a loss. */
       if (data.note) {
         close();
-        onFollowNote(el.closest("tr[data-block]")?.getAttribute("data-block") ?? null, data.note.blockId);
+        onFollowNote(el.closest("tr[data-block]")?.getAttribute("data-block") ?? null, data.note);
         return;
       }
       const ids = data.termIds.filter((id) => byId.has(id));
@@ -330,7 +330,7 @@ export function ProseHoverCard({
                 close();
                 onFollowNote(
                   shown.el.closest("tr[data-block]")?.getAttribute("data-block") ?? null,
-                  note.blockId,
+                  note,
                 );
               }}
               onJump={(id) => { close(); onJump(id); }}

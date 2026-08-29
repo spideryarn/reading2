@@ -1,0 +1,1615 @@
+diff --git a/src/source-hash.ts b/src/source-hash.ts
+index eee3db0..a1e7b6a 100644
+--- a/src/source-hash.ts
++++ b/src/source-hash.ts
+@@ -66,6 +66,17 @@ import type { Block, Tree } from "./types.js";
+  * cast at each of those three call sites and nothing else — every `Block[]`
+  * still satisfies it, which is the property this whole type exists for.
+  */
++/**
++ * The characters that make a delimiter-joined canonical form ambiguous.
++ *
++ * A tab or a newline for `hashBlocks`, a NUL or a newline for `structureHash` —
++ * asked as one question, because the two legacy forms are the same mistake and
++ * a fingerprint that is safe under one set and not the other would be a third
++ * thing to keep straight. Any field carrying one routes its whole artefact to
++ * the framed form, where JSON escapes it and the question does not arise.
++ */
++const AMBIGUOUS = /[\t\n\u0000]/;
++
+ export type BlockFingerprint = Pick<Block, "id" | "text"> & {
+   role?: string | null;
+   treatment?: string | null;
+@@ -104,11 +115,31 @@ export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
+      writer produces, and reading it as "legacy" would put a role-bearing
+      article on the old branch. */
+   const classified = blocks.some((b) => b.role != null || b.treatment != null);
+-  const canonical = classified
+-    ? `spya-blocks/3\n${JSON.stringify(
+-        blocks.map((b) => [b.id, b.text, b.role ?? "", b.treatment ?? ""]),
+-      )}`
+-    : blocks.map((b) => `${b.id}\t${b.text}`).join("\n");
++  /* **And the legacy branch is taken only when it is unambiguous.** Its
++     delimiters are a tab between the two fields and a newline between blocks,
++     and `text` is the article's own prose — so a block whose text contains
++     either is a block that can be re-read as a different list of blocks. One
++     block of `a\nb2\tc` and the two blocks `a` and `c` produce the identical
++     canonical string, and did produce the identical fingerprint
++     (`88b65f848068e592` from both, before this line). Two different articles
++     each reporting that nothing has changed is the whole failure this function
++     exists to prevent.
++     Ordinary extraction cannot reach it — `extractText` in src/blocks.ts
++     collapses whitespace, and across data/ not one of 890 blocks in 8 articles
++     carries a tab or a newline — but imported blocks do not go through it, and
++     a guard that depends on a normalisation two modules away is a guard that
++     ends the day a second importer is written. Routing the ambiguous input to
++     the framed form costs nothing on the corpus, by that same measurement.
++     GPT Sol, 2026-08-29, who also caught that a compatibility test comparing a
++     hash against a clone of its own input is tautological — the pin in
++     tests/supplement.test.ts is the literal hex. */
++  const ambiguous = blocks.some((b) => AMBIGUOUS.test(b.id) || AMBIGUOUS.test(b.text));
++  const canonical =
++    classified || ambiguous
++      ? `spya-blocks/3\n${JSON.stringify(
++          blocks.map((b) => [b.id, b.text, b.role ?? "", b.treatment ?? ""]),
++        )}`
++      : blocks.map((b) => `${b.id}\t${b.text}`).join("\n");
+   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
+ }
+ 
+@@ -161,8 +192,18 @@ export function structureHash(tree: Tree): string {
+     const n = tree.nodes[id]!;
+     return [id, n.parent ?? "", n.range.join(".."), n.title ?? "", n.gist ?? ""];
+   };
+-  const canonical = supplemented
+-    ? `spya-tree/2\n${JSON.stringify(ids.map((id) => [...row(id), tree.nodes[id]!.treatment ?? ""]))}`
+-    : ids.map((id) => row(id).join("\u0000")).join("\n");
++  /* Same conditional as `hashBlocks`, and the same reason. The legacy form
++     joins the five fields with U+0000 and the rows with a newline, and `title`
++     and `gist` are model prose — so a title carrying a NUL can be re-read as a
++     title and a gist that were split somewhere else. GPT Sol built the pair;
++     so did I: `A<NUL>B` + `C` and `A` + `B<NUL>C` both hashed
++     `1eff068c824dec8b`.
++     `range.join("..")` needs no such guard — a block id contains no dot, which
++     is the block-id contract itself (docs/project/block-ids.md). */
++  const ambiguous = ids.some((id) => row(id).some((f) => AMBIGUOUS.test(f)));
++  const canonical =
++    supplemented || ambiguous
++      ? `spya-tree/2\n${JSON.stringify(ids.map((id) => [...row(id), tree.nodes[id]!.treatment ?? ""]))}`
++      : ids.map((id) => row(id).join("\u0000")).join("\n");
+   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
+ }
+diff --git a/src/tree-invariants.ts b/src/tree-invariants.ts
+index c865c74..ccd1da3 100644
+--- a/src/tree-invariants.ts
++++ b/src/tree-invariants.ts
+@@ -104,6 +104,48 @@ export interface TreeCheck {
+  * and tests/validate-tree-rows.test.ts match on them — and because a publication
+  * refusal is read by the same person who reads the CLI output.
+  */
++/**
++ * **The same invariants, as a gate rather than as a report.**
++ *
++ * `checkTree` returns its problems, which is what a CLI wants
++ * (src/validate-tree.ts) and what a publish guard wants
++ * (src/store/pg-revisions.ts, which turns them into reasons an article may not
++ * be published). Neither of those runs when a tree is *written* to the
++ * filesystem, so `generateToc` could produce a structurally invalid tree, write
++ * it, and report the step done — and every later stage would read it and agree
++ * with it. That is the whole of GPT Sol's F5: the invariants existed and the
++ * one path most of this repo's testing goes through never asked them.
++ *
++ * Throwing rather than warning is deliberate. An invalid tree is not a
++ * recoverable representation of an article; publishing one converts a visible
++ * pipeline failure into a silent reader-facing one, and a warning at this point
++ * is the guard that goes quiet exactly when it is defeated
++ * (docs/reusable/silent-success.md). The step throws, src/jobs.ts records it,
++ * and the queue's retry asks the model again.
++ *
++ * **Capped at ten**, because a root whose range is wrong reports once per block
++ * and the message would otherwise be a megabyte — the same cap and the same
++ * reason as the publish guard.
++ *
++ * **And no problem string carries article prose.** That is a property of the
++ * messages in this file rather than of this function, and it became load-bearing
++ * the moment they could be thrown: a thrown step error is written to the log by
++ * src/jobs.ts with `errorFields`, which keeps `message` and `stack`. The
++ * `sourceHeading` message quoted the author's own heading until 2026-08-29 —
++ * see it above. docs/project/logging.md.
++ */
++export function assertTreeSound(blocks: Block[], tree: Tree): void {
++  const { problems } = checkTree(blocks, tree);
++  if (problems.length === 0) return;
++  const shown = problems.slice(0, 10);
++  const more = problems.length > 10 ? ` … and ${problems.length - 10} more` : "";
++  throw new Error(
++    `The table of contents is not a valid tree, so it was not written ` +
++      `(${problems.length} problem${problems.length === 1 ? "" : "s"}): ` +
++      `${shown.join("; ")}${more}`,
++  );
++}
++
+ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
+   /** Document order lives here and nowhere else — see block-ids.md. */
+   const index = new Map(blocks.map((b, i) => [b.id, i]));
+@@ -246,9 +288,17 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
+           .slice(mySpan[0], mySpan[1] + 1)
+           .some((b) => b.kind === "heading" && sameHeading(b.text, heading));
+         if (!inRange)
++          /* **The heading itself is deliberately not in the message.** These
++             strings were a CLI's output and a publish guard's reasons when this
++             was written; `generateToc` now throws them (src/toc.ts), and a
++             thrown step error is written to the log by src/jobs.ts with
++             `errorFields`, which keeps `message` and `stack`. That would put a
++             line of the article's own prose into the logs, which nothing here
++             may ever do — docs/project/logging.md. The node id is enough to
++             find it, and the reader-facing text stays out. GPT Sol, 2026-08-29. */
+           fail(
+-            `${node.id}: sourceHeading ${JSON.stringify(heading)} ` +
+-              `does not match any heading block in its range`,
++            `${node.id}: its sourceHeading does not match any heading block in ` +
++              `its range`,
+           );
+       }
+ 
+@@ -355,6 +405,27 @@ function checkSupplements(
+         `${node.id}: supplement has ${deep.length} internal child(ren) (${deep[0]!.id}) — ` +
+           `only leaves may sit under a supplement`,
+       );
++    /* **And at least one leaf does.** "No child of mine has children" is
++       satisfied vacuously by a supplement with no children at all, and the
++       generic tiling rule only catches the shapes where the arithmetic shows:
++       a childless node spanning six blocks reddens `leaf spans 6 blocks,
++       expected 1`, but the **one-note article** spans exactly one block, where
++       that message is exactly right and nothing fires. Measured, not reasoned:
++       with six notes the mutation reddens the generic rule, with one note it
++       reddened nothing at all. The consequence is that the two projections
++       disagree about an article that renders — `navigableItems` (src/web/tree.ts)
++       finds no cell to collapse and drops the apparatus, while the `?at=`
++       tracker walks blocks and keeps it. GPT Sol, F6.
++       Deliberately the weak rule and not "the children tile the range exactly":
++       once there is one child, the generic parent invariant already requires the
++       tiling and the generic leaf invariant already requires one block each, so
++       the strong version would be a second check that can only ever disagree
++       with those. */
++    if (node.children.length === 0)
++      fail(
++        `${node.id}: supplement has no leaves — the apparatus is one node over ` +
++          `one leaf per block, and a childless one is invisible to half the view`,
++      );
+ 
+     const lo = index.get(node.range[0]);
+     const hi = index.get(node.range[1]);
+diff --git a/src/web/ProseHoverCard.tsx b/src/web/ProseHoverCard.tsx
+index b9b2fe1..e1d7d10 100644
+--- a/src/web/ProseHoverCard.tsx
++++ b/src/web/ProseHoverCard.tsx
+@@ -123,7 +123,7 @@ export function ProseHoverCard({
+    * thirteen back-links all look alike, and only the caller can say which one
+    * the reader should be looking at when they land.
+    */
+-  onFollowNote(from: BlockId | null, to: BlockId): void;
++  onFollowNote(from: BlockId | null, marker: NoteMarker): void;
+   /**
+    * **May this card look a link up, or only describe it?**
+    *
+@@ -259,7 +259,7 @@ export function ProseHoverCard({
+          which is why the swallowed navigation is not a loss. */
+       if (data.note) {
+         close();
+-        onFollowNote(el.closest("tr[data-block]")?.getAttribute("data-block") ?? null, data.note.blockId);
++        onFollowNote(el.closest("tr[data-block]")?.getAttribute("data-block") ?? null, data.note);
+         return;
+       }
+       const ids = data.termIds.filter((id) => byId.has(id));
+@@ -330,7 +330,7 @@ export function ProseHoverCard({
+                 close();
+                 onFollowNote(
+                   shown.el.closest("tr[data-block]")?.getAttribute("data-block") ?? null,
+-                  note.blockId,
++                  note,
+                 );
+               }}
+               onJump={(id) => { close(); onJump(id); }}
+diff --git a/src/web/SummaryPanel.tsx b/src/web/SummaryPanel.tsx
+index ba77028..ad66dd4 100644
+--- a/src/web/SummaryPanel.tsx
++++ b/src/web/SummaryPanel.tsx
+@@ -608,7 +608,11 @@ function Entry({
+   };
+ 
+   return (
+-    <li className={`summ-entry d${entry.node.depth}${here ? " here" : ""}${now ? " now" : ""}`}>
++    <li
++      className={`summ-entry d${entry.node.depth}${here ? " here" : ""}${now ? " now" : ""}${
++        entry.supplement ? " supplement" : ""
++      }`}
++    >
+       {/* Both of these are the same statement, and it is the one in the header:
+           the keyboard path is the real `.summ-title` button inside this div,
+           which is unchanged and still focusable. This handler only widens the
+@@ -659,7 +663,10 @@ function Entry({
+               title="Go to this section in the article"
+               onClick={() => onJump(entry.node.range[0])}
+             >
+-              <span className="summ-number">{entry.number}</span>
++              {/* The apparatus wears no number: it is not part N of the
++                  argument, and numbering it was how "Notes" became part 3.
++                  src/web/tree.ts § buildSummaryTree. */}
++              {!entry.supplement && <span className="summ-number">{entry.number}</span>}
+               {entry.node.title}
+             </button>
+             {/* "How much is under this" — the gap their "+N hidden" badge filled
+@@ -692,7 +699,14 @@ function Entry({
+             <CitedText text={shown.text} blocks={blocks} onJump={onJump} />
+           </p>
+         ) : (
+-          !root && <p className="summ-text missing">No summary for this section.</p>
++          /* **Nor is the apparatus missing a summary.** A supplement node has
++             no gist on purpose — the notes are shown as written and never
++             summarised (src/supplement.ts) — so "No summary for this section"
++             reports our own promise as a fault, on the one row where it is
++             working correctly. */
++          !root && !entry.supplement && (
++            <p className="summ-text missing">No summary for this section.</p>
++          )
+         )}
+ 
+         {/* Where this section starts and ends, as two ids you can press.
+diff --git a/src/web/context.ts b/src/web/context.ts
+index b0d3b0e..50380c2 100644
+--- a/src/web/context.ts
++++ b/src/web/context.ts
+@@ -87,6 +87,19 @@ export interface ContextEntry {
+  * current, which is the honest answer: at this level, that is the last thing
+  * there was.
+  *
++ * **Except the apparatus, which is never a repeat of anything.** A supplement
++ * sits at depth 1 with its leaves at depth 2, so a note's chain is three nodes
++ * long however deep the body tree goes — and the moment the body is deeper than
++ * that, every supplement cell at this column is a continuation. Dropping them
++ * took the whole of "Notes" out of the fisheye while `?at=` and keynav, which
++ * do not filter, kept it: the two panels disagreed about an article that is
++ * perfectly valid, and a reader standing in the notes was told they were in the
++ * last section of the argument. The rule above is about a node already listed
++ * at a coarser level; a supplement item is not that. `navigableItems` has
++ * already replaced the cell's node with the supplement node itself, which
++ * appears nowhere else in this column, so there is nothing here to repeat.
++ * GPT Sol found the shape, 2026-08-29; docs/plans/footnotes.md.
++ *
+  * Items and starts are returned together because they must stay paired; a
+  * caller that took `itemStarts(cells)` separately would be off by one at
+  * every continuation.
+@@ -106,7 +119,7 @@ export function itemsFromCells(
+      alone is what breaks the anchor invariant**: three panels agreeing depends
+      on all four counting the same items. src/web/tree.ts § navigableItems. */
+   for (const item of navigableItems(cells, supplementOf)) {
+-    if (item.continuation) continue;
++    if (item.continuation && !item.supplement) continue;
+     const blockId = blockAt(item.startRow);
+     if (!blockId) continue;
+     items.push({ node: item.node, blockId, ...(item.supplement && { supplement: true }) });
+diff --git a/src/web/graph.ts b/src/web/graph.ts
+index 13681a2..45db97e 100644
+--- a/src/web/graph.ts
++++ b/src/web/graph.ts
+@@ -322,7 +322,20 @@ export function buildGraph(
+ ): ArticleGraph {
+   const prefix = wordsBefore(blocks);
+ 
+-  const entries = walk(root, collapsed, MAX_DRAWN_DEPTH);
++  /* **The apparatus is not in the argument's diagram at all.** A supplement
++     node was walked like any other: drawn as a node, chained into reading
++     order, and — the part that actually corrupts the picture — counted into the
++     term vectors. Because the root's range spans the whole article, a word
++     occurring *only* in the footnotes came out as the top term for the entire
++     piece, so the diagram described a piece by its endnotes. Measured on a
++     fixture whose notes contain one rare word, before this line existed.
++
++     Filtered here rather than inside `walk`, because `walk` is the tree
++     traversal three pictures share and the outline genuinely wants the
++     supplement in it. Diagram mode is what does not. GPT Sol found this one
++     last, after the other six projections were already dealt with;
++     docs/plans/footnotes.md. */
++  const entries = walk(root, collapsed, MAX_DRAWN_DEPTH).filter((e) => !e.node.supplement);
+ 
+   /* Term counts per node, over the node's own blocks. A part's counts include
+      its sections' — a part IS its sections — which is what makes a part's top
+@@ -334,6 +347,12 @@ export function buildGraph(
+     for (let i = n.startRow; i <= n.endRow && i < blocks.length; i++) {
+       const b = blocks[i];
+       if (!b) continue;
++      /* **And the blocks are the body's, not the range's.** Dropping the
++         supplement's own node above is not enough: an ancestor's range still
++         spans the apparatus — the root's always does — so its counts would go
++         on including every note. `isBody` is the same predicate the anchor
++         edges below already use. src/block-policy.ts. */
++      if (!isBody(b)) continue;
+       for (const t of terms(b.text)) tf.set(t, (tf.get(t) ?? 0) + 1);
+     }
+     counts.set(n.node.id, tf);
+diff --git a/src/web/notes-view.ts b/src/web/notes-view.ts
+index 4365b68..50ca103 100644
+--- a/src/web/notes-view.ts
++++ b/src/web/notes-view.ts
+@@ -272,25 +272,62 @@ function pruneEmpty(from: Element | null, stop: Element): void {
+   }
+ }
+ 
++/**
++ * **Where the reader came from**, which is a passage *and* a note — never one
++ * of the two.
++ *
++ * Carried as one value rather than as two arguments so that a caller cannot
++ * pair the passage it left with a different note than the one it followed. Both
++ * halves come off a single `NoteMarker`, so the mismatch is unrepresentable
++ * rather than merely avoided. GPT Sol, F7.
++ */
++export interface NoteReturn {
++  /** The block the reader was reading when they followed the marker. */
++  from: BlockId;
++  /** The note they followed — `Note.id`, the stage-2 `spya-note-…`. */
++  noteId: string;
++}
++
+ /**
+  * Mark the way back the reader actually came.
+  *
+  * One note, thirteen markers, thirteen back-links — and a reader who followed
+  * the seventh has no way to tell which of the thirteen is theirs. The back-links
+- * point at *blocks* (stage 3 repoints them there), so the one to mark is the one
+- * whose href is the passage the reader left.
++ * point at *blocks* (stage 3 repoints them there), so the passage is half the
++ * answer.
++ *
++ * **Only half.** Matching on the passage alone asks "which back-links lead
++ * where I came from", and when that passage cites *two* notes the answer is one
++ * back-link in each of them — so the second note lit up claiming to be the way
++ * the reader had come. The case that was tested was one note cited thirteen
++ * times, which is the mirror image and works; the case that was not is two
++ * notes cited from one sentence. GPT Sol, F7. So both halves are compared, and
++ * the note id is what tells the two apart.
++ *
++ * **Compared as attributes, not built into a selector.** `fromBlockId` used to
++ * be interpolated into a query string behind an `/^[A-Za-z0-9_-]+$/` test; two
++ * values would now need that test, and a second regex guarding a second
++ * interpolation is two chances to get it wrong for no gain. Querying the fixed
++ * attribute selector and comparing raw attribute values removes the dynamic
++ * selector entirely, which is Sol's correction to this fix and better than the
++ * `CSS.escape` it replaces the need for.
+  *
+  * Written straight onto injected html rather than through the annotation pass,
+  * for the reason `TAP_ATTR` gives in useHoverCard.ts: React replaces those nodes
+  * wholesale, so a stale mark leaves with the node it was on — and the caller
+  * re-runs this whenever the prose is re-annotated.
+  *
++ * One note cited **twice in the same passage** still marks both of its
++ * back-links, and that is left alone: both lead to the same block, and this
++ * app's navigation contract is block-level throughout (docs/project/block-ids.md).
++ *
+  * Returns the undo.
+  */
+-export function markReturnPath(root: ParentNode, fromBlockId: BlockId | null): () => void {
+-  if (!fromBlockId || !/^[A-Za-z0-9_-]+$/.test(fromBlockId)) return () => {};
+-  const marked = Array.from(
+-    root.querySelectorAll(`a[${NOTE_BACK_ATTR}][href="#${fromBlockId}"]`),
++export function markReturnPath(root: ParentNode, origin: NoteReturn | null): () => void {
++  if (!origin?.from || !origin.noteId) return () => {};
++  const href = `#${origin.from}`;
++  const marked = Array.from(root.querySelectorAll(`a[${NOTE_BACK_ATTR}]`)).filter(
++    (a) => a.getAttribute(NOTE_BACK_ATTR) === origin.noteId && a.getAttribute("href") === href,
+   );
+   for (const el of marked) el.setAttribute(CAME_FROM_ATTR, "");
+   return () => {
+diff --git a/src/web/scatter.ts b/src/web/scatter.ts
+index d51a210..c70a74d 100644
+--- a/src/web/scatter.ts
++++ b/src/web/scatter.ts
+@@ -60,6 +60,7 @@
+  * the dot actually *is*, which is one paragraph. Two fields, two jobs, both
+  * true.
+  */
++import { isBody } from "../block-policy.js";
+ import type { Block, BlockId, NodeId, ProjectionPoint } from "../types.js";
+ import {
+   type DiagramLayout,
+@@ -246,9 +247,22 @@ function dots(root: SummaryNode, blocks: readonly Block[], input: ScatterInput):
+      at a time. So the first dot answers for everything above it, each dot for
+      everything up to the next, and the last for everything below. Its `blocks`
+      count still says 1, because that is what the dot *is*. */
++  /* **"Everything below" is everything below in the *argument*.** The last dot's
++     range used to run to `blocks.length - 1`, which swallowed the whole
++     apparatus — so a reader three endnotes deep was shown standing on the final
++     paragraph of the argument, and Trail lit that paragraph's stretch of chain
++     as the brightest thing in the picture.
++     The tiling above exists for a body paragraph too short to embed, where a
++     blinking mark would be worse than an approximate one. The apparatus is not
++     that case: it is not in this picture at all — Drift and Trail plot embedded
++     body paragraphs and correctly receive no point for a note — so the honest
++     answer for a reader inside it is no dot rather than the wrong one, which is
++     the `-1` the caller already handles. GPT Sol, third review, 2026-08-29. */
++  let lastBody = blocks.length - 1;
++  while (lastBody >= 0 && !isBody(blocks[lastBody] ?? {})) lastBody--;
+   kept.forEach((d, i) => {
+     d.startRow = i === 0 ? 0 : d.row;
+-    d.endRow = i === kept.length - 1 ? Math.max(d.row, blocks.length - 1) : (kept[i + 1]?.row ?? d.row) - 1;
++    d.endRow = i === kept.length - 1 ? Math.max(d.row, lastBody) : (kept[i + 1]?.row ?? d.row) - 1;
+   });
+   return kept;
+ }
+diff --git a/src/web/styles.css b/src/web/styles.css
+index 58a5035..e364c4d 100644
+--- a/src/web/styles.css
++++ b/src/web/styles.css
+@@ -5808,6 +5808,19 @@ td.text.has-hit[data-hues="8"] {
+ .summ-entry.d1 > .summ-children { border-left-color: var(--depth-2); }
+ .summ-entry.d0 > .summ-children { border-left-color: var(--depth-1); }
+ 
++/* The apparatus, in the same key it wears in the spine and the arc: present in
++   the structure, quieter than the argument, and carrying no number. It is a row
++   the reader can jump to and never a section of the piece — the same grammar
++   `.arc-step.arc-supplement` and `.spine-part.supplement` use, so a reader who
++   has learned it in one panel reads it in this one without being told.
++   docs/plans/footnotes.md. */
++.summ-entry.supplement > .summ-body > .summ-title-row > .summ-title {
++  color: var(--ink-faint);
++  font-weight: 500;
++  letter-spacing: 0.04em;
++  text-transform: uppercase;
++}
++
+ /* Where the reader actually is. Every ancestor of the current section is marked
+    too — see the note in SummaryPanel.tsx: at a shallow depth cut-off the part
+    you are inside is the honest answer to "where am I", and marking only the
+diff --git a/src/web/tree.ts b/src/web/tree.ts
+index ff3d077..1de94a5 100644
+--- a/src/web/tree.ts
++++ b/src/web/tree.ts
+@@ -14,7 +14,7 @@
+  * the whole feature rests on.
+  */
+ import type { Arc, Block, BlockId, NodeId, SummaryEntry, Tree, TreeNode } from "../types.js";
+-import { supplementIndex } from "../supplement.js";
++import { isSupplementNode, supplementIndex } from "../supplement.js";
+ import type { Rung } from "./params.js";
+ 
+ export interface Cell {
+@@ -456,6 +456,14 @@ export interface SummaryNode {
+    * See docs/project/original-version/structure-panel.md.
+    */
+   blocks: number;
++  /**
++   * The apparatus rather than the argument — one row, unnumbered, not descended
++   * into and never reported as missing a summary.
++   *
++   * Absent on every ordinary node, so a panel that does not know about this
++   * reads exactly as it did. src/supplement.ts.
++   */
++  supplement?: true;
+   /** One sentence, from the tree. Present on every internal node stage 4 wrote. */
+   gist?: string;
+   /** A few sentences. Absent until `npm run summarise` has been run. */
+@@ -556,10 +564,31 @@ export function buildSummaryTree(
+ 
+     const found =
+       node.depth === 0 ? rootEntry : byRange.get(`${node.range[0]}|${node.range[1]}`);
++    /* **The apparatus is a leaf here, whatever the tree says.** Descending gave
++       "Notes" one child per endnote — each with no title, no gist and no
++       summary — and `SummaryPanel` drew six phantom rows under a numbered part
++       3, every one of them saying "No summary for this section". The notes are
++       in the structure and are not part of the argument; that is the whole
++       promise of this stage, and summary mode was the one place still breaking
++       it. GPT Sol, second review, 2026-08-29. */
++    const apparatus = isSupplementNode(node);
++    /* **Unnumbered, and the argument's numbering does not skip.** The counter
++       advances only on the parts that are the argument, so appending an
++       apparatus cannot renumber part 1 or invent a part 3. */
++    let n = 0;
+     const children =
+-      node.depth < depthLimit
++      node.depth < depthLimit && !apparatus
+         ? node.children
+-            .map((id, i) => build(tree.nodes[id], number ? `${number}.${i + 1}` : `${i + 1}`))
++            .map((id) => {
++              const child = tree.nodes[id];
++              const childNumber =
++                child && isSupplementNode(child)
++                  ? ""
++                  : number
++                    ? `${number}.${++n}`
++                    : `${++n}`;
++              return build(child, childNumber);
++            })
+             .filter((c): c is SummaryNode => c !== null)
+         : [];
+ 
+@@ -569,6 +598,7 @@ export function buildSummaryTree(
+       startRow,
+       endRow,
+       blocks: endRow - startRow + 1,
++      ...(apparatus && { supplement: true as const }),
+       ...(node.gist !== undefined && { gist: node.gist }),
+       ...(found?.short !== undefined && { short: found.short }),
+       ...(found?.long !== undefined && { long: found.long }),
+diff --git a/tests/diagram-graph.test.ts b/tests/diagram-graph.test.ts
+index f3f0d98..8326998 100644
+--- a/tests/diagram-graph.test.ts
++++ b/tests/diagram-graph.test.ts
+@@ -93,6 +93,74 @@ function article(): { root: SummaryNode; blocks: Block[] } {
+   return { root, blocks };
+ }
+ 
++/**
++ * The same article with an apparatus behind it: two endnotes, hung under a
++ * supplement node the way `appendSupplement` builds one, whose prose contains a
++ * word that occurs **nowhere in the argument**.
++ *
++ * `zibbleflux` is the whole instrument. It is rare enough that tf-idf ranks it
++ * first the moment it is counted, so "is the apparatus in the argument's
++ * vocabulary" becomes a question with a yes-or-no answer rather than a
++ * judgement about term weights.
++ */
++function articleWithNotes(): { root: SummaryNode; blocks: Block[] } {
++  const base = article();
++  const notes = [
++    block("n1x", "Zibbleflux zibbleflux, a note nobody reads front to back"),
++    block("n2x", "Zibbleflux again, the second note, also unread"),
++  ].map((b) => ({
++    ...b,
++    role: "footnote" as const,
++    treatment: "supplement" as const,
++    noteId: "spya-note-aaaaaaaaaa",
++  }));
++  const blocks = [...base.blocks, ...notes];
++
++  const tree = {
++    version: "1",
++    generator: "t",
++    slug: "s",
++    rootId: "n1",
++    nodes: {} as Record<string, unknown>,
++  };
++  // Rebuild the body tree over the widened root, then hang the apparatus off it.
++  const mk = (
++    id: string,
++    depth: number,
++    parent: string | null,
++    children: string[],
++    from: number,
++    to: number,
++    title: string,
++    treatment?: "supplement",
++  ) => {
++    tree.nodes[id] = {
++      id,
++      depth,
++      parent,
++      children,
++      range: [blocks[from]?.id, blocks[to]?.id],
++      title,
++      ...(depth < 2 && !treatment && { gist: `Gist for ${title}` }),
++      ...(treatment && { treatment }),
++    };
++  };
++  mk("n1", 0, null, ["n2", "n5", "s1"], 0, 9, "The whole thing");
++  mk("n2", 1, "n1", ["n3", "n4"], 0, 3, "First part");
++  mk("n3", 2, "n2", [], 0, 1, "Perception");
++  mk("n4", 2, "n2", [], 2, 3, "Weather");
++  mk("n5", 1, "n1", ["n6", "n7"], 4, 7, "Second part");
++  mk("n6", 2, "n5", [], 4, 5, "Cricket");
++  mk("n7", 2, "n5", [], 6, 7, "Perception again");
++  mk("s1", 1, "n1", ["s2", "s3"], 8, 9, "Notes", "supplement");
++  mk("s2", 2, "s1", [], 8, 8, "");
++  mk("s3", 2, "s1", [], 9, 9, "");
++
++  const root = buildSummaryTree(tree as unknown as Tree, blocks, null);
++  if (!root) throw new Error("fixture tree is unusable");
++  return { root, blocks };
++}
++
+ const NONE: ReadonlySet<NodeId> = new Set();
+ const OPTS = { width: 320, height: 600, collapsed: NONE };
+ 
+@@ -551,3 +619,51 @@ describe("the Force picture, against the real example article", () => {
+     });
+   }
+ });
++
++/* ------------------------------------------------- the apparatus, again -- */
++
++/**
++ * **Diagram mode is the seventh projection, and it was absorbing the notes into
++ * the argument.**
++ *
++ * The other six were dealt with one at a time — the fisheye, `?at=`, keynav,
++ * the arc, the spine, summary mode — and this one was found last, by GPT Sol,
++ * 2026-08-29. The graph walked the supplement as an ordinary node, drew it,
++ * chained it into reading order, and counted its prose into the term vectors:
++ * a word occurring only in the footnotes came out as the **top term for the
++ * whole article**, which is the diagram describing a piece by its endnotes.
++ *
++ * The precondition below is what makes these tests mean anything: the fixture
++ * has to actually contain the note-only word, or every assertion here passes on
++ * an article that never had an apparatus.
++ */
++describe("the apparatus is not part of the argument's diagram", () => {
++  const { root, blocks } = articleWithNotes();
++
++  it("has notes in the fixture at all", () => {
++    expect(blocks.filter((b) => b.treatment === "supplement").length).toBe(2);
++    expect(blocks.some((b) => b.text.toLowerCase().includes("zibbleflux"))).toBe(true);
++  });
++
++  it("draws no node for the apparatus", () => {
++    const graph = buildGraph(root, blocks);
++    expect(graph.nodes.map((n) => n.title)).not.toContain("Notes");
++  });
++
++  it("keeps note vocabulary out of every node's terms, the root included", () => {
++    const graph = buildGraph(root, blocks);
++    for (const node of graph.nodes) {
++      expect(node.terms.join(" ")).not.toContain("zibbleflux");
++    }
++  });
++
++  /* The control. If the graph stopped counting *any* prose these assertions
++     would all pass while the picture went blank, which is the shape of failure
++     this whole file exists for — plausible nonsense that still draws. */
++  it("still describes the argument itself", () => {
++    const graph = buildGraph(root, blocks);
++    const all = graph.nodes.flatMap((n) => n.terms).join(" ");
++    expect(all).toContain("consciousness");
++    expect(all).toContain("cricket");
++  });
++});
+diff --git a/tests/note-markers.test.ts b/tests/note-markers.test.ts
+index 20a7932..1b2131a 100644
+--- a/tests/note-markers.test.ts
++++ b/tests/note-markers.test.ts
+@@ -289,7 +289,7 @@ describe("one note, several points of use", () => {
+ 
+   it("marks only the way back the reader came, and undoes it", () => {
+     const doc = render(blocks);
+-    const undo = markReturnPath(doc, "spya-scdaa2");
++    const undo = markReturnPath(doc, { from: "spya-scdaa2", noteId });
+     const marked = () => [...doc.querySelectorAll("a[data-came-from]")].map((a) => a.textContent);
+     expect(marked()).toEqual(["b"]);
+     undo();
+@@ -301,6 +301,54 @@ describe("one note, several points of use", () => {
+     markReturnPath(doc, null);
+     expect(doc.querySelectorAll("a[data-came-from]").length).toBe(0);
+   });
++
++  /* The mirror of the case above, and the one that was wrong. Marking used to
++     select on the href alone, so it asked "which back-links lead to the passage
++     I left?" — and when that passage cites *two* notes, the answer is one
++     back-link in each of them. A reader following the first marker then saw the
++     second note claiming to be where they came from. One note cited thirteen
++     times was the case that got tested; two notes cited once from one sentence
++     is the case that was not. GPT Sol, F7. */
++  it("marks one note when a single passage cites two", () => {
++    const other = "spya-note-bbbbbbbbbb";
++    const twoNotes: NoteBlock[] = [
++      body(
++        "spya-cite2a1",
++        `<p>A claim${marker(noteId, "spya-ntyaa4", "1", "fnrefX")} and another` +
++          `${marker(other, "spya-othaa5", "2", "fnrefY")}.</p>`,
++      ),
++      note({
++        id: "spya-ntyaa4",
++        html:
++          `<li id="spya-ntyaa4" data-spya-note="${noteId}">` +
++          `<a href="#spya-cite2a1" data-spya-note-back="${noteId}">first</a> The first note.</li>`,
++      }),
++      note({
++        id: "spya-othaa5",
++        noteId: other,
++        html:
++          `<li id="spya-othaa5" data-spya-note="${other}">` +
++          `<a href="#spya-cite2a1" data-spya-note-back="${other}">second</a> The second note.</li>`,
++      }),
++    ];
++    const doc = render(twoNotes);
++    /* Precondition: both back-links really do point at the one passage, so a
++       selector reading the href alone cannot tell them apart. Without this the
++       test could pass because the fixture never built the ambiguity. */
++    expect(
++      [...doc.querySelectorAll("a[data-spya-note-back]")].map((a) => a.getAttribute("href")),
++    ).toEqual(["#spya-cite2a1", "#spya-cite2a1"]);
++
++    const undo = markReturnPath(doc, { from: "spya-cite2a1", noteId });
++    const marked = () => [...doc.querySelectorAll("a[data-came-from]")].map((a) => a.textContent);
++    expect(marked()).toEqual(["first"]);
++    undo();
++    expect(marked()).toEqual([]);
++
++    // And the other direction, so this cannot pass by always picking the first.
++    markReturnPath(doc, { from: "spya-cite2a1", noteId: other });
++    expect(marked()).toEqual(["second"]);
++  });
+ });
+ 
+ /* -------------------------------------------------------------------------- */
+@@ -367,6 +415,30 @@ describe("wikipedia, which cites one note thirteen times", () => {
+     expect(new Set(backs)).toEqual(new Set(most.citedBy.map((id) => `#${id}`)));
+   });
+ 
++  /* **The case the F7 fix could plausibly have broken.** Marking used to select
++     on the href alone, and the change narrows it by also requiring the note id.
++     Narrowing a selector is exactly how a fix aimed at one shape breaks its
++     mirror, and this is the mirror: thirteen back-links in one note, of which
++     the reader is owed precisely the one they came by. Real markup through the
++     real pipeline, because thirteen back-links inside one Wikipedia note is not
++     a shape worth inventing by hand. */
++  it("still marks exactly one of the thirteen back-links, and the right one", () => {
++    const index = buildNoteIndex(blocks);
++    const most = [...index.byNote.values()].sort((a, b) => b.markers - a.markers)[0]!;
++    const doc = render(most.blocks);
++    expect(doc.querySelectorAll(`a[data-spya-note-back="${most.id}"]`).length).toBe(13);
++
++    // The seventh passage of the twelve — arbitrary, and not the first, so this
++    // cannot pass by picking whichever came earliest in the document.
++    const from = most.citedBy[6]!;
++    const undo = markReturnPath(doc, { from, noteId: most.id });
++    const marked = [...doc.querySelectorAll(`a[${"data-came-from"}]`)];
++    expect(marked.length).toBe(1);
++    expect(marked[0]!.getAttribute("href")).toBe(`#${from}`);
++    undo();
++    expect(doc.querySelectorAll("a[data-came-from]").length).toBe(0);
++  });
++
+   it("previews a note without the run of back-links that opens it", () => {
+     const index = buildNoteIndex(blocks);
+     const most = [...index.byNote.values()].sort((a, b) => b.markers - a.markers)[0]!;
+diff --git a/tests/note-preview-card.test.tsx b/tests/note-preview-card.test.tsx
+index 87b5978..add3ff4 100644
+--- a/tests/note-preview-card.test.tsx
++++ b/tests/note-preview-card.test.tsx
+@@ -67,7 +67,16 @@ const index = buildNoteIndex(blocks);
+ const blockText = new Map(blocks.map((b) => [b.id, b.html.replace(/<[^>]+>/g, "")]));
+ 
+ const jumped: string[] = [];
+-const followed: [string | null, string][] = [];
++/**
++ * What the card handed back: the passage, the note's **id**, and the block the
++ * jump lands on.
++ *
++ * The note id is recorded because the marking of the return path depends on it,
++ * and a hover card that dropped it would leave the unit test in
++ * tests/note-markers.test.ts passing on a `markReturnPath` nothing ever gives a
++ * note to. GPT Sol's wiring check, F7.
++ */
++const followed: [string | null, string, string][] = [];
+ 
+ function Harness() {
+   return (
+@@ -92,7 +101,7 @@ function Harness() {
+         lookUpLinks={false}
+         onOpenTerm={() => {}}
+         onJump={(id) => jumped.push(id)}
+-        onFollowNote={(from, to) => followed.push([from, to])}
++        onFollowNote={(from, m) => followed.push([from, m.note.id, m.blockId])}
+       />
+     </>
+   );
+@@ -220,13 +229,13 @@ describe("a finger on a footnote marker", () => {
+     expect(preview()?.textContent).toContain("The note's first half");
+     expect(followed).toEqual([]);
+     tap(marker(0));
+-    expect(followed).toEqual([["spya-bdyaa2", "spya-ntyaa2"]]);
++    expect(followed).toEqual([["spya-bdyaa2", NOTE, "spya-ntyaa2"]]);
+   });
+ 
+   it("remembers which passage a second marker was followed from", () => {
+     tap(marker(1));
+     tap(marker(1));
+-    expect(followed).toEqual([["spya-bdyaa3", "spya-ntyaa2"]]);
++    expect(followed).toEqual([["spya-bdyaa3", NOTE, "spya-ntyaa2"]]);
+   });
+ });
+ 
+diff --git a/tests/scatter.test.ts b/tests/scatter.test.ts
+index 778217d..99f097c 100644
+--- a/tests/scatter.test.ts
++++ b/tests/scatter.test.ts
+@@ -421,3 +421,70 @@ describe("laneTerms", () => {
+     expect(laneTerms([], bs, 3)).toEqual([[], [], []]);
+   });
+ });
++
++/* ------------------------------------------------------- the apparatus -- */
++
++/**
++ * **A reader standing in the notes is not standing on the last paragraph of the
++ * argument.**
++ *
++ * Drift and Trail plot embedded body paragraphs, and correctly receive no point
++ * for a note. But the dot ranges are made to *tile* — the last dot answers for
++ * everything below it — so "everything below" swallowed the whole apparatus and
++ * the you-are-here mark sat on the final argument paragraph while the reader was
++ * three endnotes deep. Trail brightened that paragraph's chain position too.
++ *
++ * The tiling exists for a body paragraph too short to embed, so that the mark
++ * does not blink out for a screen at a time. The apparatus is a different case:
++ * it is not in this picture at all, and the honest answer for a reader inside it
++ * is no dot rather than the wrong one. GPT Sol, third review, 2026-08-29.
++ */
++describe("a reader inside the apparatus", () => {
++  const body = blocks(8);
++  const notes: Block[] = Array.from({ length: 4 }, (_, i) => ({
++    id: `spya-n${String(i).padStart(4, "0")}` as BlockId,
++    tag: "p",
++    kind: "text" as const,
++    text: `Note ${i}, which nobody reads front to back.`,
++    words: 9,
++    html: "<p></p>",
++    gistable: true,
++    role: "footnote" as const,
++    treatment: "supplement" as const,
++    noteId: "spya-note-aaaaaaaaaa",
++  }));
++  const all = [...body, ...notes];
++  const firstNoteRow = body.length;
++
++  /* The precondition. Without it the fixture could have no apparatus at all and
++     every assertion below would pass for the wrong reason. */
++  it("has an apparatus in the fixture, and no point for it", () => {
++    expect(all.filter((b) => b.treatment === "supplement").length).toBe(4);
++    const pts = points(body);
++    expect(pts.every((pt) => body.some((b) => b.id === pt.id))).toBe(true);
++  });
++
++  /* **What the reader actually sees is Trail's chain going bright around them.**
++     `here` is the dot index the reader is standing on, and it only surfaces as
++     link brightness — `chainStep` lights the segments either side of it at the
++     top step. With the apparatus swallowed by the last dot's range, standing in
++     the notes lit the end of the *argument*: the brightest thing in the picture
++     was a paragraph the reader had already left. */
++  const brightest = (links: readonly { depth?: number | undefined }[]) =>
++    links.filter((l) => l.depth === 8).length;
++
++  it("trail: does not light the end of the argument for a reader in the notes", () => {
++    const out = layoutTrail(tree(body), all, opts({ atRow: firstNoteRow + 2 }), input(points(body)));
++    expect(out.links.length).toBeGreaterThan(0);
++    expect(brightest(out.links)).toBe(0);
++  });
++
++  /* The control, and it is what stops the fix from being "never light
++     anything": a reader inside the argument still lights the chain around them.
++     Both directions, because a guard that goes quiet when defeated is the
++     failure this repo keeps meeting. */
++  it("trail: still lights the chain for a reader inside the argument", () => {
++    const out = layoutTrail(tree(body), all, opts({ atRow: 3 }), input(points(body)));
++    expect(brightest(out.links)).toBeGreaterThan(0);
++  });
++});
+diff --git a/tests/summary-expand.test.tsx b/tests/summary-expand.test.tsx
+index 3b80c13..e68a442 100644
+--- a/tests/summary-expand.test.tsx
++++ b/tests/summary-expand.test.tsx
+@@ -71,7 +71,26 @@ function section(id: string, title: string, row: number, parent: string): Summar
+   };
+ }
+ 
+-function tree(): SummaryNode {
++/**
++ * The apparatus as `buildSummaryTree` now hands it over: one row, `supplement`,
++ * no number, no children, and **no gist** — a supplement node never has one,
++ * which is the whole promise (src/supplement.ts).
++ */
++function apparatus(): SummaryNode {
++  const n = node("notes", 1, "Notes", "root");
++  delete (n as { gist?: string }).gist;
++  return {
++    node: n,
++    number: "",
++    startRow: 6,
++    endRow: 11,
++    blocks: 6,
++    supplement: true,
++    children: [],
++  };
++}
++
++function tree(withApparatus = false): SummaryNode {
+   const one = [
+     section("1.1", "Alpha", 0, "1"),
+     section("1.2", "Beta", 1, "1"),
+@@ -95,6 +114,7 @@ function tree(): SummaryNode {
+         blocks: 3, gist: "The gist of the first part.", children: one },
+       { node: node("2", 1, "Second part", "root", ids(two)), number: "2", startRow: 3, endRow: 5,
+         blocks: 3, gist: "The gist of the second part.", children: two },
++      ...(withApparatus ? [apparatus()] : []),
+     ],
+   };
+ }
+@@ -105,7 +125,7 @@ const deeps: number[] = [];
+ 
+ /* `deep` is the caller's state in the app, so the harness passes it in and
+    records what the panel asks for rather than moving it. */
+-const panel = (deep: number) =>
++const panel = (deep: number, withApparatus = false) =>
+   createElement(SummaryPanel, {
+     summaries: null,
+     owner: {
+@@ -121,7 +141,7 @@ const panel = (deep: number) =>
+       write: async () => {},
+       cancel: () => {},
+     },
+-    root: tree(),
++    root: tree(withApparatus),
+     blocks: new Map(),
+     rung: "gist",
+     onRung: () => {},
+@@ -304,3 +324,79 @@ describe("the follow agrees with what is drawn", () => {
+     expect(showsChildren(t.children[0]!, 1, new Set(["1"]), new Set(["1"]))).toBe(false);
+   });
+ });
++
++/* --------------------------------------------------- and the apparatus -- */
++
++/**
++ * **The notes are a row, not a section of the argument.**
++ *
++ * `buildSummaryTree` stops descending into a supplement and hands it over
++ * unnumbered; this is the other half, which is what a reader actually sees.
++ * Before it, "Notes" was numbered part 3, carried one blank child per endnote,
++ * and every one of them said "No summary for this section" — reporting the
++ * promise of this whole stage as a fault. GPT Sol, second review, 2026-08-29.
++ */
++describe("the apparatus in summary mode", () => {
++  const render = () => {
++    act(() => root.render(panel(1, true)));
++  };
++  const rowFor = (title: string) =>
++    [...host.querySelectorAll("li.summ-entry")].find(
++      (li) => li.querySelector(".summ-title")?.textContent?.includes(title),
++    );
++
++  /* Three separate tests, not three assertions in one. A failing assertion ends
++     its test, so with the number check first a probe that reverted *both* halves
++     of the fix reddened only the number and never ran the missing-summary
++     check at all. Each half of a fix needs its own probe — the identical trap
++     the two hash pins fell into earlier the same day. */
++  it("shows Notes as a row of the apparatus, not a part of the argument", () => {
++    render();
++    const notes = rowFor("Notes");
++    expect(notes).toBeTruthy();
++    expect(notes!.className).toContain("supplement");
++  });
++
++  it("gives Notes no number", () => {
++    render();
++    // No "3." in front of it — it is not part 3 of a two-part argument.
++    expect(rowFor("Notes")!.querySelector(".summ-number")).toBe(null);
++  });
++
++  it("does not report the apparatus as missing a summary", () => {
++    render();
++    expect(rowFor("Notes")!.textContent).not.toContain("No summary for this section");
++  });
++
++  it("hangs no phantom row per endnote under it", () => {
++    render();
++    expect(rowFor("Notes")!.querySelectorAll("li.summ-entry").length).toBe(0);
++  });
++
++  /* The follow path, which reads the same tree. A reader whose `?at=` row is
++     inside the notes must land on the Notes row itself — not on a phantom
++     child, which is where it went before, and not on nothing. `showsChildren`
++     already returns false for a childless entry, so this is asking whether the
++     two rules still agree once the apparatus has no children; if they ever
++     disagree the panel scrolls to an element that is not on screen, which moves
++     nothing and reports nothing. */
++  it("makes the Notes row itself the current entry for a reader inside it", () => {
++    const withNotes = tree(true);
++    // Row 8 is inside the apparatus (rows 6–11), well past the argument.
++    expect(currentEntryId(withNotes, 8, 1, new Set())).toBe("notes");
++    // And a reader in the argument is unaffected.
++    expect(currentEntryId(withNotes, 4, 1, new Set())).toBe("2");
++  });
++
++  /* The control: the parts of the argument keep their numbers and keep saying
++     when they have no summary, so the two assertions above are about the
++     apparatus and not about the panel having quietly stopped numbering or
++     stopped reporting anything at all. */
++  it("still numbers the argument's own parts", () => {
++    render();
++    const first = rowFor("First part");
++    expect(first!.querySelector(".summ-number")?.textContent).toBe("1");
++    expect(rowFor("Second part")!.querySelector(".summ-number")?.textContent).toBe("2");
++    expect(rowFor("First part")!.className).not.toContain("supplement");
++  });
++});
+diff --git a/tests/supplement.test.ts b/tests/supplement.test.ts
+index 47b53ab..a4a049f 100644
+--- a/tests/supplement.test.ts
++++ b/tests/supplement.test.ts
+@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
+ import { describe, expect, it } from "vitest";
+ import { partsOf, buildArc } from "../src/arc.js";
+ import { deriveLibraryScalars } from "../src/library-scalars.js";
+-import { structureHash } from "../src/source-hash.js";
++import { hashBlocks, structureHash } from "../src/source-hash.js";
+ import { targetsOf } from "../src/summarise.js";
+ import {
+   appendSupplement,
+@@ -56,13 +56,53 @@ function note(i: number, role: NonNullable<Block["role"]> = "footnote"): Block {
+   };
+ }
+ 
++/**
++ * A copy of the body tree one level deeper — every leaf gains a single child,
++ * so `leafDepth` goes 3 → 4 and the sections column moves to depth 3.
++ *
++ * **Why a test needs this shape at all.** A supplement is always depth 1 with
++ * its leaves at depth 2, so a note's chain is three nodes long however deep the
++ * body is. Once the body is deeper than that, the supplement's cells at the
++ * sections column are *continuations* — and the fisheye drops continuations
++ * while the saved position keeps them, so the apparatus vanished from one panel
++ * and not the other. Nothing forbids this tree: `buildTree` accepts arbitrary
++ * depth, the invariants impose no maximum, and the prompt asking for three
++ * levels is not a contract the model is held to. GPT Sol, 2026-08-29.
++ */
++function deepen(tree: Tree): Tree {
++  const deep = JSON.parse(JSON.stringify(tree)) as Tree;
++  let n = 9000;
++  for (const node of Object.values({ ...deep.nodes })) {
++    if (node.children.length > 0) continue;
++    const id = `n${++n}` as NodeId;
++    deep.nodes[id] = {
++      id,
++      parent: node.id,
++      depth: node.depth + 1,
++      children: [],
++      range: [...node.range],
++      title: "",
++    };
++    node.children = [id];
++    // It has just become internal, so it owes a gist — or `checkTree` would
++    // redden for a reason that has nothing to do with what is under test.
++    node.gist ??= "A gist, so that the tree this fixture builds is a sound one.";
++  }
++  return deep;
++}
++
+ /** The article the real pipeline would produce: body tree, then the apparatus. */
+-function withNotes(count: number, role: NonNullable<Block["role"]> = "footnote"): { blocks: Block[]; tree: Tree } {
++function withNotes(
++  count: number,
++  role: NonNullable<Block["role"]> = "footnote",
++  deeper = false,
++): { blocks: Block[]; tree: Tree } {
+   const notes = Array.from({ length: count }, (_, i) => note(i + 1, role));
+   const blocks = [...bodyBlocks, ...notes];
+   const split = splitBlocks(blocks);
+   expect(split.stranded).toBe(0);
+-  return { blocks, tree: appendSupplement(bodyTree, split.groups) };
++  const body = deeper ? deepen(bodyTree) : bodyTree;
++  return { blocks, tree: appendSupplement(body, split.groups) };
+ }
+ 
+ /** A deep copy, so a mutation cannot leak into the next test. */
+@@ -271,6 +311,24 @@ describe("the six invariants", () => {
+     expect(problems.some((p) => /only leaves may sit under a supplement/.test(p))).toBe(true);
+   });
+ 
++  /* Invariant 5 says "no child of mine has children", which a supplement with
++     *no* children satisfies vacuously. The generic tiling rule catches most of
++     that shape — a childless node spanning three blocks is a leaf that spans
++     three blocks — but it cannot see the one-note article, where the range is a
++     single block and "leaf spans 1 block" is exactly right. Measured: with six
++     notes the mutation reddens `leaf spans 6 blocks, expected 1`; with one note
++     it reddened nothing at all before this rule existed. GPT Sol, F6. */
++  it("5b — and at least one leaf does, even when the article has a single note", () => {
++    const one = withNotes(1);
++    const only = supplementNodes(one.tree)[0]!;
++    expect(only.range[0]).toBe(only.range[1]); // the shape the tiling rule cannot see
++    const stripped = clone(one.tree);
++    for (const id of stripped.nodes[only.id]!.children) delete stripped.nodes[id];
++    stripped.nodes[only.id]!.children = [];
++    const problems = checkTree(one.blocks, stripped).problems;
++    expect(problems.some((p) => /supplement has no leaves/.test(p))).toBe(true);
++  });
++
+   it("6 — no gist, never nested, never the root", () => {
+     const gisted = problemsOf((t) => {
+       t.nodes[supplement.id]!.gist = "Forty endnotes, summarised — which is the promise broken.";
+@@ -516,6 +574,137 @@ describe("a reader standing mid-Notes", () => {
+     expect(sections[active]!.title).toBe("Notes");
+   });
+ 
++  /* **The same agreement, over every supplement shape the invariants admit** —
++     and compared against the *fisheye*, not against `buildSections`.
++
++     The first version of this compared `navigableItems` with `buildSections`,
++     which was tautological: `buildSections` is a thin wrapper over
++     `navigableItems`, so the two agreed by construction and the test would have
++     passed with the bug below fully present. It also ran all three cases over
++     one depth-3 topology. GPT Sol caught both, 2026-08-29.
++
++     What the comparison has to be is `itemsFromCells` — the fisheye — against
++     `buildSections`, because the fisheye applies a filter of its own that the
++     saved position does not: it drops continuation items. That is the seam the
++     two can actually part company at, and `deepened()` below is the shape where
++     they did. */
++  const shapes: Array<[string, number, "footnote" | "reference", boolean]> = [
++    ["one note", 1, "footnote", false],
++    ["six notes", 6, "footnote", false],
++    ["six references", 6, "reference", false],
++    // The one that was broken: a body tree one level deeper than the apparatus.
++    ["one note under a deeper body", 1, "footnote", true],
++    ["six notes under a deeper body", 6, "footnote", true],
++  ];
++
++  it.each(shapes)(
++    "shows the apparatus in the fisheye and in ?at= alike — %s",
++    (_name, count, role, deeper) => {
++      const article = withNotes(count, role, deeper);
++      // A precondition, not a formality: the whole point is that this tree is
++      // *valid* and the two projections still disagreed.
++      expect(checkTree(article.blocks, article.tree).problems).toEqual([]);
++      const geo = buildGeometry(article.tree, article.blocks);
++      const d = sectionDepth(geo);
++      const fisheye = itemsFromCells(
++        geo.cells[d]!,
++        (row) => article.blocks[row]?.id,
++        geo.supplementOf,
++      ).items.filter((i) => i.supplement);
++      const sections = buildSections(geo, article.blocks).filter((sec) => sec.title === "Notes" || sec.title === "References");
++
++      expect(fisheye.length).toBe(1);
++      expect(sections.length).toBe(1);
++      // Same anchor block, which is what "the same item" has to mean: it is the
++      // id `?at=` stores and the row the fisheye marks current.
++      expect(fisheye[0]!.blockId).toBe(sections[0]!.blockId);
++    },
++  );
++
++  /* **Two supplements side by side, under a deeper body.** Only `"footnote"` is
++     assigned in v1, so Notes-then-References is the shape the second role has
++     to land in rather than one that occurs today — and it is the shape where a
++     collapsing bug would show as one row swallowing the other. Asked for by
++     GPT Sol's second review. */
++  it("keeps Notes and References as two rows, under a deeper body", () => {
++    const blocksTwo = [...bodyBlocks, note(1), note(2), note(3, "reference")];
++    const treeTwo = appendSupplement(deepen(bodyTree), splitBlocks(blocksTwo).groups);
++    expect(checkTree(blocksTwo, treeTwo).problems).toEqual([]);
++    const geo = buildGeometry(treeTwo, blocksTwo);
++    const d = sectionDepth(geo);
++    const fisheye = itemsFromCells(geo.cells[d]!, (r) => blocksTwo[r]?.id, geo.supplementOf);
++    const supplements = fisheye.items.filter((i) => i.supplement);
++    expect(supplements.length).toBe(2);
++    expect(supplements.map((i) => i.node.title)).toEqual(["Notes", "References"]);
++    const sections = buildSections(geo, blocksTwo).filter(
++      (sec) => sec.title === "Notes" || sec.title === "References",
++    );
++    expect(sections.map((sec) => sec.title)).toEqual(["Notes", "References"]);
++    expect(supplements.map((i) => i.blockId)).toEqual(sections.map((sec) => sec.blockId));
++  });
++
++  /* **No two items may be anchored on one row.** `currentIndex` walks `starts`
++     and takes the last one at or before the reader's row, so a duplicate makes
++     one of the two unreachable — the reader could never be "in" it however far
++     they scrolled. Cheap to state, and it is the one thing about the
++     continuation change I could not rule out by argument. */
++  it.each(shapes)("anchors every item on its own row — %s", (_name, count, role, deeper) => {
++    const article = withNotes(count, role, deeper);
++    const geo = buildGeometry(article.tree, article.blocks);
++    const { starts } = itemsFromCells(
++      geo.cells[sectionDepth(geo)]!,
++      (row) => article.blocks[row]?.id,
++      geo.supplementOf,
++    );
++    expect(starts.length).toBeGreaterThan(0);
++    expect(new Set(starts).size).toBe(starts.length);
++    expect([...starts].sort((a, b) => a - b)).toEqual(starts);
++  });
++
++  /* And the reader standing mid-Notes is IN it, in the deep shape too —
++     `currentIndex` reads the fisheye's own `starts`, so an apparatus the
++     fisheye dropped puts the reader in the last part of the argument instead of
++     in the notes. The count above would not notice that on its own. */
++  /* **Summary mode treated the apparatus as argument structure.** The summary
++     tree descended into the supplement, so `SummaryPanel` numbered "Notes" as
++     part 3, gave it children 3.1 … 3.6 — one phantom row per endnote, each with
++     no title and no gist — and put "No summary for this section" under every one
++     of them. It is the same promise being broken as everywhere else in this
++     stage: the notes are in the structure and are not part of the argument, so
++     they are never summarised and never reported as missing a summary.
++     GPT Sol, second review, 2026-08-29. */
++  it("does not descend into the apparatus, or number it, in summary mode", () => {
++    const article = withNotes(6, "footnote", true);
++    const summary = buildSummaryTree(article.tree, article.blocks, null, 3)!;
++    const notes = summary.children.find((c) => c.node.title === "Notes")!;
++    expect(notes).toBeDefined();
++    expect(notes.supplement).toBe(true);
++    // No phantom row per endnote — that was 3.1 … 3.6, each blank.
++    expect(notes.children).toEqual([]);
++    // And it is not part 3 of an argument that has two parts.
++    expect(notes.number).toBe("");
++    // The parts of the argument keep their own numbering, unshifted.
++    const argument = summary.children.filter((c) => !c.supplement);
++    expect(argument.map((c) => c.number)).toEqual(
++      argument.map((_c, i) => String(i + 1)),
++    );
++  });
++
++  it("puts a reader standing mid-Notes in the Notes item, under a deeper body", () => {
++    const article = withNotes(6, "footnote", true);
++    const geo = buildGeometry(article.tree, article.blocks);
++    const d = sectionDepth(geo);
++    const { items, starts } = itemsFromCells(
++      geo.cells[d]!,
++      (row) => article.blocks[row]?.id,
++      geo.supplementOf,
++    );
++    const cur = currentIndex(starts, bodyBlocks.length + 3);
++    expect(cur).not.toBe(-1);
++    expect(items[cur]!.supplement).toBe(true);
++    expect(items[cur]!.node.title).toBe("Notes");
++  });
++
+   it("and the arc's numbering agrees with all three", () => {
+     const arc = buildArc(partsOf(tree).map(() => "A sentence."), tree, "example");
+     const cells = buildArcColumn(geometry, arc)!;
+@@ -578,4 +767,70 @@ describe("structureHash", () => {
+     delete asBody.nodes[supplement.id]!.treatment;
+     expect(structureHash(asBody)).not.toBe(structureHash(tree));
+   });
++
++  /* ------------------------------------------ the delimiter, both hashes --
++
++     The legacy forms are not framings, they are rarer delimiters: fields joined
++     with U+0000 and rows with a newline in `structureHash`, `id \t text` joined
++     with a newline in `hashBlocks`. `title` and `gist` are model prose and
++     `text` is the article's own, so neither delimiter is under our control, and
++     an unescaped separator is a collision waiting for the page that contains
++     one. A fingerprint collision means two different articles each reporting
++     that nothing has changed.
++
++     Both were reproduced before either was fixed. GPT Sol found the first; the
++     second is the same bug in the more reachable hash and was not in the eight.
++
++     What the fix must NOT do is move a hash any real article already has —
++     measured across data/: 890 blocks in 8 articles, and not one `text`
++     contains a tab or a newline, nor one title or gist a NUL. So the fix routes
++     only the ambiguous inputs to the safe framing, and the pinned hash above is
++     what proves it. */
++  const NUL = "\u0000";
++  const oneNode = (title: string, gist: string): Tree =>
++    ({
++      rootId: "r",
++      nodes: {
++        r: { id: "r", parent: null, depth: 0, range: ["a", "b"], title, gist, children: [] },
++      },
++    }) as unknown as Tree;
++
++  it("does not collide when a NUL sits inside a title or a gist", () => {
++    // Same fields, different split: "A<NUL>B" + "C" versus "A" + "B<NUL>C".
++    expect(structureHash(oneNode(`A${NUL}B`, "C"))).not.toBe(
++      structureHash(oneNode("A", `B${NUL}C`)),
++    );
++  });
++
++  it("hashBlocks does not collide when a newline and a tab sit inside a block's text", () => {
++    /* One block whose text spans what reads as a second row, against the two
++       real blocks it imitates. Both canonical strings are `b1 \t a \n b2 \t c`. */
++    const one = hashBlocks([{ id: "b1", text: "a\nb2\tc" }]);
++    const two = hashBlocks([
++      { id: "b1", text: "a" },
++      { id: "b2", text: "c" },
++    ]);
++    expect(one).not.toBe(two);
++  });
++
++  it("leaves every hash a real article already has exactly where it was", () => {
++    /* The other half, and the one that costs money if it is wrong: ordinary
++       prose carries no delimiter, so both must still take the legacy path.
++       **Both pins are literal hex.** The first draft of this asserted
++       `hashBlocks(bodyBlocks) === hashBlocks(bodyBlocks.map((b) => ({ ...b })))`,
++       which is tautological — it compares a hash against a hash of a copy of its
++       own input and would hold just as well if the routing change had
++       invalidated the entire corpus. GPT Sol, 2026-08-29. */
++    expect(structureHash(bodyTree)).toBe("5bb2ef0284bce2cd");
++  });
++
++  /* Its own test rather than a second line in the one above, because a failing
++     assertion ends its test: with both in one, the `structureHash` pin masked
++     the `hashBlocks` pin entirely, and a probe that forced every field down the
++     framed branch reddened one guard while the other never ran. Two clauses
++     need two probes. Both were watched go red — `49189e0dee442198` and
++     `5d66606f5fd03635` under that probe. */
++  it("leaves the block fingerprint of a real article where it was too", () => {
++    expect(hashBlocks(bodyBlocks)).toBe("21189fa4eb0bceca");
++  });
+ });
+--- a/src/toc.ts
++++ b/src/toc.ts
+@@ -39,6 +39,7 @@
+ import { isSpideryarnId } from "./ids.js";
+ import { generateLabels, mergeLabels } from "./labels.js";
+ import { appendSupplement, splitBlocks } from "./supplement.js";
++import { assertTreeSound } from "./tree-invariants.js";
+ import { budgetFor, truncationFailure } from "./token-budget.js";
+ import type { Block, Tree, TreeNode, NodeId } from "./types.js";
+ import { parseJsonFrom } from "./parse-json.js";
+@@ -796,6 +797,17 @@
+   });
+ 
+   const tree = mergeLabels(structure, labelRun.labels);
++  /* **The invariants, on the artefact that is about to be written.** They ran
++     in src/validate-tree.ts (a CLI a human invokes) and in the publish guard
++     (src/store/pg-revisions.ts, which collects reasons rather than throwing),
++     and nowhere on this path — so a stage-4 regression was invisible in exactly
++     the workflow most of this repo's testing goes through. GPT Sol, F5.
++     After `mergeLabels` rather than before `generateLabels`: what this
++     guarantees is a property of the file, and checking `structure` instead
++     would leave the merge unchecked while costing the same. It does mean a
++     tree the model got wrong is found after a full label run has been paid
++     for; that is the cheaper of the two mistakes. */
++  assertTreeSound(blocks, tree);
+   checkCoverage(labelRun.labels, tree, blocks);
+ 
+   /* Each file is written to a temporary name and renamed into place, and the
+--- a/src/web/App.tsx
++++ b/src/web/App.tsx
+@@ -48,7 +48,7 @@
+ import { ChatPanel } from "./ChatPanel.js";
+ import { GlossaryPanel } from "./GlossaryPanel.js";
+ import { ProseHoverCard } from "./ProseHoverCard.js";
+-import { buildNoteIndex } from "./notes-view.js";
++import { buildNoteIndex, type NoteMarker, type NoteReturn } from "./notes-view.js";
+ import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
+ import { SummaryPanel } from "./SummaryPanel.js";
+ import { DiagramPanel } from "./DiagramPanel.js";
+@@ -1689,11 +1689,16 @@
+    * one stale case — following a marker and never returning — leaves a mark on
+    * a passage the reader really did leave.
+    */
+-  const [noteReturn, setNoteReturn] = useState<BlockId | null>(null);
++  const [noteReturn, setNoteReturn] = useState<NoteReturn | null>(null);
++  /* **The marker, not its destination block.** The passage and the note are
++     stored together and come off one `NoteMarker`, so there is no way to pair
++     the passage the reader left with a note they did not follow — which is what
++     went wrong when only the block id was kept. src/web/notes-view.ts §
++     `markReturnPath`. GPT Sol, F7. */
+   const followNote = useCallback(
+-    (from: BlockId | null, to: BlockId) => {
+-      setNoteReturn(from);
+-      jumpTo(to);
++    (from: BlockId | null, marker: NoteMarker) => {
++      setNoteReturn(from ? { from, noteId: marker.note.id } : null);
++      jumpTo(marker.blockId);
+     },
+     [jumpTo],
+   );
+--- a/src/web/TableView.tsx
++++ b/src/web/TableView.tsx
+@@ -30,7 +30,13 @@
+ } from "./annotate.js";
+ import { readSelection } from "./selection.js";
+ import { internalTarget } from "./internal-links.js";
+-import { markReturnPath, noteMarkerAt, type NoteIndex } from "./notes-view.js";
++import {
++  markReturnPath,
++  noteMarkerAt,
++  type NoteIndex,
++  type NoteMarker,
++  type NoteReturn,
++} from "./notes-view.js";
+ import type { Section } from "./position.js";
+ import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./context.js";
+ import { ContextPanel } from "./ContextPanel.js";
+@@ -84,9 +90,9 @@
+    * thirteen back-links, side by side and identical apart from where they point.
+    * Without this the return journey is a guess with twelve wrong answers.
+    */
+-  noteReturn?: BlockId | null | undefined;
++  noteReturn?: NoteReturn | null | undefined;
+   /** A marker was followed: go to the note, and remember the way back. */
+-  onFollowNote?: ((from: BlockId | null, to: BlockId) => void) | undefined;
++  onFollowNote?: ((from: BlockId | null, marker: NoteMarker) => void) | undefined;
+   /** Every stored comment for this article — see docs/project/comments.md. */
+   comments: Comment[];
+   /** The comment whose dialog is open, so its mark can say so. */
+@@ -624,7 +630,7 @@
+           const note = notes && onFollowNote ? noteMarkerAt(link, document, notes) : null;
+           if (note && onFollowNote) {
+             const from = link.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
+-            return onFollowNote(from, note.blockId);
++            return onFollowNote(from, note);
+           }
+           onJump(blockId);
+         }}
+
+
+===== NEW FILE: tests/toc-write-guard.test.ts =====
+
+/**
+ * **`generateToc` refuses to write a tree that is not a valid tree** —
+ * `assertTreeSound` in src/tree-invariants.ts, wired in at src/toc.ts.
+ *
+ * The invariants existed long before this file. They ran in a CLI a human
+ * invokes (src/validate-tree.ts) and in the publish guard, which collects
+ * reasons rather than throwing (src/store/pg-revisions.ts) — and on neither of
+ * the two paths that actually *write* `tree.json`. So a stage-4 regression was
+ * invisible in exactly the workflow most of this repo's testing goes through.
+ * GPT Sol's F5, 2026-08-29.
+ *
+ * **Why this is an integration test and not a unit test of the guard.**
+ * `assertTreeSound` throwing on a bad tree is worth about one line; whether
+ * `generateToc` *calls* it is the entire finding, and no amount of testing the
+ * function proves the call site exists. A static check would not help either —
+ * present-and-in-the-right-order passes for a call whose result is discarded, a
+ * call inside a branch that never runs, or a call placed after the writes it
+ * was meant to prevent. The only thing that settles it is running the stage and
+ * looking at the directory afterwards, which is what this does.
+ *
+ * No network. `streamMessage` is replaced with one that answers the structure
+ * call from a canned tree, and `generateLabels` with one that returns an empty
+ * label run — the labels are not what is under test, and mocking them is what
+ * keeps this to a single fake response instead of the whole batch protocol.
+ */
+import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+import type { Block } from "../src/types.js";
+
+/** The tree the structure model "returns", set per test before the call. */
+let modelTree: unknown = null;
+
+vi.mock("../src/messages-stream.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/messages-stream.js")>();
+  return {
+    ...real,
+    streamMessage: (_task: string, _body: unknown) => ({
+      onText: () => {},
+      finalMessage: async () => ({
+        content: [{ type: "text", text: JSON.stringify(modelTree) }],
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    }),
+  };
+});
+
+/**
+ * A label per structural block, keyed the way `mergeLabels` reads them — by the
+ * leaf's **first block id**.
+ *
+ * Not an empty set, and the control is what proved that: `checkCoverage` runs
+ * immediately after the guard and rejects a tree with no labels, so the sound
+ * case threw too and "nothing was written" would have held for both tests
+ * regardless of the guard. A control that cannot come out green is not a
+ * control.
+ */
+let labelsFor: Record<string, string> = {};
+
+vi.mock("../src/labels.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/labels.js")>();
+  return {
+    ...real,
+    /* Only the call is faked. `mergeLabels` stays real, so the tree that
+       reaches the guard is exactly the tree that would have been written. */
+    generateLabels: async () => ({
+      labels: labelsFor,
+      file: {
+        version: "test",
+        generator: "test",
+        slug: "toc-write-guard",
+        structureHash: "0000000000000000",
+        blocksHash: "0000000000000000",
+        model: "test",
+        batches: [],
+        labels: labelsFor,
+        generatedAt: "2026-08-29T00:00:00.000Z",
+        elapsedMs: 0,
+      },
+      batches: 0,
+      oversized: 0,
+      resumed: 0,
+      calls: 0,
+      estimatedCacheable: false,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      clearCheckpoint: async () => {},
+    }),
+  };
+});
+
+const ROOT = path.resolve(import.meta.dirname, "..");
+
+/** A temp copy of `example/`, never `data/` — see tests/helpers/corpus-lock.ts. */
+let DIR: string;
+let blocks: Block[];
+
+beforeAll(async () => {
+  DIR = await mkdtemp(path.join(tmpdir(), "toc-write-guard-"));
+  await cp(path.join(ROOT, "example"), DIR, { recursive: true });
+  blocks = JSON.parse(await readFile(path.join(DIR, "blocks.json"), "utf8")).blocks;
+  const { isStructural } = await import("../src/block-policy.js");
+  labelsFor = Object.fromEntries(
+    blocks.filter((b) => isStructural(b)).map((b) => [b.id, `Label for ${b.id}`]),
+  );
+  // The fixture ships a finished article. The stage must be the thing that
+  // writes these, or "they are absent afterwards" would prove nothing.
+  await rm(path.join(DIR, "tree.json"), { force: true });
+  await rm(path.join(DIR, "labels.json"), { force: true });
+});
+
+afterAll(async () => {
+  await rm(DIR, { recursive: true, force: true });
+});
+
+/** One node over every block: the smallest tree `buildTree` accepts. */
+const wholeArticle = (over: Record<string, unknown> = {}) => ({
+  root: {
+    title: "The example",
+    gist: "One node over the whole piece, which is a shape buildTree accepts.",
+    range: [blocks[0]!.id, blocks.at(-1)!.id],
+    ...over,
+  },
+});
+
+async function run(): Promise<{ threw: Error | null }> {
+  const { generateToc } = await import("../src/toc.js");
+  try {
+    await generateToc({ blocksPath: path.join(DIR, "blocks.json"), outDir: DIR });
+    return { threw: null };
+  } catch (err) {
+    return { threw: err as Error };
+  }
+}
+
+const wrote = async (): Promise<string[]> => {
+  const files = await readdir(DIR);
+  return files.filter((f) => f === "tree.json" || f === "labels.json").sort();
+};
+
+describe("generateToc refuses to write an invalid tree", () => {
+  /* The control, and it comes first on purpose: without it, "nothing was
+     written" is satisfied just as well by a stage that throws for some
+     unrelated reason — a bad mock, a missing directory, an env var. This proves
+     the same harness does write both files when the tree is sound. */
+  it("writes the tree when the model returns a sound one", async () => {
+    modelTree = wholeArticle();
+    const { threw } = await run();
+    expect(threw).toBeNull();
+    expect(await wrote()).toEqual(["labels.json", "tree.json"]);
+  });
+
+  it("throws and writes nothing when a node claims a heading it does not contain", async () => {
+    await rm(path.join(DIR, "tree.json"), { force: true });
+    await rm(path.join(DIR, "labels.json"), { force: true });
+    /* Buildable and invalid, which is the pair that matters: `buildTree` has no
+       opinion about `sourceHeading`, and `checkTree` requires the claimed
+       heading to be a heading block inside the node's own range. */
+    modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
+    const { threw } = await run();
+    expect(threw).not.toBeNull();
+    expect(threw!.message).toContain("is not a valid tree, so it was not written");
+    expect(await wrote()).toEqual([]);
+  });
+
+  /* The thrown message is written to the log by src/jobs.ts with `errorFields`,
+     which keeps `message` and `stack`. Until 2026-08-29 the `sourceHeading`
+     problem quoted the author's own heading back, so wiring this guard in would
+     have put a line of the article into the logs — which nothing in this repo
+     may ever do (docs/project/logging.md). Asserted on the message rather than
+     trusted to the comment above it. */
+  it("puts no article prose in what it throws", async () => {
+    await rm(path.join(DIR, "tree.json"), { force: true });
+    await rm(path.join(DIR, "labels.json"), { force: true });
+    const heading = blocks.find((b) => b.kind === "heading");
+    expect(heading).toBeDefined(); // the fixture must have one for this to test anything
+    modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
+    const { threw } = await run();
+    expect(threw!.message).not.toContain("A Heading Nobody Wrote");
+    expect(threw!.message).not.toContain(heading!.text);
+  });
+});

@@ -104,6 +104,48 @@ export interface TreeCheck {
  * and tests/validate-tree-rows.test.ts match on them — and because a publication
  * refusal is read by the same person who reads the CLI output.
  */
+/**
+ * **The same invariants, as a gate rather than as a report.**
+ *
+ * `checkTree` returns its problems, which is what a CLI wants
+ * (src/validate-tree.ts) and what a publish guard wants
+ * (src/store/pg-revisions.ts, which turns them into reasons an article may not
+ * be published). Neither of those runs when a tree is *written* to the
+ * filesystem, so `generateToc` could produce a structurally invalid tree, write
+ * it, and report the step done — and every later stage would read it and agree
+ * with it. That is the whole of GPT Sol's F5: the invariants existed and the
+ * one path most of this repo's testing goes through never asked them.
+ *
+ * Throwing rather than warning is deliberate. An invalid tree is not a
+ * recoverable representation of an article; publishing one converts a visible
+ * pipeline failure into a silent reader-facing one, and a warning at this point
+ * is the guard that goes quiet exactly when it is defeated
+ * (docs/reusable/silent-success.md). The step throws, src/jobs.ts records it,
+ * and the queue's retry asks the model again.
+ *
+ * **Capped at ten**, because a root whose range is wrong reports once per block
+ * and the message would otherwise be a megabyte — the same cap and the same
+ * reason as the publish guard.
+ *
+ * **And no problem string carries article prose.** That is a property of the
+ * messages in this file rather than of this function, and it became load-bearing
+ * the moment they could be thrown: a thrown step error is written to the log by
+ * src/jobs.ts with `errorFields`, which keeps `message` and `stack`. The
+ * `sourceHeading` message quoted the author's own heading until 2026-08-29 —
+ * see it above. docs/project/logging.md.
+ */
+export function assertTreeSound(blocks: Block[], tree: Tree): void {
+  const { problems } = checkTree(blocks, tree);
+  if (problems.length === 0) return;
+  const shown = problems.slice(0, 10);
+  const more = problems.length > 10 ? ` … and ${problems.length - 10} more` : "";
+  throw new Error(
+    `The table of contents is not a valid tree, so it was not written ` +
+      `(${problems.length} problem${problems.length === 1 ? "" : "s"}): ` +
+      `${shown.join("; ")}${more}`,
+  );
+}
+
 export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
   /** Document order lives here and nowhere else — see block-ids.md. */
   const index = new Map(blocks.map((b, i) => [b.id, i]));
@@ -246,9 +288,17 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
           .slice(mySpan[0], mySpan[1] + 1)
           .some((b) => b.kind === "heading" && sameHeading(b.text, heading));
         if (!inRange)
+          /* **The heading itself is deliberately not in the message.** These
+             strings were a CLI's output and a publish guard's reasons when this
+             was written; `generateToc` now throws them (src/toc.ts), and a
+             thrown step error is written to the log by src/jobs.ts with
+             `errorFields`, which keeps `message` and `stack`. That would put a
+             line of the article's own prose into the logs, which nothing here
+             may ever do — docs/project/logging.md. The node id is enough to
+             find it, and the reader-facing text stays out. GPT Sol, 2026-08-29. */
           fail(
-            `${node.id}: sourceHeading ${JSON.stringify(heading)} ` +
-              `does not match any heading block in its range`,
+            `${node.id}: its sourceHeading does not match any heading block in ` +
+              `its range`,
           );
       }
 
@@ -354,6 +404,27 @@ function checkSupplements(
       fail(
         `${node.id}: supplement has ${deep.length} internal child(ren) (${deep[0]!.id}) — ` +
           `only leaves may sit under a supplement`,
+      );
+    /* **And at least one leaf does.** "No child of mine has children" is
+       satisfied vacuously by a supplement with no children at all, and the
+       generic tiling rule only catches the shapes where the arithmetic shows:
+       a childless node spanning six blocks reddens `leaf spans 6 blocks,
+       expected 1`, but the **one-note article** spans exactly one block, where
+       that message is exactly right and nothing fires. Measured, not reasoned:
+       with six notes the mutation reddens the generic rule, with one note it
+       reddened nothing at all. The consequence is that the two projections
+       disagree about an article that renders — `navigableItems` (src/web/tree.ts)
+       finds no cell to collapse and drops the apparatus, while the `?at=`
+       tracker walks blocks and keeps it. GPT Sol, F6.
+       Deliberately the weak rule and not "the children tile the range exactly":
+       once there is one child, the generic parent invariant already requires the
+       tiling and the generic leaf invariant already requires one block each, so
+       the strong version would be a second check that can only ever disagree
+       with those. */
+    if (node.children.length === 0)
+      fail(
+        `${node.id}: supplement has no leaves — the apparatus is one node over ` +
+          `one leaf per block, and a childless one is invisible to half the view`,
       );
 
     const lo = index.get(node.range[0]);

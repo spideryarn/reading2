@@ -66,6 +66,17 @@ import type { Block, Tree } from "./types.js";
  * cast at each of those three call sites and nothing else — every `Block[]`
  * still satisfies it, which is the property this whole type exists for.
  */
+/**
+ * The characters that make a delimiter-joined canonical form ambiguous.
+ *
+ * A tab or a newline for `hashBlocks`, a NUL or a newline for `structureHash` —
+ * asked as one question, because the two legacy forms are the same mistake and
+ * a fingerprint that is safe under one set and not the other would be a third
+ * thing to keep straight. Any field carrying one routes its whole artefact to
+ * the framed form, where JSON escapes it and the question does not arise.
+ */
+const AMBIGUOUS = /[\t\n\u0000]/;
+
 export type BlockFingerprint = Pick<Block, "id" | "text"> & {
   role?: string | null;
   treatment?: string | null;
@@ -104,11 +115,31 @@ export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
      writer produces, and reading it as "legacy" would put a role-bearing
      article on the old branch. */
   const classified = blocks.some((b) => b.role != null || b.treatment != null);
-  const canonical = classified
-    ? `spya-blocks/3\n${JSON.stringify(
-        blocks.map((b) => [b.id, b.text, b.role ?? "", b.treatment ?? ""]),
-      )}`
-    : blocks.map((b) => `${b.id}\t${b.text}`).join("\n");
+  /* **And the legacy branch is taken only when it is unambiguous.** Its
+     delimiters are a tab between the two fields and a newline between blocks,
+     and `text` is the article's own prose — so a block whose text contains
+     either is a block that can be re-read as a different list of blocks. One
+     block of `a\nb2\tc` and the two blocks `a` and `c` produce the identical
+     canonical string, and did produce the identical fingerprint
+     (`88b65f848068e592` from both, before this line). Two different articles
+     each reporting that nothing has changed is the whole failure this function
+     exists to prevent.
+     Ordinary extraction cannot reach it — `extractText` in src/blocks.ts
+     collapses whitespace, and across data/ not one of 890 blocks in 8 articles
+     carries a tab or a newline — but imported blocks do not go through it, and
+     a guard that depends on a normalisation two modules away is a guard that
+     ends the day a second importer is written. Routing the ambiguous input to
+     the framed form costs nothing on the corpus, by that same measurement.
+     GPT Sol, 2026-08-29, who also caught that a compatibility test comparing a
+     hash against a clone of its own input is tautological — the pin in
+     tests/supplement.test.ts is the literal hex. */
+  const ambiguous = blocks.some((b) => AMBIGUOUS.test(b.id) || AMBIGUOUS.test(b.text));
+  const canonical =
+    classified || ambiguous
+      ? `spya-blocks/3\n${JSON.stringify(
+          blocks.map((b) => [b.id, b.text, b.role ?? "", b.treatment ?? ""]),
+        )}`
+      : blocks.map((b) => `${b.id}\t${b.text}`).join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }
 
@@ -161,8 +192,18 @@ export function structureHash(tree: Tree): string {
     const n = tree.nodes[id]!;
     return [id, n.parent ?? "", n.range.join(".."), n.title ?? "", n.gist ?? ""];
   };
-  const canonical = supplemented
-    ? `spya-tree/2\n${JSON.stringify(ids.map((id) => [...row(id), tree.nodes[id]!.treatment ?? ""]))}`
-    : ids.map((id) => row(id).join("\u0000")).join("\n");
+  /* Same conditional as `hashBlocks`, and the same reason. The legacy form
+     joins the five fields with U+0000 and the rows with a newline, and `title`
+     and `gist` are model prose — so a title carrying a NUL can be re-read as a
+     title and a gist that were split somewhere else. GPT Sol built the pair;
+     so did I: `A<NUL>B` + `C` and `A` + `B<NUL>C` both hashed
+     `1eff068c824dec8b`.
+     `range.join("..")` needs no such guard — a block id contains no dot, which
+     is the block-id contract itself (docs/project/block-ids.md). */
+  const ambiguous = ids.some((id) => row(id).some((f) => AMBIGUOUS.test(f)));
+  const canonical =
+    supplemented || ambiguous
+      ? `spya-tree/2\n${JSON.stringify(ids.map((id) => [...row(id), tree.nodes[id]!.treatment ?? ""]))}`
+      : ids.map((id) => row(id).join("\u0000")).join("\n");
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
 }

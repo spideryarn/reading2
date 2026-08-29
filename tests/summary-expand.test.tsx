@@ -71,7 +71,26 @@ function section(id: string, title: string, row: number, parent: string): Summar
   };
 }
 
-function tree(): SummaryNode {
+/**
+ * The apparatus as `buildSummaryTree` now hands it over: one row, `supplement`,
+ * no number, no children, and **no gist** — a supplement node never has one,
+ * which is the whole promise (src/supplement.ts).
+ */
+function apparatus(): SummaryNode {
+  const n = node("notes", 1, "Notes", "root");
+  delete (n as { gist?: string }).gist;
+  return {
+    node: n,
+    number: "",
+    startRow: 6,
+    endRow: 11,
+    blocks: 6,
+    supplement: true,
+    children: [],
+  };
+}
+
+function tree(withApparatus = false): SummaryNode {
   const one = [
     section("1.1", "Alpha", 0, "1"),
     section("1.2", "Beta", 1, "1"),
@@ -95,6 +114,7 @@ function tree(): SummaryNode {
         blocks: 3, gist: "The gist of the first part.", children: one },
       { node: node("2", 1, "Second part", "root", ids(two)), number: "2", startRow: 3, endRow: 5,
         blocks: 3, gist: "The gist of the second part.", children: two },
+      ...(withApparatus ? [apparatus()] : []),
     ],
   };
 }
@@ -105,7 +125,7 @@ const deeps: number[] = [];
 
 /* `deep` is the caller's state in the app, so the harness passes it in and
    records what the panel asks for rather than moving it. */
-const panel = (deep: number) =>
+const panel = (deep: number, withApparatus = false) =>
   createElement(SummaryPanel, {
     summaries: null,
     owner: {
@@ -121,7 +141,7 @@ const panel = (deep: number) =>
       write: async () => {},
       cancel: () => {},
     },
-    root: tree(),
+    root: tree(withApparatus),
     blocks: new Map(),
     rung: "gist",
     onRung: () => {},
@@ -302,5 +322,81 @@ describe("the follow agrees with what is drawn", () => {
     const t = tree();
     expect(showsChildren(t.children[0]!, 1, new Set(), new Set(["1"]))).toBe(true);
     expect(showsChildren(t.children[0]!, 1, new Set(["1"]), new Set(["1"]))).toBe(false);
+  });
+});
+
+/* --------------------------------------------------- and the apparatus -- */
+
+/**
+ * **The notes are a row, not a section of the argument.**
+ *
+ * `buildSummaryTree` stops descending into a supplement and hands it over
+ * unnumbered; this is the other half, which is what a reader actually sees.
+ * Before it, "Notes" was numbered part 3, carried one blank child per endnote,
+ * and every one of them said "No summary for this section" — reporting the
+ * promise of this whole stage as a fault. GPT Sol, second review, 2026-08-29.
+ */
+describe("the apparatus in summary mode", () => {
+  const render = () => {
+    act(() => root.render(panel(1, true)));
+  };
+  const rowFor = (title: string) =>
+    [...host.querySelectorAll("li.summ-entry")].find(
+      (li) => li.querySelector(".summ-title")?.textContent?.includes(title),
+    );
+
+  /* Three separate tests, not three assertions in one. A failing assertion ends
+     its test, so with the number check first a probe that reverted *both* halves
+     of the fix reddened only the number and never ran the missing-summary
+     check at all. Each half of a fix needs its own probe — the identical trap
+     the two hash pins fell into earlier the same day. */
+  it("shows Notes as a row of the apparatus, not a part of the argument", () => {
+    render();
+    const notes = rowFor("Notes");
+    expect(notes).toBeTruthy();
+    expect(notes!.className).toContain("supplement");
+  });
+
+  it("gives Notes no number", () => {
+    render();
+    // No "3." in front of it — it is not part 3 of a two-part argument.
+    expect(rowFor("Notes")!.querySelector(".summ-number")).toBe(null);
+  });
+
+  it("does not report the apparatus as missing a summary", () => {
+    render();
+    expect(rowFor("Notes")!.textContent).not.toContain("No summary for this section");
+  });
+
+  it("hangs no phantom row per endnote under it", () => {
+    render();
+    expect(rowFor("Notes")!.querySelectorAll("li.summ-entry").length).toBe(0);
+  });
+
+  /* The follow path, which reads the same tree. A reader whose `?at=` row is
+     inside the notes must land on the Notes row itself — not on a phantom
+     child, which is where it went before, and not on nothing. `showsChildren`
+     already returns false for a childless entry, so this is asking whether the
+     two rules still agree once the apparatus has no children; if they ever
+     disagree the panel scrolls to an element that is not on screen, which moves
+     nothing and reports nothing. */
+  it("makes the Notes row itself the current entry for a reader inside it", () => {
+    const withNotes = tree(true);
+    // Row 8 is inside the apparatus (rows 6–11), well past the argument.
+    expect(currentEntryId(withNotes, 8, 1, new Set())).toBe("notes");
+    // And a reader in the argument is unaffected.
+    expect(currentEntryId(withNotes, 4, 1, new Set())).toBe("2");
+  });
+
+  /* The control: the parts of the argument keep their numbers and keep saying
+     when they have no summary, so the two assertions above are about the
+     apparatus and not about the panel having quietly stopped numbering or
+     stopped reporting anything at all. */
+  it("still numbers the argument's own parts", () => {
+    render();
+    const first = rowFor("First part");
+    expect(first!.querySelector(".summ-number")?.textContent).toBe("1");
+    expect(rowFor("Second part")!.querySelector(".summ-number")?.textContent).toBe("2");
+    expect(rowFor("First part")!.className).not.toContain("supplement");
   });
 });

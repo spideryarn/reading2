@@ -273,24 +273,61 @@ function pruneEmpty(from: Element | null, stop: Element): void {
 }
 
 /**
+ * **Where the reader came from**, which is a passage *and* a note — never one
+ * of the two.
+ *
+ * Carried as one value rather than as two arguments so that a caller cannot
+ * pair the passage it left with a different note than the one it followed. Both
+ * halves come off a single `NoteMarker`, so the mismatch is unrepresentable
+ * rather than merely avoided. GPT Sol, F7.
+ */
+export interface NoteReturn {
+  /** The block the reader was reading when they followed the marker. */
+  from: BlockId;
+  /** The note they followed — `Note.id`, the stage-2 `spya-note-…`. */
+  noteId: string;
+}
+
+/**
  * Mark the way back the reader actually came.
  *
  * One note, thirteen markers, thirteen back-links — and a reader who followed
  * the seventh has no way to tell which of the thirteen is theirs. The back-links
- * point at *blocks* (stage 3 repoints them there), so the one to mark is the one
- * whose href is the passage the reader left.
+ * point at *blocks* (stage 3 repoints them there), so the passage is half the
+ * answer.
+ *
+ * **Only half.** Matching on the passage alone asks "which back-links lead
+ * where I came from", and when that passage cites *two* notes the answer is one
+ * back-link in each of them — so the second note lit up claiming to be the way
+ * the reader had come. The case that was tested was one note cited thirteen
+ * times, which is the mirror image and works; the case that was not is two
+ * notes cited from one sentence. GPT Sol, F7. So both halves are compared, and
+ * the note id is what tells the two apart.
+ *
+ * **Compared as attributes, not built into a selector.** `fromBlockId` used to
+ * be interpolated into a query string behind an `/^[A-Za-z0-9_-]+$/` test; two
+ * values would now need that test, and a second regex guarding a second
+ * interpolation is two chances to get it wrong for no gain. Querying the fixed
+ * attribute selector and comparing raw attribute values removes the dynamic
+ * selector entirely, which is Sol's correction to this fix and better than the
+ * `CSS.escape` it replaces the need for.
  *
  * Written straight onto injected html rather than through the annotation pass,
  * for the reason `TAP_ATTR` gives in useHoverCard.ts: React replaces those nodes
  * wholesale, so a stale mark leaves with the node it was on — and the caller
  * re-runs this whenever the prose is re-annotated.
  *
+ * One note cited **twice in the same passage** still marks both of its
+ * back-links, and that is left alone: both lead to the same block, and this
+ * app's navigation contract is block-level throughout (docs/project/block-ids.md).
+ *
  * Returns the undo.
  */
-export function markReturnPath(root: ParentNode, fromBlockId: BlockId | null): () => void {
-  if (!fromBlockId || !/^[A-Za-z0-9_-]+$/.test(fromBlockId)) return () => {};
-  const marked = Array.from(
-    root.querySelectorAll(`a[${NOTE_BACK_ATTR}][href="#${fromBlockId}"]`),
+export function markReturnPath(root: ParentNode, origin: NoteReturn | null): () => void {
+  if (!origin?.from || !origin.noteId) return () => {};
+  const href = `#${origin.from}`;
+  const marked = Array.from(root.querySelectorAll(`a[${NOTE_BACK_ATTR}]`)).filter(
+    (a) => a.getAttribute(NOTE_BACK_ATTR) === origin.noteId && a.getAttribute("href") === href,
   );
   for (const el of marked) el.setAttribute(CAME_FROM_ATTR, "");
   return () => {

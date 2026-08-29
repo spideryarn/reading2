@@ -60,6 +60,7 @@
  * the dot actually *is*, which is one paragraph. Two fields, two jobs, both
  * true.
  */
+import { isBody } from "../block-policy.js";
 import type { Block, BlockId, NodeId, ProjectionPoint } from "../types.js";
 import {
   type DiagramLayout,
@@ -246,11 +247,65 @@ function dots(root: SummaryNode, blocks: readonly Block[], input: ScatterInput):
      at a time. So the first dot answers for everything above it, each dot for
      everything up to the next, and the last for everything below. Its `blocks`
      count still says 1, because that is what the dot *is*. */
+  /* **"Everything below" is everything below in the *argument*.** The last dot's
+     range used to run to `blocks.length - 1`, which swallowed the whole
+     apparatus — so a reader three endnotes deep was shown standing on the final
+     paragraph of the argument, and Trail lit that paragraph's stretch of chain
+     as the brightest thing in the picture.
+     The tiling above exists for a body paragraph too short to embed, where a
+     blinking mark would be worse than an approximate one. The apparatus is not
+     that case: it is not in this picture at all — Drift and Trail plot embedded
+     body paragraphs and correctly receive no point for a note — so the honest
+     answer for a reader inside it is no dot rather than the wrong one, which is
+     the `-1` the caller already handles. GPT Sol, third review, 2026-08-29. */
+  const lastBody = lastBodyRow(blocks);
   kept.forEach((d, i) => {
     d.startRow = i === 0 ? 0 : d.row;
-    d.endRow = i === kept.length - 1 ? Math.max(d.row, blocks.length - 1) : (kept[i + 1]?.row ?? d.row) - 1;
+    d.endRow = i === kept.length - 1 ? Math.max(d.row, lastBody) : (kept[i + 1]?.row ?? d.row) - 1;
   });
   return kept;
+}
+
+/**
+ * The last row of the argument — the block before the apparatus begins.
+ *
+ * **This is the denominator these pictures actually want.** `blocks.length`
+ * counts the endnotes, and three separate things read as the article's extent:
+ * Drift's vertical axis, the progress hue (`slot`), and the spoken label
+ * "paragraph N of M". With the apparatus in the total, a forty-note article
+ * left a third of Drift blank, the last paragraph of the argument never reached
+ * the final progress step, and the label said "paragraph 2 of 4" about the
+ * final body paragraph of two. GPT Sol, fourth review, 2026-08-29.
+ */
+function lastBodyRow(blocks: readonly Block[]): number {
+  let i = blocks.length - 1;
+  while (i >= 0 && !isBody(blocks[i] ?? {})) i--;
+  return i;
+}
+
+/**
+ * How many rows of *argument* there are, for a denominator.
+ *
+ * Never zero, because every one of these divides by `rows - 1` or scales by it.
+ */
+function bodyRows(blocks: readonly Block[]): number {
+  return Math.max(1, lastBodyRow(blocks) + 1);
+}
+
+/**
+ * The reader's row, or `null` when they are not in the argument.
+ *
+ * **Asked of the block, not of the range**, and that is what makes it work for
+ * the shape `splitBlocks` deliberately refuses to build a supplement node for:
+ * a note stranded mid-article (src/supplement.ts). There the apparatus is a
+ * hole in the middle of the body, and no contiguous "up to the last body row"
+ * rule can describe it — a reader standing on that note was lighting three
+ * body-chain links around it. A block either is apparatus or is not, and that
+ * is the only question worth asking here.
+ */
+function bodyRowOf(blocks: readonly Block[], at: number | null | undefined): number | null {
+  if (at === null || at === undefined) return null;
+  return isBody(blocks[at] ?? {}) ? at : null;
 }
 
 /**
@@ -410,7 +465,7 @@ export function layoutDrift(
   input: ScatterInput,
 ): DiagramLayout {
   const kept = dots(root, blocks, input);
-  const rows = Math.max(1, blocks.length);
+  const rows = bodyRows(blocks);
   const height = Math.max(opts.height, 320, kept.length * ROW + PAD_Y * 2);
   const top = PAD_Y;
   const usableH = Math.max(1, height - PAD_Y * 2);
@@ -439,7 +494,13 @@ export function layoutDrift(
     nodes,
     links: [],
     axis: { top, height: usableH, rows },
-    nowY: opts.atRow === null || opts.atRow === undefined ? null : y(Math.min(rows - 1, Math.max(0, opts.atRow))),
+    /* `null` when the reader is in the apparatus, rather than a line clamped to
+       the bottom of the axis: the axis is the argument, and a reader three
+       endnotes deep is not standing on its last paragraph. `bodyRowOf`. */
+    nowY: ((): number | null => {
+      const row = bodyRowOf(blocks, opts.atRow);
+      return row === null ? null : y(Math.min(rows - 1, Math.max(0, row)));
+    })(),
   };
 }
 
@@ -528,7 +589,7 @@ export function layoutTrail(
   input: ScatterInput,
 ): DiagramLayout {
   const kept = dots(root, blocks, input);
-  const rows = Math.max(1, blocks.length);
+  const rows = bodyRows(blocks);
   const height = Math.max(opts.height, TRAIL_MIN_H);
   if (kept.length === 0) {
     return { width: opts.width, height, nodes: [], links: [], axis: null, nowY: null };
@@ -572,11 +633,9 @@ export function layoutTrail(
 
   /* Which dot the reader is standing on, so the chain can be bright where they
      are. `-1` when the reader is above the article or `?at=` is unset. */
-  const at = opts.atRow;
+  const at = bodyRowOf(blocks, opts.atRow);
   const here =
-    at === null || at === undefined
-      ? -1
-      : placed.findIndex((p) => at >= p.d.startRow && at <= p.d.endRow);
+    at === null ? -1 : placed.findIndex((p) => at >= p.d.startRow && at <= p.d.endRow);
 
   const links: DiagramLink[] = [];
   for (let i = 0; i + 1 < placed.length; i++) {

@@ -263,6 +263,67 @@ describe("the shelf card and the masthead", () => {
     expect(card.wordCount).toBe(masthead.words);
   });
 
+  /* **And the same for the structure, not just the words.** The shelf card
+     already excluded the apparatus from its part and section counts, with the
+     reasoning written next to it — the masthead, the metadata page and the
+     public page did not, so a seven-part article with endnotes was advertised
+     as having eight parts and forty-one more sections than it argues. Two
+     implementations of one derivation, and only one of them right, which is the
+     divergence this pair of modules exists to make impossible. GPT Sol, fourth
+     review, 2026-08-29. */
+  describe("counting the structure", () => {
+    const blocks: Block[] = [
+      { ...PROSE, id: "spya-200000" },
+      { ...PROSE, id: "spya-200001" },
+      { ...NOTE, id: "spya-200002" },
+    ];
+    /* Two body parts, one section under the first, and an apparatus alongside
+       them — the shape `appendSupplement` builds: depth-one node, depth-two
+       leaves, `treatment: "supplement"`. */
+    const structured = {
+      version: "1", generator: "t", slug: "s", rootId: "n0",
+      nodes: {
+        n0: { id: "n0", depth: 0, parent: null, children: ["n1", "n2", "s1"],
+          range: ["spya-200000", "spya-200002"], title: "All", gist: "g" },
+        n1: { id: "n1", depth: 1, parent: "n0", children: ["n3"],
+          range: ["spya-200000", "spya-200000"], title: "One", gist: "g" },
+        n3: { id: "n3", depth: 2, parent: "n1", children: [],
+          range: ["spya-200000", "spya-200000"], title: "One.a" },
+        n2: { id: "n2", depth: 1, parent: "n0", children: [],
+          range: ["spya-200001", "spya-200001"], title: "Two", gist: "g" },
+        s1: { id: "s1", depth: 1, parent: "n0", children: ["s2"],
+          range: ["spya-200002", "spya-200002"], title: "Notes", treatment: "supplement" },
+        s2: { id: "s2", depth: 2, parent: "s1", children: [],
+          range: ["spya-200002", "spya-200002"], title: "" },
+      },
+    } as unknown as Parameters<typeof deriveLibraryScalars>[0]["tree"];
+
+    const stats = () =>
+      articleStats({
+        slug: "s", meta: { slug: "s", title: "T" }, blocks, tree: structured,
+      } as unknown as Parameters<typeof articleStats>[0]);
+
+    it("has an apparatus in the fixture at all", () => {
+      // Or every assertion below is about an article that never had one.
+      expect(Object.values(structured!.nodes).filter((n) => n.treatment === "supplement").length)
+        .toBe(1);
+    });
+
+    it("does not count the apparatus as a part of the argument", () => {
+      expect(stats().parts).toBe(2);
+    });
+
+    it("does not count its endnotes as sections", () => {
+      expect(stats().sections).toBe(1);
+    });
+
+    it("agrees with the shelf card, which was already right", () => {
+      const card = deriveLibraryScalars({ blocks, tree: structured });
+      expect(stats().parts).toBe(card.partCount);
+      expect(stats().sections).toBe(card.sectionCount);
+    });
+  });
+
   it("still count every word when nothing is apparatus", () => {
     // The control: without it both assertions above pass on a derivation that
     // returns zero, or one that drops the last block whatever it is.

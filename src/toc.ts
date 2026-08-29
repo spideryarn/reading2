@@ -39,6 +39,7 @@ import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { isSpideryarnId } from "./ids.js";
 import { generateLabels, mergeLabels } from "./labels.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
+import { assertTreeSound } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -796,6 +797,17 @@ export async function generateToc(opts: {
   });
 
   const tree = mergeLabels(structure, labelRun.labels);
+  /* **The invariants, on the artefact that is about to be written.** They ran
+     in src/validate-tree.ts (a CLI a human invokes) and in the publish guard
+     (src/store/pg-revisions.ts, which collects reasons rather than throwing),
+     and nowhere on this path — so a stage-4 regression was invisible in exactly
+     the workflow most of this repo's testing goes through. GPT Sol, F5.
+     After `mergeLabels` rather than before `generateLabels`: what this
+     guarantees is a property of the file, and checking `structure` instead
+     would leave the merge unchecked while costing the same. It does mean a
+     tree the model got wrong is found after a full label run has been paid
+     for; that is the cheaper of the two mistakes. */
+  assertTreeSound(blocks, tree);
   checkCoverage(labelRun.labels, tree, blocks);
 
   /* Each file is written to a temporary name and renamed into place, and the

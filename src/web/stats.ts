@@ -10,6 +10,7 @@
  * or the tree is regenerated, and a stored copy would be a second truth that
  * quietly drifts from the first — see docs/project/architecture.md.
  */
+import { supplementIndex } from "../supplement.js";
 import { articleWordCounts } from "../block-policy.js";
 import { readingMinutes } from "../reading-time.js";
 import type { Article } from "../types.js";
@@ -41,7 +42,22 @@ export function articleStats(article: Article): Stats {
   const words = articleWordCounts(article.blocks).body;
   const byDepth = new Map<number, number>();
   let deepest = 0;
+  /* **The apparatus is not part of the argument's shape.** A supplement is a
+     depth-one child of the root and its leaves are at depth two, so counting by
+     depth alone advertised gwern as having one more part than it argues and
+     forty-one more sections than it has — in the masthead, the metadata page
+     and the public page, which is a small lie in three of the places a reader
+     is deciding whether to start.
+     `deriveLibraryScalars` (src/library-scalars.ts) already did this, with the
+     reasoning written next to it; this module is the second implementation of
+     the same derivation and only one of them was right. tests/block-policy.test.ts
+     now holds the two together. GPT Sol, fourth review, 2026-08-29.
+     `depth` is excluded for the same reason and one more: it answers "how many
+     granularity columns can this article offer", and a shallow body tree with
+     an apparatus behind it would claim a rung the argument does not have. */
+  const supplement = supplementIndex(article.tree);
   for (const node of Object.values(article.tree.nodes)) {
+    if (supplement.has(node.id)) continue;
     byDepth.set(node.depth, (byDepth.get(node.depth) ?? 0) + 1);
     deepest = Math.max(deepest, node.depth);
   }

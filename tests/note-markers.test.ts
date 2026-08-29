@@ -289,7 +289,7 @@ describe("one note, several points of use", () => {
 
   it("marks only the way back the reader came, and undoes it", () => {
     const doc = render(blocks);
-    const undo = markReturnPath(doc, "spya-scdaa2");
+    const undo = markReturnPath(doc, { from: "spya-scdaa2", noteId });
     const marked = () => [...doc.querySelectorAll("a[data-came-from]")].map((a) => a.textContent);
     expect(marked()).toEqual(["b"]);
     undo();
@@ -300,6 +300,54 @@ describe("one note, several points of use", () => {
     const doc = render(blocks);
     markReturnPath(doc, null);
     expect(doc.querySelectorAll("a[data-came-from]").length).toBe(0);
+  });
+
+  /* The mirror of the case above, and the one that was wrong. Marking used to
+     select on the href alone, so it asked "which back-links lead to the passage
+     I left?" — and when that passage cites *two* notes, the answer is one
+     back-link in each of them. A reader following the first marker then saw the
+     second note claiming to be where they came from. One note cited thirteen
+     times was the case that got tested; two notes cited once from one sentence
+     is the case that was not. GPT Sol, F7. */
+  it("marks one note when a single passage cites two", () => {
+    const other = "spya-note-bbbbbbbbbb";
+    const twoNotes: NoteBlock[] = [
+      body(
+        "spya-cite2a1",
+        `<p>A claim${marker(noteId, "spya-ntyaa4", "1", "fnrefX")} and another` +
+          `${marker(other, "spya-othaa5", "2", "fnrefY")}.</p>`,
+      ),
+      note({
+        id: "spya-ntyaa4",
+        html:
+          `<li id="spya-ntyaa4" data-spya-note="${noteId}">` +
+          `<a href="#spya-cite2a1" data-spya-note-back="${noteId}">first</a> The first note.</li>`,
+      }),
+      note({
+        id: "spya-othaa5",
+        noteId: other,
+        html:
+          `<li id="spya-othaa5" data-spya-note="${other}">` +
+          `<a href="#spya-cite2a1" data-spya-note-back="${other}">second</a> The second note.</li>`,
+      }),
+    ];
+    const doc = render(twoNotes);
+    /* Precondition: both back-links really do point at the one passage, so a
+       selector reading the href alone cannot tell them apart. Without this the
+       test could pass because the fixture never built the ambiguity. */
+    expect(
+      [...doc.querySelectorAll("a[data-spya-note-back]")].map((a) => a.getAttribute("href")),
+    ).toEqual(["#spya-cite2a1", "#spya-cite2a1"]);
+
+    const undo = markReturnPath(doc, { from: "spya-cite2a1", noteId });
+    const marked = () => [...doc.querySelectorAll("a[data-came-from]")].map((a) => a.textContent);
+    expect(marked()).toEqual(["first"]);
+    undo();
+    expect(marked()).toEqual([]);
+
+    // And the other direction, so this cannot pass by always picking the first.
+    markReturnPath(doc, { from: "spya-cite2a1", noteId: other });
+    expect(marked()).toEqual(["second"]);
   });
 });
 
@@ -365,6 +413,30 @@ describe("wikipedia, which cites one note thirteen times", () => {
     );
     expect(backs.length).toBe(13);
     expect(new Set(backs)).toEqual(new Set(most.citedBy.map((id) => `#${id}`)));
+  });
+
+  /* **The case the F7 fix could plausibly have broken.** Marking used to select
+     on the href alone, and the change narrows it by also requiring the note id.
+     Narrowing a selector is exactly how a fix aimed at one shape breaks its
+     mirror, and this is the mirror: thirteen back-links in one note, of which
+     the reader is owed precisely the one they came by. Real markup through the
+     real pipeline, because thirteen back-links inside one Wikipedia note is not
+     a shape worth inventing by hand. */
+  it("still marks exactly one of the thirteen back-links, and the right one", () => {
+    const index = buildNoteIndex(blocks);
+    const most = [...index.byNote.values()].sort((a, b) => b.markers - a.markers)[0]!;
+    const doc = render(most.blocks);
+    expect(doc.querySelectorAll(`a[data-spya-note-back="${most.id}"]`).length).toBe(13);
+
+    // The seventh passage of the twelve — arbitrary, and not the first, so this
+    // cannot pass by picking whichever came earliest in the document.
+    const from = most.citedBy[6]!;
+    const undo = markReturnPath(doc, { from, noteId: most.id });
+    const marked = [...doc.querySelectorAll(`a[${"data-came-from"}]`)];
+    expect(marked.length).toBe(1);
+    expect(marked[0]!.getAttribute("href")).toBe(`#${from}`);
+    undo();
+    expect(doc.querySelectorAll("a[data-came-from]").length).toBe(0);
   });
 
   it("previews a note without the run of back-links that opens it", () => {

@@ -5808,6 +5808,19 @@ td.text.has-hit[data-hues="8"] {
 .summ-entry.d1 > .summ-children { border-left-color: var(--depth-2); }
 .summ-entry.d0 > .summ-children { border-left-color: var(--depth-1); }
 
+/* The apparatus, in the same key it wears in the spine and the arc: present in
+   the structure, quieter than the argument, and carrying no number. It is a row
+   the reader can jump to and never a section of the piece — the same grammar
+   `.arc-step.arc-supplement` and `.spine-part.supplement` use, so a reader who
+   has learned it in one panel reads it in this one without being told.
+   docs/plans/footnotes.md. */
+.summ-entry.supplement > .summ-body > .summ-title-row > .summ-title {
+  color: var(--ink-faint);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* Where the reader actually is. Every ancestor of the current section is marked
    too — see the note in SummaryPanel.tsx: at a shallow depth cut-off the part
    you are inside is the honest answer to "where am I", and marking only the

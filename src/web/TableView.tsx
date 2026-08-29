@@ -30,7 +30,13 @@ import {
 } from "./annotate.js";
 import { readSelection } from "./selection.js";
 import { internalTarget } from "./internal-links.js";
-import { markReturnPath, noteMarkerAt, type NoteIndex } from "./notes-view.js";
+import {
+  markReturnPath,
+  noteMarkerAt,
+  type NoteIndex,
+  type NoteMarker,
+  type NoteReturn,
+} from "./notes-view.js";
 import type { Section } from "./position.js";
 import { currentIndex, itemsFromCells, levelList, type ContextItem } from "./context.js";
 import { ContextPanel } from "./ContextPanel.js";
@@ -84,9 +90,9 @@ interface Props {
    * thirteen back-links, side by side and identical apart from where they point.
    * Without this the return journey is a guess with twelve wrong answers.
    */
-  noteReturn?: BlockId | null | undefined;
+  noteReturn?: NoteReturn | null | undefined;
   /** A marker was followed: go to the note, and remember the way back. */
-  onFollowNote?: ((from: BlockId | null, to: BlockId) => void) | undefined;
+  onFollowNote?: ((from: BlockId | null, marker: NoteMarker) => void) | undefined;
   /** Every stored comment for this article — see docs/project/comments.md. */
   comments: Comment[];
   /** The comment whose dialog is open, so its mark can say so. */
@@ -624,7 +630,7 @@ export function TableView({
           const note = notes && onFollowNote ? noteMarkerAt(link, document, notes) : null;
           if (note && onFollowNote) {
             const from = link.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
-            return onFollowNote(from, note.blockId);
+            return onFollowNote(from, note);
           }
           onJump(blockId);
         }}

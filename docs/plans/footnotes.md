@@ -1635,6 +1635,184 @@ marker* as an apostrophe-ish scan artefact rather than a clean digit, so the tes
 **note body** at the foot of the page (`1 Examples are…`, `2 Perhaps there could not…`) and must not
 expect a superscript digit to survive text-layer extraction.
 
+## The last four findings, as they actually landed — 2026-08-29
+
+GPT Sol's review of stage 4 returned BLOCK with eight findings. Four were fixed in `d385ce4`
+and named in its message; these are the other four. Sol gave upfront input before they were
+built (`footnotes-finish-upfront-sol.md`) and reviewed the code afterwards
+(`footnotes-finish-review-sol.md`).
+
+**A supplement must have at least one leaf** — `checkSupplements`, src/tree-invariants.ts.
+Invariant 5 said "no child of mine has children", which a childless supplement satisfies
+vacuously; the two projections then disagree about an article that renders, because
+`navigableItems` finds no cell to collapse and drops the apparatus while the `?at=` tracker
+walks blocks and keeps it.
+
+The hole turned out to be **narrower than either review described**, and finding that out is
+the reason the fixture is the shape it is. Stripping the children from a supplement covering
+six blocks does *not* reproduce it: the generic tiling rule catches it as `leaf spans 6
+blocks, expected 1`. The one case that escapes is the **one-note article**, where the range
+is a single block and `leaf spans 1 block` is exactly right. So the test builds a one-note
+article, and asserts `range[0] === range[1]` as a precondition — a later simplification back
+to six notes would go on passing while testing nothing.
+
+**The invariants now run where the tree is written** — `assertTreeSound`, called from
+`generateToc`. They had run in a CLI a human invokes (src/validate-tree.ts) and in the
+publish guard, which collects reasons rather than throwing (src/store/pg-revisions.ts), and
+on neither path that writes `tree.json`. It throws rather than warns: an invalid tree is not
+a recoverable representation of an article, and publishing one turns a visible pipeline
+failure into a silent reader-facing one.
+
+Two things fell out of building it. The `sourceHeading` problem message **quoted the
+author's own heading back**, and a thrown step error is written to the log by src/jobs.ts
+with `errorFields` — so wiring this guard in would have put a line of the article into the
+logs. The heading is gone from the message; the node id is enough to find it
+([logging.md](../project/logging.md)). And the integration test's **control earned its
+keep**: with empty labels the sound case threw too, because `checkCoverage` runs immediately
+after the guard, so "nothing was written" would have held for both tests with the guard
+deleted.
+
+**The return path marks the note the reader followed, not every note in the passage** —
+`markReturnPath`, src/web/notes-view.ts. Matching on the passage alone asks "which
+back-links lead where I came from", and when one passage cites *two* notes the answer is one
+back-link in each. The case that had been tested was one note cited thirteen times, which is
+the mirror image and works.
+
+The passage and the note now travel as one `NoteReturn` off a single `NoteMarker`, so a
+caller cannot pair the passage it left with a note it did not follow. Three call sites, not
+one — `TableView.tsx` and **both** of `ProseHoverCard.tsx`, which the first pass missed. And
+the match is an attribute comparison rather than a built selector, which removes the
+interpolation and the regex guarding it rather than adding a second of each.
+
+**Neither fingerprint can be made ambiguous by prose** — `hashBlocks` and `structureHash`,
+src/source-hash.ts. Both legacy forms are delimiters rather than framings: `structureHash`
+joins fields with U+0000 and rows with a newline, `hashBlocks` joins `id \t text` with a
+newline. `title` and `gist` are model prose and `text` is the article's own, so neither
+delimiter is under our control, and a collision means two different articles each reporting
+that nothing has changed. Both were reproduced — `1eff068c824dec8b` and `88b65f848068e592`,
+each from two different inputs.
+
+The fix routes only the **ambiguous** input to the framed form, so no artefact on disk
+changes hash. That is measured rather than assumed: across `data/`, 890 blocks in 8 articles,
+not one `text` carrying a tab or a newline and not one title or gist carrying a NUL. Sol
+found the `structureHash` half; the `hashBlocks` half was not in the eight findings and is
+the more reachable of the two, since ordinary extraction collapses whitespace but imported
+blocks never go through it.
+
+Sol also caught that the compatibility test was **tautological** — it compared a hash against
+a hash of a copy of its own input, and would have held just as well if the change had
+invalidated the whole corpus. Both pins are literal hex now. And the two pins had been in one
+`it`, where the first masked the second: a probe forcing every field down the framed branch
+reddened one and never ran the other. Two clauses need two probes.
+
+### The blocker the first review of the fixes found — 2026-08-29
+
+Sol's review of the four fixes above returned BLOCK on one finding, and it is the most
+interesting thing in this whole stage because **the tree it breaks is completely valid**.
+
+A supplement is always depth 1 with its leaves at depth 2, so a note's chain is three nodes
+long however deep the body tree goes. The moment the body is deeper than that — leaf depth 4,
+sections column at depth 3 — every supplement cell at the sections column is a
+*continuation*. `itemsFromCells` (src/web/context.ts) drops continuations; `buildSections`
+and `keynav` never filtered them. So the apparatus vanished from the fisheye and stayed in
+`?at=` and the keyboard, and a reader standing in the notes was told they were in the last
+section of the argument.
+
+Reproduced before fixing, on `example/tree.json` deepened by one level with one note appended:
+
+```
+checkTree problems: []          <- nothing is wrong with this tree
+leafDepth: 4  sectionDepth: 3
+navigableItems supplements: 1   [{ row: 34, continuation: true }]
+fisheye supplements:        0
+?at= sections named Notes:  1
+```
+
+Nothing forbids that shape: `buildTree` accepts arbitrary depth, the invariants impose no
+maximum, and the prompt asking for three levels is not a contract the model is held to.
+
+The fix is one condition — a supplement is never dropped as a continuation — and it is safe
+rather than merely effective because the rule exists to stop a node *already listed at a
+coarser column* being listed twice, and a supplement item is not that: `navigableItems` has
+already replaced the cell's node with the supplement node itself, which appears nowhere else
+in that column.
+
+**The test that missed it is the part worth remembering.** It compared `navigableItems`
+against `buildSections` — and `buildSections` is a thin wrapper over `navigableItems`, so the
+two agreed by construction and it would have passed with the bug fully present. That is the
+same tautology Sol had caught hours earlier in the hash compatibility test, which compared a
+hash against a hash of a copy of its own input. Twice in one change, both times a comparison
+between a thing and a restatement of itself. The rewritten test compares the **fisheye**
+against the saved position, which is the seam they can actually part at, and varies the
+topology as well as the note count.
+
+Checked afterwards, against the same deep shape: the spine keeps its supplement row, the arc
+keeps its supplement cell, the summary tree still lists "Notes", and the fisheye's anchor rows
+are strictly increasing, so no two items share one.
+
+### The second blocker: summary mode was still summarising the notes — 2026-08-29
+
+Sol's second pass confirmed the continuation fix and found one more, in the last panel nobody
+had looked at. `buildSummaryTree` descended into the supplement, so `SummaryPanel` numbered
+"Notes" as **part 3** of a two-part argument, gave it children **3.1 … 3.6** — one row per
+endnote, each with no title and no gist — and printed *"No summary for this section"* under
+every one of them.
+
+That last part is the sharpest version of the mistake this whole stage exists to avoid: a
+supplement node has no gist **on purpose**, because the notes are shown as written and never
+summarised — so the panel was reporting our own promise as a fault, on the one row where it
+was working correctly.
+
+The fix is in two halves and each needed its own probe. `buildSummaryTree` marks the node
+`supplement`, stops descending, and does not advance the part counter over it (so appending an
+apparatus cannot renumber part 1 or invent a part 3). `SummaryPanel` then draws no number, no
+missing-summary line, and dims the row into the same key the spine and the arc already use.
+
+**The evidence was on my own screen and I read straight past it.** A probe I ran before the
+review printed `Notes | | | | | |` — the six empty titles after "Notes" *are* the phantom
+rows — and I recorded it as "the summary tree includes Notes, good". A check whose output you
+skim is not a check.
+
+And the four new panel assertions started life as one test, where the first failing assertion
+ended it: a probe that reverted **both** halves of the fix reddened only the numbering and
+never ran the missing-summary check at all. Split into one test each. That is the third time
+in this one change that two clauses shared a single probe — the same trap as the two hash
+pins.
+
+### The seventh projection: diagram mode — 2026-08-29
+
+Sol's third pass confirmed the summary fix and found the last one. Six projections had been
+dealt with one at a time — the fisheye, `?at=`, keynav, the arc, the spine, summary mode — and
+**diagram mode was the seventh**, absorbing the apparatus into the argument in three ways.
+
+`buildGraph` walked the supplement as an ordinary node: it was drawn, chained into reading
+order, and — the part that actually corrupts the picture — its prose was counted into the term
+vectors. And because the root's range spans the whole article, dropping the node alone would
+not have been enough; the root went on counting every note.
+
+The measurement is the reason this is worth a paragraph. On a fixture whose notes contain one
+rare word and the body does not:
+
+```
+root top terms: zibbleflux, back, front, note, number, reads, nobody, artificial
+```
+
+A word occurring **only in the footnotes** was the top term for the whole article. The
+diagram was describing the piece by its endnotes.
+
+Two lines fix it: skip supplement entries after `walk` (not inside it — `walk` is shared with
+the outline, which genuinely wants the supplement), and skip non-body blocks when counting
+terms, using the same `isBody` the anchor edges in that file already use.
+
+The third was in Drift and Trail. They plot embedded body paragraphs and correctly receive no
+point for a note, but the dot ranges are made to **tile** — the last dot answers for everything
+below it — and "everything below" swallowed the apparatus. A reader three endnotes deep was
+shown standing on the final paragraph of the argument, with Trail lighting that paragraph's
+stretch of chain as the brightest thing in the picture. The tiling exists for a body paragraph
+too short to embed, where a blinking mark is worse than an approximate one; the apparatus is
+not that case, so the last dot's range now stops at the last body block and a reader inside
+the notes gets no dot, which the caller already handles.
+
 ## Still open
 
 - Whether the marker carries the substantive-versus-citation distinction in v1, or stays

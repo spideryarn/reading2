@@ -421,3 +421,108 @@ describe("laneTerms", () => {
     expect(laneTerms([], bs, 3)).toEqual([[], [], []]);
   });
 });
+
+/* ------------------------------------------------------- the apparatus -- */
+
+/**
+ * **A reader standing in the notes is not standing on the last paragraph of the
+ * argument.**
+ *
+ * Drift and Trail plot embedded body paragraphs, and correctly receive no point
+ * for a note. But the dot ranges are made to *tile* — the last dot answers for
+ * everything below it — so "everything below" swallowed the whole apparatus and
+ * the you-are-here mark sat on the final argument paragraph while the reader was
+ * three endnotes deep. Trail brightened that paragraph's chain position too.
+ *
+ * The tiling exists for a body paragraph too short to embed, so that the mark
+ * does not blink out for a screen at a time. The apparatus is a different case:
+ * it is not in this picture at all, and the honest answer for a reader inside it
+ * is no dot rather than the wrong one. GPT Sol, third review, 2026-08-29.
+ */
+describe("a reader inside the apparatus", () => {
+  const body = blocks(8);
+  const notes: Block[] = Array.from({ length: 4 }, (_, i) => ({
+    id: `spya-n${String(i).padStart(4, "0")}` as BlockId,
+    tag: "p",
+    kind: "text" as const,
+    text: `Note ${i}, which nobody reads front to back.`,
+    words: 9,
+    html: "<p></p>",
+    gistable: true,
+    role: "footnote" as const,
+    treatment: "supplement" as const,
+    noteId: "spya-note-aaaaaaaaaa",
+  }));
+  const all = [...body, ...notes];
+  const firstNoteRow = body.length;
+
+  /* The precondition. Without it the fixture could have no apparatus at all and
+     every assertion below would pass for the wrong reason. */
+  it("has an apparatus in the fixture, and no point for it", () => {
+    expect(all.filter((b) => b.treatment === "supplement").length).toBe(4);
+    const pts = points(body);
+    expect(pts.every((pt) => body.some((b) => b.id === pt.id))).toBe(true);
+  });
+
+  /* **What the reader actually sees is Trail's chain going bright around them.**
+     `here` is the dot index the reader is standing on, and it only surfaces as
+     link brightness — `chainStep` lights the segments either side of it at the
+     top step. With the apparatus swallowed by the last dot's range, standing in
+     the notes lit the end of the *argument*: the brightest thing in the picture
+     was a paragraph the reader had already left. */
+  const brightest = (links: readonly { depth?: number | undefined }[]) =>
+    links.filter((l) => l.depth === 8).length;
+
+  it("trail: does not light the end of the argument for a reader in the notes", () => {
+    const out = layoutTrail(tree(body), all, opts({ atRow: firstNoteRow + 2 }), input(points(body)));
+    expect(out.links.length).toBeGreaterThan(0);
+    expect(brightest(out.links)).toBe(0);
+  });
+
+  /* The control, and it is what stops the fix from being "never light
+     anything": a reader inside the argument still lights the chain around them.
+     Both directions, because a guard that goes quiet when defeated is the
+     failure this repo keeps meeting. */
+  it("trail: still lights the chain for a reader inside the argument", () => {
+    const out = layoutTrail(tree(body), all, opts({ atRow: 3 }), input(points(body)));
+    expect(brightest(out.links)).toBeGreaterThan(0);
+  });
+
+  /* **The denominator, which three separate things read as "how long is this
+     article".** Drift's vertical axis, the progress hue and the spoken label
+     all divided by `blocks.length` — so a third of Drift was blank, the last
+     paragraph of the argument never reached the final progress step, and the
+     label said "paragraph 2 of 12" about the last body paragraph of eight. */
+  it("drift: measures the article by its argument, not by its endnotes", () => {
+    const out = layoutDrift(tree(body), all, opts(), input(points(body)));
+    // "paragraph N of M" — M is the body's length, not the whole array's.
+    const labels = out.nodes.map((n) => n.label ?? "");
+    expect(labels.some((l) => l.includes(`of ${body.length}`))).toBe(true);
+    expect(labels.some((l) => l.includes(`of ${all.length}`))).toBe(false);
+  });
+
+  it("drift: draws no you-are-here line for a reader in the notes", () => {
+    const inNotes = layoutDrift(tree(body), all, opts({ atRow: firstNoteRow + 2 }), input(points(body)));
+    expect(inNotes.nowY).toBeNull();
+    // The control: a reader in the argument still gets their line.
+    const inBody = layoutDrift(tree(body), all, opts({ atRow: 3 }), input(points(body)));
+    expect(inBody.nowY).not.toBeNull();
+  });
+
+  /* **A note stranded mid-article**, which `splitBlocks` deliberately refuses
+     to build a supplement node for (src/supplement.ts) — so the apparatus is a
+     *hole* in the body rather than a tail, and no "up to the last body row"
+     rule can describe it. Asking the block itself is what works. */
+  it("trail: does not light the chain for a reader on a note in mid-article", () => {
+    const stranded = [...body.slice(0, 4), notes[0]!, ...body.slice(4)];
+    const strandedBody = stranded.filter((b) => b.treatment !== "supplement");
+    const out = layoutTrail(
+      tree(strandedBody),
+      stranded,
+      opts({ atRow: 4 }), // the note, sitting between body paragraphs
+      input(points(strandedBody)),
+    );
+    expect(stranded[4]!.treatment).toBe("supplement"); // precondition
+    expect(brightest(out.links)).toBe(0);
+  });
+});

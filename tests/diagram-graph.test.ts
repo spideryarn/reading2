@@ -93,6 +93,74 @@ function article(): { root: SummaryNode; blocks: Block[] } {
   return { root, blocks };
 }
 
+/**
+ * The same article with an apparatus behind it: two endnotes, hung under a
+ * supplement node the way `appendSupplement` builds one, whose prose contains a
+ * word that occurs **nowhere in the argument**.
+ *
+ * `zibbleflux` is the whole instrument. It is rare enough that tf-idf ranks it
+ * first the moment it is counted, so "is the apparatus in the argument's
+ * vocabulary" becomes a question with a yes-or-no answer rather than a
+ * judgement about term weights.
+ */
+function articleWithNotes(): { root: SummaryNode; blocks: Block[] } {
+  const base = article();
+  const notes = [
+    block("n1x", "Zibbleflux zibbleflux, a note nobody reads front to back"),
+    block("n2x", "Zibbleflux again, the second note, also unread"),
+  ].map((b) => ({
+    ...b,
+    role: "footnote" as const,
+    treatment: "supplement" as const,
+    noteId: "spya-note-aaaaaaaaaa",
+  }));
+  const blocks = [...base.blocks, ...notes];
+
+  const tree = {
+    version: "1",
+    generator: "t",
+    slug: "s",
+    rootId: "n1",
+    nodes: {} as Record<string, unknown>,
+  };
+  // Rebuild the body tree over the widened root, then hang the apparatus off it.
+  const mk = (
+    id: string,
+    depth: number,
+    parent: string | null,
+    children: string[],
+    from: number,
+    to: number,
+    title: string,
+    treatment?: "supplement",
+  ) => {
+    tree.nodes[id] = {
+      id,
+      depth,
+      parent,
+      children,
+      range: [blocks[from]?.id, blocks[to]?.id],
+      title,
+      ...(depth < 2 && !treatment && { gist: `Gist for ${title}` }),
+      ...(treatment && { treatment }),
+    };
+  };
+  mk("n1", 0, null, ["n2", "n5", "s1"], 0, 9, "The whole thing");
+  mk("n2", 1, "n1", ["n3", "n4"], 0, 3, "First part");
+  mk("n3", 2, "n2", [], 0, 1, "Perception");
+  mk("n4", 2, "n2", [], 2, 3, "Weather");
+  mk("n5", 1, "n1", ["n6", "n7"], 4, 7, "Second part");
+  mk("n6", 2, "n5", [], 4, 5, "Cricket");
+  mk("n7", 2, "n5", [], 6, 7, "Perception again");
+  mk("s1", 1, "n1", ["s2", "s3"], 8, 9, "Notes", "supplement");
+  mk("s2", 2, "s1", [], 8, 8, "");
+  mk("s3", 2, "s1", [], 9, 9, "");
+
+  const root = buildSummaryTree(tree as unknown as Tree, blocks, null);
+  if (!root) throw new Error("fixture tree is unusable");
+  return { root, blocks };
+}
+
 const NONE: ReadonlySet<NodeId> = new Set();
 const OPTS = { width: 320, height: 600, collapsed: NONE };
 
@@ -550,4 +618,71 @@ describe("the Force picture, against the real example article", () => {
       }
     });
   }
+});
+
+/* ------------------------------------------------- the apparatus, again -- */
+
+/**
+ * **Diagram mode is the seventh projection, and it was absorbing the notes into
+ * the argument.**
+ *
+ * The other six were dealt with one at a time — the fisheye, `?at=`, keynav,
+ * the arc, the spine, summary mode — and this one was found last, by GPT Sol,
+ * 2026-08-29. The graph walked the supplement as an ordinary node, drew it,
+ * chained it into reading order, and counted its prose into the term vectors:
+ * a word occurring only in the footnotes came out as the **top term for the
+ * whole article**, which is the diagram describing a piece by its endnotes.
+ *
+ * The precondition below is what makes these tests mean anything: the fixture
+ * has to actually contain the note-only word, or every assertion here passes on
+ * an article that never had an apparatus.
+ */
+describe("the apparatus is not part of the argument's diagram", () => {
+  const { root, blocks } = articleWithNotes();
+
+  it("has notes in the fixture at all", () => {
+    expect(blocks.filter((b) => b.treatment === "supplement").length).toBe(2);
+    expect(blocks.some((b) => b.text.toLowerCase().includes("zibbleflux"))).toBe(true);
+  });
+
+  it("draws no node for the apparatus", () => {
+    const graph = buildGraph(root, blocks);
+    expect(graph.nodes.map((n) => n.title)).not.toContain("Notes");
+  });
+
+  it("keeps note vocabulary out of every node's terms, the root included", () => {
+    const graph = buildGraph(root, blocks);
+    for (const node of graph.nodes) {
+      expect(node.terms.join(" ")).not.toContain("zibbleflux");
+    }
+  });
+
+  /* **Membership was only half of it.** With the apparatus out of the nodes and
+     out of the terms, `totalWords` still counted it — and Force divides every
+     node's position by that total, so a long set of endnotes squeezed the whole
+     argument into the top of the panel. The picture was correct about what it
+     drew and wrong about where. GPT Sol, fourth review. */
+  it("measures the article's length in words of argument only", () => {
+    const graph = buildGraph(root, blocks);
+    const bodyWords = blocks
+      .filter((b) => b.treatment !== "supplement")
+      .reduce((n, b) => n + b.words, 0);
+    expect(graph.totalWords).toBe(bodyWords);
+    // And the notes really are words, or this asserts nothing.
+    const noteWords = blocks
+      .filter((b) => b.treatment === "supplement")
+      .reduce((n, b) => n + b.words, 0);
+    expect(noteWords).toBeGreaterThan(0);
+    expect(graph.totalWords).toBeLessThan(bodyWords + noteWords);
+  });
+
+  /* The control. If the graph stopped counting *any* prose these assertions
+     would all pass while the picture went blank, which is the shape of failure
+     this whole file exists for — plausible nonsense that still draws. */
+  it("still describes the argument itself", () => {
+    const graph = buildGraph(root, blocks);
+    const all = graph.nodes.flatMap((n) => n.terms).join(" ");
+    expect(all).toContain("consciousness");
+    expect(all).toContain("cricket");
+  });
 });

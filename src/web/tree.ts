@@ -14,7 +14,7 @@
  * the whole feature rests on.
  */
 import type { Arc, Block, BlockId, NodeId, SummaryEntry, Tree, TreeNode } from "../types.js";
-import { supplementIndex } from "../supplement.js";
+import { isSupplementNode, supplementIndex } from "../supplement.js";
 import type { Rung } from "./params.js";
 
 export interface Cell {
@@ -456,6 +456,14 @@ export interface SummaryNode {
    * See docs/project/original-version/structure-panel.md.
    */
   blocks: number;
+  /**
+   * The apparatus rather than the argument — one row, unnumbered, not descended
+   * into and never reported as missing a summary.
+   *
+   * Absent on every ordinary node, so a panel that does not know about this
+   * reads exactly as it did. src/supplement.ts.
+   */
+  supplement?: true;
   /** One sentence, from the tree. Present on every internal node stage 4 wrote. */
   gist?: string;
   /** A few sentences. Absent until `npm run summarise` has been run. */
@@ -556,10 +564,31 @@ export function buildSummaryTree(
 
     const found =
       node.depth === 0 ? rootEntry : byRange.get(`${node.range[0]}|${node.range[1]}`);
+    /* **The apparatus is a leaf here, whatever the tree says.** Descending gave
+       "Notes" one child per endnote — each with no title, no gist and no
+       summary — and `SummaryPanel` drew six phantom rows under a numbered part
+       3, every one of them saying "No summary for this section". The notes are
+       in the structure and are not part of the argument; that is the whole
+       promise of this stage, and summary mode was the one place still breaking
+       it. GPT Sol, second review, 2026-08-29. */
+    const apparatus = isSupplementNode(node);
+    /* **Unnumbered, and the argument's numbering does not skip.** The counter
+       advances only on the parts that are the argument, so appending an
+       apparatus cannot renumber part 1 or invent a part 3. */
+    let n = 0;
     const children =
-      node.depth < depthLimit
+      node.depth < depthLimit && !apparatus
         ? node.children
-            .map((id, i) => build(tree.nodes[id], number ? `${number}.${i + 1}` : `${i + 1}`))
+            .map((id) => {
+              const child = tree.nodes[id];
+              const childNumber =
+                child && isSupplementNode(child)
+                  ? ""
+                  : number
+                    ? `${number}.${++n}`
+                    : `${++n}`;
+              return build(child, childNumber);
+            })
             .filter((c): c is SummaryNode => c !== null)
         : [];
 
@@ -569,6 +598,7 @@ export function buildSummaryTree(
       startRow,
       endRow,
       blocks: endRow - startRow + 1,
+      ...(apparatus && { supplement: true as const }),
       ...(node.gist !== undefined && { gist: node.gist }),
       ...(found?.short !== undefined && { short: found.short }),
       ...(found?.long !== undefined && { long: found.long }),

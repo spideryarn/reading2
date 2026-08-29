@@ -300,7 +300,16 @@ const dot = (a: Map<string, number>, b: Map<string, number>): number => {
  */
 export function wordsBefore(blocks: readonly Block[]): number[] {
   const out: number[] = [0];
-  for (const b of blocks) out.push((out[out.length - 1] ?? 0) + b.words);
+  /* **A note contributes no words**, so the running total this returns — and
+     `ArticleGraph.totalWords`, which is its last entry — is the length of the
+     *argument*. Force divides each node's position by that total
+     (`layoutForce`, src/web/diagram-d3.ts), and every node it lays out is a
+     body node now that the supplement is filtered out; counting the apparatus
+     in the denominator and not in the numerator squeezed the whole argument
+     into the top of the panel. Measured: 200 body words behind 1,800 words of
+     endnotes put two body nodes at y≈35 and y≈54 of a 420px picture.
+     GPT Sol, fourth review, 2026-08-29. */
+  for (const b of blocks) out.push((out[out.length - 1] ?? 0) + (isBody(b) ? b.words : 0));
   return out;
 }
 
@@ -322,7 +331,20 @@ export function buildGraph(
 ): ArticleGraph {
   const prefix = wordsBefore(blocks);
 
-  const entries = walk(root, collapsed, MAX_DRAWN_DEPTH);
+  /* **The apparatus is not in the argument's diagram at all.** A supplement
+     node was walked like any other: drawn as a node, chained into reading
+     order, and — the part that actually corrupts the picture — counted into the
+     term vectors. Because the root's range spans the whole article, a word
+     occurring *only* in the footnotes came out as the top term for the entire
+     piece, so the diagram described a piece by its endnotes. Measured on a
+     fixture whose notes contain one rare word, before this line existed.
+
+     Filtered here rather than inside `walk`, because `walk` is the tree
+     traversal three pictures share and the outline genuinely wants the
+     supplement in it. Diagram mode is what does not. GPT Sol found this one
+     last, after the other six projections were already dealt with;
+     docs/plans/footnotes.md. */
+  const entries = walk(root, collapsed, MAX_DRAWN_DEPTH).filter((e) => !e.node.supplement);
 
   /* Term counts per node, over the node's own blocks. A part's counts include
      its sections' — a part IS its sections — which is what makes a part's top
@@ -334,6 +356,12 @@ export function buildGraph(
     for (let i = n.startRow; i <= n.endRow && i < blocks.length; i++) {
       const b = blocks[i];
       if (!b) continue;
+      /* **And the blocks are the body's, not the range's.** Dropping the
+         supplement's own node above is not enough: an ancestor's range still
+         spans the apparatus — the root's always does — so its counts would go
+         on including every note. `isBody` is the same predicate the anchor
+         edges below already use. src/block-policy.ts. */
+      if (!isBody(b)) continue;
       for (const t of terms(b.text)) tf.set(t, (tf.get(t) ?? 0) + 1);
     }
     counts.set(n.node.id, tf);

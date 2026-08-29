@@ -87,6 +87,19 @@ export interface ContextEntry {
  * current, which is the honest answer: at this level, that is the last thing
  * there was.
  *
+ * **Except the apparatus, which is never a repeat of anything.** A supplement
+ * sits at depth 1 with its leaves at depth 2, so a note's chain is three nodes
+ * long however deep the body tree goes — and the moment the body is deeper than
+ * that, every supplement cell at this column is a continuation. Dropping them
+ * took the whole of "Notes" out of the fisheye while `?at=` and keynav, which
+ * do not filter, kept it: the two panels disagreed about an article that is
+ * perfectly valid, and a reader standing in the notes was told they were in the
+ * last section of the argument. The rule above is about a node already listed
+ * at a coarser level; a supplement item is not that. `navigableItems` has
+ * already replaced the cell's node with the supplement node itself, which
+ * appears nowhere else in this column, so there is nothing here to repeat.
+ * GPT Sol found the shape, 2026-08-29; docs/plans/footnotes.md.
+ *
  * Items and starts are returned together because they must stay paired; a
  * caller that took `itemStarts(cells)` separately would be off by one at
  * every continuation.
@@ -106,7 +119,7 @@ export function itemsFromCells(
      alone is what breaks the anchor invariant**: three panels agreeing depends
      on all four counting the same items. src/web/tree.ts § navigableItems. */
   for (const item of navigableItems(cells, supplementOf)) {
-    if (item.continuation) continue;
+    if (item.continuation && !item.supplement) continue;
     const blockId = blockAt(item.startRow);
     if (!blockId) continue;
     items.push({ node: item.node, blockId, ...(item.supplement && { supplement: true }) });

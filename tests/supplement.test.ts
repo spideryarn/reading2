@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { partsOf, buildArc } from "../src/arc.js";
 import { deriveLibraryScalars } from "../src/library-scalars.js";
-import { structureHash } from "../src/source-hash.js";
+import { hashBlocks, structureHash } from "../src/source-hash.js";
 import { targetsOf } from "../src/summarise.js";
 import {
   appendSupplement,
@@ -56,13 +56,53 @@ function note(i: number, role: NonNullable<Block["role"]> = "footnote"): Block {
   };
 }
 
+/**
+ * A copy of the body tree one level deeper — every leaf gains a single child,
+ * so `leafDepth` goes 3 → 4 and the sections column moves to depth 3.
+ *
+ * **Why a test needs this shape at all.** A supplement is always depth 1 with
+ * its leaves at depth 2, so a note's chain is three nodes long however deep the
+ * body is. Once the body is deeper than that, the supplement's cells at the
+ * sections column are *continuations* — and the fisheye drops continuations
+ * while the saved position keeps them, so the apparatus vanished from one panel
+ * and not the other. Nothing forbids this tree: `buildTree` accepts arbitrary
+ * depth, the invariants impose no maximum, and the prompt asking for three
+ * levels is not a contract the model is held to. GPT Sol, 2026-08-29.
+ */
+function deepen(tree: Tree): Tree {
+  const deep = JSON.parse(JSON.stringify(tree)) as Tree;
+  let n = 9000;
+  for (const node of Object.values({ ...deep.nodes })) {
+    if (node.children.length > 0) continue;
+    const id = `n${++n}` as NodeId;
+    deep.nodes[id] = {
+      id,
+      parent: node.id,
+      depth: node.depth + 1,
+      children: [],
+      range: [...node.range],
+      title: "",
+    };
+    node.children = [id];
+    // It has just become internal, so it owes a gist — or `checkTree` would
+    // redden for a reason that has nothing to do with what is under test.
+    node.gist ??= "A gist, so that the tree this fixture builds is a sound one.";
+  }
+  return deep;
+}
+
 /** The article the real pipeline would produce: body tree, then the apparatus. */
-function withNotes(count: number, role: NonNullable<Block["role"]> = "footnote"): { blocks: Block[]; tree: Tree } {
+function withNotes(
+  count: number,
+  role: NonNullable<Block["role"]> = "footnote",
+  deeper = false,
+): { blocks: Block[]; tree: Tree } {
   const notes = Array.from({ length: count }, (_, i) => note(i + 1, role));
   const blocks = [...bodyBlocks, ...notes];
   const split = splitBlocks(blocks);
   expect(split.stranded).toBe(0);
-  return { blocks, tree: appendSupplement(bodyTree, split.groups) };
+  const body = deeper ? deepen(bodyTree) : bodyTree;
+  return { blocks, tree: appendSupplement(body, split.groups) };
 }
 
 /** A deep copy, so a mutation cannot leak into the next test. */
@@ -269,6 +309,24 @@ describe("the six invariants", () => {
       s.children = [groupId, ...s.children.slice(2)];
     });
     expect(problems.some((p) => /only leaves may sit under a supplement/.test(p))).toBe(true);
+  });
+
+  /* Invariant 5 says "no child of mine has children", which a supplement with
+     *no* children satisfies vacuously. The generic tiling rule catches most of
+     that shape — a childless node spanning three blocks is a leaf that spans
+     three blocks — but it cannot see the one-note article, where the range is a
+     single block and "leaf spans 1 block" is exactly right. Measured: with six
+     notes the mutation reddens `leaf spans 6 blocks, expected 1`; with one note
+     it reddened nothing at all before this rule existed. GPT Sol, F6. */
+  it("5b — and at least one leaf does, even when the article has a single note", () => {
+    const one = withNotes(1);
+    const only = supplementNodes(one.tree)[0]!;
+    expect(only.range[0]).toBe(only.range[1]); // the shape the tiling rule cannot see
+    const stripped = clone(one.tree);
+    for (const id of stripped.nodes[only.id]!.children) delete stripped.nodes[id];
+    stripped.nodes[only.id]!.children = [];
+    const problems = checkTree(one.blocks, stripped).problems;
+    expect(problems.some((p) => /supplement has no leaves/.test(p))).toBe(true);
   });
 
   it("6 — no gist, never nested, never the root", () => {
@@ -516,6 +574,137 @@ describe("a reader standing mid-Notes", () => {
     expect(sections[active]!.title).toBe("Notes");
   });
 
+  /* **The same agreement, over every supplement shape the invariants admit** —
+     and compared against the *fisheye*, not against `buildSections`.
+
+     The first version of this compared `navigableItems` with `buildSections`,
+     which was tautological: `buildSections` is a thin wrapper over
+     `navigableItems`, so the two agreed by construction and the test would have
+     passed with the bug below fully present. It also ran all three cases over
+     one depth-3 topology. GPT Sol caught both, 2026-08-29.
+
+     What the comparison has to be is `itemsFromCells` — the fisheye — against
+     `buildSections`, because the fisheye applies a filter of its own that the
+     saved position does not: it drops continuation items. That is the seam the
+     two can actually part company at, and `deepened()` below is the shape where
+     they did. */
+  const shapes: Array<[string, number, "footnote" | "reference", boolean]> = [
+    ["one note", 1, "footnote", false],
+    ["six notes", 6, "footnote", false],
+    ["six references", 6, "reference", false],
+    // The one that was broken: a body tree one level deeper than the apparatus.
+    ["one note under a deeper body", 1, "footnote", true],
+    ["six notes under a deeper body", 6, "footnote", true],
+  ];
+
+  it.each(shapes)(
+    "shows the apparatus in the fisheye and in ?at= alike — %s",
+    (_name, count, role, deeper) => {
+      const article = withNotes(count, role, deeper);
+      // A precondition, not a formality: the whole point is that this tree is
+      // *valid* and the two projections still disagreed.
+      expect(checkTree(article.blocks, article.tree).problems).toEqual([]);
+      const geo = buildGeometry(article.tree, article.blocks);
+      const d = sectionDepth(geo);
+      const fisheye = itemsFromCells(
+        geo.cells[d]!,
+        (row) => article.blocks[row]?.id,
+        geo.supplementOf,
+      ).items.filter((i) => i.supplement);
+      const sections = buildSections(geo, article.blocks).filter((sec) => sec.title === "Notes" || sec.title === "References");
+
+      expect(fisheye.length).toBe(1);
+      expect(sections.length).toBe(1);
+      // Same anchor block, which is what "the same item" has to mean: it is the
+      // id `?at=` stores and the row the fisheye marks current.
+      expect(fisheye[0]!.blockId).toBe(sections[0]!.blockId);
+    },
+  );
+
+  /* **Two supplements side by side, under a deeper body.** Only `"footnote"` is
+     assigned in v1, so Notes-then-References is the shape the second role has
+     to land in rather than one that occurs today — and it is the shape where a
+     collapsing bug would show as one row swallowing the other. Asked for by
+     GPT Sol's second review. */
+  it("keeps Notes and References as two rows, under a deeper body", () => {
+    const blocksTwo = [...bodyBlocks, note(1), note(2), note(3, "reference")];
+    const treeTwo = appendSupplement(deepen(bodyTree), splitBlocks(blocksTwo).groups);
+    expect(checkTree(blocksTwo, treeTwo).problems).toEqual([]);
+    const geo = buildGeometry(treeTwo, blocksTwo);
+    const d = sectionDepth(geo);
+    const fisheye = itemsFromCells(geo.cells[d]!, (r) => blocksTwo[r]?.id, geo.supplementOf);
+    const supplements = fisheye.items.filter((i) => i.supplement);
+    expect(supplements.length).toBe(2);
+    expect(supplements.map((i) => i.node.title)).toEqual(["Notes", "References"]);
+    const sections = buildSections(geo, blocksTwo).filter(
+      (sec) => sec.title === "Notes" || sec.title === "References",
+    );
+    expect(sections.map((sec) => sec.title)).toEqual(["Notes", "References"]);
+    expect(supplements.map((i) => i.blockId)).toEqual(sections.map((sec) => sec.blockId));
+  });
+
+  /* **No two items may be anchored on one row.** `currentIndex` walks `starts`
+     and takes the last one at or before the reader's row, so a duplicate makes
+     one of the two unreachable — the reader could never be "in" it however far
+     they scrolled. Cheap to state, and it is the one thing about the
+     continuation change I could not rule out by argument. */
+  it.each(shapes)("anchors every item on its own row — %s", (_name, count, role, deeper) => {
+    const article = withNotes(count, role, deeper);
+    const geo = buildGeometry(article.tree, article.blocks);
+    const { starts } = itemsFromCells(
+      geo.cells[sectionDepth(geo)]!,
+      (row) => article.blocks[row]?.id,
+      geo.supplementOf,
+    );
+    expect(starts.length).toBeGreaterThan(0);
+    expect(new Set(starts).size).toBe(starts.length);
+    expect([...starts].sort((a, b) => a - b)).toEqual(starts);
+  });
+
+  /* And the reader standing mid-Notes is IN it, in the deep shape too —
+     `currentIndex` reads the fisheye's own `starts`, so an apparatus the
+     fisheye dropped puts the reader in the last part of the argument instead of
+     in the notes. The count above would not notice that on its own. */
+  /* **Summary mode treated the apparatus as argument structure.** The summary
+     tree descended into the supplement, so `SummaryPanel` numbered "Notes" as
+     part 3, gave it children 3.1 … 3.6 — one phantom row per endnote, each with
+     no title and no gist — and put "No summary for this section" under every one
+     of them. It is the same promise being broken as everywhere else in this
+     stage: the notes are in the structure and are not part of the argument, so
+     they are never summarised and never reported as missing a summary.
+     GPT Sol, second review, 2026-08-29. */
+  it("does not descend into the apparatus, or number it, in summary mode", () => {
+    const article = withNotes(6, "footnote", true);
+    const summary = buildSummaryTree(article.tree, article.blocks, null, 3)!;
+    const notes = summary.children.find((c) => c.node.title === "Notes")!;
+    expect(notes).toBeDefined();
+    expect(notes.supplement).toBe(true);
+    // No phantom row per endnote — that was 3.1 … 3.6, each blank.
+    expect(notes.children).toEqual([]);
+    // And it is not part 3 of an argument that has two parts.
+    expect(notes.number).toBe("");
+    // The parts of the argument keep their own numbering, unshifted.
+    const argument = summary.children.filter((c) => !c.supplement);
+    expect(argument.map((c) => c.number)).toEqual(
+      argument.map((_c, i) => String(i + 1)),
+    );
+  });
+
+  it("puts a reader standing mid-Notes in the Notes item, under a deeper body", () => {
+    const article = withNotes(6, "footnote", true);
+    const geo = buildGeometry(article.tree, article.blocks);
+    const d = sectionDepth(geo);
+    const { items, starts } = itemsFromCells(
+      geo.cells[d]!,
+      (row) => article.blocks[row]?.id,
+      geo.supplementOf,
+    );
+    const cur = currentIndex(starts, bodyBlocks.length + 3);
+    expect(cur).not.toBe(-1);
+    expect(items[cur]!.supplement).toBe(true);
+    expect(items[cur]!.node.title).toBe("Notes");
+  });
+
   it("and the arc's numbering agrees with all three", () => {
     const arc = buildArc(partsOf(tree).map(() => "A sentence."), tree, "example");
     const cells = buildArcColumn(geometry, arc)!;
@@ -557,6 +746,49 @@ describe("the shelf card's counts", () => {
   });
 });
 
+/* ------------------------------------------- a tree that is not a tree -- */
+
+/**
+ * **`supplementIndex` is asked about every article a reader opens**, including
+ * ones whose stored tree is not the shape the types promise.
+ *
+ * It became reachable from `articleStats` (src/web/stats.ts) so the masthead
+ * could stop counting the apparatus as parts of the argument — and that put it
+ * on the path of every page load, where a root node with no `children` array
+ * threw `Cannot read properties of undefined (reading 'map')` and took the
+ * whole view down. Twelve tests in tests/article-rename.test.tsx caught it,
+ * which is what a suite is for.
+ *
+ * The rule everywhere else in this app is that a malformed tree **renders
+ * visibly short** rather than throwing or silently claiming the whole article
+ * (src/web/tree.ts § buildChains). A projection helper is no place to make an
+ * exception.
+ */
+describe("a malformed tree", () => {
+  const bare = (root: Record<string, unknown>): Tree =>
+    ({ version: "1", generator: "t", slug: "s", rootId: "n0", nodes: { n0: root } }) as unknown as Tree;
+
+  it("has no supplements rather than throwing, when the root has no children", () => {
+    const tree = bare({ id: "n0", depth: 0, parent: null, title: "All" });
+    expect(() => supplementIndex(tree)).not.toThrow();
+    expect(supplementIndex(tree).size).toBe(0);
+    expect(supplementNodes(tree)).toEqual([]);
+  });
+
+  it("has no supplements rather than throwing, when a child is missing entirely", () => {
+    const tree = bare({ id: "n0", depth: 0, parent: null, title: "All", children: ["gone"] });
+    expect(() => supplementIndex(tree)).not.toThrow();
+    expect(supplementIndex(tree).size).toBe(0);
+  });
+
+  /* The control: the same helpers still find a real supplement, so the two
+     above cannot pass because the whole thing has been made to return nothing. */
+  it("still finds the apparatus in a well-formed tree", () => {
+    expect(supplementIndex(tree).size).toBeGreaterThan(0);
+    expect(supplementNodes(tree).length).toBe(1);
+  });
+});
+
 describe("structureHash", () => {
   it("is byte-identical on a supplement-free tree", () => {
     /* Pinned against a hex string computed before any of this was written, over
@@ -577,5 +809,71 @@ describe("structureHash", () => {
     const asBody = clone(tree);
     delete asBody.nodes[supplement.id]!.treatment;
     expect(structureHash(asBody)).not.toBe(structureHash(tree));
+  });
+
+  /* ------------------------------------------ the delimiter, both hashes --
+
+     The legacy forms are not framings, they are rarer delimiters: fields joined
+     with U+0000 and rows with a newline in `structureHash`, `id \t text` joined
+     with a newline in `hashBlocks`. `title` and `gist` are model prose and
+     `text` is the article's own, so neither delimiter is under our control, and
+     an unescaped separator is a collision waiting for the page that contains
+     one. A fingerprint collision means two different articles each reporting
+     that nothing has changed.
+
+     Both were reproduced before either was fixed. GPT Sol found the first; the
+     second is the same bug in the more reachable hash and was not in the eight.
+
+     What the fix must NOT do is move a hash any real article already has —
+     measured across data/: 890 blocks in 8 articles, and not one `text`
+     contains a tab or a newline, nor one title or gist a NUL. So the fix routes
+     only the ambiguous inputs to the safe framing, and the pinned hash above is
+     what proves it. */
+  const NUL = "\u0000";
+  const oneNode = (title: string, gist: string): Tree =>
+    ({
+      rootId: "r",
+      nodes: {
+        r: { id: "r", parent: null, depth: 0, range: ["a", "b"], title, gist, children: [] },
+      },
+    }) as unknown as Tree;
+
+  it("does not collide when a NUL sits inside a title or a gist", () => {
+    // Same fields, different split: "A<NUL>B" + "C" versus "A" + "B<NUL>C".
+    expect(structureHash(oneNode(`A${NUL}B`, "C"))).not.toBe(
+      structureHash(oneNode("A", `B${NUL}C`)),
+    );
+  });
+
+  it("hashBlocks does not collide when a newline and a tab sit inside a block's text", () => {
+    /* One block whose text spans what reads as a second row, against the two
+       real blocks it imitates. Both canonical strings are `b1 \t a \n b2 \t c`. */
+    const one = hashBlocks([{ id: "b1", text: "a\nb2\tc" }]);
+    const two = hashBlocks([
+      { id: "b1", text: "a" },
+      { id: "b2", text: "c" },
+    ]);
+    expect(one).not.toBe(two);
+  });
+
+  it("leaves every hash a real article already has exactly where it was", () => {
+    /* The other half, and the one that costs money if it is wrong: ordinary
+       prose carries no delimiter, so both must still take the legacy path.
+       **Both pins are literal hex.** The first draft of this asserted
+       `hashBlocks(bodyBlocks) === hashBlocks(bodyBlocks.map((b) => ({ ...b })))`,
+       which is tautological — it compares a hash against a hash of a copy of its
+       own input and would hold just as well if the routing change had
+       invalidated the entire corpus. GPT Sol, 2026-08-29. */
+    expect(structureHash(bodyTree)).toBe("5bb2ef0284bce2cd");
+  });
+
+  /* Its own test rather than a second line in the one above, because a failing
+     assertion ends its test: with both in one, the `structureHash` pin masked
+     the `hashBlocks` pin entirely, and a probe that forced every field down the
+     framed branch reddened one guard while the other never ran. Two clauses
+     need two probes. Both were watched go red — `49189e0dee442198` and
+     `5d66606f5fd03635` under that probe. */
+  it("leaves the block fingerprint of a real article where it was too", () => {
+    expect(hashBlocks(bodyBlocks)).toBe("21189fa4eb0bceca");
   });
 });

@@ -149,7 +149,16 @@ export function isSupplementNode(node: Pick<TreeNode, "treatment">): boolean {
 export function supplementNodes(tree: Tree): TreeNode[] {
   const root = tree.nodes[tree.rootId];
   if (!root) return [];
-  return root.children
+  /* **`?? []` even though `children` is a required field.** The type describes
+     what this app writes; it does not describe every tree this app is handed.
+     This became reachable from `articleStats` (src/web/stats.ts) so the masthead
+     would stop counting the apparatus as parts of the argument — which put it on
+     the path of every page load, where one root without a `children` array threw
+     and took the whole reading view down with it.
+     The rule everywhere else here is that a malformed tree renders visibly short
+     rather than throwing (src/web/tree.ts § buildChains); a projection helper is
+     no place to make an exception. tests/supplement.test.ts § a malformed tree. */
+  return (root.children ?? [])
     .map((id) => tree.nodes[id])
     .filter((n): n is TreeNode => !!n && isSupplementNode(n));
 }
@@ -177,7 +186,7 @@ export function supplementIndex(tree: Tree): Map<NodeId, TreeNode> {
       if (out.has(id)) continue;
       out.set(id, node);
       const child = tree.nodes[id];
-      if (child) stack.push(...child.children);
+      if (child) stack.push(...(child.children ?? []));
     }
   }
   return out;

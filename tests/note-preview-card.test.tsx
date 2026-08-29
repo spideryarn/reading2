@@ -67,7 +67,16 @@ const index = buildNoteIndex(blocks);
 const blockText = new Map(blocks.map((b) => [b.id, b.html.replace(/<[^>]+>/g, "")]));
 
 const jumped: string[] = [];
-const followed: [string | null, string][] = [];
+/**
+ * What the card handed back: the passage, the note's **id**, and the block the
+ * jump lands on.
+ *
+ * The note id is recorded because the marking of the return path depends on it,
+ * and a hover card that dropped it would leave the unit test in
+ * tests/note-markers.test.ts passing on a `markReturnPath` nothing ever gives a
+ * note to. GPT Sol's wiring check, F7.
+ */
+const followed: [string | null, string, string][] = [];
 
 function Harness() {
   return (
@@ -92,7 +101,7 @@ function Harness() {
         lookUpLinks={false}
         onOpenTerm={() => {}}
         onJump={(id) => jumped.push(id)}
-        onFollowNote={(from, to) => followed.push([from, to])}
+        onFollowNote={(from, m) => followed.push([from, m.note.id, m.blockId])}
       />
     </>
   );
@@ -220,13 +229,13 @@ describe("a finger on a footnote marker", () => {
     expect(preview()?.textContent).toContain("The note's first half");
     expect(followed).toEqual([]);
     tap(marker(0));
-    expect(followed).toEqual([["spya-bdyaa2", "spya-ntyaa2"]]);
+    expect(followed).toEqual([["spya-bdyaa2", NOTE, "spya-ntyaa2"]]);
   });
 
   it("remembers which passage a second marker was followed from", () => {
     tap(marker(1));
     tap(marker(1));
-    expect(followed).toEqual([["spya-bdyaa3", "spya-ntyaa2"]]);
+    expect(followed).toEqual([["spya-bdyaa3", NOTE, "spya-ntyaa2"]]);
   });
 });
 

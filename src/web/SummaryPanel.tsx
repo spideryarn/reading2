@@ -608,7 +608,11 @@ function Entry({
   };
 
   return (
-    <li className={`summ-entry d${entry.node.depth}${here ? " here" : ""}${now ? " now" : ""}`}>
+    <li
+      className={`summ-entry d${entry.node.depth}${here ? " here" : ""}${now ? " now" : ""}${
+        entry.supplement ? " supplement" : ""
+      }`}
+    >
       {/* Both of these are the same statement, and it is the one in the header:
           the keyboard path is the real `.summ-title` button inside this div,
           which is unchanged and still focusable. This handler only widens the
@@ -659,7 +663,10 @@ function Entry({
               title="Go to this section in the article"
               onClick={() => onJump(entry.node.range[0])}
             >
-              <span className="summ-number">{entry.number}</span>
+              {/* The apparatus wears no number: it is not part N of the
+                  argument, and numbering it was how "Notes" became part 3.
+                  src/web/tree.ts § buildSummaryTree. */}
+              {!entry.supplement && <span className="summ-number">{entry.number}</span>}
               {entry.node.title}
             </button>
             {/* "How much is under this" — the gap their "+N hidden" badge filled
@@ -692,7 +699,14 @@ function Entry({
             <CitedText text={shown.text} blocks={blocks} onJump={onJump} />
           </p>
         ) : (
-          !root && <p className="summ-text missing">No summary for this section.</p>
+          /* **Nor is the apparatus missing a summary.** A supplement node has
+             no gist on purpose — the notes are shown as written and never
+             summarised (src/supplement.ts) — so "No summary for this section"
+             reports our own promise as a fault, on the one row where it is
+             working correctly. */
+          !root && !entry.supplement && (
+            <p className="summ-text missing">No summary for this section.</p>
+          )
         )}
 
         {/* Where this section starts and ends, as two ids you can press.

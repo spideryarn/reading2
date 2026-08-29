@@ -48,7 +48,7 @@ import { Dock } from "./Dock.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { GlossaryPanel } from "./GlossaryPanel.js";
 import { ProseHoverCard } from "./ProseHoverCard.js";
-import { buildNoteIndex } from "./notes-view.js";
+import { buildNoteIndex, type NoteMarker, type NoteReturn } from "./notes-view.js";
 import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel } from "./DiagramPanel.js";
@@ -1689,11 +1689,16 @@ function Reader({
    * one stale case — following a marker and never returning — leaves a mark on
    * a passage the reader really did leave.
    */
-  const [noteReturn, setNoteReturn] = useState<BlockId | null>(null);
+  const [noteReturn, setNoteReturn] = useState<NoteReturn | null>(null);
+  /* **The marker, not its destination block.** The passage and the note are
+     stored together and come off one `NoteMarker`, so there is no way to pair
+     the passage the reader left with a note they did not follow — which is what
+     went wrong when only the block id was kept. src/web/notes-view.ts §
+     `markReturnPath`. GPT Sol, F7. */
   const followNote = useCallback(
-    (from: BlockId | null, to: BlockId) => {
-      setNoteReturn(from);
-      jumpTo(to);
+    (from: BlockId | null, marker: NoteMarker) => {
+      setNoteReturn(from ? { from, noteId: marker.note.id } : null);
+      jumpTo(marker.blockId);
     },
     [jumpTo],
   );
