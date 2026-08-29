@@ -144,9 +144,9 @@ same directory, a stray file outside every project, and a deliberate type error 
 the three in turn. That is the habit the whole of [silent-success.md](../reusable/silent-success.md)
 argues for — **a check you have never seen fail is not yet a check.**
 
-## Two ways to report it clean while it is red
+## Three ways to report it clean while it is red
 
-Both happened. Neither is a flaw in the gate — the gate said the right thing both times.
+All three happened. None is a flaw in the gate — the gate said the right thing every time.
 
 **Filtering the summary away from the names.** `npm run typecheck 2>&1 | grep -E "^✓|^✗"` looks like
 a reasonable way to see the three results at a glance. It is not: the per-error lines are **indented**
@@ -165,6 +165,30 @@ report over a red gate* has the whole reconstruction.
 > **The gate must be the last thing you run before you report, not the last thing you remember
 > running.** An edit invalidates every gate run before it, including a one-line edit that only
 > touched a test.
+
+**Green on the union of everybody's unfinished work.** This one is invisible in a single-agent tree
+and routine here. `npm run typecheck` reads the **working tree**, and several agents share this one —
+so it answers *does my tree compile*, when the question at commit time is *does `HEAD` plus my commit
+compile*. Those come apart the moment your code depends on a file somebody else has written and not
+yet committed. On 2026-08-28 four lanes each had a green gate and `HEAD` did not compile, with 16
+errors across four files; every one was a commit whose missing file was sitting untracked beside it.
+The next day it happened again, to the person who had written that up: `113ce17` landed `App.tsx`
+without the five panel files whose `Props` it had reshaped.
+
+**An import check does not catch it either**, which is the trap inside the trap. Resolving a file's
+relative imports and refusing any that `git ls-files` does not know answers *can this be resolved*.
+`113ce17` passed that and still had nine errors, because what had changed was the shape of a type
+inside an **already-tracked** file. Resolution and type-checking are different questions.
+
+> **Build the candidate, not the baseline.** `git worktree add --detach <tmp> HEAD`, symlink
+> `node_modules` in, copy over the files you are about to commit, and run the gate *there*. That is
+> literally *`HEAD` plus this commit*, which is the only one of the three possible greens you can act
+> on before pushing.
+
+Expect to iterate: on `1ace072` the first round of fixes surfaced three more errors in test files that
+also had to come along. And the inverse is worth knowing before you panic — a **red** suite in this
+tree is no more evidence about `HEAD` than a green one. An uncommitted `src/db/schema.ts` declaring a
+table with no migration made about 16 database tests fail here while `HEAD` was perfectly fine.
 
 ## Where this fits
 
