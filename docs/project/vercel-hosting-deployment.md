@@ -14,8 +14,9 @@ Start at [debugging.md](debugging.md) if you do not yet know which of the three 
 
 ## The ids, and where they come from
 
-Everything below needs a project id and a team id. Both are in
-[`.vercel/project.json`](../../.vercel/project.json) — `projectId`, and `orgId` is the team:
+Everything below needs a project id and a team id. Both are in `.vercel/project.json` — `projectId`,
+and `orgId` is the team. That file is gitignored and appears when you link the project, so it is not
+a link: a fresh clone does not have it, and the values are written out here for that reason.
 
     projectId  prj_I739wqovZ54zt2oTBbZjPIke4IEY      (project "spideryarn-reading2")
     orgId      team_Xu0cDrurD3h6PIeMZblXJEIL
