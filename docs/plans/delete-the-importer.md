@@ -2121,12 +2121,18 @@ that one is not obviously subsumed. **Safe to stop after:** a checkpoint is work
 answer costs money and never correctness, and both callers already treat a miss as *buy it again*.
 This is the cheapest possible place to find out whether B3's interface is right.
 
-**D3 (was D2) — the five uniform late stages**, one commit each: `arc`, `tweets`, `summary`, `glossary`,
-`ideas`. All five read `toc/blocks`, `toc/tree` and `extract/meta` and write one artefact. `arc` goes
-first because it has neither a baseline nor a stamp, which makes it the smallest possible first
-production caller of `store.write`. **Safe to stop after each:** the five are independent, only `arc`
-is in `DEFAULT_INGEST_STEPS`, and a half-converted set still runs because each stage's I/O is
-self-contained.
+**D3 (was D2) — the six uniform late stages**, one commit each: `arc`, `tweets`, `summary`, `glossary`,
+`ideas` — **and `assets`**. The first five read `toc/blocks`, `toc/tree` and `extract/meta` and write
+one artefact. `arc` goes first because it has neither a baseline nor a stamp, which makes it the
+smallest possible first production caller of `store.write`. **Safe to stop after each:** they are
+independent, only `arc` and `assets` are in `DEFAULT_INGEST_STEPS`, and a half-converted set still
+runs because each stage's I/O is self-contained.
+
+**`assets` was written as five and is six**, corrected 2026-08-29 — see § *What D1b's design review
+changed*, last paragraph. It arrived after this document was written, and an explicit name list
+enumerates a newcomer *out* rather than quietly covering it, which is the failure mode of every list
+in this plan. `assets` reads differently from the other five — it collects images rather than reading
+the tree — so do not assume its conversion is mechanical because the other five are.
 
 **D4 (was D3) — `toc`, with `labels` already moved.** Three artefacts written in one call, an input that is
 stage 3's copy rather than stage 4's, and the deliberate `blocks` duplication in `PATHS`
@@ -2619,6 +2625,90 @@ a Postgres preflight with misleading filesystem files present; and a job where e
 review was explicit that a fake product-returning step proves the coordinator and nothing else — it
 does not reach carried-output handling, attempt rebinding, preflight store selection, job-transition
 atomicity or publication. `arc` stays the first real user, in D3.
+
+#### What D1b's design review changed — [delete-the-importer-d1b-design-sol.md](delete-the-importer-d1b-design-sol.md)
+
+**NO-SHIP, three criticals, and the design was reviewed before a line of it was written** — which is
+the one thing this stage got right first time. The lock order I proposed survived; almost nothing
+else did unchanged.
+
+**The lock order is settled, and one word of it was wrong.** *"Article then job is the right order.
+It agrees with publication/failure and with all article-wide writers."* The correction is that
+taking the article lock before the artefact fence is **essential rather than tidy**: *"If the
+transaction first acquires the job lock and later calls `publishRevisionIn`, it still has job→article
+ordering; being inside one transaction does not prevent a deadlock with another article→job
+transaction."* I had reasoned the lock should go at the top for legibility; it has to go at the top
+for correctness, and I would have accepted a "take it only when publishing" simplification if anyone
+had pushed back on the cost. Re-locking an article the same transaction already holds is safe, so the
+unconditional lock costs nothing beyond contention — Postgres does not escalate these row locks and
+reader `SELECT`s stay unblocked, but shelf, chat, search, visibility and import writers will wait.
+That is a performance risk to measure, not a correctness objection.
+
+And the review went one further than I asked: **`openOrBeginJobDraft` should be reordered to
+article→job in D1b too.** It already has the article identity before it locks the job, so it is a
+small change, and it *"establishes one enforceable invariant instead of depending on caller
+sequencing"*. My argument for leaving the inversion alone was accepted on its facts — the claim fence
+does prevent the cycle, and `failExpired` does not create it because a replacement job is a different
+job row — but "narrowly safe today by caller sequencing" is not a property anybody can check later.
+
+**Critical 1: settlement was never designed, only its happy path.** Three things follow.
+`releaseStep` can resolve to **cancelled** after a concurrent Stop, so a `void` `commit` that infers
+the outcome from the transition it was *asked* for reports the wrong thing: **`commit` and
+`settleJob` must return the actual settlement.** Neither `finish`, `releaseStep`, `failExpired` nor
+`requestCancel` clears `draftRevisionId` ([`src/store/pg-jobs.ts:252`](../../src/store/pg-jobs.ts)),
+so the sweeper protects terminal jobs' drafts indefinitely. And the all-skipped path must
+**explicitly publish or discard** the copied draft rather than merely finishing the job. The state
+machine, in full, is now five cases rather than the two I had drawn: non-terminal success; terminal
+success (write, validate, finish step, publish, finish job, clear draft); stage failure or
+cancellation; a release that resolves to cancellation; and all-skipped.
+
+**Critical 2: the dependency I declared cannot do the job.** `pgStoreSession(… jobs: JobSettles)`
+takes methods whose implementations call `getDb()` independently, so injecting them binds nothing to
+the transaction — *"artefacts and step state can commit while release/finish fails separately — the
+exact D1 finding"*. The session must call `releaseStepIn(tx, …)` / `finishIn(tx, …)` directly, or
+take a factory bound to its own `tx`, and must **not** accept the public `JobSettles` capability.
+`NotTheLiveAttempt` is translated to `StaleAttemptError` at that boundary.
+
+**Critical 3: the importer and prune refusal had vanished from the design.** The plan assigns it to
+D1b and my draft never mentioned it. Import replaces revision data inside a long transaction and
+prune deletes the article, and neither checks for a live job — so an import can replace the base
+beneath an active draft and prune can cascade-delete state a running job owns. Both must **lock the
+article, then refuse any queued or running job for that owner and slug**, in that order. The review
+cited this as further evidence for article-before-job.
+
+**Three of the six owed tests are not honestly reachable as written**, because production is still
+hardwired to `fsStoreSession` and the Postgres session refuses every real step: the two concurrent
+`/advance` claims, the Postgres preflight over misleading filesystem files, and the all-skipped
+Postgres path. Calling a session helper directly would prove *different* behaviour, and "both claims
+succeed" contradicts the one-running-job constraint anyway. The fix is **a narrow internal
+coordinator entry point taking a session factory and a step registry**, with production supplying
+today's defaults.
+
+**And the seventh test is the one that matters most**, for exactly the reason D1a's review gave:
+every test on the list is a refusal, and refusals are negative cases. A successful final fake step
+must prove **artefacts written, the run completed, the revision published, the job finished and the
+draft pointer cleared** — all five. An eighth, a concurrent Stop proving a release-to-cancel disposes
+of the draft correctly, is what justifies taking the article lock on non-publishing commits.
+
+**`publishRevisionIn` is not a pure extraction while it logs inside somebody else's transaction.**
+The pre-update `article.currentRevisionId` stays correct because the row is locked, but
+[`logger.info`](../../src/store/pg-revisions.ts) can announce a publication that the outer
+transaction then rolls back during job settlement. It returns its log fields instead, and the caller
+logs after the commit. Same rule for any extracted failure helper.
+
+**D3 undoes none of this** — it converts `arc` to return products, drops it from
+`LEGACY_UNCONVERTED_STEPS`, and adds a real-product integration test. And a second `StoreSession`
+implementation is confirmed as the cheapest sound design: share `checkProduct`, `readsOf` and a small
+transition dispatcher, keep the mechanics separate, because *"generalizing transactions across both
+stores would add machinery without reducing the atomic risk."*
+
+**One correction to this plan that came from outside the review.** `assets` is a real `ArtifactKind`,
+a step with `produces: ["assets"]`, in `DEFAULT_INGEST_STEPS`, on `LEGACY_UNCONVERTED_STEPS` and
+carrying a `STAMP_SOURCE` entry — and the string does not appear anywhere in this document. It landed
+on 2026-08-29, after the plan was written, and D3's explicit five-name list enumerates it *out*
+rather than covering it. **D3 converts six stages, not five.** Found by another session reviewing the
+production ingest failure; the plan had no mechanism that would have caught it, which is the more
+useful half of the finding.
 
 #### What D0's code review found — [delete-the-importer-d0-sol.md](delete-the-importer-d0-sol.md)
 
