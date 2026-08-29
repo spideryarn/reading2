@@ -2050,6 +2050,165 @@ It moves to the reference-backed signed URL **no later than D**, keeping the fil
 old articles through the mixed window. Note also that dropping `raw_bytes` is not what breaks this
 route — it has never read that column.
 
+#### The inventory, 2026-08-29 — and the three things it changed
+
+Before drawing D's stage boundaries I had the whole surface swept. Three findings changed the plan;
+the rest confirmed it. Each was checked against the code before being written down here.
+
+**1. `store.write` has no production caller at all.** `beginStep` and `finishStep` are wired
+([`src/jobs.ts:351`, `:390`](../../src/jobs.ts)) and the read side is partly live, but every call to
+`write` in this repo is in a test. **The write half of the seam has never run in anger.** That
+reframes D: it is not nine conversions of a working mechanism, it is the first real exercise of one.
+Expect the writes to be the expensive part and the reads to be routine — which is the opposite of how
+the earlier sections of this plan read.
+
+**2. `htmlCarriesItsIds` does not stop working under Postgres. It inverts, silently.** This plan said
+it "stops working", which implied a break somebody would see. It compiles and runs: it already reads
+`blocks/blocks` and `blocks/stampedHtml` through the store. What changes is what the answer *means*.
+On disk `extractedHtml` and `stampedHtml` are one file, so "are the recorded ids in the HTML" detects
+a re-extraction that wiped them. In Postgres they are two columns — a re-extraction writes a new
+`extracted_html` and leaves `stamped_html` alone — so the check reads **stage 3's own previous
+output**, finds its own ids, and returns `true`. The guard that exists to catch silent id loss becomes
+a silent success itself.
+
+The question it is really asking is *was stage 3's output derived from the stage-2 HTML that is there
+now?*, and in Postgres that is a stamp. But `STAMP_SOURCE`
+([`src/store/artifacts.ts:565`](../../src/store/artifacts.ts)) has no `fetch`, `extract` or `blocks`
+entry, so **`blocks` records `NO_INPUT_HASH` and no stamp at all**. That gap has to close *before* any
+of the later stages move, or everything after it is built on an identity guarantee Postgres cannot
+check. This is why D now starts with stamps rather than with a stage.
+
+**3. A deploy gate asserts the existence of what D deletes.**
+`GATE_FIXTURES = ["data", "output", …]` ([`scripts/deploy-checks.ts:582`](../../scripts/deploy-checks.ts)),
+iterated by [`scripts/deploy.ts:620`](../../scripts/deploy.ts). Nothing in this plan mentioned it. It
+gets folded into whichever stage first breaks it rather than left to the demolition: a red deploy gate
+in the middle of a sequence is the kind of thing that gets forced past, and this repo already has a
+note about a force-gate forgiving the next failure.
+
+Two smaller corrections. The metadata page's `STEP_STORAGE.fetch` line is at
+[`src/store/pg.ts:752`](../../src/store/pg.ts), not 336 as written above; and `provenance.dir` is
+rendered as a relative path ([`src/web/Metadata.tsx:405`](../../src/web/Metadata.tsx)) with a fixture
+check `provenance?.dir === "example"`, which breaks the moment `dir` stops being a path.
+`tests/owner-isolation.test.ts:610` pins that `sendSource` calls the store for authorisation
+**before** it touches `fsLocations`, so any rewrite of that route has to keep the ordering.
+
+#### D's five stages, and what makes each one safe to stop at
+
+The ordering principle: **remove code before adding it, and close the identity gap before moving
+anything that depends on identity.**
+
+**D0 — the stamps. No store conversion at all.** Give `tweets` and `summary` a `stamp:` and delete
+`threadIsCurrent` and `summariesAreCurrent`; record an `input_hash` for `blocks` over the stage-2
+HTML, and replace `htmlCarriesItsIds` with the stamp comparison. Those two `…IsCurrent` functions ask
+`sameStamp`'s question in four hand-written steps, and `glossary` and `ideas` already do it the short
+way. First because it is the only part of D that *deletes* code, because it is fully testable on the
+filesystem store today, and because finding 2 means nothing else should move until it is done.
+**Safe to stop after:** nothing has been converted, two `isDone`s became stamps, and the existing
+suites cover both.
+
+**D1 — the two checkpoint callers.** `pdf-read.ts` first (near drop-in; the key is already the right
+16-hex digest, and the batched `read` replaces a `readFile` per chunk inside the loop), then
+`labels.ts`, which *deletes* the `serialise()` mutex, the `kept[]` pruning, `runId` and
+`clearCheckpoint` — all four exist only because the unit of deletion was a whole file. `usableCheckpoint`
+splits rather than disappearing: its per-entry validation stays as the caller-side gate the store
+delegates, and its four manifest comparisons go, but **`sourceHash` must be checked against
+`batchFingerprint`'s inputs before it is deleted** — three of the four are already inside the key and
+that one is not obviously subsumed. **Safe to stop after:** a checkpoint is working state, so a wrong
+answer costs money and never correctness, and both callers already treat a miss as *buy it again*.
+This is the cheapest possible place to find out whether B3's interface is right.
+
+**D2 — the five uniform late stages**, one commit each: `arc`, `tweets`, `summary`, `glossary`,
+`ideas`. All five read `toc/blocks`, `toc/tree` and `extract/meta` and write one artefact. `arc` goes
+first because it has neither a baseline nor a stamp, which makes it the smallest possible first
+production caller of `store.write`. **Safe to stop after each:** the five are independent, only `arc`
+is in `DEFAULT_INGEST_STEPS`, and a half-converted set still runs because each stage's I/O is
+self-contained.
+
+**D3 — `toc`, with `labels` already moved.** Three artefacts written in one call, an input that is
+stage 3's copy rather than stage 4's, and the deliberate `blocks` duplication in `PATHS`
+([`src/store/artifacts-fs.ts:91`](../../src/store/artifacts-fs.ts)) that has to survive the move. Its
+own stage because it is the one place where *write everything at once* has an atomicity story the
+filesystem adapter cannot honour and Postgres can.
+
+**D4 — `fetch`, `extract`, `blocks`, and the source route.** Bytes rather than JSON; two acquisition
+paths, including the inline duplicate at [`src/pipeline.ts:742`](../../src/pipeline.ts) that bypasses
+`writeRaw` entirely; the `extractedHtml`/`stampedHtml` split becoming real; and `sendSource` moving
+onto the reference. **Last, because it is the only part of D where getting it wrong loses a reader's
+document rather than costing a model call** — and because by then D0's stamp is actually checking the
+thing.
+
+**Not D, but before `data/` can go.** The slug-allocation path reads `raw.json` through
+`readRaw(contextPaths(candidate).dir)` before an article has a store at all (`articleExists`,
+`urlForSlug`, [`src/jobs.ts:1377`](../../src/jobs.ts) `slugIsSpokenFor`); `src/store/slug-is-taken.ts`
+exists and nothing in that path calls it. Two independent `readdir(data/)` walks enumerate the library
+([`src/library-search.ts:207`](../../src/library-search.ts), [`src/api.ts:1005`](../../src/api.ts)).
+And **reader state is a different drawer entirely** — comments, chat, searches, shelf, glossary
+lookups and the reader profile all build their own `data/` paths and never touch the artefact store.
+`data/` does not disappear at the end of D, and this plan should stop implying that it does.
+
+**One hazard to name rather than discover.** Three CLI `main()`s default `dataDir` to
+`data/<slug>` ([`src/fetch.ts:1286`](../../src/fetch.ts), [`src/toc.ts:675`](../../src/toc.ts),
+[`src/pdf-read.ts:1329`](../../src/pdf-read.ts), and `src/extract.ts`'s
+`opts.dataDir ?? path.join("data", slug)`). That default is the dangerous shape: forget to pass a
+store and you get a *working filesystem write* rather than an error — the same hazard the required
+`store` argument on `stepIsDone` was introduced to remove. `previousBlocksInFile`
+([`src/blocks.ts:1148`](../../src/blocks.ts)) is the same thing: the deleted bug still in the file,
+with a comment saying so, live for the CLI. Both need a decision in D rather than a second door left
+open into the removed behaviour.
+
+#### Two things D0 must not break, found while checking whether the stamp holds on a first run
+
+The first-run question answered itself and is closed already: `stepIsDone`
+([`src/pipeline.ts:503`](../../src/pipeline.ts)) asks `store.has` *before* it computes a stamp, so
+freshness can only narrow presence and never widen it; and `sameStamp`
+([`src/store/artifacts.ts:621`](../../src/store/artifacts.ts)) returns **false** both for a `null`
+recorded stamp and for an expected stamp with no defined keys, on the stated grounds that *"yes,
+current" would otherwise mean "nobody checked anything"*. For `tweets` and `summary` the change is a
+true refactor: the filesystem `stampFor` reads `sourceHash`/`version`/`generator` off the artefact
+itself, which is the same three fields the two hand-written `…IsCurrent` functions compare.
+
+Asking it turned up two things that are not symmetric, and both were checked against the code.
+
+**`blocks` has nowhere on the filesystem to keep a stamp.** `blocksArtefact`
+([`src/blocks.ts:947`](../../src/blocks.ts)) returns `{ sanitizer, blocks }` — none of the three
+stamp fields. So adding `blocks` to `STAMP_SOURCE` hands `stampOf` an artefact with nothing in it,
+`sameStamp({}, {inputHash})` is false, and **stage 3 re-runs on every job for ever**: `{ steps:
+["blocks"] }` could never skip, and the metadata page would report `blocks` permanently not-done. It
+costs no model call, which is exactly what would let it survive unnoticed.
+
+The fix is to write the stamp into the artefact — `sourceHash: hash(extractedHtml)` alongside
+`sanitizer`, which is the move [`src/blocks.ts:1195`](../../src/blocks.ts) already argues for. Older
+`blocks.json` files lack the field, so each article gets one free re-run of stage 3, which carries its
+ids over and costs nothing. The alternative — give Postgres the stamp and leave the filesystem on
+`htmlCarriesItsIds` — is the private freshness rule in the storage layer that the `toc` note at
+[`src/pipeline.ts:1120`](../../src/pipeline.ts) already rejected, arriving through a different door.
+It does change the shape of `blocks.json`, so the artefact contract and `SHAPE` need a look in the
+same commit.
+
+**`htmlCarriesItsIds` does two jobs, and a stamp only replaces one.** Besides the id-membership test
+it returns false on `!file?.blocks?.length`, and that half is eight days old: *"No ids at all is not
+'all of them are there'. `every` over an empty array is true"* — GPT Sol, 2026-08-28,
+[`src/pipeline.ts:413`](../../src/pipeline.ts). It is reachable on a **first ingest**, where the
+runtime guard in `src/blocks.ts` has no baseline to refuse against: a paywall or an error page
+extracts to no prose, and `{"blocks":[]}` satisfies `SHAPE.blocks`, which takes any array.
+
+A stamp over `hash(extractedHtml)` does not reproduce it — an empty blocks array written against the
+current HTML has a *matching* stamp and reports done. So D0 must keep that half, and the better home
+is a **write-time refusal beside `assertIdsCarried`** rather than a residual `isDone`: refuse to write
+the empty artefact at all instead of catching it on the next skip check. Note that
+`assertIdsCarried`'s own `produced.length === 0` exemption was removed on 2026-08-28 for the
+*baseline* case; this is the first-run case, which nothing guards yet.
+
+Both are "the check goes quiet at the moment it becomes true", so both get a red test first.
+
+**And D0 needs no edit to `src/summarise.ts`**, which is the file another session is live in.
+`PROMPT_VERSION` is already exported there and in `src/tweets.ts`, so both `stamp:` closures are built
+inside `src/pipeline.ts` from `inputHashFor` and the imported constant. The only edit that would land
+in `summarise.ts` is deleting the dead `summariesAreCurrent` — one importer, no test references — and
+that waits for a one-line follow-up once the peer commits. The real test cost is `tweets`:
+`tests/tweets.test.ts` has a six-assertion `describe("threadIsCurrent")` block to rewrite against the
+stamp, and both of those files are clean.
+
 ### The demolition — five steps, not one commit
 
 The first draft bundled everything into one commit on the reasoning that splitting them leaves a
