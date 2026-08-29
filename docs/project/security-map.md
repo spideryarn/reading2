@@ -80,11 +80,41 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/ingest.ts`](../../src/ingest.ts) | `normaliseUrl` — refuses literal private and loopback hosts before queueing |
 | [`src/chat-tools.ts`](../../src/chat-tools.ts) | `isSlug` on the model's slug, URL-length cap on the model's URL |
 | [`src/urls.ts`](../../src/urls.ts) | `isWebUrl` — what model output must pass to become an `href` |
+| [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only, no owner ever set. See below |
 | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
 
 The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-client.test.ts`,
 `tests/routes.test.ts`, `tests/slug.test.ts`, `tests/owner-isolation.test.ts`,
 `tests/public-dto.test.ts`.
+
+### The unauthenticated namespace, and the tripwire under it
+
+Everything else on this page is a defence in front of a gate. `/api/public/` is the one surface
+**dispatched before the gate**, so a stranger reaches it with no token at all
+([public-read-only-access.md](../plans/public-read-only-access.md) is the plan; the code documents
+itself thoroughly and is worth reading before touching). Four things keep it a closed room, and each
+was checked against the source rather than taken on trust:
+
+- **No fallthrough into the authenticated table.** An unknown path or a wrong method inside the
+  namespace is answered *here*. The file names this as "the single most likely way this feature
+  grows a hole", and the bare path is inside the namespace too — otherwise it would fall through and
+  answer 401 where it should answer 404.
+- **Read methods only**, via `requireReadMethod`.
+- **No owner is ever set in that scope.** `setRequestOwner` is not called, so `currentOwnerId()`
+  *throws* rather than quietly returning somebody. That is a **runtime tripwire**, not a
+  convention — a stray owner-scoped read on this path fails loudly instead of succeeding against
+  the wrong person's data. Compare `src/owner.ts`, where the environment variable deliberately
+  "does not get a vote" inside a request, which closed a real historical hole and is pinned by
+  `tests/owner-isolation.test.ts`.
+- **Hand-built allowlist DTOs**, below.
+
+It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
+misconfigured dev server cannot serve a half-implemented public path.
+
+**What is deliberately *not* here:** diagram mode. `src/web/visitor.ts`'s `COSTS` table marks it
+owners-only unconditionally, because two of its four pictures POST for embeddings and spend money;
+the gate is real on the server too, since `/api/similar/:slug` and `/api/projection/:slug` sit
+behind `requireUser`. The client-side gate is a courtesy; the server-side one is the defence.
 
 ### The allowlist has two failure directions, and only one of them is loud
 
