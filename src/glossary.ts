@@ -40,7 +40,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { partsOf } from "./arc.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
@@ -65,7 +64,7 @@ import type {
   Tree,
 } from "./types.js";
 import type { ArtifactStore } from "./store/artifacts.js";
-import { withLedger } from "./cli-ledger.js";
+import { stageCli } from "./cli-ledger.js";
 
 /**
  * Bumped whenever the prompt changes in a way that changes what an entry *is*.
@@ -1424,9 +1423,8 @@ async function main(): Promise<void> {
   }
 }
 
-/* Compared as resolved paths, not by suffix — see the same guard in
-   src/tweets.ts for what `endsWith` gets wrong. */
-const isMain =
-  process.argv[1] !== undefined &&
-  fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
-if (isMain) void withLedger("cli", main);
+/* **`stageCli`, which is the guard and the ledger together.** Awaited rather
+   than `void`ed: flushing the ledger, and any failure in it, are part of the
+   command finishing rather than something the process might exit before doing.
+   src/cli-ledger.ts says what the one line replaces and why it is one line. */
+await stageCli(import.meta.url, main);
