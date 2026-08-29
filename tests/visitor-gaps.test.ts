@@ -1,5 +1,5 @@
 /**
- * **Four sentences, and they must not become one.**
+ * **Three sentences, and they must not become one.**
  *
  * The worked example of the failure is Notion: unpublishing a page makes every
  * old link land on a plain *"page could not be found"*, so *never existed*,
@@ -9,25 +9,39 @@
  * at this time"*; Google Docs pairs *"View only"* with *"Request edit access"*.
  * docs/research/public-access-how-others-do-it.md.
  *
- * Three of ours live in the reading view and one is a whole page, so no single
- * component renders all four and could be tested for telling them apart. That
- * is why `visitorGap` is a pure function, and this is the test it exists for.
+ * They live in the reading view, in the comments drawer and on a page of their
+ * own, so no single component renders them all and could be tested for telling
+ * them apart. That is why `visitorGap` is a pure function, and this is the test
+ * it exists for.
+ *
+ * ## What slice 1b changed here, and why this file asserts policy rather than
+ * membership
+ *
+ * There were five members and there are three. `not-yet-public` said *it exists
+ * and a shared link does not carry it yet*, and a shared link carries all four
+ * artefacts now; `availability-unknown` said *we could not find out*, and the
+ * second request that could fail is gone. So the interesting answer for an
+ * artefact is `null` — nothing stands in the way — and the sweeps below are
+ * about **what the policy is**, never about how many members the union has. A
+ * union can grow a member that says nothing new, and a count would go green on
+ * exactly that.
  *
  * **The assertions are about the `kind`, not the prose**, following the rule
  * docs/project/copy.md sets for the failure messages: copy should stay
  * rewritable without turning a test red, and a test that pins a sentence
- * quietly makes the sentence permanent. The one place a string is checked is
- * the distinctness sweep at the bottom, which asserts that the four differ from
- * each other rather than that any of them says a particular thing.
+ * quietly makes the sentence permanent. The one place strings are checked is
+ * the distinctness sweep at the bottom, which asserts that the three differ
+ * from each other rather than that any of them says a particular thing.
  */
 import { describe, expect, it } from "vitest";
-import type { PublicArtefacts } from "../src/public-types.js";
+import type { PublicArticle, PublicArtefacts } from "../src/public-types.js";
+import { artefactsIn, artefactsOf } from "../src/web/public-artefacts.js";
 import { MODES, type Mode } from "../src/web/params.js";
 import {
   anAccountWouldHelp,
   COMMENTS_GAP,
   markedModes,
-  tweetsGap,
+  notBuiltGap,
   visitorGap,
   visitorSentence,
   type VisitorGap,
@@ -65,7 +79,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
  *
  * One fixture per artefact is the shape that works: with only `ideas` built,
  * any mode reading anything other than `ideas` answers *not built* where the
- * truth is *not carried yet*.
+ * truth is *here it is*.
  */
 function only(built: keyof PublicArtefacts): PublicArtefacts {
   return {
@@ -83,56 +97,24 @@ describe("what a visitor is told, mode by mode", () => {
     // already holds, and none of it costs anything to serve.
     expect(visitorGap("toc", EVERYTHING_BUILT)).toBeNull();
     expect(visitorGap("toc", NOTHING_BUILT)).toBeNull();
-    expect(visitorGap("toc", null)).toBeNull();
   });
 
-  it("tells an artefact that was never built apart from one we do not carry yet", () => {
+  /**
+   * **The slice, in one assertion.** An artefact this piece has is not a gap at
+   * all: the visitor opens the band and reads it. An artefact nobody built is
+   * the one artefact sentence left.
+   */
+  it("gives away an artefact the piece has, and names the one it does not", () => {
+    expect(visitorGap("glossary", EVERYTHING_BUILT)).toBeNull();
     expect(visitorGap("glossary", NOTHING_BUILT)).toEqual({
       kind: "not-built",
       noun: expect.any(String),
     });
-    expect(visitorGap("glossary", EVERYTHING_BUILT)).toEqual({
-      kind: "not-yet-public",
-      noun: expect.any(String),
-    });
-  });
-
-  /**
-   * **A missing answer is not a claim about somebody's article.**
-   *
-   * `available` is `null` when the metadata request did not land. Reading that
-   * as "nobody has built a glossary" would put a statement about the world in
-   * front of a visitor on the strength of a network failure — the exact shape
-   * docs/reusable/silent-success.md keeps writing up.
-   */
-  it("does not turn a failed metadata fetch into 'nobody built one'", () => {
-    for (const mode of ["glossary", "summary", "ideas"] as const) {
-      expect(visitorGap(mode, null)?.kind).toBe("availability-unknown");
-    }
-  });
-
-  /**
-   * **And the fifth state must not swallow the fourth.**
-   *
-   * `availability-unknown` was `not-yet-public` until 2026-08-28, whose
-   * sentence begins *"There is"* — so a network failure was rendered as a claim
-   * about somebody's article. Folding them back together would be the same bug
-   * under a new name, so this compares the two **sentences** rather than
-   * counting kinds: a union can grow a member that says nothing new.
-   */
-  it("says a different thing when it does not know than when it does", () => {
-    const known = visitorSentence(visitorGap("glossary", EVERYTHING_BUILT) as VisitorGap);
-    const unsure = visitorSentence(visitorGap("glossary", null) as VisitorGap);
-
-    expect(known).not.toBe(unsure);
-    // The one that knows may claim the piece has it; the one that does not, may not.
-    expect(known).toContain("There is");
-    expect(unsure).not.toContain("There is");
   });
 
   it("names the modes that spend as the owner's, whatever the flags say", () => {
     for (const mode of ["chat", "search", "review", "diagram"] as const) {
-      for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT, null]) {
+      for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
         expect(visitorGap(mode, flags)).toEqual({
           kind: "owners-only",
           feature: expect.any(String),
@@ -141,75 +123,106 @@ describe("what a visitor is told, mode by mode", () => {
     }
   });
 
-  /**
-   * **The tweets page derives its gap rather than asserting one.**
-   *
-   * It was a constant saying `not-yet-public`, so `/read/:slug/tweets` told a
-   * visitor *"There is a tweet thread for this piece"* about an article whose
-   * own wire response said `tweets: false`. GPT Sol, 2026-08-28.
-   */
+  /** The owner's own annotations, which sharing an article does not share. */
+  it("keeps the comments with whoever added the article", () => {
+    expect(COMMENTS_GAP.kind).toBe("readers-own");
+    expect(anAccountWouldHelp(COMMENTS_GAP)).toBe(false);
+  });
+
   /**
    * **Each mode reads its own flag and nobody else's.**
    *
    * Swept per artefact rather than asserted once: with only `X` built, the mode
-   * for `X` must say *not carried yet* and every other artefact mode must say
-   * *nobody built one*. A crossed wire fails on at least one row whichever pair
-   * was crossed.
+   * for `X` must be free and every other artefact mode must say *nobody built
+   * one*. A crossed wire fails on at least one row whichever pair was crossed.
    */
   it.each(["glossary", "summary", "ideas"] as const)(
     "reads its own flag when only %s is built",
     (built) => {
       const flags = only(built);
       for (const mode of ["glossary", "summary", "ideas"] as const) {
-        expect(visitorGap(mode, flags)?.kind, `${mode} when only ${built} is built`).toBe(
-          mode === built ? "not-yet-public" : "not-built",
+        expect(visitorGap(mode, flags)?.kind ?? null, `${mode} when only ${built} is built`).toBe(
+          mode === built ? null : "not-built",
         );
       }
-      // And the tweets page, which is not a mode but reads the same table.
-      expect(tweetsGap(flags).kind).toBe("not-built");
     },
   );
 
-  it("reads the tweets flag when only tweets is built", () => {
-    expect(tweetsGap(only("tweets")).kind).toBe("not-yet-public");
+  it("does not let the tweets flag stand in for a mode's", () => {
     for (const mode of ["glossary", "summary", "ideas"] as const) {
       expect(visitorGap(mode, only("tweets"))?.kind).toBe("not-built");
     }
   });
 
-  it("asks the flags about the tweet thread too", () => {
-    expect(tweetsGap(NOTHING_BUILT).kind).toBe("not-built");
-    expect(tweetsGap(EVERYTHING_BUILT).kind).toBe("not-yet-public");
-    expect(tweetsGap(null).kind).toBe("availability-unknown");
+  /**
+   * **The tweet thread's own answer is not a mode's**, and it is not decided
+   * here.
+   *
+   * `VisitorTweetsPage` branches on the artefact key itself — it has to, since
+   * it renders the thread when there is one — and takes its sentence from
+   * `notBuiltGap`. There is no `tweetsGap` beside that branch any more, because
+   * a policy function returning a value TypeScript cannot narrow on would have
+   * been a second answer to a question already decided, which is the shape GPT
+   * Sol caught on 2026-08-28. What this asserts is the half that lives here:
+   * the sentence exists and it is about a tweet thread.
+   * tests/public-network-trace.test.tsx drives both branches on the page.
+   */
+  it("has a sentence for a thread nobody wrote", () => {
+    expect(notBuiltGap("tweets")).toEqual({ kind: "not-built", noun: expect.any(String) });
+    expect(visitorSentence(notBuiltGap("tweets"))).toContain("tweet thread");
   });
 
   /**
-   * The property that keeps this true when somebody adds a ninth mode.
+   * **`markedModes` excludes what a visitor can now have**, which is the
+   * property slice 1b turned round.
    *
-   * `markedModes` derives from `MODES`, so a mode nobody thought about here is
-   * marked rather than quietly live — the fail-closed direction. Written as a
-   * sweep of every member rather than a list, so the list cannot go stale.
+   * Before it, every mode but `toc` was marked and the only question was which
+   * excuse to show. Now a marked button means the reader really cannot open the
+   * band — and the sweep is written as a derivation from `MODES` rather than a
+   * list, so a ninth mode is covered whether or not whoever adds it remembers.
    */
-  it("answers for every mode there is, and `toc` and `outline` are free", () => {
-    for (const mode of MODES) {
-      const gap = visitorGap(mode, EVERYTHING_BUILT);
-      /* `outline` is the second free mode, added 2026-08-28: like the table of
-         contents it draws from the tree in the payload the visitor already holds
-         and reaches no artefact, so it is named here deliberately rather than
-         falling through the fail-closed default. docs/plans/outline-mode.md. */
-      if (mode === "toc" || mode === "outline") expect(gap).toBeNull();
-      else expect(gap).not.toBeNull();
-    }
-    expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
+  it("marks only what a visitor cannot have, and derives that from MODES", () => {
+    /* Nothing built: everything but the table of contents is marked, which is
+       the old behaviour and still right for an article with no artefacts. */
+    /* `outline` joins `toc` as a mode a visitor always gets: like the table of
+       contents it is drawn from the tree in the payload they already hold and
+       reaches no artefact at all. docs/plans/outline-mode.md. */
+    expect([...markedModes(NOTHING_BUILT).keys()].sort()).toEqual(
       MODES.filter((m: Mode) => m !== "toc" && m !== "outline")
         .slice()
         .sort(),
     );
-    /* And each entry carries the sentence the band will show, so the bar's
-       tooltip cannot drift away from it — the drift a browser pass found on
-       2026-08-28, when the two said the same fact a few words apart. */
-    for (const [mode, sentence] of markedModes(EVERYTHING_BUILT)) {
-      expect(sentence).toBe(visitorSentence(visitorGap(mode, EVERYTHING_BUILT) as VisitorGap));
+    /* Everything built: the three artefact modes drop out, and what is left is
+       the four that spend a model call. */
+    expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
+      ["chat", "diagram", "review", "search"].sort(),
+    );
+    /* And one at a time, so a mode reading the wrong flag shows up. */
+    for (const built of ["glossary", "summary", "ideas"] as const) {
+      expect([...markedModes(only(built)).keys()], built).not.toContain(built);
+    }
+  });
+
+  it("answers for every mode there is, and gives away only what it should", () => {
+    for (const mode of MODES) {
+      const gap = visitorGap(mode, EVERYTHING_BUILT);
+      if (
+        mode === "toc" ||
+        mode === "outline" ||
+        mode === "glossary" ||
+        mode === "summary" ||
+        mode === "ideas"
+      ) {
+        expect(gap, mode).toBeNull();
+      } else {
+        expect(gap, mode).not.toBeNull();
+      }
+    }
+    /* And each marked entry carries the sentence the band will show, so the
+       bar's tooltip cannot drift away from it — the drift a browser pass found
+       on 2026-08-28, when the two said the same fact a few words apart. */
+    for (const [mode, sentence] of markedModes(NOTHING_BUILT)) {
+      expect(sentence).toBe(visitorSentence(visitorGap(mode, NOTHING_BUILT) as VisitorGap));
     }
   });
 });
@@ -218,28 +231,20 @@ describe("the sentences themselves", () => {
   /** One of each kind, so the sweeps below cover the whole union. */
   const ALL: VisitorGap[] = [
     visitorGap("glossary", NOTHING_BUILT) as VisitorGap,
-    visitorGap("glossary", EVERYTHING_BUILT) as VisitorGap,
-    visitorGap("glossary", null) as VisitorGap,
-    visitorGap("chat", null) as VisitorGap,
+    visitorGap("chat", NOTHING_BUILT) as VisitorGap,
     COMMENTS_GAP,
   ];
 
   it("covers every kind the union has", () => {
     expect(new Set(ALL.map((g) => g.kind))).toEqual(
-      new Set([
-        "not-built",
-        "not-yet-public",
-        "availability-unknown",
-        "owners-only",
-        "readers-own",
-      ]),
+      new Set(["not-built", "owners-only", "readers-own"]),
     );
   });
 
   it("says something different for each kind", () => {
-    /* By kind rather than by member, because a not-yet-public tweet thread and
-       a not-yet-public glossary are deliberately the same sentence about
-       different nouns. */
+    /* By kind rather than by member, because a missing tweet thread and a
+       missing glossary are deliberately the same sentence about different
+       nouns. */
     const byKind = new Map(ALL.map((g) => [g.kind, visitorSentence(g)]));
     expect(new Set(byKind.values()).size).toBe(byKind.size);
     for (const sentence of byKind.values()) {
@@ -252,20 +257,93 @@ describe("the sentences themselves", () => {
   });
 
   /**
+   * **Every artefact gets its own noun**, so the four sentences are about four
+   * different things rather than one thing said four times.
+   */
+  it("names each artefact distinctly", () => {
+    const nouns = (["tweets", "glossary", "summary", "ideas"] as const).map(
+      (what) => (notBuiltGap(what) as { noun: string }).noun,
+    );
+    expect(new Set(nouns).size).toBe(nouns.length);
+  });
+
+  /**
    * **The offer is withheld where it would not be kept.**
    *
-   * An artefact that exists but is not yet carried on a shared link waits on us
-   * shipping slice 1b, not on the visitor doing anything — so putting "make a
-   * free account" beside it would be a promise broken the moment they took it.
-   * Comments are the same: they belong to whoever added the article, and an
-   * account does not change that.
+   * Comments belong to whoever added the article, and an account does not
+   * change that until docs/plans/public-read-only-access.md § Stage 3. The two
+   * entries that used to be withheld for the other reason — *we are the ones
+   * who have not shipped it* — went with their union members in slice 1b, which
+   * is why there is one `false` here and there were three.
    */
   it("offers an account only where an account is the fix", () => {
     expect(anAccountWouldHelp(visitorGap("glossary", NOTHING_BUILT) as VisitorGap)).toBe(true);
-    expect(anAccountWouldHelp(visitorGap("chat", null) as VisitorGap)).toBe(true);
-    expect(anAccountWouldHelp(visitorGap("glossary", EVERYTHING_BUILT) as VisitorGap)).toBe(false);
-    /* And least of all where we do not know there is anything to offer. */
-    expect(anAccountWouldHelp(visitorGap("glossary", null) as VisitorGap)).toBe(false);
+    expect(anAccountWouldHelp(visitorGap("chat", NOTHING_BUILT) as VisitorGap)).toBe(true);
     expect(anAccountWouldHelp(COMMENTS_GAP)).toBe(false);
+  });
+});
+
+/**
+ * **Which artefacts the payload turned out to have** — the derivation that
+ * replaced `GET /api/public/metadata/:slug` in the client.
+ *
+ * It is two lines of code and it is the hinge of the whole slice: everything
+ * above takes `PublicArtefacts`, and this is where those five booleans now come
+ * from. The one way to get it wrong is the one the empty case below pins.
+ */
+describe("what the payload says it has", () => {
+  const BARE: PublicArticle = {
+    meta: { slug: "a-piece", title: "A piece" },
+    blocks: [],
+    tree: { version: "t", generator: "t", slug: "a-piece", rootId: "n0", nodes: {} },
+  };
+
+  it("reads a present key as yes and an absent one as no", () => {
+    expect(artefactsIn(BARE)).toEqual({
+      arc: false,
+      tweets: false,
+      glossary: false,
+      summary: false,
+      ideas: false,
+    });
+    expect(
+      artefactsIn({
+        ...BARE,
+        glossary: { entries: [{ id: "t", name: "T", kind: "concept", aliases: [], blocks: [] }] },
+      }),
+    ).toMatchObject({ glossary: true, summary: false });
+  });
+
+  /**
+   * **An artefact that is empty is one that exists**, and this is the case a
+   * truthiness or a length test collapses.
+   *
+   * A stored `{entries: []}` means somebody ran the step and it found no terms
+   * — a ready but empty artefact, which the panel says out loud. *Nobody has
+   * built a glossary for this piece yet* is a different sentence about a
+   * different situation, and it would be a claim about the pipeline that is
+   * simply false. src/web/public-artefacts.ts.
+   */
+  it("counts an empty artefact as built", () => {
+    const empty: PublicArticle = { ...BARE, glossary: { entries: [] }, ideas: { ideas: [] } };
+    expect(artefactsIn(empty)).toMatchObject({ glossary: true, ideas: true });
+    /* And the gap that follows from it: nothing stands in the way, so the band
+       opens and says the list is empty rather than that nobody built one. */
+    expect(visitorGap("glossary", artefactsIn(empty))).toBeNull();
+    expect(visitorGap("summary", artefactsIn(empty))?.kind).toBe("not-built");
+  });
+
+  /**
+   * **The lift carries the four artefacts and nothing else.**
+   *
+   * `PublicArticle` extends `PublicArtefactSet`, so handing the whole payload
+   * down would typecheck — and would leave the prose, the blocks and the tree
+   * sitting there at runtime for the first `as` to reach. This is the same
+   * construct-rather-than-spread rule the server DTOs follow.
+   */
+  it("lifts the artefacts out without the article coming with them", () => {
+    const full: PublicArticle = { ...BARE, glossary: { entries: [] } };
+    expect(Object.keys(artefactsOf(full))).toEqual(["glossary"]);
+    expect(artefactsOf(BARE)).toEqual({});
   });
 });

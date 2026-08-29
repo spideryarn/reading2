@@ -72,7 +72,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article } from "../src/types.js";
-import type { PublicArticle, PublicMetadata } from "../src/public-types.js";
+import type { PublicArticle, PublicMetadata, PublicTweets } from "../src/public-types.js";
 
 /** Who `useSession` says is here. Re-posed by each test before it renders. */
 const session: { user: { id: string; email: string } | null } = { user: null };
@@ -127,6 +127,21 @@ Object.defineProperty(window, "scrollTo", { writable: true, value: () => {} });
 const trace: { url: string; method: string; auth: string | null }[] = [];
 
 const SLUG = "a-piece";
+
+/**
+ * **What the payload carries and nothing else could put on screen.**
+ *
+ * The trace proves no private request went out; it cannot prove the page knows
+ * which reader it is drawing for — handing `OwnedReader` a visitor capability
+ * left every trace assertion passing, because the hooks are called there either
+ * way. So each of these is a string that can only have come from
+ * `GET /api/public/article/:slug`, and each is asserted **on screen** beside
+ * the trace. That is the second assertion slice 1a's review asked every future
+ * capability seam to have.
+ */
+const PUBLIC_TERM = "Integrated information theory";
+const PUBLIC_IDEA = "Measurement precedes theory";
+const PUBLIC_TWEET = "The first post.";
 
 /**
  * A **PDF** article, because the private source control only mounts for one.
@@ -205,7 +220,60 @@ const ARTICLE: PublicArticle = {
       },
     },
   },
+  /**
+   * **Asymmetric on purpose, and it is the fixture that makes slice 1b
+   * checkable at all.**
+   *
+   * A glossary and a list of ideas are here; a summary and a tweet thread are
+   * not. So one article in one run produces both of the two answers a visitor
+   * can get about an artefact — *here it is* and *nobody has built one* — and
+   * "these two blurred into one" is visible. A fixture with all four, or with
+   * none, cannot tell them apart. A browser pass made exactly this point on
+   * 2026-08-28 about the four sentences of slice 1a.
+   */
+  glossary: {
+    entries: [
+      {
+        id: "spya-term01",
+        name: PUBLIC_TERM,
+        kind: "concept",
+        aliases: [],
+        senseHere: "What the author means by it here.",
+        blocks: ["spya-bbbbbb"],
+      },
+    ],
+  },
+  ideas: {
+    ideas: [
+      {
+        id: "spya-idea01",
+        /* The **name** rather than the statement, because a closed row shows
+           only the name — a canary the page cannot draw without opening
+           something would be a canary this test never sees. */
+        name: PUBLIC_IDEA,
+        provenance: "assumed",
+        statement: "You cannot theorise about what you have no way to measure.",
+        occurrences: [
+          {
+            blockId: "spya-bbbbbb",
+            quote: "The first paragraph",
+            reasoning: "It rests on it.",
+          },
+        ],
+      },
+    ],
+  },
 };
+
+/**
+ * The thread, for the one case that needs the tweets page to have one.
+ *
+ * Kept off `ARTICLE` so that the default fixture can still prove the *absent*
+ * half — the page said *"There is a tweet thread for this piece"* about an
+ * article whose own response said there was not, and that assertion is worth
+ * keeping red-able.
+ */
+const THREAD: PublicTweets = { limit: 280, tweets: [{ text: PUBLIC_TWEET, chars: 24 }] };
 
 const METADATA: PublicMetadata = {
   slug: SLUG,
@@ -226,7 +294,12 @@ const METADATA: PublicMetadata = {
  * below turns on being able to see it disappear.
  */
 const OWNED: Article = {
-  ...ARTICLE,
+  /* The owner's payload is an `Article`, which has no artefact keys at all —
+     theirs come from `GET /api/glossary/:slug` and its siblings. Spreading
+     `ARTICLE` would carry the public ones across and make the owner control
+     below prove less than it says. */
+  blocks: ARTICLE.blocks,
+  tree: ARTICLE.tree,
   meta: {
     ...ARTICLE.meta,
     ...PDF_META,
@@ -241,6 +314,12 @@ const OWNED: Article = {
  * matters most to the chrome: a visitor who has an account.
  */
 let owned: () => Response;
+
+/**
+ * What the public article endpoint serves — `ARTICLE` unless a case says
+ * otherwise, and reset in `beforeEach` so one test cannot leak into the next.
+ */
+let served: PublicArticle;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -257,7 +336,7 @@ function json(body: unknown, status = 200): Response {
  * full of error states — a trace of failures would be a different test.
  */
 function reply(url: string, method: string): Response {
-  if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
+  if (url === `/api/public/article/${SLUG}`) return json(served);
   if (url === `/api/public/metadata/${SLUG}`) return json(METADATA);
   if (url === `/api/article/${SLUG}`) return owned();
   if (method === "POST") return new Response(null, { status: 204 });
@@ -287,6 +366,7 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   trace.length = 0;
   session.user = null;
+  served = ARTICLE;
   owned = () => json(OWNED);
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -342,7 +422,7 @@ async function open(search = "", path = ""): Promise<void> {
 const outsidePublic = () => trace.filter((r) => !r.url.startsWith("/api/public/"));
 
 describe("a signed-out browser on a shared document", () => {
-  it("asks the two public endpoints and nothing else", async () => {
+  it("asks one public endpoint and nothing else", async () => {
     await open();
 
     expect(host.textContent).toContain("The first paragraph of the piece.");
@@ -353,10 +433,17 @@ describe("a signed-out browser on a shared document", () => {
        what the capability actually decides, so it is checked here and its
        absence is checked in the owner control below. */
     expect(host.textContent).toContain("View only");
-    expect(trace.map((r) => r.url)).toEqual([
-      `/api/public/article/${SLUG}`,
-      `/api/public/metadata/${SLUG}`,
-    ]);
+    /**
+     * **One request, and it used to be two.** `GET /api/public/metadata/:slug`
+     * was fetched immediately after the article, purely so a marked mode could
+     * pick between two true sentences, with its failure swallowed to `null`.
+     * The artefacts ride on the article payload since slice 1b, so the payload
+     * answers that question and the request is gone. The endpoint itself stays
+     * — it is still in the route inventory and still tested — which is why this
+     * asserts the exact list rather than a prefix.
+     * docs/plans/public-read-only-access.md § The second request disappears.
+     */
+    expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
   });
 
   it("issues no POST, and sends no Authorization header", async () => {
@@ -394,19 +481,59 @@ describe("a signed-out browser on a shared document", () => {
    * so the two artefact sentences are produced by one article in one run, which
    * is the arrangement in which "they blurred into one" is visible.
    */
-  it("tells a missing artefact from one we do not carry yet, on screen", async () => {
+  it("tells an artefact it has from one nobody built, on screen", async () => {
     await open("?mode=summary");
-    /* `summary: false` — nobody built one. This is the state the browser pass
-       could not reach. */
+    /* No `summary` key on the payload — nobody built one. This is the state the
+       browser pass could not reach, because the article it drove had every
+       artefact. */
     expect(host.textContent).toContain("Nobody has built a summary for this piece yet");
+    expect(host.textContent).not.toContain(PUBLIC_TERM);
 
     await remount();
 
     await open("?mode=glossary");
-    /* `glossary: true` — it exists, and slice 1b has not shipped the endpoint
-       that would carry it. A different sentence, and it has to be. */
-    expect(host.textContent).toContain("does not carry it yet");
+    /**
+     * **And the glossary is really on screen**, which is the slice.
+     *
+     * `PUBLIC_TERM` can only have come from the article payload — there is no
+     * glossary endpoint in this trace and `outsidePublic()` is empty — so this
+     * is the rendered-state half that a network trace cannot give. The trace
+     * proves nothing private was asked for; this proves the page knows it is a
+     * visitor's page and drew the visitor's data.
+     */
+    expect(host.textContent).toContain(PUBLIC_TERM);
     expect(host.textContent).not.toContain("Nobody has built");
+    expect(outsidePublic()).toEqual([]);
+
+    await remount();
+
+    await open("?mode=ideas");
+    expect(host.textContent).toContain(PUBLIC_IDEA);
+    expect(outsidePublic()).toEqual([]);
+  });
+
+  /**
+   * **The owner-only controls are not on a visitor's band**, and this is the
+   * assertion the trace genuinely cannot make.
+   *
+   * Every one of these is a button or a label that only `GlossaryPanel`'s
+   * `owner` arm draws, and none of them fires a request until it is *pressed* —
+   * so a panel handed a nulled-out owner shape instead of `owner: null` would
+   * render all of them and leave the trace spotless. src/web/GlossaryPanel.tsx
+   * § GlossaryOwner.
+   */
+  it("draws none of the owner's controls on the band it does open", async () => {
+    await open("?mode=glossary");
+    expect(host.textContent).toContain(PUBLIC_TERM);
+    for (const control of [
+      "Check the web",
+      "Find more",
+      "Start again",
+      "Find the terms",
+      "Use my profile",
+    ]) {
+      expect(host.textContent, control).not.toContain(control);
+    }
   });
 
   /**
@@ -530,6 +657,27 @@ describe("a signed-out browser on a shared document", () => {
 
     expect(host.textContent).toContain("Nobody has built a tweet thread for this piece yet");
     expect(host.textContent).not.toContain("There is a tweet thread");
+  });
+
+  /**
+   * **And it draws the real thread when the payload carries one** — the other
+   * half of the same branch, which is what makes the case above evidence
+   * rather than a page that always says the same thing.
+   *
+   * Still no request outside `/api/public/`: `Tweets` fetches
+   * `GET /api/tweets/:slug` and mounts `useJobs`, and neither may appear here.
+   */
+  it("renders the tweet thread the payload carries, and asks nobody for it", async () => {
+    served = { ...ARTICLE, tweets: THREAD };
+    await open("", "/tweets");
+
+    expect(host.textContent).toContain(PUBLIC_TWEET);
+    expect(host.textContent).not.toContain("Nobody has built a tweet thread");
+    /* The owner's foot: the provenance line and the button that spends. */
+    expect(host.textContent).not.toContain("Write it again");
+    expect(host.textContent).not.toContain("Written by");
+    expect(outsidePublic()).toEqual([]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
 
   /**

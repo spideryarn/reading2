@@ -1159,6 +1159,15 @@ export const MAKE_AN_ACCOUNT = "Make a free account";
  * first — a gap where a glossary would be teaches a visitor that the feature is
  * broken.
  *
+ * **It is the only artefact sentence now.** Two others stood beside it until
+ * slice 1b: *"There is a glossary for this piece, but a shared link does not
+ * carry it yet"*, and *"A shared link does not carry a glossary yet"* for when
+ * a second request had failed and we did not know which of the two was true.
+ * A shared link carries all four artefacts now, and there is no second request
+ * to fail, so both were deleted with the `VisitorGap` members that produced
+ * them — src/web/visitor.ts. A sentence with no cause is one that gets shown by
+ * mistake.
+ *
  * `noun` is a noun phrase with its article: `"a glossary"`, `"a summary"`.
  */
 export function notBuiltYet(noun: string): string {
@@ -1166,40 +1175,22 @@ export function notBuiltYet(noun: string): string {
 }
 
 /**
- * **It exists, and a shared link does not carry it yet.** A fourth state, and
- * it is temporary: slice 1b adds the public endpoints for glossary, summaries,
- * ideas and tweets, and this sentence goes with the slice that makes it false.
+ * **Somebody built it and it came back with nothing in it.**
  *
- * It is worth having rather than folding into `notBuiltYet`, which would be a
- * lie about somebody's article, or into `signedInOnly`, which would promise
- * that an account is the fix when the fix is us shipping the endpoint.
- * `PublicMetadata.available` is the field that tells the two apart —
- * src/public-types.ts.
+ * The state absence cannot express, and slice 1b is what made it reachable: a
+ * shared link now carries the artefacts themselves, and *there is no glossary
+ * key on this payload* is a different fact from *there is one and its list is
+ * empty*. The first means nobody has run the step; the second means somebody
+ * ran it and it found no terms, which is a real answer about the piece.
+ *
+ * Collapsing the two would libel the article in one direction or the pipeline
+ * in the other, and a truthiness or a length test in the client is exactly how
+ * that happens — src/web/public-artefacts.ts.
+ *
+ * `noun` is capitalised and carries its article: `"A glossary"`, `"A summary"`.
  */
-export function notOnSharedLinksYet(noun: string): string {
-  return `There is ${noun} for this piece, but a shared link does not carry it yet.`;
-}
-
-/**
- * **We could not find out whether it exists**, and the sentence above must not
- * be used for it.
- *
- * `available` is `null` when `GET /api/public/metadata/:slug` did not land, and
- * until 2026-08-28 that fell through to `notOnSharedLinksYet` — whose first two
- * words are *"There is"*. A network failure was being rendered as a claim about
- * somebody's article. GPT Sol found it reviewing the client half.
- *
- * So this says only the half we know. *A shared link does not carry a glossary
- * yet* is unconditionally true in this slice whatever the flags would have
- * said, and it asserts nothing about whether one was ever written.
- *
- * **Deliberately close to `notOnSharedLinksYet` and deliberately not the same.**
- * The two differ by exactly the claim that separates them — one says the piece
- * has the thing, the other declines to. A reader who saw both would notice; a
- * reader who saw one cannot be misled by it.
- */
-export function availabilityUnknown(noun: string): string {
-  return `A shared link does not carry ${noun} yet.`;
+export function builtButEmpty(noun: string): string {
+  return `${noun} was built for this piece, and it came back with nothing in it.`;
 }
 
 /**

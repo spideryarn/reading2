@@ -1614,6 +1614,39 @@ before landing: for every file being committed, resolve its relative imports and
 `git ls-files` does not know. Run against `TableView.tsx` and `App.tsx` it names all three missing
 modules immediately; run against this slice's server files it says nothing.
 
+### The client half of 1b, and what waiting for a peer cost
+
+Held back for most of a day, on one fact: `App.tsx` imported `./safe-area.js`, and `safe-area.ts`
+was not in git. Committing would have named a file nobody else could resolve and re-broken `main` in
+exactly the way [the section above](#npm-run-typecheck-cannot-see-that-a-commit-is-incomplete)
+describes. So `src/web/public-artefacts.ts` went in **alone**, as `2f8439d` — a leaf with one
+type-only import and nothing in `HEAD` referring to it, inert until the rest arrived, and, more to
+the point, no longer sitting untracked where somebody else's `git add` could sweep it into their
+message. That had already happened once this slice, to a test edit, in `158467c`.
+
+The safe-area lane landed its own work in the meantime and the block dissolved on its own. By the
+time the rest went in, `App.tsx`'s diff against `HEAD` contained **no** hunk that was not this
+slice's: the peer work that had made it un-committable was committed, by the peer, under their
+message. Greg had authorised sweeping their hunks in if it came to that; it did not come to that.
+
+**The lesson is about the shape of the wait, not the wait.** A leaf can go early and should. What
+cannot go early is the file that *names* the leaf, and in a shared tree the thing that decides when
+it may go is somebody else's commit, not your own gate. The check that told us — resolve a file's
+relative imports, refuse any `git ls-files` does not know — is what made the wait a decision instead
+of a guess, and running it against the six files in this commit is what ended it.
+
+#### What actually landed
+
+| File | What changed |
+|---|---|
+| `src/web/App.tsx` | the second request and its swallowed `catch` deleted; three band hooks (`useIdeasMode`, `useGlossaryMode`, `useSummaryMode`) extracted so the owner's loader-fed path and the visitor's payload-fed path run the same code |
+| `src/web/reader-capability.ts` | the visitor arm carries `artefacts` and a no-longer-nullable `available` |
+| `src/web/visitor.ts` | `VisitorGap` loses `availability-unknown` — the state that existed only to hedge a request that no longer happens |
+| `src/messages.ts` | `builtButEmpty(noun)`, because *ready and empty* and *never built* are different sentences |
+| `tests/visitor-gaps.test.ts`, `tests/public-network-trace.test.tsx` | the gap table and the one-request assertion, both rewritten around the smaller union |
+
+`npm test` is green across 304 files and 5534 tests; all three typecheck projects are clean.
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next

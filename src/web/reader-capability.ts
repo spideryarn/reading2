@@ -32,7 +32,7 @@
  * chrome one thing rather than two.
  */
 import type { Glossary, ThreadSummary } from "../types.js";
-import type { PublicArtefacts } from "../public-types.js";
+import type { PublicArtefactSet, PublicArtefacts } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
 import type { ChatAnchorsApi } from "./useChatAnchors.js";
 import type { ClientComment, CommentsApi } from "./useComments.js";
@@ -50,13 +50,43 @@ export type ReaderCapability =
   | {
       kind: "visitor";
       /**
-       * Which artefacts this piece has, from `GET /api/public/metadata/:slug` —
-       * or `null` when that request did not land.
+       * **The artefacts this piece has, as data rather than as a loader.**
        *
-       * It decides one thing: which of two true sentences a marked mode shows.
-       * visitor.ts.
+       * This is what slice 1b added, and the shape is the point. The owner's
+       * arm above carries three *hooks' results* — a `CommentsApi`, a
+       * `ChatAnchorsApi`, a `GlossaryRead`, each of which has a status, an
+       * error and a set of verbs, because each of them is a request in flight.
+       * A visitor's glossary is none of those things: it arrived inside the
+       * page's own payload, so there is nothing to be loading, nothing to have
+       * failed, and nothing to ask for.
+       *
+       * GPT Sol's design for this slice specified a four-state
+       * `PublicArtefactRead<T>` — loading, ready, not-generated, unavailable —
+       * because it also specified four sibling endpoints. Greg's decision that
+       * there are none takes all four states with it: **an artefact that exists
+       * is a key that is present.** src/public-types.ts § PublicArtefactSet.
+       *
+       * Which is also why this is not `GlossaryRead` with its fields left null.
+       * The rule this file exists to keep is one member up: the visitor arm has
+       * no `comments` field to be empty, so there is nothing for a later edit
+       * to read. A nulled-out owner shape would have put that back.
        */
-      available: PublicArtefacts | null;
+      artefacts: PublicArtefactSet;
+      /**
+       * The same fact as five booleans, derived once at the seam.
+       *
+       * The marked modes and the visitor's metadata page both ask *does this
+       * piece have one* rather than *give me the list*, and they ask it about
+       * `arc` too, which is not in the set above because it has ridden inside
+       * the article payload since slice 1a. Derived rather than fetched:
+       * `GET /api/public/metadata/:slug` used to answer this and the second
+       * request is gone. public-artefacts.ts.
+       *
+       * **Not nullable any more.** It was `PublicArtefacts | null`, where
+       * `null` meant that second request had failed — which is the state slice
+       * 1b deleted along with the request. visitor.ts § VisitorGap.
+       */
+      available: PublicArtefacts;
       /**
        * **Whether there is a session — the one question the chrome asks that is
        * not "is this mine".**

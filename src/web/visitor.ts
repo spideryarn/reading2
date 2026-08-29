@@ -1,6 +1,6 @@
 /**
  * **What a visitor is told when they press a mode they cannot have** — and
- * which of the four sentences it is.
+ * which of the three sentences it is.
  *
  * "Visitor" means anyone who does not own the document: signed out, or signed
  * in and reading somebody else's. Keyed on *is this mine*, never on *am I
@@ -15,76 +15,111 @@
  * products that get it right name the cause.
  * docs/research/public-access-how-others-do-it.md.
  *
- * Three of these live in the reading view and one is a whole page, so there is
- * no single component that renders all four and could be tested for telling
- * them apart. A function can be — tests/visitor-gaps.test.ts sweeps every mode
- * against both answers `PublicMetadata.available` can give and asserts the four
- * are distinguishable.
+ * These live in the reading view, in the comments drawer and on a whole page of
+ * its own, so there is no single component that renders them all and could be
+ * tested for telling them apart. A function can be — tests/visitor-gaps.test.ts
+ * sweeps every mode against every artefact and asserts the sentences are
+ * distinguishable.
+ *
+ * **Since slice 1b the commonest answer is `null`.** A visitor gets the
+ * glossary, the summaries, the ideas and the tweet thread, so the question this
+ * file answers is no longer *which excuse* but *is there anything in the way at
+ * all* — and for three of the eight modes, on an article that has them, there
+ * is not.
  *
  * The sentences themselves are in src/messages.ts, like every other sentence a
  * reader sees. This file decides *which*.
  */
 import type { PublicArtefacts } from "../public-types.js";
-import {
-  availabilityUnknown,
-  notBuiltYet,
-  notOnSharedLinksYet,
-  ownersOnly,
-  readersOwnWork,
-} from "../messages.js";
+import { notBuiltYet, ownersOnly, readersOwnWork } from "../messages.js";
 import { MODES, type Mode } from "./params.js";
 
 /**
  * Why this mode is not available here.
  *
- * Four members, and the discriminant is the *cause* rather than the remedy —
- * two of them are fixed by making an account, one by us shipping slice 1b, and
- * one by nothing at all, because it is a boundary rather than a gap.
+ * **Three members since slice 1b, and it used to be five.** The discriminant is
+ * the *cause* rather than the remedy, and what is left are three causes rather
+ * than two causes and two uncertainties:
+ *
+ *  - `not-yet-public` said *it exists, and a shared link does not carry it yet*.
+ *    Slice 1b is what carries all four artefacts, so nothing can produce it any
+ *    more, and a union member with no cause is a sentence waiting to be shown
+ *    by mistake.
+ *  - `availability-unknown` said *we could not find out whether it exists*. It
+ *    existed because the flags came from a **second** request that could fail
+ *    on its own. The artefacts are in the article payload now, so either that
+ *    payload arrived — and we know exactly what it holds — or it did not, and
+ *    the reader never reaches a mode at all, because the page renders *this
+ *    document isn't shared* or an error instead.
+ *
+ * Deleting a defensive state deserves more suspicion than adding one, so the
+ * claim is written narrowly and it is checkable: **there is no path on which a
+ * visitor is rendering a mode and does not know whether its artefact exists.**
+ * `visitorGap` takes a non-optional `PublicArtefactSet` now, so the compiler
+ * asks the same question of every future caller.
  */
 export type VisitorGap =
   /** The pipeline never ran for this piece. Nobody's fault. */
   | { kind: "not-built"; noun: string }
-  /** It exists, and slice 1b has not shipped the public endpoint that would carry it. */
-  | { kind: "not-yet-public"; noun: string }
-  /**
-   * **We could not find out whether it exists.** The metadata request did not
-   * land, so the flags are absent.
-   *
-   * The fifth member, added 2026-08-28, and it exists because a `null` used to
-   * fall through to `not-yet-public` — whose sentence begins *"There is"*. A
-   * network failure was rendered as a claim about somebody's article.
-   *
-   * It must not swallow `not-yet-public` either: one says the piece has the
-   * thing and this one declines to, which is the whole difference between them.
-   */
-  | { kind: "availability-unknown"; noun: string }
   /** It works, it costs a model call, and it is the owner's. */
   | { kind: "owners-only"; feature: string }
   /** It is the owner's own annotation, and sharing an article does not share it. */
   | { kind: "readers-own"; plural: string };
 
 /**
- * The three answers about an artefact, chosen by what the flags say.
+ * **The one answer about an artefact, and `null` is now one of the two.**
  *
- * One function because three call sites need it — the two artefact modes, and
- * the tweets *page*, which had a hardcoded `not-yet-public` constant and so
- * claimed a thread existed even when the wire said `tweets: false`. GPT Sol,
- * 2026-08-28.
+ * Before slice 1b this had three answers and none of them was "you can have
+ * it": every artefact was withheld, and the only question was which true
+ * sentence to say about the withholding. Now the flag decides whether there is
+ * a gap at all — a piece that has a glossary shows its glossary, and `null`
+ * means nothing stands in the way.
+ *
+ * One function because three call sites need it: the two artefact modes and the
+ * tweets *page*, which had a hardcoded gap constant and so claimed a thread
+ * existed even when the wire said `tweets: false`. GPT Sol, 2026-08-28.
  */
-function artefactGap(
-  noun: string,
-  has: keyof PublicArtefacts,
-  available: PublicArtefacts | null,
-): VisitorGap {
-  if (available === null) return { kind: "availability-unknown", noun };
-  return available[has] ? { kind: "not-yet-public", noun } : { kind: "not-built", noun };
+function artefactGap(has: keyof PublicArtefacts, available: PublicArtefacts): VisitorGap | null {
+  return available[has] ? null : notBuiltGap(has);
 }
 
-/** The noun phrase each artefact mode is called in a sentence, article included. */
-const ARTEFACT: Partial<Record<Mode, { noun: string; has: keyof PublicArtefacts }>> = {
-  summary: { noun: "a summary", has: "summary" },
-  glossary: { noun: "a glossary", has: "glossary" },
-  ideas: { noun: "a list of ideas", has: "ideas" },
+/**
+ * **The noun phrase each artefact is called in a sentence, article included.**
+ *
+ * One table, so that the tweet thread on its own page and the three modes in
+ * the reading view cannot end up calling the same thing two names.
+ */
+const NOUN: Record<keyof PublicArtefacts, string> = {
+  arc: "an arc through the argument",
+  summary: "a summary",
+  glossary: "a glossary",
+  ideas: "a list of ideas",
+  tweets: "a tweet thread",
+};
+
+/**
+ * *Nobody has built one of these yet*, for a caller that has already
+ * established the artefact is absent.
+ *
+ * **`VisitorTweetsPage` is the one caller, and this replaced a `tweetsGap`
+ * that took the five booleans.** The tweets page has to branch on the artefact
+ * key anyway — it renders the thread when there is one, and TypeScript will not
+ * narrow `artefacts.tweets` from the return value of a policy function — so a
+ * `tweetsGap` beside that branch would have been a second answer to a question
+ * already decided, which is exactly the shape GPT Sol caught on 2026-08-28
+ * when a constant claimed a thread the wire said was absent. Branching on the
+ * key and taking the sentence from the table below is one fact and one wording.
+ * src/web/PublicPages.tsx.
+ */
+export function notBuiltGap(what: keyof PublicArtefacts): VisitorGap {
+  return { kind: "not-built", noun: NOUN[what] };
+}
+
+/** Which of the flags each artefact mode asks about. */
+const ARTEFACT: Partial<Record<Mode, keyof PublicArtefacts>> = {
+  summary: "summary",
+  glossary: "glossary",
+  ideas: "ideas",
 };
 
 /** The modes that spend, and what the button that opens them is called. */
@@ -113,18 +148,20 @@ const COSTS: Partial<Record<Mode, string>> = {
 /**
  * What stands between this visitor and this mode, or `null` if nothing does.
  *
- * `available` is `PublicMetadata.available`, or `null` when that fetch did not
- * land. **A missing answer must not become a claim about somebody's article**:
- * without the flags this says *not on shared links yet*, which is
- * unconditionally true in slice 1a whatever the flag would have said, rather
- * than *nobody has built one*, which would be a statement about the world made
- * from a failed request. docs/reusable/silent-success.md.
+ * `available` is **not optional**, and that is the whole of slice 1b's claim
+ * about the deleted `availability-unknown`. It used to be
+ * `PublicArtefacts | null`, where `null` meant *the second request did not
+ * land*; there is no second request, so the five flags are derived from the
+ * article payload the page is already rendering and there is nothing to be
+ * unsure about. A caller who does not have a payload does not have a page
+ * either. src/web/public-artefacts.ts.
  */
-export function visitorGap(mode: Mode, available: PublicArtefacts | null): VisitorGap | null {
+export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap | null {
   /* The table of contents, the granularity zoom and the spine are the whole
      point of the feature and cost nothing: they are drawn from the tree in the
      payload the visitor already has. */
   if (mode === "toc") return null;
+
   /* Outline is the same bargain and had to be named to get it. The fall-through
      below is deliberately fail-closed, so a mode added later is owners-only
      until somebody says otherwise — which meant the plan's claim that this mode
@@ -138,7 +175,7 @@ export function visitorGap(mode: Mode, available: PublicArtefacts | null): Visit
   if (costs) return { kind: "owners-only", feature: costs };
 
   const artefact = ARTEFACT[mode];
-  if (artefact) return artefactGap(artefact.noun, artefact.has, available);
+  if (artefact) return artefactGap(artefact, available);
 
   /* Not reachable today — `Mode` is closed and every member is in one of the
      tables above. It is here rather than as a non-null assertion because a mode
@@ -149,18 +186,6 @@ export function visitorGap(mode: Mode, available: PublicArtefacts | null): Visit
 
 /** The same question for the two things that are not modes. */
 export const COMMENTS_GAP: VisitorGap = { kind: "readers-own", plural: "Comments" };
-
-/**
- * The tweets page, **derived rather than assumed.**
- *
- * It was a constant asserting `not-yet-public`, so `/read/:slug/tweets` told a
- * visitor *"There is a tweet thread for this piece"* on an article whose wire
- * response said `tweets: false`. A sentence about somebody's article, made up
- * by a client that had been told otherwise. GPT Sol, 2026-08-28.
- */
-export function tweetsGap(available: PublicArtefacts | null): VisitorGap {
-  return artefactGap("a tweet thread", "tweets", available);
-}
 
 /**
  * Which mode buttons in the bottom bar are drawn dimmed, **and the sentence
@@ -176,14 +201,17 @@ export function tweetsGap(available: PublicArtefacts | null): VisitorGap {
  *
  * **Derived from `MODES` rather than listed**, which is the whole reason it is
  * a function and not a constant: a mode added next month is marked for a
- * visitor whether or not whoever adds it remembers this file. That is the same
+ * visitor whether or not whoever adds it remembers this file. And it is derived
+ * from the flags too, so an artefact this piece **has** is not marked at all —
+ * since slice 1b a visitor can open the glossary, the summaries and the ideas,
+ * and a dimmed button over a band that works would be the worst of both. That is the same
  * rule the admin check in src/routes.ts states about itself — *"so a route
  * added later is behind this check whether or not whoever adds it remembers,
  * which is the only version of this that stays true"* — and it fails closed,
  * because `visitorGap` answers with a boundary for anything it does not
  * recognise.
  */
-export function markedModes(available: PublicArtefacts | null): ReadonlyMap<Mode, string> {
+export function markedModes(available: PublicArtefacts): ReadonlyMap<Mode, string> {
   const marked = new Map<Mode, string>();
   for (const mode of MODES) {
     const gap = visitorGap(mode, available);
@@ -197,10 +225,6 @@ export function visitorSentence(gap: VisitorGap): string {
   switch (gap.kind) {
     case "not-built":
       return notBuiltYet(gap.noun);
-    case "not-yet-public":
-      return notOnSharedLinksYet(gap.noun);
-    case "availability-unknown":
-      return availabilityUnknown(gap.noun);
     case "owners-only":
       return ownersOnly(gap.feature);
     case "readers-own":
@@ -213,21 +237,20 @@ export function visitorSentence(gap: VisitorGap): string {
  *
  * The sign-up line goes beside the specific thing the visitor has just found
  * they could not do — that is the whole placement rule — so it must not appear
- * beside the one gap an account does not close. A `not-yet-public` artefact
- * waits on us shipping slice 1b, and offering an account for it would be a
- * promise we would break the moment they took it.
+ * beside a gap an account does not close. Comments are the one left: they
+ * belong to whoever added the article, and until
+ * docs/plans/public-read-only-access.md § Stage 3 an account does not change
+ * that.
+ *
+ * The two entries that used to be `false` for the other reason — *we are the
+ * ones who have not shipped it* — went with their union members in slice 1b.
  *
  * A total map rather than a comparison, for the reason `RETRYABLE` in
- * src/messages.ts gives: a fifth kind is then a red compile rather than a
+ * src/messages.ts gives: a fourth kind is then a red compile rather than a
  * silent `false`.
  */
 const FIXED_BY_AN_ACCOUNT: Record<VisitorGap["kind"], boolean> = {
   "not-built": true,
-  "not-yet-public": false,
-  /* Same as `not-yet-public`, and for a stronger reason: we do not even know
-     whether there is anything to carry, so an offer would be a guess wrapped in
-     a promise. */
-  "availability-unknown": false,
   "owners-only": true,
   "readers-own": false,
 };

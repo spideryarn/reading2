@@ -8,7 +8,16 @@ import {
   useState,
 } from "react";
 import { throttle, useQueryState } from "nuqs";
-import type { Article, Block, BlockId, ReviewStance, ThreadKind } from "../types.js";
+import type {
+  Article,
+  Block,
+  BlockId,
+  GlossaryEntry,
+  Idea,
+  ReviewStance,
+  SummaryEntry,
+  ThreadKind,
+} from "../types.js";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
 import { HomeLogo } from "./HomeLogo.js";
@@ -100,6 +109,8 @@ import {
   textParam,
   threadParam,
   type Mode,
+  type Rung,
+  type TermSort,
 } from "./params.js";
 import {
   arrivalTarget,
@@ -124,12 +135,20 @@ import { anchored, countByBlock, useChatAnchors } from "./useChatAnchors.js";
 import { PILL } from "./pill.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { loadPublicArticle, loadPublicMetadata } from "./public-api.js";
-import type { PublicArtefacts } from "../public-types.js";
+import { loadPublicArticle } from "./public-api.js";
+import type {
+  PublicArtefactSet,
+  PublicArtefacts,
+  PublicArticle,
+  PublicGlossary,
+  PublicIdeas,
+  PublicSummaries,
+} from "../public-types.js";
+import { artefactsIn, artefactsOf } from "./public-artefacts.js";
 import { NO_COMMENTS, NO_TERMS, NO_THREADS, type ReaderCapability } from "./reader-capability.js";
-import { markedModes, tweetsGap, visitorGap } from "./visitor.js";
+import { markedModes, visitorGap } from "./visitor.js";
 import { NotSharedPage, SharedNotice, ViewOnlyChip, VisitorBand } from "./PublicChrome.js";
-import { PublicMetadataPage, VisitorPage } from "./PublicPages.js";
+import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
 
 /**
@@ -152,6 +171,24 @@ const EVERY_MODE_AVAILABLE: ReadonlyMap<Mode, string> = new Map();
  * below is a string rather than the array it describes.
  */
 const EMPTY_DEPTHS: number[] = [];
+
+/**
+ * The artefact flags an owner is handed, and nothing reads them.
+ *
+ * `visitorGap` and `markedModes` take a non-optional `PublicArtefacts` since
+ * slice 1b — there is no second request to have failed, so there is no `null`
+ * to mean *we could not check*. The owner's path never asks either function
+ * anything: every gate in `Reader` tests `owner` first. This is what the
+ * compiler is given so that the absence of a question does not need an absent
+ * answer. src/web/visitor.ts.
+ */
+const OWNER_HAS_EVERYTHING: PublicArtefacts = {
+  arc: true,
+  tweets: true,
+  glossary: true,
+  summary: true,
+  ideas: true,
+};
 
 
 
@@ -308,17 +345,31 @@ type ArticleAccess =
       kind: "public";
       article: Article;
       /**
-       * Which artefacts this piece has — `null` when that second request did
-       * not land.
+       * **The glossary, the summaries, the ideas and the tweet thread**, as
+       * they arrived — inside the same payload as the prose.
        *
-       * A separate field rather than folded into the article, because the two
-       * come from two endpoints and one may arrive without the other. What must
-       * not happen is a failed metadata fetch turning into *"nobody has built a
-       * glossary for this piece"*, which is a claim about somebody's article
-       * made out of a network failure. `visitorGap` in visitor.ts is where that
-       * distinction is enforced.
+       * A separate field rather than left on the article because the reading
+       * view takes an `Article`, which is the shape the owner's path also
+       * produces; these four have no owner-side equivalent to be confused with.
+       * Lifted out in `resolveAccess`, which is also the doorway `sanitizeArticle`
+       * runs at — the artefacts do not go through it because nothing renders
+       * them as HTML, and `block.html` is the only field on this page that
+       * reaches `innerHTML`. src/web/sanitize.ts.
        */
-      available: PublicArtefacts | null;
+      artefacts: PublicArtefactSet;
+      /**
+       * Which artefacts this piece has, as five booleans, derived from the
+       * payload above rather than fetched.
+       *
+       * It used to be `PublicArtefacts | null`, filled by a **second** request
+       * to `GET /api/public/metadata/:slug` whose failure was swallowed to
+       * `null` — and `null` needed a `VisitorGap` member and a sentence of its
+       * own so that a lost request would not be rendered as a claim about
+       * somebody's article. There is no second request now, so there is no
+       * `null`: either this payload arrived or the reader is looking at
+       * *this document isn't shared*. public-artefacts.ts.
+       */
+      available: PublicArtefacts;
     };
 
 const LOADING: ArticleAccess = { kind: "loading" };
@@ -441,7 +492,12 @@ async function resolveAccess(slug: string, signedIn: boolean): Promise<ArticleAc
   const article = sanitizeArticle(found.article);
   return found.kind === "owned"
     ? { kind: "owned", article }
-    : { kind: "public", article, available: found.available };
+    : {
+        kind: "public",
+        article,
+        artefacts: artefactsOf(found.article),
+        available: artefactsIn(found.article),
+      };
 }
 
 /** The two-step itself: the owned route, then the public one. Raw payloads. */
@@ -451,7 +507,7 @@ async function findArticle(
 ): Promise<
   | { kind: "not-shared" }
   | { kind: "owned"; article: Article }
-  | { kind: "public"; article: Article; available: PublicArtefacts | null }
+  | { kind: "public"; article: PublicArticle }
 > {
   if (signedIn) {
     const res = await apiFetch(`/api/article/${encodeURIComponent(slug)}`);
@@ -464,16 +520,16 @@ async function findArticle(
     }
   }
 
+  /* **One request, and it used to be two.** A second `GET /api/public/metadata/:slug`
+     stood here purely to learn which artefacts existed, with its failure
+     swallowed to `null`. The artefacts are in this payload now, so the payload
+     answers that — and the endpoint itself stays, tested and in the route
+     inventory, for stage 2's link preview. The win was the request, never the
+     route. docs/plans/public-read-only-access.md § The second request
+     disappears. */
   const read = await loadPublicArticle(slug);
   if (read.kind === "not-shared") return { kind: "not-shared" };
-
-  const available = await loadPublicMetadata(slug)
-    .then((m) => (m.kind === "ok" ? m.body.available : null))
-    /* Swallowed on purpose: the flags decide which of two true sentences a
-       visitor reads, and losing them is not worth losing the article for. */
-    .catch(() => null);
-
-  return { kind: "public", article: read.body, available };
+  return { kind: "public", article: read.body };
 }
 
 /**
@@ -583,6 +639,7 @@ function ArticlePage({
           key={slug}
           slug={slug}
           article={access.article}
+          artefacts={access.artefacts}
           available={access.available}
           signedIn={signedIn}
           view={view}
@@ -760,13 +817,16 @@ function OwnedReader({
 function VisitorArticle({
   slug,
   article,
+  artefacts,
   available,
   signedIn,
   view,
 }: {
   slug: string;
   article: Article;
-  available: PublicArtefacts | null;
+  /** The four artefacts the payload carried. reader-capability.ts § artefacts. */
+  artefacts: PublicArtefactSet;
+  available: PublicArtefacts;
   /** For the call to action, and nothing else — reader-capability.ts § signedIn. */
   signedIn: boolean;
   view: ArticleView;
@@ -782,14 +842,11 @@ function VisitorArticle({
     );
   if (view === "tweets")
     return (
-      <VisitorPage
+      <VisitorTweetsPage
         slug={slug}
         article={article}
-        view="tweets"
-        /* Derived from the wire's own flag, not a constant. It asserted "there
-           is a tweet thread for this piece" on articles whose response said
-           there was not. visitor.ts § tweetsGap. */
-        gap={tweetsGap(available)}
+        thread={artefacts.tweets}
+        available={available}
         signedIn={signedIn}
       />
     );
@@ -797,7 +854,7 @@ function VisitorArticle({
     <Reader
       slug={slug}
       article={article}
-      capability={{ kind: "visitor", available, signedIn }}
+      capability={{ kind: "visitor", artefacts, available, signedIn }}
     />
   );
 }
@@ -951,17 +1008,20 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
  *
  * ## A known follow-up, measured rather than guessed
  *
- * `noExcessiveCognitiveComplexity` scores this function **49** against a
- * threshold of 25. It was **38** before the capability seam and over the
- * threshold then too, so this is not a line that was crossed here — but eleven
- * of those points are the `owner ? … : …` gates, and they are worth a number.
+ * `noExcessiveCognitiveComplexity` scores this function **54** against a
+ * threshold of 25. It was **38** before the capability seam and **49** after
+ * it, and over the threshold at every one of those, so this is not a line that
+ * was crossed here — but the gates are worth a number and the number keeps
+ * going up. Slice 1b added the last five: three `!owner && mode === "…" &&
+ * artefacts?.x` branches, and the two narrowings above them.
  *
- * The extraction that would pay it back is the **mode band dispatch**: the six
- * `owner && mode === "…"` branches near the bottom become one `<OwnerBands>`,
- * which takes about fourteen props. Greg's team lead weighed it on 2026-08-28
- * and said leave it — a fourteen-prop extraction made late and under time
- * pressure is how a lint number becomes a bug. Recorded here rather than in a
- * plan file because this is where somebody will be standing when they wonder.
+ * The extraction that would pay it back is the **mode band dispatch**: the nine
+ * `mode === "…"` branches near the bottom become one `<ModeBands>`, which takes
+ * about sixteen props. Greg's team lead weighed it on 2026-08-28 and said leave
+ * it — a sixteen-prop extraction made late and under time pressure is how a
+ * lint number becomes a bug. Worth revisiting deliberately rather than at the
+ * end of a slice. Recorded here rather than in a plan file because this is
+ * where somebody will be standing when they wonder.
  */
 function Reader({
   slug,
@@ -992,7 +1052,21 @@ function Reader({
    * drift apart. The visitor's `available` is read the same way.
    */
   const owner = capability.kind === "owner" ? capability : null;
-  const available = capability.kind === "visitor" ? capability.available : null;
+  /**
+   * The visitor's half, read the same way and for the same reason.
+   *
+   * `artefacts` is what slice 1b added: the glossary, the summaries, the ideas
+   * and the tweet thread, as **data** rather than as a loader, because they
+   * arrived inside the payload this page is already drawing.
+   * reader-capability.ts.
+   *
+   * `available` is the same fact as five booleans and it is no longer nullable:
+   * there is no second request to have failed, so there is nothing to be unsure
+   * about. For the owner it is `EVERYTHING`, which nothing reads — every gate
+   * below is on `owner` first.
+   */
+  const artefacts = capability.kind === "visitor" ? capability.artefacts : null;
+  const available = capability.kind === "visitor" ? capability.available : OWNER_HAS_EVERYTHING;
   /* Only the call to action reads this — see reader-capability.ts § signedIn.
      `true` for the owner is never consulted, since none of the chrome it gates
      is drawn for them. */
@@ -1112,6 +1186,7 @@ function Reader({
     () => buildArcColumn(geometry, article.arc),
     [geometry, article.arc],
   );
+
   /**
    * Outline mode's tree — the whole thing, down to the leaves.
    *
@@ -1291,7 +1366,15 @@ function Reader({
    * the band should not pay for a poller.
    */
   const glossaryRead = owner?.glossary ?? null;
-  const terms = glossaryRead?.glossary?.entries ?? NO_TERMS;
+  /* **A visitor's terms are underlined too**, and that is the whole of what
+     slice 1b bought here: the list is in the payload, so the dotted underlines
+     and the hover cards are a standing property of a shared article exactly as
+     they are of the owner's. `PublicGlossaryEntry` is a `GlossaryEntry` with
+     the owner's lookup absent (src/public-types.ts), so the same scan reads
+     both. `NO_TERMS` is a module constant rather than a fresh `[]`, because
+     half a dozen memos below key on it by identity — reader-capability.ts. */
+  const terms: GlossaryEntry[] =
+    glossaryRead?.glossary?.entries ?? artefacts?.glossary?.entries ?? NO_TERMS;
 
   /**
    * The glossary term the reader has *pressed* in the panel, of the many now
@@ -2094,6 +2177,10 @@ function Reader({
           Placed above the real bands rather than woven into each of their
           conditions, so that a mode added later cannot arrive without one:
           `visitorGap` answers for every member of `Mode` and fails closed. */}
+      {/* **Only when there is a gap**, and since slice 1b there usually is not:
+          a visitor whose article has a glossary opens the glossary, and
+          `visitorGap` answers `null`. What is left here is a mode the pipeline
+          never ran for this piece, and the four that cost a model call. */}
       {!owner && gap && <VisitorBand gap={gap} signedIn={signedIn} />}
       {owner && (mode === "chat" || mode === "review") && (
         <ConversationBand
@@ -2113,6 +2200,26 @@ function Reader({
         <GlossaryBand
           slug={slug}
           read={glossaryRead}
+          onJump={jumpTo}
+          onSelected={setTerm}
+        />
+      )}
+      {/* **The visitor's three bands, and they are the slice.** Each is the same
+          panel as the owner's with its data injected and no hooks behind it —
+          the list arrived in this page's own payload, so there is nothing to
+          fetch and nothing to poll. A separate component per mode because a
+          hook cannot be called conditionally, which is the same reason
+          `OwnedReader` exists one level up; a separate *panel* would be two
+          designs for one list. reader-capability.ts, and
+          GlossaryPanel.tsx § GlossaryOwner.
+
+          Gated on the artefact itself rather than on `available`, so the branch
+          that renders the band and the flag that decides the sentence cannot
+          disagree: an absent key means `visitorGap` said `not-built` and the
+          `VisitorBand` above is showing instead. */}
+      {!owner && mode === "glossary" && artefacts?.glossary && (
+        <VisitorGlossaryBand
+          glossary={artefacts.glossary}
           onJump={jumpTo}
           onSelected={setTerm}
         />
@@ -2139,12 +2246,25 @@ function Reader({
       {owner && mode === "summary" && (
         <SummaryBand slug={slug} article={article} onJump={jumpTo} />
       )}
+      {!owner && mode === "summary" && artefacts?.summary && (
+        <VisitorSummaryBand article={article} summaries={artefacts.summary} onJump={jumpTo} />
+      )}
       {owner && mode === "diagram" && (
         <DiagramBand slug={slug} article={article} onJump={jumpTo} />
       )}
       {owner && mode === "ideas" && (
         <IdeasBand
           slug={slug}
+          blocks={article.blocks}
+          onJump={jumpTo}
+          onFound={setIdeaFound}
+          openKey={openOccurrence}
+          onOpenKey={setOpenOccurrence}
+        />
+      )}
+      {!owner && mode === "ideas" && artefacts?.ideas && (
+        <VisitorIdeasBand
+          ideas={artefacts.ideas}
           blocks={article.blocks}
           onJump={jumpTo}
           onFound={setIdeaFound}
@@ -2277,6 +2397,106 @@ function IdeasBand({
 }) {
   useRenderCount("IdeasBand");
   const ideas = useIdeas(slug);
+  const band = useIdeasMode({
+    ideas: ideas.ideas,
+    /* The artefact's own clock, which src/ideas.ts fixes at write time so the
+       palette cannot reshuffle. See `useIdeasMode`. */
+    generatedAt: ideas.ideas?.generatedAt ?? "",
+    blocks,
+    onFound,
+    openKey,
+    onOpenKey,
+    onJump,
+  });
+  return (
+    <IdeasPanel
+      ideas={ideas.ideas}
+      owner={ideas}
+      {...band}
+      openKey={openKey}
+      onOpenKey={onOpenKey}
+      onJump={onJump}
+    />
+  );
+}
+
+/**
+ * **The same panel, for somebody who does not own the article.**
+ *
+ * No `useIdeas` and therefore no `useJobs`: the list came in the page's own
+ * payload. See `VisitorGlossaryBand` for why this is a second band and not a
+ * second panel.
+ */
+function VisitorIdeasBand({
+  ideas,
+  blocks,
+  onJump,
+  onFound,
+  openKey,
+  onOpenKey,
+}: {
+  ideas: PublicIdeas;
+  blocks: Block[];
+  onJump(id: BlockId): void;
+  onFound(found: Found[]): void;
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
+}) {
+  useRenderCount("VisitorIdeasBand");
+  const band = useIdeasMode({
+    ideas,
+    /* **No clock, and it does not need one.** `generatedAt` seeds the tie-break
+       `assignSlots` uses to colour the ideas in a stable order, and the index
+       already breaks the tie — the artefact's timestamp is provenance the
+       public projection drops on purpose (src/public/dto.ts). What matters is
+       that every idea gets the same seed, which the empty string gives. */
+    generatedAt: "",
+    blocks,
+    onFound,
+    openKey,
+    onOpenKey,
+    onJump,
+  });
+  return (
+    <IdeasPanel
+      ideas={ideas}
+      owner={null}
+      {...band}
+      openKey={openKey}
+      onOpenKey={onOpenKey}
+      onJump={onJump}
+    />
+  );
+}
+
+/**
+ * Everything the ideas band does that is not a fetch: `?idea=`, the colour
+ * slots, and the resolved passages it pushes up.
+ *
+ * What it pushes up is the **resolved** passages, not the stored occurrences.
+ * The panel and the prose have to be showing the same set, and the only way to
+ * guarantee that is for one of them to compute it and hand it to the other —
+ * the same rule `SearchBand` follows. Resolution can drop occurrences (a block
+ * the article no longer has), so a panel counting the stored list would say
+ * "2 of 5" and step through three.
+ */
+function useIdeasMode({
+  ideas,
+  generatedAt,
+  blocks,
+  onFound,
+  openKey,
+  onOpenKey,
+  onJump,
+}: {
+  ideas: { ideas: Idea[] } | null;
+  generatedAt: string;
+  blocks: Block[];
+  onFound(found: Found[]): void;
+  openKey: string | null;
+  onOpenKey(key: string | null): void;
+  onJump(id: BlockId): void;
+}) {
   const [ideaId, setIdeaId] = useQueryState("idea", ideaParam);
 
   /* The palette slot, assigned over **every** idea rather than only the
@@ -2284,19 +2504,18 @@ function IdeasBand({
      the same guarantee `assignSlots` gives saved searches, and the same reason
      App.tsx calls it over all runs rather than the active ones.
 
-     `generatedAt` for every idea, so `inCreationOrder` walks them in the order
-     the artefact stores — which src/ideas.ts fixes at write time precisely so
-     this cannot reshuffle. Ideas have no clock of their own; the artefact's is
-     the honest stand-in, and the index breaks the tie. */
+     A clock for every idea, so `inCreationOrder` walks them in the order the
+     artefact stores — which src/ideas.ts fixes at write time precisely so this
+     cannot reshuffle. Ideas have no clock of their own; the artefact's is the
+     honest stand-in, and the index breaks the tie. */
   const slots = useMemo(() => {
-    const list = ideas.ideas?.ideas ?? [];
-    const at = ideas.ideas?.generatedAt ?? "";
-    return assignSlots(list.map((idea, i) => ({ id: idea.id, createdAt: `${at}#${i}` })));
-  }, [ideas.ideas]);
+    const list = ideas?.ideas ?? [];
+    return assignSlots(list.map((idea, i) => ({ id: idea.id, createdAt: `${generatedAt}#${i}` })));
+  }, [ideas, generatedAt]);
 
   const selected = useMemo(
-    () => ideas.ideas?.ideas.find((i) => i.id === ideaId) ?? null,
-    [ideas.ideas, ideaId],
+    () => ideas?.ideas.find((i) => i.id === ideaId) ?? null,
+    [ideas, ideaId],
   );
 
   /* Document order, so the stepper's "2 of 4" counts the way the reader moves
@@ -2384,26 +2603,20 @@ function IdeasBand({
     [onFound, onOpenKey],
   );
 
-  return (
-    <IdeasPanel
-      {...ideas}
-      ideaId={ideaId}
-      onIdea={(next) => {
-        void setIdeaId(next);
-        /* A new idea means the old occurrence is meaningless — its key names an
-           idea nobody is looking at, so the stepper would read "0 / 3". */
-        onOpenKey(null);
-        /* Only on selecting, never on clearing: pressing the open idea again
-           takes the marks away, and throwing the reader down the article as it
-           does would be the opposite of what that gesture means. */
-        wantsJump.current = next !== null;
-      }}
-      found={found}
-      openKey={openKey}
-      onOpenKey={onOpenKey}
-      onJump={onJump}
-    />
-  );
+  return {
+    ideaId,
+    onIdea: (next: string | null) => {
+      void setIdeaId(next);
+      /* A new idea means the old occurrence is meaningless — its key names an
+         idea nobody is looking at, so the stepper would read "0 / 3". */
+      onOpenKey(null);
+      /* Only on selecting, never on clearing: pressing the open idea again
+         takes the marks away, and throwing the reader down the article as it
+         does would be the opposite of what that gesture means. */
+      wantsJump.current = next !== null;
+    },
+    found,
+  };
 }
 
 /**
@@ -2737,6 +2950,62 @@ function GlossaryBand({
 }) {
   useRenderCount("GlossaryBand");
   const glossary = useGlossary(slug, read);
+  const band = useGlossaryMode(glossary.glossary?.entries ?? NO_TERMS, onSelected);
+
+  return (
+    <GlossaryPanel
+      glossary={glossary.glossary}
+      owner={glossary}
+      {...band}
+      onJump={onJump}
+    />
+  );
+}
+
+/**
+ * **The same panel, for somebody who does not own the article.**
+ *
+ * No `useGlossary`, no `useJobs`, no fetch of any kind: the list came in the
+ * page's own payload (src/public-types.ts § PublicArtefactSet), so this
+ * component is the query parameters and nothing else.
+ *
+ * A second *band* rather than a second *panel*, and the difference is the whole
+ * design. `GlossaryBand` above exists because hooks cannot be called
+ * conditionally, so "a visitor does not poll the job list" has to be a component
+ * boundary — but everything a reader looks at is drawn by one `GlossaryPanel`
+ * with its data injected. Two panels for one list is how the owner's glossary
+ * and the visitor's glossary drift into two designs for one thing, which a
+ * browser pass caught once already in a drawer heading.
+ */
+function VisitorGlossaryBand({
+  glossary,
+  onJump,
+  onSelected,
+}: {
+  glossary: PublicGlossary;
+  onJump(id: BlockId): void;
+  onSelected(selection: TermSelection | null): void;
+}) {
+  useRenderCount("VisitorGlossaryBand");
+  const band = useGlossaryMode(glossary.entries, onSelected);
+  return <GlossaryPanel glossary={glossary} owner={null} {...band} onJump={onJump} />;
+}
+
+/**
+ * Everything the glossary band does that is not a fetch — the three parameters
+ * and the selection it pushes back up.
+ *
+ * A hook rather than a base component, because two bands need all of it and
+ * only one of them may call `useGlossary`. `?term=`, `?sort=` and `?gate=` live
+ * here for the reason they used to live in the band: all three are meaningless
+ * outside glossary mode, and reading them in `Reader` would put three parameter
+ * subscriptions on every render of the reading view for values only this mode
+ * uses.
+ */
+function useGlossaryMode(
+  entries: readonly GlossaryEntry[],
+  onSelected: (selection: TermSelection | null) => void,
+) {
   const [termId, setTermId] = useQueryState("term", termParam);
   const [sort, setSort] = useQueryState("sort", sortParam);
   /* Null is "nobody has touched the threshold", which the panel resolves to
@@ -2744,10 +3013,10 @@ function GlossaryBand({
      stays one number in one file — see `gateParam` in params.ts. */
   const [gate, setGate] = useQueryState("gate", gateParam);
 
-  /* `find` returns the entry object out of `glossary.entries`, so its identity
-     is stable across renders until the list itself is refetched — which is what
-     keeps the effect below from firing on every render. */
-  const selected = glossary.glossary?.entries.find((e) => e.id === termId) ?? null;
+  /* `find` returns the entry object out of the list, so its identity is stable
+     across renders until the list itself is replaced — which is what keeps the
+     effect below from firing on every render. */
+  const selected = entries.find((e) => e.id === termId) ?? null;
 
   useEffect(() => {
     onSelected(
@@ -2766,18 +3035,14 @@ function GlossaryBand({
      a visible flicker. */
   useEffect(() => () => onSelected(null), [onSelected]);
 
-  return (
-    <GlossaryPanel
-      {...glossary}
-      termId={termId}
-      onTerm={(id) => void setTermId(id)}
-      sort={sort}
-      onSort={(next) => void setSort(next)}
-      gate={gate}
-      onGate={(next) => void setGate(next)}
-      onJump={onJump}
-    />
-  );
+  return {
+    termId,
+    onTerm: (id: string | null) => void setTermId(id),
+    sort,
+    onSort: (next: TermSort) => void setSort(next),
+    gate,
+    onGate: (next: number | null) => void setGate(next),
+  };
 }
 
 /**
@@ -3077,16 +3342,50 @@ function SummaryBand({
 }) {
   useRenderCount("SummaryBand");
   const summaries = useSummaries(slug);
+  const band = useSummaryMode(article, summaries.summaries);
+  return <SummaryPanel summaries={summaries.summaries} owner={summaries} {...band} onJump={onJump} />;
+}
+
+/**
+ * **The same panel, for somebody who does not own the article.**
+ *
+ * No `useSummaries` and therefore no `useJobs`: the ladder came in the page's
+ * own payload. See `VisitorGlossaryBand` for why this is a second band and not
+ * a second panel.
+ */
+function VisitorSummaryBand({
+  article,
+  summaries,
+  onJump,
+}: {
+  article: Article;
+  summaries: PublicSummaries;
+  onJump(id: BlockId): void;
+}) {
+  useRenderCount("VisitorSummaryBand");
+  const band = useSummaryMode(article, summaries);
+  return <SummaryPanel summaries={summaries} owner={null} {...band} onJump={onJump} />;
+}
+
+/**
+ * Everything the summary band does that is not a fetch.
+ *
+ * `?len=` and `?deep=` live here for the reason they used to live in the band:
+ * both are meaningless outside summary mode, and reading them in `Reader` would
+ * put two parameter subscriptions on every render of the reading view for
+ * values only this mode uses.
+ */
+function useSummaryMode(article: Article, summaries: { entries: SummaryEntry[] } | null) {
   const [rung, setRung] = useQueryState("len", rungParam);
   const [deep, setDeep] = useQueryState("deep", deepParam);
 
-  /* The join: the tree, plus whatever `summary.json` has for it, matched by
-     block range and never by node id — see tree.js § the summaries. Memoised on
-     the artefact rather than on the hook, whose object identity changes on
-     every poll of the job queue. */
+  /* The join: the tree, plus whatever summaries exist, matched by block range
+     and never by node id — see tree.js § the summaries. Memoised on the
+     artefact rather than on the hook, whose object identity changes on every
+     poll of the job queue. */
   const root = useMemo(
-    () => buildSummaryTree(article.tree, article.blocks, summaries.summaries),
-    [article.tree, article.blocks, summaries.summaries],
+    () => buildSummaryTree(article.tree, article.blocks, summaries),
+    [article.tree, article.blocks, summaries],
   );
 
   /* Read, never written, and not a subscription: `?at=` is already tracked by
@@ -3108,26 +3407,22 @@ function SummaryBand({
   /* Id to plain text, for the block ids the summaries cite: the panel needs it
      to tell a real id from an invented one, and to put the paragraph in a
      chip's hover card. The same map `Reader` builds for chat — built again
-     here rather than threaded down, because this band is rendered only in its
-     own mode and a prop would make every reader of every article pay for it. */
-  const blockText = useMemo(
+     here rather than threaded down, because this mode is rendered only in its
+     own band and a prop would make every reader of every article pay for it. */
+  const blocks = useMemo(
     () => new Map(article.blocks.map((b) => [b.id, b.text])),
     [article.blocks],
   );
 
-  return (
-    <SummaryPanel
-      {...summaries}
-      root={root}
-      blocks={blockText}
-      rung={rung}
-      onRung={(next) => void setRung(next)}
-      deep={deep}
-      onDeep={(next) => void setDeep(next)}
-      atRow={atRow}
-      onJump={onJump}
-    />
-  );
+  return {
+    root,
+    blocks,
+    rung,
+    onRung: (next: Rung) => void setRung(next),
+    deep,
+    onDeep: (next: number) => void setDeep(next),
+    atRow,
+  };
 }
 
 /**
