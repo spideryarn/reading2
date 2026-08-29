@@ -23,8 +23,11 @@ npm run db:generate    # regenerate drizzle/ SQL after editing src/db/schema.ts
 
 **After any reset, run `npm run db:migrate`.** Our migrations are Drizzle's, in `drizzle/`, and the
 Supabase CLI cannot see them — so a reset leaves the `spideryarn` schema absent and
-[its tests](../../tests/db-schema.test.ts) go quietly back to skipping rather than failing. The
-tables and what they promise are in [database.md](database.md#next-supabase-postgres).
+[its tests](../../tests/db-schema.test.ts) go back to skipping rather than failing. They now say so:
+the shared probe in [`tests/helpers/pg-ready.ts`](../../tests/helpers/pg-ready.ts) prints one line
+naming the suite and the missing table, with `npm run db:migrate` in it — see
+[testing.md § A suite that cannot run](testing.md#a-suite-that-cannot-run-and-how-to-make-it-say-so).
+The tables and what they promise are in [database.md](database.md#next-supabase-postgres).
 
 Docker has to be running first. Greg's `docker` context points at **OrbStack**, so `open -a
 OrbStack` is what starts the engine; `docker info` failing with *"Cannot connect to the Docker
