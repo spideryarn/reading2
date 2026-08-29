@@ -70,6 +70,7 @@ import {
   chatThreads,
   comments as commentsTable,
   glossaryLookups,
+  jobs,
   revisionBlocks,
   revisionStepRuns,
   searchRuns,
@@ -340,6 +341,52 @@ export function checkNoteFields(slug: string, blocks: Block[]): void {
 }
 
 /**
+ * The statuses that mean a job is still working.
+ *
+ * The same two `ACTIVE` names in src/store/pg-jobs.ts, written out again
+ * because that one is module-private and this file must not reach into the job
+ * store to widen it. Both are also what `jobs_active_slug` is partial on, so
+ * the database's idea of "in flight" and this one are the same list in three
+ * places — if a fourth status ever joins them, `tests/store-import-active-job.
+ * test.ts` is where the disagreement shows up.
+ */
+const ACTIVE_JOB = ["queued", "running"] as const;
+
+/** The transaction handle drizzle hands the callback. */
+type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
+/**
+ * The id of a job still working on this owner's slug, or undefined for none.
+ *
+ * **Takes `tx`, and that is the whole point of the function.** The obvious call
+ * is `pgJobStore.activeForSlug`, which asks the identical question — and it
+ * calls `getDb()` itself, so it would run on a different connection, outside
+ * the caller's transaction, seeing a snapshot the caller's row lock says
+ * nothing about. A check that cannot see what the lock is holding is a check
+ * that agrees with whatever raced it.
+ *
+ * **Call it AFTER locking the article row, never before.** The order is the
+ * guard: with the lock first, anything that wants to enqueue against this
+ * article has to wait for this transaction to end, so the answer here cannot go
+ * stale before the write that depends on it. Ask first and lock second and the
+ * window is back, exactly as wide as it was.
+ *
+ * One thing it cannot do, said out loud: for a slug with **no article row yet**
+ * there is nothing to lock, so a job enqueued in parallel with a first import
+ * is still possible. The refusal below still catches every job that already
+ * exists; serialising that last case needs a lock on something that exists
+ * before the article does, which is a bigger change than this guard.
+ */
+async function activeJobHolds(tx: Tx, slug: string, owner: OwnerId): Promise<string | undefined> {
+  const [row] = await tx
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(and(eq(jobs.ownerId, owner), eq(jobs.slug, slug), inArray(jobs.status, ACTIVE_JOB)))
+    .limit(1);
+  return row?.id;
+}
+
+/**
  * Import one article's directory.
  *
  * Everything happens in **one transaction**, because publication is the atomic
@@ -508,12 +555,41 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
       .select({ ownerId: articles.ownerId })
       .from(articles)
       .where(eq(articles.id, articleId))
-      .limit(1);
+      .limit(1)
+      /* `for update`, and the lock has to be taken HERE rather than after the
+         jobs query below — see `activeJobHolds`. */
+      .for("update");
     if (existing && existing.ownerId !== ownerId) {
       throw new Error(
         `${slug}: that slug already belongs to a different owner in Postgres. ` +
           "Importing would take their article, and everything anchored to it. " +
           "Check SPIDERYARN_OWNER_ID. See src/store/import.ts.",
+      );
+    }
+
+    /* **Refuse to import under a job that is still working.**
+     *
+       The article row is locked by the select above; this is the second half of
+       the pair, and both halves are inside this transaction. A queued or
+       running job for this owner and slug owns a draft revision it is about to
+       write into, and the pointer move at the end of this transaction would
+       replace the base that draft was carried forward from — quietly, with
+       every write reporting success and the reader's job finishing onto an
+       article that is no longer the one it started from.
+
+       GPT Sol raised it against the D1b design, 2026-08-29: "both operations
+       should lock the article, then refuse any queued/running job for that
+       owner and slug before changing revisions or reader state."
+
+       A throw rather than a skip, because this function is handed one slug and
+       has no other answer to give. `pruneOrphans` below does the same check and
+       skips, for the opposite reason. */
+    const holder = await activeJobHolds(tx, slug, ownerId);
+    if (holder) {
+      throw new Error(
+        `${slug}: there is a queued or running job for that slug (${holder}), and importing ` +
+          "would replace the revision it is building on. Wait for it to finish, or stop it. " +
+          "See src/store/import.ts.",
       );
     }
 
@@ -1248,13 +1324,46 @@ export async function pruneOrphans(orphans: readonly Orphan[]): Promise<Orphan[]
       );
       continue;
     }
-    await db.transaction(async (tx) => {
+    /* **And a third check, on the database rather than the disk: is a job still
+       working on it?**
+
+       An orphan is an article whose directory has gone, and a job that is
+       queued or running for that slug is about to write a draft revision onto
+       it — a re-ingest of an article somebody deleted from `data/` is exactly
+       that shape. The delete below cascades, so pruning here takes the article
+       out from under a live job and there is nothing to put back.
+
+       Skipped, not fatal, and that is the difference from `importArticle`: this
+       loops over a list a person has already agreed to, and one busy article
+       must not stop the other nine being removed. Same shape as the
+       directory-came-back check above, for the same reason — and said out loud,
+       because an orphan silently left behind reads as a prune that worked. */
+    const busy = await db.transaction(async (tx) => {
+      /* Lock FIRST, then ask about jobs — see `activeJobHolds`. Unlike the
+         importer there is always a row to lock here: an orphan came out of
+         `articles`. If it has gone in the meantime there is nothing left to
+         prune, and saying so beats deleting nothing and reporting a removal. */
+      const [row] = await tx
+        .select({ ownerId: articles.ownerId })
+        .from(articles)
+        .where(eq(articles.id, orphan.articleId))
+        .limit(1)
+        .for("update");
+      if (!row) return "the row has already gone";
+      const holder = await activeJobHolds(tx, orphan.slug, row.ownerId as OwnerId);
+      if (holder) return `a job is still working on it (${holder})`;
+
       await tx
         .update(articles)
         .set({ currentRevisionId: null })
         .where(eq(articles.id, orphan.articleId));
       await tx.delete(articles).where(eq(articles.id, orphan.articleId));
+      return undefined;
     });
+    if (busy) {
+      logger.warn({ slug: orphan.slug, why: busy }, "not pruning after all");
+      continue;
+    }
     logger.warn(
       {
         slug: orphan.slug,
