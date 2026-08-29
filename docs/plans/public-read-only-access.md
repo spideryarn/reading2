@@ -1096,11 +1096,30 @@ The file's own comment already explains the pairing and the trap in it — *a cr
 `Disallow` never fetches the page, so it never sees the header* — which means slice 2 is a change to
 **two** things that do not reinforce each other, not one.
 
-**An open question that decides whether slice 1 is worth building at all:** do the unfurlers we care
-about — Slack, iMessage, WhatsApp, Discord, Twitter/X — fetch a URL whose `robots.txt` disallows it?
-Most link-preview fetchers are not crawlers and do not consult `robots.txt`; some do. If ours do,
-slice 1 ships a head that nothing reads, and the slices have to merge or swap. **Check this before
-building slice 1**, and check it by observation rather than by reasoning about what a bot ought to do.
+**That question was asked and answered before building anything, and the answer is *it depends on
+the service*.** Whether slice 1 is worth building at all turns on whether a link-preview fetcher
+obeys `Disallow: /`, and they do not agree with each other:
+
+| | Under our current `Disallow: /` |
+|---|---|
+| **Slack** | **Fetches.** Slack's own robots page says plainly: *"We do not currently honor `robots.txt` files."* Their reasoning is that their robots act for a person who has just posted the link rather than crawling. |
+| **Meta** — Facebook, Messenger, Instagram, WhatsApp | **Probably not.** `facebookexternalhit` accepts `robots.txt`, with an exception for security and integrity checks, and caches the file for up to 24 hours — so even after slice 2 the change would not take effect immediately. |
+| **Twitter/X** | `Twitterbot` is documented as an ordinary well-behaved preview crawler; treat as respecting it until observed otherwise. |
+| **Discord, iMessage** | Not established. Neither publishes a clear statement that was found. |
+
+Sources: [Slack's robots page](https://api.slack.com/robots), and the vendor documentation summaries
+for [`facebookexternalhit`](https://trakkr.ai/bots/facebookexternalhit/).
+
+**So slice 1 is worth building, and it is worth less than it looks.** It delivers a working preview
+in Slack on the day it ships and nowhere in Meta's apps until slice 2 lands and their cache expires.
+Which is a question for Greg rather than a technical one: *where do you expect people to paste these
+links?* If the answer is a group chat on WhatsApp, slices 1 and 2 should merge, because slice 1 alone
+would be invisible there. If it is Slack and a DM, the order stands.
+
+The general lesson, since it nearly went the other way: this was settled by reading what each vendor
+says about its own bot, not by reasoning about what a preview fetcher *ought* to do. The two answers
+would have been opposite, and "most preview fetchers are not crawlers" — which is what I believed
+before looking — is right about Slack and wrong about Meta.
 
 #### What already has a mutation that must make it red
 
