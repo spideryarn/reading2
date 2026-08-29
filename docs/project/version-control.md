@@ -154,6 +154,26 @@ test "$(git rev-parse --git-path index)" != ".git/index" || { echo "PRIVATE INDE
 can tell you which index you actually got. A recipe whose failure mode is silent needs a check that
 speaks.
 
+**The rule behind all of this, and it is one rule rather than three.** In this harness, *separate
+tool calls are separate shells and separate instants*, so **anything that must be true at the moment
+a command runs has to be established in the same invocation as that command.** Three of the day's
+accidents are the same mistake wearing different clothes:
+
+| The thing that must hold | How it gets lost | What it cost |
+|---|---|---|
+| `GIT_INDEX_FILE` is set | `export` in the previous call — a fresh shell has none of it | the shared index, rewritten from a stale tree |
+| the working tree still matches what you checked | `git diff --stat HEAD` in the previous call; `git commit -- <path>` reads the tree **again** | a peer's uncommitted section committed under somebody else's message, 2026-08-29 |
+| the commit actually happened | `&& echo COMMITTED` reports on the command, not the repository | a minute spent believing work had landed that had not |
+
+So the general form is: **put the check and the thing it guards in one invocation, and finish by
+asking the repository rather than the pipeline.** `git show --stat HEAD` afterwards is the net that
+catches whatever the window still let through — cheap, and it is the only one of these that works
+after the fact.
+
+The check-then-commit window is the least obvious of the three, because both commands are correct and
+the gap between them is the entire bug. Reading `45 insertions` and then committing `74` is not a
+command misbehaving; it is two reads of a moving tree.
+
 **Watch the assertion fail once before you rely on it.** Run it in a call with `GIT_INDEX_FILE`
 unset and confirm it prints `.git/index` and exits non-zero; only then does the passing case mean
 anything. A guard you have never seen trip is not evidence it is guarding — and this one sits in
