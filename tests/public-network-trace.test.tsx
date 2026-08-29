@@ -513,6 +513,55 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
+   * **The third sentence, which nothing had ever rendered.**
+   *
+   * The test above draws two of the states an artefact can be in — *here it
+   * is*, and *nobody built one* — from one asymmetric fixture. It leaves out
+   * the state the whole "presence, not truthiness" rule exists for: an artefact
+   * somebody **ran**, that came back with nothing in it.
+   *
+   * That state is why `artefactsIn` tests `!== undefined` rather than
+   * `?.length`, why `visitorGap` cannot answer *not-built* here, and why
+   * `builtButEmpty` exists as a separate sentence from `notBuiltYet`. All of
+   * which was **untested**: mutating `builtButEmpty` to `return notBuiltYet(noun)`
+   * on 2026-08-29 left the entire suite green, so the reader could have been
+   * told nobody built a glossary that somebody had in fact built.
+   *
+   * It is the same shape as the bug the browser pass found the day before —
+   * a state no test and no human had ever put on screen — one state along.
+   * The negative assertion is the load-bearing half: without it this passes on
+   * a page saying both things, or the wrong one.
+   */
+  it("says an artefact came back empty, rather than that nobody built one", async () => {
+    /* Present and empty, both of them. `artefactsIn` reports the artefact off
+       the *key*, so the band mounts the panel rather than answering
+       *not-built* — which is exactly the branch a length test would delete. */
+    const empty: { mode: string; noun: string; article: () => PublicArticle }[] = [
+      {
+        mode: "glossary",
+        noun: "A glossary",
+        article: () => ({ ...ARTICLE, glossary: { entries: [] } }),
+      },
+      {
+        mode: "ideas",
+        noun: "A list of ideas",
+        article: () => ({ ...ARTICLE, ideas: { ideas: [] } }),
+      },
+    ];
+    for (const { mode, noun, article } of empty) {
+      await remount();
+      served = article();
+      await open(`?mode=${mode}`);
+
+      expect(host.textContent, mode).toContain(`${noun} was built for this piece`);
+      expect(host.textContent, mode).toContain("came back with nothing in it");
+      /* The whole point: not the never-built sentence. */
+      expect(host.textContent, mode).not.toContain("Nobody has built");
+      expect(outsidePublic(), mode).toEqual([]);
+    }
+  });
+
+  /**
    * **The owner-only controls are not on a visitor's band**, and this is the
    * assertion the trace genuinely cannot make.
    *

@@ -1675,6 +1675,53 @@ Run that way it took two iterations to converge: five files fixed six errors and
 in the summary tests, and `tree.ts` plus those two test files closed it. Both of those iterations
 would otherwise have been a broken `main` that somebody else discovered.
 
+### Mutation testing found the one state nothing had ever rendered
+
+Run against the built slice on 2026-08-29, before the code review came back. Six mutations, each
+applied in a throwaway worktree at `HEAD`, each reverted after the run.
+
+| Mutation | Result |
+|---|---|
+| `artefactsIn` tests `?.entries?.length` instead of `!== undefined` | RED |
+| `publicBlock` copies `Block.note` through | RED, 3 tests |
+| `publicGlossary` drops `aliases` | RED |
+| `publicSlug` drops the visibility predicate | RED, 6 tests |
+| `builtButEmpty(noun)` returns `notBuiltYet(noun)` | **GREEN** |
+| delete `IdeasPanel`'s built-but-empty branch | **GREEN** |
+
+Four of the six are the guards doing their job. The two that stayed green are one finding: **the
+built-but-empty state had never been rendered by any test**, so a visitor could have been told nobody
+built a glossary that somebody had in fact built, and nothing would have gone red.
+
+It is the same shape as the bug the browser pass found the day before — the "never built" case that
+no test and no human had ever put on screen — one state along. And it is the state this slice's
+central rule exists for: *presence, not truthiness, not length*. The rule was enforced at the flag
+(`artefactsIn` goes red), and unenforced at the sentence.
+
+Fixed by rendering it, in `tests/public-network-trace.test.tsx` — both artefacts that have the
+branch, with the negative assertion as the load-bearing half. Three controls, each red and each red
+*only on that test*: delete either panel's branch, or collapse the two sentences into one.
+
+#### Two things the probe got wrong, which is why probes get re-run
+
+Two more findings dissolved on inspection, and both are worth writing down because the first version
+of this section had them as bugs.
+
+**"An empty summary renders nothing."** The probe fixture was `{entries: []}`, cast past the
+compiler. `PublicSummaries.missing` is **required**, so that fixture cannot occur — real data is
+`{entries: [], missing: n}`, and `SummaryPanel` already draws "n sections got nothing back" for a
+visitor. The cast is what made the invalid state look reachable.
+
+**"`?mode=tweets` shows nothing."** Tweets is a *page*, `/tweets`, not a band mode. The probe opened
+an address that does not exist. On the real page an empty thread reads "A thread, 0 posts", which is
+honest, next to a "Copy the thread" button with nothing to copy — a dead button in a state the
+pipeline may not be able to produce. Left alone deliberately: a branch guarding an unreachable state
+is the kind of part Greg asked us not to add.
+
+The general lesson is [reachability-is-not-handling](../reusable/silent-success.md) turned around.
+A cast fixture can manufacture a state the type system forbids, and then the code's failure to handle
+it looks like a bug rather than like a fixture that lied.
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next
