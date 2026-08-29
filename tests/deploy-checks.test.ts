@@ -686,7 +686,13 @@ describe("reading the bucket blocks out of supabase/config.toml", () => {
       name: "sources",
       public: false,
       fileSizeLimit: 52_428_800,
-      allowedMimeTypes: ["application/pdf", "text/html"],
+      allowedMimeTypes: [
+        "application/pdf",
+        "text/html",
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+      ],
     });
   });
 
@@ -699,12 +705,41 @@ describe("reading the bucket blocks out of supabase/config.toml", () => {
   });
 
   it("ignores the commented-out example the file ships with", () => {
-    /* `# allowed_mime_types = ["image/png", "image/jpeg"]` sits in the template
-       section above. A parser that read commented lines would declare a bucket
-       nobody asked for. */
-    expect(declaredBuckets(CONFIG).some((b) => b.allowedMimeTypes?.includes("image/jpeg"))).toBe(
-      false,
-    );
+    /* The template section above holds a whole commented bucket:
+       `# [storage.buckets.images]` with `# allowed_mime_types = ["image/png",
+       "image/jpeg"]`. A parser that read commented lines would declare a bucket
+       nobody asked for.
+
+       **This assertion used to be `no declared bucket includes image/jpeg`, and
+       that stopped meaning anything on 2026-08-29**, when `sources` legitimately
+       started accepting `image/jpeg`. The needle was shared between the thing
+       under test and a real declaration, so it could no longer tell a parser
+       that ignores comments from one that reads them — it would have passed
+       either way, for ever. The name is the part only the comment has. */
+    expect(declaredBuckets(CONFIG).map((b) => b.name)).not.toContain("images");
+  });
+
+  it("really does skip a commented bucket, on a fixture of exactly one", () => {
+    /* Independent of what the real file happens to contain, so this cannot be
+       blunted the way the assertion above was. If the parser ever reads
+       comments, this is a bucket appearing out of nothing.
+
+       **What actually protects is the anchored header regex, not the `#`
+       skip.** Both were probed: deleting `line.startsWith("#")` reddens
+       nothing, because `# [storage.buckets.x]` cannot match `/^\[...\]$/`
+       either way — that line is an early-out, not a guard. Unanchoring the
+       header regex reddens this test and the one above. Worth knowing before
+       anyone "tidies up" the anchors on the grounds that comments are already
+       filtered. */
+    const commented = [
+      "# [storage.buckets.ghost]",
+      '# public = false',
+      '# allowed_mime_types = ["image/png"]',
+      "",
+      "[storage.buckets.real]",
+      "public = false",
+    ].join("\n");
+    expect(declaredBuckets(commented).map((b) => b.name)).toEqual(["real"]);
   });
 
   it("reads a size in bytes, and in each unit", () => {

@@ -26,24 +26,35 @@ import type { BlobHead, PutResult, RawSourceStore, UploadGrants } from "./blobs.
  * is what `GET /api/source/:slug` already names, and PDFs are only the first
  * kind. Private, with a 50 MiB object cap.
  *
- * **The MIME allowlist is not a second line under our own checks, and this
- * comment said it was.** Measured against the running container on 2026-08-27:
- * with the bucket declaring `{application/pdf}`, a service-role
- * `putIfAbsent` stored objects typed `text/html`, `image/png` and
- * `application/x-nonsense` without complaint. All four succeeded. The service
- * key bypasses it exactly as it bypasses RLS.
+ * **The MIME allowlist IS enforced, against the service key too.** This comment
+ * claimed the opposite for a day, citing a measurement — that a PDF-only bucket
+ * had accepted `text/html`, `image/png` and `application/x-nonsense` from our
+ * own server. That measurement was wrong, and the way it was wrong is the
+ * interesting part: `blobStore()` falls back to the filesystem without both env
+ * vars, and `fsBlobs` ignores `contentType` entirely, so the probe's bytes went
+ * to `data/_blobs/` and never touched Storage at all. The container's request
+ * log covers its whole life and contains none of those uploads.
+ * docs/postmortems/the-config-file-is-not-the-bucket.md.
  *
- * So for anything *this server* writes, our own validation — `looksLikePdf` and
- * the SHA-256 comparison in `acquireUpload` — is the only line, not the second.
- * The allowlist is still declared, and is still worth declaring, because the
- * path it plausibly does govern is the one that matters most: a browser PUTing
- * to a signed grant, which is untrusted input arriving without us in the middle.
- * **That half is untested** — it needs a browser and a real grant — so it is
- * written here as a belief rather than as a measurement.
+ * Re-measured against the running container on 2026-08-29, with the bucket
+ * declaring the five types it declares today:
+ *
+ *     image/png              → 200
+ *     application/x-nonsense → 415  mime type ... is not supported
+ *     image/svg+xml          → 415  mime type ... is not supported
+ *
+ * So the allowlist is a real line for everything written here, and one that
+ * holds independently of our own checks — `looksLikePdf` and the SHA-256
+ * comparison in `acquireUpload` are the other line, not the only one. It is
+ * also why SVG cannot be stored today even by mistake, which is the decision
+ * docs/plans/hosting-the-articles-images.md made in code and this enforces in
+ * infrastructure.
  *
  * [silent-success](docs/reusable/silent-success.md): the natural check is to
  * read `supabase/config.toml`, which agrees with the code and says nothing
- * about whether anybody enforces it.
+ * about whether anybody enforces it — and the natural *probe* is the one above,
+ * which can quietly measure the filesystem instead. `scripts/check-buckets.ts`
+ * reads the live bucket, which is the only thing that answers the question.
  */
 const BUCKET = "sources";
 

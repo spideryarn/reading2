@@ -180,7 +180,19 @@ file_size_limit = "50MiB"
 # was written, and no PUT or PATCH has ever reached it — so this line was
 # inert for seven hours and every HTML fetch threw. Both halves are written up
 # in docs/postmortems/the-config-file-is-not-the-bucket.md.
-allowed_mime_types = ["application/pdf", "text/html"]
+# `image/png`, `image/jpeg` and `image/gif` since 2026-08-29: the pipeline now
+# stores the images an article references, beside the document itself. Those
+# three and no more, because they are the three the corpus actually contains and
+# because each format added here is one whose bytes we have to be able to sniff
+# and whose delivery we have to have thought about — SVG in particular is a
+# document that runs script when navigated to, so it is deliberately absent.
+# See docs/plans/hosting-the-articles-images.md.
+#
+# **Keep this on one line.** `declaredBuckets` in scripts/deploy-checks.ts parses
+# a list only when it is on the same line as its key, and a multi-line list
+# throws rather than being read as empty — loudly, which is why this comment is
+# short and not a postmortem.
+allowed_mime_types = ["application/pdf", "text/html", "image/png", "image/jpeg", "image/gif"]
 
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
