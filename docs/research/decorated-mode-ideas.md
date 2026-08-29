@@ -584,6 +584,13 @@ handler: **a hovered card leaves when the pointer does; a clicked one stays unti
 is dismissed.** The grace period matters too — the pointer has to be able to travel
 from the word onto the card without the card vanishing under it on the way.
 
+And the fix had a race in it, found by a browser agent instrumenting the flag rather
+than watching the screen. The pointer must arrive at a word before it can be clicked,
+so a hover timer is *always* already armed when the click handler runs — and 420ms
+later it fired `cardPinned = false` and re-opened the card unpinned. The pin looked
+set at the moment of the click and came undone half a second afterwards, which is
+exactly the interval nobody watches. One `clearTimeout` on the click path.
+
 The general shape: `showPopover()` is half an interaction. Getting the top layer, the
 light-dismiss and the escape key for free is exactly why it was used here, and the
 free behaviour is tuned for something a reader *asked* for. Anything opened by hover

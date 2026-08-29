@@ -319,7 +319,17 @@ function glossCard(entry) {
 document.addEventListener('click', (e) => {
   // Anything opened by a click stays open until it is dismissed; see the hover
   // handler below for the other half of this.
-  if (e.target.closest('[data-gloss], [data-idea], [data-comment]')) cardPinned = true;
+  //
+  // `clearTimeout` first, and it is load-bearing. The pointer has to arrive at the
+  // word before it can be clicked, so a hover timer is always already armed when
+  // this runs — and 420ms later it would fire `cardPinned = false` and re-open the
+  // card unpinned, silently undoing the pin on a card the reader deliberately
+  // clicked. The pin looked set at the moment of the click and came undone half a
+  // second afterwards, which is why it took instrumenting the flag to see it.
+  if (e.target.closest('[data-gloss], [data-idea], [data-comment]')) {
+    clearTimeout(hoverTimer);
+    cardPinned = true;
+  }
   const g = e.target.closest('[data-gloss]');
   if (g) {
     const entry = D.glossary[g.dataset.gloss];
