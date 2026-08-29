@@ -54,7 +54,7 @@ import { useRenderCount } from "./perf.js";
  * **The owner's half of this panel** — the read's status, the job finding the
  * ideas, and the one verb.
  *
- * `null` for a visitor. The list itself arrives inside
+ * Absent for a visitor — see `IdeasAccess` below. The list itself arrives inside
  * `GET /api/public/article/:slug` since slice 1b, so it is the same list drawn
  * by the same rows; what a visitor has no equivalent of is everything here.
  * GlossaryPanel.tsx § GlossaryOwner has the argument for one panel with its
@@ -62,11 +62,17 @@ import { useRenderCount } from "./perf.js";
  */
 export type IdeasOwner = UseIdeas;
 
+/**
+ * **Who is reading, and the list they get — one prop, so the two cannot
+ * disagree.** The argument is in GlossaryPanel.tsx § GlossaryAccess, including
+ * why the owner's list is nullable and the visitor's is not.
+ */
+export type IdeasAccess =
+  | { kind: "owner"; owner: IdeasOwner; ideas: { ideas: Idea[] } | null }
+  | { kind: "visitor"; ideas: { ideas: Idea[] }; owner?: never };
+
 interface Props {
-  /** The list to draw, or `null` when this piece has none. */
-  ideas: { ideas: Idea[] } | null;
-  /** Whose article this is, and what comes with it. `null` for a visitor. */
-  owner: IdeasOwner | null;
+  access: IdeasAccess;
   /** Which idea is open, from `?idea=`. */
   ideaId: string | null;
   onIdea(id: string | null): void;
@@ -105,8 +111,7 @@ const GROUPS = [
 ];
 
 export function IdeasPanel({
-  ideas,
-  owner,
+  access,
   ideaId,
   onIdea,
   found,
@@ -115,6 +120,8 @@ export function IdeasPanel({
   onJump,
 }: Props) {
   useRenderCount("IdeasPanel");
+  const owner = access.kind === "owner" ? access.owner : null;
+  const ideas = access.ideas;
   /* Seeded from what the list on screen was written with, so the box is already
      in the state the reader last chose and nothing has to remember it between
      visits: the artefact does. `useState`'s initialiser rather than an effect,

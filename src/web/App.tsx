@@ -2415,8 +2415,7 @@ function IdeasBand({
   });
   return (
     <IdeasPanel
-      ideas={ideas.ideas}
-      owner={ideas}
+      access={{ kind: "owner", owner: ideas, ideas: ideas.ideas }}
       {...band}
       openKey={openKey}
       onOpenKey={onOpenKey}
@@ -2464,8 +2463,7 @@ function VisitorIdeasBand({
   });
   return (
     <IdeasPanel
-      ideas={ideas}
-      owner={null}
+      access={{ kind: "visitor", ideas }}
       {...band}
       openKey={openKey}
       onOpenKey={onOpenKey}
@@ -2959,8 +2957,7 @@ function GlossaryBand({
 
   return (
     <GlossaryPanel
-      glossary={glossary.glossary}
-      owner={glossary}
+      access={{ kind: "owner", owner: glossary, glossary: glossary.glossary }}
       {...band}
       onJump={onJump}
     />
@@ -2993,7 +2990,7 @@ function VisitorGlossaryBand({
 }) {
   useRenderCount("VisitorGlossaryBand");
   const band = useGlossaryMode(glossary.entries, onSelected);
-  return <GlossaryPanel glossary={glossary} owner={null} {...band} onJump={onJump} />;
+  return <GlossaryPanel access={{ kind: "visitor", glossary }} {...band} onJump={onJump} />;
 }
 
 /**
@@ -3348,7 +3345,13 @@ function SummaryBand({
   useRenderCount("SummaryBand");
   const summaries = useSummaries(slug);
   const band = useSummaryMode(article, summaries.summaries);
-  return <SummaryPanel summaries={summaries.summaries} owner={summaries} {...band} onJump={onJump} />;
+  return (
+    <SummaryPanel
+      access={{ kind: "owner", owner: summaries, summaries: summaries.summaries }}
+      {...band}
+      onJump={onJump}
+    />
+  );
 }
 
 /**
@@ -3369,7 +3372,7 @@ function VisitorSummaryBand({
 }) {
   useRenderCount("VisitorSummaryBand");
   const band = useSummaryMode(article, summaries);
-  return <SummaryPanel summaries={summaries} owner={null} {...band} onJump={onJump} />;
+  return <SummaryPanel access={{ kind: "visitor", summaries }} {...band} onJump={onJump} />;
 }
 
 /**

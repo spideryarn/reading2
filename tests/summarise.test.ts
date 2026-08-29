@@ -42,9 +42,9 @@ import {
   targetsOf,
   textOf,
 } from "../src/summarise.js";
-import { SummaryPanel } from "../src/web/SummaryPanel.js";
+import { SummaryPanel, type SummariesAccess, type SummariesOwner } from "../src/web/SummaryPanel.js";
 import { buildSummaryTree, currentEntryId, rungText } from "../src/web/tree.js";
-import type { Block, Summaries, Tree, TreeNode } from "../src/types.js";
+import type { Block, Summaries, SummaryEntry, Tree, TreeNode } from "../src/types.js";
 
 /* ------------------------------------------------------------- fixtures -- */
 
@@ -670,11 +670,11 @@ describe("SummaryPanel", () => {
    * The owner's half — the read's status, the job and the verb.
    *
    * A group of its own since slice 1b, because a visitor gets this panel with
-   * `owner: null` and the same ladder: the summaries arrive in the shared
-   * article payload, so there is no status to be in and no button that spends.
-   * src/web/SummaryPanel.tsx § SummariesOwner.
+   * the visitor arm of `access` and the same ladder: the summaries arrive in
+   * the shared article payload, so there is no status to be in and no button
+   * that spends. src/web/SummaryPanel.tsx § SummariesOwner.
    */
-  const OWNER: NonNullable<ComponentProps<typeof SummaryPanel>["owner"]> = {
+  const OWNER: SummariesOwner = {
     status: "ready",
     summaries: SUMMARIES,
     stale: false,
@@ -693,9 +693,16 @@ describe("SummaryPanel", () => {
     cancel: () => {},
   };
 
+  /* The owner's arm of `access`, with whatever this case changes. One prop
+     carries both halves now, so a case that used to override `owner` alone has
+     to hand back the whole arm — src/web/GlossaryPanel.tsx § GlossaryAccess. */
+  const owned = (
+    owner: Partial<SummariesOwner> = {},
+    summaries: { entries: SummaryEntry[]; missing: number } | null = SUMMARIES,
+  ): SummariesAccess => ({ kind: "owner", owner: { ...OWNER, ...owner }, summaries });
+
   const base: ComponentProps<typeof SummaryPanel> = {
-    summaries: SUMMARIES,
-    owner: OWNER,
+    access: owned(),
     root: buildSummaryTree(TREE, BLOCKS, SUMMARIES),
     blocks: new Map(BLOCKS.map((b) => [b.id, b.text])),
     rung: "long",
@@ -748,8 +755,7 @@ describe("SummaryPanel", () => {
 
   it("disables the generated rungs when nothing has been written", () => {
     const out = html({
-      owner: { ...OWNER, status: "none", summaries: null },
-      summaries: null,
+      access: owned({ status: "none", summaries: null }, null),
       root: buildSummaryTree(TREE, BLOCKS, null),
     });
     // Offered and disabled, not hidden: a control that appears only once you
@@ -762,7 +768,7 @@ describe("SummaryPanel", () => {
   });
 
   it("says so when the article has moved underneath them", () => {
-    expect(html({ owner: { ...OWNER, stale: true } })).toContain("older version of the article");
+    expect(html({ access: owned({ stale: true }) })).toContain("older version of the article");
   });
 
   it("marks where the reader is, and does not mark the root", () => {
@@ -834,7 +840,7 @@ describe("SummaryPanel", () => {
   };
 
   it("draws a cited block id as a link into the article", () => {
-    const out = html({ summaries: cited, root: buildSummaryTree(TREE, BLOCKS, cited) });
+    const out = html({ access: owned({}, cited), root: buildSummaryTree(TREE, BLOCKS, cited) });
     // The chip, and a real href — BlockRef renders an `<a>` so ⌘-click, the
     // status bar and copy-link all work. block-ids.md#showing-an-id.
     expect(out).toContain(`at=${id(3)}`);
@@ -856,7 +862,7 @@ describe("SummaryPanel", () => {
       ...SUMMARIES,
       entries: [{ range: [id(0), id(9)], depth: 0, long: "As it says [spya-zzzzzz]." }],
     };
-    const out = html({ summaries: bogus, root: buildSummaryTree(TREE, BLOCKS, bogus) });
+    const out = html({ access: owned({}, bogus), root: buildSummaryTree(TREE, BLOCKS, bogus) });
     expect(out).toContain("spya-zzzzzz");
     expect(out).not.toContain("at=spya-zzzzzz");
   });
@@ -890,7 +896,7 @@ describe("SummaryPanel", () => {
        summary that looks like an ordinary one is one the reader cannot weigh.
        It is also what explains why a section reads the way it does. */
     const steered: Summaries = { ...SUMMARIES, guidance: "I care about the evidence" };
-    const out = html({ owner: { ...OWNER, summaries: steered }, summaries: steered });
+    const out = html({ access: owned({ summaries: steered }, steered) });
     expect(out).toContain("summ-steer-box");
     expect(out).toContain("I care about the evidence");
   });
@@ -898,6 +904,6 @@ describe("SummaryPanel", () => {
   it("offers the steer on a stale article too", () => {
     // The foot is hidden while the summaries are stale, so without this the one
     // article most likely to be rewritten is the one you cannot steer.
-    expect(html({ owner: { ...OWNER, stale: true } })).toContain("Steer these summaries");
+    expect(html({ access: owned({ stale: true }) })).toContain("Steer these summaries");
   });
 });

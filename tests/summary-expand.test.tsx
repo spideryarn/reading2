@@ -127,19 +127,22 @@ const deeps: number[] = [];
    records what the panel asks for rather than moving it. */
 const panel = (deep: number, withApparatus = false) =>
   createElement(SummaryPanel, {
-    summaries: null,
-    owner: {
-      status: "none",
+    access: {
+      kind: "owner",
       summaries: null,
-      stale: false,
-      profiled: false,
-      profileChanged: false,
-      hasProfile: false,
-      error: null,
-      job: null,
-      failed: null,
-      write: async () => {},
-      cancel: () => {},
+      owner: {
+        status: "none",
+        summaries: null,
+        stale: false,
+        profiled: false,
+        profileChanged: false,
+        hasProfile: false,
+        error: null,
+        job: null,
+        failed: null,
+        write: async () => {},
+        cancel: () => {},
+      },
     },
     root: tree(withApparatus),
     blocks: new Map(),

@@ -1769,19 +1769,31 @@ cannot be evidence that one was.
 pass, before the review came back. Two independent methods found the same hole, which is the most
 reassuring thing in this section.
 
-**3 — the panel props no longer make the bad combination impossible.** Not fixed; it is Greg's call.
-`GlossaryPanel`, `IdeasPanel` and `SummaryPanel` each take the public artefact and `owner: Use… | null`
-as **independent** fields, so a visitor's glossary paired with a non-null owner is legal TypeScript
-and would render the authenticated lookup and regeneration controls. Every visitor caller passes
-`owner={null}` and `tests/public-network-trace.test.tsx` asserts none of those controls is on screen,
-so nothing is wrong today — what is gone is the *type* seam that made it unwriteable.
+**3 — the panel props no longer make the bad combination impossible.** Fixed, 2026-08-29; Greg chose
+it over leaving it as a tested-only invariant.
+`GlossaryPanel`, `IdeasPanel` and `SummaryPanel` each took the public artefact and `owner: Use… | null`
+as **independent** fields, so a visitor's glossary paired with a non-null owner was legal TypeScript
+and would have rendered the authenticated lookup and regeneration controls. Every visitor caller
+passed `owner={null}` and `tests/public-network-trace.test.tsx` asserts none of those controls is on
+screen, so nothing was wrong at the time — what had gone was the *type* seam that made it
+unwriteable.
 
 That seam is the whole reason `ReaderCapability` is a discriminated union rather than a boolean, so
-losing it one level down is a real loss. The fix is a union per panel — `{artefact, owner: null} |
-{artefact: null, owner: Use…}` — which is three files and the same pattern already in the codebase.
-Against it: Greg asked us not to overcomplicate, and this is a type-level refactor for a state no
-caller creates. **Recommendation: do it**, on the grounds that it is the pattern already chosen for
-exactly this and the runtime assertion currently standing in for it is one test.
+losing it one level down was a real loss. The fix is one tagged `access` prop per panel, replacing
+both fields: `GlossaryAccess`, `IdeasAccess`, `SummariesAccess`, each
+`{ kind: "owner"; owner; artefact | null } | { kind: "visitor"; artefact }`.
+
+**Tagged, and not the untagged `{artefact, owner: null} | {artefact: null, owner}` this section
+first proposed.** That shape says a visitor has no artefact, which is backwards: since slice 1b a
+visitor's whole point is that they *do* have one, and it is the owner who can be looking at a piece
+nobody has built anything for yet. So the nullability runs the other way round — nullable on the
+owner's arm, where "not built yet" is an ordinary state and the offer to build one is what fills it,
+and non-nullable on the visitor's, because `visitorGap` answers *not built* and the band says so
+instead of mounting the panel at all. A `kind` tag rather than relying on the nulls to discriminate,
+for the same reason `ReaderCapability` carries one.
+
+The panel bodies are untouched: each destructures `access` and derives the two locals it already
+used. The three `…Owner` aliases stay, because the tests and the bands name them.
 
 ### Eleven mutations, and two of them were wrong
 
@@ -1796,6 +1808,75 @@ Two mutations came back green and were *my* mistake rather than a hole: I had ad
 `revision_blocks` to public files, and both are on the guard's allowlist on purpose. Written down
 because "still green" in a mutation log reads as a finding, and the next person to skim this should
 not spend an hour re-finding that the guard was right.
+
+### What the payload actually costs, measured on a real article
+
+The estimate this slice was approved against — glossary 2.5–12KB, summaries ~37KB — came from
+sampling artefacts on disk. Checked against the wire on 2026-08-29, on
+`noema-mythology-of-conscious-ai` served by the real endpoint from Postgres:
+
+| | KB | share |
+|---|---:|---:|
+| `blocks` | 143.4 | 58% |
+| `tree` | 40.0 | 16% |
+| `summary` | 34.5 | 14% |
+| `ideas` | 12.0 | 5% |
+| `glossary` | 10.1 | 4% |
+| `tweets` | 4.3 | 2% |
+| `arc` | 1.5 | 1% |
+| **total** | **246.2** | |
+
+The estimate holds: summaries are 34.5KB against ~37KB predicted, glossary 10.1KB inside the 2.5–12KB
+range. **The four artefacts together are 61KB, a quarter of the payload**, against a prose-and-tree
+body of 183KB that a visitor was already being sent. So Greg's call trades a round trip for a third
+more bytes, not for a different order of magnitude — which is the version of the tradeoff he agreed
+to, now with a number behind it rather than a sample.
+
+Checked for disclosure at the same time, against the real payload rather than a fixture: no `note`,
+no `profileHash`, no `guidance`, no `sourceHash`, no lookups. Three words did match a grep and all
+three were innocent — `model` and `cost` appear in the article's own prose, and `provenance` on an
+idea is `"assumed"` or `"introduced"`, which is about the idea rather than about a run.
+
+`arc.generator` and `tree.generator` do carry `claude-sonnet-5` to a visitor, and that is deliberate
+and already argued in [`src/public/dto.ts`](../../src/public/dto.ts): it says which of *our*
+generators wrote the tree, which is provenance about us and not about the owner. Recorded here
+because it is the one thing in the payload that looks like a leak and is not.
+
+### The panel props, and the `never` that makes the union worth having
+
+Greg's call on [finding 3](#the-code-review-of-the-built-slice-and-the-two-guards-that-were-not-guarding):
+do it. The three band panels now take one tagged `access` prop instead of two loose ones —
+
+```ts
+export type GlossaryAccess =
+  | { kind: "owner"; owner: GlossaryOwner; glossary: { entries: GlossaryEntry[] } | null }
+  | { kind: "visitor"; glossary: { entries: GlossaryEntry[] }; owner?: never };
+```
+
+— so the sentence from [reader-capability.ts](../../src/web/reader-capability.ts) holds one level
+down: **the visitor arm has no `owner` field to be empty.** The asymmetry is deliberate. An owner can
+be looking at a piece with no glossary yet, which is what the offer to build one is for; a visitor
+never mounts the panel without the artefact, because `visitorGap` answers *not-built* and the band
+says so instead.
+
+**`owner?: never` is the half that matters, and the first version did not have it.** Without it the
+union catches only a fresh object literal at the call site, because a literal is the only thing
+TypeScript applies excess-property checking to. Build the same object in a variable and
+`access={that}` compiles with an owner hook riding inside a visitor's arm:
+
+```ts
+const sneaky = { kind: "visitor" as const, glossary: visitorList, owner: ownerHook };
+<GlossaryPanel access={sneaky} … />   // no error, before the `never`
+```
+
+Which is exactly how this kind of guard turns out to be worth nothing — and it would have shipped,
+because every one of the six real call sites writes a literal and every one of them compiled. Both
+forms were run through `tsc` before and after. Before: the literal errored, the variable did not.
+After: all three panels reject both, `TS2322 … is not assignable to type 'GlossaryAccess'`.
+
+The general lesson is worth more than the fix: **a type-level guard has to be tried against the
+sneaky form, not the honest one.** The honest form is what your call sites already write, so it
+proves nothing about a call site somebody writes next month.
 
 ## Open questions
 

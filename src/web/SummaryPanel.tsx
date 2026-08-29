@@ -95,7 +95,8 @@ import { useRenderCount } from "./perf.js";
  * **The owner's half of this panel** — the read's status, the job writing the
  * two longer rungs, the steer box and the button that spends.
  *
- * `null` for a visitor. Since slice 1b the summaries arrive inside
+ * Absent for a visitor — see `SummariesAccess` below. Since slice 1b the
+ * summaries arrive inside
  * `GET /api/public/article/:slug`, so the ladder below is the same ladder drawn
  * by the same components; what a visitor has no equivalent of is everything
  * here. One panel with its data injected rather than an owner's panel and a
@@ -108,19 +109,27 @@ import { useRenderCount } from "./perf.js";
  */
 export type SummariesOwner = UseSummaries;
 
+/**
+ * **Who is reading, and the ladder they get — one prop, so the two cannot
+ * disagree.** The argument is in GlossaryPanel.tsx § GlossaryAccess.
+ *
+ * The ladder is typed as what it is read for rather than as `Summaries`: a
+ * visitor's `PublicSummaries` is exactly these two fields
+ * (src/public-types.ts). It is nullable on the owner's arm and not on the
+ * visitor's — an owner looking at a piece with no ladder is an ordinary state
+ * rather than a fault, because every internal tree node already carries a
+ * one-sentence gist and the panel works without any of this.
+ */
+export type SummariesAccess =
+  | {
+      kind: "owner";
+      owner: SummariesOwner;
+      summaries: { entries: SummaryEntry[]; missing: number } | null;
+    }
+  | { kind: "visitor"; summaries: { entries: SummaryEntry[]; missing: number }; owner?: never };
+
 interface Props {
-  /**
-   * The ladder to draw, or `null` when this piece has none — which is an
-   * ordinary state rather than a fault, because every internal tree node
-   * already carries a one-sentence gist and the panel works without any of
-   * this.
-   *
-   * Typed as what it is read for rather than as `Summaries`: a visitor's
-   * `PublicSummaries` is exactly these two fields (src/public-types.ts).
-   */
-  summaries: { entries: SummaryEntry[]; missing: number } | null;
-  /** Whose article this is, and what comes with it. `null` for a visitor. */
-  owner: SummariesOwner | null;
+  access: SummariesAccess;
   /** The tree, joined to whatever summaries exist. Null if the tree is unusable. */
   root: SummaryNode | null;
   /**
@@ -154,8 +163,7 @@ const RUNG_LABELS: Record<Rung, { label: string; blurb: string }> = {
 const DEPTH_LABELS = ["article", "parts", "sections"];
 
 export function SummaryPanel({
-  summaries,
-  owner,
+  access,
   root,
   blocks,
   rung,
@@ -166,6 +174,8 @@ export function SummaryPanel({
   onJump,
 }: Props) {
   useRenderCount("SummaryPanel");
+  const owner = access.kind === "owner" ? access.owner : null;
+  const summaries = access.summaries;
   /**
    * Which sections the reader has closed.
    *

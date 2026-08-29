@@ -96,7 +96,8 @@ import { useRenderCount } from "./perf.js";
  * **The owner's half of this panel** — the read's status, the job writing it,
  * the three verbs and the per-entry web lookup.
  *
- * `null` for a visitor, and that is the seam. Since slice 1b a visitor gets the
+ * Absent for a visitor, and that is the seam — `GlossaryAccess` below is what
+ * makes "absent" a thing the compiler enforces. Since slice 1b a visitor gets the
  * real glossary: it arrives inside `GET /api/public/article/:slug`, so the list
  * below is the same list drawn by the same components. What a visitor has no
  * equivalent of is everything in this type — there is no request to be loading
@@ -119,19 +120,47 @@ import { useRenderCount } from "./perf.js";
  */
 export type GlossaryOwner = UseGlossary;
 
+/**
+ * **Who is reading, and the list they get — one prop, so the two cannot
+ * disagree.**
+ *
+ * These used to be two independent props, `glossary` and `owner`, which made
+ * `{ glossary: <a visitor's list>, owner: <a real owner hook> }` a legal thing
+ * to write: it typechecks, and it renders the lookup box and the buttons that
+ * spend to somebody who does not own the article. Nothing wrote it and a test
+ * asserts nobody does, but the test is the only thing that was stopping it.
+ *
+ * So the rule from reader-capability.ts is reproduced one level down: **the
+ * visitor arm has no `owner` field to be empty, so there is nothing for a later
+ * edit to read.**
+ *
+ * The list is typed as its entries rather than as `Glossary`, because that is
+ * all this panel and its `Foot` ever read — and because a visitor's
+ * `PublicGlossaryEntry` is a `GlossaryEntry` with the lookup absent
+ * (src/public-types.ts), so both fit without a cast and neither needs a second
+ * component.
+ *
+ * **The asymmetry is deliberate.** An owner can be looking at a piece with no
+ * glossary yet — that is an ordinary state, and it is what the offer to build
+ * one is for. A visitor never mounts this panel without the list, because
+ * `visitorGap` answers *not built* and the band says so instead of rendering
+ * (src/web/visitor.ts).
+ *
+ * **`owner?: never` is load-bearing, and it is not tidiness.** Without it the
+ * union catches only a *fresh object literal* at the call site, because that is
+ * the only place TypeScript applies excess-property checking. Build the same
+ * object in a variable first and `access={that}` typechecks with an owner hook
+ * riding along inside a visitor's arm — which is precisely how a guard like
+ * this turns out to be worth nothing. Both forms were tried against `tsc`
+ * before this line was added, and only the literal was caught; with it, both
+ * are. There is a `never` on each of the other two panels for the same reason.
+ */
+export type GlossaryAccess =
+  | { kind: "owner"; owner: GlossaryOwner; glossary: { entries: GlossaryEntry[] } | null }
+  | { kind: "visitor"; glossary: { entries: GlossaryEntry[] }; owner?: never };
+
 interface Props {
-  /**
-   * The list to draw, or `null` when this piece has none.
-   *
-   * Typed as its entries rather than as `Glossary`, because that is all this
-   * panel and its `Foot` ever read — and because a visitor's
-   * `PublicGlossaryEntry` is a `GlossaryEntry` with the lookup absent
-   * (src/public-types.ts), so both fit without a cast and neither needs a
-   * second component.
-   */
-  glossary: { entries: GlossaryEntry[] } | null;
-  /** Whose article this is, and what comes with it. `null` for a visitor. */
-  owner: GlossaryOwner | null;
+  access: GlossaryAccess;
   /** The selected term, from `?term=`. Null is a list nobody has picked from. */
   termId: string | null;
   onTerm(id: string | null): void;
@@ -149,8 +178,7 @@ interface Props {
 }
 
 export function GlossaryPanel({
-  glossary,
-  owner,
+  access,
   termId,
   onTerm,
   sort,
@@ -160,6 +188,8 @@ export function GlossaryPanel({
   onJump,
 }: Props) {
   useRenderCount("GlossaryPanel");
+  const owner = access.kind === "owner" ? access.owner : null;
+  const glossary = access.glossary;
   /* `effectiveSort` and not `sort`: `prioritised` is the default, so it arrives
      on glossaries whose scores cannot support it, and everything below — the
      groups, the SortBar's pressed state, the numbers on each row — has to agree
