@@ -1,6 +1,10 @@
 # Footnotes and bibliographies
 
-**Status: built, 2026-08-29 — stages 2 to 5a, less stage 6 (PDFs), which Greg cut from v1.**
+**Status: built and seen working, 2026-08-29 — stages 2 to 5a and 3b, less stage 6 (PDFs), which
+Greg cut from v1.** Ten rounds of GPT Sol review, every one of which found something real. The
+feature has been run end to end through the real pipeline on a live article
+(`data/scaling-hypothesis`) and looked at in a browser through the real public DTO. The one thing
+nobody has seen is **diagram mode**, which is owners-only by design and needs a signed-in session.
 Five rounds of GPT Sol review after it was built; every one found something real, and the last
 of them is the closed inventory of consumers in
 [footnotes-finish-review-5-sol.md](footnotes-finish-review-5-sol.md). **Stage 3b — the block-id
@@ -2130,16 +2134,16 @@ for `/api/public/article/fn-wikipedia` only, from the artefacts on disk.
 | masthead | **"20 parts · 237 sections"** — not 21, not 358; 237 is exactly the body count |
 | marker → note → back | hover gives a sidenote-grade card with the citation's own links live and "cited in 2 passages"; the note carries **plural** back-links "1 2"; the round trip lands on the exact citing paragraph |
 | granularity zoom | scrolling through the whole notes range keeps both the current tier and the ancestor highlight on "Notes", and both return to the body on the way out |
-| summary mode | **not tested** — no `summary.json` (a model call), so the panel says nobody has built one |
-| diagram | **not tested** — gated behind a model call for a visitor with no diagram artefact |
+| summary mode | not testable on this fixture (no `summary.json`) — **since checked in full** on a real article, below |
+| diagram | not reachable signed out, and deliberately so — **measured directly instead**, below |
 
 **What this is and is not evidence for.** The payload was built from the artefacts directly, not
 through `publicArticle()`, so this shows the *visitor-side client* renders the apparatus correctly
 **given** a payload carrying `treatment`. That the DTO now emits it is a separate piece of evidence
 (`tests/public-dto.test.ts`, and the 1-part/2-part measurement recorded in
 [the fifth review](footnotes-finish-review-5-sol.md)). Two halves, two kinds of
-evidence, and neither substitutes for the other. Summary mode and diagram mode remain unseen by
-anyone, and should be looked at the first time a real article has both notes and summaries.
+evidence, and neither substitutes for the other. Summary mode was unseen by anyone at this point; it has since been
+checked in full, and diagram mode measured another way — both below.
 
 **The two fixtures are gone, and this is how to rebuild one.** They were scaffolding for a single
 browser pass and they could not stay: `tests/store-roundtrip.test.ts` and `tests/store-parity.test.ts`
@@ -2169,6 +2173,31 @@ So this is the durable copy of what those files said. Rebuilding takes no model 
   depth-one leaves under the root, because the article has exactly one heading block and there is no
   hierarchy to derive. Its `raw.html` is kept in `data/` because it is a genuine fetch of the live
   Substack page and nobody need re-fetch it. Use fn-wikipedia for anything to do with footnotes.
+
+**Summary mode, seen at last — and through the real DTO.** This was the one reader-facing check
+nobody had ever made, because until 2026-08-29 no article existed with both real footnotes and real
+model-written summaries. `data/scaling-hypothesis` is that article: Gwern's piece, fetched live and
+put through the whole pipeline, 186 blocks with 41 footnotes, 8 parts, 35 summary entries.
+
+The route matters more than usual here. The preview page imported **`publicArticle()` from
+[`src/public/dto.ts`](../../src/public/dto.ts)** and called it in the browser on the real artefacts,
+stubbing only `window.fetch` for the one public path. So this is the **visitor boundary itself**,
+not a hand-assembled payload — which makes it the end-to-end confirmation of the fifth review's
+finding, the one no owner-side test could see.
+
+| | |
+|---|---|
+| rows the apparatus produces | **1**, not 41 — `.summ-title-row` returns 9: eight numbered parts, then `Notes 41¶` |
+| is "Notes" numbered? | **no** — part 8's title is `[<span class="summ-number">8</span>, "Site Footer"]`; the Notes title is a bare text node with no `.summ-number` element at all |
+| "No summary for this section" | **0** matches page-wide |
+| the eight real parts | numbered 1–8, in order, unshifted, each with its own generated gist |
+| is Notes distinguished? | `oklch(0.63 0 0)` grey, weight 500, uppercase — against `oklch(0.97 0 0)`, weight 600, normal for a part |
+| can it be descended into? | no: its toggle carries `leaf` and is `disabled` |
+| can a reader still get there? | **yes** — clicking it sets `?at=spya-cbz06n` and highlights the row |
+
+That last pair is the whole design in two rows, and it is exactly what Greg asked for: *"a way to see
+it in the structure of the doc … but we don't necessarily need to summarise and include it in the
+argument"*. Present in the structure, absent from the argument, and reachable.
 
 **Diagram mode, measured on the real article instead.** Diagram mode is owners-only by design
 (`src/web/visitor.ts` § `COSTS`, and `/api/similar` and `/api/projection` sit behind `requireUser`),
