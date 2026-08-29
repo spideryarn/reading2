@@ -1071,6 +1071,59 @@ is the guarded read that silently does nothing: under vitest + jsdom, Node's own
 shadows jsdom's and reads as `undefined`, so a `try`/`catch` around it passes every test while
 storing nothing.
 
+#### The three slices, and why in this order
+
+From [Sol's stage 2 design](public-read-only-stage2-input-sol.md) § 9, adopted:
+
+1. **Unfurls, still `noindex`.** The compiled shell, the `/read/:slug` rewrite ahead of the SPA
+   catch-all, the public head query, safe tags, the 404 default shell, `no-store`, `HEAD`, a shell
+   digest, and a deployed browser check. **The global `noindex` and `robots.txt` stay exactly as they
+   are.**
+2. **Public pages may be crawled.** Split the static headers, let the function own robots per
+   request, and change `robots.txt`.
+3. **Anonymous resume.** The visitor-only `localStorage` layer. Shares no server logic with the other
+   two and must not hold them up.
+
+The order is the point: slice 1 makes a shared link preview properly **without** changing crawler
+exposure at all, so it is a complete user-visible result rather than build infrastructure sitting
+unused waiting for a policy decision.
+
+#### `robots.txt` says `Disallow: /`, and the plan had not noticed
+
+Sol's largest finding, and it was missing from everything above. [`public/robots.txt`](../../public/robots.txt)
+is `User-agent: * / Disallow: /`, and `vercel.json` sets a global `X-Robots-Tag: noindex, nofollow`.
+The file's own comment already explains the pairing and the trap in it — *a crawler that obeys the
+`Disallow` never fetches the page, so it never sees the header* — which means slice 2 is a change to
+**two** things that do not reinforce each other, not one.
+
+**An open question that decides whether slice 1 is worth building at all:** do the unfurlers we care
+about — Slack, iMessage, WhatsApp, Discord, Twitter/X — fetch a URL whose `robots.txt` disallows it?
+Most link-preview fetchers are not crawlers and do not consult `robots.txt`; some do. If ours do,
+slice 1 ships a head that nothing reads, and the slices have to merge or swap. **Check this before
+building slice 1**, and check it by observation rather than by reasoning about what a bot ought to do.
+
+#### What already has a mutation that must make it red
+
+Sol's § 7 gives a check and a mutation for each part, and the split between local and deployed is
+the useful half. Local: head tags and escaping, body and asset references unchanged, a private title
+never entering the output, the `root_gist` fallback, canonical query refusal, a stale client shell,
+the API bundle carrying built assets, rewrite ordering as *written*. Only four genuinely need a
+deployment: whether Vercel's rewrite actually matches in that order, whether the headers collide or
+merge, whether the shell embedded equals the shell served, and whether `robots.txt` is served as
+text/plain with the exact pair.
+
+The one Sol flags as most important is the browser mutation: corrupt the compiled script URL, and
+`curl` still returns 200 with the right title while the page is blank. A head test and a status code
+cannot tell those apart.
+
+#### Two constraints worth pulling out of the list
+
+- **Never build `og:url` from `Host` or a forwarded header.** Use the fixed production origin, or an
+  attacker-controlled host becomes public metadata.
+- **`/read/:slug/metadata` and `/read/:slug/tweets` are separate live client routes.** The rewrite
+  enhances the base reading URL only. Decide that deliberately rather than reaching for
+  `/read/:path*` and capturing every nested route by accident.
+
 ### Stage 3 — one article, many readers
 
 *The structural stage, and the one that makes the cost-efficiency argument literally true.*
