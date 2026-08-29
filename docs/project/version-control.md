@@ -228,29 +228,6 @@ staged as deleted within minutes of landing. One stale snapshot cannot do both â
 to predate `7edad4f` and postdate `0aa30ac` at once. A repeatedly-reused stale `BASE` does exactly
 that, because each retry rewrites the index from the same old tree while HEAD keeps moving.
 
-**The same recipe can also print `COMMITTED` having committed nothing.** a5 hit this one themselves.
-The heredoc writing the message file was stopped by a permission prompt, so `git commit-tree -F` failed
-on a missing file, `$C` came back **empty**, and
-
-```sh
-git update-ref refs/heads/main $C $BASE && echo "COMMITTED $C on $BASE"
-```
-
-still printed `COMMITTED  on <base>` â€” the only tell being a double space where the commit id should
-be. `main` was untouched, so nothing was damaged, but for a minute they believed they had committed
-something they had not, which in a shared tree is worse than the damage because the next thing you do
-is move on. Quote the variables, and assert the outcome rather than the exit status:
-
-```sh
-C=$(git commit-tree "$TREE" -p "$BASE" -F "$MSG") || return 1
-[ -n "$C" ] || { echo "ABORT: empty commit id"; return 1; }
-git update-ref refs/heads/main "$C" "$BASE" || return 1
-[ "$(git rev-parse HEAD)" = "$C" ] || { echo "ABORT: HEAD is not the new commit"; return 1; }
-```
-
-The last line is the one that matters, and it is the same move as the index assertion above: **ask
-the repository what happened, rather than the pipeline that was supposed to make it happen.**
-
 **The one number that settles who did it.** Compare each staged path's blob against `git hash-object`
 of the file on disk. Anything a person deliberately staged matches disk; a stale `read-tree` matches
 none of it. On the incident above, **0 of 65 staged paths matched disk**, which turns an argument
