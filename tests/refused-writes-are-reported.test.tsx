@@ -65,6 +65,9 @@ vi.mock("../src/web/useJobs.js", () => ({
     jobs: [],
     loaded: true,
     error: null,
+    /* The durable half of `error` — src/web/useJobs.ts § `lastFailure`. Reached
+       only if a run fails, which is what a refused reset must never get to. */
+    lastFailure: () => null,
     run: async (_slug: string, _steps: string[], force?: boolean) => {
       ran.push(force ?? false);
       return null;

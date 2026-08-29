@@ -174,6 +174,14 @@ vi.mock("../src/web/useJobs.js", () => ({
       jobs: [],
       loaded: true,
       error: queueError,
+      /* The durable half of the same fact — the real hook keeps it in a ref
+         that no poll can clear, and the surfaces read *this* rather than
+         `error` (src/web/useJobs.ts § `lastFailure`). A posed queue does not
+         poll, so the two are indistinguishable here; that is exactly what
+         `tests/refused-job-reason-survives.test.tsx` exists to say, and it is
+         why this mock has to carry both rather than only the one it is asked
+         for. */
+      lastFailure: () => queueError,
       run: async () => runResult,
       cancel: async () => {},
     };
