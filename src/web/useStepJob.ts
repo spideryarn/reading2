@@ -26,18 +26,21 @@
  * (docs/plans/simplification-wave-2.md § 2.6). What this hook takes is the job
  * half, where the four really were the same code.
  *
- * ## Who uses it, and the one who does not yet
+ * ## Who uses it
  *
- * `useGlossary`, `useIdeas` and `useSummaries`. **`src/web/Tweets.tsx` is the
- * fourth caller and is still hand-rolling all of this** — not because the
- * thread page is different, but because it had a hundred lines of another
- * session's uncommitted work in it on the day this was extracted and editing it
- * would have taken their changes with mine. So the job is unfinished rather
- * than deliberately partial: when that file is quiet, its `writesThread`,
- * `onFinished`, `useJobs`, `job` memo, `postFailed`/`startedId`/`stopped` and
- * `write()` come out and it calls `useStepJob(slug, "tweets", load)` like the
- * rest. Until then it carries the bug in `failed` that § `failed` below
- * describes, because the fix lives here.
+ * All four: `useGlossary`, `useIdeas`, `useSummaries` and `src/web/Tweets.tsx`.
+ *
+ * The thread page came last, a day after the other three, because it had a
+ * hundred lines of another session's uncommitted work in it on the day this was
+ * extracted and editing it would have taken their changes along. It is the one
+ * whose copy was inline in a component rather than in a hook, which is why
+ * `jscpd` never saw it and why it drifted furthest — and for that whole day it
+ * carried the bug in `failed` that § `failed` below describes, because the fix
+ * lived here and nothing propagated it.
+ *
+ * That is the argument for the module in one sentence: a fix that lands in a
+ * shared place reaches every caller, and a fix that lands in one of four copies
+ * reaches one.
  */
 import { useCallback, useMemo, useState } from "react";
 import type { Job, StepName } from "../types.js";

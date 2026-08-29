@@ -78,7 +78,7 @@ import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { carriedSearch, readHref } from "./router.js";
 import { articleStats } from "./stats.js";
-import { useJobs } from "./useJobs.js";
+import { useStepJob } from "./useStepJob.js";
 import { useSlow } from "./useSlow.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { JobProgress } from "./JobProgress.js";
@@ -177,64 +177,29 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * The queue, because writing a thread is half a minute of model time and this
    * repo has one for exactly that (docs/project/ingest-queue.md).
    *
-   * `onFinished` rather than watching for a status change: the hook already
-   * knows which jobs it has announced and which were merely on the shelf when
-   * the page opened, so a reload does not refetch once per historical job.
+   * **All of it is in the hook now** — src/web/useStepJob.ts. The job memo, the
+   * two-clause `writesThread` filter, `postFailed`/`startedId`/`stopped` and
+   * the `failed` expression were written out here longhand and were the fourth
+   * copy of the same ninety lines; the hook's own docstring says which of the
+   * four each paragraph came from. Two things this page knew and the other
+   * three did not — that forcing a step forces every step after it, and that
+   * `tweets` must be named rather than forced positionally — went into
+   * `StepRun.force` there, which is where they are true of all four.
    *
-   * **The cost, said out loud:** `useJobs` polls the whole job list and never
-   * stops, so sitting on a finished thread page is one small request every
-   * eight seconds for something this page has no use for. That was the price of
-   * not writing a second poller, and it buys the paragraph below — a run
-   * started in another tab or from the CLI shows up here as progress rather
-   * than as a button that appears to do nothing. If it ever matters, the fix is
-   * an idle switch in `useJobs`, not a private hook here.
+   * The one that mattered was `failed`. This page read `queue.error` at render,
+   * which is right for a frame: `error` is shared with the poller and a failed
+   * POST's own `finally` starts the poll that clears it, so the server's reason
+   * for refusing a job was replaced by "Couldn't start the job." before anyone
+   * could read it. The hook snapshots it out of `queue.lastFailure()` instead.
+   * `tests/refused-job-reason-survives.test.tsx` mounts this page whole and
+   * drives that sequence with the polls held.
    */
-  const onFinished = useCallback(
-    (job: Job) => {
-      if (job.slug === slug && writesThread(job)) void load();
-    },
-    [slug, load],
-  );
-  const queue = useJobs(onFinished);
-
-  /**
-   * The job writing this article's thread, if one is.
-   *
-   * Found in the polled list rather than remembered from the click, which is
-   * what makes a run started somewhere else — another tab, `npm run tweets` —
-   * show up here as progress rather than as a button that appears to do
-   * nothing. `enqueue` hands back the job already in flight for an identical
-   * request, so pressing the button twice cannot start a second one.
-   */
-  const job = useMemo(
-    () =>
-      queue.jobs
-        .filter((j) => j.slug === slug && writesThread(j))
-        .find((j) => j.status === "queued" || j.status === "running") ?? null,
-    [queue.jobs, slug],
-  );
-
-  /**
-   * What went wrong, in the two quite different ways it can.
-   *
-   * `postFailed` is the request never landing: no job exists, so nothing will
-   * ever arrive in the list to explain the silence.
-   *
-   * `startedId` is the other one, and it is the reason this is not just a
-   * boolean. A job that fails leaves the running set, so without it the button
-   * would simply reappear as though nothing had happened — the model call
-   * failed and the page shrugged. Scoped to the job **this page started**, so
-   * an old failure from another day is not dug up and presented as news.
-   */
-  const [postFailed, setPostFailed] = useState(false);
-  const [startedId, setStartedId] = useState<string | null>(null);
-  const stopped = useMemo(() => {
-    const mine = startedId ? queue.jobs.find((j) => j.id === startedId) : undefined;
-    if (!mine) return null;
-    if (mine.status === "error") return mine.error ?? "The job failed.";
-    if (mine.status === "cancelled") return "Stopped.";
-    return null;
-  }, [queue.jobs, startedId]);
+  const queue = useStepJob(slug, "tweets", load);
+  /* Destructured because the four surfaces below took `job` and `failed` as
+     props long before the hook existed, and threading `queue` through them
+     would be a rename of this file's whole render for no gain. `cancel` stays
+     on `queue`, where the two call sites read it. */
+  const { job, failed } = queue;
 
   /**
    * Ask for a thread.
@@ -245,33 +210,13 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
    * right for a stale one — it agrees the artefact is out of date, so an
    * ordinary run really does rewrite it. It is *wrong* for a thread that is
    * perfectly current: the step would report "already done" and the page would
-   * sit there having apparently done nothing. `force: ["tweets"]` is how the
-   * footer's rewrite says "I know, do it anyway".
-   *
-   * Forcing a step forces every step after it (`cascadeForce`, src/jobs.ts).
-   * That is harmless here only because `tweets` is last in `STEP_ORDER` and is
-   * the sole step in this job — worth knowing before adding a second name to
-   * the array.
+   * sit there having apparently done nothing. The footer's rewrite is how a
+   * reader says "I know, do it anyway", and `StepRun.force` in useStepJob.ts is
+   * what that turns into.
    */
   async function write(force = false, useProfile = true) {
-    setStartedId(null);
-    const started = await queue.run({
-      slug,
-      steps: ["tweets"],
-      ...(force ? { force: ["tweets" as const] } : {}),
-      // Only when false, so absent goes on meaning yes — src/routes.ts.
-      ...(useProfile ? {} : { useProfile: false }),
-    });
-    setPostFailed(started === null);
-    if (started) setStartedId(started.id);
+    await queue.start({ force, useProfile });
   }
-
-  /* `queue.error` is read here at render and not inside `write`, where it would
-     be the value from the render that created the closure — the hook sets it
-     during the same `await`, so reading it there gives you the *previous*
-     error, or null, which is how a failed request ends up reported as nothing
-     at all. */
-  const failed = postFailed ? (queue.error ?? "Couldn't start the job.") : stopped;
 
   const backHref = readHref(slug, carriedSearch(location.search), "article");
 
@@ -342,11 +287,6 @@ export function Tweets({ slug, article }: { slug: string; article: Article }) {
       <Dock slug={slug} view="tweets" />
     </>
   );
-}
-
-/** Is this job one that would write a thread? */
-function writesThread(job: Job): boolean {
-  return job.steps.some((s) => s.name === "tweets");
 }
 
 /**

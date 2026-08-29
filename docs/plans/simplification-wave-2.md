@@ -311,6 +311,42 @@ pointer worth more than the paragraph, because that is how the next person finds
 own `FORCE_ONLY_WHEN_NAMED` citation moved from `useIdeas.ts:156-166` to `src/pipeline.ts:202`.
 Rule 3, as predicted.
 
+### The fourth surface, and the last two entrypoints — 2026-08-29
+
+The peer work that had been sitting on `Tweets.tsx`, `glossary.ts` and `ideas.ts` landed overnight,
+so three of the pieces 2.1 and 2.5 had to leave behind went in.
+
+**`src/web/Tweets.tsx` now calls `useStepJob(slug, "tweets", load)`** — the fourth caller, and the
+one whose copy was **inline in a component** rather than in a hook, which is why `jscpd` never saw
+it and why it had drifted furthest. Out came `writesThread`, the `onFinished` wrapper, the `useJobs`
+call, the `job` memo, `postFailed`, `startedId`, `stopped` and the `failed` expression: 854 lines to
+794.
+
+The point was not the sixty lines. It was that this page had gone on reading `queue.error` at render
+for a day after the other three were fixed, because **the fix lived in the hook and there was
+nothing to propagate it to a fourth copy** — which is the argument for the module, stated by the bug
+rather than by the line count.
+
+Red-first, and at the right line. `tests/refused-job-reason-survives.test.tsx` now mounts the thread
+page **whole** and clicks its button, with the real `useJobs`, the real `apiFetch` and `readJson`,
+and the polls held. Against the old code the pre-poll assertion **passed** and the post-poll one
+failed — `:291`, exactly the frame the reader never sees. A test that had stopped at the first
+assertion would have proved the ternary and gone green on the bug. The second case checks the
+opposite risk, that durable does not become stuck.
+
+**`src/glossary.ts` and `src/ideas.ts` moved onto `stageCli`**, taking 2.5 from 18 of 23 to 20 of 23.
+`arc`, `summarise` and `toc` still hold peer work. The gate was made to redden for the new tails
+before this was written down: a `void stageCli(…)` in `glossary.ts` produces *"runs stageCli() at the
+top level but not as `await stageCli(…);`"*, naming the file.
+
+**A note on the suite.** Two full runs of the same code gave 5623/5623 green and then 9 failures, and
+a *different* nine each time — `store-jobs-parity`, `db-schema`, `shelf`. Every one passes in
+isolation. `jobs_only_one_running` is a **database-global** partial unique index (it is in
+`drizzle/0000_initial_schema.sql`, not new), and vitest runs test files in parallel against one
+shared local Postgres, so two suites that each need a running job cannot both be in flight. The
+moving failure set is the tell, and it is worth its own item: a suite that is green or red by
+scheduling teaches everyone to ignore it.
+
 ### The missing converse test — 2026-08-29
 
 `tests/converse-citations.test.ts`, the one gap Sol named that was not a defect. Every `url_citation`

@@ -518,9 +518,12 @@ can set one and forget the other — which is how the four copies drifted in the
 first place. `tests/refused-job-reason-survives.test.tsx` drives the real
 sequence, polls and all.
 
-`useGlossary`, `useIdeas` and `useSummaries` are on it.
-[`Tweets.tsx`](../../src/web/Tweets.tsx) is the fourth and is still hand-rolled,
-so it still reads `queue.error` at render and still carries the bug.
+All four surfaces are on it: `useGlossary`, `useIdeas`, `useSummaries` and
+[`Tweets.tsx`](../../src/web/Tweets.tsx). The thread page came last, a day after
+the others, and was the one whose copy was **inline in a component** rather than
+in a hook — so `jscpd` never saw it, and it drifted furthest. For that day it
+went on reading `queue.error` at render, because the fix lived in the hook and
+there was nothing to propagate it to a fourth copy.
 
 ### The waiting state
 

@@ -40,12 +40,20 @@
  * is what tells a failing run apart from a test that never reached the bug:
  * before the poll, both the broken and the fixed code say the right thing.
  *
- * One surface is driven rather than three. All three go through `useStepJob`,
- * and `tests/step-job-force.test.tsx` is what proves that they do.
+ * One *hook* surface is driven rather than three. All three go through
+ * `useStepJob`, and `tests/step-job-force.test.tsx` is what proves that they do.
+ *
+ * The thread page is driven separately below, because it was the fourth copy of
+ * this and the one that did **not** go through the hook — so for it, "does the
+ * reason survive the poll" was a live question rather than a fact inherited
+ * from a shared module. It is kept after the conversion for the same reason the
+ * fixture above is: the way this breaks is by somebody reintroducing a private
+ * `queue.error` read, and that is exactly what a page mounted whole can catch.
  */
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Article } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -66,7 +74,20 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 
 vi.mock("../src/web/useProfile.js", () => ({ useHasProfile: () => false }));
 
+/* The thread page's bottom bar reaches Supabase and the whole visitor layer,
+   and none of it is what this file is about. Same reason as
+   tests/background-reload-keeps-the-list.test.tsx. */
+vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+
 const { useIdeas } = await import("../src/web/useIdeas.js");
+const { Tweets } = await import("../src/web/Tweets.js");
+
+/** Enough article for the page to render its head. */
+const ARTICLE = {
+  meta: { slug: "constitution", title: "A Constitution", url: "https://example.com/c" },
+  blocks: [{ id: "spya-a", kind: "p", text: "some words here" }],
+  tree: { rootId: "spya-root", nodes: {} },
+} as unknown as Article;
 
 /** What the server says when it refuses the job. */
 const REFUSED = "You are out of credit for today.";
@@ -116,6 +137,9 @@ beforeEach(() => {
         await new Promise<void>((go) => heldPolls.push(go));
         return json({ jobs: [] });
       }
+      /* No thread for this article yet — the ordinary 404, and the state the
+         thread page's "Write the thread" button is pressed from. */
+      if (url.startsWith("/api/tweets/")) return new Response(null, { status: 404 });
       /* Nobody has asked for ideas on this article yet: the ordinary 404, and
          the state the button is pressed from. */
       return new Response(null, { status: 404 });
@@ -216,5 +240,84 @@ describe("a job the server received and refused", () => {
 
     expect(ideas?.failed).toBeNull();
     expect(host.textContent).toBe("");
+  });
+});
+
+describe("the thread page, which had its own copy of all this", () => {
+  /**
+   * The fourth surface, mounted whole and clicked, because it is a component
+   * rather than a hook and its `failed` was written out longhand in the
+   * component body. It read `queue.error` at render — the spelling the three
+   * hooks were fixed out of on 2026-08-28 and this one was not, because the
+   * file held another session's uncommitted work that day.
+   *
+   * Everything real runs: the page's own `load`, the real `useJobs`, the real
+   * `apiFetch` and `readJson`. Only the dock is stubbed.
+   */
+  it("goes on saying what the server said after the next poll succeeds", async () => {
+    await act(async () => {
+      root.render(createElement(Tweets, { slug: "constitution", article: ARTICLE }));
+    });
+    await settle();
+    await answerPolls();
+    // The page found no thread, so the button that asks for one is on screen.
+    expect(host.textContent).toContain("Nobody has written a thread for this one yet.");
+
+    const button = [...host.querySelectorAll("button")].find(
+      (b) => b.textContent?.trim() === "Write the thread",
+    );
+    if (!button) throw new Error("the thread page did not render its write button");
+
+    await act(async () => {
+      button.click();
+      await Promise.resolve();
+    });
+    await settle();
+
+    /* Before the poll lands — the frame the reader never sees. The broken code
+       passes this line, which is why it is here and not left out. */
+    expect(host.textContent).toContain(REFUSED);
+    expect(sent.some((r) => r.method === "POST" && r.url === "/api/jobs")).toBe(true);
+
+    /* And the poll that the failed POST's own `finally` started really is in
+       flight. Without this the test could pass by never reaching the thing
+       that wipes the message. */
+    const before = polls();
+    await answerPolls();
+    expect(before).toBeGreaterThan(1);
+
+    /* After a perfectly successful poll. The server refused the job and its
+       reason is still the one on screen — not "Couldn't start the job." */
+    expect(host.textContent).toContain(REFUSED);
+    expect(host.textContent).not.toContain("Couldn't start the job.");
+  });
+
+  it("lets go of it the moment a run does start", async () => {
+    /* The other half, on this surface too: durable must not mean stuck. */
+    await act(async () => {
+      root.render(createElement(Tweets, { slug: "constitution", article: ARTICLE }));
+    });
+    await settle();
+    await answerPolls();
+
+    const press = async () => {
+      const button = [...host.querySelectorAll("button")].find(
+        (b) => b.textContent?.trim() === "Write the thread",
+      );
+      if (!button) throw new Error("the thread page did not render its write button");
+      await act(async () => {
+        button.click();
+        await Promise.resolve();
+      });
+      await settle();
+      await answerPolls();
+    };
+
+    await press();
+    expect(host.textContent).toContain(REFUSED);
+
+    refusing = false;
+    await press();
+    expect(host.textContent).not.toContain(REFUSED);
   });
 });
