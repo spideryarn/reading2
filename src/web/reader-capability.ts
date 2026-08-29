@@ -36,6 +36,7 @@ import type { PublicArtefactSet, PublicArtefacts } from "../public-types.js";
 import type { GlossaryRead } from "./useGlossary.js";
 import type { ChatAnchorsApi } from "./useChatAnchors.js";
 import type { ClientComment, CommentsApi } from "./useComments.js";
+import type { UseArc } from "./useArc.js";
 
 export type ReaderCapability =
   | {
@@ -46,6 +47,17 @@ export type ReaderCapability =
       chatAnchors: ChatAnchorsApi;
       /** The opening glossary read, shared with the band. `useGlossaryRead`. */
       glossary: GlossaryRead;
+      /**
+       * The arc, and whether one is being written right now. `useArc`.
+       *
+       * **Here rather than on `Article` because only an owner can cause one.**
+       * Since 2026-08-29 the arc is not built by every ingest, so an article can
+       * be opened without one — and the thing that asks for one is a POST, which
+       * a visitor must never issue. So "the arc as the reader will see it" is an
+       * owner-shaped answer, and the visitor arm below keeps taking its arc from
+       * the payload alone.
+       */
+      arc: UseArc;
     }
   | {
       kind: "visitor";

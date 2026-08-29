@@ -166,11 +166,13 @@ describe("cascadeForce", () => {
          when you want to find out. src/pipeline.ts § FORCE_ONLY_WHEN_NAMED
          names the other four and deliberately not this one. */
       "assets",
-      "arc",
     ]);
   });
 
   it("starts the cascade at the earliest forced step, not the one named last", () => {
+    /* `arc` is still here because it was **named**. Since 2026-08-29 it is in
+       FORCE_ONLY_WHEN_NAMED, which stops it being swept in by position — naming
+       it has always been the other way in, and that is unchanged. */
     expect([...cascadeForce([...STEP_ORDER], new Set(["arc", "blocks"]))]).toEqual([
       "blocks",
       "toc",
@@ -184,9 +186,13 @@ describe("cascadeForce", () => {
   });
 
   it("cascades within the job's own steps, not the whole pipeline", () => {
-    // A job of {toc, arc} that forces toc must force arc, and must not invent
-    // a fetch step nobody asked for.
-    expect([...cascadeForce(["toc", "arc"], new Set(["toc"]))]).toEqual(["toc", "arc"]);
+    /* A job of {toc, arc} that forces toc must not invent a fetch step nobody
+       asked for. It no longer forces `arc` either: since 2026-08-29 `arc` can
+       tell for itself whether it is current, so it is in FORCE_ONLY_WHEN_NAMED
+       and an unforced run re-does it exactly when its inputs have moved. */
+    expect([...cascadeForce(["toc", "arc"], new Set(["toc"]))]).toEqual(["toc"]);
+    // Named, it is forced like anything else.
+    expect([...cascadeForce(["toc", "arc"], new Set(["toc", "arc"]))]).toEqual(["toc", "arc"]);
   });
 
   it("ignores a forced step the job isn't running", () => {
@@ -201,7 +207,9 @@ describe("cascadeForce", () => {
     // whose inputs never moved. See FORCE_ONLY_WHEN_NAMED in src/pipeline.ts.
     expect(FORCE_ONLY_WHEN_NAMED.has("tweets")).toBe(true);
     expect([...cascadeForce([...STEP_ORDER], new Set(["arc"]))]).toEqual(["arc"]);
-    expect([...cascadeForce(["toc", "arc", "tweets"], new Set(["toc"]))]).toEqual(["toc", "arc"]);
+    /* `arc` is absent here for the same reason `tweets` is, as of 2026-08-29 —
+       both can now judge their own freshness. */
+    expect([...cascadeForce(["toc", "arc", "tweets"], new Set(["toc"]))]).toEqual(["toc"]);
   });
 
   it("does not sweep `glossary` in by position either, and this one appends", () => {
@@ -224,20 +232,30 @@ describe("cascadeForce", () => {
     // Exempt from the cascade is not exempt from `force`. This is the rewrite
     // button: the thread looks current and you want a different one anyway.
     expect([...cascadeForce(["tweets"], new Set(["tweets"]))]).toEqual(["tweets"]);
+    /* `arc` is not here, and its absence is the same rule doing its job: it left
+       the positional cascade on 2026-08-29 and was not named. `assets` stays,
+       because it never left. */
     expect([...cascadeForce([...STEP_ORDER], new Set(["toc", "tweets"]))]).toEqual([
       "toc",
       "assets",
-      "arc",
       "tweets",
     ]);
   });
 
-  it("keeps `arc` in the cascade, because it cannot check itself", () => {
-    // The asymmetry is the point, and it is not about branching. `tweets` can
-    // leave the cascade because its `isDone` compares a sourceHash and will
-    // re-run on its own when the article moves. `arc` has no such check, so
-    // its position is the only signal there is that it has gone stale.
-    expect(FORCE_ONLY_WHEN_NAMED.has("arc")).toBe(false);
+  it("lets `arc` out of the cascade, now that it CAN check itself", () => {
+    /* **This test asserted the opposite until 2026-08-29, and the reason it
+       gave was the right one: `arc` had no freshness check, so its position was
+       the only signal that it had gone stale.** It has one now — a `stamp` over
+       the blocks, the tree and the metadata its prompt carries (src/arc.ts §
+       `inputFingerprint`) — which is the exact condition FORCE_ONLY_WHEN_NAMED
+       states for membership.
+
+       Worth knowing that position was never quite the signal it looked like:
+       `cascadeForce` only names steps already in the job, so a forced
+       `{ steps: ["toc"] }` never reached `arc` even then, and the stale arc that
+       resulted lost entries in silence. The stamp is what actually closed that.
+       docs/plans/defer-arc-and-rename-hierarchy.md § 2.1. */
+    expect(FORCE_ONLY_WHEN_NAMED.has("arc")).toBe(true);
     /* `assets` is in the cascade too, and for a third reason again: it *can*
        check itself — it has a stamp over the blocks hash — but a forced
        re-fetch is a request to go and look at the publisher again, which is the
@@ -247,7 +265,6 @@ describe("cascadeForce", () => {
     expect([...cascadeForce([...STEP_ORDER], new Set(["toc"]))]).toEqual([
       "toc",
       "assets",
-      "arc",
     ]);
   });
 });

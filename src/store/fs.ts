@@ -25,6 +25,7 @@ import {
   listArticles,
   loadArticle,
   loadGlossary,
+  loadArc,
   loadIdeas,
   loadSummaries,
   loadTweets,
@@ -84,6 +85,7 @@ export const fsArticleReader: ArticleReader = {
   loadTweets,
   loadGlossary,
   loadSummaries,
+  loadArc,
   loadIdeas,
 };
 

@@ -139,6 +139,29 @@ export const STEP_ORDER: StepName[] = [
  * to both, directly (2026-08-25); `summary` follows the rule they established,
  * and it is the most expensive of the three — several batched calls rather than
  * one. See docs/project/summaries.md.
+ *
+ * **And not `arc`, since 2026-08-29**, which is a different argument from the
+ * three above and worth keeping separate. Those are things a reader *goes to*.
+ * The arc is part of the reading view itself — it is the L0 column — and it comes
+ * out for latency: it was the last model call between pasting a URL and being
+ * able to read. `src/web/useArc.ts` now asks for one when an owner opens an
+ * article that has none.
+ *
+ * **Be clear about the size of that win, because it is smaller than it sounds.**
+ * Measured over the one ingest in `data/_ai-calls.jsonl` that logged both: `toc`
+ * 228s, `arc` 10s. This takes about 4% off the wait. Greg was shown that number
+ * and chose to make the change anyway (2026-08-29). What makes it worth having
+ * is not the 4%: it is that `arc` now behaves like every other asked-for stage,
+ * and that it gained a real freshness check on the way (see its `stamp`), which
+ * fixed a live silent-staleness bug.
+ *
+ * **The cost, recorded because nothing on screen will show it:** an article whose
+ * owner has not opened it since this landed shows a *visitor* no arc, and a
+ * visitor cannot ask for one — starting a job is a POST. `TableView` falls back
+ * to the root gist, which looks fine. Greg was offered a second, non-blocking arc
+ * job after ingest, which would have closed this, and chose the smaller change.
+ * tests/visitor-gaps.test.ts pins it, so it stays a decision rather than becoming
+ * a bug report. docs/plans/defer-arc-and-rename-hierarchy.md § 2.2.
  */
 export const DEFAULT_INGEST_STEPS: StepName[] = [
   "fetch",
@@ -151,7 +174,6 @@ export const DEFAULT_INGEST_STEPS: StepName[] = [
      leak this step exists to close, so closing it cannot be something somebody
      has to ask for. docs/plans/hosting-the-articles-images.md. */
   "assets",
-  "arc",
 ];
 
 /**
@@ -226,6 +248,13 @@ export function sharesArticleCache(step: StepName, later: readonly StepName[]): 
  * the width of the article.
  */
 export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
+  /* **`arc` joined on 2026-08-29, the day it got a `stamp`.** The paragraph above
+     names the exact condition — "give it a freshness check of its own and it
+     belongs here too" — and it now has one, over the blocks, the tree and the
+     metadata its prompt carries. Its position is no longer the only signal it
+     has, so being swept in by the cascade would only spend a model call
+     rewriting an arc whose inputs had not moved. */
+  "arc",
   "tweets",
   "glossary",
   "summary",

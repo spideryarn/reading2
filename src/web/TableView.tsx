@@ -75,6 +75,17 @@ interface Props {
    * back to the root node exactly as it used to. See tree.js § the arc.
    */
   arcCells: Map<number, ArcCell> | null;
+  /**
+   * An arc is being written right now, and there is none to draw yet.
+   *
+   * Since 2026-08-29 the arc is not built by every ingest — the article opens as
+   * soon as the tree is ready — so the L0 column can be the root gist *while a
+   * real arc is on its way*, which is a different thing from the root gist being
+   * all there will ever be. Without this the wait is invisible: the fallback is
+   * good enough that nothing looks like it is loading. Greg asked for a loading
+   * state here specifically (2026-08-29).
+   */
+  arcPending: boolean;
   /** Jump to a block, recording it in the URL. See App § useReadingPosition. */
   onJump(blockId: BlockId): void;
   /**
@@ -175,6 +186,7 @@ export function TableView({
   showText,
   navDepth,
   arcCells,
+  arcPending,
   onJump,
   notes,
   noteReturn,
@@ -763,6 +775,11 @@ export function TableView({
                     // nothing to do with inheritance — so `--tint` set on the
                     // <col> resolves on an element that nothing reads it from.
                     `depth-${depth}`,
+                    /* The root gist standing in for an arc that is coming. Only
+                       at depth 0, and only while there is genuinely no arc —
+                       `arcCells` being null is what makes this cell the L0 one
+                       rather than an ordinary gist. */
+                    depth === 0 && !arcCells && arcPending ? "arc-pending" : "",
                     active ? "active" : "",
                     cell.continuation ? "continuation" : "",
                     depth === geometry.leafDepth ? "leaf" : "",

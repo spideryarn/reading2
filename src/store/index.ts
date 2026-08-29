@@ -200,6 +200,7 @@ export const loadTweets = reader.loadTweets.bind(reader);
 export const loadGlossary = reader.loadGlossary.bind(reader);
 export const loadSummaries = reader.loadSummaries.bind(reader);
 export const loadIdeas = reader.loadIdeas.bind(reader);
+export const loadArc = reader.loadArc.bind(reader);
 
 /**
  * The reader's own state: conversations, saved searches, checked terms.

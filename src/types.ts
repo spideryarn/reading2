@@ -845,6 +845,29 @@ export interface Ideas {
  * `GET /api/ideas/:slug`. The same three staleness facts the glossary carries,
  * for the same three reasons, computed at read time.
  */
+/**
+ * The arc as a surface reads it: the artefact, and whether it still describes
+ * this article.
+ *
+ * **Three states, not two**, which is the whole reason this is a type rather
+ * than `Arc | null`. Absent means nobody has asked for one yet and the reader
+ * should be offered the wait; *stale* means one exists and is about a shape the
+ * article no longer has. Collapsing them loses the case that matters, because a
+ * stale arc is the one that renders as a plausible, silently incomplete column —
+ * `buildArcColumn` joins by exact block range and simply does not draw an entry
+ * that matches no node. GPT Sol, 2026-08-29.
+ *
+ * `stale` and `outdated` split the same way they do for the ideas: the article
+ * moved under it, versus we would write it differently now.
+ */
+export interface ArcFound {
+  arc: Arc;
+  /** The article moved underneath this arc. Do not draw it. */
+  stale: boolean;
+  /** The article is the same and we would write it differently now. */
+  outdated: boolean;
+}
+
 export interface IdeasResponse {
   ideas: Ideas;
   /** The article moved underneath these ideas. */

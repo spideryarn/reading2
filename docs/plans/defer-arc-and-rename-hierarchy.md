@@ -1,6 +1,8 @@
 # Open the article sooner, and call the mode Hierarchy
 
-Status: planned 2026-08-29, not built. **Revised after GPT Sol's review** —
+Status: **built 2026-08-29**, in three commits — `0aa30ac` (the arc's freshness check),
+`837df17` (the Contents → Hierarchy rename), and the deferral itself. **Revised after GPT Sol's
+review** —
 `defer-arc-and-rename-hierarchy-sol.md`, verdict *"revise before building"*. Every finding below was
 re-checked against the tree; the four that contradicted the first draft are marked **[corrected]**.
 
@@ -440,6 +442,31 @@ near-synonyms sitting next to each other in the dock. Greg was asked and said go
 (2026-08-29). Recorded because if Outline wins, one of these two names is going away.
 
 ---
+
+## 3.5 What actually landed
+
+All of § 4's order, in three commits:
+
+1. **Measured first** — § 2.4. The answer (4%) is why § 2.4 now opens with a warning rather than a
+   promise.
+2. **`0aa30ac`** — `inputFingerprint` and `isStale` in [`src/arc.ts`](../../src/arc.ts) over blocks +
+   tree + the three metadata fields `articleText` sends; a `stamp` on the arc step; the `arc` case in
+   Postgres's currency switch and four columns added to its `metadata` projection; `sourceHash` on
+   `Arc`. [`tests/arc-freshness.test.ts`](../../tests/arc-freshness.test.ts), 13 tests, red first.
+3. **`837df17`** — the rename, § 3. Including `DEFAULT_MODE`, `withMode` dropping the parameter when
+   it is the default, a legacy-`?mode=toc` test, and
+   [`tests/dock-mode-urls.test.ts`](../../tests/dock-mode-urls.test.ts) — which was watched failing
+   against the old unconditional `set`.
+4. **The deferral** — `arc` out of `DEFAULT_INGEST_STEPS` and into `FORCE_ONLY_WHEN_NAMED`;
+   `GET /api/arc/:slug` with `loadArc` on the reader contract and both stores;
+   [`src/web/useArc.ts`](../../src/web/useArc.ts) mounted in `OwnedReader`; the `arc-pending` state
+   on the L0 column; [`tests/visitor-arc-gap.test.ts`](../../tests/visitor-arc-gap.test.ts).
+
+**One test had to be rewritten rather than fixed**, and it is the interesting one:
+`tests/jobs.test.ts` § *"keeps `arc` in the cascade, because it cannot check itself"*. Its name was
+the old specification and its reasoning was correct at the time. The stamp makes it false, so it is
+now *"lets `arc` out of the cascade, now that it CAN check itself"*. Four other assertions in that
+file expected `arc` to be swept in by position and no longer are.
 
 ## 4. Order of work
 

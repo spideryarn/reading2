@@ -21,6 +21,10 @@ import path from "node:path";
 import { loadComments } from "./comments.js";
 import { loadShelf } from "./shelf.js";
 import { loadReaderProfile } from "./profile.js";
+import {
+  isStale as arcIsStale,
+  PROMPT_VERSION as ARC_PROMPT_VERSION,
+} from "./arc.js";
 import { loadLookups } from "./glossary-lookups.js";
 import { isStale as glossaryIsStale, PROMPT_VERSION, readGlossary } from "./glossary.js";
 import {
@@ -41,6 +45,7 @@ import { isStale } from "./tweets.js";
 import type { Assets } from "./assets.js";
 import type {
   Arc,
+  ArcFound,
   Article,
   ArticleMetadata,
   Block,
@@ -397,6 +402,50 @@ export async function loadIdeas(slug: string): Promise<IdeasFound> {
     ideas,
     stale: !blocksFile || !tree || ideasAreStale(ideas, blocksFile.blocks, tree),
     outdated: ideas.version !== IDEAS_PROMPT_VERSION,
+  };
+}
+
+/**
+ * The arc on its own — the filesystem half of `loadArc`.
+ *
+ * **Why a read of its own, when the arc already travels in the article
+ * payload:** since 2026-08-29 the arc is not built by every ingest, so a reader
+ * can open an article that has none, ask for one, and need to collect it when
+ * the job finishes. Refetching `/api/article/:slug` for that would re-read every
+ * block and the whole tree to pick up one small object — the cost
+ * docs/plans/glossary-read-latency.md exists to describe. Modelled on
+ * `loadIdeas` directly above; the differences are noted where they occur.
+ */
+export async function loadArc(slug: string): Promise<ArcFound> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const arc = await readJson<Arc>(path.join(dir, "arc.json"));
+  if (!arc) {
+    throw Object.assign(
+      new Error(
+        `No arc for "${slug}" yet. Write one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["arc"] }.`,
+      ),
+      { status: 404 },
+    );
+  }
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  /* The metadata too, and unlike the three artefacts above this one is
+     *optional by design* — `generateArc` tolerates a missing meta.json, so its
+     fingerprint hashes "no meta" as a legitimate input rather than as a failure.
+     `??` rather than a guard for exactly that reason. */
+  const meta = await readJson<Meta>(path.join(dir, "meta.json"));
+  // Unknown counts as stale, the same way round as the ideas: the cost of being
+  // wrong is a wait nobody needed, not a column quietly missing its entries.
+  return {
+    arc,
+    stale: !blocksFile || !tree || arcIsStale(arc, blocksFile.blocks, tree, meta ?? null),
+    outdated: arc.version !== ARC_PROMPT_VERSION,
   };
 }
 

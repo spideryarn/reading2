@@ -43,7 +43,7 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
-import { isStale as arcIsStale } from "../arc.js";
+import { isStale as arcIsStale, PROMPT_VERSION as ARC_PROMPT_VERSION } from "../arc.js";
 import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import {
   isStale as ideasAreStale,
@@ -62,6 +62,7 @@ import { isStale as summariesStale } from "../summarise.js";
 import { isStale as tweetsStale } from "../tweets.js";
 import type {
   Arc,
+  ArcFound,
   Article,
   ArticleMetadata,
   StageState,
@@ -267,7 +268,8 @@ type RevisionReader =
   | "tweets"
   | "glossary"
   | "summaries"
-  | "ideas";
+  | "ideas"
+  | "arc";
 
 const REVISION_READ_POLICY: Record<
   keyof typeof articleRevisions.$inferSelect,
@@ -285,9 +287,9 @@ const REVISION_READ_POLICY: Record<
   /* `metaFrom` — the reading view's masthead and the library card. */
   /* `metadata` reads these three because the arc's freshness fingerprint covers
      them — src/arc.ts § `inputFingerprint`. */
-  title: { article: "value", library: "value", metadata: "value" },
-  byline: { article: "value", library: "value", metadata: "value" },
-  siteName: { article: "value", library: "value", metadata: "value" },
+  title: { article: "value", library: "value", metadata: "value", arc: "value" },
+  byline: { article: "value", library: "value", metadata: "value", arc: "value" },
+  siteName: { article: "value", library: "value", metadata: "value", arc: "value" },
   lang: { article: "value", library: "value" },
   excerpt: { article: "value", library: "value", publish: "value" },
   note: { article: "value", library: "value" },
@@ -311,9 +313,10 @@ const REVISION_READ_POLICY: Record<
      continue`. */
   tree: {
     article: "value", metadata: "value", publish: "value", ideas: "value",
+    arc: "value",
     library: "presence",
   },
-  arc: { article: "value", library: "presence", metadata: "value" },
+  arc: { article: "value", library: "presence", metadata: "value", arc: "value" },
 
   /* **The image manifest, and the reading view is the only read that takes
      it.** It is what tells the reader which `<img src>` we hold a copy of, so
@@ -490,6 +493,19 @@ export const REVISION_PROJECTIONS = {
   glossary: { id: articleRevisions.id, glossary: articleRevisions.glossary },
   summaries: { id: articleRevisions.id, summary: articleRevisions.summary },
   ideas: { id: articleRevisions.id, ideas: articleRevisions.ideas, tree: articleRevisions.tree },
+  /* Wider than its neighbours by three columns, and only by three. The arc's
+     fingerprint covers the blocks, the tree **and** the metadata the prompt
+     carries, so `title`, `byline` and `siteName` have to be here — but nothing
+     else from META_COLUMNS does, and selecting them would be the habit this map
+     exists to break. src/arc.ts § `inputFingerprint`. */
+  arc: {
+    id: articleRevisions.id,
+    arc: articleRevisions.arc,
+    tree: articleRevisions.tree,
+    title: articleRevisions.title,
+    byline: articleRevisions.byline,
+    siteName: articleRevisions.siteName,
+  },
 } as const;
 
 /** Exported for the test that guards the policy. Not a read seam. */
@@ -1216,6 +1232,7 @@ export const pgArticleReader: Pick<
   | "loadGlossary"
   | "loadSummaries"
   | "loadIdeas"
+  | "loadArc"
 > = {
   async loadArticle(slug: string): Promise<Article> {
     requireSlug(slug);
@@ -1677,6 +1694,50 @@ export const pgArticleReader: Pick<
       ideas,
       stale: !tree || ideasAreStale(ideas, blocks, tree),
       outdated: ideas.version !== IDEAS_PROMPT_VERSION,
+    };
+  },
+
+  /**
+   * The arc on its own — the Postgres half, and a read of its own since
+   * 2026-08-29, when the arc stopped being built by every ingest.
+   *
+   * **Four inputs, where `loadIdeas` above needs three.** Blocks and tree for the
+   * reason that one gives, and the metadata besides: the arc's prompt carries
+   * `TITLE:`, `BY:` and `PUBLISHED IN:` at its head (src/article-prompt.ts), so a
+   * renamed article is a different question. The revision row stores those three
+   * as columns, which is why the `arc` projection selects them — a store that
+   * compared only blocks and tree here would call an arc current while the
+   * filesystem store called it stale, and two stores disagreeing about staleness
+   * is what the parity tests exist to catch.
+   *
+   * `slug` is not in the fingerprint, so passing the requested one rather than a
+   * stored one cannot affect the answer.
+   */
+  async loadArc(slug: string): Promise<ArcFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "arc");
+    if (!found) throw notFound(slug);
+
+    const arc = found.revision.arc as Arc | null;
+    if (!arc) {
+      throw Object.assign(
+        new Error(`No arc for "${slug}" yet. Write one with \`npm run arc -- ${slug}\`.`),
+        { status: 404 },
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      arc,
+      stale:
+        !tree ||
+        arcIsStale(arc, blocks, tree, {
+          slug,
+          title: found.revision.title ?? "",
+          ...(found.revision.byline == null ? {} : { byline: found.revision.byline }),
+          ...(found.revision.siteName == null ? {} : { siteName: found.revision.siteName }),
+        }),
+      outdated: arc.version !== ARC_PROMPT_VERSION,
     };
   },
 };

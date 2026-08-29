@@ -49,6 +49,7 @@ import { ChatPanel } from "./ChatPanel.js";
 import { GlossaryPanel } from "./GlossaryPanel.js";
 import { ProseHoverCard } from "./ProseHoverCard.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "./notes-view.js";
+import { useArc } from "./useArc.js";
 import { useGlossary, useGlossaryRead, type GlossaryRead } from "./useGlossary.js";
 import { SummaryPanel } from "./SummaryPanel.js";
 import { DiagramPanel } from "./DiagramPanel.js";
@@ -794,12 +795,20 @@ function OwnedReader({
    * the band should not pay for a poller.
    */
   const glossary = useGlossaryRead(slug);
+  /**
+   * **The arc, and the request for one if there is none.** Here rather than in
+   * `Reader` for the same reason the three above are: it can POST, and the
+   * acceptance test for public reading is that a signed-out browser issues no
+   * POST at all. A visitor keeps the payload's arc, or none.
+   * src/web/useArc.ts § Who must not reach this.
+   */
+  const arc = useArc(slug, article.arc);
 
   return (
     <Reader
       slug={slug}
       article={article}
-      capability={{ kind: "owner", comments, chatAnchors, glossary }}
+      capability={{ kind: "owner", comments, chatAnchors, glossary, arc }}
       onRenamed={onRenamed}
     />
   );
@@ -1182,9 +1191,16 @@ function Reader({
    * Null until `npm run arc` has been run for this article, and then the column
    * falls back to the root exactly as it used to. See tree.js § the arc.
    */
+  /* **The owner's live arc, falling back to the payload's.** An owner may have
+     arrived without one and had it written while they read, so their column
+     comes from `useArc` — which also returns `null` for an arc it knows to be
+     stale, rather than drawing a column that would silently omit the entries
+     whose ranges no longer match. A visitor has only the payload.
+     src/web/useArc.ts. */
+  const liveArc = capability.kind === "owner" ? (capability.arc.arc ?? undefined) : article.arc;
   const arcCells = useMemo(
-    () => buildArcColumn(geometry, article.arc),
-    [geometry, article.arc],
+    () => buildArcColumn(geometry, liveArc),
+    [geometry, liveArc],
   );
 
   /**
@@ -1923,6 +1939,7 @@ function Reader({
         showText={proseOn}
         navDepth={navDepth}
         arcCells={arcCells}
+        arcPending={capability.kind === "owner" && capability.arc.working}
         onJump={jumpTo}
         notes={notes}
         noteReturn={noteReturn}

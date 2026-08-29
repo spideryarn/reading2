@@ -9045,3 +9045,43 @@ table.only-prose thead { display: none; }
 .outln-card-crumb { font-size: 0.75rem; color: var(--muted); }
 .outln-card-title { font-weight: 600; margin-bottom: 0.2rem; }
 .outln-card-gist { margin: 0; font-family: var(--read-font, inherit); }
+
+/* ── The arc, while it is being written ───────────────────────────────────────
+
+   Since 2026-08-29 the arc is not built before the article can be opened, so the
+   L0 column shows the root gist until one arrives (src/web/useArc.ts). The
+   fallback is good — which is the problem: without a mark, a reader cannot tell
+   "this is all there is" from "this is still coming", and Greg asked for a
+   loading state rather than a silent wait.
+
+   A breathing tint on the cell rather than a spinner: the cell already holds
+   text the reader can use, and a spinner over readable content says "wait" about
+   something they do not have to wait for. `::after` rather than a border, so
+   nothing in the table's own geometry moves — this column is measured
+   (layout.ts) and a width change here would shift every other column. */
+.gist.arc-pending {
+  position: relative;
+}
+
+.gist.arc-pending::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--accent-soft, currentColor);
+  opacity: 0.06;
+  animation: arc-pending-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes arc-pending-breathe {
+  0%, 100% { opacity: 0.04; }
+  50% { opacity: 0.12; }
+}
+
+/* A reader who has asked for less motion still gets the signal, held still. */
+@media (prefers-reduced-motion: reduce) {
+  .gist.arc-pending::after {
+    animation: none;
+    opacity: 0.08;
+  }
+}

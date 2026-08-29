@@ -63,6 +63,7 @@ import type {
   SearchRun,
   ShelfState,
   SummariesFound,
+  ArcFound,
   IdeasFound,
   ThreadFound,
   ThreadKind,
@@ -109,6 +110,21 @@ export interface ArticleReader {
    * rule rather than a variation on theirs. src/ideas.ts § `inputFingerprint`.
    */
   loadIdeas(slug: string): Promise<IdeasFound>;
+
+  /**
+   * The arc, plus whether it still describes the article.
+   *
+   * **A read of its own since 2026-08-29, when the arc stopped being built by
+   * every ingest.** The arc still travels inside the article payload for a
+   * reader who has one; this is for the reader who does not, and has just asked
+   * for it. Refetching `/api/article/:slug` to collect one small artefact
+   * re-reads every block and the whole tree — the cost
+   * docs/plans/glossary-read-latency.md was written about.
+   *
+   * Staleness is computed here at read time, like the four above, and against
+   * the blocks, the tree **and** the metadata (src/arc.ts § `inputFingerprint`).
+   */
+  loadArc(slug: string): Promise<ArcFound>;
 }
 
 /**

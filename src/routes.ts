@@ -26,6 +26,7 @@
  *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources
  *   GET    /api/summary/:slug    the piece at more than one length, and whether it is stale
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
+ *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
  *   GET    /api/comments/:slug   every stored comment for the article
  *   POST   /api/comments/:slug   { blockId, quote, start } → the answered comment
  *   DELETE /api/comments/:slug/:id
@@ -76,6 +77,7 @@ import {
   loadArticle,
   loadGlossary,
   lookUpTerm,
+  loadArc,
   loadIdeas,
   loadSummaries,
   loadTweets,
@@ -3460,6 +3462,13 @@ export async function serveAuthenticatedApi(
      throw away. Asking for these is
      POST /api/jobs { slug, steps: ["ideas"] }. */
   const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(url);
+  /* The arc on its own. It also travels inside `/api/article/:slug`, and this is
+     not a second way to do the same thing — since 2026-08-29 the arc is not built
+     by every ingest, so a reader can arrive without one, ask for one, and need to
+     collect it when the job lands. Refetching the whole article for that re-reads
+     every block and the whole tree; see docs/plans/glossary-read-latency.md for
+     what that costs on Postgres. */
+  const arc = /^\/api\/arc\/([\w.%-]+)$/.exec(url);
   /* Its own endpoint, and unlike every artefact route above it this one is not
      a read: it embeds the article's blocks the first time it is asked, then
      serves the answer out of memory (src/similar.ts). It is here rather than on
@@ -3675,6 +3684,18 @@ export async function serveAuthenticatedApi(
         const at = slugPart(ideas, 1);
         send(res, 200, await withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas));
       }
+      return;
+    }
+    /* Read only, like the summary above and for the same reason: running the step
+       again replaces the artefact, so "start over" already has a spelling. Asking
+       for one is POST /api/jobs { slug, steps: ["arc"] }.
+
+       **No `withProfileChanged`**, unlike the two above. The arc's prompt does not
+       take the reader profile (src/arc.ts § `generateArc` sends no profile), so
+       there is no "you are not who you were" answer to give and offering one would
+       be a banner about a thing that cannot have happened. */
+    if (arc && req.method === "GET") {
+      send(res, 200, await loadArc(slugPart(arc, 1)));
       return;
     }
     /**
