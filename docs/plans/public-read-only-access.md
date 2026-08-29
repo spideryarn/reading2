@@ -1929,6 +1929,51 @@ cannot forbid an owner's panel being handed a projection of the owner's own data
 without giving up the one-panel design. Written down here rather than left implicit, because the next
 person to read `GlossaryAccess` will otherwise assume it is stronger than it is.
 
+### The state that cannot happen
+
+Found on 2026-08-29 by asking a question I should have asked before writing any of it: **can the
+pipeline actually produce an empty artefact?**
+
+It cannot. All four builders throw rather than write one, and each says why beside the throw in
+almost the same words:
+
+| | |
+|---|---|
+| [`src/glossary.ts`](../../src/glossary.ts) | `if (previous.length === 0 && fresh.length === 0) throw new Error("The model returned no terms. Nothing to write.")` |
+| [`src/ideas.ts`](../../src/ideas.ts) | `if (fresh.length === 0) throw` — with the four drop counts in the message |
+| [`src/summarise.ts`](../../src/summarise.ts) | `if (entries.length === 0) throw new Error("The model returned no usable summaries…")` |
+| [`src/tweets.ts`](../../src/tweets.ts) | `if (texts.length === 0) throw` — *"An empty thread throws. A zero-post thread is not a degenerate success"* |
+
+> Nothing to say is not a degenerate success — it is a model call that produced nothing, and writing
+> it would make the step report done for ever after.
+>
+> — `src/glossary.ts`, and `src/ideas.ts` in the same words
+
+Checked against the data as well as the code: every artefact in the local database is either absent
+or non-empty. Nothing is `{entries: []}`.
+
+**So the rationale this slice was carrying was false**, and it was written down in four places. It
+said a stored `{entries: []}` *means somebody ran the step and it found no terms*. The step refuses
+to record that. `builtButEmpty` renders a sentence no reader can reach; `SummaryPanel`'s new branch
+guards a state no payload can be in; the mutation that made `artefactsIn` use `?.length` went red on
+a fixture rather than on anything real.
+
+**What is kept, and why.** The code stays and the comments are corrected to say what is true. The
+cost is three lines of copy and one branch each; the benefit is that those four throws are one
+refactor away from being relaxed — there is a real article somewhere with no jargon in it — and the
+failure if they are is the client calling the owner a liar about their own pipeline. Insurance is
+fine. **Insurance described as a live case is not**, because the next person reads the comment, not
+the throw four files away.
+
+Presence rather than length also survives on its own merit, which is narrower than what was claimed:
+it asks the question `artefactsIn` is *for* — did the payload carry one — rather than a question
+about the contents that happens to have the same answer while a distant throw holds.
+
+**The lesson is the order.** The reachability question belongs *before* the handling, not after the
+review. Two of the five findings in the code review above are about this state, and both were treated
+as live bugs by me and by the reviewer, because the plan asserted the state occurred and neither of us
+went and read the four builders. A rationale in a comment is not evidence; the throw is.
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next

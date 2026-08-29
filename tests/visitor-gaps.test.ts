@@ -318,11 +318,17 @@ describe("what the payload says it has", () => {
    * **An artefact that is empty is one that exists**, and this is the case a
    * truthiness or a length test collapses.
    *
-   * A stored `{entries: []}` means somebody ran the step and it found no terms
-   * — a ready but empty artefact, which the panel says out loud. *Nobody has
-   * built a glossary for this piece yet* is a different sentence about a
-   * different situation, and it would be a claim about the pipeline that is
-   * simply false. src/web/public-artefacts.ts.
+   * `{entries: []}` would mean somebody ran the step and it found no terms — a
+   * ready but empty artefact, which the panel says out loud rather than
+   * claiming nobody has built one.
+   *
+   * **The fixture below is a state no article can be in.** All four builders
+   * throw rather than write an empty result (src/glossary.ts § buildGlossary
+   * and its three siblings), and no stored artefact is empty. So this test
+   * pins behaviour that is insurance against those throws being relaxed, not
+   * behaviour any reader reaches — said here because a test whose fixture the
+   * pipeline forbids will otherwise read as proof that the state occurs.
+   * docs/plans/public-read-only-access.md § The state that cannot happen.
    */
   it("counts an empty artefact as built", () => {
     const empty: PublicArticle = { ...BARE, glossary: { entries: [] }, ideas: { ideas: [] } };

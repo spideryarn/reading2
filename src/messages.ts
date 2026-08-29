@@ -1177,15 +1177,24 @@ export function notBuiltYet(noun: string): string {
 /**
  * **Somebody built it and it came back with nothing in it.**
  *
- * The state absence cannot express, and slice 1b is what made it reachable: a
- * shared link now carries the artefacts themselves, and *there is no glossary
- * key on this payload* is a different fact from *there is one and its list is
- * empty*. The first means nobody has run the step; the second means somebody
- * ran it and it found no terms, which is a real answer about the piece.
+ * The state absence cannot express: *there is no glossary key on this payload*
+ * is a different fact from *there is one and its list is empty*. The first
+ * means nobody has run the step; the second would mean somebody ran it and it
+ * found nothing.
  *
- * Collapsing the two would libel the article in one direction or the pipeline
- * in the other, and a truthiness or a length test in the client is exactly how
- * that happens — src/web/public-artefacts.ts.
+ * **No artefact in the database is in that second state, and none can be.** All
+ * four builders refuse to write an empty result, each with the same reason
+ * spelled out beside the throw — src/glossary.ts § buildGlossary,
+ * src/ideas.ts, src/summarise.ts, src/tweets.ts: *writing it would make the
+ * step report done for ever after.* Checked against every stored artefact on
+ * 2026-08-29; every one is absent or non-empty.
+ *
+ * So this sentence is **insurance, not a screen anybody reaches today**, and it
+ * is left in with that said out loud rather than deleted, because the four
+ * throws are one refactor away from being relaxed for an article that genuinely
+ * has no jargon — and the failure mode if they are is the client calling the
+ * owner a liar about their own pipeline.
+ * docs/plans/public-read-only-access.md § The state that cannot happen.
  *
  * `noun` is capitalised and carries its article: `"A glossary"`, `"A summary"`.
  */

@@ -25,13 +25,21 @@
  *
  * ## `in`, not truthiness, and not length
  *
- * A stored `{entries: []}` is a **ready but empty** artefact: somebody ran the
- * step and it found no terms. That is a different sentence from *nobody has
- * built a glossary for this piece yet*, and the reader is entitled to the
- * difference. So the test is presence of the key. A truthiness test on the
- * document agrees today, because an artefact is an object; a length test on
- * what is inside it collapses the two outright, which is the mutation
- * tests/visitor-gaps.test.ts runs as its control.
+ * The test is **presence of the key**, and the reason is smaller than it used
+ * to say here. A truthiness test on the document agrees today, because an
+ * artefact is an object. A length test on what is inside it agrees too — and
+ * that is the correction: all four builders throw rather than write an empty
+ * result (src/glossary.ts § buildGlossary and its three siblings), so
+ * `{entries: []}` is not a state any article is in or can get into. Every
+ * stored artefact was checked on 2026-08-29 and every one is absent or
+ * non-empty.
+ *
+ * Presence stays the test anyway, for one honest reason: it asks the question
+ * this function is *for* — did the payload carry one — rather than a question
+ * about the contents that happens to have the same answer while a throw four
+ * files away holds. If that throw is ever relaxed, presence keeps telling the
+ * truth and a length test starts reporting a built artefact as never built.
+ * docs/plans/public-read-only-access.md § The state that cannot happen.
  */
 import type { PublicArtefactSet, PublicArtefacts, PublicArticle } from "../public-types.js";
 

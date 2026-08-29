@@ -586,7 +586,12 @@ describe("a signed-out browser on a shared document", () => {
   it("says an artefact came back empty, rather than that nobody built one", async () => {
     /* Present and empty, both of them. `artefactsIn` reports the artefact off
        the *key*, so the band mounts the panel rather than answering
-       *not-built* — which is exactly the branch a length test would delete. */
+       *not-built* — which is exactly the branch a length test would delete.
+
+       **A state no article can be in**: all four builders throw rather than
+       write an empty result. This pins the fallback, not a screen anybody
+       reaches. docs/plans/public-read-only-access.md § The state that cannot
+       happen. */
     const empty: { mode: string; noun: string; article: () => PublicArticle }[] = [
       {
         mode: "glossary",
