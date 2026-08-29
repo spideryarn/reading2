@@ -144,6 +144,28 @@ same directory, a stray file outside every project, and a deliberate type error 
 the three in turn. That is the habit the whole of [silent-success.md](../reusable/silent-success.md)
 argues for — **a check you have never seen fail is not yet a check.**
 
+## Two ways to report it clean while it is red
+
+Both happened. Neither is a flaw in the gate — the gate said the right thing both times.
+
+**Filtering the summary away from the names.** `npm run typecheck 2>&1 | grep -E "^✓|^✗"` looks like
+a reasonable way to see the three results at a glance. It is not: the per-error lines are **indented**
+under the `✗`, so that filter prints `✗ tests/tsconfig.json (607 files, 2 errors)` and drops every
+file name beneath it. A count is not a diagnosis, and "2 errors, and I know which ones" is a sentence
+that gets shorter as you say it. Read the whole output, or grep for `error TS` **as well** as the
+summary lines.
+
+**Editing after the last run.** On 2026-08-29 a report said typecheck was clean except for one file
+owned by another session. It had been true when the command was run; a one-line edit afterwards — made
+to satisfy a *different* gate, `tests/fixture-ids.test.ts` — replaced an object literal and dropped a
+required field. Every check run after that edit was a test run, and **vitest does not typecheck**, so
+186 green tests said nothing about the red gate. docs/plans/delete-the-importer.md § *And a green
+report over a red gate* has the whole reconstruction.
+
+> **The gate must be the last thing you run before you report, not the last thing you remember
+> running.** An edit invalidates every gate run before it, including a one-line edit that only
+> touched a test.
+
 ## Where this fits
 
 - [testing.md](testing.md) — the other thing to run before committing, and the doc-link test that
