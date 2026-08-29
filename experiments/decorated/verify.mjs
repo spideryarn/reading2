@@ -129,10 +129,35 @@ if (echoControl.length === 0 || selectControl.length !== MUST_BE_UNSELECTABLE.le
 // The control. Delete four words from one paragraph of a copy — the exact thing the
 // rule forbids and the thing an eyeball scrolling past would never catch — and run
 // the identical comparison. If this comes back clean, the check above proves nothing.
+//
+// The four words have to come from a TEXT NODE. The first version of this matched
+// four lower-case words anywhere in a window of the markup, and when every sentence
+// acquired a wrapper and several marks acquired `data-tip="…"`, the window filled up
+// with English prose sitting inside attributes. It found its four words in a
+// tooltip, deleted them, and the comparison came back clean — because deleting words
+// from an attribute changes nothing about the article. The check reported that IT
+// was broken, which is the only reason this was noticed at all: the control had
+// stopped being able to damage the thing it was meant to damage.
 const victim = blocks.find((b) => b.kind === 'text' && b.words > 60);
-const section = new RegExp(`(<section id="${victim.id}"[\\s\\S]*?<div class="body">[\\s\\S]{200,400}?)([a-z]+ [a-z]+ [a-z]+ [a-z]+ )`);
-if (!section.test(page)) throw new Error(`the control could not find four plain words to delete in ${victim.id}`);
-const damaged = page.replace(section, '$1');
+const damaged = deleteFourWords(page, victim.id);
+
+/** Remove four consecutive words from the victim block's rendered text, not its markup. */
+function deleteFourWords(html, id) {
+  const open = html.indexOf(`<section id="${id}"`);
+  const bodyAt = html.indexOf('<div class="body">', open);
+  const end = html.indexOf('<div class="margin">', bodyAt);
+  if (open === -1 || bodyAt === -1 || end === -1) throw new Error(`the control could not find ${id} on the page`);
+  const region = html.slice(bodyAt, end);
+  // Every stretch between a `>` and the next `<` is text the reader sees. Attribute
+  // values never are, and that is the whole distinction the old version missed.
+  for (const m of region.matchAll(/>([^<>]{40,})</g)) {
+    const words = /[a-z]+ [a-z]+ [a-z]+ [a-z]+ /.exec(m[1]);
+    if (!words) continue;
+    const at = bodyAt + m.index + 1 + words.index;
+    return html.slice(0, at) + html.slice(at + words[0].length);
+  }
+  throw new Error(`the control could not find four plain words of text to delete in ${id}`);
+}
 const control = compare(damaged);
 console.log(`\nthe control — same check, four words deleted: ${control.bad.length} altered ` + `(expected at least 1)`);
 if (control.bad.length === 0) {
@@ -145,4 +170,70 @@ if (control.bad.length === 0) {
 if (real.bad.length > 0) process.exitCode = 1;
 if (real.bad.length === 0 && control.bad.length > 0) {
   console.log(`\nEvery word of the article survives the decoration: ${real.checked} blocks, character for character.`);
+}
+
+/*
+ * Third check: every mark this page adds can say what it is.
+ *
+ * Greg's first question about the built page was "there are a bunch of weird little
+ * symbols in boxes without tooltips — what do they mean?", and the honest answer was
+ * that the only explanation was a `title` attribute carrying the raw key: the answer
+ * to "what is this?" was "and-also". This check is the standing version of that
+ * question. A mark either carries `data-tip`, or it carries a card handle
+ * (`data-gloss`, `data-idea`, `data-comment`) that opens something richer. A mark
+ * carrying neither is a private convention, and a page full of those is a puzzle.
+ */
+const MUST_EXPLAIN = [
+  'conn', 'role-tag', 'gist', 'q', 'sp-hedge', 'sp-number', 'sp-hinge',
+  'gloss', 'idea', 'note', 'idea-stamp', 'seam-title', 'lineated', 'gate-prompt',
+];
+
+function unexplained(html) {
+  const seen = new Map(MUST_EXPLAIN.map((c) => [c, { total: 0, bare: 0 }]));
+  for (const m of html.matchAll(/<[a-z][a-z0-9]*\b[^>]*>/g)) {
+    const tag = m[0];
+    const cls = /\sclass="([^"]*)"/.exec(tag);
+    if (!cls) continue;
+    const classes = new Set(cls[1].split(/\s+/));
+    const explained = /\sdata-(tip|gloss|idea|comment)=/.test(tag);
+    for (const want of MUST_EXPLAIN) {
+      if (!classes.has(want)) continue;
+      const row = seen.get(want);
+      row.total++;
+      if (!explained) row.bare++;
+    }
+  }
+  return seen;
+}
+
+// Scan the page's MARKUP, not its scripts. page.js is inlined verbatim, and it
+// contains a legend whose samples are written as `<span class="gloss">…</span>`
+// string literals — the check found those and reported one bare mark of six
+// different kinds. The finding was about the checker, not the page, which is the
+// standard way a text-scanning check goes wrong.
+const markup = page.replace(/<script[\s\S]*?<\/script>/g, '').replace(/<style[\s\S]*?<\/style>/g, '');
+
+const explain = unexplained(markup);
+const missing = [...explain].filter(([, r]) => r.total === 0 || r.bare > 0);
+console.log(`\nmarks that cannot say what they are: ${missing.length} of ${MUST_EXPLAIN.length} kinds (expected 0)`);
+for (const [cls, r] of missing) {
+  console.log(`  .${cls}: ${r.total === 0 ? 'not on the page at all' : `${r.bare} of ${r.total} bare`}`);
+}
+if (missing.length) process.exitCode = 1;
+
+// And its control: take the tips away and every one of them should go bare. A check
+// that still passes with the thing it checks for deleted is measuring something else.
+const tipControl = unexplained(markup.replace(/ data-tip="/g, ' data-notip="').replace(/ data-tip-title="/g, ' data-notiptitle="'));
+const stillFine = [...tipControl].filter(([, r]) => r.bare === 0);
+// These four keep a `data-gloss` / `data-idea` / `data-comment` handle when the tips
+// are stripped, so they stay explained on purpose and the control must not flag them.
+const byCard = ['gloss', 'idea', 'note', 'idea-stamp'];
+const unexpected = stillFine.filter(([cls]) => !byCard.includes(cls));
+console.log(
+  `control — tips stripped: ${MUST_EXPLAIN.length - stillFine.length} kinds went bare, ` +
+    `${byCard.length} kept a card handle by design`,
+);
+if (unexpected.length) {
+  console.log(`  THE CHECK IS BROKEN — ${unexpected.map(([c]) => '.' + c).join(', ')} passed without any tip at all.`);
+  process.exitCode = 1;
 }

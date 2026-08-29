@@ -14,7 +14,10 @@
  *                 see .L-size, which the reading-science review argued against and
  *                 which is therefore off by default and labelled in the panel.)
  *   space         passage emphasis. The quietest channel, so it does most of the work.
- *   underline     the entity layers — glossary solid, assumption dotted. Never hue.
+ *   underline     four styles, four owners, no sharing — solid is the author's own
+ *                 hyperlinks, dotted is a glossary term (as in the reading view),
+ *                 dashed is a proposition the argument leans on, wavy is a hedge.
+ *                 Never hue. See § the underline channel, at L-gloss.
  *   hairlines     structure, all on one vertical axis at the far left.
  *   motion        one moving thing per viewport, scroll-scrubbed, off under
  *                 prefers-reduced-motion.
@@ -234,6 +237,52 @@ a { color: inherit; }
 /* Quiet: the parenthetical a careful reader can skip. Down one step, no further. */
 .L-quiet .sp-quiet { color: var(--ink-5); }
 
+/* ------------------------------------------------ L-skim: the skim path -- */
+/*
+ * Greg, on the first build: *"It doesn't do enough to emphasise the sections that
+ * are worth reading vs can be skipped (perhaps with spans rather than at block
+ * level)."*
+ *
+ * The diagnosis is the useful half. L-topography above is block-level: it gives a
+ * load-bearing paragraph more air and fuller ink, which says "this one matters" and
+ * says nothing about the four sentences inside it. But nobody skims in paragraphs.
+ * The eye lands on a sentence, decides, and moves — so the grading has to be per
+ * sentence or it is not answering the question that gets asked while reading.
+ *
+ * Every sentence of every prose block therefore carries a grade (build.mjs
+ * § the skim path), and this layer is the whole of what that grade buys:
+ *
+ *   g2  full ink and a little weight — read these and you have the argument
+ *   g1  one step down — the reasons, the workings, the qualifications
+ *   g0  the floor — a careful reader can pass over it and lose nothing
+ *
+ * It is deliberately the loudest layer on the page, because a half-hearted version
+ * of this is worse than none: a reader has to be able to see the path from across
+ * the room or they will not use it, and a decoration nobody uses is just noise with
+ * good intentions.
+ *
+ * --ink-5 is the floor and it is not negotiable. Grade 0 means "you may skip this",
+ * never "this is not here", and nothing in this layer hides, collapses, shortens or
+ * reorders a sentence. Turning the layer off must return the page to plain prose.
+ */
+.L-skim .prose .sent-g1 { color: var(--ink-4); }
+.L-skim .prose .sent-g0 { color: var(--ink-5); }
+.L-skim .prose .sent-g2 { color: var(--ink-1); font-weight: 500; }
+
+/* Together with the relief layer the two compose rather than fight: topography sets
+   the paragraph's base ink, skim moves individual sentences off it. The one case
+   that needed saying is a grade-2 sentence in a minor paragraph — it should still
+   be bright, because the reason it is graded 2 is that it carries something. */
+.L-skim.L-topography .w0 .prose .sent-g2,
+.L-skim.L-topography .w1 .prose .sent-g2 { color: var(--ink-1); }
+
+/* Held rather than switched: `s` gives you the path for as long as the key is down,
+   which is how you use it — you ask where to go next, you do not read in it. */
+.skim-peek .prose .sent-g1 { color: var(--ink-4); }
+.skim-peek .prose .sent-g0 { color: var(--ink-5); }
+.skim-peek .prose .sent-g2 { color: var(--ink-1); font-weight: 500; }
+.L-skim .prose .sent, .skim-peek .prose .sent { transition: color 0.18s ease; }
+
 /* --------------------------------------------------- L-hedge: the maybe -- */
 /*
  * The essay is about what we do and don't know, and readers routinely upgrade
@@ -241,10 +290,15 @@ a { color: inherit; }
  * ladder — the one decoration on this page that makes the prose HARDER to read
  * quickly, on purpose.
  */
+/* WAVY, not dotted — see § the underline channel below. Wobbly is the right
+   drawing convention for "not firm", and it leaves dotted free for the meaning the
+   rest of the product already gives it. */
 .L-hedge .sp-hedge {
-  text-decoration: underline dotted;
+  text-decoration: underline wavy;
   text-decoration-color: var(--ink-5);
-  text-underline-offset: 0.22em;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  cursor: help;
 }
 .L-hedge .sp-hedge::after {
   content: "?";
@@ -271,27 +325,42 @@ a { color: inherit; }
 
 /* --------------------------------------------------- L-gloss: the terms -- */
 /*
- * A term is underlined everywhere it occurs, and its FIRST occurrence is marked
- * differently — a small raised tick — because that is the only place the reader can
- * still be taught something. Every later underline is a reminder; the first one is
- * an offer.
+ * THE UNDERLINE CHANNEL, and who owns which style. Four things want a line under
+ * some words, and until this was written down they were fighting: glossary had
+ * solid, assumptions had dotted AND dashed, hedges had dotted, and the author's own
+ * hyperlinks had solid too. Two collisions, and the wrong one won.
+ *
+ *   solid   the author's own hyperlinks. Theirs, not ours.
+ *   dotted  a glossary term.
+ *   dashed  a proposition the argument leans on.
+ *   wavy    a hedge — the author is qualifying, not asserting.
+ *
+ * Dotted goes to the glossary because that is what it already means everywhere else
+ * in Spideryarn: `mark.term` in src/web/styles.css has been a dotted rule since
+ * 2026-08-26, always on, with a rich card on hover. A reader who learns the
+ * convention in the reading view should not have to learn a second one here. Greg,
+ * on the first build of this page: *"Are we including the glossary dotted-links?"*
+ * — we were including the underlines and had made them solid, which is the same
+ * question with a worse answer.
+ *
+ * The one difference from the app is hue: there the dots are in the highlight
+ * orange, and here orange is reserved for the reader's own marks, so ours are in
+ * the ink ladder.
+ *
+ * The first occurrence is still marked differently, because it is the only place
+ * the reader can still be taught something — but by a fuller ink rather than by a
+ * raised ° nobody could interpret. Every later underline is a reminder; the first
+ * one is an offer.
  */
 .L-gloss .gloss {
-  text-decoration: underline;
+  text-decoration: underline dotted;
   text-decoration-color: var(--ink-5);
   text-decoration-thickness: 1px;
   text-underline-offset: 0.18em;
   cursor: help;
 }
 .L-gloss .gloss:hover { text-decoration-color: var(--ink-2); background: color-mix(in oklab, var(--ink-1) 7%, transparent); }
-.L-gloss .gloss-first { text-decoration-style: solid; text-decoration-color: var(--ink-3); }
-.L-gloss .gloss-first::after {
-  content: "°";
-  font-family: var(--sans);
-  font-size: 0.8em;
-  color: var(--ink-4);
-  vertical-align: super;
-}
+.L-gloss .gloss-first { text-decoration-color: var(--ink-3); text-decoration-thickness: 1.5px; }
 
 /* The Talmudic margin: on first use, the definition arrives in the left gutter,
    unasked, at the height of the word. No click, no hover, no modal — the thing a
@@ -316,12 +385,19 @@ a { color: inherit; }
  * for. A dotted underlay under the exact words, and a stamp in the gutter. Clicking
  * either says WHY the argument needs it.
  *
- * Provenance is carried by underline style, not by hue: `assumed` is dotted (it
- * rests on nothing), `introduced` is dashed (the piece puts it in play).
+ * Both provenances are DASHED. They used to be dotted and dashed, which spent two
+ * of the four underline styles on a distinction the stamp beside the paragraph
+ * already makes in words — it says "assumes" or "introduces" — and it cost the
+ * glossary the style the rest of the product gives it. Provenance is now carried by
+ * the stamp and the card; the underline just says "something is being taken for
+ * granted in these words".
  */
-.L-ideas .idea { text-underline-offset: 0.3em; text-decoration-thickness: 1.5px; }
-.L-ideas .idea-assumed { text-decoration: underline dotted; text-decoration-color: var(--ink-4); }
-.L-ideas .idea-introduced { text-decoration: underline dashed; text-decoration-color: var(--ink-4); }
+.L-ideas .idea {
+  text-underline-offset: 0.3em;
+  text-decoration: underline dashed;
+  text-decoration-thickness: 1.5px;
+  text-decoration-color: var(--ink-4);
+}
 .L-ideas .idea:hover { background: color-mix(in oklab, var(--ink-1) 8%, transparent); cursor: help; }
 
 .idea-stamp {
@@ -376,15 +452,23 @@ a { color: inherit; }
 /* Only the connective glyph belongs to the gutter layer proper. */
 html:not(.L-gutter) .conn { display: none; }
 
+/* A WORD, not a glyph.
+   These were logic symbols — ∴ ⊥ ∵ ⌄ ⌃ ⇄ — and the first question anyone asked
+   about this page was what they meant, which is the only review a private glyph set
+   ever gets. A symbol that needs a tooltip in a reading interface has already
+   failed; the tooltip is now the reason, and the chip is the answer. */
 .conn {
-  font-family: var(--mono);
-  font-size: 0.8rem;
+  font-family: var(--sans);
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  font-variant-caps: all-small-caps;
   color: var(--ink-4);
   border: 1px solid var(--rule);
   border-radius: 2px;
-  min-width: 1.5rem;
+  min-width: 1.6rem;
   text-align: center;
-  padding: 0 0.2rem;
+  padding: 0.05rem 0.3rem;
+  cursor: help;
 }
 /* The three connectives that mean the argument changed direction are the only ones
    allowed to be conspicuous. A page of identical `+` glyphs is honest and quiet;
@@ -469,18 +553,12 @@ html:not(.L-overtures) .seam-theirs { padding-bottom: 0; }
   letter-spacing: 0.09em;
   color: var(--ink-4);
 }
-.seam-mark {
-  font-family: var(--sans);
-  font-size: 0.6rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-5);
-  border: 1px dashed var(--rule-strong);
-  padding: 0.05rem 0.3rem;
-  border-radius: 2px;
-  margin-left: 0.5rem;
-  vertical-align: 0.15em;
-}
+/* The heading is the whole cue now. It is sans, small caps and one ink step down
+   where the author's four are serif at full ink, and it carries the sentence saying
+   so as a tooltip. The badge that used to sit beside every one of the twenty-two is
+   gone — repeated that many times it stopped being read by the third. */
+.seam-ours .seam-title { cursor: help; }
+.seam-ours .seam-title:hover { color: var(--ink-2); }
 
 .seam-gist {
   display: none;
@@ -556,9 +634,12 @@ html:not(.L-arc) #arc-rail { display: none; }
 /* The role name at the far LEFT of the block's own column, not offset by the
    gutter width — `.blk` already starts at the gutter's left edge, so measuring
    from there again put the label on top of the prose. The gutter's own content is
-   right-aligned in that same column, so the two never meet. */
-.L-roles .blk::after {
-  content: attr(data-role-label);
+   right-aligned in that same column, so the two never meet.
+
+   A real element rather than a `::after`, because a pseudo-element cannot be
+   hovered, and "implication" beside a paragraph is a word, not an explanation. */
+.role-tag {
+  display: none;
   position: absolute;
   left: 0;
   top: 0.35rem;
@@ -567,8 +648,10 @@ html:not(.L-arc) #arc-rail { display: none; }
   font-variant-caps: all-small-caps;
   letter-spacing: 0.09em;
   color: var(--ink-5);
-  pointer-events: none;
+  cursor: help;
 }
+.L-roles .role-tag { display: block; }
+.role-tag:hover { color: var(--ink-2); }
 
 /* ------------------------------------------- L-lineate: the thesis set as verse -- */
 /*
@@ -594,14 +677,19 @@ html:not(.L-arc) #arc-rail { display: none; }
  * Rubrication, which is what a scribe did before bold existed: the first few words
  * of a section in a different treatment, so the eye can find where things start
  * from across the room. Small caps rather than red — the hue is spoken for.
+ *
+ * THE DROP CAP IS GONE. Greg: *"Why add dropcaps? It doesn't add information."*
+ * Correct, and it is the sharpest test on this page: a two-line initial says
+ * "a section starts here", which the rule, the heading and the small-caps opening
+ * line each already say, so it was a fourth statement of a fact that had three. On
+ * a page whose whole argument is that every decoration must earn its place, the
+ * decoration that is there because books have them is the first one to lose.
+ *
+ * The small-caps first line stays, because it does something the heading does not:
+ * it survives being scrolled past, so a reader who lands mid-page can still see
+ * they are at the top of a section rather than the middle of one.
  */
 .L-rubric .blk.section-open .prose::first-line { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
-.L-rubric .blk.section-open .prose::first-letter {
-  initial-letter: 2 2;
-  font-weight: 600;
-  color: var(--ink-1);
-  margin-right: 0.12em;
-}
 
 /* --------------------------------------- L-gravity: the left-field one -- */
 /*
@@ -629,11 +717,18 @@ html:not(.L-arc) #arc-rail { display: none; }
  */
 .L-readfirst .blk:not(.read) .gutter,
 .L-readfirst .blk:not(.read) .margin,
+.L-readfirst .blk:not(.read) .role-tag,
 .L-readfirst .blk:not(.read) .idea-stamp { opacity: 0; }
 .L-readfirst .blk .gutter,
 .L-readfirst .blk .margin,
+.L-readfirst .blk .role-tag,
 .L-readfirst .blk .idea-stamp { transition: opacity 0.7s ease; }
 .L-readfirst .blk:not(.read) .sp-key { font-weight: inherit; color: inherit; }
+/* The skim path has to be held back too, and it is the layer that most needed
+   saying: it is the loudest thing on the page and it grades sentences by how much
+   they are worth reading, so leaving it visible before the block is read would let
+   "earn the ink" be defeated by exactly the decoration it exists to restrain. */
+.L-readfirst .blk:not(.read) .sent { color: inherit; font-weight: inherit; }
 .L-readfirst .blk:not(.read) .gloss,
 .L-readfirst .blk:not(.read) .idea { text-decoration-color: transparent; }
 .L-readfirst .blk .gloss,
@@ -738,6 +833,54 @@ html:not(.L-arc) #arc-rail { display: none; }
 #card p { margin: 0.45rem 0 0; }
 #card .why { color: var(--ink-4); border-left: 2px solid var(--rule-strong); padding-left: 0.6rem; }
 
+/* --------------------------------------------------------- the tip ----- */
+/*
+ * The answer to "what is this?", on everything we added.
+ *
+ * Separate from #card on purpose. The card is a destination — a glossary entry, an
+ * assumption, your own note — and it is opened by a click, holds a paragraph, and
+ * light-dismisses. The tip is a caption: it explains a mark, arrives on hover, and
+ * goes when the pointer does. Making one element do both jobs meant the cheap
+ * question could only be asked in the expensive way.
+ *
+ * Every mark this page adds carries one. That was Greg's first note on the first
+ * build — *"There are a bunch of weird little symbols in boxes without tooltips.
+ * What do they mean?"* — and the general form of it, *"in general, use more
+ * tooltips"*, is a fair charge against a page that invents twenty conventions and
+ * explains them in a panel you have to open.
+ *
+ * It never covers the words it explains: the placer prefers below-right, flips
+ * above when there is no room, and clamps to the viewport.
+ */
+#tip {
+  position: fixed;
+  z-index: 70;
+  max-width: 22rem;
+  background: var(--raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  padding: 0.55rem 0.7rem;
+  font-family: var(--sans);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  color: var(--ink-3);
+  box-shadow: 0 10px 32px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  visibility: hidden;
+}
+#tip.on { opacity: 1; visibility: visible; }
+#tip b {
+  display: block;
+  color: var(--ink-1);
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
 /* --------------------------------------------------------- the panel --- */
 
 #panel-toggle {
@@ -786,6 +929,32 @@ html:not(.L-arc) #arc-rail { display: none; }
 .layer-row .flag { color: var(--orange); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; }
 .panel-group { font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-5); margin: 1rem 0 0.2rem; }
 
+/* The legend. Twenty conventions is too many to learn by hovering them one at a
+   time, and a reader who does not know a mark exists will never hover it. So the
+   marks are listed once, drawn in their own styling rather than described. */
+.legend { margin: 0.3rem 0 0; }
+.legend-row { display: grid; grid-template-columns: 5.2rem 1fr; gap: 0.5rem; padding: 0.3rem 0; align-items: baseline; }
+.legend-row + .legend-row { border-top: 1px solid color-mix(in oklab, var(--rule) 50%, transparent); }
+.legend-sample { font-family: var(--serif); font-size: 0.8rem; color: var(--ink-2); text-align: right; }
+.legend-row p { margin: 0; color: var(--ink-5); font-size: 0.68rem; line-height: 1.4; }
+.legend-row p b { color: var(--ink-3); font-weight: 600; }
+/* The samples have to be drawn by the real rules, or the legend drifts from the
+   page the first time a rule changes. Forcing the layer classes on locally is how
+   a sample stays honest while its layer is switched off. */
+.legend-sample .gloss { text-decoration: underline dotted; text-decoration-color: var(--ink-3); text-underline-offset: 0.18em; }
+.legend-sample .idea { text-decoration: underline dashed; text-decoration-color: var(--ink-4); text-underline-offset: 0.3em; }
+.legend-sample .sp-hedge { text-decoration: underline wavy; text-decoration-color: var(--ink-5); text-underline-offset: 0.2em; }
+.legend-sample .sp-hinge { font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--ink-1); box-shadow: inset 0 1px 0 0 var(--rule-strong); }
+.legend-sample .sp-number { font-variant-numeric: lining-nums tabular-nums; border-bottom: 1px solid var(--rule-strong); }
+.legend-sample .lnk { text-decoration: underline; text-decoration-color: var(--ink-5); text-underline-offset: 0.16em; }
+/* `html:not(.L-gutter) .conn { display: none }` outranks a plain `.legend-sample
+   .conn`, so the legend's own sample vanished exactly when the reader had the
+   gutter switched off and most needed to be told what the chip was. */
+html:not(.L-gutter) .legend-sample .conn, .legend-sample .conn { display: inline-block; }
+.legend-sample .g2 { color: var(--ink-1); font-weight: 500; }
+.legend-sample .g0 { color: var(--ink-5); }
+.legend-sample .dot { color: var(--orange); }
+
 /* ------------------------------------------------ the clipboard rule --- */
 /*
  * EVERYTHING WE ADDED IS UNSELECTABLE. A reader who selects three paragraphs and
@@ -802,9 +971,9 @@ html:not(.L-arc) #arc-rail { display: none; }
  * accidentally make the prose uncopyable — which would be the worse bug, and a
  * silent one.
  */
-.gutter, .margin, .seam-title, .seam-mark, .seam-gist, .arc-turn,
+.gutter, .margin, .seam-title, .seam-gist, .arc-turn, .role-tag,
 .gate, .idea-stamp, .gloss-note, #arc-rail, #spine, #panel, #panel-toggle,
-#card, #masthead .kicker, #masthead .standfirst, #colophon {
+#card, #tip, #masthead .kicker, #masthead .standfirst, #colophon {
   user-select: none;
   -webkit-user-select: none;
 }
@@ -826,7 +995,7 @@ html:not(.L-arc) #arc-rail { display: none; }
   #stream { column-gap: 0; }
   .gutter, .margin { display: none !important; }
   /* With no gutter to hang in, the role label would sit on the first line of prose. */
-  .L-roles .blk::after { display: none; }
+  .L-roles .role-tag { display: none; }
   .seam-d1, .seam-d2, #colophon, .gate, #arc-rail { padding-left: 1.5rem; }
   #page { padding-left: 0; }
   .L-spine #spine { display: none; }

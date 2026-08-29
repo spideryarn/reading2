@@ -279,6 +279,21 @@ function narrow(kind, quote) {
   return { at: 0, len: quote.length };
 }
 
+const SPAN_TIP = {
+  hedge: [
+    'A hedge',
+    'The author is qualifying this rather than asserting it — "may", "arguably", "it seems". Readers routinely remember hedged claims as flat ones, and this essay is about what we do and do not know, so the wavy rule and the raised query are here to slow you down on exactly these words.',
+  ],
+  number: [
+    'A figure the argument leans on',
+    'Set in lining tabular figures and underlined, so you can find it again on a second pass. Every other numeral on the page is old-style, which is why dates stop shouting.',
+  ],
+  hinge: [
+    'A hinge',
+    'The words where the argument changes direction. Small caps and a hairline above — the treatment a printed critical edition would use — because these are the phrases you lose first when skimming.',
+  ],
+};
+
 /** The judgement pass: key sentence, hinge, hedge, number, strong, quiet. */
 function annotationRanges() {
   const perBlock = new Map();
@@ -298,12 +313,116 @@ function annotationRanges() {
         continue;
       }
       if (fit.len !== span.quote.length) narrowed++;
-      list.push({ start: i + fit.at, end: i + fit.at + fit.len, classes: [`sp-${span.kind}`] });
+      // The three kinds that visibly change the author's words — a wavy rule and a
+      // raised query, small caps, a hairline under a figure — carry their own tip.
+      // The other three are ink and weight, which explain themselves once the layer
+      // is named, and a tooltip on every emphasised sentence would fire all the way
+      // down the page while somebody is trying to read.
+      const attrs = SPAN_TIP[span.kind] ? { 'data-tip-title': SPAN_TIP[span.kind][0], 'data-tip': SPAN_TIP[span.kind][1] } : undefined;
+      list.push({ start: i + fit.at, end: i + fit.at + fit.len, classes: [`sp-${span.kind}`], attrs });
     }
     if (list.length) perBlock.set(blockId, list);
   }
   if (narrowed) note('spans narrowed', `${narrowed} hedge/number spans shrunk from a clause to the phrase that earns the mark`);
   if (dropped) note('spans dropped', `${dropped} in total`);
+  return perBlock;
+}
+
+/* ------------------------------------------------- the skim path -------- */
+/*
+ * Greg, on the first build: *"It doesn't do enough to emphasise the sections that
+ * are worth reading vs can be skipped (perhaps with spans rather than at block
+ * level)."*
+ *
+ * He is right, and the diagnosis is right too. The relief we had was block-level:
+ * a whole paragraph got more air and fuller ink, which says "this one matters" and
+ * says nothing at all about the four sentences inside it. But a paragraph is not
+ * the unit a reader skims in. Sentences are.
+ *
+ * So every prose block is cut into sentences and each sentence is graded:
+ *
+ *   2  the skim path — read these and you have the argument
+ *   1  supporting — read these and you have the argument's reasons
+ *   0  skippable — a careful reader can pass over it and lose nothing
+ *
+ * The grade is DERIVED from the judgement pass rather than asked for separately,
+ * which keeps one source of truth: a sentence is on the skim path because it holds
+ * the key sentence or a hinge, not because a second model was asked a second time.
+ *
+ * The floor is --ink-5 and it is load-bearing. Grade 0 is "you may skip this", never
+ * "this is not here" — the reading-science review's objection to fading is that
+ * faint becomes deleted, and a floor plus a hard rule against ever hiding a sentence
+ * is the whole answer to it.
+ */
+
+// Not every full stop ends a sentence. These are the ones that appear in this
+// article; a stop we mis-split only puts a grade boundary in a silly place, since
+// the ranges still cover the text contiguously and no character can be lost.
+const ABBREV = /(?:\b(?:Mr|Mrs|Ms|Dr|Prof|St|vs|etc|cf|Fig|No|pp|Jr|Sr|Inc|Ltd)|\be\.g|\bi\.e|\b[A-Z])\.$/;
+
+function sentences(text) {
+  const out = [];
+  let start = 0;
+  const re = /[.!?]["”’')\]]*\s+/g;
+  let m;
+  while ((m = re.exec(text))) {
+    const end = m.index + m[0].length;
+    if (ABBREV.test(text.slice(start, end).trimEnd())) continue;
+    out.push({ start, end });
+    start = end;
+  }
+  if (start < text.length) out.push({ start, end: text.length });
+  return out;
+}
+
+const skimTally = { 2: 0, 1: 0, 0: 0 };
+
+function skimRanges() {
+  const perBlock = new Map();
+  for (const [blockId, ann] of Object.entries(annotations)) {
+    const block = byId.get(blockId);
+    if (!block || block.kind !== 'text' || block.tag !== 'p') continue;
+
+    const marks = [];
+    for (const span of ann.spans ?? []) {
+      const i = locate(block.text, span.quote, undefined, `skim ${span.kind} in ${blockId}`);
+      if (i !== -1) marks.push({ kind: span.kind, start: i, end: i + span.quote.length });
+    }
+
+    const list = [];
+    sentences(block.text).forEach((s, idx) => {
+      const len = s.end - s.start;
+      const touching = (kind) =>
+        marks.some((m) => m.kind === kind && m.start < s.end && m.end > s.start);
+      // How much of this sentence a `quiet` span covers. A parenthetical inside a
+      // sentence does not make the sentence skippable; one that IS the sentence does.
+      const quiet = marks
+        .filter((m) => m.kind === 'quiet')
+        .reduce((n, m) => n + Math.max(0, Math.min(m.end, s.end) - Math.max(m.start, s.start)), 0);
+      const unmarked = !marks.some((m) => m.start < s.end && m.end > s.start);
+
+      let grade;
+      if (touching('key') || touching('hinge') || (ann.weight === 3 && touching('strong'))) grade = 2;
+      else if (quiet / len > 0.6) grade = 0;
+      else if (ann.weight === 0) grade = 0;
+      // An unmarked sentence that is not the paragraph's first is elaboration: the
+      // judgement pass found nothing in it worth naming, and the sentence that tells
+      // you whether you want the rest of the paragraph is the one before it.
+      //
+      // The cut-off is weight ≤ 2, which is a choice worth seeing the numbers for.
+      // At ≤ 1 the grades come out 33% / 57% / 10% and the page has a bright path
+      // through a uniform grey; at ≤ 2 they come out 33% / 36% / 31% and it has
+      // three visible tones, which is the thing being tested. The most load-bearing
+      // paragraphs — weight 3 — are excluded either way, so no sentence of the
+      // thirteen paragraphs the essay most needs can ever be called skippable.
+      else if (ann.weight <= 2 && unmarked && idx > 0) grade = 0;
+      else grade = 1;
+
+      skimTally[grade]++;
+      list.push({ start: s.start, end: s.end, classes: ['sent', `sent-g${grade}`] });
+    });
+    if (list.length) perBlock.set(blockId, list);
+  }
   return perBlock;
 }
 
@@ -356,20 +475,59 @@ const glossHits = glossaryRanges();
 const ideaHits = ideaRanges();
 const commentHits = commentRanges();
 const annHits = annotationRanges();
+const skimHits = skimRanges();
 const seamsAt = seams();
 const arcAt = spanIndex(arc);
 
-const CONNECTIVE_GLYPH = {
-  therefore: '∴',
-  but: '⊥',
-  because: '∵',
-  'for-example': 'e.g.',
-  'and-also': '+',
-  'zoom-in': '⌄',
-  'zoom-out': '⌃',
-  contrast: '⇄',
-  restates: '=',
-  'new-thread': '§',
+/**
+ * The gutter chip: what this paragraph does to the one before it.
+ *
+ * These used to be logic symbols — ∴ ⊥ ∵ ⌄ ⌃ ⇄ § — and Greg's first question on
+ * seeing the page was "what do these mean?", which is the only review a glyph set
+ * ever gets. Two things were wrong. The symbols were opaque (⊥ is the falsum sign,
+ * not "but"), and the only explanation was a `title` attribute carrying the raw key,
+ * so the answer to "what is this?" was "and-also".
+ *
+ * A symbol that needs a tooltip in a reading interface has already failed, so the
+ * chip now carries a short WORD and the tooltip carries the sentence. The word is
+ * the answer; the tip is the reason. Two of them are still signs (`+` and `=`), kept
+ * because nobody has ever had to be taught either.
+ */
+const CONNECTIVE = {
+  therefore: ['so', 'Therefore. This paragraph draws its conclusion from the one before it.'],
+  but: ['but', 'But. This paragraph pushes back on what you just read.'],
+  because: ['why', 'Because. This paragraph gives the reason for the one before it.'],
+  'for-example': ['e.g.', 'For example. This paragraph is an instance of the claim above it.'],
+  'and-also': ['+', 'And also. More of the same line of thought, no change of direction.'],
+  'zoom-in': ['closer', 'Zooming in. The same subject, at more detail than the paragraph before.'],
+  'zoom-out': ['wider', 'Zooming out. Stepping back from the detail you have just been given.'],
+  contrast: ['vs', 'Contrast. Something set against what came before, without denying it.'],
+  restates: ['=', 'Restates. The same point again, in different words.'],
+  'new-thread': ['new', 'New thread. This starts something the paragraph before it did not lead to.'],
+};
+
+/**
+ * What each rhetorical role means, in the reader's terms rather than ours. Shown as
+ * a hairline label beside the block under the x-ray, and as a tooltip on the label
+ * — because "implication" beside a paragraph is a word, not an explanation.
+ */
+const ROLE_TIP = {
+  thesis: 'The thesis. One of the few paragraphs the whole essay exists to deliver.',
+  claim: 'A claim. Something asserted here, which the surrounding paragraphs support.',
+  evidence: 'Evidence. Offered in support of a claim made nearby.',
+  example: 'An example. An instance of a claim rather than an argument for it.',
+  anecdote: 'An anecdote. A story doing the work of an example.',
+  definition: 'A definition. The piece is fixing what a term will mean from here on.',
+  implication: 'An implication. What follows if the preceding claims hold.',
+  conclusion: 'A conclusion. The argument arriving somewhere.',
+  objection: 'An objection. A case against the argument, put by the author.',
+  rebuttal: 'A rebuttal. The answer to an objection.',
+  concession: 'A concession. The author granting a point that costs them something.',
+  question: 'A question. Posed here and answered later; worth holding on to.',
+  transition: 'A transition. Moving between parts rather than advancing the argument.',
+  context: 'Context. Background you need before the argument can land.',
+  aside: 'An aside. Interesting, and not load-bearing.',
+  meta: 'Apparatus of the publication — credits, prizes, reading time. Not the essay.',
 };
 
 /**
@@ -414,7 +572,7 @@ function renderProse(block, opts = {}) {
     if (r.tag === 'a' && r.attrs.href) ranges.push({ start: r.start, end: r.end, href: r.attrs.href, classes: ['lnk'] });
     if (r.tag === 'em' || r.tag === 'i') ranges.push({ start: r.start, end: r.end, em: true });
   }
-  for (const src of [glossHits, ideaHits, commentHits, annHits]) {
+  for (const src of [skimHits, glossHits, ideaHits, commentHits, annHits]) {
     for (const r of src.get(block.id) ?? []) ranges.push(r);
   }
 
@@ -424,9 +582,12 @@ function renderProse(block, opts = {}) {
   const { start, end } = verse;
   const lines = lineate(parsed.text.slice(start, end));
   const body = lines.map((l) => `<span class="lin">${esc(l)}</span>`).join('');
+  const tip =
+    ' data-tip-title="The author\'s sentence, set as verse"' +
+    ' data-tip="Broken at their own punctuation — every dash, semicolon and colon they wrote. Not one word added, removed or moved; only the pace. Line breaks are instructions to the reading voice."';
   return (
     renderRanges(parsed.text.slice(0, start), clip(ranges, 0, start)) +
-    `<span class="lineated">${body}</span>` +
+    `<span class="lineated"${tip}>${body}</span>` +
     renderRanges(parsed.text.slice(end), clip(ranges, end, parsed.text.length))
   );
 }
@@ -516,8 +677,16 @@ for (const block of blocks) {
     // duplication until the built page was read back.
     html += `<div class="seam seam-d${seam.depth}${seam.generated ? ' seam-ours' : ' seam-theirs'}" data-node="${seam.id}">`;
     if (seam.generated) {
-      html += `<h${seam.depth + 1} class="seam-title">${esc(seam.title)}</h${seam.depth + 1}>`;
-      html += `<span class="seam-mark" title="Spideryarn wrote this heading; the author did not">not the author's</span>`;
+      // The "not the author's" badge used to be printed beside every one of the
+      // twenty-two generated headings. Greg: *"For the headings we've added, move
+      // 'Not the author's' to a tooltip."* The provenance still has to be legible
+      // without hovering, so it stays in the TYPE — ours are sans, small caps, one
+      // ink step down, where the author's four are serif at full ink — and the
+      // sentence saying so moves into the tip. A badge repeated twenty-two times
+      // stops being read by the third one anyway.
+      html += `<h${seam.depth + 1} class="seam-title" data-tip-title="Our heading, not the author's"`;
+      html += ` data-tip="Spideryarn wrote this one. The author left this stretch untitled — four headings in 8,300 words — so we name the span the tree found. Their own headings are set in the serif at full ink.">`;
+      html += `${esc(seam.title)}</h${seam.depth + 1}>`;
     }
     if (seam.gist) html += `<p class="seam-gist">${esc(seam.gist)}</p>`;
     html += `</div>`;
@@ -526,7 +695,9 @@ for (const block of blocks) {
   const a = arcAt.get(block.id);
   if (a && a !== lastArc) {
     lastArc = a;
-    html += `<div class="arc-turn"><p>${esc(a.text)}</p></div>`;
+    html += `<div class="arc-turn"><p data-tip-title="The argument turns here"`;
+    html += ` data-tip="From arc.json — one sentence per stretch saying where in the ARGUMENT you are, not what the section says. This marker is left in the flow at the point the answer changes.">`;
+    html += `${esc(a.text)}</p></div>`;
   }
 
   const isText = block.kind === 'text' || block.kind === 'caption';
@@ -544,7 +715,6 @@ for (const block of blocks) {
     `class="${classes.join(' ')}"`,
     `data-label="${esc(labels[block.id] ?? '')}"`,
   ];
-  if (ann?.role) attrs.push(`data-role-label="${ann.role}"`);
   if (ann?.connective) attrs.push(`data-connective="${ann.connective}"`);
   if (ann?.question) attrs.push(`data-question="${esc(ann.question)}"`);
   if (ann?.difficulty !== undefined) attrs.push(`data-difficulty="${ann.difficulty}"`);
@@ -554,13 +724,31 @@ for (const block of blocks) {
 
   html += `<section ${attrs.join(' ')}>`;
 
+  // The rhetorical role, as a real element rather than a `::after`. It was a
+  // pseudo-element, which looked tidier and could not carry a tooltip — and "an
+  // implication" beside a paragraph is a word, not an explanation.
+  if (ann?.role) {
+    html += `<span class="role-tag" data-tip-title="What this paragraph is doing"`;
+    html += ` data-tip="${esc(ROLE_TIP[ann.role] ?? ann.role)} Hold X anywhere on the page to see the roles of every paragraph at once.">`;
+    html += `${esc(ann.role)}</span>`;
+  }
+
   // The machine's gutter, on the left. Never a hue, never inline.
   html += `<div class="gutter">`;
   if (ann?.connective) {
-    html += `<span class="conn conn-${ann.connective}" title="${esc(ann.connective)}">${CONNECTIVE_GLYPH[ann.connective] ?? '·'}</span>`;
+    const [word, tip] = CONNECTIVE[ann.connective] ?? ['·', 'Its relation to the paragraph before it.'];
+    html += `<span class="conn conn-${ann.connective}" data-tip-title="This paragraph, and the one before" data-tip="${esc(tip)}">${esc(word)}</span>`;
   }
-  if (labels[block.id]) html += `<span class="gist">${esc(labels[block.id])}</span>`;
-  if (ann?.question) html += `<span class="q">${esc(ann.question)}</span>`;
+  if (labels[block.id]) {
+    html += `<span class="gist" data-tip-title="One line for this paragraph"`;
+    html += ` data-tip="Spideryarn's, from labels.json — what the paragraph says, in about ten words. Every one of the 141 blocks has one.">`;
+    html += `${esc(labels[block.id])}</span>`;
+  }
+  if (ann?.question) {
+    html += `<span class="q" data-tip-title="The question this answers"`;
+    html += ` data-tip="Written in your voice rather than the author's. Reading a paragraph to answer a question is a different act from reading it to absorb one.">`;
+    html += `${esc(ann.question)}</span>`;
+  }
   // The gloss arrives beside the word the first time the article uses it, unasked.
   // A tooltip cannot do this: you have to already suspect you need it.
   for (const entry of firstUse.get(block.id) ?? []) {
@@ -569,7 +757,12 @@ for (const block of blocks) {
   // The assumption stamp. Not a summary of the paragraph — a naming of what the
   // paragraph needs you to grant it.
   for (const idea of ideasAt.get(block.id) ?? []) {
-    html += `<button class="idea-stamp" data-idea="${idea.id}">${idea.provenance === 'assumed' ? 'assumes' : 'introduces'} · ${esc(idea.name)}</button>`;
+    const verb = idea.provenance === 'assumed' ? 'assumes' : 'introduces';
+    const tip =
+      idea.provenance === 'assumed'
+        ? 'This paragraph needs you to grant this, and never argues for it. Click for what it is and why the argument needs it.'
+        : 'This paragraph puts this proposition into play; the rest of the essay leans on it. Click for why.';
+    html += `<button class="idea-stamp" data-idea="${idea.id}" data-tip-title="An assumption underneath" data-tip="${esc(tip)}">${verb} · ${esc(idea.name)}</button>`;
   }
   html += `</div>`;
 
@@ -586,7 +779,10 @@ for (const block of blocks) {
   const myComments = comments.filter((c) => c.blockId === block.id);
   html += `<div class="margin">`;
   for (const c of myComments) {
-    html += `<button class="note" data-comment="${c.id}" title="${esc(c.quote)}">${c.answer ? '●' : '○'}</button>`;
+    const tip = c.answer
+      ? 'You asked about this passage and got an answer back. Click to read it.'
+      : 'You bookmarked this passage and asked nothing. Click to see what you marked.';
+    html += `<button class="note" data-comment="${c.id}" data-tip-title="${c.answer ? 'Your question' : 'Your bookmark'}" data-tip="${esc(tip)}">${c.answer ? '●' : '○'}</button>`;
   }
   html += `</div>`;
 
@@ -598,7 +794,9 @@ for (const block of blocks) {
   const gate = gateAfter.get(block.id);
   if (gate) {
     html += `<div class="gate" data-node="${gate.node.id}">`;
-    html += `<p class="gate-prompt">You have just read <b>${esc(gate.node.title)}</b>. In a sentence, what was its point? Nobody marks this.</p>`;
+    html += `<p class="gate-prompt" data-tip-title="Say it before you are told it"`;
+    html += ` data-tip="Free recall followed by feedback is the best-evidenced cheap thing you can do to a reading. Nothing here is scored and nothing is sent anywhere — the value is entirely in having tried to say it first, which is what turns a summary from a substitute for reading into an answer key.">`;
+    html += `You have just read <b>${esc(gate.node.title)}</b>. In a sentence, what was its point? Nobody marks this.</p>`;
     html += `<textarea rows="1" placeholder="…"></textarea>`;
     html += `<button class="gate-reveal" disabled>show what we'd have said</button>`;
     html += `<div class="gate-answer">${esc(gate.summary.short)}</div>`;
@@ -614,6 +812,7 @@ const payload = {
   ideas: Object.fromEntries(ideas.map((i) => [i.id, i])),
   comments: Object.fromEntries(comments.map((c) => [c.id, c])),
   spine: spineTicks,
+  labels,
   tree: tree.nodes,
   rootId: tree.rootId,
   arc,
@@ -635,6 +834,26 @@ writeFileSync(join(HERE, 'decorated.html'), out);
 
 console.log(`wrote experiments/decorated/decorated.html — ${(out.length / 1024).toFixed(0)} KB`);
 console.log(`${blocks.length} blocks · ${Object.keys(annotations).length} annotated · ${glossary.length} terms · ${ideas.length} ideas · ${comments.length} comments`);
+
+// The skim path's shape, printed every build. A grading that came out 3% / 94% / 3%
+// would render as a page with no skim path on it and would look, on screen, exactly
+// like a grading that worked — so the distribution is a number rather than a glance.
+{
+  const total = skimTally[2] + skimTally[1] + skimTally[0];
+  const pc = (n) => `${((n / total) * 100).toFixed(0)}%`;
+  console.log(
+    `skim path: ${total} sentences · ${skimTally[2]} carry the argument (${pc(skimTally[2])}) · ` +
+      `${skimTally[1]} support it (${pc(skimTally[1])}) · ${skimTally[0]} skippable (${pc(skimTally[0])})`,
+  );
+  if (skimTally[2] === 0 || skimTally[0] === 0) note('skim', 'a grade nobody got — the layer will look like it is off');
+}
+
+// Tooltip coverage, for the same reason. Greg's first question about the page was
+// what a gutter glyph meant, and the answer to "did we fix that" should be a count.
+{
+  const tips = (out.match(/data-tip="/g) ?? []).length;
+  console.log(`tooltips: ${tips} explained marks on the page`);
+}
 if (problems.length) {
   console.log(`\n${problems.length} problems:`);
   for (const p of problems.slice(0, 40)) console.log('  ' + p);

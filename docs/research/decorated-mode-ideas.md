@@ -182,7 +182,7 @@ is reproduced here because every rule in `experiments/decorated/page.css` is ans
 | Weight (3 stops) | load-bearing sentences, and the author's own emphasis |
 | Size | headings only |
 | Space / leading | passage emphasis — the quietest channel, so it does the most work |
-| Underline style | the entity layers: glossary solid, assumption dotted, introduced dashed |
+| Underline style | four styles, four owners: **solid** the author's own hyperlinks, **dotted** a glossary term, **dashed** a proposition the argument leans on, **wavy** a hedge. See [§ The underline channel had two collisions](#the-underline-channel-had-two-collisions) |
 | Hairlines | structure, all on one vertical axis at the far left |
 | Motion | one moving thing per viewport, scroll-scrubbed, off under `prefers-reduced-motion` |
 | Background fields | transient only: hover, focus, target. No persistent highlighter, ever |
@@ -200,14 +200,18 @@ Grouped by what they do rather than by who proposed them. **✓** means it is on
 ### A. Structure made visible
 
 - **✓ Generated seams** — where an unheaded stretch changes subject, our heading, set in the sans in
-  small caps with a dashed "not the author's" label. *(all five)*
+  small caps. It used to carry a dashed "not the author's" badge; that moved into a tooltip on
+  Greg's instruction, and the provenance is now carried by the type alone — ours sans and small
+  caps, the author's four serif at full ink. *(all five)*
 - **✓ Section overtures** — the node's gist once, under our heading, in the apparatus voice.
   *(designer #24, Sol #2)*
 - **✓ The spine** — the whole article as one 3.2rem strip of ticks at the far left edge; tick length
   is load-bearing-ness, orange pips are the reader's marks. No text, so it costs no reading.
   *(designer #16, Fable #23)*
-- **✓ Rubrication** — what a scribe did before bold existed: section openings get a two-line initial
-  and small caps, so the eye finds where things start from across the room. *(Fable #2, #5)*
+- **✓ Rubrication** — what a scribe did before bold existed: the opening line of a section in small
+  caps, so a reader landing mid-page can tell the top of a section from the middle of one.
+  *(Fable #2, #5)* **The two-line initial is gone** — see
+  [§ The drop cap was the only decoration that failed its own test](#the-drop-cap-was-the-only-decoration-that-failed-its-own-test).
 - **Depth brackets** — hairline vertical rules, one per level of tree depth, bracketing each span.
   *(designer #14)* Not built: it is the same information as the spine, spent twice.
 - **Section frontispiece / ledger** — a chapter opening with word count, reading time, and how many
@@ -228,14 +232,20 @@ Grouped by what they do rather than by who proposed them. **✓** means it is on
   says. *(Sol #3, Fable #24, designer #9, reading science #2)*
 - **✓ Turn markers** — the same sentences left in the flow where the argument actually turns, set
   between rules like a printed fleuron. *(Fable #29, designer #17)*
-- **✓ The turn gutter** — one glyph per paragraph for its relation to the one before: ∴ therefore,
-  ⊥ but, ∵ because, ⌄ zoom in. The dull ones fade; thirty-four consecutive "and also" is the truth
-  about most prose and the page should say so. *(Sol #8, designer #17, reading science #7)*
+- **✓ The turn gutter** — one chip per paragraph for its relation to the one before: *so, but, why,
+  closer, wider, vs*. It shipped as logic symbols — ∴ ⊥ ∵ ⌄ ⌃ ⇄ — and the first question anyone
+  asked about the page was what they meant, which is
+  [the only review a private glyph set ever gets](#a-symbol-that-needs-a-tooltip-has-already-failed).
+  The dull ones fade; thirty-four consecutive "and also" is the truth about most prose and the page
+  should say so. *(Sol #8, designer #17, reading science #7)*
 - **✓ Rhetorical x-ray** — hold `x` and each paragraph gets a hairline saying what it is *doing* —
   claim, evidence, concession, rebuttal. Momentary by construction, which is how it stays inside the
   no-persistent-highlighter rule. *(Fable #3, Sol #4, reading science #9)*
-- **✓ The assumptions** — `ideas.json` dotted under the exact words, stamped in the gutter, and
-  clicking says *why the argument needs it*. Provenance carried by underline style, not hue.
+- **✓ The assumptions** — `ideas.json` dashed under the exact words, stamped in the gutter, and
+  clicking says *why the argument needs it*. Provenance used to be carried by underline style —
+  dotted for assumed, dashed for introduced — and now sits in the stamp, which says it in words. It
+  was spending two of the four underline styles on a distinction already made in English, and
+  costing the glossary the style the rest of the product gives it.
   *(Sol #6, Fable #7, designer #11, #12, reading science #10)*
 - **Claim–evidence wiring** — hover a claim, thin lines run to the passages supporting it; solid for
   explicit support, dotted for inferred. *(Sol #5, designer #25, reading science #11)* Not built:
@@ -258,7 +268,7 @@ Grouped by what they do rather than by who proposed them. **✓** means it is on
 - **✓ …and by size too** — the contested version. *(Greg; opposed by reading science, designer)*
 - **✓ Fade the skippable** — parentheticals and credentials one ink step down. *(designer #2, #20,
   Fable #15; contested)*
-- **✓ Mark the hedges** — "may be possible", "arguably", dotted with a raised query. The one
+- **✓ Mark the hedges** — "may be possible", "arguably", a wavy rule with a raised query. The one
   decoration here that makes reading *slower* on purpose, because this essay is about what we do and
   do not know and readers routinely upgrade a hedge into a fact. *(designer #20, Sol #15)*
 - **✓ Figures that behave** — old-style numerals in running prose so dates stop shouting; lining
@@ -417,6 +427,173 @@ cannot resolve instead of skipping it.
    with no inflection allowance finds neither.
 
 Neither is confirmed against `src/` yet; both are worth a look before they get written up.
+
+## Greg's second pass, and what it changed
+
+Seven notes on the first build. Six were about the page explaining itself, and one was about the
+thing the page is for. They are worth keeping together because five of the six share a shape: a
+decoration that was *legible to whoever built it* and opaque to everyone else.
+
+> There are a bunch of weird little symbols in boxes without tooltips. What do they mean?
+>
+> Why add dropcaps? It doesn't add information.
+>
+> The idea-links/tooltips are good.
+>
+> Are we including the glossary dotted-links?
+>
+> For the headings we've added, move "Not the author's" to a tooltip.
+>
+> In general, use more tooltips.
+>
+> It doesn't do enough to emphasise the sections that are worth reading vs can be skipped (perhaps
+> with spans rather than at block level).
+>
+> — Greg, 2026-08-29
+
+### A symbol that needs a tooltip has already failed
+
+The gutter chips were logic symbols: ∴ therefore, ⊥ but, ∵ because, ⌄ zoom in, ⌃ zoom out,
+⇄ contrast, § new thread. They came out of the design pass and they are genuinely elegant — a
+private notation, one character wide, no reading cost.
+
+They are also unreadable, and the give-away is that the *only* question anyone asked about the page
+was what they meant. Two separate failures, and the second is the instructive one.
+
+- The symbols were wrong on their own terms. `⊥` is the falsum sign — "contradiction", not "but".
+  `⌄` and `⌃` are chevrons doing duty as a fisheye metaphor nobody has been told about.
+- **There was a tooltip, and it made things worse.** Every chip carried `title="and-also"` — the
+  raw key from the annotation schema. The answer to "what is this?" was the string we look the
+  answer up *under*. It looked like coverage and it was the absence of coverage, which is the same
+  shape as everything in [silent-success.md](../reusable/silent-success.md).
+
+The chips now carry a **word** — *so, but, why, e.g., closer, wider, vs, new* — and the tooltip
+carries a sentence about what that relation means. The rule that came out of it: in a reading
+interface, the mark is the answer and the tooltip is the reason. If the mark cannot be the answer,
+it should be a word.
+
+Two signs survived — `+` and `=` — on the grounds that nobody has ever had to be taught either.
+
+### The drop cap was the only decoration that failed its own test
+
+Greg's objection is exact: a two-line initial adds no information. And this page's whole argument is
+that a decoration must carry something a reader could not otherwise get.
+
+A section opening was already stated three times — by the rule above it, by the heading, and by the
+small-caps first line. The drop cap was a fourth statement of a fact that had three, and the reason
+it was there is that books have them. It is gone. The small-caps opening line stays, because it does
+one thing the heading cannot: it survives being scrolled past, so a reader who lands mid-page can
+still tell the top of a section from the middle of one.
+
+This is the cheapest test in the file and it is worth applying to everything else on the page:
+*what does a reader know after this that they did not know before it?*
+
+### The underline channel had two collisions
+
+*"Are we including the glossary dotted-links?"* is a question with a worse answer than it looks. We
+were drawing the underlines — and we had made them **solid**, while giving **dotted** to
+assumptions and to hedges.
+
+Spideryarn's reading view has had one convention since 2026-08-26: `mark.term` in
+[`src/web/styles.css`](../../src/web/styles.css) is a **dotted** rule, always on, with a rich card on
+hover, and Greg set it that way himself. A reader who learns that convention in the reading view
+should not have to unlearn it here. The channel table above said "glossary solid, assumption dotted,
+introduced dashed" and nobody noticed it contradicted the product, because the playground was read
+against the design review rather than against the app.
+
+Four styles, four owners, no sharing:
+
+| Style | Means | Whose |
+| --- | --- | --- |
+| solid | a hyperlink | the author's |
+| dotted | a glossary term | ours |
+| dashed | a proposition the argument leans on | ours |
+| wavy | a hedge — qualifying, not asserting | the author's words, our mark |
+
+Assumptions gave up the dotted/dashed provenance split, which was spending two of four styles on a
+distinction the gutter stamp already makes **in English** ("assumes" / "introduces"). Hedges moved
+to wavy, which is a better sign for "not firm" than dotted ever was. The one deliberate difference
+from the app is hue: there the dots are in the highlight orange, and here orange belongs to the
+reader alone.
+
+### Skimming happens in sentences, not paragraphs
+
+The most substantive note, and the diagnosis in the parenthesis is the useful half: *"perhaps with
+spans rather than at block level"*.
+
+Salience relief was block-level. It gives a load-bearing paragraph more air and fuller ink, which
+says *this one matters* and says nothing at all about the four sentences inside it. But nobody skims
+in paragraphs. The eye lands on a sentence, decides, and moves — so a grading that cannot answer at
+sentence resolution is not answering the question that actually gets asked while reading.
+
+Every prose block is now cut into sentences and each sentence graded: **2** carries the argument,
+**1** supports it, **0** can be skipped. The grade is *derived* from the existing judgement pass
+rather than asked for separately, which keeps one source of truth — a sentence is on the skim path
+because it holds the key sentence or a hinge, not because a second model was asked a second time.
+
+The distribution is printed on every build, and it had to be, because the cut-off is a real choice:
+
+| Rule | carries | supports | skippable |
+| --- | --- | --- | --- |
+| unmarked non-first sentence in a weight ≤ 1 block | 33% | 57% | 10% |
+| **unmarked non-first sentence in a weight ≤ 2 block** | **33%** | **36%** | **31%** |
+
+The first gives a bright path through a uniform grey; the second gives three visible tones, which is
+the thing Greg asked to be able to judge. Weight-3 paragraphs are excluded either way, so no
+sentence of the thirteen the essay most needs can ever be called skippable. `--ink-5` is the floor
+and nothing is ever hidden, collapsed or shortened: grade 0 means *you may skip this*, never *this
+is not here*.
+
+A grading that came out 3% / 94% / 3% would render as a page with no skim path on it and would look,
+on screen, exactly like a grading that worked — so the distribution is a number printed every build
+rather than something to glance at.
+
+### Two checks that had quietly stopped checking
+
+Both found by the checks reporting on *themselves*, which is the only reason either was noticed.
+
+1. **The four-word control could no longer damage the article.** `verify.mjs` proves the "not a word
+   changed" promise by deleting four words from a copy and confirming the comparison goes red. Once
+   every sentence acquired a wrapper and every mark acquired `data-tip="…"`, the window it searched
+   filled up with English prose sitting inside *attributes*. It found four words in a tooltip,
+   deleted them, and the comparison came back clean — because deleting words from an attribute
+   changes nothing about the article. The control now takes its words from a text node, and this is
+   the second time on this page that adding markup has blinded a check written against markup.
+2. **The glossary card printed the word "undefined" for ten of nineteen terms.** An entry carries
+   either `background` (who a person is) or `senseHere` (what this piece means by a concept), and
+   about half carry both. `build.mjs` had a `gloss()` helper for exactly this; the card renderer in
+   `page.js` still read `entry.background` directly. The fix had landed on one side of the seam, and
+   the ten failures were on the ten entries a screenshot of the top of the article never reaches.
+
+There is now a third check with its own control: **every mark on the page must be able to say what
+it is** — `data-tip`, or a card handle that opens something richer. Fourteen kinds, and the control
+strips the tips and confirms every one of them goes bare. Its first run found six false positives,
+all from the checker reading `page.js`'s own legend out of the inlined `<script>`, which is the
+ordinary way a text-scanning check goes wrong.
+
+### A card that opened by accident and then would not leave
+
+Found by the browser pass, not by reading the code, and it is the kind of thing only
+a pointer finds. The glossary card opens on hover after a 420ms beat — and nothing
+ever closed it. `popover` gives light-dismiss for free, so it *would* go away, but
+only if the reader happened to click somewhere, and nothing on the page says that.
+
+So brushing past an underlined term while scrolling put a card over the article and
+left it there. The fix is the distinction that was missing rather than a dismissal
+handler: **a hovered card leaves when the pointer does; a clicked one stays until it
+is dismissed.** The grace period matters too — the pointer has to be able to travel
+from the word onto the card without the card vanishing under it on the way.
+
+The general shape: `showPopover()` is half an interaction. Getting the top layer, the
+light-dismiss and the escape key for free is exactly why it was used here, and the
+free behaviour is tuned for something a reader *asked* for. Anything opened by hover
+needs the closing half written by hand.
+
+### And a legend, because twenty conventions is too many to hover
+
+A reader who does not know a mark exists will never hover it. The panel now opens with **what the
+marks mean** — nine rows, each drawing its sample with the real rules rather than describing it, so
+the legend cannot drift from the page the first time a rule changes.
 
 ## Open questions for Greg
 
