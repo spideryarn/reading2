@@ -2425,6 +2425,88 @@ wired in the demolition, so the line that picks Postgres stays one line.
 that currently brackets nothing, and both sessions are covered — including a red-first test that a
 transactional session refuses an unconverted stage.
 
+#### What the D1 design review changed — [delete-the-importer-d1-design-sol.md](delete-the-importer-d1-design-sol.md)
+
+**NO-SHIP, two criticals, and the design above is superseded by this section.** The run/commit split
+itself survived — *"under the present writer set, baseline reads outside the transaction are safe for
+the job-owned draft"*, which was the question I most expected to lose. What did not survive is where
+the transaction ends, and the shape of `commit` itself.
+
+**The transaction ended too early, and this plan already said so 500 lines earlier.** § *C* says
+plainly that the coordinator calls *"`write` + `finishStep` + **the job transition** together"*. My
+D1 design dropped the third. `releaseStep` and `finish` open their own statements
+([`src/store/pg-jobs.ts:252`](../../src/store/pg-jobs.ts)), so after the artefact transaction commits
+there is a window in which `failExpired` can invalidate the attempt before the release lands: the
+revision says done and the job says interrupted. And the job's step status is not cosmetic — it drives
+`stillForced`, completion and retry-force ([`src/jobs.ts:245`, `:853`, `:1510`](../../src/jobs.ts)).
+`noteProgress` may stay outside, because its running text really is a progress bar; the **terminal**
+release and finish may not. On the last step the same transaction must publish the revision, and on
+failure it must fail revision and job together. That needs transaction-taking variants of the job and
+revision operations, and an explicit lock order written down.
+
+**`commit(…, fn)` cannot express its own guard, and that is the second critical.** The session never
+receives the product, so *"a transactional session refuses a step that returned no `parts`"* — the
+sentence that was supposed to make a partial conversion safe — has nothing to inspect. Worse,
+`ArtifactParts` is **partial**, and `assertProduced` only asks whether each kind is readable *now*
+([`src/pipeline.ts:556`](../../src/pipeline.ts)) — its own comment already admits it *"cannot tell
+that this run wrote them"*. Since `beginDraftIn` carries the previous revision's artefacts into the
+draft, a converted step returning `{ parts: {} }`, or an `extract`/`toc`/`blocks` product missing one
+required part, **writes nothing, passes the postcondition against the carried copy, and is marked
+done.** For `blocks` that commits new stamped HTML beside old block rows — the id-loss failure this
+whole plan exists to prevent, arriving through the coordinator meant to prevent it.
+
+So `commit` takes the **product**, not a closure, and validates before any write: every key in
+`step.produces` present, with a defined value. Postgres rejects an absent `parts` outright; the
+filesystem permits absence only for a step explicitly marked unconverted. **And the test must run
+against a carried draft, not an empty one**, or it proves nothing — an empty draft has no old artefact
+for the missing part to be mistaken for.
+
+**`reads` needs a real type, and a session cannot live for a job.** `run` currently takes the full
+mutable `ArtifactStore` ([`src/pipeline.ts:383`](../../src/pipeline.ts)) while `readOnlyPgArtifacts`
+returns four methods, so calling the run-phase object an `ArtifactStore` either fails to typecheck or
+pushes writable methods back into the run phase. It gets a real `ArtifactReads` type with the six
+read operations the stages actually use. And the lifetime was wrong: **every `/advance` mints a new
+attempt and runs one step**, and `JobDraftRef` embeds the attempt — so a session built once per job is
+stale on the second request. It is built once per successful claim, after `openOrBeginJobDraft`,
+rebinding the same draft to the new attempt. The preflight `stepIsDone` has to go through
+`session.reads` as well, or filesystem artefacts will make a Postgres step skip.
+
+**Only the happy path was designed.** A handled failure needs its own short transaction — mark the
+step `error`, fail or clear the draft, end the job — or the step stays `running`, the terminal job
+keeps its draft pointer, and the retry builds a different draft. So `StoreSession` grows a `fail`.
+`collectSpend`'s cost rows, the checkpoints, the logs and the initial interrupted marker all stay
+**outside**, deliberately: they record work that was really spent, and it was spent even when the
+artefact is rejected.
+
+**One hazard outside the runner entirely.** The importer bypasses the job constraints and can replace
+`current_revision_id` during a model call ([`src/store/import.ts:586`, `:1014`](../../src/store/import.ts)),
+and publication does not check that the current revision is still the one the draft was copied from —
+so a job can overwrite a concurrent import, and `--prune` can delete the article and draft underneath
+one. While the importer exists, **import and prune refuse any slug with an active job.** The planned
+"current revision has a source reference" refusal does not cover this, because the first Postgres job
+runs while the current revision is still importer-produced.
+
+#### D1 splits in two, because the atomic boundary is the whole risk
+
+**D1a — the shape, on the filesystem.** `ArtifactReads`; `run` returning `{ detail, parts?, stamp? }`
+(nine mechanical returns); the session seam with `commit` taking the product; product validation
+against `step.produces`; the filesystem session; the runner going through it. Nothing converted, no
+Postgres session, no transaction. **Safe to stop after:** every stage still writes its own artefacts
+and the coordinator has grown a boundary that currently holds one.
+
+**D1b — the atomic boundary, on Postgres.** The transactional session: write, validate, finish the
+step, release the job, publish on the last step — one transaction, with a written lock order — plus
+`fail`, the transaction-taking job and revision variants, and the importer/prune refusal. **Safe to
+stop after:** nothing switches over; `src/jobs.ts` still imports the filesystem store.
+
+**The six tests D1b owes**, each with its guard mutated to confirm the assertion actually fails: a
+missing part over a **carried** artefact; a stale attempt between run and commit; artefacts and job
+transition rolling back together; two `/advance` claims reopening one draft under different attempts;
+a Postgres preflight with misleading filesystem files present; and a job where every step skips. The
+review was explicit that a fake product-returning step proves the coordinator and nothing else — it
+does not reach carried-output handling, attempt rebinding, preflight store selection, job-transition
+atomicity or publication. `arc` stays the first real user, in D3.
+
 #### What D0's code review found — [delete-the-importer-d0-sol.md](delete-the-importer-d0-sol.md)
 
 **NO-SHIP, and the finding was that the test proving the fix could not fail.** The stamp conversion

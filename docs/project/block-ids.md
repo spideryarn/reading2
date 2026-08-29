@@ -121,6 +121,26 @@ would pass a count. A *partial* loss is deliberately not an error; any threshold
 There is no exemption for a deliberate whole-article replacement because no such operation exists:
 `force` on a step means *run it again*, which is the ordinary idempotent path and must keep its ids.
 
+And a third behind that, because comparing two sets of ids needs two sets. `assertIdsCarried` returns
+early when there is no baseline, and no baseline is exactly the state of a **first ingest** — so the
+paywall and the error page above were still let through on the one run that mints every id in the
+article. `assertSomethingWasProduced` is that case: a run that produced no blocks at all stops,
+before either artefact is written, whether or not there was anything to compare against. Every later
+stage is built from the blocks, so `{"blocks":[]}` is not a short article, it is a failed fetch or a
+failed extraction wearing a finished run's clothes — and the store's shape check takes any array, so
+nothing downstream would have said a word. Added 2026-08-29.
+
+The `blocks` step turns that one into a `blocked` stage failure, so the job card offers no Retry
+([job-failure.ts](../../src/job-failure.ts)). Retry skips every step that finished, so it would hand
+stage 3 the same prose-free HTML and stop in the same place — which is what the error already tells
+the reader, and for a while it said so above a button that contradicted it.
+
+The read side keeps its own copy of that question — `htmlCarriesItsIds` in
+[`src/pipeline.ts`](../../src/pipeline.ts) refuses to call the step done when `blocks.json` lists
+nothing. Belt and braces on purpose: the write-time guard stops new empties being created, and the
+read-time one still has work to do, because `blocks.json` files already on disk can be empty and
+nothing will rewrite them.
+
 Stage 3's input is **stage 2's HTML** (`extractedHtml`), never its own previous output
 (`stampedHtml`) — `BLOCKS_INPUT_HTML` in [`src/blocks.ts`](../../src/blocks.ts). On disk the two are
 the same file and nobody could choose; Postgres holds them in separate columns, and reading the

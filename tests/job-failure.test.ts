@@ -24,7 +24,7 @@ import { JobCard } from "../src/web/AddArticle.js";
 import { failureKindOf, jobWorthRetrying } from "../src/job-failure.js";
 import { providerHttpFailure } from "../src/messages.js";
 import { STEPS, type StepContext } from "../src/pipeline.js";
-import { fsArtifacts } from "../src/store/artifacts-fs.js";
+import { createFsArtifactStore, fsArtifacts } from "../src/store/artifacts-fs.js";
 import { generateSummaries } from "../src/summarise.js";
 import {
   budgetFor,
@@ -229,6 +229,45 @@ describe("the failures a retry cannot change", () => {
       const err = await threw(() => generateSummaries({ dir }));
       expect((err as Error).message).toMatch(/covers enough text/);
       expect(failureKindOf(err)).toBe("bug");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * **The failure that convicted itself.** `NoBlocksProduced` (src/blocks.ts)
+   * ends by telling the reader that re-running stage 3 over the same HTML will
+   * produce nothing again — and until it was classified, the card underneath
+   * that sentence offered a Retry, because an unrecognised failure offers one.
+   * Retry skips `fetch` and `extract`, which both finished, so stage 3 gets the
+   * identical prose-free HTML and fails in the identical place. GPT Sol,
+   * 2026-08-29.
+   *
+   * The real stage, like the Readability one below and for a stronger reason:
+   * this is where the classification physically is, so a landing that moves the
+   * `runBlocks` call and drops the `catch` around it turns this red.
+   */
+  it("calls an extraction that produced no blocks `blocked`", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "spya-blocks-"));
+    try {
+      const htmlFile = path.join(dir, "a-slug.html");
+      /* Stage 2's output for a page that never gave up its prose: a
+         JS-rendered shell, which is a shape a real fetch returns. */
+      await writeFile(
+        htmlFile,
+        '<!doctype html><html><body>\n<div id="app"></div><script>window.__PAYWALL__ = true;</script>\n</body></html>',
+      );
+      /* A store over the scratch directory rather than `fsArtifacts`, which
+         would send the baseline read at `data/a-slug/` in the real repo. */
+      const store = createFsArtifactStore(() => ({ dir, htmlFile }));
+
+      const err = await threw(() => STEPS.blocks.run(ctx(dir), store));
+      expect((err as Error).message).toMatch(/no blocks at all/);
+      expect(failureKindOf(err)).toBe("blocked");
+      /* Both halves, because the kind is only half the feature: the card is
+         what the reader sees, and a rule nothing consults changes nothing. */
+      expect(jobWorthRetrying(failed(failureKindOf(err)))).toBe(false);
+      expect(cardHtml(failed(failureKindOf(err)))).not.toContain("Retry");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

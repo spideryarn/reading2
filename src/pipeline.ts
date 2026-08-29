@@ -22,7 +22,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { generateArc } from "./arc.js";
-import { previousBlocksFrom, runBlocks } from "./blocks.js";
+import { type BlocksRun, NoBlocksProduced, previousBlocksFrom, runBlocks } from "./blocks.js";
 import { runExtract } from "./extract.js";
 import { fetchDocument, type RawManifest, readRaw, writeRaw } from "./fetch.js";
 import {
@@ -419,6 +419,12 @@ export interface PipelineStep {
  * an error page extracts to no prose, `{"blocks":[]}` satisfies the store's
  * shape check (`SHAPE` in src/store/artifacts.ts takes any array), and every
  * path exists and parses. GPT Sol, 2026-08-28.
+ *
+ * **Kept even though `assertSomethingWasProduced` (src/blocks.ts) now refuses to
+ * write an empty artefact at all.** Belt and braces, and both halves have work:
+ * the write-time guard stops new empties being created, and this one still has
+ * to answer for the `blocks.json` files already on disk, which nothing will
+ * rewrite. Deleting either leaves a real state unguarded.
  *
  * Cheap enough to run on every skip check: one pass of the HTML with a regex,
  * then a set lookup per block. And the cost of being wrong is small in the
@@ -1025,7 +1031,27 @@ export const STEPS: Record<StepName, PipelineStep> = {
        */
       const previous = await previousBlocksFrom(store, ctx.slug);
 
-      const run = await runBlocks({ htmlFile: ctx.htmlFile, previous });
+      let run: BlocksRun;
+      try {
+        run = await runBlocks({ htmlFile: ctx.htmlFile, previous });
+      } catch (err) {
+        /* **Only this one, and by type rather than by sentence.** Stage 3 read
+           the HTML an earlier step wrote and Retry never re-runs a step that
+           finished, so the second attempt hands it the identical prose-free
+           document and it stops in the identical place — which is what the
+           error's own last sentence tells the reader, while an unclassified
+           failure was offering them a Retry underneath it. Everything else
+           `runBlocks` can throw — a full disk, a directory that vanished — is
+           ordinary bad luck, and hiding a Retry that would have worked is the
+           costlier way to be wrong (the same argument as `extract` above).
+
+           `IdsNotCarried` is deliberately not here: it is thrown against a
+           baseline, so it is the *article* that changed under us, and whether a
+           retry can come out differently depends on why. It has never been
+           classified and this is not the change that decides it. */
+        if (err instanceof NoBlocksProduced) throw stageFailure("blocked", err.message);
+        throw err;
+      }
       const previousBlocks = run.previousBlocks;
       const { total, minted, carried, reused, retargeted } = run.stats;
       const kept = reused + carried;

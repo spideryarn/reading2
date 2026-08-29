@@ -1072,6 +1072,46 @@ export class IdsNotCarried extends Error {
 }
 
 /**
+ * An article with nothing in it, which is never an article.
+ *
+ * **The sibling of `IdsNotCarried`, for the case that one returns early on.**
+ * `assertIdsCarried` compares two sets of ids and cannot compare against a
+ * baseline that is not there, so on a first ingest — the exact run that mints
+ * every id in the article — an extraction that produced nothing had no guard at
+ * all: `{"blocks":[]}` satisfies the store's shape check (`SHAPE` in
+ * src/store/artifacts.ts takes any array), every path exists and parses, and
+ * every stage after stage 3 reads an article with no blocks in it.
+ *
+ * Same four things as `IdsNotCarried`, for the same reason — a reader of the log
+ * should not have to go and find any of them: what was produced, that **nothing
+ * has been written**, what the usual causes are, and that all of them are
+ * transient in a way stopping does not make worse.
+ *
+ * **Deliberately no exemption**, for a reason `IdsNotCarried` does not have to
+ * argue: there is no such thing as an article this app can do anything with that
+ * has no blocks in it. Every later stage — the ToC, the summaries, the gists,
+ * every anchor a reader can leave — is a function of the blocks. An empty run is
+ * not an article that happens to be short; it is a fetch or an extraction that
+ * failed while returning normally.
+ */
+export class NoBlocksProduced extends Error {
+  constructor(readonly slug: string) {
+    super(
+      `blocks "${slug}": this run produced no blocks at all, so there is no article here to ` +
+        "write. Every later stage — the table of contents, the summaries, the gists, and every " +
+        "comment or search a reader can anchor — is built from the blocks, so writing this " +
+        "would record an empty article as a finished one (docs/project/block-ids.md).\n" +
+        "Nothing has been written — the HTML is still stage 2's and any previous blocks are " +
+        "still the previous run's, so there is nothing to restore.\n" +
+        "The usual causes are a paywall, an error page, or a page whose text only appears once " +
+        "its JavaScript has run, and in all three the fetch or the extraction is what needs " +
+        "looking at; re-running stage 3 over the same HTML will produce nothing again.",
+    );
+    this.name = "NoBlocksProduced";
+  }
+}
+
+/**
  * The previous run's blocks, from the store — the parameter `splitIntoBlocks`
  * has always taken, now fetched through the seam rather than from a path.
  *
@@ -1138,6 +1178,30 @@ function assertIdsCarried(slug: string, previous: Block[] | undefined, produced:
 }
 
 /**
+ * Did this run produce an article at all?
+ *
+ * **The first-ingest half, which `assertIdsCarried` above cannot cover.** That
+ * one returns early when there is no baseline, and no baseline is precisely the
+ * state of the run that mints every id — so before this existed, an extraction
+ * that produced nothing on a first ingest was written out and reported done.
+ * There is a read-side guard for the same emptiness in `htmlCarriesItsIds`
+ * (src/pipeline.ts), but it can only notice at the *next* skip check, by which
+ * time the empty artefact has been the article for however long. This refuses at
+ * the moment it would be created.
+ *
+ * **Order: after `assertIdsCarried`, and that is a decision rather than an
+ * accident.** An empty run against a full baseline trips both, and the two
+ * errors say different things: `IdsNotCarried` names the baseline it was
+ * measured against and the anchors that were about to be orphaned, which is the
+ * more serious fact and the one already tested for. This one is what is left —
+ * the run with no baseline to be measured against — so it is asked second.
+ */
+function assertSomethingWasProduced(slug: string, produced: Block[]): void {
+  if (produced.length > 0) return;
+  throw new NoBlocksProduced(slug);
+}
+
+/**
  * Stage 3's baseline read for a caller that has files and no store — the CLI at
  * the bottom of this file, and nothing else.
  *
@@ -1189,7 +1253,9 @@ export async function runBlocks(opts: {
   const result = splitIntoBlocks(source, previous);
   /* Before either write, so a refusal leaves the previous artefacts exactly
      where they were rather than half-replaced by the run that was refused. */
-  assertIdsCarried(path.basename(htmlFile).replace(/\.html$/, ""), previous, result.blocks);
+  const slug = path.basename(htmlFile).replace(/\.html$/, "");
+  assertIdsCarried(slug, previous, result.blocks);
+  assertSomethingWasProduced(slug, result.blocks);
 
   await writeFile(htmlFile, result.html, "utf-8");
   /* `blocksArtefact`, not a bare `{ blocks }` — see its own comment. The stamp

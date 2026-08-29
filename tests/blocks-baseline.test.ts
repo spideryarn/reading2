@@ -25,6 +25,7 @@
  * | drop the `hasEarlierBlocks` question | *refuses to mint when a baseline it should have had is missing* |
  * | swallow a throwing store read | *lets an infrastructure fault through untouched* |
  * | drop `assertIdsCarried` | *stops a run that kept none of the previous ids* |
+ * | drop `assertSomethingWasProduced` | *refuses a first ingest that produced no blocks at all* — and this one was watched red **before** the guard existed: `runBlocks` resolved with `stats.total: 0` and wrote `{"sanitizer":3,"blocks":[]}` |
  *
  * ## The Postgres half needs a database and says so out loud
  *
@@ -48,6 +49,7 @@ import {
   BLOCKS_INPUT_HTML,
   BaselineMissing,
   IdsNotCarried,
+  NoBlocksProduced,
   blocksArtefact,
   previousBlocksFrom,
   runBlocks,
@@ -83,6 +85,18 @@ const EXTRACTED = `<!doctype html><html><body>
 <h2>The opening</h2>
 <p>A first paragraph, which does not change between the two runs.</p>
 <p>A second paragraph, which does not change either.</p>
+</body></html>`;
+
+/**
+ * What a page that never gave up its prose leaves stage 2 holding: the shell of
+ * a JS-rendered paywall. No text anywhere, so extraction produces no blocks.
+ *
+ * Deliberately not an empty `<body>` — this is the shape a real fetch returns,
+ * and it has to be one that genuinely reaches stage 3 rather than a document
+ * nobody would ever hand it.
+ */
+const SHELL = `<!doctype html><html><body>
+<div id="app"></div><script>window.__PAYWALL__ = true;</script>
 </body></html>`;
 
 /* -------------------------------------------------------- the filesystem -- */
@@ -329,6 +343,38 @@ describe("the runtime guard", () => {
     /* And it refused before writing, so the article is still the article. */
     const after = JSON.parse(await readFile(jsonFile, "utf-8"));
     expect(idsIn(after.blocks)).toEqual(idsIn(first.blocks));
+  });
+
+  /**
+   * **The half `assertIdsCarried` cannot reach, by construction.** It returns
+   * early when there is no baseline (`if (!previous?.length) return;`), so on a
+   * *first* ingest there is nothing to compare against and a run that produced
+   * no blocks at all sailed through: `runBlocks` wrote `{"blocks":[]}` over both
+   * artefacts and resolved, and every stage after it read an article with no
+   * blocks in it. Nothing threw, every path existed and parsed, and the store's
+   * shape check takes any array (`SHAPE` in src/store/artifacts.ts).
+   *
+   * The read-side half of this — `htmlCarriesItsIds` in src/pipeline.ts —
+   * noticed only at the *next* skip check, and only for a `blocks.json` it
+   * happened to read. This one refuses at write time, which is the moment the
+   * empty artefact would otherwise be created.
+   */
+  it("refuses a first ingest that produced no blocks at all", async () => {
+    const w = await aWorkspace();
+    cleanUp.push(w.root);
+    const jsonFile = w.htmlFile.replace(/\.html$/, ".blocks.json");
+    await writeFile(w.htmlFile, SHELL, "utf-8");
+
+    await expect(
+      runBlocks({ htmlFile: w.htmlFile, previous: undefined }),
+    ).rejects.toBeInstanceOf(NoBlocksProduced);
+
+    /* Refused *before* writing, like the baseline guard beside it: no empty
+       artefact on disk, and stage 2's HTML untouched. An article that stopped
+       at stage 3 can be re-run; one that recorded emptiness as its answer looks
+       finished. */
+    await expect(readFile(jsonFile, "utf-8")).rejects.toThrow(/ENOENT/);
+    expect(await readFile(w.htmlFile, "utf-8")).toBe(SHELL);
   });
 
   it("says nothing on a first ingest, where minting everything is correct", async () => {
