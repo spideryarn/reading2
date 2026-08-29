@@ -87,7 +87,21 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
   // the parts list, and there is no single place that says what the piece is.
   // The leaf column carries navLabels rather than gists, so it is only shown in
   // outline mode — see TableView.
-  const maxDepth = Math.max(...Object.values(tree.nodes).map((n) => n.depth));
+  /* **The ladder is the argument's, not the article's.** A supplement is depth
+     one with its leaves at depth two, so an article whose body tree is only
+     parts-deep gained a whole rung it does not have: an L2 gist column whose
+     only occupant was a note leaf with no gist and no navLabel — while the
+     metadata page's "Levels" stat, fed by `articleStats.depth`, said one. Two
+     answers to "how many levels does this piece have", both on screen.
+     The supplement is excluded from the *maximum* only. Its cells still project
+     into the columns that do exist, as continuations, which is what puts "Notes"
+     in the sections column at all — see `navigableItems` below.
+     GPT Sol, fifth review, 2026-08-29. */
+  const apparatus = supplementIndex(tree);
+  const bodyDepths = Object.values(tree.nodes)
+    .filter((n) => !apparatus.has(n.id))
+    .map((n) => n.depth);
+  const maxDepth = bodyDepths.length > 0 ? Math.max(...bodyDepths) : 0;
   const columnDepths = Array.from({ length: maxDepth + 1 }, (_, i) => i);
 
   const cells: Cell[][] = [];
@@ -128,7 +142,7 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
     cells,
     cellAt,
     chains,
-    supplementOf: supplementIndex(tree),
+    supplementOf: apparatus,
   };
 }
 

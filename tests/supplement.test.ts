@@ -746,6 +746,72 @@ describe("the shelf card's counts", () => {
   });
 });
 
+/* --------------------------------------- the ladder the article offers -- */
+
+/**
+ * **The apparatus must not add a granularity column.**
+ *
+ * A supplement is depth 1 with its leaves at depth 2, so an article whose body
+ * tree is only parts-deep gains a whole rung it does not have: `buildGeometry`
+ * took `leafDepth` from every node, offered an L2 gist column, and the only
+ * thing in it was a note leaf with no gist and no navLabel. The metadata page's
+ * "Levels" stat, which `articleStats.depth` feeds, said 1 at the same moment.
+ * Two answers to "how many levels does this piece have", and the reader could
+ * see both. GPT Sol, fifth review, 2026-08-29.
+ */
+describe("a shallow article with an apparatus", () => {
+  const shallowBlocks: Block[] = [
+    { ...note(1), id: "spya-body01", text: "The first half.", role: undefined, treatment: undefined, noteId: undefined },
+    { ...note(2), id: "spya-body02", text: "The second half.", role: undefined, treatment: undefined, noteId: undefined },
+    note(3),
+  ].map((b) => {
+    const { role, treatment, noteId, ...rest } = b;
+    return role === undefined ? (rest as Block) : b;
+  });
+
+  const shallowTree = appendSupplement(
+    {
+      version: "1", generator: "t", slug: "s", rootId: "n0",
+      nodes: {
+        n0: { id: "n0", depth: 0, parent: null, children: ["n1", "n2"],
+          range: ["spya-body01", "spya-body02"], title: "All", gist: "g" },
+        n1: { id: "n1", depth: 1, parent: "n0", children: [],
+          range: ["spya-body01", "spya-body01"], title: "One" },
+        n2: { id: "n2", depth: 1, parent: "n0", children: [],
+          range: ["spya-body02", "spya-body02"], title: "Two" },
+      },
+    } as unknown as Tree,
+    splitBlocks(shallowBlocks).groups,
+  );
+
+  it("is a valid tree whose body is only one level deep", () => {
+    // The preconditions. Without them this is a test about some other article.
+    expect(checkTree(shallowBlocks, shallowTree).problems).toEqual([]);
+    expect(supplementNodes(shallowTree).length).toBe(1);
+    const supplement = supplementIndex(shallowTree);
+    const bodyDeepest = Math.max(
+      ...Object.values(shallowTree.nodes).filter((n) => !supplement.has(n.id)).map((n) => n.depth),
+    );
+    expect(bodyDeepest).toBe(1);
+  });
+
+  it("offers no column for a rung the argument does not have", () => {
+    const geo = buildGeometry(shallowTree, shallowBlocks);
+    expect(geo.leafDepth).toBe(1);
+    expect(geo.columnDepths).toEqual([0, 1]);
+  });
+
+  /* And the apparatus is still *in* the columns that do exist — the point is to
+     drop the phantom rung, not the notes. Without this the fix could be "stop
+     projecting the supplement" and every assertion above would still pass. */
+  it("still shows the apparatus in the column it does have", () => {
+    const geo = buildGeometry(shallowTree, shallowBlocks);
+    const items = navigableItems(geo.cells[1]!, geo.supplementOf).filter((i) => i.supplement);
+    expect(items.length).toBe(1);
+    expect(items[0]!.node.title).toBe("Notes");
+  });
+});
+
 /* ------------------------------------------- a tree that is not a tree -- */
 
 /**

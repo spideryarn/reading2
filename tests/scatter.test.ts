@@ -509,6 +509,30 @@ describe("a reader inside the apparatus", () => {
     expect(inBody.nowY).not.toBeNull();
   });
 
+  /* **The spoken count is a count, not a coordinate**, and with a stranded note
+     the two part company: `bodyRows` has to stay monotonic in row number so the
+     axis works, but the label a screen reader reads must not skip a number. It
+     said "paragraph 1 of 3" and "paragraph 3 of 3" about an article with two
+     paragraphs in it. GPT Sol, fifth review. */
+  it("drift: numbers the paragraphs of the argument consecutively, around a stranded note", () => {
+    const stranded = [...body.slice(0, 4), notes[0]!, ...body.slice(4)];
+    const strandedBody = stranded.filter((b) => b.treatment !== "supplement");
+    expect(stranded[4]!.treatment).toBe("supplement"); // precondition
+    const out = layoutDrift(
+      tree(strandedBody), stranded, opts(), input(points(strandedBody)),
+    );
+    const spoken = out.nodes
+      .map((n) => /paragraph (\d+) of (\d+)/.exec(n.label ?? ""))
+      .filter((m): m is RegExpExecArray => m !== null);
+    expect(spoken.length).toBeGreaterThan(0);
+    // Every label counts out of the body's length, and none exceeds it.
+    for (const m of spoken) {
+      expect(Number(m[2])).toBe(strandedBody.length);
+      expect(Number(m[1])).toBeLessThanOrEqual(strandedBody.length);
+      expect(Number(m[1])).toBeGreaterThanOrEqual(1);
+    }
+  });
+
   /* **A note stranded mid-article**, which `splitBlocks` deliberately refuses
      to build a supplement node for (src/supplement.ts) — so the apparatus is a
      *hole* in the body rather than a tail, and no "up to the last body row"

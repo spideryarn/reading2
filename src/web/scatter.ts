@@ -293,6 +293,26 @@ function bodyRows(blocks: readonly Block[]): number {
 }
 
 /**
+ * **Which paragraph of the argument each row is**, one-based, and how many
+ * there are.
+ *
+ * Separate from `bodyRows` on purpose, and they are two different quantities.
+ * `bodyRows` is a coordinate extent — it has to stay monotonic in row number,
+ * so a note stranded mid-article is still inside it. This is a *count*, spoken
+ * aloud in the label a screen reader reads, and a count that skipped the
+ * stranded note's number said "paragraph 1 of 3" and "paragraph 3 of 3" about
+ * an article with two paragraphs in it. GPT Sol, fifth review, 2026-08-29.
+ */
+function bodyOrdinals(blocks: readonly Block[]): { of: ReadonlyMap<number, number>; total: number } {
+  const of = new Map<number, number>();
+  let n = 0;
+  blocks.forEach((b, i) => {
+    if (isBody(b)) of.set(i, ++n);
+  });
+  return { of, total: n };
+}
+
+/**
  * The reader's row, or `null` when they are not in the argument.
  *
  * **Asked of the block, not of the range**, and that is what makes it work for
@@ -383,7 +403,15 @@ function slot(d: Dot, input: ScatterInput, rows: number): number {
 }
 
 /** The `DiagramNode` every scatter dot shares, before its position is decided. */
-function node(d: Dot, input: ScatterInput, rows: number, cx: number, cy: number, r: number): DiagramNode {
+function node(
+  d: Dot,
+  input: ScatterInput,
+  rows: number,
+  cx: number,
+  cy: number,
+  r: number,
+  paragraphs: { of: ReadonlyMap<number, number>; total: number },
+): DiagramNode {
   /* The hit target is a square around the dot, never the dot itself. At three
      pixels across a circle is a target nobody can hit twice, and `arc` and
      `cluster` already solve this the same way — `dot` for the mark, the box for
@@ -425,7 +453,7 @@ function node(d: Dot, input: ScatterInput, rows: number, cx: number, cy: number,
        lane, and a reader using a screen reader gets neither. So both are in
        words. docs/project/colour-scales.md § Colour is never the only carrier
        is the rule; this is where it lands for a scatter. */
-    label: `${d.number ? `${d.number} ${d.title}, ` : ""}paragraph ${d.row + 1} of ${rows}${input.k > 1 ? `, topic ${d.point.c + 1} of ${input.k}` : ""}: ${excerpt(d.block.text, 90)}`,
+    label: `${d.number ? `${d.number} ${d.title}, ` : ""}paragraph ${paragraphs.of.get(d.row) ?? d.row + 1} of ${paragraphs.total}${input.k > 1 ? `, topic ${d.point.c + 1} of ${input.k}` : ""}: ${excerpt(d.block.text, 90)}`,
   };
 }
 
@@ -466,6 +494,7 @@ export function layoutDrift(
 ): DiagramLayout {
   const kept = dots(root, blocks, input);
   const rows = bodyRows(blocks);
+  const paragraphs = bodyOrdinals(blocks);
   const height = Math.max(opts.height, 320, kept.length * ROW + PAD_Y * 2);
   const top = PAD_Y;
   const usableH = Math.max(1, height - PAD_Y * 2);
@@ -485,7 +514,7 @@ export function layoutDrift(
   const nodes = kept.map((d) => {
     const r = radius(d.block.words, reference);
     const cx = Math.min(right, Math.max(left, x(d)));
-    return node(d, input, rows, cx, y(d.row), r);
+    return node(d, input, rows, cx, y(d.row), r, paragraphs);
   });
 
   return {
@@ -590,6 +619,7 @@ export function layoutTrail(
 ): DiagramLayout {
   const kept = dots(root, blocks, input);
   const rows = bodyRows(blocks);
+  const paragraphs = bodyOrdinals(blocks);
   const height = Math.max(opts.height, TRAIL_MIN_H);
   if (kept.length === 0) {
     return { width: opts.width, height, nodes: [], links: [], axis: null, nowY: null };
@@ -629,7 +659,7 @@ export function layoutTrail(
     return { d, r, cx: x(d.point.x), cy: y(d.point.y) };
   });
 
-  const nodes = placed.map((p) => node(p.d, input, rows, p.cx, p.cy, p.r));
+  const nodes = placed.map((p) => node(p.d, input, rows, p.cx, p.cy, p.r, paragraphs));
 
   /* Which dot the reader is standing on, so the chain can be bright where they
      are. `-1` when the reader is above the article or `?at=` is unset. */

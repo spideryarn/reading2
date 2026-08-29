@@ -161,6 +161,24 @@ function publicTree(tree: Tree): Tree {
       ...(node.navLabel === undefined ? {} : { navLabel: node.navLabel }),
       ...(node.summary === undefined ? {} : { summary: node.summary }),
       ...(node.sourceHeading === undefined ? {} : { sourceHeading: node.sourceHeading }),
+      /* **`treatment` crosses, and that is a decision.** The safe default here
+         is to drop an optional field, and this one was dropped until 2026-08-29
+         — with the test below saying in as many words that whoever landed the
+         footnotes lane had to come here and choose.
+         It has to cross. Every consumer that tells the apparatus from the
+         argument reads it off the *node*: the fisheye collapses forty endnotes
+         into one "Notes" row, the spine dims it, outline and summary mode
+         refuse to descend into it or number it, and the diagram leaves it out
+         of the argument's picture. A public reader without it gets all of that
+         back as it was — footnotes numbered as a part of the piece, one blank
+         row per endnote, and "No summary for this section" on each. Measured
+         through the real DTO: 1 part and 1 section for the owner, 2 and 2 for
+         a visitor.
+         Nothing about it is private. It says a node is apparatus rather than
+         argument, which is structure exactly as `depth` and `title` are, and it
+         is derived from the article's own markup rather than from anything the
+         owner did. GPT Sol, fifth review. */
+      ...(node.treatment === undefined ? {} : { treatment: node.treatment }),
     };
   }
   return {

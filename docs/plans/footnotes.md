@@ -1,6 +1,13 @@
 # Footnotes and bibliographies
 
-**Status: plan, unbuilt, revised once.** Written 2026-08-28 after a GPT Sol design consultation
+**Status: built, 2026-08-29 — stages 2 to 5a, less stage 6 (PDFs), which Greg cut from v1.**
+Five rounds of GPT Sol review after it was built; every one found something real, and the last
+of them is the closed inventory of consumers in
+[footnotes-finish-review-5-sol.md](footnotes-finish-review-5-sol.md). Still open: **stage 3b**,
+the block-id carry-over key — until it lands, footnote identity does not survive re-extraction,
+so do not claim that it does.
+
+The plan below is kept as it was written. Written 2026-08-28 after a GPT Sol design consultation
 ([footnotes-prompt.md](footnotes-prompt.md) → [footnotes-sol.md](footnotes-sol.md)), then reviewed
 and revised ([footnotes-review-prompt.md](footnotes-review-prompt.md) →
 [footnotes-review-sol.md](footnotes-review-sol.md), verdict **REVISE BEFORE IMPLEMENTATION**).
@@ -1812,6 +1819,41 @@ stretch of chain as the brightest thing in the picture. The tiling exists for a 
 too short to embed, where a blinking mark is worse than an approximate one; the apparatus is
 not that case, so the last dot's range now stops at the last body block and a reader inside
 the notes gets no dot, which the caller already handles.
+
+### The eighth consumer, and the fourteenth — 2026-08-29
+
+Sol's fourth pass gave the closed inventory of consumers I had asked for and named an eighth:
+`articleStats` counted the supplement as a part and its endnotes as sections, so the masthead,
+the metadata page and the public page each advertised a seven-part article with endnotes as
+having eight parts. The shelf card already did not, with the reasoning written beside it —
+two implementations of one derivation and only one of them right. Diagram scale went the same
+way: the notes were out of the nodes and out of the terms but still in the denominators, which
+squeezed the argument into the top of the panel, stopped the last paragraph reaching the final
+progress step, and made a screen reader say "paragraph 2 of 4" about the last body paragraph
+of two.
+
+**And the fifth pass found the one that mattered most, which no amount of owner-side testing
+could have caught: `publicTree` dropped `treatment`.** Every fix above reads the apparatus off
+the node, so a visitor got all of it back exactly as it was — footnotes numbered as a part of
+the piece, a blank row per endnote in summary mode with "No summary for this section" on each,
+the spine and the outline descending into individual notes, the diagram drawing them as
+argument. Measured through the real DTO: 1 part and 1 section for the owner, 2 and 2 for a
+visitor of the same article.
+
+The test that guarded it had said, in as many words, *"whoever lands the footnotes lane's
+`TreeNode.treatment` meets this test and decides"*. That was me, and the decision is that it
+crosses: it says a node is apparatus, which is structure exactly as `depth` and `title` are,
+derived from the article's own markup rather than from anything the owner did. The
+exactly-these-keys guard in the same file caught the change on the way through, which is what
+it is for.
+
+Two smaller ones from the same pass. `buildGeometry` took `leafDepth` from every node, so an
+article whose body tree is only parts-deep gained a granularity column containing nothing but
+a note leaf with no gist — while the "Levels" stat beside it said one. The ladder comes from
+the body now; the apparatus still projects into the columns that do exist. And the spoken
+paragraph count is a *count* rather than a coordinate: `bodyRows` must stay monotonic in row
+number for the axis, so a stranded note sits inside it, and the label had to stop reading from
+it.
 
 ## Still open
 

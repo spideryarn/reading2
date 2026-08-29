@@ -291,6 +291,10 @@ describe("the public article payload", () => {
         "tree.nodes.n1.summary",
         "tree.nodes.n1.sourceHeading",
         "tree.nodes.n1.title",
+        /* Apparatus or argument, and it crosses on purpose since 2026-08-29 —
+           see the test below for the decision and what a visitor saw without
+           it. */
+        "tree.nodes.n1.treatment",
         "tree.rootId",
         "tree.slug",
         "tree.version",
@@ -327,16 +331,28 @@ describe("the public article payload", () => {
    * **The field the `Required<TreeNode>` fixture exists for**, asserted rather
    * than left to the key list above.
    *
-   * `treatment` is set on the fixture and dropped by `publicTree`. That is the
-   * safe default doing its job — but *safe* and *correct* are different here,
-   * and this is the case that shows it: a client that cannot tell apparatus
-   * from argument numbers the footnotes as a part of the piece. Whoever lands
-   * the footnotes lane's `TreeNode.treatment` meets this test and decides.
+   * `treatment` was dropped by `publicTree` — the safe default doing its job —
+   * and this test said in as many words that whoever landed the footnotes
+   * lane's `TreeNode.treatment` would meet it and decide.
+   *
+   * **The decision is that it crosses**, made 2026-08-29. *Safe* and *correct*
+   * were different here and this was the case that showed it: every consumer
+   * that tells the apparatus from the argument reads it off the node, so a
+   * visitor without it saw the footnotes numbered as a part of the piece, one
+   * blank row per endnote in summary mode with "No summary for this section" on
+   * each, the spine and the outline descending into individual notes, and the
+   * diagram drawing them as argument. Measured through this DTO before the
+   * change: 1 part and 1 section for the owner, 2 and 2 for a visitor.
+   *
+   * It is structure, not privacy: it says a node is apparatus, which is the
+   * same kind of fact as `depth` and `title`, and it is derived from the
+   * article's own markup rather than from anything the owner did. GPT Sol's
+   * fifth review of the footnotes lane.
    */
-  it("drops a tree node's treatment, which is a decision rather than an oversight", () => {
+  it("carries a tree node's treatment, so a visitor can tell apparatus from argument", () => {
     expect(NODE_FIELDS.treatment).toBe("supplement");
-    expect(keyPaths(built)).not.toContain("tree.nodes.n1.treatment");
-    expect(JSON.stringify(built.tree)).not.toContain("supplement");
+    expect(keyPaths(built)).toContain("tree.nodes.n1.treatment");
+    expect(built.tree.nodes.n1?.treatment).toBe("supplement");
   });
 
   it("has none of the meta fields the payload table forbids", () => {
