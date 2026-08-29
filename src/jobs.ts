@@ -65,9 +65,10 @@ import { isSlug, normaliseUrl, urlKey } from "./ingest.js";
 import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
+import { fsStoreSession } from "./store/session.js";
+import type { JobTransition, StoreSession } from "./store/session.js";
 import {
   articleExists,
-  assertProduced,
   contextPaths,
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
@@ -265,11 +266,18 @@ type StepOutcome = "skipped" | "ran" | "cancelled" | "failed";
  * longer owns this job*, and carrying on would spend a model call whose result
  * nothing will accept. It propagates, and `advanceJob` turns it into `busy`.
  *
- * **Nothing here writes the job.** The steps array is mutated in memory and
- * `note` is called at the two moments a reader would notice — a skip, and a
- * step starting. The claimant's own release or finish is what records the
- * outcome, in one write, so there is exactly one fenced statement per step
- * rather than a trickle that each has to be fenced separately.
+ * **The one job write this makes is the step's own transition**, and it makes it
+ * through `session.commit` so that the artefacts, the step's completion and the
+ * job's move are one act — the thing D1b turns into one transaction. Everything
+ * else about the job is mutated in memory and committed by the caller: `note` is
+ * called at the two moments a reader would notice, a skip and a step starting,
+ * and the endings that have no product go through `session.settleJob`.
+ *
+ * `decide` is the caller's, and it is called **immediately before** the commit
+ * rather than after the step returns. That is the ordering the atomic boundary
+ * needs: the job transition has to be known while there is still a transaction
+ * to put it in. It sees this step already marked `done` in memory, and the title
+ * already on the job, because both are inputs to what the transition says.
  */
 async function runStep(
   job: Job,
@@ -277,7 +285,9 @@ async function runStep(
   controller: AbortController,
   jlog: Log,
   note: () => Promise<void>,
-): Promise<StepOutcome> {
+  session: StoreSession,
+  decide: () => JobTransition,
+): Promise<{ outcome: StepOutcome; after?: Job; transition?: JobTransition }> {
   const { dir, htmlFile } = contextPaths(job.slug);
 
   const ctx: StepContext = {
@@ -304,7 +314,11 @@ async function runStep(
     ...(job.profile !== undefined && { profile: job.profile }),
   };
 
-  if (!stillForced(step) && (await stepIsDone(STEPS[step.name], ctx, pipelineStore))) {
+  /* `session.reads`, not the store directly. The preflight and the run phase
+     have to ask the same store, or a step decides whether to skip by looking at
+     one place and does its work against another — which under Postgres means
+     files on disk answering for rows in a draft. */
+  if (!stillForced(step) && (await stepIsDone(STEPS[step.name], ctx, session.reads))) {
     /* **A step this job already ran keeps saying so.** `runJob` never meets
        this case — it visits each step once, at `pending` — but `advanceJob`
        walks the whole list on every call, so without the guard the second
@@ -323,7 +337,7 @@ async function runStep(
     // the log and the lines that matter would be sitting in it.
     jlog.debug({ step: step.name }, `step skipped: ${step.name} — ${job.slug}`);
     await note();
-    return "skipped";
+    return { outcome: "skipped" };
   }
 
   /* Timed here rather than read back off `startedAt`/`finishedAt`. Those are
@@ -348,7 +362,7 @@ async function runStep(
        success path below, which means a throw, a cancel or a kill all leave
        the step honestly not-done. See `beginStep` in
        src/store/artifacts.ts. */
-    const attempt = await pipelineStore.beginStep(job.slug, step.name);
+    const attempt = await session.beginStep(job.slug, step.name);
     /* **The one place that knows a step is over.** A step is not a model call
        — summarise batches per parent, labels fans out — so no stage can report
        its own total, and threading one up would be a return-type change on
@@ -356,7 +370,7 @@ async function runStep(
        say nothing and this still gets the whole bill.
 
        What it is told about the work is below rather than here. */
-    const { result } = await collectSpend(() => STEPS[step.name].run(ctx, pipelineStore), {
+    const { result: product } = await collectSpend(() => STEPS[step.name].run(ctx, session.reads), {
       /* **Everything the ledger cannot work out for itself.** A gateway sees a
          model id and a body; this is the frame that knows whose article it is,
          which job, and which step — so it says so once and every call inside
@@ -380,16 +394,34 @@ async function runStep(
         spend = report;
       },
     });
-    step.detail = result;
-    await assertProduced(STEPS[step.name], ctx, pipelineStore);
-    /* **Before the abort check, not after.** A cancel here is about the job,
-       not about this step: `run` returned and its postcondition passed, so
-       the work is real and paid for. Clearing the marker after the throw
-       would leave a completed step looking interrupted, and the Retry that
-       follows a cancel would buy the same model call twice. */
-    await pipelineStore.finishStep(job.slug, step.name, attempt);
+    step.detail = product.detail;
+    /* **Marked done before the commit, not after, and that is the ordering the
+       atomic boundary needs.** `decide` below asks whether this was the job's
+       last step, and it cannot answer that about a step still marked `running`.
+       The title is the same: it is a field of the transition, so it has to be on
+       the job before the transition is worked out. If the commit refuses, the
+       catch below puts both back — `step.status = "error"` — and the job ends as
+       a failure, which is what it always did.
+
+       The title only exists once extraction has run, and the moment it does is
+       the moment the progress card can stop calling the article by its slug. */
     step.status = "done";
     step.finishedAt = new Date().toISOString();
+    if (step.name === "extract") job.title = product.detail;
+
+    /* **The whole of what used to be four calls, three here and one in the
+       caller.** `commit` validates the product against `produces` before it
+       writes anything, writes it if the step has been converted, runs the
+       postcondition, clears the marker, and moves the job on — and under D1b's
+       Postgres session those happen in one transaction.
+
+       **Still before the abort check, not after.** A cancel here is about the
+       job, not about this step: `run` returned and its postcondition passed, so
+       the work is real and paid for. Clearing the marker after the throw would
+       leave a completed step looking interrupted, and the Retry that follows a
+       cancel would buy the same model call twice. */
+    const transition = decide();
+    const after = await session.commit(ctx, STEPS[step.name], attempt, product, transition);
     /* **`step.detail` is deliberately not logged**, though it is the obvious
        thing to put here and the first version did.
 
@@ -408,11 +440,16 @@ async function runStep(
       { step: step.name, ms: since(stepStarted), ...spendFields(spend) },
       `step done: ${step.name} — ${job.slug}`,
     );
-    // The title only exists once extraction has run, and the moment it does
-    // is the moment the progress card can stop calling the article by its slug.
-    if (step.name === "extract") job.title = step.detail;
-    return "ran";
+    return { outcome: "ran", after, transition };
   } catch (err) {
+    /* **The one thing that is not a step failure, and it has to leave first.**
+       `commit` now carries the job's own release or finish, and those are fenced:
+       a claim that moved on while we were inside the step throws
+       `StaleAttemptError`. Recording that as an error on the step would be this
+       claimant writing a verdict on a job it no longer owns — and the write would
+       be refused anyway. It propagates, and `advanceJob` turns it into `busy`,
+       exactly as it always did when `note` threw it. */
+    if (err instanceof StaleAttemptError) throw err;
     const message = (err as Error).message;
     /* A cancel unwinds through here too — the `throw new Error("Cancelled")`
        above, and any step that honours the signal by throwing. The reader
@@ -454,14 +491,14 @@ async function runStep(
       /* Not on a cancel: the reader stopped it, and a stopped job is always
          worth starting again. */
       recordFailureKind(job, undefined);
-      return "cancelled";
+      return { outcome: "cancelled" };
     }
     job.status = "error";
     job.error = message;
     recordFailureKind(job, failureKindOf(err));
     job.finishedAt = new Date().toISOString();
     delete job.cancelling;
-    return "failed";
+    return { outcome: "failed" };
   }
 }
 
@@ -533,8 +570,32 @@ async function endJob(
   ending: JobEnding,
   jlog: Log,
   startedMs: number,
+  session: StoreSession,
 ): Promise<Job> {
-  const after = await store.finish(job.id, attempt, ending);
+  /* **Through the session, like every other terminal job write in this file.**
+     The endings that reach here have no product to commit — a step that failed,
+     a step the reader cancelled, and a claim where every step skipped — so they
+     take the session's other door rather than the store directly. One seam for
+     D1b to make transactional, rather than one seam and three exceptions. */
+  const after = await session.settleJob({ kind: "end", jobId: job.id, attempt, ending });
+  await noteEnded(job, ending, jlog, startedMs);
+  return after;
+}
+
+/**
+ * The log line and the retention sweep that follow **any** ending.
+ *
+ * Split out of `endJob` because the successful last step ends the job from
+ * inside `session.commit` — the transition is part of the commit — and still has
+ * to say so in the log and still has to trim. Two callers, one account of what
+ * an ending sounds like.
+ */
+async function noteEnded(
+  job: Job,
+  ending: JobEnding,
+  jlog: Log,
+  startedMs: number,
+): Promise<void> {
   const line = { ms: since(startedMs), status: ending.status, ...(await jobSpend(job, jlog)) };
   /* `warn` for a cancel, because the reader chose it and it is neither a fault
      nor a clean finish. An `error` outcome stays at `info` — the step that
@@ -551,7 +612,6 @@ async function endJob(
   await store.trimFinished(job.ownerId, KEEP_FINISHED).catch((err: Error) => {
     jlog.error({ ...errorFields(err), owner: job.ownerId }, "could not trim finished jobs");
   });
-  return after;
 }
 
 /**
@@ -775,6 +835,22 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
   }
 
   const job = outcome.job;
+  /**
+   * **The session, built here and nowhere else** — immediately after the claim
+   * succeeded, and used for the whole of it.
+   *
+   * Not per step, and not per job. Every `/advance` mints a new attempt and runs
+   * one step, and a Postgres draft reference embeds that attempt, so a session
+   * built once per job is stale on the second request; one built per step could
+   * not carry a draft at all. One per successful claim is the lifetime that
+   * matches what a claim *is*, and it is what D1b needs
+   * (docs/plans/delete-the-importer-d1-design-sol.md, finding 3).
+   *
+   * On the filesystem it holds no transaction and says so out loud
+   * (src/store/session.ts). `src/jobs.ts:57` still picks the filesystem artefact
+   * store; this line is where the Postgres session goes.
+   */
+  const session = fsStoreSession({ artifacts: pipelineStore, jobs: store });
   /* A child logger, made here and used locally — never a module-level "current
      job". Rule 4 at the top of src/log.ts, and it matters more here than
      anywhere: several advance requests for *different* jobs really can be in
@@ -805,12 +881,57 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
   };
 
   try {
+    /**
+     * **What the job record should say once this step's artefacts are written.**
+     *
+     * Called from inside `runStep`, immediately before the commit, so that the
+     * step's completion and the job's transition are one act — the boundary D1b
+     * makes atomic. It used to be computed here, *after* `runStep` returned, and
+     * that is precisely the shape the review said D1b would have to re-cut
+     * (docs/plans/delete-the-importer-d1-design-sol.md, finding 1).
+     *
+     * Everything it reads is already true by the time it is called: the step is
+     * marked `done` in memory, the title is on the job, and the signal is the
+     * same signal the step just finished under.
+     */
+    const transitionAfter = (): JobTransition => {
+      /* **Whose abort was it?** A step that watches its signal unwinds through
+         `runStep`'s catch and never reaches here; a step that ignores it runs to
+         completion and lands exactly here — and if the thing that aborted was
+         our own deadline rather than the reader, calling it "cancelled" tells
+         them they stopped something they did not. GPT Sol found the
+         mislabelling; the deadline had a branch on the failure path and none on
+         the success path. */
+      if (controller.signal.aborted) {
+        const ending = overran
+          ? interruptedEnding(job)
+          : (markCancelled(job, "Cancelled"), endingFrom(job, "cancelled"));
+        return { kind: "end", jobId: job.id, attempt, ending };
+      }
+      const finished = job.steps.every((s) => s.status === "done" || s.status === "skipped");
+      if (finished) {
+        return { kind: "end", jobId: job.id, attempt, ending: endingFrom(job, "done") };
+      }
+      /* Not over: **let the claim go.** One claim covers one step, so the next
+         request — a different token — can have it. Holding it across requests
+         would leave the job `running` with a token nobody holds and every later
+         advance told `busy` until the lease lapsed, which is this endpoint
+         deadlocking itself on the happy path. GPT Sol, 2026-08-27. */
+      return {
+        kind: "release",
+        jobId: job.id,
+        attempt,
+        steps: job.steps,
+        fields: { ...(job.title !== undefined && { title: job.title }) },
+      };
+    };
+
     for (const step of job.steps) {
-      const outcome = await runStep(job, step, controller, jlog, note);
+      const ran = await runStep(job, step, controller, jlog, note, session, transitionAfter);
 
-      if (outcome === "skipped") continue;
+      if (ran.outcome === "skipped") continue;
 
-      if (outcome === "cancelled" || outcome === "failed") {
+      if (ran.outcome === "cancelled" || ran.outcome === "failed") {
         /* Read off the outcome rather than off `job.status`: `runStep` records
            the story on the record in memory and this is the one write that
            commits it. An overrun is neither a cancel nor a step's fault — the
@@ -819,55 +940,39 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
            whatever the abort happened to say. */
         const ending = overran
           ? interruptedEnding(job)
-          : endingFrom(job, outcome === "cancelled" ? "cancelled" : "error");
-        const after = await endJob(job, attempt, ending, jlog, startedMs);
+          : endingFrom(job, ran.outcome === "cancelled" ? "cancelled" : "error");
+        const after = await endJob(job, attempt, ending, jlog, startedMs, session);
         return { job: after, ran: step.name, busy: false, done: true };
       }
 
-      /* It ran. One step per call, so stop here — even if the next one would
-         only skip. The caller comes straight back for it, and a request that
-         returns keeps every step inside its own serverless invocation, which is
-         the whole reason this endpoint exists. */
-      if (controller.signal.aborted) {
-        /* **Whose abort was it?** A step that watches its signal unwinds through
-           `runStep`'s catch and never reaches here; a step that ignores it runs
-           to completion and lands exactly here — and if the thing that aborted
-           was our own deadline rather than the reader, calling it "cancelled"
-           tells them they stopped something they did not. GPT Sol found the
-           mislabelling; the deadline had a branch on the failure path and none
-           on the success path. */
-        const ending = overran
-          ? interruptedEnding(job)
-          : (markCancelled(job, "Cancelled"), endingFrom(job, "cancelled"));
+      /* It ran, and the commit inside it already moved the job — released the
+         claim, or ended the job. One step per call, so stop here even if the
+         next one would only skip: the caller comes straight back for it, and a
+         request that returns keeps every step inside its own serverless
+         invocation, which is the whole reason this endpoint exists. */
+      const after = ran.after as Job;
+      const ended = ran.transition?.kind === "end";
+      if (ended && ran.transition?.kind === "end") {
         if (overran) {
           jlog.warn(
             { step: step.name },
             `step ${step.name} ran past its deadline and ignored the signal — ${job.slug}`,
           );
-        } else {
+        } else if (controller.signal.aborted) {
           jlog.debug({ step: step.name }, `job cancelled after ${step.name} — ${job.slug}`);
         }
-        const after = await endJob(job, attempt, ending, jlog, startedMs);
-        return { job: after, ran: step.name, busy: false, done: true };
+        /* The finish itself happened inside the commit; this is the half of
+           `endJob` that is not a store write. */
+        await noteEnded(job, ran.transition.ending, jlog, startedMs);
       }
-      const finished = job.steps.every((s) => s.status === "done" || s.status === "skipped");
-      const after = finished
-        ? await endJob(job, attempt, endingFrom(job, "done"), jlog, startedMs)
-        : /* Not over: **let the claim go.** One claim covers one step, so the
-             next request — a different token — can have it. Holding it across
-             requests would leave the job `running` with a token nobody holds
-             and every later advance told `busy` until the lease lapsed, which
-             is this endpoint deadlocking itself on the happy path. GPT Sol,
-             2026-08-27. */
-          await store.releaseStep(job.id, attempt, job.steps, {
-            ...(job.title !== undefined && { title: job.title }),
-          });
-      return { job: after, ran: step.name, busy: false, done: finished };
+      return { job: after, ran: step.name, busy: false, done: ended };
     }
 
     // Every step skipped: there was nothing left to do. A job re-added after
-    // its article was already on the shelf lands here on its first call.
-    const after = await endJob(job, attempt, endingFrom(job, "done"), jlog, startedMs);
+    // its article was already on the shelf lands here on its first call — and
+    // it never reaches `commit`, which is why the ending goes through the
+    // session's other door rather than being the one job write that does not.
+    const after = await endJob(job, attempt, endingFrom(job, "done"), jlog, startedMs, session);
     return { job: after, ran: null, busy: false, done: true };
   } catch (err) {
     /* **The claim went somewhere else while we were inside a step.** Not a step

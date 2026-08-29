@@ -2425,6 +2425,119 @@ wired in the demolition, so the line that picks Postgres stays one line.
 that currently brackets nothing, and both sessions are covered — including a red-first test that a
 transactional session refuses an unconverted stage.
 
+#### What D1a's code review changed — [delete-the-importer-d1a-sol.md](delete-the-importer-d1a-sol.md)
+
+**NO-SHIP, and the first finding is the one this plan should be most embarrassed by: nothing tested
+the write.** Ten mutations had been run and every one went red, and not one of them touched the line
+the stage exists to add. Deleting `store.write` from `commit` left all eight session tests green —
+verified here rather than taken on trust. The reason is plain once seen: **every test written was a
+refusal**, and refusals are negative cases. `{ parts: {} }`, a missing key, an absent `parts` — every
+one asserts that nothing is written. The positive case, a complete product written over a carried
+artefact, was never written at all. The real-blocks job test did not catch it either, because
+`blocks` still writes its own files and returns no `parts`, so the whole runner could have reverted to
+its old direct path with that test still green.
+
+Closed with a test that seeds `tree` and `labels` from a previous run and commits complete new ones,
+asserting the write happened **once**, that the bytes on disk are the new ones and not the carried
+ones, that the step completed, and that the marker is gone. The same mutation now reddens exactly that
+test and leaves sixteen green. Separately, `tests/jobs-commit-path.test.ts` wraps the real session the
+runner builds and counts, so reverting `src/jobs.ts` to its old inline path fails by name rather than
+by inference.
+
+**The atomic boundary was in the wrong place, and that was this plan's fault rather than the
+implementation's.** D1a was fenced off from `src/jobs.ts`'s job handling on the grounds that the job
+transition was D1b's work. The result was a seam D1b could not have used: `commit` ended at
+`finishStep`, `runStep` marked the job step done afterwards, `advanceJob` released or finished the job
+in separate calls later, and an all-skipped claim never reached `commit` at all. So the fence is
+lifted and D1a carries it. The session is built **once per successful claim** and passed into
+`runStep`; `commit` takes an explicit `JobTransition` payload — declarative, not a closure, for the
+same reason `commit` takes the product rather than a function; and `runStep` decides the transition
+**before** committing, because a transition has to be known while there is still a transaction to put
+it in. Every terminal job write now goes through the session, so D1b inherits one seam rather than one
+seam and three exceptions.
+
+One bug fell out of that move and is worth recording: with the fenced job write now inside `runStep`'s
+`try`, a `StaleAttemptError` from `releaseStep` would have been swallowed into `"failed"` — this
+claimant writing a verdict on a job it no longer owns. It is re-thrown, restoring the contract the
+function's own docstring states.
+
+**`UNCONVERTED_STEPS` was fail-open, and the note in this plan arguing for it was wrong.** Pinning the
+set equal to `STEP_ORDER` was defended here as making a new step declare which side of the seam it is
+on. It does the opposite: it hands every newly added step the **unsafe** exemption by default, and a
+converted stage accidentally left in the set is permitted to write nothing and pass `assertProduced`
+against old artefacts. Inverted: steps are converted-by-default, and `parts` is **statically** required
+for any name outside a `LEGACY_UNCONVERTED_STEPS` tuple, through `PipelineStep<N extends StepName>` and
+a return type that resolves to a `parts`-required product off the list. A stage dropped from the list
+without being converted no longer compiles. The test asserts only that the legacy names are real steps.
+
+**Three edge cases in `checkProduct`**, each now with its own red: `parts[kind]` accepted **inherited**
+values while `Object.entries` writes none of them, so a prototype-borne key could let a carried
+artefact satisfy the postcondition — `Object.hasOwn` now; extra keys were not rejected until the
+filesystem store threw part-way through a write; and a step with `produces: []` and `parts: {}` was
+accepted and finished, though `has([], …)` deliberately returns false so it could never be considered
+done.
+
+**And `reads` was a compile-time fiction.** It handed out the mutable store, so one assertion widened
+it back. `readsOf` returns a six-method facade written out one by one — not a spread, which would
+carry `write` with it — with a test that the key set is exactly six, and another that the six really
+delegate, because a facade returning `undefined` for everything would pass the first.
+
+#### D2 scoped, 2026-08-29 — the open `sourceHash` question is answered, and there is one blocker
+
+**The `sourceHash` gate can go, and here is the argument this plan owed.** § D2 said three of
+`usableCheckpoint`'s four manifest comparisons are already inside the checkpoint key and that
+`sourceHash` *"is not obviously subsumed"*. Checked properly:
+
+- `version` and `generator` are **literal** inputs to `batchFingerprint`
+  ([`src/labels.ts:600`](../../src/labels.ts)), along with `EFFORT` and `SYSTEM`.
+- `slug` is structural rather than hashed: the store is bound per article and
+  `assertCheckpointRequest` throws on a mismatch before it touches anything
+  ([`src/store/checkpoints.ts:273`](../../src/store/checkpoints.ts)).
+- **`sourceHash` is not an input, and does not need to be.** `hashBlocks` covers *every* block in the
+  article. `batchFingerprint` instead hashes exactly what the model is shown for that one batch — its
+  own blocks' text plus one neighbour either side (`CONTEXT_BLOCKS = 1`), the block ids, the set
+  grouping that no rendered text states, **and the whole-tree outline, which every batch shares**. So
+  a heading changing anywhere changes every batch's fingerprint, and a batch's own window changing
+  changes that batch's.
+
+What is left is the case the coarse gate caught and the fine one does not: a block edited far outside
+a batch's window, with no heading touched. There, **reuse is correct** — nothing the model saw for
+that batch moved. So dropping `sourceHash` removes no correctness, and removes the old behaviour where
+editing one paragraph threw away every batch including the ones still good. Worth noting alongside it
+that `structureHash` and `structureVersion`, which `labels.json` records
+([`src/labels.ts:1490`](../../src/labels.ts)), were **never** in `usableCheckpoint`'s gate at all — a
+forced re-run producing a different tree from the same blocks was already caught only by per-batch
+fingerprint mismatch, which is the same mechanism this now relies on.
+
+**`articleId` is not a problem, and the store said so in advance.** Neither call site has one; only a
+slug and a directory. `createFsCheckpointStore`'s docstring
+([`src/store/checkpoints-fs.ts:122`](../../src/store/checkpoints-fs.ts)) already answers it: *"`ref.articleId`
+is unused here and is still required, so that a call site cannot build a filesystem store today and
+discover it has nothing to give the Postgres one tomorrow."* `assertCheckpointRequest` validates slug,
+namespace and keys and never the id. So an empty `articleId` on the filesystem is the contract working,
+not a workaround.
+
+**The blocker: D2 cannot be built without a three-line deletion in `src/toc.ts`.** The
+`generateLabels` call site itself is fine — `toc.ts:780` already passes `dir` and `slug`, which is
+everything a store needs. But `toc.ts:838` calls `labelRun.clearCheckpoint()`, and `clearCheckpoint`
+is one of the things D2 deletes: the checkpoint store has **no `delete`**, deliberately
+([`src/store/checkpoints.ts:122`](../../src/store/checkpoints.ts)). A peer is live in `src/toc.ts`,
+so this waits for them. Leaving a no-op `clearCheckpoint` behind would be a second door into removed
+behaviour, which is the shape this plan exists to close.
+
+**So D2 splits.** `pdf-read.ts` has no boundary crossing at all — its only caller is `runPdfExtract`
+([`src/pipeline.ts:941`](../../src/pipeline.ts)), already passing `dataDir` and `slug`, and nothing has
+ever deleted a PDF chunk. It can go first and on its own, which is the cheapest possible test of
+whether B3's interface is right. `labels.ts` follows once `src/toc.ts` is free. Note that `pdf-read`'s
+call site sits inside the `extract` step that **D1 rewrites**, so these two must not be built at the
+same time.
+
+**What D2 deletes**, all in `src/labels.ts`: `serialise()` (~21 lines with its docstring), the
+accumulated `kept[]` array — gone because each write is now one key rather than a re-serialised batch
+list — `runId` in all four of its places, `clearCheckpoint`'s type and implementation, and the
+map-level half of `usableCheckpoint` (~28 lines), whose per-entry shape validation stays as the
+caller-side gate the store delegates.
+
 #### What the D1 design review changed — [delete-the-importer-d1-design-sol.md](delete-the-importer-d1-design-sol.md)
 
 **NO-SHIP, two criticals, and the design above is superseded by this section.** The run/commit split

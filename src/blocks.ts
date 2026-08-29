@@ -33,7 +33,7 @@ import { SANITIZER_VERSION } from "./sanitize-policy.js";
 import type { Block, BlockKind } from "./types.js";
 /* Types only, so nothing runtime crosses from the store into stage 3. Stage 3
    asks the store two questions and does not care which store answers. */
-import type { ArtifactKind, ArtifactStore } from "./store/artifacts.js";
+import type { ArtifactKind, ArtifactReads } from "./store/artifacts.js";
 
 /**
  * Blocks are the *finest* unit a reader takes in as one thing, so a `<li>` is a
@@ -1130,7 +1130,11 @@ export class NoBlocksProduced extends Error {
  * the one thing that must not happen to it is being turned into an answer.
  */
 export async function previousBlocksFrom(
-  store: ArtifactStore,
+  /* `ArtifactReads`, not the whole store, since 2026-08-29. This runs inside a
+     stage's `run`, which is the half that may only read — see
+     src/store/artifacts.ts § `ArtifactReads`. The real store still satisfies it,
+     so every caller is unchanged. */
+  store: ArtifactReads,
   slug: string,
 ): Promise<Block[] | undefined> {
   const artefact = await store.read(slug, "blocks", "blocks");

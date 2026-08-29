@@ -167,13 +167,22 @@ serves every article, the library, the metadata page and the reader's comments f
 instead of from disk; `files` remains the default. The work, and what is still missing, is in
 [postgres-storage-implementation.md](../plans/postgres-storage-implementation.md).
 
-**Writes do not.** Every pipeline stage still writes `data/<slug>/*.json` directly —
-`ArtifactStore.write()` has no production caller at all — so an article ingested with
-`SPIDERYARN_STORE=postgres` set produces files on disk and an empty draft revision that
-`publishRevision` then refuses. The job record moved on 2026-08-27
+**Writes do not.** Every pipeline stage still writes `data/<slug>/*.json` directly, so an article
+ingested with `SPIDERYARN_STORE=postgres` set produces files on disk and an empty draft revision
+that `publishRevision` then refuses. The job record moved on 2026-08-27
 ([ingest-queue.md](ingest-queue.md)) and the artefacts did not, which is why an ingest still cannot
 run on a host without a writable disk. The plan for the other half, and an honest account of its
 size, is [transactional-stage-runner.md](../plans/transactional-stage-runner.md).
+
+**There is one caller of `ArtifactStore.write()` now, and nothing reaches it yet.** Since 2026-08-29
+a step returns a *product* — `{ detail, parts?, stamp? }` — and the commit after it
+([`src/store/session.ts`](../../src/store/session.ts)) writes that product, checks it, and finishes
+the step. All nine steps still return `{ detail }` alone and still write their own files, so `write`
+is never called; the point of landing the boundary empty is that the stages can move behind it one
+at a time. `LEGACY_UNCONVERTED_STEPS` in [`src/pipeline.ts`](../../src/pipeline.ts) is the list of
+the ones that have not, and each conversion deletes a name from it. A step **off** that list must
+return `parts` — the type says so as well as the commit, so a new stage is converted by default and
+the exemption has to be asked for. [delete-the-importer.md § D1](../plans/delete-the-importer.md).
 
 ```bash
 npm run db:seed-owner   # the one auth.users row every owner_id points at
