@@ -243,7 +243,7 @@ reads; a shared index with a fresh `BASE` is close to a no-op. Together they wri
 old snapshot into the index everybody shares, and it reads as a precise, deliberate back-out of
 exactly the work that landed in between.
 
-**It was one write, and the belief that it was ongoing is what cost the day.** This paragraph first
+**How many writes there were, and why this paragraph has now said three different things.** This paragraph first
 said the opposite, on my evidence and 56's: that a file committed at 19:34 appearing as a staged
 deletion minutes later proved a *later* stale write, since no single snapshot could both predate one
 commit and postdate another. d7 refuted it. `git diff --cached` compares the index to **HEAD**, so a
@@ -265,15 +265,33 @@ present in the index:
 20:16 837df17  added=tests/dock-mode-urls…      in-index=no
 ```
 
-Everything up to 14:14, nothing from 14:19: **a single write, inside a five-minute window.** So the
-`BASE`-reuse composition above still stands as the shape of the mistake, but nothing measured requires
-*retries* — one mistake explains all of it.
+Everything up to 14:14, nothing from 14:19: that write happened inside a five-minute window.
 
-That correction is the most useful thing in this section. One silent mistake in a five-minute window
-produced six hours of phantom reverts, three misattributions, five honest denials and a nearly-committed
-back-out of a finished feature — and the **wrong diagnosis, that it was ongoing, is what stopped anyone
-clearing the index for six hours.** When the damage is a stale snapshot, "is this still happening?" is
-the question to answer first and with a measurement, because it decides whether you clean up or hunt.
+**And then it happened again, between 20:20 and 20:55** — 16 paths, 0 of 16 matching disk, dated and
+cleared the same way. So this is not a historical incident with a tidy ending. Whatever does it is
+still live, `scripts/check-staged-revert.ts` is the standing guard rather than the postscript, and the
+right habit is to run it before every commit rather than to assume the tree is clean.
+
+**The three-step way this section reached the truth is worth more than the truth.** It read, in order:
+*ongoing* → *one write* → *ongoing after all*. The first was asserted from the ordering argument,
+which is invalid. The second refuted that argument correctly and then went one step too far, treating
+"the evidence for X is bad" as "not X" — when the available conclusion was only *"X is unsupported,
+go and measure again."* The conclusion had been right the whole time; only its reasoning was rotten,
+and replacing rotten reasoning with a sound argument for the opposite is a satisfying move that was
+wrong twice over.
+
+So: **refuting an argument does not refute its conclusion**, and a correction deserves the same
+suspicion as the claim it corrects — more, because it arrives feeling rigorous. The `BASE`-reuse
+composition still stands as the shape of the mistake either way; what nobody has yet is the *cause* of
+the repeat.
+
+What the day cost: six hours of phantom reverts, three misattributions, five honest denials, and a
+nearly-committed back-out of a finished feature — the worst of the three incidents staged a
+`src/fetch.ts` carrying **zero** occurrences of `pinnedAgent` where HEAD had four, so committing it
+would have silently removed the DNS-rebinding fix under somebody else's message.
+
+"Is this still happening?" is the question to answer first and always with a measurement, because it
+decides whether you clean up or hunt — and note that it has to be re-answered, not answered once.
 
 **The one number that settles who did it.** Compare each staged path's blob against `git hash-object`
 of the file on disk. Anything a person deliberately staged matches disk; a stale `read-tree` matches
