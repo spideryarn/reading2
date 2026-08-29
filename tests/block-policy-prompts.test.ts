@@ -162,7 +162,10 @@ describe("the automatic stages never see the note", () => {
 
   it("glossary", async () => {
     const { generateGlossary } = await import("../src/glossary.js");
-    const prompt = await promptOf(() => generateGlossary({ dir: DIR }));
+    /* `previous: null` — a first pass, which is what this fixture is. The
+       argument is required so that landing D cannot drop it silently; here it
+       is the honest value rather than a placeholder. src/glossary.ts. */
+    const prompt = await promptOf(() => generateGlossary({ dir: DIR, previous: null }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
@@ -180,7 +183,7 @@ describe("the automatic stages never see the note", () => {
        green on arc, glossary and tweets and would leave this one reading the
        bibliography. */
     const { generateIdeas } = await import("../src/ideas.js");
-    const prompt = await promptOf(() => generateIdeas({ dir: DIR }));
+    const prompt = await promptOf(() => generateIdeas({ dir: DIR, previous: null }));
     expect(prompt).toContain(BODY_WORD);
     expect(prompt).not.toContain(NOTE_WORD);
   });
