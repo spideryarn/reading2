@@ -390,11 +390,12 @@ symlinked entry and its target can load as two module instances, so `isMain`'s f
 reinstating the silent no-op that actually happens. The flag is named in the docstring so nobody has
 to rediscover which one it is.
 
-**Not fixed, and it should be:** `converse`'s citation collection has no end-to-end test — every
-`url_citation` in `tests/` is in `tests/explain.test.ts`. Sol: *"worth adding before the remaining
-stream refactor because its unique assertion is cross-round persistence."* It confirmed the
+**Not fixed at the time, and now fixed:** `converse`'s citation collection had no end-to-end test —
+every `url_citation` in `tests/` was in `tests/explain.test.ts`. Sol: *"worth adding before the
+remaining stream refactor because its unique assertion is cross-round persistence."* It confirmed the
 extraction did not change accumulation — `converse` still holds one map above the round loop, so a
-page cited in round one is still not cited again in round two — but nothing tests that.
+page cited in round one is still not cited again in round two — but nothing tested that.
+`tests/converse-citations.test.ts` now does; see [below](#the-missing-converse-test-2026-08-29).
 
 
 ### What the code review changed, and it earned its keep
