@@ -1878,6 +1878,41 @@ The general lesson is worth more than the fix: **a type-level guard has to be tr
 sneaky form, not the honest one.** The honest form is what your call sites already write, so it
 proves nothing about a call site somebody writes next month.
 
+#### The control set, and what each file is for
+
+Six files, each compiled against `src/web/tsconfig.json` on its own. Four must fail and two must
+pass, and the two that pass are the half that makes the four mean anything.
+
+| File | Shape | Result |
+|---|---|---|
+| `good.tsx` | all three arms the app really writes, including an owner with no glossary yet | compiles |
+| `bad.tsx` | visitor arm plus an owner hook, as a fresh literal | `TS2322` |
+| `sneaky.tsx` | the same object through a named `const` | `TS2322` |
+| `more-bad.tsx` | the old two-prop form; a visitor with `glossary: null`; an owner arm with no owner | `TS2322` ×3 |
+| `without-never.tsx` | **the union as first written, minus `owner?: never`**, handed the sneaky shape | **compiles** |
+| `limit.tsx` | owner arm, handed a visitor's projection | **compiles** — see below |
+
+`without-never.tsx` is the one that earns the fix. It is not "the guard fires", it is *the guard
+without this line does not fire on the same input* — which is the only thing that separates a strong
+version from a weak one that looks identical from the call sites.
+
+One trap on the way, and it is the same shape one level down: the first attempt ran all six through a
+`tsconfig.json` whose `include` named a single file, so five of them were never compiled and every
+one reported "clean". A control that is not in the compilation is indistinguishable from a control
+that passed.
+
+#### What the union does not forbid, and cannot
+
+`{ kind: "owner", owner: <a real owner hook>, glossary: <a visitor's projection> }` still typechecks,
+and `limit.tsx` confirms it. `PublicGlossaryEntry` is **deliberately** assignable to `GlossaryEntry`
+([`src/public-types.ts`](../../src/public-types.ts)) — that is what lets one panel draw both readers'
+lists without a cast and without a second component.
+
+So the union forbids the direction that does harm, which is owner machinery reaching a visitor. It
+cannot forbid an owner's panel being handed a projection of the owner's own data, and no type could
+without giving up the one-panel design. Written down here rather than left implicit, because the next
+person to read `GlossaryAccess` will otherwise assume it is stronger than it is.
+
 ## Open questions
 
 - **What a public visitor sees when the owner turns a doc off** while they are reading it. The next
