@@ -252,10 +252,21 @@ describe("decidePublicPage — the table, with no I/O in it", () => {
       ["POST", HEAD.slug, null, SHA256],
     ];
     for (const args of others) {
-      expect(Object.keys(decidePublicPage(...args)), String(args[0] + " " + args[1])).not.toContain(
-        "Retry-After",
-      );
+      const d = decidePublicPage(...args);
+      const label = `${args[0]} ${args[1]}`;
+      /* `d.headers`, not `d` — the first draft of this line read
+         `Object.keys(decidePublicPage(...args))`, whose keys are `status`,
+         `headers` and `head`, so it could not have contained a header name
+         under any mutation. The mutation that found it (put `Retry-After` in
+         the shared `headers` object) left it green. */
+      expect(Object.keys(d.headers), label).not.toContain("Retry-After");
+      expect(d.headers["Retry-After"], label).toBeUndefined();
     }
+    /* And the control, so "absent everywhere" is not vacuously true of a
+       `decidePublicPage` that had stopped setting it at all. */
+    expect(
+      decidePublicPage("GET", HEAD.slug, { kind: "failed" }, SHA256).headers["Retry-After"],
+    ).toBe("30");
   });
 
   /**
@@ -344,11 +355,25 @@ describe("servePublicReadPage — what actually goes on the wire", () => {
    */
   it("serves the untouched shell, with no trace of the title, for a slug that is not shared", async () => {
     const answer = await serve("GET", "someone-elses-article", privateReader());
-    expect(answer.status).toBe(404);
-    expect(answer.body).toBe(SHELL);
+    /* **Every canary first — before the status, and before `toBe(SHELL)`.**
+       Not housekeeping: a failing assertion ends the case, so anything above
+       these is a lid on them. A `toBe(SHELL)` placed first hides them from any
+       leak that changes the body, and `toBe(404)` placed first hides them from
+       any leak that changes the status — which is most of them, and which was
+       still true after the first repair of this test. Measured both ways on
+       2026-08-29: with the status check above, a `loadHead` that renders the
+       reader's error message into the head reddens this case on *the status*
+       and never runs a single `not.toContain`.
+
+       The general form, which is why this comment is long: **an assertion is
+       only exercised if every assertion above it passes**, so ordering decides
+       what a mutation actually proves. Put the assertion the test is *named
+       for* at the top. */
     expect(answer.body).not.toContain(PRIVATE_TITLE);
     expect(answer.body).not.toContain("Zylquarn");
     expect(JSON.stringify(answer.headers)).not.toContain("Zylquarn");
+    expect(answer.status).toBe(404);
+    expect(answer.body).toBe(SHELL);
   });
 
   it("400s a malformed slug without asking the reader anything", async () => {
