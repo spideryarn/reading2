@@ -153,6 +153,11 @@ THE FIVE THINGS YOU CAN DRAW
    text:  what the passage SAYS, in the reader's language — a claim, not a
           heading. "Consciousness may not be computable" beats "Section 3.2".
           Three to eight words. It must fit the box: see the width rule above.
+          A diamond, a hexagon, an ellipse and a pill are NARROWER than their
+          w away from the middle, so a second line and especially a "sub" get
+          much less room than the number says — reckon on about two thirds for
+          a hexagon or an ellipse and half for a diamond, or make the shape
+          wider. Anything that does not fit is truncated with an ellipsis.
    sub:   OPTIONAL second line, smaller — a count, a name, a qualifier.
    size:  xs | sm | md | lg. sm for ordinary nodes, md or lg for the two or
           three nodes that carry the whole picture, xs for the crowd.

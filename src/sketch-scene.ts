@@ -775,20 +775,126 @@ export function linesInBox(node: SketchNode): number {
   return Math.max(1, Math.floor((node.h - subH - 4) / (px * LINE_H)));
 }
 
+/**
+ * **How wide the shape is `dy` above or below its own centre.**
+ *
+ * A box is its full width everywhere and nothing else here is. A diamond, a
+ * hexagon, an ellipse and a pill all cut in as you move away from the centre
+ * line, so text laid out to the *bounding box* sits outside the shape — and
+ * every check reports it fitting, because every check was measuring the box.
+ * Seen on the phrenology tract: a hexagon captioned "self-knowledge to moral
+ * perfection", the caption crossing both sloping sides, `overflowing` = 0.
+ *
+ * A flat fraction per shape was the first fix and it was too crude in both
+ * directions at once — it called a sub one character over an overflow on a
+ * picture that looked perfectly fine. This is the actual arithmetic of each
+ * outline, which costs four lines and has no constant in it to argue about.
+ */
+export function widthAt(node: SketchNode, dy: number): number {
+  const rx = node.w / 2;
+  const ry = node.h / 2;
+  const t = ry === 0 ? 1 : Math.min(1, Math.abs(dy) / ry);
+  switch (node.shape) {
+    case "ellipse":
+      return 2 * rx * Math.sqrt(Math.max(0, 1 - t * t));
+    case "diamond":
+      return 2 * rx * (1 - t);
+    case "hex":
+      // The polygon is widest at the centre line and inset by `k` at the ends.
+      return 2 * (rx - Math.min(node.w / 4, ry) * t);
+    case "pill": {
+      // Semicircular ends of radius `ry`; the straight part is what is left.
+      const r = Math.min(ry, rx);
+      return 2 * (rx - r + r * Math.sqrt(Math.max(0, 1 - t * t)));
+    }
+    default:
+      return node.w;
+  }
+}
+
+/** One node's text, exactly as it will be drawn. */
+export interface NodeText {
+  lines: string[];
+  /** The sub-line as drawn — truncated if it had to be. */
+  sub: string | null;
+  px: number;
+  subPx: number;
+  /** True when anything was cut to make it fit. */
+  truncated: boolean;
+}
+
+/**
+ * **What the painter will draw inside this node** — the one place the question
+ * is answered, so that `nodeFits` and the picture cannot disagree about it.
+ *
+ * They did, twice. First as two different word-wrapping loops, where a single
+ * word longer than a line scored as fitting and rendered as `superc…`. Then as
+ * two different ideas of how wide the shape is. **A measure and the thing it
+ * measures cannot be two pieces of arithmetic** — so there is one function, the
+ * painter positions what it returns, and `nodeFits` asks whether anything in it
+ * was cut.
+ *
+ * The width is taken at the outermost row the text occupies, found by wrapping
+ * once at the centre width and then again at the width that many lines really
+ * have. One refinement, not a loop: the second answer is what is drawn, so it
+ * is right by construction even where a third pass would have differed.
+ */
+export function layoutNodeText(node: SketchNode): NodeText {
+  const px = SIZE_PX[node.size];
+  const subPx = Math.max(9, px * 0.76);
+  const subH = node.sub ? subPx * 1.3 : 0;
+  const maxLines = linesInBox(node);
+
+  /**
+   * The width available to the **outermost line's centre**, which is not the
+   * width at the edge of the text block.
+   *
+   * Getting that wrong makes the two passes below diverge instead of settle: a
+   * three-line block measured at its outer edge is narrower than one measured
+   * at its outer line, so the text needs another line, so it is measured
+   * narrower still. On the phrenology hexagon that turned a caption which fits
+   * on two lines into a truncation — the measure inventing the failure it was
+   * added to detect. The centre of the outermost of `n` rows is
+   * `(n − 1) / 2` line-heights from the middle.
+   */
+  const widthFor = (lineCount: number) =>
+    widthAt(node, ((lineCount - 1) / 2) * px * LINE_H + subH / 2);
+
+  let lines = wrap(node.text, charsThatFit(widthFor(1), node.size), maxLines);
+  lines = wrap(node.text, charsThatFit(widthFor(lines.length), node.size), maxLines);
+
+  const room = charsThatFit(widthFor(lines.length), node.size);
+  const whole = wrap(node.text, room, Number.POSITIVE_INFINITY);
+
+  let sub: string | null = null;
+  let subCut = false;
+  if (node.sub) {
+    /* The sub sits under the text, so it gets its own width — it is the
+       narrowest row of a diamond and it is the line that actually overflowed. */
+    const subDy = (lines.length * px * LINE_H) / 2;
+    const subRoom = Math.max(1, Math.floor((widthAt(node, subDy) - 10) / (subPx * CHAR_W)));
+    sub = wrap(node.sub, subRoom, 1)[0] ?? "";
+    subCut = sub !== node.sub;
+  }
+
+  return {
+    lines,
+    sub,
+    px,
+    subPx,
+    truncated: lines.length < whole.length || lines.join("").includes("…") || subCut,
+  };
+}
+
 /** How many lines the text needs, at this size, in a box this wide. */
 export function linesNeeded(text: string, w: number, size: SketchSize): number {
   return wrap(text, charsThatFit(w, size), Number.POSITIVE_INFINITY).length;
 }
 
-/**
- * Does this node's text fit the box the model gave it?
- *
- * Asked exactly as the painter asks it: how many lines does the box hold, and
- * how many does the text need — using the same `wrap` for both.
- */
+/** Does this node's text fit the shape the model gave it, uncut? */
 export function nodeFits(node: SketchNode): boolean {
   if (!node.text) return true;
-  return linesNeeded(node.text, node.w, node.size) <= linesInBox(node);
+  return !layoutNodeText(node).truncated;
 }
 
 function overlapArea(a: SketchNode, b: SketchNode): number {

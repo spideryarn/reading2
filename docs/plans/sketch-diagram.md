@@ -301,6 +301,48 @@ spotless — a fault count that cannot be reproduced is a claim, not evidence. T
 raw answer is written beside it now, and the whole run is committed under
 `evals/results/`.
 
+### And a seventh renderer bug, found by drawing a different genre
+
+Every article in the table above is an argumentative essay, and a corpus that
+cannot exercise a rule tells you nothing about it. So two more were drawn:
+`fowler-phrenology`, an 1849 lecture that is really a list of twelve benefits,
+and `revistes-ub-30977`, a literary-studies paper. Both came back with a real
+shape — a funnel into a fan-out into a convergence, and a chain that loops back
+— and the phrenology one scored **flow 0.74**, the lowest yet and correctly so:
+its five domains are a genuine fan rather than a sequence.
+
+What they exposed is that **`nodeFits` was measuring the bounding box, and a
+diamond, a hexagon, an ellipse and a pill are all narrower than their box away
+from the centre line.** The phrenology hexagon was captioned *"self-knowledge to
+moral perfection"* with the caption crossing both of its sloping sides, and
+`overflowing` reported **0** — which is exactly the failure this module exists
+to catch, in the module that catches it. Three of the five earlier pictures had
+the same fault and none of them had reported it.
+
+`widthAt` computes each outline's real width now, and `layoutNodeText` is a
+single function that returns the text as it will be drawn, so the painter
+positions what the measure measured. **Two rounds of this were the same
+mistake**: first two different word-wrapping loops, then two different ideas of
+how wide the shape is. A measure and the thing it measures cannot be two pieces
+of arithmetic.
+
+One piece of that arithmetic is worth naming because it was wrong in a way that
+looked right: the width has to be taken at the **outermost line's centre**, not
+at the edge of the text block. Measured at the edge, a three-line block is
+narrower than a two-line one, so the text needs another line, so it is measured
+narrower still — the passes diverge, and the measure invents the truncation it
+was added to detect.
+
+### Known and not fixed: edges cross boxes
+
+On the phrenology fan-in, the curve from *Business and vocation* down to the
+conclusion passes straight through *Justice, law, marriage*. Nothing routes
+around obstacles; an edge is a curve between two anchors. Fixing it properly
+means obstacle-aware routing, which is a real piece of work and the wrong thing
+to build before anyone has used this. The cheap mitigations already in are that
+edges are drawn *under* the nodes, so a box is never obscured, and that edge
+labels move along the line to a clear spot.
+
 ### Findings taken as fair and not acted on
 
 - **`flow` overclaims.** It is ordinal: three nodes at y = 100, 100.001 and

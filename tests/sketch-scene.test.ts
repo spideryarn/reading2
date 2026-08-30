@@ -22,12 +22,13 @@ import {
   CANVAS_W,
   charsThatFit,
   cleanPath,
-  linesInBox,
+  layoutNodeText,
   linesNeeded,
   nodeFits,
   readSketch,
   scoreSketch,
   type SketchNode,
+  widthAt,
   wrap,
 } from "../src/sketch-scene.js";
 
@@ -417,20 +418,64 @@ describe("nodeFits — text that will not fit its box", () => {
     expect(nodeFits(long)).toBe(false);
   });
 
-  it("agrees with what the painter will actually draw", () => {
-    // The property, rather than one example of it: for any node, "it fits" and
-    // "the drawn lines are the whole text" have to be the same statement.
+  it("says a node fits exactly when nothing in it was cut", () => {
+    // The property, rather than one example of it, across every shape — because
+    // "fits" and "the drawn text is the whole text" are meant to be one
+    // statement, and they were two for two rounds running.
     const cases: SketchNode[] = [
       box({ text: "short", w: 200, h: 40 }),
       box({ text: "supercalifragilisticexpialidocious", w: 60, h: 20 }),
       box({ text: "a fairly long claim about several things at once", w: 140, h: 44 }),
       box({ text: "two words", w: 90, h: 60, sub: "and a qualifier" }),
+      box({ shape: "hex", text: "Twelve benefits of phrenology", w: 200, h: 90, size: "lg" }),
+      box({ shape: "diamond", text: "Will anyone scale further?", w: 300, h: 90, size: "md" }),
+      box({ shape: "ellipse", text: "We are more meat than machine", w: 240, h: 70 }),
+      box({ shape: "pill", text: "Do not build conscious machines", w: 320, h: 76, size: "md" }),
     ];
     for (const n of cases) {
-      const drawn = wrap(n.text, charsThatFit(n.w, n.size), linesInBox(n));
-      const whole = wrap(n.text, charsThatFit(n.w, n.size), Number.POSITIVE_INFINITY);
-      expect(nodeFits(n)).toBe(drawn.length === whole.length && !drawn.join("").includes("…"));
+      const drawn = layoutNodeText(n);
+      const whole = [drawn.lines.join(" "), drawn.sub ?? ""].join(" ");
+      const wanted = [n.text, n.sub ?? ""].join(" ");
+      expect(nodeFits(n)).toBe(whole.replace(/\s+/g, " ").trim() === wanted.replace(/\s+/g, " ").trim());
     }
+  });
+
+  it("measures a shape's width where the text sits, not at its widest point", () => {
+    /* Their outlines cut in above and below the centre line, so text laid out
+       to the bounding box sits OUTSIDE the shape while every check reports it
+       fitting. Seen on the phrenology tract: a hexagon captioned
+       "self-knowledge to moral perfection", the caption crossing both sloping
+       sides, and `overflowing` reporting 0. */
+    const n = (shape: SketchNode["shape"]) => box({ shape, w: 200, h: 100 });
+    // At the centre line every shape here is its full width...
+    for (const shape of ["box", "hex", "diamond", "ellipse"] as const) {
+      expect(widthAt(n(shape), 0)).toBeCloseTo(200, 5);
+    }
+    // ...and away from it, only the box still is.
+    expect(widthAt(n("box"), 40)).toBeCloseTo(200, 5);
+    expect(widthAt(n("hex"), 40)).toBeLessThan(200);
+    expect(widthAt(n("ellipse"), 40)).toBeLessThan(200);
+    // A diamond closes to a point; an ellipse does too but more slowly.
+    expect(widthAt(n("diamond"), 50)).toBeCloseTo(0, 5);
+    expect(widthAt(n("diamond"), 40)).toBeLessThan(widthAt(n("ellipse"), 40));
+  });
+
+  it("catches a sub-line too long for the shape it is in", () => {
+    // The sub gets one line and no wrap, so "does it fit" is a question about
+    // characters rather than about height — and it was not being asked at all.
+    // The real node off the phrenology tract, numbers and all — my first
+    // fixture was 260 wide at `sm`, which is roomy enough that the sub fitted
+    // and the test passed against the bug. The one that broke was 200 at `lg`,
+    // where the sub gets 16 characters and was given 34.
+    const real = box({
+      shape: "hex",
+      text: "Twelve benefits of phrenology",
+      w: 200,
+      h: 90,
+      size: "lg",
+    });
+    expect(nodeFits(real)).toBe(true);
+    expect(nodeFits({ ...real, sub: "self-knowledge to moral perfection" })).toBe(false);
   });
 
   it("counts the sub-line against the height", () => {

@@ -29,9 +29,8 @@
 import {
   CANVAS_W,
   CHAR_W,
-  charsThatFit,
   LINE_H,
-  linesInBox,
+  layoutNodeText,
   SIZE_PX,
   type SketchEdge,
   type SketchLabel,
@@ -167,17 +166,16 @@ function shapePrims(n: SketchNode): Prim[] {
 /** The node's words, centred in its box, wrapped to what the box can hold. */
 function textPrims(n: SketchNode): Prim[] {
   if (!n.text) return [];
-  const px = SIZE_PX[n.size];
-  const subPx = Math.max(9, px * 0.76);
-  /* **`linesInBox` and `charsThatFit` are the same two functions `nodeFits`
-     uses**, which is the point of them living in sketch-scene.ts. They used to
-     be two implementations — one here deciding what gets drawn, one there
-     deciding whether it fits — and they disagreed: a 60×20 node holding one
-     long word scored as fitting and rendered as `superc…`. A measure and the
-     thing it measures cannot be two pieces of arithmetic. GPT Sol, 2026-08-30. */
-  const maxLines = linesInBox(n);
-  const lines = wrap(n.text, charsThatFit(n.w, n.size), maxLines);
-  const subH = n.sub ? subPx * 1.3 : 0;
+  /* **`layoutNodeText` is the same function `nodeFits` asks.** This file used
+     to wrap the text itself, and sketch-scene.ts estimated the line count with
+     a different loop and a different idea of how wide the shape is — so a 60×20
+     node holding one long word scored as fitting and rendered as `superc…`, and
+     a hexagon's caption crossed both of its sloping sides with `overflowing`
+     reporting 0. A measure and the thing it measures cannot be two pieces of
+     arithmetic. Everything below this line is *positioning* what that function
+     returned. GPT Sol, 2026-08-30. */
+  const { lines, sub, px, subPx } = layoutNodeText(n);
+  const subH = sub ? subPx * 1.3 : 0;
   const blockH = lines.length * px * LINE_H + subH;
   // The first baseline: centre the block, then drop by the cap height so the
   // *glyphs* are centred rather than the line boxes.
@@ -198,12 +196,12 @@ function textPrims(n: SketchNode): Prim[] {
     baseline += px * LINE_H;
     return p;
   });
-  if (n.sub) {
+  if (sub) {
     prims.push({
       t: "text",
       x: cx,
       y: baseline + subPx * 0.15,
-      text: wrap(n.sub, Math.max(1, Math.floor((n.w - 10) / (subPx * CHAR_W))), 1)[0] ?? "",
+      text: sub,
       px: subPx,
       anchor: "middle",
       cls: "sk-sub",
