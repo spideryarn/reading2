@@ -70,6 +70,7 @@ import { createFsArtifactStore } from "../../src/store/artifacts-fs.js";
 import { pgArtifactsIn } from "../../src/store/artifacts-pg.js";
 import { storeRawSource } from "../../src/store/blobs.js";
 import { insertWhenSlotFree } from "./running-slot.js";
+import { withRunLock } from "./run-lock.js";
 import { mintAttempt } from "../../src/store/jobs.js";
 import {
   PublishRefused,
@@ -201,6 +202,22 @@ async function storeRawBytesFor(slug: string): Promise<void> {
  * 2026-08-28 because a suite that had never met this grew the same failure:
  * one of it, not one per file that gets bitten.
  *
+ * **And the slot is taken under `withRunLock`, not merely waited for.** Waiting
+ * on the constraint is *unfair* — it polls, so under contention one caller
+ * starves and spends the whole 20s budget. `./run-lock.ts` serialises the
+ * suites properly; this is how the two callers that cannot afford a file-scope
+ * hold — `store-parity`, and `store-roundtrip` at 63 seconds — join that queue
+ * for the length of a fixture load instead of a suite.
+ *
+ * The two are kept together on purpose. The lock excludes the suites that agree
+ * to take it; `insertWhenSlotFree` still covers everything that never will — a
+ * dev server mid-ingest, a real job. Neither replaces the other.
+ *
+ * **For the five callers that already hold the lock for their file**, the take
+ * below is a no-op: `withRunLock` returns early when this process is the holder.
+ * Without that it would be a second connection asking for its own key, and would
+ * poll to the deadline. See `./run-lock.ts` and `tests/run-lock.test.ts`.
+ *
  * **The job is deleted rather than marked done.** Marking it `done` in a
  * `finally` would claim success for a body that threw, and — worse — an
  * unfenced update could overwrite a job something else had already failed,
@@ -219,25 +236,31 @@ async function withRunningJob<T>(
   body: (job: { id: string; attemptId: string }) => Promise<T>,
 ): Promise<T> {
   const db = getDb();
-  const job = await insertWhenSlotFree(slug, async () => {
-    const started = { id: mintId(), attemptId: mintAttempt() };
-    await db.insert(jobs).values({
-      id: started.id,
-      ownerId,
-      slug,
-      steps: FIXTURE_STEPS,
-      status: "running",
-      attemptId: started.attemptId,
-      leaseExpiresAt: new Date(Date.now() + 600_000),
-      workKey: `fixture-${started.id}`,
+  /* The lock wraps the whole window — insert, body, delete — and not just the
+     insert. Holding it only for the insert would let a sibling take the slot
+     the moment this one had it, which is the race the constraint then reports
+     as somebody else's failure. */
+  return await withRunLock(`loading ${slug}`, async () => {
+    const job = await insertWhenSlotFree(slug, async () => {
+      const started = { id: mintId(), attemptId: mintAttempt() };
+      await db.insert(jobs).values({
+        id: started.id,
+        ownerId,
+        slug,
+        steps: FIXTURE_STEPS,
+        status: "running",
+        attemptId: started.attemptId,
+        leaseExpiresAt: new Date(Date.now() + 600_000),
+        workKey: `fixture-${started.id}`,
+      });
+      return started;
     });
-    return started;
+    try {
+      return await body(job);
+    } finally {
+      await db.delete(jobs).where(eq(jobs.id, job.id));
+    }
   });
-  try {
-    return await body(job);
-  } finally {
-    await db.delete(jobs).where(eq(jobs.id, job.id));
-  }
 }
 
 /**

@@ -101,23 +101,45 @@
  * loader in `./load-article.ts` does not take it: several of its callers hold
  * this lock already, and a nested take would deadlock every one of them.
  *
- * ## Why `store-roundtrip` and `store-parity` do not take this
+ * ## Why `store-roundtrip` and `store-parity` take this by the window, not the file
  *
- * Because the lock is held for the **whole file**, the budget above is a sum
- * over its holders, and `tests/store-roundtrip.test.ts` runs for **63 seconds**
- * (measured 2026-08-30; 190 cases over every article in `data/`). Holding the
- * lock across that would leave 57s of the 120s for everybody else, and two
- * concurrent runs would exceed the deadline outright — turning today's flake
+ * Because a file-scope take is held for the **whole file**, the budget above is
+ * a sum over its holders, and `tests/store-roundtrip.test.ts` runs for **63
+ * seconds** (measured 2026-08-30; 190 cases over every article in `data/`).
+ * Holding the lock across that would leave 57s of the 120s for everybody else,
+ * and two concurrent runs would exceed the deadline outright — turning a flake
  * into a hard, confident failure, which is worse.
  *
- * Those two already have what they need: `./corpus-lock.ts` serialises the pair
- * that actually collides, and `insertWhenSlotFree` inside `./load-article.ts`
- * waits out the slot. Their slot window is one fixture load, not the suite.
+ * So those two take it through `withRunLock` inside `loadArticleIntoPg`, for the
+ * length of one fixture load rather than one suite. Same key, same exclusion,
+ * a hold measured in hundreds of milliseconds.
  *
- * That is the rule for anything added later: **take this if you hold the slot,
- * unless holding it for your whole file would dominate the budget.** If a
- * locked file ever grows to that size, it wants the corpus-lock treatment
- * instead, not a bigger deadline.
+ * That is the rule for anything added later: **take this if you hold the slot;
+ * take it by the file if your fixtures are named the same on every run, and by
+ * the window if holding it for your whole file would dominate the budget.**
+ *
+ * ## Measuring this lock: read the `import` phase, not `tests`
+ *
+ * `takeRunLock` is called at module load, under a top-level `await`, so the wait
+ * lands entirely in vitest's **import** phase. The `tests` figure cannot see it.
+ * Measured 2026-08-30 on `store-job-draft`, with the key held from an outside
+ * `psql` session for 25s:
+ *
+ * ```
+ * solo        import 35.31s   tests 2.47s
+ * key held    import 62.72s   tests 2.56s
+ * ```
+ *
+ * The whole +27.4s is import; the test phase moved by 0.09s. Read the `tests`
+ * number and you would conclude the lock does nothing, having measured a phase
+ * it cannot touch.
+ *
+ * That split is also what tells a lock wait from ordinary contention, in a
+ * single pair of runs and without a quiet machine: background contention is
+ * *database* contention, so it inflates `tests`, where the queries are. A delay
+ * sitting wholly in `import` with query time flat is not something a busy tree
+ * can produce. (A dose-response confirms it too — hold for 10s and 30s and see
+ * the import track the hold — but the phase split does not need a second trial.)
  */
 import type { Pool, PoolClient } from "pg";
 
@@ -126,12 +148,20 @@ import type { Pool, PoolClient } from "pg";
  * point is that these files exclude *each other*.
  *
  * Distinct from `CORPUS_LOCK` (823_117_001) in `./corpus-lock.ts`, which is a
- * different resource: the real articles in `data/`. **No file holds both**, and
- * that is deliberate rather than incidental — see "Why store-roundtrip does not
- * take this" below. If you ever do give one file both, take this one first, at
- * module load, before its `beforeAll` reaches the corpus lock: a pair of locks
- * taken in two orders is the one way this can genuinely deadlock, and the
- * corpus lock uses the blocking `pg_advisory_lock`, which waits for ever.
+ * different resource: the real articles in `data/`.
+ *
+ * **Two files hold both**, and the order matters. `store-parity` and
+ * `store-roundtrip` take the corpus lock in `beforeAll` and reach this one
+ * inside `loadArticleIntoPg`, so for them it is corpus-then-run. No file-scope
+ * holder of this lock ever wants the corpus lock, so there is no cycle —
+ * **corpus outside, run inside**, and keep it that way. A pair of locks taken in
+ * two orders is the one way this can genuinely deadlock, and the corpus lock
+ * uses the blocking `pg_advisory_lock`, which waits for ever rather than
+ * reporting.
+ *
+ * (An earlier version of this comment said no file held both and told you to
+ * take this one first. Both halves were wrong once the window-scoped take
+ * landed; the ordering above is the one that is actually true.)
  */
 export const RUN_LOCK = 918_273_645;
 
@@ -148,6 +178,38 @@ const RUN_LOCK_WAIT_MS = 120_000;
 
 /** How often to ask. Short enough to be prompt, long enough not to spin. */
 const POLL_MS = 200;
+
+/**
+ * **Does this process already hold the lock?**
+ *
+ * Module-level, so it is per *file*: vitest runs each test file in its own fork
+ * with a fresh module graph (`pool: "forks"`, `isolate: true`, both defaults),
+ * so this flag is never shared between two files, and two files can never see
+ * each other's. It exists only to answer "have *I* already got it".
+ *
+ * `withRunLock` needs it because the twelve file-scope holders also call
+ * `loadArticleIntoPg`, which takes the lock for its slot window. Without the
+ * flag that is a second connection asking for a key the first connection holds
+ * — Postgres advisory locks are re-entrant within a *session* and these are two
+ * sessions — so it would poll until the deadline and then throw, in every one
+ * of those twelve files. Hence the guard, and hence the test that drives
+ * exactly that path.
+ */
+let heldByThisProcess = false;
+
+/**
+ * Options only the tests for this file pass.
+ *
+ * The deadline is injectable for the same reason `attempts`/`gapMs` are in
+ * `./running-slot.ts`: the failure this guards against presents as a **120
+ * second** wait naming a sibling that does not exist, and a branch nobody can
+ * afford to run twice is a branch nobody has seen work. At one second the
+ * re-entrancy case is an ordinary test.
+ */
+export interface RunLockOptions {
+  /** Overrides `RUN_LOCK_WAIT_MS`. Tests only. */
+  waitMs?: number;
+}
 
 export interface HeldRunLock {
   /**
@@ -169,7 +231,10 @@ export interface HeldRunLock {
  * message is that the reader learns which files are in the queue rather than
  * being told "a lock timed out".
  */
-export async function takeRunLock(suite: string): Promise<HeldRunLock> {
+export async function takeRunLock(
+  suite: string,
+  { waitMs = RUN_LOCK_WAIT_MS }: RunLockOptions = {},
+): Promise<HeldRunLock> {
   const url = process.env.DATABASE_URL;
   if (!url) {
     /* Callers are supposed to have run `pgReady` first, which returns
@@ -186,7 +251,7 @@ export async function takeRunLock(suite: string): Promise<HeldRunLock> {
   const pool: Pool = new Pool({ connectionString: url, max: 1 });
   const client = await pool.connect();
 
-  const deadline = Date.now() + RUN_LOCK_WAIT_MS;
+  const deadline = Date.now() + waitMs;
   for (;;) {
     const got = await client.query<{ got: boolean }>("select pg_try_advisory_lock($1) as got", [
       RUN_LOCK,
@@ -196,7 +261,7 @@ export async function takeRunLock(suite: string): Promise<HeldRunLock> {
       client.release();
       await pool.end();
       throw new Error(
-        `Waited ${RUN_LOCK_WAIT_MS}ms for advisory lock ${RUN_LOCK}: ${suite} could not get the ` +
+        `Waited ${waitMs}ms for advisory lock ${RUN_LOCK}: ${suite} could not get the ` +
           "single running job slot. Another suite that takes this lock is still running against " +
           "this database — a second `npm test`, or a copy of one of those files. If nothing is " +
           "actually running, a connection is wedged holding the lock; it goes when that process " +
@@ -205,6 +270,11 @@ export async function takeRunLock(suite: string): Promise<HeldRunLock> {
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
+
+  /* Set only once the key is actually in hand, never before the loop — a flag
+     set optimistically would make `withRunLock` skip the take on the strength
+     of a lock this process failed to get. */
+  heldByThisProcess = true;
 
   let released = false;
   return {
@@ -215,6 +285,7 @@ export async function takeRunLock(suite: string): Promise<HeldRunLock> {
          Postgres but ending an ended pool is not. */
       if (released) return;
       released = true;
+      heldByThisProcess = false;
       /* Explicit unlock first, so the lock is gone the moment this returns
          rather than whenever the socket closes. `pool.end()` would do it too;
          doing both means a slow teardown cannot delay the next file. */
@@ -223,4 +294,42 @@ export async function takeRunLock(suite: string): Promise<HeldRunLock> {
       await pool.end();
     },
   };
+}
+
+/**
+ * Hold the run lock for the length of `body`, unless this process already has it.
+ *
+ * **The window-scoped take**, for code that needs the running slot briefly
+ * rather than for a whole file — `loadArticleIntoPg` in `./load-article.ts` is
+ * the caller it was written for. A fixture load is one insert, some artefact
+ * writes and a delete; serialising *that* costs nothing, where serialising the
+ * suite around it would cost 63 seconds in `tests/store-roundtrip.test.ts`.
+ *
+ * **The early return is the whole point, and it is not an optimisation.** Five
+ * of the twelve file-scope holders call `loadArticleIntoPg` while holding the
+ * lock for their file. Taking it again would be a second *connection* asking
+ * for a key the first connection holds; advisory locks are re-entrant within a
+ * session and these are two sessions, so it would poll to the deadline and then
+ * throw — in five files at once, blaming a sibling that does not exist. The
+ * flag says "I already have it", which is true, and the body runs with the slot
+ * genuinely held. `tests/run-lock.test.ts` drives exactly that path.
+ *
+ * **Lock ordering.** This one is always the *inner* lock. `store-parity` and
+ * `store-roundtrip` hold `CORPUS_LOCK` across their `beforeAll` and reach this
+ * one through the fixture loader, so the order there is corpus-then-run; no
+ * file-scope holder of this lock ever wants the corpus lock, so there is no
+ * cycle. Keep it that way: **corpus outside, run inside.**
+ */
+export async function withRunLock<T>(
+  what: string,
+  body: () => Promise<T>,
+  options: RunLockOptions = {},
+): Promise<T> {
+  if (heldByThisProcess) return await body();
+  const lock = await takeRunLock(what, options);
+  try {
+    return await body();
+  } finally {
+    await lock.release();
+  }
 }
