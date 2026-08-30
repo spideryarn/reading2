@@ -43,7 +43,6 @@ import {
   FetchFailure,
   type FetchLike,
 } from "../src/fetch.js";
-import { DEADLINE_MARGIN_MS, LEASE_MS } from "../src/jobs.js";
 import { hashBlocks } from "../src/source-hash.js";
 import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
 import type { Block } from "../src/types.js";
@@ -951,19 +950,34 @@ describe("the wall-clock budget", () => {
   });
 
   /**
-   * The relationship, pinned rather than the number — the same shape
-   * `tests/jobs-lease-budget.test.ts` uses for the lease and `maxDuration`.
+   * **The real bound lives in `tests/jobs-lease-budget.test.ts`, and this is a
+   * pointer to it rather than a second copy.**
    *
-   * `LEASE_MS - DEADLINE_MARGIN_MS` is when the claimant aborts the step
-   * (src/jobs.ts). A budget at or above that is a budget that never bites, and
-   * it would deploy green: the only article that shows it is a slow one.
+   * There used to be an assertion here that `ASSETS_BUDGET_MS` was under 90% of
+   * one step's deadline. It went **quiet** on 2026-08-30 without anyone
+   * touching it: `LEASE_MS` was raised 420s → 760s in `38ea362` for reasons
+   * that had nothing to do with this step, and the bound is derived from
+   * `LEASE_MS`, so it silently loosened from permitting 340s to permitting
+   * **666s** — while the arithmetic that actually constrains this constant
+   * leaves it **399.6s** (740s deadline, less `toc` at 320.4s, less the cheap
+   * steps). It would have gone green on a budget 266s too large, and it was
+   * still passing when it was found.
+   *
+   * That is the failure this repo keeps writing up, in a new costume: not a
+   * guard that was deleted, but one whose *input* moved underneath it in
+   * another workstream, leaving something green, load-bearing-looking, and
+   * enforcing nothing. Nobody in either workstream could see it, because each
+   * side's own tests were correct.
+   *
+   * So the bound is asserted **once**, over the sum of every default step,
+   * against `maxDuration` — the one number that binds whether a job runs as one
+   * claim or several. Duplicating it here would put a second source of truth
+   * beside the constant, which is exactly how the first one drifted.
    */
-  it("finishes inside the deadline the job claimant gives a step", () => {
+  it("is bounded by the whole-job budget, asserted in tests/jobs-lease-budget.test.ts", () => {
+    /* Kept local because it is about this constant and cannot drift: a budget
+       of zero or less never bites, whatever the job model is. */
     expect(ASSETS_BUDGET_MS).toBeGreaterThan(0);
-    expect(ASSETS_BUDGET_MS).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
-    /* And with room to spare, because the bucket writes take no signal and are
-       not covered by it. */
-    expect(ASSETS_BUDGET_MS).toBeLessThan((LEASE_MS - DEADLINE_MARGIN_MS) * 0.9);
   });
 });
 

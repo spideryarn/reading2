@@ -134,7 +134,7 @@ export const CONCURRENCY = 2;
  *
  *     200 images ÷ 2 at a time × 2 attempts × 15s = 3,000s
  *
- * A step gets `LEASE_MS - DEADLINE_MARGIN_MS` = **400s** before the claimant
+ * A step gets `LEASE_MS - DEADLINE_MARGIN_MS` = **740s** before the claimant
  * aborts it (src/jobs.ts), and the platform kills the whole invocation at
  * `maxDuration: 800` (vercel.json). So the worst case is seven and a half times
  * the step's own deadline — and the way it ends is a platform kill, which is
@@ -158,7 +158,15 @@ export const CONCURRENCY = 2;
  * Sizing it against the ceiling rather than the corpus was the wrong
  * denominator, and it cost the whole ingest 120s of budget it did not need.
  *
- * The remainder below 400s is for the parts of the step this number cannot
+ * **What actually constrains this number is the whole job, not one step.** The
+ * default ingest sums to roughly `10 + 5 + 5 + 320.4 + this`, and that sum has
+ * to fit inside `maxDuration` — so at 180s it is ~520s against 800s. The
+ * per-step deadline is the looser bound of the two and quoting it here is what
+ * let an earlier guard in `tests/collect-assets.test.ts` go quiet when
+ * `LEASE_MS` moved for unrelated reasons. The single binding assertion lives in
+ * `tests/jobs-lease-budget.test.ts`.
+ *
+ * The remainder is for the parts of the step this number cannot
  * govern: `storeRawSource` takes no `AbortSignal` at all, so a slow bucket runs
  * past the deadline no matter what the fetches do, and the unwinding of
  * whatever was on the wire when it bit has to fit somewhere too.
