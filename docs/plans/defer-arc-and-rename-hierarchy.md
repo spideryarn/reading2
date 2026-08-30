@@ -274,17 +274,24 @@ Its additions:
 From `data/_ai-calls.jsonl`, the one ingest that logged both steps
 (`what-if-we-had-bigger-brains-imagi`):
 
+> **Corrected 2026-08-30.** The first version of this table summed the three label calls as though
+> they ran one after another. They do not — `src/labels.ts` runs them concurrently, and the ledger's
+> timestamps show all three starting at 163.1s and the last finishing at 186.2s. The sum was 65.2s;
+> the wall-clock contribution is 23.1s. Found by GPT Sol reviewing
+> `docs/research/opening-an-article-before-the-toc.md`, and verified from
+> `data/_ai-calls.jsonl`. The conclusion does not change; the denominator does.
+
 ```
-toc  structure call    163.1s  ████████████████████████████████
-toc  label batch ×3     65.2s  █████████████     (22.0 + 23.2 + 20.0)
-arc                     10.4s  ██
-                       ──────
-     total              238.6s
+                        start    end    wall-clock
+toc  structure call       0.0   163.1      163.1s  ████████████████████████████████
+toc  label batch ×3     163.1   186.2       23.1s  ████        (concurrent: 22.0, 23.2, 20.0)
+arc                     187.4   197.8       10.4s  ██
+                                          ────────
+     total                                 197.8s
 ```
 
-**Deferring arc removes ~4% of the wait** — about 10 seconds out of four minutes; ~5% if the label
-batches run in parallel rather than serially. The wait is the ToC, and within it the single
-structure call is ~70% of everything.
+**Deferring arc removes ~5% of the wait** — 10.4 seconds out of 197.8. The wait is the ToC, and
+within it the single structure call is **88%** of everything.
 
 n = 1: it is the only article in the log with both steps. The 35 calls with no `stepName` were
 checked in case they hid pipeline work — they are chat, embeddings and search. A 16:1 ratio is
