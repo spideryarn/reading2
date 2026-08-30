@@ -68,6 +68,9 @@ you read those two *before* you measure something, not after.
 - **[browser-testing.md](browser-testing.md)** — driving the reading view in a real browser, and the
   ways it lies to you: colour in a screenshot, a hidden tab that fires no scroll events, hovering by
   pixel rather than by element. Open this before any UI check.
+- **[claude-in-chrome.md](claude-in-chrome.md)** — getting the extension to talk to Claude Code in
+  the first place. `list_connected_browsers` returning `[]` is almost always the wrong Chrome
+  profile, not broken plumbing. Open this before you debug anything below the extension.
 - **[performance.md](performance.md)** — what the page costs at rest and while scrolling, the exact
   commands, and why render counts beat percentages. Open this before any CPU claim.
 - **[counting-lines.md](counting-lines.md)** — `npm run count-lines`: how big the thing is now, as a

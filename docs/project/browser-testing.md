@@ -6,7 +6,9 @@ does, **looking at it in a browser is the test harness for stage 6**, and that m
 writing down what to look at and where the eye lies to you.
 
 This doc is the how. What the client *is*: [web-client.md](web-client.md). Why the feature exists:
-[granularity-zoom.md](granularity-zoom.md).
+[granularity-zoom.md](granularity-zoom.md). If the extension isn't connected at all —
+`list_connected_browsers` comes back `[]` — that's a different problem and it lives in
+[claude-in-chrome.md](claude-in-chrome.md).
 
 ## Before anything, check the server is actually up
 
