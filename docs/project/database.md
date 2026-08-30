@@ -174,12 +174,19 @@ serves every article, the library, the metadata page and the reader's comments f
 instead of from disk; `files` remains the default. The work, and what is still missing, is in
 [postgres-storage-implementation.md](../plans/postgres-storage-implementation.md).
 
-**Writes do not.** Every pipeline stage still writes `data/<slug>/*.json` directly, so an article
-ingested with `SPIDERYARN_STORE=postgres` set produces files on disk and an empty draft revision
-that `publishRevision` then refuses. The job record moved on 2026-08-27
-([ingest-queue.md](ingest-queue.md)) and the artefacts did not, which is why an ingest still cannot
-run on a host without a writable disk. The plan for the other half, and an honest account of its
-size, is [transactional-stage-runner.md](../plans/transactional-stage-runner.md).
+**Writes still go to disk first, and since 2026-08-30 they are carried across at the end.** Every
+pipeline stage still writes `data/<slug>/*.json` directly. What changed is what happens when the job
+is over: under `SPIDERYARN_STORE=postgres` a `done` ending copies those files into a fresh draft and
+publishes it, in one transaction with the job's own finish
+([ingest-queue.md § A finished job publishes the article](ingest-queue.md#a-finished-job-publishes-the-article-and-until-2026-08-30-it-did-not)).
+Before that the ingest produced files on disk and an empty draft revision that `publishRevision`
+refused, and the reader's shelf stayed empty.
+
+That is a carry-across, not the end state: an ingest still needs a writable disk for the length of
+the job, so the host question is unchanged and only the *publication* has moved. The plan for the
+other half — stages that return their products instead of writing files — is
+[delete-the-importer.md](../plans/delete-the-importer.md) § D3–D5, and
+[transactional-stage-runner.md](../plans/transactional-stage-runner.md) is the design it came from.
 
 **There is one caller of `ArtifactStore.write()` now, and nothing reaches it yet.** Since 2026-08-29
 a step returns a *product* — `{ detail, parts?, stamp? }` — and the commit after it
