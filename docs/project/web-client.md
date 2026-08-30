@@ -43,7 +43,7 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) + [`useChat.ts`](../../src/web/useChat.ts) | **chat**, in the band between the spine and the prose: threads, the streamed answer, the block-id chips that jump the article, and what a turn can have done to it — copy, retry, edit, **stop** — [chat-mode.md](../plans/chat-mode.md), and [§ What a turn can have done to it](../plans/chat-mode.md#what-a-turn-can-have-done-to-it) for why a stop is a `done` rather than an error |
 | [`src/web/citations.ts`](../../src/web/citations.ts) | the block ids in a model's answer, found and checked against the article — pure, DOM-free, and the piece of chat that carries the contract — [chat-mode.md § The citation contract](../plans/chat-mode.md#the-citation-contract) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
-| [`src/web/position.ts`](../../src/web/position.ts) | reading position → the section that goes in `?at=` |
+| [`src/web/position.ts`](../../src/web/position.ts) | reading position → what goes in `?at=`, and the one rule about when the scroll spy may overwrite it |
 | [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns |
 | [`src/web/scroll.ts`](../../src/web/scroll.ts) | `scrollToBlock`, shared so a restore and a jump land identically; the flat-duration glide, and `stickyOffset()` |
 | [`src/web/keynav.ts`](../../src/web/keynav.ts) | ↑ / ↓ nav, aimed by the pointer — [keyboard.md](keyboard.md) |
@@ -344,9 +344,8 @@ that mismatch shipped a bug that nobody working on it could see.
 
 Every `fetch` in the client reads its response through
 [`src/web/lib/api.ts`](../../src/web/lib/api.ts) — `readJson` when the body is
-wanted, `failure` when the caller has already decided the request failed and only
-needs the error. There are two rules in it and both are there because they were
-once broken:
+wanted, `fetchOk` when it is not, and `failure` underneath both. There are two
+rules in it and both are there because they were once broken:
 
 **Read the text once, then decide.** Twelve call sites had each written the same
 careful four lines:
@@ -386,6 +385,44 @@ browser already has a console — but before this, nothing reached it at all.
 neighbouring case and stays where it is: it names the failure where the request
 never got a *response at all*, which is a different thing from a response that
 says no.
+
+### A write nobody reads the answer to
+
+`readJson` makes the check unforgettable for a call whose body you want — you
+cannot get the body without it. The calls with nothing to read had no such
+protection, and the same omission shipped twice: a DELETE whose response was
+never looked at took the row off the screen and said nothing, so the reader saw
+it gone and found it back after a reload (`forget` in
+[`useComments.ts`](../../src/web/useComments.ts), then again in
+[`useSearch.ts`](../../src/web/useSearch.ts)). `fetchOk` is that check made
+unforgettable in the same way — **asking and checking are one act** — and the six
+sites that send a DELETE, a POST or a PATCH now go through it.
+
+Three kinds of site deliberately do **not**:
+
+- **A response about to be streamed.** `if (!r.ok || !r.body)` asks a second
+  question, and a stream can end by simply stopping, which looks exactly like
+  finishing. `useComments` § `answer`, `useSearch` § `run`, `chat/effects.ts`.
+- **A status that is an answer.** A 404 from `/api/ideas/:slug` means nobody has
+  asked for ideas yet; a 409 from the chat stream means somebody else is already
+  answering; `/api/public/…` answers 404 for a piece that is not shared. Those
+  callers read the status before deciding, and throwing would report an ordinary
+  state as a fault.
+- **A fetch that is not ours.** The Wikipedia summary in `link-facts.ts` and the
+  Supabase settings probe in `lib/supabase.ts` both treat a non-2xx as *nothing
+  to show*, which is not a thing to tell anybody about.
+
+[`tests/refused-writes-are-reported.test.tsx`](../../tests/refused-writes-are-reported.test.tsx)
+is the measure taken from outside, and its shape matters twice. It mocks **none**
+of `lib/api.js`, because `fetchOk` calls `apiFetch` inside the module — so the
+`vi.mock("…/lib/api.js", { apiFetch })` seam two neighbouring tests use does not
+reach it, and a mocked `fetchOk` would be a test asserting against its own fake.
+And one of its cases is a 500 whose body dies mid-read, which is the only thing
+that separates `fetchOk` from letting `readJson` make the same check: `failure`
+reads the body with a `.catch` and `readJson` does not, so without it a refusal on
+a cut connection reaches the reader as `describeFetchFailure`'s *"Couldn't reach
+the dev server"* — false, and unactionable, for somebody on a production page
+whose server answered perfectly well.
 
 ## Empty is not the same as not asked yet
 
