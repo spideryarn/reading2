@@ -46,8 +46,8 @@ of compression, down the page for position and across for detail. Read that firs
   name block ids.
 - **[search.md](search.md)** — one box, two matchers, hits marked in the prose, and the shape of a
   search painted into the spine. Long; open it for the confidence unit or the colours.
-- **[diagram.md](diagram.md)** — the article's shape as a picture: four of them, what each can and
-  cannot promise, the four that were cut, and why nothing was installed to draw them.
+- **[diagram.md](diagram.md)** — the article's shape as a picture: three of them, what each can and
+  cannot promise, the five that were cut, and why nothing was installed to draw them.
 
 ### Marking a passage, and asking about one
 

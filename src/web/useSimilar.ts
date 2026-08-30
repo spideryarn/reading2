@@ -14,7 +14,7 @@
  * **`enabled` is the whole gate.** This is the only fetch in the reading view
  * that spends money without a button labelled with what it costs. Pressing a
  * diagram toggle is not a purchase decision, so the request happens on exactly
- * one of the six pictures and never on the other five — and the moment `force`
+ * one of the three pictures and never on the other two — and the moment `force`
  * is no longer the picture, nothing further is requested. Cheap, bounded and
  * cached, but the bound has to be somewhere and this is it.
  *

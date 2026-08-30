@@ -221,7 +221,7 @@ genuinely new information; Tree supplies the legible explanation of it."*
    claims across the code and docs said otherwise — including that it "shares the
    spine's axis exactly", when the spine measures rendered pixels. All three
    corrected, and the gap written up as the next change worth making. (Strata
-   was cut on 2026-08-27 — [diagram.md § There were eight](../project/diagram.md#there-were-eight-and-four-were-cut).)
+   was cut on 2026-08-27 — [diagram.md § There were eight](../project/diagram.md#there-were-eight-and-five-are-gone).)
 8. **Two documentation claims contradicted the files**: a comment said the Luna
    answer was quoted in this plan when the plan says it was kept out of git, and
    this section promised reviews "below" when there was nothing below.

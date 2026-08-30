@@ -14,19 +14,24 @@
  * **`enabled` is the whole gate.** This and `useSimilar` are the only fetches
  * in the reading view that spend money without a button saying so. Pressing a
  * diagram toggle is not a purchase decision, so the request happens on exactly
- * the two pictures that draw it and never on the other six. The vectors are
+ * the two pictures that draw it and never on the third. The vectors are
  * shared with `useSimilar`'s answer on the server, so a reader who has already
  * opened Force pays only for the arithmetic.
  *
- * **It never blocks the picture.** Unlike Force — which is four fifths drawn
- * without any of this — Drift and Trail have *nothing* to draw without it, so
- * they fall back to `tree` until the answer lands (see `layoutDiagram`) and
- * the strip beside the picture says what is happening. A picture of something
- * real with a line of explanation beats a spinner over an empty box.
+ * **It blocks the picture, and the picture says so.** Unlike Force — which is
+ * four fifths drawn without any of this — Drift and Trail have *nothing* to
+ * draw without it. Until 2026-08-30 they borrowed the Tree while they waited,
+ * on the reasoning that a picture of something real with a line of explanation
+ * beats a spinner over an empty box. The Tree has been cut, and the reasoning
+ * had a hole in it anyway: a mode that answers a question you did not ask,
+ * under small type explaining that it is not the picture you pressed, is a
+ * worse failure than an honest wait. `layoutDiagram` now returns null and the
+ * panel draws the spinner (DiagramPanel.tsx § Waiting).
  *
- * **A failure is not a blank.** If the request fails the strip says so in
- * words, and the fallback picture stays. Silently drawing the wrong picture is
- * the [silent-success](../../docs/reusable/silent-success.md) shape.
+ * **A failure is not a blank.** If the request fails, the reason — the
+ * server's own words, ending in a code the reader can quote — stands where the
+ * picture would have been. Failing to nothing at all is the
+ * [silent-success](../../docs/reusable/silent-success.md) shape.
  */
 import { useEffect, useState } from "react";
 import type { ProjectionPoint, ProjectionResponse, SkipCounts } from "../types.js";

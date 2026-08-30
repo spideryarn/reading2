@@ -292,8 +292,12 @@ charged to an unrelated state change.
 
 ### Scrolling no longer re-runs the force simulation
 
+(Written when there were six pictures; five have since been cut and only Force, Drift and Trail are
+left — [diagram.md](diagram.md). The fix and the measurement below stand, and Force is still the
+expensive layout the saving is about.)
+
 `atRow` — the reader's position — was a dependency of the diagram layout memo for all six pictures.
-`arc`, `force` and `cluster` return `nowY: null` and never look at it, so for those three it was a
+`arc`, `force` and `cluster` returned `nowY: null` and never looked at it, so for those three it was a
 dependency nobody read — and scrolling with `Force` open re-ran a 300-tick d3 simulation (**39ms at
 60 sections, 113ms at 150**) to produce a picture identical to the one it had just thrown away, once
 per section, all the way down the article. Those three are also the expensive layouts, so excluding

@@ -112,7 +112,8 @@ It also refuses to work at all on the filesystem store — `requirePostgres()` a
 misconfigured dev server cannot serve a half-implemented public path.
 
 **What is deliberately *not* here:** diagram mode. `src/web/visitor.ts`'s `COSTS` table marks it
-owners-only unconditionally, because two of its four pictures POST for embeddings and spend money;
+owners-only unconditionally, because all three of its pictures POST for embeddings and spend money —
+two of four did until the free one, Tree, was cut on 2026-08-30;
 the gate is real on the server too, since `/api/similar/:slug` and `/api/projection/:slug` sit
 behind `requireUser`. The client-side gate is a courtesy; the server-side one is the defence.
 

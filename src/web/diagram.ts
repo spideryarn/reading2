@@ -1,6 +1,14 @@
 /**
- * **The Diagram mode's shared vocabulary, and the one picture that is an
- * outline** — computed as pure numbers so it can be tested without a browser.
+ * **The Diagram mode's shared vocabulary** — the words every picture is
+ * described in, computed as pure numbers so they can be tested without a
+ * browser.
+ *
+ * No picture is laid out here any more. `force` is
+ * [diagram-d3.ts](./diagram-d3.ts) over [graph.ts](./graph.ts); `drift` and
+ * `trail` are [scatter.ts](./scatter.ts) over the server's projection. What is
+ * left in this file is what all three need — `DiagramNode`, `DiagramLink`,
+ * `walk`, `wrapText`, `LABEL_PX` — plus the two readers of a finished layout,
+ * `stepStops` and `nodeAt`.
  *
  * Greg, 2026-08-26:
  *
@@ -11,12 +19,16 @@
  * > will take up a few columns in the middle, so it should probably be
  * > vertically narrow, and think of the article's ordering as top to bottom.
  *
- * ## Nothing was installed **for these three**, and that is a finding
+ * ## Nothing was installed for the hand-rolled outline, and that is a finding
  *
- * Read this as history rather than as current fact: three more pictures arrived
- * on 2026-08-27 and they *are* D3-driven, over a richer data structure that did
- * not exist when the survey below was run. See [diagram-d3.ts](./diagram-d3.ts)
- * for what changed and why the argument here still stands for the tree pictures.
+ * Read this as history rather than as current fact. It is the survey that was
+ * run for the original `tree` picture, which was hand-rolled here and was cut
+ * on 2026-08-30; the three pictures that are left *are* D3-driven, over a
+ * richer data structure that did not exist when the survey was run. It stays
+ * because it is the reasoning behind the one property none of them gave up —
+ * down the page is later in the article — and because the next person to reach
+ * for a mindmap library should read it before they do. See
+ * [diagram-d3.ts](./diagram-d3.ts) for what changed.
  *
  * GPT-5.6 Luna was sent to survey the field first, per
  * docs/reusable/third-party-library-selection.md — d3-hierarchy, @visx/hierarchy,
@@ -39,40 +51,34 @@
  *  - Markmap and Mermaid mindmaps expand *sideways*. In this band that is not a
  *    styling problem, it is the wrong shape.
  *
- * So: hand-rolled SVG, one dependency-free module, and the layout arithmetic
- * lives here rather than inside a component, because that is what makes the
- * three sorting rules below testable.
+ * So: hand-rolled SVG, dependency-free modules, and the layout arithmetic lives
+ * in its own file rather than inside a component, because that is what makes it
+ * testable.
  *
- * ## What is left, after the cut
+ * ## What is left, after the cuts
  *
  * ```
- *        tree                  force              drift / trail
- *   ┌───────────────┐   ┌───────────────┐    ┌───────────────┐
- *   │ ● Being You   │   │    ◯───◯      │    │  ·   ·  ·     │
- *   │ ├─● 1 Waking  │   │   ╱ ╲ ╱       │    │ ·  ·   ·  ·   │
- *   │ │ └─● 1.1 The │   │  ◯───◯····◯   │    │   ·  ·        │
- *   │ │    body     │   │   ╲   ╲       │    │  ·   ·  ·   · │
- *   │ ├─● 2 The     │   │    ◯───◯      │    │ ·  ·      ·   │
- *   │ └─● 3 Being   │   │                │    │   ·  ·  ·     │
- *   └───────────────┘   └───────────────┘    └───────────────┘
- *    depth as indent    sections pulled       one dot per
- *    and elbows;        together by the       paragraph, placed
- *    one row each       words they share      by what it is about
+ *          force                    drift / trail
+ *   ┌───────────────┐            ┌───────────────┐
+ *   │    ◯───◯      │            │  ·   ·  ·     │
+ *   │   ╱ ╲ ╱       │            │ ·  ·   ·  ·   │
+ *   │  ◯───◯····◯   │            │   ·  ·        │
+ *   │   ╲   ╲       │            │  ·   ·  ·   · │
+ *   │    ◯───◯      │            │ ·  ·      ·   │
+ *   │               │            │   ·  ·  ·     │
+ *   └───────────────┘            └───────────────┘
+ *    sections pulled              one dot per
+ *    together by the              paragraph, placed
+ *    words they share             by what it is about
  * ```
  *
- * Only the first is in this file. `force` is [diagram-d3.ts](./diagram-d3.ts)
- * over [graph.ts](./graph.ts); `drift` and `trail` are
- * [scatter.ts](./scatter.ts) over the server's projection. What they all share
- * — `DiagramNode`, `DiagramLink`, `wrapText`, `LABEL_PX` — lives here, which is
- * why a router that knows about all three is its own file
- * ([diagrams.ts](./diagrams.ts)) rather than a function at the bottom of this
- * one.
+ * Neither is in this file, and what they share is. That is why a router that
+ * knows about both is its own file ([diagrams.ts](./diagrams.ts)) rather than a
+ * function at the bottom of this one.
  *
- * **`tree` keeps document order but not document scale**: every node gets the
- * room its label needs. That was a deliberate split while `strata` existed to
- * be the honest-about-proportion half of the pair, and it is worth saying
- * plainly that the pair is now a single: nothing in this mode is to scale any
- * more. The spine beside the band still is.
+ * **Nothing in this mode is to scale.** That was already true once `strata`
+ * went, and the spine beside the band is still where the reader gets a sense of
+ * proportion.
  *
  * ## Why text is wrapped by counting characters
  *
@@ -92,26 +98,38 @@ import type { SummaryNode } from "./tree.js";
 /**
  * Which picture. In the URL as `?diagram=` — see params.ts § diagramParam.
  *
- * **Four, and there were eight.** Greg cut Strata, Mindmap, Arc and Cluster on
- * 2026-08-27, and the four that went share one property: each of them was a
- * second way of drawing something another picture already draws. Mindmap and
- * Cluster were both the containment tree with different geometry — the
- * comparison GPT Sol had already said `tree` won. Arc drew the vocabulary edges
- * that `force` draws, on a line rather than in a plane. Strata was the odd one
- * out and the real loss: it was to scale, and nothing here is any more. Its
- * question — *how much of the piece is that section?* — is now answered by the
- * spine beside the band and by the paragraph count on a tree row, which is
- * weaker and is the price of a toggle bar you can take in at a glance.
+ * **Three, and there were eight.** Greg cut Strata, Mindmap, Arc and Cluster on
+ * 2026-08-27, and Tree on 2026-08-30. All five share one property: each was a
+ * second way of drawing something the reader could already get elsewhere.
+ * Mindmap and Cluster were the containment tree with different geometry. Arc
+ * drew the vocabulary edges that `force` draws, on a line rather than in a
+ * plane. And Tree, which outlasted them by three days, was the contents page
+ * with dots on it —
  *
- * What is left is one picture per **kind of thing to say**: `tree` is the
- * outline (this file), `force` is the relationships a tree cannot hold
- * ([diagram-d3.ts](./diagram-d3.ts) over [graph.ts](./graph.ts)), and `drift`
- * and `trail` are the article as paragraphs placed by meaning
- * ([scatter.ts](./scatter.ts)). The order runs from the most faithful to the
- * article's own shape to the most interpretive, which is also from cheapest to
- * most surprising: the first costs nothing, the last three cost a model call.
+ * > it's not interesting enough to keep, and it overlaps too much with
+ * > Hierarchy and Outline mode etc.
+ * >
+ * > — Greg, 2026-08-30
+ *
+ * Strata is still the odd one out and the real loss: it was to scale, and
+ * nothing here is any more. Its question — *how much of the piece is that
+ * section?* — is answered by the spine beside the band, which is weaker and is
+ * the price of a toggle bar you can take in at a glance.
+ *
+ * What is left is one picture per **kind of thing to say**: `force` is the
+ * relationships an outline cannot hold ([diagram-d3.ts](./diagram-d3.ts) over
+ * [graph.ts](./graph.ts)), and `drift` and `trail` are the article as
+ * paragraphs placed by meaning ([scatter.ts](./scatter.ts)). The order runs
+ * from the most faithful to the article's own shape to the most interpretive.
+ *
+ * **All three now cost a model call**, which is what ended the argument for a
+ * free default. `force` is the cheapest of them and the only one that draws
+ * something real before its answer lands — four of its five kinds of line are
+ * arithmetic over prose the browser already holds — so it is the default, and
+ * the other two show a spinner rather than borrowing a picture that is not
+ * theirs. See [diagrams.ts](./diagrams.ts).
  */
-export const DIAGRAMS = ["tree", "force", "drift", "trail"] as const;
+export const DIAGRAMS = ["force", "drift", "trail"] as const;
 export type DiagramKind = (typeof DIAGRAMS)[number];
 
 /**
@@ -194,8 +212,8 @@ export interface DiagramNode {
  * file, and a type going the other way would be an import cycle, which
  * `npm run check` gates on (docs/project/static-analysis.md).
  *
- * The three tree pictures leave `kind` unset: on a tree every line is
- * containment, so naming it would be ceremony.
+ * The cut tree pictures left `kind` unset, on the grounds that on a tree every
+ * line is containment. It is required now — see `DiagramLink.kind` below.
  */
 export type LinkKind = (typeof LINK_KINDS)[number];
 
@@ -222,20 +240,18 @@ export interface DiagramLink {
   d: string;
   part: number;
   /**
-   * **A per-picture rendering band, and it means three different things.**
+   * **A per-picture rendering band, and it means a different thing in each.**
    *
-   * On `tree` and `mindmap` it is the depth of the node the line hangs off. On
-   * `arc` it is the edge's *weight*, quantised into the three stroke widths the
-   * stylesheet has. On `force` it used to be the edge's *kind* — 0 for
-   * sequence, 1 for parent, 2 for vocabulary — which worked for exactly three
-   * kinds and stopped working at five.
+   * On `force` it is the depth of the node the line hangs off; on `trail` it is
+   * the step of the sequential ramp the segment is painted at. It has also been
+   * an edge's quantised *weight* (`arc`, cut) and an edge's *kind* (`force`,
+   * until five kinds outgrew three numbers) — that last use is what `kind`
+   * below replaced.
    *
-   * That third use is what `kind` below replaced. The other two are left alone
-   * because each picture's stylesheet is written against them, and the honest
-   * description of this field is that it is a channel a layout may use, not a
-   * fact about the graph. GPT Sol pointed out that Arc had already made it one;
-   * pretending otherwise here would be the kind of comment that is worse than
-   * none.
+   * The honest description of this field is that it is a channel a layout may
+   * use, not a fact about the graph. GPT Sol pointed out that Arc had already
+   * made it one; pretending otherwise here would be the kind of comment that is
+   * worse than none.
    */
   depth: number;
   /**
@@ -243,9 +259,8 @@ export interface DiagramLink {
    *
    * An optional discriminator would leave the exact trap this replaced: a sixth
    * kind of Force edge could be added, forget to say what it is, and compile.
-   * Every layout therefore names the kind of every line it draws — and on the
-   * tree pictures that is not ceremony, because every line there really is
-   * containment and saying so costs one word.
+   * Every layout therefore names the kind of every line it draws, even where a
+   * picture only ever draws one kind and saying so costs a word.
    */
   kind: LinkKind;
   /**
@@ -363,7 +378,6 @@ const CHAR_W = 0.52;
 export const UNLABELLED: ReadonlySet<DiagramKind> = new Set<DiagramKind>(["drift", "trail"]);
 
 export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
-  tree: { 0: 12, 1: 12, 2: 12 },
   // Only a number goes inside a force bubble, and it is small.
   force: { 0: 10, 1: 10, 2: 10 },
   /* Nothing is written on a scatter dot at all — `lines` is always empty
@@ -373,9 +387,6 @@ export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
   drift: { 0: 11, 1: 11, 2: 11 },
   trail: { 0: 11, 1: 11, 2: 11 },
 };
-
-/** The gist's size, on the one picture that draws one. Same contract as above. */
-export const GIST_PX = 10.5;
 
 /**
  * Baseline-to-baseline step, by picture and by which half of the label a line
@@ -388,7 +399,6 @@ export const GIST_PX = 10.5;
  * as slightly uneven spacing rather than as an overflow.
  */
 export const LINE_STEP: Record<DiagramKind, { title: number; gist: number }> = {
-  tree: { title: 15, gist: 12 },
   // Force puts one line on a node and the rest in the footer card.
   force: { title: 12, gist: 12 },
   // The two scatters write nothing on a dot; everything is in the card.
@@ -482,11 +492,11 @@ export function wrapText(text: string, maxChars: number, maxLines: number): stri
  *
  * `buildSummaryTree` already stops at 2 by default and `DiagramBand` takes the
  * default, so today this changes nothing. It is here because the layouts
- * silently assume it — `layoutTree` indents by depth and would run a fourth
- * level off the right edge of a 288px band, and the stylesheet has font sizes
- * for `diag-d0` to `diag-d2` and nothing below. Raising `buildSummaryTree`'s
- * limit for some other caller must not quietly change what this file draws, so
- * the ceiling is asserted here rather than inherited.
+ * silently assume it — the stylesheet has font sizes and fills for `diag-d0` to
+ * `diag-d2` and nothing below, and `graph.ts` calls a node at this depth a leaf
+ * whether or not it has children. Raising `buildSummaryTree`'s limit for some
+ * other caller must not quietly change what these pictures draw, so the ceiling
+ * is asserted here rather than inherited.
  */
 export const MAX_DRAWN_DEPTH = 2;
 
@@ -517,98 +527,6 @@ export function walk(
   return out;
 }
 
-/* ── tree: the picture that is legible ──────────────────────────────────── */
-
-const TREE_INDENT = 15;
-const TREE_LEFT = 12;
-const TREE_GAP = 7;
-const DOT_R = 3.5;
-
-/**
- * **Tree** — a vertical outline with elbow connectors, one row per node, each
- * row as tall as its own text needs.
- *
- * Luna's shape, and the reason it is this rather than `d3-hierarchy.tree()`:
- * *"assign `y` by a preorder traversal, advance `y` by the rendered height of
- * each visible node"*. A tidy tree balances leaves against each other; an
- * article outline wants them in the order they were written, each taking the
- * room its own name needs.
- *
- * A gist is drawn only on nodes shallower than 2 — at depth 2 there are enough
- * of them that the picture stops being a picture and becomes the summary panel,
- * which already exists and is better at it.
- */
-export function layoutTree(root: SummaryNode, opts: DiagramOptions): DiagramLayout {
-  const entries = walk(root, opts.collapsed);
-  const nodes: DiagramNode[] = [];
-  const links: DiagramLink[] = [];
-  /** Where each node's dot ended up, so its children can draw back to it. */
-  const anchors = new Map<NodeId, { x: number; y: number }>();
-
-  let y = 10;
-  for (const e of entries) {
-    const { node: n } = e;
-    const depth = n.node.depth;
-    const dotX = TREE_LEFT + depth * TREE_INDENT;
-    const textX = dotX + 9;
-    const avail = opts.width - textX - 26; // 26 keeps the ¶ count clear of the text
-    const label = n.number ? `${n.number}  ${n.node.title}` : n.node.title;
-    const titleLines = wrapText(label, charsThatFit(avail, LABEL_PX.tree[depth] ?? 12), 2);
-    const gistLines =
-      depth < 2 && n.gist && !e.collapsed
-        ? wrapText(n.gist, charsThatFit(avail, GIST_PX), depth === 0 ? 3 : 2)
-        : [];
-    const h = titleLines.length * LINE_STEP.tree.title + gistLines.length * LINE_STEP.tree.gist;
-    const dotY = y + LINE_STEP.tree.title / 2;
-
-    const parent = n.node.parent === null ? undefined : anchors.get(n.node.parent);
-    if (parent) {
-      /* An elbow with a rounded corner: straight down the parent's column, a
-         quarter turn, straight across to the child. Drawn from the PARENT's x
-         so that several children share one vertical stroke — which is what
-         makes the indent read as a tree rather than as a list of dashes. */
-      const r = Math.min(6, Math.max(0, dotX - parent.x), Math.max(0, dotY - parent.y));
-      links.push({
-        id: `${n.node.parent}-${n.node.id}`,
-        d: `M ${parent.x} ${parent.y + DOT_R} V ${dotY - r} Q ${parent.x} ${dotY} ${parent.x + r} ${dotY} H ${dotX - DOT_R}`,
-        part: e.part,
-        depth,
-        kind: "parent",
-      });
-    }
-    anchors.set(n.node.id, { x: dotX, y: dotY });
-
-    nodes.push({
-      id: n.node.id,
-      blockId: n.node.range[0],
-      depth,
-      number: n.number,
-      title: n.node.title,
-      ...(n.gist !== undefined && { gist: n.gist }),
-      blocks: n.blocks,
-      startRow: n.startRow,
-      endRow: n.endRow,
-      part: e.part,
-      // The hit target is the whole row, not the dot: a 7px circle is not a
-      // click target, and the row is what the reader thinks they are pointing at.
-      x: 0,
-      y,
-      w: opts.width,
-      h: h + TREE_GAP,
-      labelX: textX,
-      labelY: y + 11,
-      anchor: "start",
-      lines: [...titleLines, ...gistLines],
-      titleLines: titleLines.length,
-      hasChildren: n.children.length > 0,
-      collapsed: e.collapsed,
-    });
-    y += h + TREE_GAP;
-  }
-
-  return { width: opts.width, height: Math.max(opts.height, y + 10), nodes, links, axis: null, nowY: null };
-}
-
 /**
  * One rung of the step ladder: a row, and what pressing there jumps to.
  *
@@ -626,16 +544,16 @@ export interface StepStop {
  * and what the panel's ↑ / ↓ buttons walk.
  *
  * Rows rather than nodes, and that is the first half of the design. A layout's
- * `nodes` are in *preorder*, so on a tree the root, part 1 and section 1.1 all
+ * `nodes` are in *preorder*, so on Force the root, part 1 and section 1.1 all
  * begin on the same row: stepping by node would press ↓ three times and move
  * the article nowhere, which reads as a broken button. Distinct rows make one
  * press always one visible move — and they make the *unit* come out right by
- * itself, sections on the tree pictures and single paragraphs on the two
- * scatters, because those are the rows those pictures draw.
+ * itself, sections on Force and single paragraphs on the two scatters, because
+ * those are the rows those pictures draw.
  *
  * **The row is the row of `blockId`, not `startRow`, and that is the second
- * half.** They agree on every tree picture, where a node's range begins at the
- * block it jumps to. They do **not** agree on a scatter: a dot's range is
+ * half.** They agree on Force, where a node's range begins at the block it
+ * jumps to. They do **not** agree on a scatter: a dot's range is
  * stretched to tile the article so that a reader standing in a paragraph too
  * short to embed still has a dot answering for them (scatter.ts § dots), so the
  * first dot claims `startRow: 0` while its block may be the third paragraph.

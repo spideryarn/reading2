@@ -508,23 +508,25 @@ describe("runsParam and the legacy run= it replaced", () => {
  * every other parser in params.ts makes, and worth pinning for the two newest.
  */
 describe("the diagram parameters", () => {
-  it("takes any of the four pictures and falls back to the free one", () => {
-    expect(diagramParam.parse("tree")).toBe("tree");
+  it("takes any of the three pictures and falls back to the one that draws first", () => {
     expect(diagramParam.parse("force")).toBe("force");
     expect(diagramParam.parse("drift")).toBe("drift");
     expect(diagramParam.parse("trail")).toBe("trail");
     // A picture from a version this build has never heard of.
     expect(diagramParam.parse("hyperbolic")).toBeNull();
-    /* **And one this build used to have.** Strata, Mindmap, Arc and Cluster
-       were cut on 2026-08-27, and a `?diagram=strata` in somebody's bookmark
-       has to open the Tree rather than a broken page — which is the same rule
-       as the line above, and the one that has an actual link behind it. */
+    /* **And ones this build used to have.** Strata, Mindmap, Arc and Cluster
+       were cut on 2026-08-27 and Tree on 2026-08-30, and a `?diagram=strata` or
+       `?diagram=tree` in somebody's bookmark has to open a real picture rather
+       than a broken page — the same rule as the line above, and the one that
+       has an actual link behind it. `tree` is the one to watch: it was the
+       default for three days, so it is in the most bookmarks. */
     expect(diagramParam.parse("strata")).toBeNull();
     expect(diagramParam.parse("mindmap")).toBeNull();
-    /* `tree` because it is the only picture that costs nothing: the other three
-       all spend a model call the moment they are drawn, and a URL somebody
-       mistyped should not bill them. */
-    expect(diagramParam.defaultValue).toBe("tree");
+    expect(diagramParam.parse("tree")).toBeNull();
+    /* `force` because it is the only one that draws anything before a model has
+       answered: four of its five kinds of line are arithmetic over prose the
+       browser already holds. The other two would open on a spinner. */
+    expect(diagramParam.defaultValue).toBe("force");
   });
 
   it("defaults sideways to lanes, and refuses anything it cannot draw", () => {

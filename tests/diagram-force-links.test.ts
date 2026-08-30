@@ -22,9 +22,22 @@ import { describe, expect, it } from "vitest";
 import type { Block, BlockId, NodeId, SimilarPair, Tree } from "../src/types.js";
 import { buildGraph } from "../src/web/graph.js";
 import { layoutDiagram } from "../src/web/diagrams.js";
+import type { DiagramLayout } from "../src/web/diagram.js";
 import { arrowPath, type Sim, type SimLink, strengthOf } from "../src/web/diagram-d3.js";
 import { relatedFor } from "../src/web/DiagramPanel.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
+
+/**
+ * `layoutDiagram` returns null when a picture's data has not arrived
+ * (src/web/diagrams.ts). Every call in this file hands it a graph, so a null
+ * here is a bug in the test rather than a case to handle — and it has to throw
+ * rather than be asserted away, or a router that quietly stopped drawing Force
+ * would turn every assertion below into a skipped one.
+ */
+function drawn(layout: DiagramLayout | null): DiagramLayout {
+  if (layout === null) throw new Error("layoutDiagram drew nothing with its data supplied");
+  return layout;
+}
 
 function block(id: string, text: string, html?: string): Block {
   return {
@@ -498,15 +511,15 @@ describe("semantic edges", () => {
        the simulation actually ran with them. */
     const { root, blocks } = twoParts();
     const opts = { width: 320, height: 600, collapsed: NONE };
-    const before = layoutDiagram("force", root, opts, buildGraph(root, blocks));
-    const after = layoutDiagram(
+    const before = drawn(layoutDiagram("force", root, opts, buildGraph(root, blocks)));
+    const after = drawn(layoutDiagram(
       "force",
       root,
       opts,
       buildGraph(root, blocks, NONE, [
         { a: blocks[0]?.id ?? "", b: blocks[6]?.id ?? "", score: 0.95 },
       ]),
-    );
+    ));
     const xOf = (l: typeof before, id: string) => l.nodes.find((n) => n.id === id)?.x ?? 0;
     expect(xOf(after, "n3")).not.toBeCloseTo(xOf(before, "n3"));
   });
@@ -515,27 +528,27 @@ describe("semantic edges", () => {
 // ----------------------------------------------------------------- paint
 
 describe("what the force picture draws", () => {
-  it("names the kind of every line, on every picture", () => {
+  it("names the kind of every line", () => {
     /* `DiagramLink.kind` is required precisely so this cannot regress into a
        line that forgot to say what it claims — but a required field with a
        `?? "parent"` somewhere would satisfy the compiler and not this. */
     const { root, blocks } = twoParts();
     const opts = { width: 320, height: 600, collapsed: NONE };
     const graph = buildGraph(root, blocks);
-    for (const kind of ["tree", "force"] as const) {
-      for (const l of layoutDiagram(kind, root, opts, graph).links) {
-        expect(l.kind, `${kind} link ${l.id}`).toBeTruthy();
-      }
+    for (const l of drawn(layoutDiagram("force", root, opts, graph)).links) {
+      expect(l.kind, `force link ${l.id}`).toBeTruthy();
     }
   });
 
   it("puts an arrow on the sequence chain and on nothing else", () => {
     const { root, blocks } = twoParts();
-    const layout = layoutDiagram(
-      "force",
-      root,
-      { width: 320, height: 600, collapsed: NONE },
-      buildGraph(root, blocks),
+    const layout = drawn(
+      layoutDiagram(
+        "force",
+        root,
+        { width: 320, height: 600, collapsed: NONE },
+        buildGraph(root, blocks),
+      ),
     );
     for (const l of layout.links) {
       expect(Boolean(l.arrow), `${l.kind} ${l.id}`).toBe(l.kind === "sequence");
@@ -548,11 +561,13 @@ describe("what the force picture draws", () => {
        draws, and the feature reads as "the arrows did not work". So every
        sequence line must stop short of both bubbles. */
     const { root, blocks } = twoParts();
-    const layout = layoutDiagram(
-      "force",
-      root,
-      { width: 320, height: 600, collapsed: NONE },
-      buildGraph(root, blocks),
+    const layout = drawn(
+      layoutDiagram(
+        "force",
+        root,
+        { width: 320, height: 600, collapsed: NONE },
+        buildGraph(root, blocks),
+      ),
     );
     const at = (id: string) => {
       const n = layout.nodes.find((x) => x.id === id);
@@ -592,7 +607,9 @@ describe("what the force picture draws", () => {
     ]);
     expect(graph.edges.some((e) => e.kind === "vocabulary")).toBe(true);
 
-    const layout = layoutDiagram("force", root, { width: 320, height: 600, collapsed: NONE }, graph);
+    const layout = drawn(
+      layoutDiagram("force", root, { width: 320, height: 600, collapsed: NONE }, graph),
+    );
     const kinds = layout.links.map((l) => l.kind);
     const lastCheap = Math.max(
       kinds.lastIndexOf("parent"),

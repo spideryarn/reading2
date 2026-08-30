@@ -1,13 +1,13 @@
 # Diagram mode
 
-The article as a picture, in the middle band — four of them, one toggle, and
+The article as a picture, in the middle band — three of them, one toggle, and
 the reader's position marked on every one.
 
 - **The geometry** — [`src/web/diagram.ts`](../../src/web/diagram.ts) for the
-  outline, [`diagram-d3.ts`](../../src/web/diagram-d3.ts) for the graph,
-  [`scatter.ts`](../../src/web/scatter.ts) for the two made of paragraphs, and
-  [`diagrams.ts`](../../src/web/diagrams.ts) is the router that knows about all
-  three. Pure functions, no DOM, tested in
+  shared vocabulary, [`diagram-d3.ts`](../../src/web/diagram-d3.ts) for the
+  graph, [`scatter.ts`](../../src/web/scatter.ts) for the two made of
+  paragraphs, and [`diagrams.ts`](../../src/web/diagrams.ts) is the router that
+  knows about both. Pure functions, no DOM, tested in
   [`tests/diagram.test.ts`](../../tests/diagram.test.ts),
   [`diagram-graph.test.ts`](../../tests/diagram-graph.test.ts) and
   [`scatter.test.ts`](../../tests/scatter.test.ts).
@@ -18,10 +18,12 @@ the reader's position marked on every one.
 - **What the server computes for the last two** —
   [`src/projection.ts`](../../src/projection.ts) over
   [`src/article-vectors.ts`](../../src/article-vectors.ts).
-- **Why nothing was installed for the Tree** —
+- **Why nothing was installed for the hand-rolled outline** —
   [diagram-mode.md](../plans/diagram-mode.md), which has the whole library
-  survey and the answers on Mermaid and on generated images. What changed when
-  the data got richer is in [`diagram-d3.ts`](../../src/web/diagram-d3.ts).
+  survey and the answers on Mermaid and on generated images. The outline itself
+  is gone; the survey is the reasoning behind the one rule none of the survivors
+  gave up. What changed when the data got richer is in
+  [`diagram-d3.ts`](../../src/web/diagram-d3.ts).
 
 ## What it is for
 
@@ -37,28 +39,27 @@ It is a **mode**, in the sense [url-state.md](url-state.md) and
 and the prose, the article stays exactly where it was, and `?mode=diagram` says
 so. The fifth one, and it cost `MODES` one word.
 
-## The four pictures
+## The three pictures
 
 ```
-        tree                  force              drift / trail
-   ┌───────────────┐   ┌───────────────┐    ┌───────────────┐
-   │ ● Being You   │   │    ◯───◯      │    │  ·   ·  ·     │
-   │ ├─● 1 Waking  │   │   ╱ ╲ ╱       │    │ ·  ·   ·  ·   │
-   │ │ └─● 1.1 The │   │  ◯───◯····◯   │    │   ·  ·        │
-   │ │    body     │   │   ╲   ╲       │    │  ·   ·  ·   · │
-   │ ├─● 2 The     │   │    ◯───◯      │    │ ·  ·      ·   │
-   │ └─● 3 Being   │   │               │    │   ·  ·  ·     │
-   └───────────────┘   └───────────────┘    └───────────────┘
+          force                    drift / trail
+   ┌───────────────┐            ┌───────────────┐
+   │    ◯───◯      │            │  ·   ·  ·     │
+   │   ╱ ╲ ╱       │            │ ·  ·   ·  ·   │
+   │  ◯───◯····◯   │            │   ·  ·        │
+   │   ╲   ╲       │            │  ·   ·  ·   · │
+   │    ◯───◯      │            │ ·  ·      ·   │
+   │               │            │   ·  ·  ·     │
+   └───────────────┘            └───────────────┘
 ```
 
 | | Vertical axis is | Honest about | Not honest about |
 |---|---|---|---|
-| **Tree** (default, `?diagram=tree`) | one row per node, sized to its own text | every name, and the nesting | size |
-| **Force** (`?diagram=force`) | reading order, **pinned** (`fy`) | *what* clusters with what, across **five kinds of relationship** | exact position — it is a physics settlement |
+| **Force** (default, `?diagram=force`) | reading order, **pinned** (`fy`) | *what* clusters with what, across **five kinds of relationship** | exact position — it is a physics settlement |
 | **Drift** (`?diagram=drift`) | the article, linearly in **rows** | *where* the piece returns to a subject | how far apart two subjects are — the sideways axis is a projection |
 | **Trail** (`?diagram=trail`) | **nothing** — it is the second component | whether the piece travels or circles | position, except through the chain and the colour |
 
-**Three of the four keep document order down the page.** That was the one
+**Two of the three keep document order down the page.** That was the one
 property nothing was allowed to give up, and it is what ruled out every mindmap
 and graph library in the survey: they spend width to show depth, and in a 288px
 band width is the axis we have not got.
@@ -71,18 +72,26 @@ is still in the picture, as a line you can follow rather than as a direction you
 can assume. Nothing else here gives the rule up, and nothing should without a
 reason of that size.
 
-### There were eight, and four were cut
+### There were eight, and five are gone
 
 Greg, 2026-08-27:
 
 > Remove Strata, Mindmap, Arc, Cluster.
 
-The four that went share one property: **each of them was a second way of
-drawing something another picture already draws.** Mindmap and Cluster were both
-the containment tree with different geometry — which is the comparison GPT Sol
-had already called for `tree` on the grounds that it was done and `tree` had
-won. Arc drew the vocabulary edges that Force draws, on a line rather than in a
-plane. Eight chips is also more than a 288px band can show without wrapping to
+And Greg, 2026-08-30, on the Tree:
+
+> Remove the "Tree" diagram from Diagram mode — it's not interesting enough to
+> keep, and it overlaps too much with Hierarchy and Outline mode etc.
+
+The five that went share one property: **each of them was a second way of
+drawing something the reader could already get elsewhere.** Mindmap and Cluster
+were both the containment tree with different geometry — which is the comparison
+GPT Sol had already called for `tree` on the grounds that it was done and `tree`
+had won. Arc drew the vocabulary edges that Force draws, on a line rather than
+in a plane. And Tree, which outlasted them by three days, lost the same argument
+to two things outside this mode: the outline panel and the gist columns, which
+already show the reader the contents page and do it better in a band this
+narrow. Eight chips is also more than a 288px band can show without wrapping to
 two rows, and a toggle you have to read twice is not a toggle you press.
 
 **Strata is the real loss, and it is worth naming rather than tidying away.** It
@@ -96,9 +105,11 @@ previous version.
 
 What answers that question now is weaker: the **spine** beside the band, which
 is sized from measured pixel heights and is better again at proportion but
-carries no names, and the **paragraph count** on a Tree row, which is a number
-rather than a shape. If the question comes back, `strata` is in the history of
-[`diagram.ts`](../../src/web/diagram.ts) and its arithmetic was tested.
+carries no names. The Tree's per-row paragraph count used to be the other half
+of the answer, and it went with the Tree; the footer card still shows it for
+whatever the pointer is on, one section at a time. If the question comes back,
+`strata` is in the history of [`diagram.ts`](../../src/web/diagram.ts) and its
+arithmetic was tested.
 
 `DiagramOptions.wordsBefore` is still on the options object and still computed,
 which is deliberate: nothing reads it today, and it is the one seam that would
@@ -107,23 +118,73 @@ distinction was GPT Sol's finding against the first round of `strata` — eight
 long paragraphs and eight one-line list items are the same number of blocks and
 very different amounts of article — and it cost a whole round to learn.
 
-**A cut picture's name in a URL opens the Tree** rather than an error, which is
+**A cut picture's name in a URL opens Force** rather than an error, which is
 the same "degrade to something real" rule every parser in
 [`params.ts`](../../src/web/params.ts) follows, and the one place here that has
-an actual pasted link behind it. Pinned in `tests/url-state.test.ts`.
+an actual pasted link behind it. `?diagram=tree` is the one to watch: it was the
+default for three days, so it is in more bookmarks than the other four together.
+Pinned in `tests/url-state.test.ts`.
 
-### Why the Tree is the default
+### Why Force is the default, and what changed
 
-**It is the only one that is free.** Stage 4 already wrote a gist onto every
-internal node and the block ranges already give the sizes, so the Tree needs no
-artefact, no job and no model call — the band fetches nothing at all until you
-press something else. The other three all spend a model call the moment they are
-drawn: Force buys the dotted lines from `useSimilar`, and Drift and Trail buy the
-projection from `useProjection`.
+**Nothing here is free any more.** The Tree was, and that was the whole of its
+claim on the default slot: stage 4 had already written a gist onto every
+internal node and the block ranges gave the sizes, so the band fetched nothing
+at all until you pressed something else.
 
-That is the whole argument. **A default that bills the reader for opening a mode
-is not a default, it is a purchase nobody agreed to** — and it is why the hover
-card on each chip says where the picture comes from as well as what it shows.
+What is left is the next-best version of the same rule. Force **draws
+immediately** — four of its five kinds of line are arithmetic over prose the
+browser is already holding (see the graph table below), and the model's opinion
+only adds the fifth, folded in on a later render. Drift and Trail have *nothing*
+without their model call. So the reader who opens the mode still sees a picture
+straight away; they just also, now, buy the dotted lines.
+
+That is a real cost the old default did not have, and it is why the hover card
+on each chip says where the picture comes from as well as what it shows.
+
+### Waiting, and failing, without borrowing a picture
+
+Greg, 2026-08-30:
+
+> if while loading and/or if there's an error with one of the others (e.g. with
+> semantic embeddings), it falls back to Tree — instead, just show a loading
+> spinner or error.
+
+Until then, a picture with no data got the Tree. `layoutDiagram` now returns
+**null** ([`diagrams.ts`](../../src/web/diagrams.ts)) and the panel puts a
+spinner, or the failure's own words, where the picture would be
+(`Waiting` in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)).
+
+Two reasons, and the second is the bigger one:
+
+- **A mode that answers a question you did not ask** — under small type
+  explaining that this is not the picture you pressed — is a worse failure than
+  an honest wait.
+- **The fallback was its own class of bug.** It made "which toggle is lit" and
+  "which picture is on screen" two different things, so every branch in the
+  panel had to remember which one it wanted, and twice it did not. See
+  [§ the corpse](#the-fallback-was-a-bug-factory-and-it-is-gone) below.
+
+**And nothing is bought for a picture that cannot be drawn.** Both paid hooks
+are gated on `root !== null` as well as on their picture, which became necessary
+the moment Force stopped being a picture you had to ask for: an article with an
+unusable tree used to open on the free Tree and buy nothing, and with Force as
+the default it would have POSTed for embeddings while the band was printing "no
+usable tree" underneath. ⟨Sol⟩, 2026-08-30.
+
+**An empty layout is not a wait, and gets its own sentence.** `layoutForce`
+draws only `depth > 0`, so an article whose contents page is a single entry lays
+out to a real layout holding no nodes — which took the SVG branch and painted a
+blank band with a working scrollbar and nothing in it. The Tree drew that root
+as a row, so this only became visible when Force became the default. Also
+⟨Sol⟩'s, the same day.
+
+The failure text is the **server's own words**, and the reason for that has its
+own history: it said "Could not reach the embedding model" for every failure,
+including the one that was actually happening in production for the whole of
+this feature's life — an account not allowed to use the model, which no amount
+of reaching would have fixed. Consequence first, reason after, bracketed code
+last, per [copy.md](copy.md).
 
 ### Each chip says what it is, and what it costs
 
@@ -135,7 +196,7 @@ A real hover card ([`Tooltip.tsx`](../../src/web/Tooltip.tsx), Floating UI),
 not the `title` attribute the chips had before. Two paragraphs: **what the
 picture shows**, then **where it comes from and what it costs**. `TooltipGroup`
 makes the neighbours open instantly once one is open, so reading along the row
-is one gesture rather than four separate waits — the same shape `Dock.tsx`'s
+is one gesture rather than three separate waits — the same shape `Dock.tsx`'s
 mode switcher uses.
 
 The `title` attribute was not a smaller version of this. It waits about a
@@ -444,9 +505,13 @@ that takes 300ms and cannot be wrong about which build it was looking at.
   code had not implemented. GPT Sol's finding, 2026-08-26.)
 - **↑ / ↓ as buttons**, under the picture, 44px tall — see
   [§ the step bar](#the-step-bar-and-the-key-that-was-firing-twice) below.
-- **The chevron on a tree row** toggles; the row itself jumps. Two gestures at
-  nearly the same pixel, which is why they are two targets — the file-tree
-  convention, and it matters more here because the shapes are small.
+- **Folding a part away is gone**, and saying so is the point of this line. The
+  chevron on a Tree row was the only way in that ever worked; ← and → look like
+  a second way and are not one, because `layoutForce` gives every bubble
+  `hasChildren: false` and both key branches require it. So the collapse set is
+  now a constant — `walk`, `buildGraph` and `DiagramOptions` all still honour
+  one, and the panel has nothing to drive it with. ⟨Sol⟩ caught the claim that
+  ← and → still folded, which was written in the same change that made it false.
 - **Where you are** is a ring on the deepest node you are inside, and on Drift
   also a dashed line drawn across at your exact row. The ring is orange rather
   than a fill change, because the fill already means *which part* and a position
@@ -479,9 +544,10 @@ activating opens something you cannot undo. Here activating means *scrolling*,
 the cheapest and most reversible thing this app does, so following focus costs
 nothing and turns the picture into something you read the article **with**. It
 is the documented follow-focus variant, and it is what the gist columns beside
-this panel already do. ← and → do not follow on the Tree, where they mean open
-and close: folding a part away is a statement about the picture, and should not
-move the reader out of the paragraph they are in.
+this panel already do. ← and → do not follow on Force, where they walk to the
+parent and into the first child: moving around the *structure* is a statement
+about the picture, and should not move the reader out of the paragraph they are
+in.
 
 **And a pair of real buttons**, because an iPad has no arrow keys and this
 panel's own hit targets are a 6px band or a 3px dot. 44px tall — Apple's own
@@ -498,20 +564,20 @@ live, which is the same mistake
 primary button. The fill now arrives on hover, where it means something.
 
 **They step by distinct row, not by node**, and that is the one piece of design
-in them. `layout.nodes` is in preorder, so on a Tree the root, part 1 and
+in them. `layout.nodes` is in preorder, so on Force the root, part 1 and
 section 1.1 all begin on the same row — stepping by node would press ↓ three
 times and move the article nowhere, which reads as a broken button. Rows make
 one press always one visible move, and they make the *unit* come out right by
-itself: sections on Tree and Force, single paragraphs on Drift and Trail,
-because those are the rows those pictures draw. The readout between the buttons
+itself: sections on Force, single paragraphs on Drift and Trail, because those
+are the rows those pictures draw. The readout between the buttons
 (`12 / 47`) is what says which. The step rule itself is `stepTarget` from
 `keynav.ts` rather than a second copy, so ↑ here means what ↑ means everywhere:
 part-way into an item it goes to the top of the item you are in before it steps
 back, which is the track-skip rule from every music player.
 
 **And the row is the row of the block a rung *jumps to*, not the row its range
-starts on.** Those are the same number on the tree pictures and they are not on
-a scatter: a dot's range is stretched to tile the article, so a reader standing
+starts on.** Those are the same number on Force and they are not on a
+scatter: a dot's range is stretched to tile the article, so a reader standing
 in a paragraph too short to embed still has a dot answering for them, and the
 first dot therefore claims row 0 while the block it jumps to may be the third
 paragraph. A ladder built from the range put a rung at row 0 whose press landed
@@ -524,7 +590,7 @@ so the two cannot be looked up separately and disagree.
 a part and its first section separately even though they start in the same
 place. What they do instead is decline to jump when the jump would go nowhere —
 `jumpTo` pushes a history entry, so without that guard three presses at the top
-of a Tree cost three presses of Back and move nothing. Same finding, same
+of a picture cost three presses of Back and move nothing. Same finding, same
 review.
 
 The readout's **unit is read off what is drawn**, not off which toggle is
@@ -533,18 +599,23 @@ folded away, steps by *part* — and a label that is confidently wrong about the
 unit is worse than no label, because the number beside it is a count of exactly
 that unit.
 
-**Whatever a picture falls back to, it is drawn as that picture.** Drift and
-Trail have nothing to show until the projection lands, so `layoutDiagram` hands
-back the Tree — and the panel's SVG class and its per-node shape branch both
-have to come from *what was drawn* rather than from the chip that is lit. They
-did not, and the result was Tree geometry wearing Drift's stylesheet: every row
-erased by `.diag-drift .diag-box { fill: transparent }`, no dot, no chevron, and
-labels at the browser's default size because no `.diag-drift .diag-label` rule
-exists. The strip above it said the right thing the whole time. `drawnKind` in
-[`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx) is the fix, and it is the
-same value `flat` and `ramp` were already derived from — those two were right
-and the third was missed. GPT Sol, 2026-08-27, and it was live in the previous
-round too with `strata` where `tree` now is.
+#### The fallback was a bug factory, and it is gone
+
+Worth keeping, because the bug is what argues for the design. While a picture
+with no data was drawn as the Tree, the panel's SVG class and its per-node shape
+branch had to come from *what was drawn* rather than from the chip that was lit.
+They did not, and the result was Tree geometry wearing Drift's stylesheet: every
+row erased by `.diag-drift .diag-box { fill: transparent }`, no dot, no chevron,
+and labels at the browser's default size because no `.diag-drift .diag-label`
+rule exists. Nothing threw, nothing logged, and the strip above it said the
+right thing the whole time. GPT Sol, 2026-08-27 — and it had been live in the
+previous round too, with `strata` where `tree` then was.
+
+The fix at the time was a `drawnKind` variable, derived from the same condition
+`flat` and `ramp` were already derived from. That worked, and it left the trap
+in place: any *new* branch in the panel could reach for `kind` and be wrong
+again. `layoutDiagram` returning null removes the second value entirely, so
+there is nothing left to disagree with.
 
 **The picture scrolls to keep up.** `.diag-scroll` nudges the marked node into
 view when it goes out of it — keyed on the target rather than on scroll events,
@@ -597,8 +668,8 @@ saturated fill at 20px tall is a shout and thirty of them is a mess.
 
 ## The two pictures made of paragraphs
 
-`drift` and `trail` are the only pictures here that do not draw the **tree** at
-all. One dot per paragraph, placed by an embedding of what that paragraph says —
+`drift` and `trail` are the two pictures here that do not draw the article's
+**structure** at all. One dot per paragraph, placed by an embedding of what that paragraph says —
 [`src/projection.ts`](../../src/projection.ts) does the arithmetic on the
 server, [`src/web/scatter.ts`](../../src/web/scatter.ts) turns two numbers into
 pixels, and [embedding-scatter-diagrams.md](../plans/embedding-scatter-diagrams.md)
@@ -812,8 +883,8 @@ swallowed the article cannot squash everything else to the minimum.
 
 ### They are a list, not a tree
 
-The other six pictures are a `role="tree"` of `treeitem`s with levels, sibling
-counts, and Left/Right meaning close and open. These two cannot honour that:
+Force is a `role="tree"` of `treeitem`s with levels, sibling counts, and
+Left/Right meaning close and open. These two cannot honour that:
 276 paragraphs are not a hierarchy and there is nothing to open. So they are a
 `listbox` of `option`s, and all four arrow keys step one paragraph. Inheriting
 the tree contract would have been a role describing a widget the code does not
@@ -867,7 +938,7 @@ and the panel have not been wired up. Everything about it, including the review
 that found what would have shipped a blank picture as a success, is in
 [sketch-diagram.md](../plans/sketch-diagram.md).
 
-The short version, because it bears on the section below. The four pictures
+The short version, because it bears on the section below. The three pictures
 above each answer one question with one algorithm, so every article comes out
 the same shape. Sketch has no algorithm: a model reads the piece, decides what
 shape the argument is — three supports converging, a ladder, a spine with asides
@@ -936,7 +1007,7 @@ still runs down the page. A structure you can check is the whole difference.
   in the round that was asked to make lines fainter, so it is written down
   rather than done. The bubbles' own positions carry most of what it says.
 - **Nothing here is to scale any more.** See
-  [§ There were eight](#there-were-eight-and-four-were-cut). The spine still is.
+  [§ There were eight](#there-were-eight-and-five-are-gone). The spine still is.
 - **Collapse state is not in the URL.** Everything else about the view is
   ([url-state.md](url-state.md)), and this is the exception: node ids are
   positional and a re-run of `npm run toc` renumbers them

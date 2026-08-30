@@ -21,7 +21,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DIAGRAMS, GIST_PX, LABEL_PX, LINK_KINDS, UNLABELLED } from "../src/web/diagram.js";
+import { DIAGRAMS, LABEL_PX, LINK_KINDS, UNLABELLED } from "../src/web/diagram.js";
 
 const CSS = readFileSync("src/web/styles.css", "utf8");
 
@@ -59,17 +59,14 @@ describe("the diagram's font sizes are declared in both files and match", () => 
     }
   }
 
-  it("the gist", () => {
-    expect(fontSizeOf(".diag-gist")).toBe(GIST_PX);
-  });
-
   it("no bare `.diag-label` font-size, which would beat nothing and be beaten by everything", () => {
-    /* A base size plus per-depth overrides is how the tree's titles ended up at
-       10px: `.diag-node.diag-d1 .diag-label` was written for `strata` and also
-       matched the tree, and a base rule cannot say which. The nine rules above
+    /* A base size plus per-depth overrides is how the cut Tree's titles ended up
+       at 10px: `.diag-node.diag-d1 .diag-label` was written for `strata` and
+       also matched the tree, and a base rule cannot say which. The rules above
        are all at one specificity, so there is nothing left for a base to do —
        and a base that came back would make this suite pass while the browser
-       used a different number. */
+       used a different number. It is more tempting now that Force is the only
+       picture writing a label, which is why this stayed. */
     expect(fontSizeOf(".diag-label")).toBeNull();
   });
 });

@@ -20,6 +20,7 @@ import { describe, expect, it } from "vitest";
 import type { Block, BlockId, NodeId, Tree } from "../src/types.js";
 import { buildGraph, terms, wordsBefore } from "../src/web/graph.js";
 import { layoutDiagram } from "../src/web/diagrams.js";
+import type { DiagramLayout } from "../src/web/diagram.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
 
 /**
@@ -163,6 +164,18 @@ function articleWithNotes(): { root: SummaryNode; blocks: Block[] } {
 
 const NONE: ReadonlySet<NodeId> = new Set();
 const OPTS = { width: 320, height: 600, collapsed: NONE };
+
+/**
+ * `layoutDiagram` returns null when a picture's data has not arrived
+ * (src/web/diagrams.ts). Every call below except the one that is *about* the
+ * missing graph hands it one, so a null there is a bug in the test — and it
+ * throws rather than being asserted away, or a router that quietly stopped
+ * drawing Force would turn every assertion into a skipped one.
+ */
+function drawn(layout: DiagramLayout | null): DiagramLayout {
+  if (layout === null) throw new Error("layoutDiagram drew nothing with its data supplied");
+  return layout;
+}
 
 describe("terms", () => {
   it("drops function words and anything under four letters", () => {
@@ -425,7 +438,7 @@ describe("the Force layout", () => {
   for (const kind of ["force"] as const) {
     it(`${kind} keeps every node and every label inside the band`, () => {
       for (const width of [288, 320, 400]) {
-        const l = layoutDiagram(kind, root, { ...OPTS, width }, graph);
+        const l = drawn(layoutDiagram(kind, root, { ...OPTS, width }, graph));
         expect(l.nodes.length).toBeGreaterThan(0);
         for (const n of l.nodes) {
           for (const v of [n.x, n.y, n.w, n.h, n.labelX, n.labelY]) {
@@ -446,14 +459,18 @@ describe("the Force layout", () => {
     it(`${kind} draws no path containing NaN`, () => {
       // A single NaN in a `d` attribute makes the browser drop the WHOLE path,
       // so one bad number is one invisible connector and no error anywhere.
-      const l = layoutDiagram(kind, root, OPTS, graph);
+      const l = drawn(layoutDiagram(kind, root, OPTS, graph));
       for (const link of l.links) expect(link.d).not.toMatch(/NaN|Infinity|undefined/);
     });
 
-    it(`${kind} falls back to a real picture when handed no graph`, () => {
-      // Rather than throwing: same rule params.ts uses for an unknown value.
-      const l = layoutDiagram(kind, root, OPTS, null);
-      expect(l.nodes.length).toBeGreaterThan(0);
+    it(`${kind} draws nothing at all when handed no graph`, () => {
+      /* **Null rather than a stand-in picture**, since 2026-08-30: it used to
+         fall back to the Tree, which is the picture this app no longer has, and
+         which the panel then had to remember was not the one you pressed. The
+         panel shows a spinner or the error instead. It is still a null rather
+         than a throw — a caller holding only a tree should get a wait, not a
+         crash. */
+      expect(layoutDiagram(kind, root, OPTS, null)).toBeNull();
     });
   }
 
@@ -465,8 +482,8 @@ describe("the Force layout", () => {
        which is a supported call that would make every reload a different
        picture, and it guards a future d3 that changes its mind. Cheap, and the
        failure it catches is one nobody would think to look for. */
-    const a = layoutDiagram("force", root, OPTS, graph).nodes.map((n) => [n.x, n.y]);
-    const b = layoutDiagram("force", root, OPTS, graph).nodes.map((n) => [n.x, n.y]);
+    const a = drawn(layoutDiagram("force", root, OPTS, graph)).nodes.map((n) => [n.x, n.y]);
+    const b = drawn(layoutDiagram("force", root, OPTS, graph)).nodes.map((n) => [n.x, n.y]);
     expect(a).toEqual(b);
   });
 
@@ -475,7 +492,7 @@ describe("the Force layout", () => {
        layout throws away by default. `forceY` is what holds it; drop its
        strength and this is what goes. Compared by centre, since bubbles differ
        in size. */
-    const nodes = layoutDiagram("force", root, OPTS, graph).nodes.filter((n) => n.depth === 2);
+    const nodes = drawn(layoutDiagram("force", root, OPTS, graph)).nodes.filter((n) => n.depth === 2);
     const mid = (n: (typeof nodes)[number]) => n.y + n.h / 2;
     const byDoc = [...nodes].sort((p, q) => p.startRow - q.startRow);
     for (let i = 1; i < byDoc.length; i++) {
@@ -505,7 +522,7 @@ describe("the Force layout", () => {
     const r2 = buildSummaryTree(tree2, blocks2, null);
     expect(r2).not.toBeNull();
     if (!r2) return;
-    const nodes = layoutDiagram("force", r2, OPTS, buildGraph(r2, blocks2)).nodes;
+    const nodes = drawn(layoutDiagram("force", r2, OPTS, buildGraph(r2, blocks2))).nodes;
     for (const depth of [1, 2]) {
       const byDoc = nodes
         .filter((n) => n.depth === depth)
@@ -536,7 +553,7 @@ describe("the Force layout", () => {
        near each other even when the article separates them. 1.1 and 2.2 of the
        fixture are the linked pair; 1.2 sits between them in reading order and is
        about something else entirely. */
-    const nodes = layoutDiagram("force", root, OPTS, graph).nodes;
+    const nodes = drawn(layoutDiagram("force", root, OPTS, graph)).nodes;
     const cx = (id: string) => {
       const n = nodes.find((x) => x.id === id);
       return n ? n.x + n.w / 2 : Number.NaN;
@@ -608,7 +625,7 @@ describe("the Force picture, against the real example article", () => {
       if (!root) return;
       const g = buildGraph(root, blocks);
       for (const width of [288, 320, 400]) {
-        const l = layoutDiagram(kind, root, { ...OPTS, width }, g);
+        const l = drawn(layoutDiagram(kind, root, { ...OPTS, width }, g));
         for (const n of l.nodes) {
           expect(Number.isFinite(n.x + n.y + n.w + n.h)).toBe(true);
           expect(n.x).toBeGreaterThanOrEqual(-0.5);

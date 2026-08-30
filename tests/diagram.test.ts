@@ -15,13 +15,19 @@
  *  2. a collapsed node keeps its own row and loses only its subtree;
  *  3. no picture draws deeper than the layouts assume.
  *
- * **Four pictures here, and there were eight** — Greg cut Strata, Mindmap, Arc
- * and Cluster on 2026-08-27. The tests that went with them went too; what is
- * left is deliberately not a smaller version of the same file, because two of
- * the rules above (siblings partitioning their parent, a picture growing past
- * the scroller to keep a band clickable) were facts about `strata` and about
- * nothing that is still drawn. Keeping them as assertions over `tree` would
- * have been a test that passes for a reason unrelated to why it was written.
+ * **No picture is laid out in diagram.ts any more.** Strata, Mindmap, Arc and
+ * Cluster went on 2026-08-27 and Tree — the last one this module drew — on
+ * 2026-08-30. So what is here is the *vocabulary*: the wrapper, the walk, and
+ * the two functions that read a finished layout. Force's geometry is in
+ * tests/diagram-graph.test.ts and the two scatters' in tests/scatter.test.ts,
+ * each against a picture that has its own data.
+ *
+ * The tests that went with the cut pictures went too, and what is left is
+ * deliberately not a smaller version of the same file: two of the rules above
+ * (siblings partitioning their parent, a picture growing past the scroller to
+ * keep a band clickable) were facts about `strata` and about nothing still
+ * drawn. Keeping them as assertions over whatever picture was left would have
+ * been a test that passes for a reason unrelated to why it was written.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -29,12 +35,8 @@ import type { Block, BlockId, NodeId, Tree } from "../src/types.js";
 import {
   charsThatFit,
   DIAGRAMS,
-  type DiagramKind,
   type DiagramNode,
-  GIST_PX,
-  LABEL_PX,
   MAX_DRAWN_DEPTH,
-  layoutTree,
   stepStops,
   nodeAt,
   walk,
@@ -93,7 +95,45 @@ function fixture(): SummaryNode {
 }
 
 const NONE: ReadonlySet<NodeId> = new Set();
-const OPTS = { width: 320, height: 600, collapsed: NONE };
+
+/**
+ * A tree as the preorder run of `DiagramNode`s every layout produces.
+ *
+ * **`layoutTree` used to stand in for this**, on the reasonable grounds that
+ * `stepStops`, `nodeAt` and `siblingRuns` take nodes and any layout makes some.
+ * It was cut on 2026-08-30, and building the nodes here is the better shape
+ * anyway: those three are pure functions of preorder, depth, part and range,
+ * and reaching them through a layout also tested that layout's geometry, which
+ * has a file of its own.
+ *
+ * The geometry is zeroed because **none of the three reads a coordinate** —
+ * checked against each of them, not assumed. If one ever does, this stops being
+ * a valid input and the test that needs it should build a real layout.
+ */
+function nodesOf(root: SummaryNode, collapsed: ReadonlySet<NodeId> = NONE): DiagramNode[] {
+  return walk(root, collapsed).map((e) => ({
+    id: e.node.node.id,
+    blockId: e.node.node.range[0],
+    depth: e.node.node.depth,
+    number: e.node.number,
+    title: e.node.node.title,
+    blocks: e.node.blocks,
+    startRow: e.node.startRow,
+    endRow: e.node.endRow,
+    part: e.part,
+    x: 0,
+    y: 0,
+    w: 0,
+    h: 0,
+    labelX: 0,
+    labelY: 0,
+    anchor: "start" as const,
+    lines: [],
+    titleLines: 0,
+    hasChildren: e.node.children.length > 0,
+    collapsed: e.collapsed,
+  }));
+}
 
 describe("wrapText", () => {
   it("breaks on words and keeps every line inside the budget", () => {
@@ -187,50 +227,6 @@ describe("walk", () => {
   });
 });
 
-describe("layoutTree", () => {
-  it("indents by depth and never runs a label off the right edge", () => {
-    const { nodes } = layoutTree(fixture(), OPTS);
-    const depths = new Map(nodes.map((n) => [n.id, n.labelX]));
-    expect(depths.get("a") ?? 0).toBeGreaterThan(depths.get("root") ?? 0);
-    expect(depths.get("a1") ?? 0).toBeGreaterThan(depths.get("a") ?? 0);
-    for (const n of nodes) {
-      expect(n.labelX).toBeLessThan(OPTS.width);
-      n.lines.forEach((line, i) => {
-        /* Title lines are set at 12px and gist lines at 10.5px — the same two
-           budgets `layoutTree` wraps against. Measuring both at 12 is what this
-           assertion did first, and it failed on a gist line that was in fact
-           perfectly inside the band. Worth keeping in mind: a test of estimated
-           text width has to use the same estimate, or it tests the estimate. */
-        const fontPx = i < n.titleLines ? 12 : 10.5;
-        expect(n.labelX + line.length * fontPx * 0.52).toBeLessThanOrEqual(OPTS.width + 1);
-      });
-    }
-  });
-
-  it("stacks rows top to bottom in document order and never overlaps them", () => {
-    const nodes = layoutTree(fixture(), OPTS).nodes;
-    for (let i = 1; i < nodes.length; i++) {
-      const prev = nodes[i - 1];
-      const cur = nodes[i];
-      if (!prev || !cur) continue;
-      expect(cur.y).toBeGreaterThanOrEqual(prev.y + prev.h - 0.001);
-    }
-  });
-
-  it("draws one connector per node except the root", () => {
-    const { nodes, links } = layoutTree(fixture(), OPTS);
-    expect(links).toHaveLength(nodes.length - 1);
-  });
-
-  it("hides a closed node's gist, because a closed node is a summary of itself", () => {
-    const open = layoutTree(fixture(), OPTS).nodes.find((n) => n.id === "a");
-    const shut = layoutTree(fixture(), { ...OPTS, collapsed: new Set(["a" as NodeId]) }).nodes.find(
-      (n) => n.id === "a",
-    );
-    expect((shut?.lines.length ?? 0)).toBeLessThan(open?.lines.length ?? 0);
-  });
-});
-
 describe("stepStops", () => {
   /* The fixture's blocks, so a node's `blockId` has a row to resolve to. Each
      node's `blockId` is `spya-<id>a` (see `node` above), and these are the rows
@@ -250,11 +246,11 @@ describe("stepStops", () => {
   );
 
   it("gives one rung per distinct row, not one per node", () => {
-    /* **The whole reason the step buttons walk rows.** `layoutTree` is
+    /* **The whole reason the step buttons walk rows.** Every layout is
        preorder, so the root, part 1 and section 1.1 all begin on row 0 — a
        ladder built from nodes would spend its first three rungs going nowhere,
        and a button that moves nothing looks broken rather than correct. */
-    const { nodes } = layoutTree(fixture(), OPTS);
+    const nodes = nodesOf(fixture());
     const stops = stepStops(nodes, rows);
     expect(nodes.length).toBeGreaterThan(stops.length);
     expect(stops.map((s) => s.row)).toEqual([0, 4, 10, 50]);
@@ -263,7 +259,7 @@ describe("stepStops", () => {
   it("keeps the deepest node where several share a row", () => {
     // `nodeAt`'s rule: the deepest node is the most specific thing the reader
     // could mean, and the card describes whatever this lands on.
-    const stops = stepStops(layoutTree(fixture(), OPTS).nodes, rows);
+    const stops = stepStops(nodesOf(fixture()), rows);
     expect(stops[0]?.id).toBe("a1");
   });
 
@@ -274,8 +270,8 @@ describe("stepStops", () => {
        from `startRow` puts a rung at row 0 whose jump lands at row 2 — and
        Previous, from row 1, then moves the reader DOWN the page. GPT Sol's
        finding, 2026-08-27. */
-    const tiled: DiagramNode[] = layoutTree(fixture(), OPTS)
-      .nodes.filter((n) => n.depth === 2)
+    const tiled: DiagramNode[] = nodesOf(fixture())
+      .filter((n) => n.depth === 2)
       .map((n) => ({ ...n, startRow: 0 }));
     const stops = stepStops(tiled, rows);
     expect(stops.map((s) => s.row)).toEqual([0, 4, 10, 50]);
@@ -285,7 +281,7 @@ describe("stepStops", () => {
   it("falls back to the range when a block is not in the article", () => {
     // A layout left over from the moment before a re-ingest. A rung in
     // slightly the wrong place beats a button that does nothing.
-    const { nodes } = layoutTree(fixture(), OPTS);
+    const nodes = nodesOf(fixture());
     expect(stepStops(nodes, new Map()).map((s) => s.row)).toEqual([0, 4, 10, 50]);
   });
 
@@ -300,121 +296,76 @@ describe("nodeAt", () => {
   it("marks the deepest node the reader is inside, not the outermost", () => {
     // Marking the part when the section is on screen tells the reader something
     // they already knew. Same rule as the summary panel's follow mark.
-    const { nodes } = layoutTree(fixture(), OPTS);
+    const nodes = nodesOf(fixture());
     expect(nodeAt(nodes, 5)).toBe("a2");
     expect(nodeAt(nodes, 60)).toBe("b2");
   });
 
   it("marks a collapsed node itself rather than nothing", () => {
-    const { nodes } = layoutTree(fixture(), { ...OPTS, collapsed: new Set(["a" as NodeId]) });
+    const nodes = nodesOf(fixture(), new Set(["a" as NodeId]));
     expect(nodeAt(nodes, 5)).toBe("a");
   });
 
   it("is null above the first row, rather than guessing the root", () => {
-    expect(nodeAt(layoutTree(fixture(), OPTS).nodes, null)).toBeNull();
+    expect(nodeAt(nodesOf(fixture()), null)).toBeNull();
   });
 });
 
 /**
- * The same rules, against the **committed example article** rather than a
- * fixture built to be convenient.
- *
- * The tree above has four sections with tidy short titles. This one has 45
- * nodes, real headings, real gists, and a shape nobody chose — which is the
- * only kind of input that catches a budget that was very slightly too generous.
+ * The **committed example article** rather than a fixture built to be
+ * convenient — 45 nodes, real headings, real gists, and a shape nobody chose.
  * `example/` is in git; `data/` is not (version-control.md), so this is the
  * largest real article a test can reach on a fresh clone.
  *
- * Run across the whole width range the band can actually take: `MODE_MIN` is
- * 288 and `MODE_IDEAL` is 400 (src/web/layout.ts), and the narrow end is where
- * a label runs out.
+ * **Two rules only, and both are about the router.** The width checks that used
+ * to live here ran over `DIAGRAMS` and were testing one picture four times —
+ * `layoutDiagram` was called with no graph and no scatter input, so Force,
+ * Drift and Trail all fell back to `layoutTree`: three green rows saying
+ * nothing about three layouts, under a name promising the opposite. GPT Sol's
+ * finding, 2026-08-27. Force is checked against this same article in
+ * tests/diagram-graph.test.ts, which builds the graph, and the two scatters in
+ * tests/scatter.test.ts, which builds a projection.
  */
-/**
- * **This loop used to run over `DIAGRAMS` and it was testing one picture four
- * times.** `layoutDiagram` is called with no graph and no scatter input, so
- * Force, Drift and Trail all fall back to `layoutTree` — three green rows
- * saying nothing about three layouts, and a name ("every picture") promising
- * the opposite. GPT Sol's finding, 2026-08-27.
- *
- * The honest split: the tree picture is checked here, Force is checked against
- * the same article in tests/diagram-graph.test.ts (which builds the graph), and
- * the two scatters in tests/scatter.test.ts (which builds a projection). The
- * `FALLS_BACK` case below is what pins the *fallback itself*, which is a real
- * behaviour and was the only thing the old loop was actually exercising.
- */
-describe("every picture, against the real example article", () => {
+describe("the router, against the real example article", () => {
   const tree = JSON.parse(readFileSync("example/tree.json", "utf8")) as Tree;
   const raw = JSON.parse(readFileSync("example/blocks.json", "utf8")) as unknown;
   const blocks = (Array.isArray(raw) ? raw : (raw as { blocks: Block[] }).blocks) as Block[];
   const real = buildSummaryTree(tree, blocks, null);
 
-  /* The estimate `wrapText` used for this line, which is the only honest ruler
-     for a label it wrapped. Getting THIS wrong is how a check reports a bug that
-     is not there — it happened twice while writing these, both times by
-     measuring a 10.5px gist line at title size. */
-  const lineWidth = (n: DiagramNode, i: number, kind: DiagramKind) =>
-    (n.lines[i]?.length ?? 0) * (i >= n.titleLines ? GIST_PX : (LABEL_PX[kind]?.[n.depth] ?? 12)) * 0.52;
+  it("hands back nothing at all for a picture whose data has not arrived", () => {
+    /* **The behaviour that replaced the fallback**, and the whole point of the
+       2026-08-30 change. Every one of these used to come back as the Tree, and
+       the panel then had to remember that the toggle pressed and the picture on
+       screen were two different things — which it twice did not, rendering tree
+       geometry under another picture's stylesheet with nothing thrown and
+       nothing logged. A null cannot be drawn wearing the wrong clothes: the
+       panel shows a spinner or the error instead (DiagramPanel.tsx § Waiting).
 
-  for (const kind of ["tree"] as const) {
-    for (const width of [288, 320, 400]) {
-      it(`${kind} at ${width}px stays inside the band and draws no impossible box`, () => {
-        expect(real).not.toBeNull();
-        if (!real) return;
-        const layout = layoutDiagram(kind, real, { width, height: 700, collapsed: NONE });
-        expect(layout.nodes.length).toBeGreaterThan(0);
-
-        for (const n of layout.nodes) {
-          for (const v of [n.x, n.y, n.w, n.h, n.labelX, n.labelY]) expect(v).toBeTypeOf("number");
-          for (const v of [n.x, n.y, n.w, n.h, n.labelX, n.labelY]) expect(Number.isFinite(v)).toBe(true);
-          expect(n.w).toBeGreaterThanOrEqual(0);
-          expect(n.h).toBeGreaterThanOrEqual(0);
-          expect(n.x).toBeGreaterThanOrEqual(-0.5);
-          expect(n.x + n.w).toBeLessThanOrEqual(width + 0.5);
-
-          n.lines.forEach((_, i) => {
-            const w = lineWidth(n, i, kind);
-            const left =
-              n.anchor === "start" ? n.labelX : n.anchor === "end" ? n.labelX - w : n.labelX - w / 2;
-            expect(left, `${kind} ${n.number} line ${i} starts left of the band`).toBeGreaterThan(-1);
-            expect(left + w, `${kind} ${n.number} line ${i} runs past the band`).toBeLessThanOrEqual(
-              width + 1,
-            );
-          });
-        }
-      });
-    }
-  }
-
-  it("hands every picture without its data a real one, and says which", () => {
-    /* The fallback, asserted as itself rather than as a side effect of a loop
-       that meant to test something else. What matters is that it is `tree` —
-       the panel derives the SVG's class and `NodeShape`'s branch from this, so
-       a fallback that returned some other shape would be drawn wearing the
-       wrong picture's stylesheet. */
+       `force` is in the loop too, and it is not a special case: with no graph
+       it has nothing either. In the app the graph is built in the browser from
+       blocks the page already holds, so this is only reachable there when the
+       tree is unusable — which the panel has already said in words. */
     expect(real).not.toBeNull();
     if (!real) return;
-    const tree = layoutTree(real, { width: 320, height: 700, collapsed: NONE });
     for (const kind of DIAGRAMS) {
-      const l = layoutDiagram(kind, real, { width: 320, height: 700, collapsed: NONE });
-      expect(l.nodes.map((n) => n.id), `${kind} without its data`).toEqual(
-        tree.nodes.map((n) => n.id),
-      );
+      expect(
+        layoutDiagram(kind, real, { width: 320, height: 700, collapsed: NONE }),
+        `${kind} without its data`,
+      ).toBeNull();
     }
   });
 
-  it("never draws deeper than MAX_DRAWN_DEPTH, whatever the tree holds", () => {
-    /* The example tree goes to depth 3. The layouts assume 2 — `layoutTree`
-       indents by depth and would run a fourth level off a 288px band, and the
-       stylesheet has font sizes for `diag-d0` to `diag-d2` and nothing below.
-       `buildSummaryTree` stops at 2 today, so this is guarding the assumption
-       rather than the current caller. */
+  it("never walks deeper than MAX_DRAWN_DEPTH, whatever the tree holds", () => {
+    /* The example tree goes to depth 3. The pictures assume 2 — the stylesheet
+       has font sizes and fills for `diag-d0` to `diag-d2` and nothing below,
+       and graph.ts calls a node at this depth a leaf whether or not it has
+       children. `buildSummaryTree` stops at 2 today, so this is guarding the
+       assumption rather than the current caller. */
     expect(Math.max(...Object.values(tree.nodes).map((n) => n.depth))).toBeGreaterThan(
       MAX_DRAWN_DEPTH,
     );
     if (!real) return;
-    for (const n of layoutTree(real, { width: 320, height: 700, collapsed: NONE }).nodes) {
-      expect(n.depth).toBeLessThanOrEqual(MAX_DRAWN_DEPTH);
-    }
+    for (const n of nodesOf(real)) expect(n.depth).toBeLessThanOrEqual(MAX_DRAWN_DEPTH);
   });
 });
 
@@ -428,7 +379,7 @@ describe("every picture, against the real example article", () => {
  */
 describe("siblingRuns", () => {
   it("counts each node among its own siblings, not among its level", () => {
-    const { nodes } = layoutTree(fixture(), OPTS);
+    const nodes = nodesOf(fixture());
     const runs = siblingRuns(nodes);
     const of = (id: string) => runs[nodes.findIndex((n) => n.id === id)];
 
@@ -443,7 +394,7 @@ describe("siblingRuns", () => {
   });
 
   it("counts a closed parent's siblings without counting its hidden children", () => {
-    const { nodes } = layoutTree(fixture(), { ...OPTS, collapsed: new Set(["a" as NodeId]) });
+    const nodes = nodesOf(fixture(), new Set(["a" as NodeId]));
     const runs = siblingRuns(nodes);
     const of = (id: string) => runs[nodes.findIndex((n) => n.id === id)];
     expect(of("a")).toEqual({ size: 2, pos: 1 });

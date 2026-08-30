@@ -3,16 +3,16 @@
  *
  * ```
  *  ┌── spine ──┬────── DIAGRAM (this panel) ──────┬──── the article ────┐
- *  │           │  DIAGRAM  tree · force · drift   │                     │
+ *  │           │  DIAGRAM  force · drift · trail  │                     │
  *  │  ▇▇▇▇▇▇▇  │ ──────────────────────────────── │  Being You opens    │
- *  │  ▇▇▇▇     │ ▐ ▌█ 1  Waking up                │  with a story about │
- *  │  ▇▇▇      │ ▐ ▌█                             │  waking from        │
- *  │  ▇▇▇▇▇▇   │ ▐ ▌█ 1.1 The body as a model     │  anaesthesia…       │
- *  │  ▇▇       │ ▐▶▌█ ◀── you are here            │                     │
- *  │  ▇▇▇▇     │ ▐ ▌█ 2  The hard problem         │  Every paragraph    │
- *  │  ▇▇▇      │ ▐ ▌█                             │  stays where it was.│
+ *  │  ▇▇▇▇     │        ◯───◯                     │  with a story about │
+ *  │  ▇▇▇      │       ╱ ╲ ╱                      │  waking from        │
+ *  │  ▇▇▇▇▇▇   │      ◯───◉····◯  ◀── you are here│  anaesthesia…       │
+ *  │  ▇▇       │       ╲   ╲                      │                     │
+ *  │  ▇▇▇▇     │        ◯───◯                     │  Every paragraph    │
+ *  │  ▇▇▇      │                                  │  stays where it was.│
  *  │           │ ──────────────────────────────── │                     │
- *  │           │  1.1 The body as a model   6 ¶   │  Clicking a band    │
+ *  │           │  1.1 The body as a model   6 ¶   │  Clicking a bubble  │
  *  │           │  Perception is a controlled…     │  scrolls it here.   │
  *  └───────────┴──────────────────────────────────┴─────────────────────┘
  * ```
@@ -57,8 +57,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ChartScatter,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
+  LoaderCircle,
   Network,
   Route,
   Waypoints,
@@ -123,9 +123,10 @@ interface Props {
  *
  * **Three fields rather than one, and the third is the one readers ask for.**
  * `blurb` says what the picture shows; `how` says where it comes from and what
- * it costs. Three of these four spend a model call the first time they are
- * drawn, and a toggle bar that does not say which is a toggle bar where one
- * press is free and the next one bills you — see docs/project/diagram.md.
+ * it costs. All three spend a model call, and they do not spend it on the same
+ * thing: Force's buys the dotted lines onto a picture that is already drawn,
+ * while Drift's and Trail's buy the picture itself — see
+ * docs/project/diagram.md.
  *
  * Both are rendered in a real hover card (Tooltip.tsx) rather than a `title`
  * attribute. The native tooltip waits about a second, cannot be styled, cannot
@@ -133,12 +134,6 @@ interface Props {
  * sentence explaining what a picture *is*, that is close to not being there.
  */
 const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb: string; how: string }> = {
-  tree: {
-    label: "Tree",
-    icon: Network,
-    blurb: "The outline as a branching tree — every part, every section, in the order they were written.",
-    how: "Free: drawn from the contents page, which the article already has. Click a row to go there; the chevron folds a part away.",
-  },
   /* Force draws the GRAPH, not the tree — sections joined by the words they
      share as well as by where they sit (src/web/graph.ts). Its blurb says what
      it is *for*, because unlike the tree it is not showing the reader something
@@ -196,6 +191,17 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb:
 const NEEDS_AT_ROW = new Set<DiagramKind>(["drift", "trail"]);
 
 const NEEDS_GRAPH = new Set<DiagramKind>(["force"]);
+
+/**
+ * The collapse set, which is empty and stays empty — see `collapsed` in the
+ * panel for why, and why it is a constant rather than a deletion.
+ *
+ * Module-level so it is one object for the life of the page: it is a dependency
+ * of the `graph` and `layout` memos, and a fresh `new Set()` per render would
+ * make both of them miss on every render — which on Force is a 300-tick physics
+ * simulation.
+ */
+const NOTHING_COLLAPSED: ReadonlySet<NodeId> = new Set();
 
 /**
  * The two that need the server's projection of the article, and are a **flat
@@ -321,14 +327,28 @@ const PART_HUES = 8;
 
 export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, axis, onAxis, hue, onHue }: Props) {
   useRenderCount("DiagramPanel");
-  /* Which nodes the reader has closed. Deliberately NOT in the URL: `?cols=`
-     and `?rung=` are about how much of the article you are looking at, and a
-     link carrying them tells the recipient something. A set of node ids tells
-     them nothing — node ids are positional and a re-run of `npm run toc`
-     renumbers them (src/web/tree.ts), so a pasted link would open the wrong
-     sections on an article that had been re-ingested. That is the same rule
-     block-ids.md states for ranges, applied to a control. */
-  const [collapsed, setCollapsed] = useState<ReadonlySet<NodeId>>(() => new Set());
+  /**
+   * **Nothing is collapsed, and nothing can be.**
+   *
+   * This was a `useState` set of the nodes the reader had closed, and the only
+   * two ways into it were the chevron on a Tree row and the ← / → keys. Tree was
+   * cut on 2026-08-30, and Force — the one picture left that draws a hierarchy —
+   * hands every node `hasChildren: false` (diagram-d3.ts § the bubbles), which
+   * both key branches require. So the set could never gain a member, and a
+   * `useState` nothing can set is state in name only.
+   *
+   * **Kept as a constant rather than deleted**, because `walk`, `buildGraph`
+   * and `DiagramOptions` all take it and all still honour it — the capability is
+   * theirs, and it is the panel that has nothing to drive it with. Giving them
+   * back a real set is one `useState` away for whichever picture grows a way to
+   * fold something.
+   *
+   * ⟨Sol⟩ found the claim that ← and → still fold on Force, which was written
+   * here in the same change that made it false. Believing a comment about a
+   * field two modules away is how it got written; `hasChildren: false` is one
+   * grep and settles it.
+   */
+  const collapsed = NOTHING_COLLAPSED;
   /**
    * What the *pointer* is on. Cleared when it leaves the picture.
    *
@@ -422,11 +442,28 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
     };
   }, []);
 
+  /**
+   * **Is there an article to draw at all?**
+   *
+   * Both paid hooks below are gated on this as well as on their picture, and
+   * that became necessary the moment Force stopped being a picture you had to
+   * ask for. `tree` was the default until 2026-08-30 and cost nothing, so an
+   * article with an unusable tree opened this mode, printed "no usable tree"
+   * and bought nothing. With Force as the default the same article would POST
+   * for embeddings — spending money on a picture the panel is *at that moment*
+   * telling the reader it cannot draw. ⟨Sol⟩, 2026-08-30.
+   *
+   * A gate on the input rather than on the message: the branch that prints the
+   * sentence is 600 lines below, and a hook's `enabled` argument is the only
+   * place a fetch can be prevented rather than wasted.
+   */
+  const drawable = root !== null;
+
   /* **Built only when a graph picture is on.** Counting terms over a whole
      article is cheap — a few milliseconds for sixty sections — but it is not
-     free, and three of the four pictures never look at it. Same reasoning that
-     keeps `DiagramBand` from fetching anything: a reader who never leaves
-     `tree` should not pay for the other three. */
+     free, and two of the three pictures never look at it. Same reasoning that
+     keeps `DiagramBand` from fetching anything: a reader on a scatter should
+     not pay for the graph. */
   const wantsGraph = NEEDS_GRAPH.has(kind);
   /* **Only Force, and only Force.** This is the one thing the panel asks the
      server for, it costs a model call the first time, and it is the only fetch
@@ -434,7 +471,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      what it will do. So the gate is narrow on purpose: `force`, which is the
      picture Greg asked to put the dotted lines on, and nothing else. See
      useSimilar.ts. */
-  const similar = useSimilar(slug, kind === "force");
+  const similar = useSimilar(slug, drawable && kind === "force");
   const graph = useMemo(
     () => (root && wantsGraph ? buildGraph(root, blocks, collapsed, similar.pairs) : null),
     // `wantsGraph`, NOT `kind`: there were three graph pictures when this was
@@ -457,7 +494,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      between the two endpoints, so a reader who has already opened Force pays
      only for the arithmetic here. See useProjection.ts. */
   const wantsPoints = NEEDS_POINTS.has(kind);
-  const projection = useProjection(slug, wantsPoints);
+  const projection = useProjection(slug, drawable && wantsPoints);
 
   /* The picture's second data source, assembled only when a picture wants it.
      `axis` and `hue` are in here because they change where a dot goes and which
@@ -470,12 +507,12 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
     [wantsPoints, blocks, projection.points, projection.k, axis, hue],
   );
 
-  /* **What is actually drawn**, which is not the same as which toggle is
-     pressed: until the projection lands, `layoutDiagram` falls back to `tree`
-     (see diagrams.ts). Deriving the role, the palette and the strip from the
-     *picture on screen* rather than from `kind` is what stops the panel telling
-     a screen reader it is showing a list of paragraphs while it is showing a
-     column of sections. */
+  /* **Whether a scatter has anything to draw yet**, which is exactly the
+     condition `layoutDiagram` returns null on. Since 2026-08-30 no picture
+     stands in for another, so this and `layout !== null` say the same thing for
+     the two scatters — both are kept because this one is also what the strip
+     and the legend below are gated on, and those render outside the scroller
+     where there is no layout to ask. */
   const drawingPoints = wantsPoints && projection.points.length > 0;
   const flat = drawingPoints;
   const ramp = drawingPoints && hue === "progress";
@@ -496,9 +533,9 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      rather than blocks. */
   const words = useMemo(() => wordsBefore(blocks), [blocks]);
 
-  /* `tree` and `force` return `nowY: null` and never read `atRow`, so for them
-     it was a dependency nobody looked at — and `atRow` changes every time the
-     reader scrolls into a new section.
+  /* `force` returns `nowY: null` and never reads `atRow`, so for it this was a
+     dependency nobody looked at — and `atRow` changes every time the reader
+     scrolls into a new section.
 
      That made scrolling with Force open re-run the whole layout, which is a
      300-tick d3 simulation measured at 39ms on a 60-section article and 113ms
@@ -522,26 +559,24 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
   }, [root, kind, box, collapsed, words, graph, scatter, followsReader]);
 
   /**
-   * **The picture actually on screen, which is not always the toggle that is
-   * pressed** — and everything the renderer branches on has to use this.
+   * **`drawnKind` was here, and its removal is the point of this change.**
    *
-   * `layoutDiagram` falls back to `layoutTree` whenever a picture's data has
-   * not arrived: Drift and Trail before the projection lands or after it fails,
-   * Force before the graph exists. The panel already derived `flat` and `ramp`
-   * from what is drawn; the **`kind` handed to the SVG and to `NodeShape` was
-   * not**, so the fallback came out as Tree geometry wearing Drift's
-   * stylesheet — `.diag-drift .diag-box { fill: transparent; stroke: none }`
-   * erased every row, the tree branch that draws the dot and the chevron never
-   * ran, and no `.diag-drift .diag-label` font size exists so the labels
-   * painted at the browser default. A picture that says "the picture below is
-   * the Tree instead" and then draws a broken one.
+   * A picture with no data used to be handed `layoutTree`, so the toggle that
+   * was pressed and the picture on screen were two different things, and every
+   * branch in this file had to remember which one it wanted. Twice it did not:
+   * the SVG's class and `NodeShape`'s branch both read `kind`, so the fallback
+   * came out as Tree geometry wearing Drift's stylesheet —
+   * `.diag-drift .diag-box { fill: transparent; stroke: none }` erased every
+   * row and no `.diag-drift .diag-label` font size exists, so the labels
+   * painted at the browser default. A picture that said "the picture below is
+   * the Tree instead" and then drew a broken one, with nothing thrown and
+   * nothing logged. GPT Sol found it on the built code on 2026-08-27, and it
+   * had been live in the round before that too, with `strata` in Tree's place.
    *
-   * Nothing throws and nothing logs — GPT Sol's finding on the built code,
-   * 2026-08-27, and it was live in the round before this one too, with `strata`
-   * where `tree` now is.
+   * `layoutDiagram` returns null instead now (diagrams.ts), the scroller shows
+   * a spinner or the error, and `kind` is the only answer to "which picture is
+   * this" — so the class of bug has nowhere left to live.
    */
-  const drawnKind: DiagramKind =
-    (wantsPoints && !drawingPoints) || (kind === "force" && !graph) ? "tree" : kind;
 
   /* The node the reader is standing in — the deepest one drawn, which is the
      same rule the summary panel's follow mark uses. Computed from the LAID OUT
@@ -690,13 +725,6 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
     [graph],
   );
 
-  const toggle = (id: NodeId) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (!next.delete(id)) next.add(id);
-      return next;
-    });
-
   /** Move the tabstop, and move real focus with it. */
   const rove = (id: NodeId | null) => {
     if (id === null) return;
@@ -786,8 +814,10 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
         // the same step as down — which is what a listbox promises, and it
         // follows the reader for the same reason down does.
         if (flat) follow(1);
-        else if (node.hasChildren && node.collapsed) toggle(node.id);
-        else if (node.hasChildren) step(1); // preorder: the next node IS the first child
+        // preorder: the next node IS the first child. The branch that opened a
+        // closed parent was here and went with the collapse set above — nothing
+        // in this mode can close one any more.
+        else if (node.hasChildren) step(1);
         return;
       case "ArrowLeft": {
         e.preventDefault();
@@ -795,11 +825,8 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           follow(-1);
           return;
         }
-        if (node.hasChildren && !node.collapsed) {
-          toggle(node.id);
-          return;
-        }
         // Walk back to the nearest shallower node — the parent, in preorder.
+        // Closing an open parent was the branch above this one; see `collapsed`.
         for (let j = i - 1; j >= 0; j--) {
           const cand = nodes[j];
           if (cand && cand.depth < node.depth) {
@@ -1001,24 +1028,17 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           worse than useless to a reader who does not know what "variance"
           means. So it is one sentence in ordinary words, and it says the thing
           a percentage cannot: **the projection can only ever pull dots
-          together, never push them apart.** GPT Sol's finding, 2026-08-27. */}
-      {wantsPoints && projection.status !== "idle" && (
+          together, never push them apart.** GPT Sol's finding, 2026-08-27.
+
+          **Only when there is a picture to describe.** Waiting and failing used
+          to be reported here too, back when a fallback picture was drawn
+          underneath and something had to explain it. There is no fallback any
+          more, so those two states belong to `Waiting` inside the scroller —
+          where the picture is missing — and a strip that also announced them
+          would say the same thing twice in two places. */}
+      {drawingPoints && projection.status === "ready" && (
         <p className="diag-note" role="status">
-          {projection.status === "loading" && "Reading the article paragraph by paragraph…"}
-          {projection.status === "ready" && kept(projection)}
-          {/* **The server's own words, not a guess at them.** The route now
-              tells a provider outage apart from a bug of ours and says which;
-              a fixed sentence here would have reported an authentication
-              failure, a network drop and a broken deploy as the embedding model
-              being down. GPT Sol's finding, 2026-08-27. */}
-          {/* **The consequence first, the reason after, and the code last of
-              all.** It read the other way round until 2026-08-28, which put
-              "The picture below is the Tree instead." *after* the bracketed
-              code — so the one thing docs/project/copy.md asks of a code, that
-              it end the sentence and be skippable, was undone at the last
-              step. ⟨Sol⟩ */}
-          {projection.status === "error" &&
-            `The picture below is the Tree instead. ${projection.error ?? "Could not place these paragraphs, and the reason did not come back."}`}
+          {kept(projection)}
         </p>
       )}
 
@@ -1053,14 +1073,57 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
             This article has no usable tree, so there is nothing to draw. Run <code>npm run toc</code>{" "}
             for it and the picture appears.
           </p>
-        ) : layout === null ? (
+        ) : box === null || box.w === 0 ? (
           /* Before the first measure there is no width, and a diagram laid out
              against a guessed width would be visibly wrong for one frame. An
-             empty box for one frame is the cheaper mistake. */
+             empty box for one frame is the cheaper mistake — and it is a
+             *different* thing from waiting for data, which is the branch below,
+             which is why the two are told apart here rather than both falling
+             out of `layout === null`. One frame of spinner would flash. */
           <div className="diag-measuring" aria-hidden="true" />
+        ) : layout === null ? (
+          /**
+           * **Nothing to draw yet — a spinner or the reason, never another
+           * picture.** Greg, 2026-08-30: *"just show a loading spinner or
+           * error"*.
+           *
+           * Only the two scatters can reach this: Force needs no fetch to
+           * draw. **And it is the only voice while it is on screen** — the
+           * `.diag-note` strip above now says only what a *drawn* picture is,
+           * so a reader is never told the same thing twice in two registers.
+           *
+           * `projection` is handed over **only when it is the thing being
+           * waited for**. "Force cannot reach this" is a fact about today's
+           * code, not a property of it — and the failure it would license is
+           * the quiet kind: a picture that never asked for a projection,
+           * telling the reader it is reading the article paragraph by
+           * paragraph. A null here cannot say that.
+           */
+          <Waiting projection={wantsPoints ? projection : null} />
+        ) : layout.nodes.length === 0 ? (
+          /**
+           * **A layout can arrive with nothing in it, and an empty `<svg>` says
+           * nothing at all.**
+           *
+           * `layoutForce` returns a real layout with zero nodes when the graph
+           * holds only its root — an article whose contents page is a single
+           * entry, which is a shape the store really does hold. This branch did
+           * not need to exist while `tree` was the default, because the Tree
+           * drew that root as a row; Force draws only `depth > 0`, so making it
+           * the default turned a thin picture into a blank band with a working
+           * scrollbar and no explanation. ⟨Sol⟩, 2026-08-30.
+           *
+           * Separate from `Waiting` because it is not a wait: nothing is coming.
+           * The reason is the article's own shape, so the sentence says that
+           * rather than offering hope or a command to run.
+           */
+          <p className="diag-wait">
+            There is nothing to place: this article has no sections inside it, so the picture has no
+            bubbles to draw.
+          </p>
         ) : (
           <svg
-            className={`diag-svg diag-${drawnKind}`}
+            className={`diag-svg diag-${kind}`}
             width={layout.width}
             height={layout.height}
             viewBox={`0 0 ${layout.width} ${layout.height}`}
@@ -1070,11 +1133,12 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                the price of a layout box per node in a picture that can hold a
                hundred of them. */
             /* **A listbox where the picture is a flat list of paragraphs, a
-               tree where it is a tree.** The six tree and graph pictures draw
-               nested sections and honour the whole tree contract; the two
-               scatters draw 276 paragraphs with no nesting and nothing to open,
-               so claiming `tree` there would describe a widget this code does
-               not implement. GPT Sol's finding, 2026-08-27. */
+               tree where it is a tree.** Force draws nested sections and
+               honours the whole tree contract — levels, sibling counts,
+               Left/Right meaning close and open; the two scatters draw 276
+               paragraphs with no nesting and nothing to open, so claiming
+               `tree` there would describe a widget this code does not
+               implement. GPT Sol's finding, 2026-08-27. */
             /* No `biome-ignore` here any more, and that is a consequence of the
                role being a variable: the rule that needed suppressing fires on a
                *literal* role, so a computed one is invisible to it. Left as a
@@ -1083,8 +1147,8 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
             role={flat ? "listbox" : "tree"}
             aria-label={
               flat
-                ? `${KIND_UI[drawnKind].label} view — one dot per paragraph, placed by what it is about`
-                : `${KIND_UI[drawnKind].label} view of the article's structure`
+                ? `${KIND_UI[kind].label} view — one dot per paragraph, placed by what it is about`
+                : `${KIND_UI[kind].label} view of the article's structure`
             }
             onPointerLeave={() => setHover(null)}
             onFocus={() => setHasFocus(true)}
@@ -1150,7 +1214,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
               <NodeShape
                 key={n.id}
                 node={n}
-                kind={drawnKind}
+                kind={kind}
                 flat={flat}
                 ramp={ramp}
                 here={n.id === here}
@@ -1162,7 +1226,6 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                 onHover={setHover}
                 onRove={setRoving}
                 onKeyNav={onKeyNav}
-                onToggle={toggle}
               />
             ))}
             {/* You-are-here, as a line rather than a highlight — only on the
@@ -1236,6 +1299,67 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
         related={related}
       />
     </aside>
+  );
+}
+
+/**
+ * **What stands where the picture will be, when there is no picture yet.**
+ *
+ * Greg, 2026-08-30:
+ *
+ * > if while loading and/or if there's an error with one of the others (e.g.
+ * > with semantic embeddings), it falls back to Tree - instead, just show a
+ * > loading spinner or error.
+ *
+ * Only Drift and Trail can get here: Force draws four of its five kinds of line
+ * without asking the server anything. Three states, and they are three
+ * different sentences rather than one with a code appended —
+ *
+ *  - **loading** — the spinner, plus what the wait is *for*. A bare spinner in
+ *    a 288px band says "something", and a reader who has just pressed a chip
+ *    that costs a model call is owed the sentence.
+ *  - **ready with nothing to place** — an article of one long paragraph, or all
+ *    headings, comes back successful and empty. That is not an error and must
+ *    not be dressed as one.
+ *  - **error** — the consequence first, then the server's own words, which end
+ *    in a bracketed code the reader can quote (docs/project/copy.md). A fixed
+ *    sentence here would report an authentication failure, a network drop and a
+ *    broken deploy as the same thing, which is what this said before 2026-08-28.
+ *
+ * One `role="status"`, and only one: while this is on screen the `.diag-note`
+ * strip above says nothing, so a screen reader hears the wait once.
+ */
+function Waiting({ projection }: { projection: UseProjection | null }) {
+  /* No projection is being waited for, so there is nothing this can say about
+     why. Unreachable today — see the call site — and deliberately a real
+     sentence rather than a `throw` or a blank, because the one thing a reader
+     must never get here is an empty band with no explanation. */
+  if (projection === null) return <p className="diag-wait">This picture has nothing to draw yet.</p>;
+  if (projection.status === "error") {
+    return (
+      <p className="diag-wait" role="status">
+        Could not place these paragraphs.{" "}
+        {projection.error ?? "The reason did not come back."}
+      </p>
+    );
+  }
+  /* Ready, and no dots came back at all: an article of one long paragraph, or
+     one that is all headings. **Not "fewer than two"** — that is `kept`'s guard,
+     which is a different threshold about a picture that did draw. This branch is
+     `points.length === 0`, so the honest number is none. */
+  if (projection.status === "ready") {
+    return (
+      <p className="diag-wait" role="status">
+        Nothing here to place: a paragraph needs a dozen words before the model can say what it is
+        about, and none of this article's do.
+      </p>
+    );
+  }
+  return (
+    <p className="diag-wait" role="status">
+      <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" />
+      Reading the article paragraph by paragraph…
+    </p>
   );
 }
 
@@ -1325,13 +1449,15 @@ function Choice<T extends string>({
  * half of the answer. GPT Sol's finding, 2026-08-27.
  */
 function kept(p: UseProjection): string {
-  /* **Nothing to draw is its own sentence.** An article of one long paragraph,
-     or one that is all headings, comes back ready and empty — and the general
-     wording below would tell the reader what percentage of the differences this
-     flat view keeps, of a view that is not there. GPT Sol's finding,
-     2026-08-27. */
+  /* **A picture too thin to describe.** The *empty* case no longer reaches
+     here — no dots means no picture, and `Waiting` says so where the picture is
+     missing. What is left is the article that placed exactly **one** paragraph:
+     there is a dot, so this strip renders, and the general wording below would
+     report what percentage of the differences a flat view keeps of a view with
+     nothing to be different from. GPT Sol's finding, 2026-08-27, and the reason
+     the threshold is 2 rather than 1. */
   if (p.blocks < 2) {
-    return "Not enough prose here to place — a paragraph needs a dozen words before the model can say what it is about. The picture below is the Tree instead.";
+    return "Not enough prose here to place — a paragraph needs a dozen words before the model can say what it is about.";
   }
   const held = Math.round((p.variance[0] + p.variance[1]) * 100);
   const short = p.skipped.tooShort + p.skipped.nonProse;
@@ -1454,7 +1580,6 @@ function NodeShape({
   onHover,
   onRove,
   onKeyNav,
-  onToggle,
 }: {
   node: DiagramNode;
   kind: DiagramKind;
@@ -1472,7 +1597,6 @@ function NodeShape({
   onHover(id: NodeId | null): void;
   onRove(id: NodeId): void;
   onKeyNav(e: React.KeyboardEvent, node: DiagramNode): void;
-  onToggle(id: NodeId): void;
 }) {
   const titles = node.titleLines;
   const step = LINE_STEP[kind];
@@ -1512,9 +1636,8 @@ function NodeShape({
       /* **`node.label` where the picture spends position on something colour is
          also carrying.** A scatter dot's topic and its place in the article are
          in its position and its hue and nowhere else, and colour-scales.md is
-         emphatic that colour is never allowed to be the only carrier. The six
-         other pictures have nothing extra to say and fall through to the
-         default. */
+         emphatic that colour is never allowed to be the only carrier. Force has
+         nothing extra to say and falls through to the default. */
       aria-label={node.label ?? `${label}, ${node.blocks} paragraph${node.blocks === 1 ? "" : "s"}`}
       {...(node.hasChildren && { "aria-expanded": !node.collapsed })}
       onPointerEnter={() => onHover(node.id)}
@@ -1522,12 +1645,7 @@ function NodeShape({
       onClick={() => onJump(node.blockId)}
       onKeyDown={(e) => onKeyNav(e, node)}
     >
-      {kind === "tree" ? (
-        <>
-          <rect className="diag-row" x={node.x} y={node.y} width={node.w} height={node.h} rx={3} />
-          <circle className="diag-dot" cx={node.labelX - 9} cy={node.y + 7.5} r={3.5} />
-        </>
-      ) : kind === "force" ? (
+      {kind === "force" ? (
         /* A bubble, and the box IS the circle here rather than a row around it —
            in a force layout the shape's position is the whole of the
            information, so a rectangular hit target would sit over its
@@ -1568,7 +1686,6 @@ function NodeShape({
             // the string or the width changes.
             // biome-ignore lint/suspicious/noArrayIndexKey: see above
             key={i}
-            className={kind === "tree" && i >= titles ? "diag-gist" : undefined}
             x={node.labelX}
             // The step for a line is the step for the half of the label it is
             // in, and the layout reserved the row's height with exactly these
@@ -1581,36 +1698,13 @@ function NodeShape({
         ))}
       </text>
 
-      {/* The paragraph count, on the pictures that have room for it. The answer
-          to "how much am I not seeing", which nothing else in this picture
-          says. */}
-      {kind === "tree" && (
-        <text className="diag-count" x={node.w - 6} y={node.y + 11} textAnchor="end">
-          {node.blocks}
-        </text>
-      )}
-
-      {node.hasChildren && kind === "tree" && (
-        // biome-ignore lint/a11y/useSemanticElements: SVG has no <button> — see the <svg> above
-        <g
-          className="diag-twist"
-          role="button"
-          tabIndex={-1}
-          aria-label={node.collapsed ? `Open ${label}` : `Close ${label}`}
-          onClick={(e) => {
-            // Or the row's own handler jumps the article at the same time.
-            e.stopPropagation();
-            onToggle(node.id);
-          }}
-        >
-          <rect x={node.labelX - 21} y={node.y} width={14} height={15} fill="transparent" />
-          {node.collapsed ? (
-            <ChevronRight x={node.labelX - 20} y={node.y + 2} size={11} />
-          ) : (
-            <ChevronDown x={node.labelX - 20} y={node.y + 2} size={11} />
-          )}
-        </g>
-      )}
+      {/* **The chevron was here, and it went with the Tree.** It was the only
+          pointer-driven way to fold a part away, and it only ever existed on
+          the Tree's rows — a 14px hit target beside a 7px dot is not something
+          a force bubble has room for. Folding is still in the picture on Force,
+          on ← and →, which is where the tree-view pattern puts it; the paragraph
+          count that sat at the end of a Tree row is in the footer card, where it
+          always also was. */}
     </g>
   );
 }
