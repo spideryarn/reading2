@@ -50,8 +50,10 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import PQueue from "p-queue";
 import { PDFDocument } from "pdf-lib";
 import { stageCli } from "./cli-ledger.js";
+import { allOrStop } from "./concurrency.js";
 import { loadEnvLocal } from "./env.js";
 import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
@@ -110,6 +112,52 @@ const MAX_TOKENS = 16_000;
 
 /** How many times a chunk that fails its check is asked again. See the loop in `runPdfExtract`. */
 const ATTEMPTS = 2;
+
+/**
+ * How many chunks are transcribed at once.
+ *
+ * **This is the number that decides how long a PDF may be.** Chunks used to be
+ * read one after another, and the arithmetic that follows from that is why this
+ * constant exists. The first PDF through the deployed pipeline took 135s for 9
+ * pages in 2 chunks — about 45s a call — and a step is killed by its own
+ * deadline at `LEASE_MS - DEADLINE_MARGIN_MS`, 740s (src/jobs.ts). Sequentially
+ * that is roughly sixteen calls, so somewhere around fifty to seventy-five
+ * pages the stage stopped being able to finish at all, while `MAX_PAGES` went
+ * on accepting a hundred. The cap was about double the reachable length, and
+ * nothing said so: a long PDF ran for twelve minutes, died, and offered a Retry
+ * that would do the same thing again.
+ *
+ * **Why a number rather than "all of them".** Unbounded was the ask and it is
+ * the wrong shape for three reasons, none of them provider rate limits:
+ *
+ * - **A fatal chunk costs the whole document.** The run stops on the first
+ *   truncated or filtered answer, and everything already in the air has been
+ *   paid for. Sequentially the loss was one chunk; at full width it is every
+ *   chunk. `allOrStop` cancels what it can, but a request that has already been
+ *   answered is already billable.
+ * - **Memory.** `cutPages` builds a fresh PDF per chunk and a request may carry
+ *   up to `MAX_ENCODED_BYTES`. Thirty of those in flight is not a serverless
+ *   function's idea of a good time.
+ * - **Width past the point the deadline is met buys latency nobody is waiting
+ *   on**, and costs the two risks above.
+ *
+ * **Eight, and it is not a guarantee — an earlier draft of this comment said
+ * six made `MAX_PAGES` "comfortably reachable" and that was false.** GPT Sol
+ * did the worst case: `planChunks` will make a one-page chunk out of a page
+ * dense enough, so a hundred pages can be a hundred chunks, and at six wide
+ * that is `ceil(100/6) × 45s = 765s` — already past the 740s deadline before a
+ * single retry. Eight gives `ceil(100/8) × 45s = 585s`, which has margin at the
+ * *mean* call duration and would still fail at a bad enough p95. Note the
+ * arithmetic rather than the number: 45s is one measurement from one paper.
+ *
+ * **The real fix is not a bigger number here.** Admission should be decided on
+ * the planned chunk count against a measured p95, refusing up front like
+ * `TooLongForOnePass` does, instead of accepting a document and discovering at
+ * minute twelve that it cannot finish. That is not built. Until it is, a
+ * pathologically dense hundred-page PDF can still run out of time — it will now
+ * take rather more than a hundred dense pages to do it.
+ */
+export const CHUNK_CONCURRENCY = 8;
 
 /** Anthropic's own limit is on the whole encoded request; OpenRouter's providers are no kinder. */
 const MAX_ENCODED_BYTES = 30 * 1024 * 1024;
@@ -847,103 +895,219 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
      a retry nobody counts is a cost nobody sees. */
   const retries: string[] = [];
 
-  for (const [i, chunk] of chunks.entries()) {
-    const key = createHash("sha256")
-      .update(
-        JSON.stringify({
-          rawSha256,
-          pages: chunk.pages,
-          context: chunk.context ?? null,
-          prompt: promptFingerprint(),
-          reader: reader.id,
-          maxTokens: MAX_TOKENS,
-        }),
-      )
-      .digest("hex")
-      .slice(0, 16);
-    const cacheFile = path.join(cacheDir, `${key}.json`);
+  /**
+   * **The chunks are read concurrently, and then folded together in order.**
+   *
+   * Two phases, and the split is the whole design. Reading a chunk is a slow
+   * paid call that depends on nothing but the chunk; folding one in depends on
+   * every chunk before it, because `seen` carries the running dedup. Doing both
+   * in one loop is what forced the calls to be sequential — see
+   * `CHUNK_CONCURRENCY` for what that cost.
+   *
+   * **Phase 1's check is chunk-local, and the honest reason is not the one
+   * written here first.** The original comment claimed the explicit empty set
+   * was preventing a race — that `checkChunk` reading the shared `seen` would
+   * otherwise make retry decisions depend on who finished first. GPT Sol
+   * pointed out that this is false: phase 1 runs to completion before phase 2
+   * begins, so `seen` is empty throughout phase 1 anyway, and passing it would
+   * be identical. The splitting of the phases is what removes the shared state;
+   * the empty set does not remove anything.
+   *
+   * It is still passed explicitly, and now for a reason that is true: it says
+   * at the call site that this check does not see other chunks, so nobody has
+   * to reason about the temporal accident to know what it scores. The guard
+   * against the divergence that *does* matter — a chunk certified on text the
+   * fold then deletes — is the second check in phase 2, not this one.
+   *
+   * The two rules that matter still apply within the chunk: context-page
+   * records are removed by page number, and `isContextPage` catches a
+   * re-emitted context page even when chopped below the twenty-word floor,
+   * which is the attack Sol found. Cross-chunk dedup of the *output* is
+   * unaffected — phase 2 folds through the one shared `seen`, in page order.
+   */
+  const fatal = new AbortController();
+  /* Linked to the caller's signal rather than replacing it, so a cancelled
+     ingest (src/jobs.ts) still cancels the calls in flight. */
+  const signal = opts.signal
+    ? AbortSignal.any([opts.signal, fatal.signal])
+    : fatal.signal;
+  const queue = new PQueue({ concurrency: CHUNK_CONCURRENCY });
+  let completed = 0;
 
-    /**
-     * **One retry of a chunk that fails its check, and it is not the fallback
-     * the plan forbids.**
-     *
-     * The distinction matters. What the plan rules out is escalating a failing
-     * page to a stronger model, because that quietly costs four times as much
-     * and hides the fault. This is the *same* call again, and its output has to
-     * pass the *same* check — so it cannot launder a bad reading, it can only
-     * survive a transient one.
-     *
-     * And transient is what these are. The `easy` fixture passed twice and then
-     * dropped thirteen words — "in an interview Derrida speaks again of this
-     * specter of the future" — from a page it had transcribed perfectly an hour
-     * earlier. A gate that fails an eight-page paper one run in three, on a
-     * fault that is gone when you ask again, is a gate somebody turns off.
-     *
-     * Two runs, then it fails with the page numbers in the message. The failure
-     * is still visible and still hard.
-     */
-    let reading: ChunkReading;
-    let result: Check;
-    const cached = await readCachedChunk(cacheFile, {
-      slug: opts.slug,
-      chunk: key,
-      pages: chunk.pages,
-    });
-    if (cached) {
-      reading = cached;
-      result = checkChunk(reading, chunk, pass, seen);
-    } else {
-      for (let attempt = 1; ; attempt++) {
-        const sent = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
-        reading = await reader.read(
-          await cutPages(opts.bytes, sent),
-          instructionFor(chunk),
-          opts.signal,
-        );
-        usage.input += reading.usage.input;
-        usage.output += reading.usage.output;
-        /* `length` is a truncated answer, and a truncated answer is a lost page —
-           the previous version's own bug, shipped as a shorter article. Say which
-           it was before the scoring says "the model lost content", because that
-           is the right symptom and the wrong diagnosis. */
-        if (reading.finish === "length") {
-          throw new Error(
-            `The transcription of pages ${chunk.pages.join(", ")} was cut off at the token limit.`,
-          );
-        }
-        if (reading.finish === "content_filter") {
-          throw new Error(
-            `The model's safety filter stopped the transcription of pages ${chunk.pages.join(", ")}` +
-              `${reading.nativeFinish ? ` (${reading.nativeFinish})` : ""}. Verbatim transcription` +
-              ` of long boilerplate is a known trigger; a smaller chunk sometimes gets through.`,
-          );
-        }
-        result = checkChunk(reading, chunk, pass, seen);
-        if (result.ok || attempt >= ATTEMPTS) break;
-        retries.push(`pages ${chunk.pages.join(", ")}: ${result.failures[0] ?? "failed its check"}`);
-      }
-      /* Only a reading that passed is cached. A failed one is not worth
-         replaying, and caching it would make the retry above read back the
-         answer it is retrying. */
-      if (result.ok) await writeAtomic(cacheFile, reading);
-    }
+  const readings = await allOrStop(
+    chunks.map((chunk) =>
+      /* The signal goes to `add` as well as into the request. Without it a chunk
+         still queued when a fatal one aborts would never run and never settle,
+         and the `Promise.all` inside `allOrStop` would wait on it forever. */
+      queue.add(
+        async () => {
+          const key = createHash("sha256")
+            .update(
+              JSON.stringify({
+                rawSha256,
+                pages: chunk.pages,
+                context: chunk.context ?? null,
+                prompt: promptFingerprint(),
+                reader: reader.id,
+                maxTokens: MAX_TOKENS,
+              }),
+            )
+            .digest("hex")
+            .slice(0, 16);
+          const cacheFile = path.join(cacheDir, `${key}.json`);
 
+          /**
+           * **One retry of a chunk that fails its check, and it is not the
+           * fallback the plan forbids.**
+           *
+           * The distinction matters. What the plan rules out is escalating a
+           * failing page to a stronger model, because that quietly costs four
+           * times as much and hides the fault. This is the *same* call again,
+           * and its output has to pass the *same* check — so it cannot launder
+           * a bad reading, it can only survive a transient one.
+           *
+           * And transient is what these are. The `easy` fixture passed twice
+           * and then dropped thirteen words — "in an interview Derrida speaks
+           * again of this specter of the future" — from a page it had
+           * transcribed perfectly an hour earlier. A gate that fails an
+           * eight-page paper one run in three, on a fault that is gone when you
+           * ask again, is a gate somebody turns off.
+           *
+           * Two runs, then it fails with the page numbers in the message. The
+           * failure is still visible and still hard.
+           */
+          let reading: ChunkReading;
+          let result: Check;
+          /* Empty, and deliberately not `seen` — see the note above this block. */
+          const alone = new Set<string>();
+          const asked: string[] = [];
+          const cached = await readCachedChunk(cacheFile, {
+            slug: opts.slug,
+            chunk: key,
+            pages: chunk.pages,
+          });
+          if (cached) {
+            reading = cached;
+            result = checkChunk(reading, chunk, pass, alone);
+          } else {
+            for (let attempt = 1; ; attempt++) {
+              const sent = chunk.context ? [chunk.context, ...chunk.pages] : chunk.pages;
+              reading = await reader.read(
+                await cutPages(opts.bytes, sent),
+                instructionFor(chunk),
+                signal,
+              );
+              usage.input += reading.usage.input;
+              usage.output += reading.usage.output;
+              /* `length` is a truncated answer, and a truncated answer is a lost page —
+                 the previous version's own bug, shipped as a shorter article. Say which
+                 it was before the scoring says "the model lost content", because that
+                 is the right symptom and the wrong diagnosis. */
+              if (reading.finish === "length") {
+                throw new Error(
+                  `The transcription of pages ${chunk.pages.join(", ")} was cut off at the token limit.`,
+                );
+              }
+              if (reading.finish === "content_filter") {
+                throw new Error(
+                  `The model's safety filter stopped the transcription of pages ${chunk.pages.join(", ")}` +
+                    `${reading.nativeFinish ? ` (${reading.nativeFinish})` : ""}. Verbatim transcription` +
+                    ` of long boilerplate is a known trigger; a smaller chunk sometimes gets through.`,
+                );
+              }
+              result = checkChunk(reading, chunk, pass, alone);
+              if (result.ok || attempt >= ATTEMPTS) break;
+              asked.push(
+                `pages ${chunk.pages.join(", ")}: ${result.failures[0] ?? "failed its check"}`,
+              );
+            }
+            /* Only a reading that passed is cached. A failed one is not worth
+               replaying, and caching it would make the retry above read back the
+               answer it is retrying. */
+            if (result.ok) await writeAtomic(cacheFile, reading);
+          }
+
+          /* Counted as chunks land rather than in page order, because this is
+             the one number a reader is watching and "4 of 17" should move when
+             a call returns, not when its turn comes round. `chunk.pages` says
+             which one it was, so out-of-order progress still reads sensibly. */
+          completed += 1;
+          opts.onProgress?.(completed, chunks.length, chunk.pages, result);
+          return { chunk, reading, result, asked };
+        },
+        { signal },
+      ),
+    ),
+    () => {
+      /**
+       * One failed chunk ends the run, so stop the rest before they cost
+       * anything more.
+       *
+       * **`abort` is the one that does the work, and `clear` is a guard against
+       * a future edit — which is not what the equivalent comment in
+       * src/labels.ts says.** That one claims both are needed because "neither
+       * reaches the other's batches". Measured here, that is not true: deleting
+       * `clear()` leaves all three tests green, because the `{ signal }` passed
+       * to `queue.add` already makes a task that has not started settle as
+       * aborted rather than sit there. Deleting `abort()` instead turns the
+       * cancellation test red at once — nothing in flight is ever signalled.
+       *
+       * `clear()` stays anyway, and deliberately: it is free, and it is the
+       * thing that stops a hang if someone later drops `{ signal }` from the
+       * `add` above. But it is documented as the belt and not the braces, so
+       * nobody reads a redundant line as a load-bearing one.
+       */
+      fatal.abort();
+      queue.clear();
+    },
+  );
+
+  /**
+   * Phase 2, in page order rather than completion order — `readings` follows
+   * `chunks`, so this is deterministic however the calls raced.
+   *
+   * **The score recorded here is of what is PUBLISHED, not of what the chunk
+   * returned, and those are two different sets.** Phase 1 scores a chunk on its
+   * own reading, before the cross-chunk dedup has run; this fold then removes
+   * records that repeat twenty or more words seen in an earlier chunk. So a
+   * chunk can pass phase 1 on the strength of text that phase 2 deletes.
+   *
+   * That is not hypothetical. GPT Sol built the probe: a reading scoring recall
+   * 1.0 and precision 1.0, from which removing one 20-word record duplicated
+   * out of an earlier chunk left a 20-word missing run and failed. The repeated
+   * paragraph was supplying the word evidence that covered an omission
+   * elsewhere on the page, and then it disappeared. Scoring only in phase 1
+   * would report 1.0 for an article with a hole in it — the exact shape of
+   * failure pass 0 exists to catch.
+   *
+   * So the chunk is checked twice, and the two checks answer different
+   * questions. Phase 1's decides whether to spend money asking again, and has
+   * to happen there because that is where the retry is. This one decides what
+   * `recall` and `quality` say about the article, and has to happen here
+   * because this is where the records are final. Only local CPU, no second call.
+   */
+  for (const { chunk, reading, result, asked } of readings) {
+    retries.push(...asked);
     const emitted = withoutRepeats(
       reading.records.filter((r) => !chunk.context || r.page !== chunk.context),
       seen,
       chunk.context === undefined ? null : wordsOf(pass, [chunk.context]),
       wordsOf(pass, chunk.pages),
     );
+    /* `result` is phase 1's verdict and is deliberately not reused for the
+       numbers below — it is kept only for `onProgress`, which has already
+       fired. */
+    const published = checkEmitted(emitted, chunk, pass);
     stripped += reading.stripped ?? 0;
-    if (!result.ok) failures.push(...result.failures);
-    notes.push(...result.notes);
-    if (result.overall.recall !== null) {
-      baselineTokens += result.overall.base;
-      matchedTokens += result.overall.recall * result.overall.base;
-      pagesChecked += result.scored.length;
+    if (!published.ok) failures.push(...published.failures);
+    notes.push(...published.notes);
+    if (published.overall.recall !== null) {
+      baselineTokens += published.overall.base;
+      matchedTokens += published.overall.recall * published.overall.base;
+      pagesChecked += published.scored.length;
     }
     all.push(...emitted);
-    opts.onProgress?.(i + 1, chunks.length, chunk.pages, result);
+    void result;
   }
 
   /**
@@ -1101,6 +1265,17 @@ function checkChunk(reading: ChunkReading, chunk: Chunk, pass: Pass0, seen: Set<
     chunk.context === undefined ? null : wordsOf(pass, [chunk.context]),
     wordsOf(pass, chunk.pages),
   );
+  return checkEmitted(emitted, chunk, pass);
+}
+
+/**
+ * The check for records that have already been through the dedup.
+ *
+ * Split out of `checkChunk` so the *published* records can be scored, which is
+ * the thing the two-phase read has to be careful about. See the note at the
+ * fold in `runPdfExtract`.
+ */
+function checkEmitted(emitted: PdfRecord[], chunk: Chunk, pass: Pass0): Check {
   return check(emitted, chunk.pages, pass, {
     context: chunk.context,
     unchecked: bibliographyPages(emitted, chunk.pages, pass),
