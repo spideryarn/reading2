@@ -60,37 +60,54 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
  */
 let labelsFor: Record<string, string> = {};
 
+/**
+ * How many times the stage paid for labels — the whole of the second guard
+ * below.
+ *
+ * `assertTreeSound` ran only after `mergeLabels`, so a structural mistake the
+ * model made in the *structure* call was found after a full label run had been
+ * paid for and had succeeded. On job spya-v2f7b3 that happened three times in
+ * one ingest. Counting the call is the only way to see it: the outcome —
+ * throws, writes nothing — is identical whether the check runs before the
+ * labels or after them, which is why the existing tests in this file all passed
+ * on the wasteful order. See docs/postmortems/the-article-with-one-heading.md.
+ */
+let labelCalls = 0;
+
 vi.mock("../src/labels.js", async (importOriginal) => {
   const real = await importOriginal<typeof import("../src/labels.js")>();
   return {
     ...real,
     /* Only the call is faked. `mergeLabels` stays real, so the tree that
        reaches the guard is exactly the tree that would have been written. */
-    generateLabels: async () => ({
-      labels: labelsFor,
-      file: {
-        version: "test",
-        generator: "test",
-        slug: "toc-write-guard",
-        structureHash: "0000000000000000",
-        blocksHash: "0000000000000000",
-        model: "test",
-        batches: [],
+    generateLabels: async () => {
+      labelCalls += 1;
+      return {
         labels: labelsFor,
-        generatedAt: "2026-08-29T00:00:00.000Z",
-        elapsedMs: 0,
-      },
-      batches: 0,
-      oversized: 0,
-      resumed: 0,
-      calls: 0,
-      estimatedCacheable: false,
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheReadTokens: 0,
-      cacheWriteTokens: 0,
-      clearCheckpoint: async () => {},
-    }),
+        file: {
+          version: "test",
+          generator: "test",
+          slug: "toc-write-guard",
+          structureHash: "0000000000000000",
+          blocksHash: "0000000000000000",
+          model: "test",
+          batches: [],
+          labels: labelsFor,
+          generatedAt: "2026-08-29T00:00:00.000Z",
+          elapsedMs: 0,
+        },
+        batches: 0,
+        oversized: 0,
+        resumed: 0,
+        calls: 0,
+        estimatedCacheable: false,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        clearCheckpoint: async () => {},
+      };
+    },
   };
 });
 
@@ -183,5 +200,41 @@ describe("generateToc refuses to write an invalid tree", () => {
     const { threw } = await run();
     expect(threw!.message).not.toContain("A Heading Nobody Wrote");
     expect(threw!.message).not.toContain(heading!.text);
+  });
+
+  /* **The control, and it has to come first for the same reason as the one at
+     the top of this block.** "The labels were not generated" is satisfied just
+     as well by a harness where the mock is never reached at all — a broken
+     import, a throw earlier in the stage. This proves the counter moves. */
+  it("pays for labels when the structure is sound", async () => {
+    await rm(path.join(DIR, "tree.json"), { force: true });
+    await rm(path.join(DIR, "labels.json"), { force: true });
+    labelCalls = 0;
+    modelTree = wholeArticle();
+    const { threw } = await run();
+    expect(threw).toBeNull();
+    expect(labelCalls).toBe(1);
+  });
+
+  /* The finding from job spya-v2f7b3. Everything `checkTree` complains about
+     here is decided by the *structure* call: the ranges, the tiling, the gists,
+     the titles and `sourceHeading`. None of it can change in `generateLabels`,
+     because `mergeLabels` touches leaves only and only sets or deletes
+     `navLabel` — so the answer is already known before a single label is asked
+     for, and asking anyway costs a full batch run per attempt.
+
+     Not merely a saving. Stage 4 is the most expensive step in the pipeline
+     (see 38ea362), and this is a whole wasted pass through the second half of
+     it on every attempt at an article the structure model keeps getting wrong —
+     which is exactly the article this postmortem is about, six times over. */
+  it("does not pay for labels when the structure call already produced an invalid tree", async () => {
+    await rm(path.join(DIR, "tree.json"), { force: true });
+    await rm(path.join(DIR, "labels.json"), { force: true });
+    labelCalls = 0;
+    modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
+    const { threw } = await run();
+    expect(threw).not.toBeNull();
+    expect(labelCalls).toBe(0);
+    expect(await wrote()).toEqual([]);
   });
 });

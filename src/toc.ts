@@ -803,6 +803,27 @@ export async function generateToc(opts: {
      `isStructural`, which is false for every supplement block, so the node
      contributes no sibling set and costs no call. */
 
+  /* **The structural half of the invariants, before a label is paid for.**
+     Everything `checkTree` can fail on here — the ranges, the tiling, the
+     coverage, the gists, the titles, `sourceHeading`, the supplement rules — is
+     decided by the structure call above and cannot change in `generateLabels`,
+     because `mergeLabels` touches leaves only and only sets or deletes
+     `navLabel`. So the answer is already known at this line, and the version of
+     this file that only asked after the merge paid for a full batch run to
+     learn something it could have been told for free. On job spya-v2f7b3 that
+     happened three times in one ingest, each time discarding a label run that
+     had *succeeded* — and stage 4 is the most expensive step in the pipeline.
+
+     **This does not replace the call after `mergeLabels`, and must not.** One
+     `fail` in `checkTree` reads `navLabel` — the phantom-row rule at
+     tree-invariants.ts, a leaf that carries a label but anchors a block
+     `isStructural` says may never have one. There are no labels yet at this
+     line, so that check is vacuous here and only the later call can make it.
+     Two calls, deliberately: this one is a cost guard, the one below is the
+     guarantee about the file. `checkTree` is pure and takes microseconds.
+     docs/postmortems/the-article-with-one-heading.md. */
+  assertTreeSound(blocks, structure);
+
   /* Pass two. The tree has to exist first: the batches are cut along its own
      section boundaries, so that every label a reader compares with another was
      written in the same call. src/labels.ts says why that is the rule. */
