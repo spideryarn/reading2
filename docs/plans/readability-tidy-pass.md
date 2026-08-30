@@ -1,9 +1,12 @@
 # Tidying what Readability kept — a model pass over the blocks, not the gaps
 
-**Status: a spike, with numbers, and a recommendation.** Nothing in the pipeline has changed. Stage 2
-is [content-extraction.md](../project/content-extraction.md); the sibling plan that asked the
-opposite question is
-[readability-repair-pass.md](readability-repair-pass.md).
+**Status: a spike, reviewed, and with a recommendation that the review changed.** Nothing in the
+pipeline has changed. Stage 2 is [content-extraction.md](../project/content-extraction.md); the
+sibling plan that asked the opposite question is
+[readability-repair-pass.md](readability-repair-pass.md); GPT Sol's review is
+[readability-tidy-pass-review-sol.md](readability-tidy-pass-review-sol.md) and
+**[What the review overturned](#what-the-review-overturned)** is the section to read if you read only
+one.
 
 > We had talked in the past about having some kind of LLM post-processing stage (after running
 > Mozilla Readability) for HTML imports. For example, it might have caught & fixed the issue where
@@ -20,24 +23,30 @@ opposite question is
 value belonged to free deterministic code, and stopped there.
 
 Re-asked, the answer is different, because the question is different. The failure Greg describes is
-real and it is on the shelf right now; the `<br>` example is not the case; and a model pass at
-**a fifth of a cent per article** does the job with no false positive on article prose across twenty
-committed pages.
+real and it is on the shelf right now, and the `<br>` example is not the case.
+
+**The first draft of this file then said a model pass "does the job with no false positive on article
+prose across twenty committed pages". That was wrong, and it was wrong for three compounding
+reasons the review found:** the instruments were not running the real stage 2, the safety alarm was
+printing 140 characters of a block while claiming to print it in full, and the control could not
+discriminate. Corrected, the arm is still worth building and **is not ready to remove anything
+automatically** — see [Recommendation](#recommendation).
 
 Three findings, in the order they change what to do:
 
 1. **The `<br>` premise is wrong, and its conclusion is right.** Readability's own `_replaceBrs`
    reflows `<br><br>` runs into paragraphs. Paul Graham's *How to Do Great Work* has **zero `<p>` in
-   the source** and comes out with **266**. That page is nevertheless broken, in a way nothing in
+   the source**; Readability emits **231**, and stage 3 makes **265 `<p>` blocks** of them. That page is nevertheless broken, in a way nothing in
    this repo was looking at: it arrives as 328 blocks of which **87 hold six characters or fewer** —
    `[1]`…`[29]`, a bare `[`, a bare `25`. 87 of them are `gistable: true`, so the table of contents,
    the summaries and the granularity-zoom tree all treat them as content.
 2. **Nothing in the pipeline has ever looked at what Readability *kept*.** Every instrument here
-   measures absence — `droppedChars`, the ratio, kept-over-present per tag. Four of the five fixtures
+   measures absence — `droppedChars`, the ratio, kept-over-present per tag. Two of the five fixtures
    added for this spike score **perfectly** on all of them while being visibly wrong to a reader.
-3. **A model does the judgement well, cheaply, and safely — but only the half that needs judgement.**
-   The certain junk is free; the model's marker recall is *worse* than a four-line regex and varies
-   run to run. What it is good at is the part no rule can do.
+3. **A model does the judgement well and cheaply, and not yet safely enough to act on.** The certain
+   junk is free; the model's marker recall is *worse* than a four-line regex and varies run to run.
+   What it is good at is the part no rule can do — and it still confuses an author's later update to
+   a post with the post's footer.
 
 ## What is actually broken, measured
 
@@ -45,8 +54,13 @@ Three findings, in the order they change what to do:
 **real stage-3 splitter** over a page and reports what a reader would get. Two counts, split where
 certainty is:
 
-- **markers** — a gistable block with no letter in it anywhere. `[1]`, `¶`, `▲`, `[`, `25`, `{6}`.
-  Not a passage, no judgement needed.
+- **markers** — a gistable block of six characters or fewer with no letter in it. `[1]`, `¶`, `▲`,
+  `[`, `25`, `{6}`.
+  (**The length bound was missing from one of the two copies of this rule**, and the recommendation
+  inherited the unbounded one. Sol's counter-examples are decisive: with no bound it deletes a
+  numeric table cell, a scoreline, `1–0`, `0-0`, a date, an equation like `1 + 1 = 2` and a
+  symbol-only scene break. Bounded at six it still deletes `1–0` and a numeric cell. See
+  [What the review overturned](#what-the-review-overturned).)
 - **tiny** — six characters or fewer, has a letter, is not a heading. `http`, `[edit]`, `{v}`.
   Suspicious, not certain.
 
@@ -55,7 +69,7 @@ certainty is:
 definition term. An instrument that scores Tufte CSS's own section headings as junk would have argued
 for a fix that damages pages.
 
-Across the twenty committed fixtures:
+Across the twenty-one committed fixtures:
 
 | fixture | markers | tiny | longest block | ratio | what the reader gets |
 |---|---:|---:|---:|---:|---|
@@ -65,15 +79,31 @@ Across the twenty committed fixtures:
 | **mdn-cache-control** | 0 | 31 | 533 | 0.665 | `http` / `html` code-fence labels, 30 of them |
 | **wikipedia-transformer** | 0 | 19 | 1,874 | 0.731 | nineteen `[edit]` links |
 | **mactutor-turing** | 18 | 15 | 990 | 0.858 | `1931`, `in`, `'s` — mid-sentence fragments |
-| **acx-footnotes** | 18 | 0 | 1,041 | 0.986 | footnote numbers split from their footnotes |
+| ~~acx-footnotes~~ | ~~18~~ **0** | 0 | 1,041 | 0.986 | **a failure this file invented; see below** |
 | **whitman-leaves** | 0 | 0 | **67,890** | **1.000** | several poems as one node |
 | **hacker-howto** | 0 | 0 | **14,572** | 0.955 | 21 Q&A pairs as one node |
-| **shakespeare-hamlet** | 0 | 0 | 1,539 | 0.945 | **correct** — 52 verse lines, the control |
+| **shakespeare-hamlet** | 0 | 0 | 1,539 | 0.945 | **correct** — 52 speeches and lines, the control |
+
+**The `acx-footnotes` row was a measurement artefact and is the most instructive number here.** The
+instruments did `unhide → Readability → split` and production stage 2 also calls
+`canonicaliseNotes` *before* Readability ([`src/extract.ts`](../../src/extract.ts)). Without it that
+page reports **118 blocks and 18 stranded footnote markers**; with it, **96 blocks and zero**. The
+instrument was reporting a failure the real pipeline had already fixed, and no check computed from
+its own rows could have caught it. Both instruments now call `readArticle`, the production transform
+itself, so the two cannot drift again. Found by GPT Sol.
+
+The rest of the table survives that fix unchanged, Paul Graham's row included — 87 markers with the
+note step and 87 without.
 
 Note the ratios. **`pg-greatwork` and `whitman-leaves` both score 1.000 and drop nothing**, and both
 are broken. The existing corpus runner cannot see either failure, and neither can the structure
 check, because no *tag* went missing — the tags are all there, wrapped around the wrong amount of
 text or around nothing.
+
+(An earlier draft generalised that into "four of the five new fixtures score perfectly on
+`droppedChars`". That is false and the file's own probe output contradicts it: only `whitman-leaves`
+is zero. MkDocs drops 156 characters, `hacker-howto` 1,031, `mactutor-turing` 1,539,
+`shakespeare-hamlet` 208. **Two** fixtures make the point; four was a number nobody computed.)
 
 ### Why this matters more here than in most reading apps
 
@@ -107,37 +137,48 @@ takes part of the piece away from the reader and nothing will tell them; they ar
 you are not sure, keep it.* The second list is doing most of the work — it is what the controls test,
 and the controls pass.
 
-## What three models did, over twenty pages
-
-**The free rule is computed first and the model is scored against the residual**, because the sibling
-plan's central finding was that measuring against stock reported an arm as four times more useful
-than it was.
+## What three models did, and what that comparison is worth
 
 | | GPT-5.6 Luna | GPT-5.6 Terra | Claude Sonnet 5 |
 |---|---|---|---|
-| cost, full corpus | **$0.07** | $0.94 | $0.96 |
-| slowest page | 27 s | 42 s | 72 s |
-| marker recall | 87/87, 118/127, 8/8 — but **2/18** on MacTutor | **77/127** on rfc9110 | 87/87 |
-| the ToC on rfc9110 | **missed it** (1 block) | **found it** (307 blocks) | ran out of tokens |
-| false positives on prose | 1 in 3 runs (below) | 0 | 1 (PG's acknowledgements) |
+| fixtures completed | **21 of 21** | 14 of 15 | **9 of 15** |
+| cost of that run | **$0.118** | $0.943 | $0.962 |
+| per completed page | **$0.0056** | $0.067 | $0.107 |
+| slowest completed page | 24.5 s | 42.0 s | 72 s |
+| marker recall, whole run | **221/246 (90%)** | 89/139 (64%) | not comparable |
+| the inline ToC on rfc9110 | missed it (1 block) | **found it (307)** | ran out of tokens |
+| content deletions | 2 (Aaronson's own updates) | 0 seen | 1 (PG acknowledgements) |
 
-**Luna at a fifth of a cent per page is the recommendation**, with one change to the design that the
-table above forces: **do not ask the model about markers at all.** Its recall on them is erratic —
-2 of 18 on MacTutor, 0 of 2 on the MkDocs page — while a four-line regex gets 100% of them for
-nothing. Filter them out deterministically, then ask the model about what is left. Terra's better
-marker recall is not worth paying for; Terra's better recall on *inline tables of contents* might be,
-and that is the one place the two genuinely differ.
+**Every one of those numbers is one run per fixture, and the sibling plan asks for at least three.**
+So the table separates *models* from *run-to-run variance* nowhere at all, and the RFC ToC row — the
+single largest apparent difference — is exactly where that matters, because Luna found one block on
+one run and 307 was Terra's single attempt.
 
-**Terra found something Luna missed and it is the largest single win in the run**: RFC 9110's own
-table of contents, 307 list items, which Luna scored as one block. On WHATWG both found it (146 vs
-158). So the disagreement is not "Terra is better", it is "on the two largest pages in the corpus,
-one of them sees the inline ToC and the other sometimes does not" — and both pages are ~2,500 rows,
-which is where a long list starts costing recall.
+Three corrections to the first draft, all from the review and all checked here:
 
-**Sonnet's rfc9110 run failed with `finish_reason: "length"`.** That is worth stating because the
-guard for it was written on purpose: a truncated JSON answer parses as *fewer* drops, which reads as
-a cautious model. Without the check, Sonnet would have been scored as the most conservative arm on
-the page it actually could not finish.
+- **Sonnet completed 9 of 15, not 14.** The first draft reported only the RFC failure and left five
+  other absent fixtures unmentioned, so its cost-per-page and its "one false positive" both came off
+  a denominator the table did not show. A results file that is six pages short looks exactly like a
+  corpus that is six pages smaller, which is why the fixture count is now in the filename.
+- **Terra's marker recall is worse than Luna's, not better** — 64% against 90%. The first draft said
+  "Terra's better marker recall is not worth paying for", which had the direction backwards. What
+  Terra is better at is finding a long inline table of contents on a 2,500-row page.
+- **Luna is $0.0056 a page, not $0.002.** The earlier figure divided a smaller total by a larger page
+  count.
+
+**Sonnet's rfc9110 run failed with `finish_reason: "length"`**, and the guard for it was written on
+purpose: a truncated JSON answer parses as *fewer* drops, which reads as a cautious model. Without
+the check, Sonnet would have been scored as the most conservative arm on the page it could not
+finish.
+
+### And the arm that is recommended has not actually been run
+
+The design conclusion below is *"free rule first, model on the residual"*. The accounting in
+`tidy.mts` separates markers from `beyondTheRule` **after** the call — but `ask()` still sends every
+row, markers included, and the prompt still lists marker examples. So what was measured is "model
+sees everything, we credit it only for the residual", which is the right *scoring* and not the
+proposed *system*. Removing the markers first changes the prompt, its length and its attention, and
+that run has not been done. Sol's point, and it is fair.
 
 ### What it drops, read rather than scored
 
@@ -149,43 +190,69 @@ be made a fourth time. Read across the corpus, Luna's picks are:
 |---|---|---|
 | whatwg-parsing | 146 — the spec's inline ToC, prev/next links, "Living Standard — Last Updated" | correct |
 | mdn-cache-control | 30 — every `http` / `html` code-fence label | correct; kept `h2:"Syntax"`, `dt:"Age"`, `h4:"no-cache"` |
-| gutenberg-pride | 24 — twenty repeats of `[Copyright 1894 by George Allen.]`, page markers | correct, except one plate caption |
+| gutenberg-pride | 21 — twenty repeats of `[Copyright 1894 by George Allen.]`, page markers | correct; an earlier run also took the publisher's imprint and a plate caption |
 | mactutor-turing | 23 — the "Additional Resources" external-links rail | correct |
 | wikipedia-transformer | 18–19 — `[edit]`, all of them and nothing else | correct |
-| gwern-scaling | 6 — "Backlinks", "Similar Links", "Bibliography" and their labels | correct |
+| gwern-scaling | 5 — "Backlinks", "Similar Links", "Bibliography" and their labels | correct |
 | arxiv-abs | 4 — the metadata table and submission history | correct |
 | whitman-leaves | the Gutenberg `*** START/END ***` sentinels; once, the 8,331-char ToC | correct |
 | hacker-howto | 1 — `Copyright © 2001 Eric S. Raymond` | correct |
 | tufte-css | 1 — `Dave Liepmann`, the byline | arguable |
-| acx, cornell, constitution, **shakespeare-hamlet** | **nothing** | correct |
+| aaronson | 7 — the post footer and comment policy, **and two of the author's own updates** | see below |
+| acx, acx-footnotes, cornell, constitution, mkdocs-tabs, **shakespeare-hamlet** | **nothing** | correct |
 
-**The Shakespeare control is the one to look at.** Fifty-two blocks averaging 170 characters, every
-one a line of verse, and the model touched none of them. A "drop short blocks" rule would have
-destroyed that page, which is exactly why it is now a committed fixture.
+**The Shakespeare control was over-claimed and the correction matters.** The model did leave all 52
+of its blocks alone, which is the right behaviour. But the blocks are mostly *speeches*, the longest
+running to 1,539 characters, and **none of them is six characters or fewer** — so the page cannot
+defeat a short-block rule, because such a rule never touches it. It is a control against a model
+being careless, not against the crude baseline, and the first draft claimed the second. Reproduce it
+with `npx tsx evals/extraction/tidy.mts --trivial --all`.
 
-### The one false positive, and why the alarm nearly missed it
+### The false positives, and there are more than one
 
-On the second of three Luna runs over `pg-greatwork` it named a **177-character** block: the body of
-footnote 15, which begins with a stray `]` because the splitter cut its marker off. Real article
-prose, named for deletion.
+The first draft of this section was called *"the one false positive"* and reported a rate of one in
+three runs. Both halves were wrong, and the second instrument fix is why: `prose` claimed to print a
+block "in full" and was printing the same 140-character snippet the model saw, so a reviewer was
+judging a deletion from its first sentence.
 
-The alarm did not fire. `PROSE_CHARS` was 200, chosen by feel, and the block was twenty-three
-characters short of it. It was caught only because `beyondTheRule` is *printed* — which is an
-argument for printing, not for a better threshold. The threshold is now 100, and 100 is not
-better-justified than 200 was; **no character count separates a footnote body from a code-fence
-label**, exactly as the sibling plan found that no percentage separates a dropped comment thread from
-dropped normative text.
+With the full text stored, the twenty-one-fixture Luna run names **twelve blocks over 100
+characters**. Read, they sort into three groups:
 
-Rate: **one false positive in three runs on one of twenty pages**, and it was recoverable prose in a
-footnote rather than body text. That is the number a decision rests on and it is from a small sample.
+**Correct.** `man-open`'s 2,497-character "Pages that refer to this page" index; `arxiv-abs`'s
+metadata table and submission history; `aaronson`'s WordPress "This entry was posted on…" footer and
+its three comment-policy paragraphs. Furniture, all of it.
 
-### And the variance is real
+**Genuinely wrong, and a nameable class.** On Scott Aaronson's post, two blocks:
 
-Three Luna runs on `pg-greatwork`: 87/87 markers with 0 extra, then 86/87 with the footnote,
-then 87/87 with 0. `whitman-leaves` dropped three blocks once and two the next time. The sibling plan
-asks for at least three uncached repetitions per fixture for exactly this reason; **this spike has
-three on one fixture and one on the rest**, which is enough to establish that variance exists and not
-enough to bound it.
+> *Update (Feb. 29): A YouTube video of this talk is now available…*
+> *Another Update (March 8): YouTube video of a shorter (18-minute) version of this talk…*
+
+Those are **the author's own later additions to the piece**, and they read like site chrome because
+they begin with a parenthetical date. Nothing in the prompt's keep-list covers them. This is the
+failure to design against, and it is worse than a stray footnote body: an update is often the most
+current thing on the page.
+
+**A policy question, not an error.** PG's *"Thanks to Trevor Blackwell, Daniel Gackle…"*
+acknowledgements, and — in an earlier run — Gutenberg's publisher imprint
+(*"Ruskin House. 156. Charing Cross Road. London George Allen."*) and its printer's colophon. The
+sibling plan raised exactly this and nobody has answered it: **does Spideryarn want acknowledgements
+and front matter on the shelf?** That is Greg's call and needs no model.
+
+An earlier run also named the body of PG's footnote 15 — 177 characters beginning with a stray `]`,
+because the splitter cut its marker off. Real prose. The alarm did not fire, because `PROSE_CHARS`
+was 200 and the block was twenty-three characters short of it.
+
+**So the honest count is at least four distinct content deletions across the runs, not one**, and
+Sol's arithmetic on the rate stands: treating page-runs as independent — already a simplification
+this evidence does not earn — two errors in twenty-two page-runs is a 95% exact interval of roughly
+**1%–29%**. That interval is useless for deciding anything, which is the point. It does not estimate
+the quantity that matters either: **the chance that an ordinary article loses genuine content**, for
+which this corpus, enriched for difficulty, is the wrong sample entirely.
+
+`PROSE_CHARS` is now 100. **That is not a fix and should not be read as one.** No character count
+separates a footnote body from a code-fence label, and Aaronson's update at 220 characters and his
+comment policy at 256 are indistinguishable by length. Length orders human review; it cannot gate
+anything.
 
 ## What a model cannot fix here, and it is half the problem
 
@@ -221,22 +288,28 @@ than a failure. Captures are now checked for their own article text before hashi
 
 ## Recommendation
 
-1. **The free marker rule, in stage 3, deterministically.** No model, no money, no latency, no
-   variance. It is the single largest win on the corpus (87 blocks on the PG essay alone) and it does
-   not need this plan's permission — it needs
-   [block-ids.md](../project/block-ids.md)'s owner to decide whether a letterless block should ever
-   have been minted as a gistable block in the first place. **That question is upstream of everything
-   else here.**
-2. **Then the model, on the residual only.** Luna, ids-only, ~$0.002 and 20 seconds per article,
-   cached on the content hash like the other expensive stages
-   ([architecture.md](../project/architecture.md#conventions)). It is not on a reader's critical path,
-   so it does not need streaming.
-3. **Not yet as an automatic drop.** One false positive in three runs is a small sample, and the
-   thing it deleted was article prose. The honest first shipping form is the same one the sibling
-   plan reached for detection: **record the model's verdict beside the block rather than acting on
-   it**, and look at a hundred articles' worth before anything is removed for real.
-4. **Do not pay for Terra or Sonnet** on this task. Thirteen times the price for one genuine
-   difference (the inline ToC on 2,500-row pages), which chunking the list would probably also fix.
+Changed by the review. The first version said "ship the free marker rule, then the model on the
+residual, do not act automatically yet". The middle and the end survive; the beginning does not.
+
+1. **Do *not* ship a generic letterless rule.** Bounded at six characters it still deletes a numeric
+   table cell, a scoreline, `1–0`, a chess result, a bare date and a symbol-only scene break — and
+   **the corpus contains no page with any of those**, so its 100% marker precision could not have
+   failed. Build the negative controls first. Then prefer rules that name a *structure* rather than a
+   character class: a link whose text is its own affordance, a block with a footnote role, a language
+   label adjacent to a `<pre>`. Those are what the failures actually are.
+2. **The prompt needs three additions**, all from real errors above: an author's later *Update (date)*
+   to a post is the article; acknowledgements, captions, imprints and licence text are the article
+   unless policy says otherwise; and a document's own table of contents is different from site
+   navigation. A `needs-context` verdict alongside keep and drop would stop uncertainty being forced
+   into one of the two.
+3. **Then the model, on the actual residual**, which has not been run. Luna, ids-only, roughly half a
+   cent and 25 seconds an article, cached on the content hash like the other expensive stages.
+   Not on a reader's critical path, so no streaming.
+4. **Detection only, for a long time.** Record the verdict beside the block; remove nothing. Two
+   content deletions in twenty-two page-runs gives a 1%–29% interval, and the quantity that decides
+   this — the chance an *ordinary* article loses something — has not been measured at all.
+5. **Do not pay for Terra or Sonnet on this task**, but call that budgeting rather than a quality
+   finding. One run each cannot separate a model from its own variance.
 
 ## What would falsify this
 
@@ -248,6 +321,52 @@ than a failure. Captures are now checked for their own article text before hashi
   are not.
 - Block-id stability across two runs, which nothing here measured and which is the thing that
   silently orphans notes.
+- A page with numeric-only or symbol-only content that is genuinely the article — a results table, a
+  scoresheet, a chess game, an equation on its own line. The marker rule's precision is untested
+  against every one of those.
+- Labelled golds for the short blocks, so the trivial baseline can be scored rather than argued
+  about. Without them `beyondTheRule` is the only evidence, and it is prose for a human to read.
+
+## What the review overturned
+
+[GPT Sol's review](readability-tidy-pass-review-sol.md), 2026-08-31. Its verdict was *"change the
+recommendation"* and it was right. Every finding below was reproduced here before being accepted.
+
+**Three defects in the instruments, all of which made the arm look better than it is:**
+
+1. **They did not run the real stage 2.** `canonicaliseNotes` was missing, and `acx_footnotes.html`
+   reported 18 stranded markers that production does not produce. Fixed by exporting `readArticle`
+   from [`src/extract.ts`](../../src/extract.ts) and having both instruments call it.
+2. **`probeHtml` caught every splitter exception and returned zero blocks, zero markers, zero tiny** —
+   so a broken splitter scored as a flawless page. The `try`/`catch` is gone. I wrote that catch
+   myself with a comment excusing it, which is the ordinary way this class of bug arrives.
+3. **The `prose` alarm printed 140 characters while the doc comment said "in full".** Two of the
+   deletions it was supposed to surface — Aaronson's own updates — were invisible behind that
+   truncation. Full text is stored now.
+
+**And the finding that does the most damage to the first draft:**
+
+> **The control does not discriminate.** The claim was that `shakespeare_hamlet.html` and the short
+> headings on Tufte, MDN and WHATWG stop a "drop every short block" policy from scoring well. Run it:
+> at six characters the trivial policy scores **246/246 markers, zero prose alarms, zero invented
+> ids**, and deletes 544 blocks of which 298 are not markers at all — 18 real headings among them.
+> **Hamlet contributes zero blocks at that threshold**, so the control is entirely inert against the
+> policy it exists to defeat.
+
+That is the sibling plan's own central lesson — a corpus that cannot exercise the arm it exists to
+judge — recurring in the file that quotes it. It does not make the headline finding wrong, and it
+does mean **nothing here has yet shown that a model beats a crude rule**, because the only evidence
+separating them is a printed list a person has to read.
+
+Sol also found four stale numbers, all corrected in place: 266 paragraphs (it is 265), "four of five
+fixtures score perfectly on droppedChars" (only one does), Luna's slowest page, and Terra's marker
+recall being better than Luna's when it is worse.
+
+**What it checked and found sound:** the Paul Graham failure itself, ratio 1.000 and zero dropped
+characters and all; the ids-only schema preventing rewriting and reordering; the erratic marker
+recall; the `finish_reason` guard; the two giant blocks in Whitman and the hacker FAQ; that a drop
+mask cannot fix them; that splitting belongs to stage 3; and that not dropping automatically is
+correct.
 
 ## See also
 

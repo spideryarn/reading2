@@ -29,12 +29,16 @@
  *
  * The third was added on 2026-08-30 because Paul Graham's *How to Do Great
  * Work* — a page already on the shelf, and one the corpus scores as losing
- * **nothing** — produces 330 blocks of which **88 hold six characters or
- * fewer**: `[1]`…`[29]` footnote markers promoted to top-level blocks, thirty
- * `<p>` holding a bare `[`, and twenty-nine `<a>` holding a bare number. 87 of
- * the 88 are `gistable: true`. Recall says the page is perfect. Structure says
- * the page is perfect. The reader gets an eighty-eight-item table of contents
- * of punctuation.
+ * **nothing** — produces **328 blocks of which 87 are gistable and hold six
+ * characters or fewer**: `[1]`…`[29]` footnote markers promoted to top-level
+ * blocks, `<p>` holding a bare `[`, `<a>` holding a bare number. Recall says the
+ * page is perfect. Structure says the page is perfect. The reader gets an
+ * eighty-seven-item table of contents of punctuation.
+ *
+ * (An earlier draft of this comment said 330 and 88, from `data/greatwork/
+ * blocks.json` — a *different* artefact, written by the full pipeline including
+ * the sanitiser. Quoting one number and running another is how a comment starts
+ * disagreeing with the code beneath it; these are this file's own.)
  *
  * So a page can pass both existing measures and still arrive broken, which is
  * the whole reason to measure a third thing.
@@ -53,11 +57,10 @@
  * [the plan](../../docs/plans/readability-repair-pass.md#what-the-ratio-is-and-is-not)
  * on why extracted-over-raw is not a quality score.
  */
-import { Readability } from "@mozilla/readability";
-import { JSDOM, VirtualConsole } from "jsdom";
+import { readArticle } from "../../src/extract.js";
 import { writeFile } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
-import { compare, unhide, STRUCTURE } from "./inventory.mjs";
+import { compare, STRUCTURE } from "./inventory.mjs";
 import { FIXTURE_UA } from "./corpus.mjs";
 import { splitIntoBlocks } from "../../src/blocks.js";
 import { isMain } from "../../src/is-main.js";
@@ -127,13 +130,21 @@ export interface Probe {
   longestBlockChars: number;
 }
 
-/** Stage 2 as this app runs it: un-hide, then Readability. No sanitising — the
- *  splitter does its own, and we want to measure Readability, not our policy. */
+/**
+ * Stage 2, through `readArticle` in [src/extract.ts](../../src/extract.ts) —
+ * **the production transform itself, not a re-derivation of it.**
+ *
+ * This used to be four lines here doing `unhide → Readability`, and the missing
+ * `canonicaliseNotes` made `acx_footnotes.html` report 18 stranded footnote
+ * markers that the real pipeline does not produce. The function is shared now so
+ * the two cannot drift again.
+ *
+ * No sanitising: the splitter does its own, and the question here is what
+ * Readability did, not what our policy then removes.
+ */
 function extract(rawHtml: string, url: string): { html: string; title: string | null } {
-  const dom = new JSDOM(rawHtml, { url, virtualConsole: new VirtualConsole() });
-  unhide(dom.window.document);
-  const parsed = new Readability(dom.window.document).parse();
-  return { html: parsed?.content ?? "", title: parsed?.title ?? null };
+  const { article } = readArticle(rawHtml, url);
+  return { html: article?.content ?? "", title: article?.title ?? null };
 }
 
 export function probeHtml(rawHtml: string, url: string): Probe {
@@ -149,12 +160,14 @@ export function probeHtml(rawHtml: string, url: string): Probe {
 
   /* The real splitter, not a re-implementation of it. If stage 3 changes how it
      promotes an inline span to a block, this number has to move with it. */
-  let blocks: ReturnType<typeof splitIntoBlocks>["blocks"] = [];
-  try {
-    blocks = splitIntoBlocks(html).blocks;
-  } catch {
-    /* A page Readability returned nothing for splits into nothing. Reported as 0. */
-  }
+  /* **No `try`/`catch` here, and there used to be one.** It turned any splitter
+     exception into zero blocks, zero markers, zero tiny — a page that reads as
+     flawless on every count this script reports. A broken splitter looking
+     perfectly clean is the exact shape docs/reusable/silent-success.md is about,
+     and the instrument had it built in. A page Readability declined returns an
+     empty string, which splits to an empty list honestly; a page that throws is
+     a failure and now says so. */
+  const blocks = splitIntoBlocks(html).blocks;
   const shattered = blocks.filter(
     (b) => b.gistable && b.text.trim().length <= SHATTER_CHARS,
   );

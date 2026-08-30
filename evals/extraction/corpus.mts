@@ -127,6 +127,29 @@ export const CORPUS: { name: string; file: string; url: string; slot: string }[]
 ];
 
 /**
+ * **Fixtures that are committed and hashed but are not part of `CORPUS`.**
+ *
+ * `CORPUS` is the denominator of the un-hide eval, and that number appears in
+ * [../../docs/plans/readability-repair-pass.md](../../docs/plans/readability-repair-pass.md)
+ * as "13 of 15 byte-identical". Adding a page to it retroactively changes a
+ * published figure, so a fixture captured for some *other* investigation goes
+ * here instead.
+ *
+ * Moved out of `fixtures/verify.mts` on 2026-08-31, where it was a second copy
+ * of the same list. GPT Sol's review pointed out that
+ * `evals/extraction/tidy.mts --all` was walking `CORPUS` alone and therefore
+ * silently skipping the one fixture built to hold modern footnotes — the exact
+ * shape of the gap that list was created to close, repeated one level up.
+ */
+export const EXTRA_FIXTURES: { name: string; file: string; url: string; slot: string }[] = [
+  { name: "acx-footnotes", file: "acx_footnotes.html", slot: "—",
+    url: "https://www.astralcodexten.com/p/your-book-review-the-pale-king" },
+];
+
+/** Every committed fixture, for an eval whose denominator is not `CORPUS`'s. */
+export const ALL_FIXTURES = [...CORPUS, ...EXTRA_FIXTURES];
+
+/**
  * **This threshold was wrong in both directions and is kept as a warning.**
  *
  * It was stated up front — 5% of the page, in a run of 1,500+ characters — which

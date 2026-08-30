@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { CORPUS, FIXTURE_UA } from "../corpus.mjs";
+import { CORPUS, EXTRA_FIXTURES, FIXTURE_UA } from "../corpus.mjs";
 
 /**
  * Fixtures that are committed and hashed here but are **not** part of the
@@ -45,13 +45,7 @@ import { CORPUS, FIXTURE_UA } from "../corpus.mjs";
  * by neither list is a failure, so the next person to add a fixture cannot
  * repeat it by forgetting.
  */
-const EXTRA: { name: string; file: string; url: string }[] = [
-  {
-    name: "acx-footnotes",
-    file: "acx_footnotes.html",
-    url: "https://www.astralcodexten.com/p/your-book-review-the-pale-king",
-  },
-];
+const EXTRA = EXTRA_FIXTURES;
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const MANIFEST = path.join(HERE, "hashes.json");

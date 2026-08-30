@@ -82,12 +82,10 @@ import { openRouterJson } from "../../src/ai-call.js";
 import { withLedger } from "../../src/cli-ledger.js";
 import { QUICK_MODEL_OPENROUTER } from "../../src/models.js";
 import { isMain } from "../../src/is-main.js";
-import { CORPUS } from "./corpus.mjs";
+import { ALL_FIXTURES } from "./corpus.mjs";
 import { probeHtml } from "./probe.mjs";
 import { splitIntoBlocks } from "../../src/blocks.js";
-import { Readability } from "@mozilla/readability";
-import { JSDOM, VirtualConsole } from "jsdom";
-import { unhide } from "./inventory.mjs";
+import { readArticle } from "../../src/extract.js";
 
 /* `loadEnvLocal()`, not a bare import — see the same note in rescue.mts. The
    bare form reads whatever the shell exported, which is a different OpenRouter
@@ -97,6 +95,14 @@ loadEnvLocal();
 const MODEL = process.env.MODEL ?? QUICK_MODEL_OPENROUTER;
 /** Enough of a block to judge it. Not enough to reward reading the article. */
 const SNIPPET = 140;
+/**
+ * **What the model is shown is truncated; what is reported must not be.**
+ * `SNIPPET` was used for both, so the `prose` alarm promised to print a block
+ * "in full" and printed 140 characters of it — and a reviewer cannot judge a
+ * deletion from its first sentence. `TidyRow.full` carries the whole text for
+ * reporting; only `text` goes on the wire.
+ */
+const REPORT_CHARS = 600;
 /**
  * Above this a block is prose until proved otherwise, and gets printed under its
  * own alarm if the model names it.
@@ -130,7 +136,11 @@ const FIXTURES = path.join(path.dirname(new URL(import.meta.url).pathname), "fix
  * worth. Measuring the model against stock instead of against the residual is
  * how an arm gets reported four times more useful than it is.
  */
-export const isMarker = (text: string): boolean => !/\p{L}/u.test(text.trim());
+export const MARKER_CHARS = 6;
+export const isMarker = (text: string): boolean => {
+  const t = text.trim();
+  return t.length > 0 && t.length <= MARKER_CHARS && !/\p{L}/u.test(t);
+};
 
 const SYSTEM = `You are checking the output of an automatic article extractor (Mozilla Readability).
 
@@ -223,26 +233,34 @@ export interface TidyRow {
   id: string;
   tag: string;
   chars: number;
+  /** Truncated to SNIPPET — this is what the model sees. */
   text: string;
+  /** Truncated to REPORT_CHARS — this is what a human reviewing a deletion sees. */
+  full: string;
   marker: boolean;
 }
 
 /** Stage 2 then stage 3, exactly as the pipeline runs them, so the blocks judged
  *  here are the blocks a reader would actually get. */
 export function blocksOf(rawHtml: string, url: string): TidyRow[] {
-  const dom = new JSDOM(rawHtml, { url, virtualConsole: new VirtualConsole() });
-  unhide(dom.window.document);
-  const parsed = new Readability(dom.window.document).parse();
-  const blocks = splitIntoBlocks(parsed?.content ?? "").blocks;
+  /* `readArticle`, the production transform — not `unhide → Readability` by
+     hand, which is what this was and which omitted `canonicaliseNotes`. See the
+     note on that function in src/extract.ts. */
+  const { article } = readArticle(rawHtml, url);
+  const blocks = splitIntoBlocks(article?.content ?? "").blocks;
   return blocks
     .filter((b) => b.gistable)
-    .map((b) => ({
-      id: b.id,
-      tag: b.tag,
-      chars: b.text.trim().length,
-      text: b.text.trim().replace(/\s+/g, " ").slice(0, SNIPPET),
-      marker: isMarker(b.text),
-    }));
+    .map((b) => {
+      const flat = b.text.trim().replace(/\s+/g, " ");
+      return {
+        id: b.id,
+        tag: b.tag,
+        chars: b.text.trim().length,
+        text: flat.slice(0, SNIPPET),
+        full: flat.slice(0, REPORT_CHARS),
+        marker: isMarker(b.text),
+      };
+    });
 }
 
 async function ask(
@@ -362,15 +380,26 @@ function report(s: Scored): void {
      quantity the warning was about. */
   console.log(`  PROSE THE MODEL WANTS GONE — ${s.prose.length} blocks of ${PROSE_CHARS}+ chars:`);
   for (const r of s.prose)
-    console.log(`      !! ${r.tag.padEnd(4)} ${String(r.chars).padStart(5)}  ${JSON.stringify(r.text)}`);
+    console.log(`      !! ${r.tag.padEnd(4)} ${String(r.chars).padStart(5)}  ${JSON.stringify(r.full)}`);
   if (!s.prose.length) console.log("      (none)");
 }
 
 async function main(): Promise<void> {
   const argv = process.argv.slice(2);
   const dry = argv.includes("--dry");
+  /* **The crude baseline, so it is reproducible instead of asserted.** "Drop
+     every gistable block of six characters or fewer" is the policy the model has
+     to beat, and the first draft of the plan claimed the corpus defeated it
+     without ever running it. It does not: the policy scores 246/246 markers and
+     zero prose alarms, while deleting 298 blocks that are not markers at all —
+     eighteen of them real headings. GPT Sol computed that; this flag is so
+     nobody has to take either of us on trust. */
+  const trivial = argv.includes("--trivial");
+  /* ALL_FIXTURES, not CORPUS: the fixture captured for the footnote
+     investigation lives outside CORPUS so it does not move the un-hide eval's
+     denominator, and walking CORPUS here skipped it in silence. */
   const names = argv.includes("--all")
-    ? CORPUS.map((c) => c.name)
+    ? ALL_FIXTURES.map((c) => c.name)
     : argv.filter((a) => !a.startsWith("--"));
   if (!names.length) {
     console.error("Usage: npx tsx evals/extraction/tidy.mts <fixture name>… | --all   [--dry]");
@@ -380,14 +409,22 @@ async function main(): Promise<void> {
   const out: Scored[] = [];
   const failed: string[] = [];
   for (const name of names) {
-    const c = CORPUS.find((x) => x.name === name);
+    const c = ALL_FIXTURES.find((x) => x.name === name);
     if (!c) {
-      console.error(`unknown fixture: ${name} (have: ${CORPUS.map((x) => x.name).join(", ")})`);
+      console.error(`unknown fixture: ${name} (have: ${ALL_FIXTURES.map((x) => x.name).join(", ")})`);
       process.exit(1);
     }
     const html = await readFile(path.join(FIXTURES, c.file), "utf8");
     const rows = blocksOf(html, c.url);
     const p = probeHtml(html, c.url);
+
+    if (trivial) {
+      const chosen = rows.filter((r) => r.chars <= MARKER_CHARS);
+      const s = score(name, rows, chosen.map((r) => ({ id: r.id, reason: "other" })));
+      report(s);
+      out.push(s);
+      continue;
+    }
 
     if (dry) {
       /* The free rule alone, so the residual is visible before a penny is spent. */
@@ -422,7 +459,8 @@ async function main(): Promise<void> {
      five-fixture run then silently replaced a fifteen-fixture one under the same
      name — the results file for a model shrinking without a word, which is
      indistinguishable from a corpus that got smaller. */
-  const file = `evals/results/extraction-tidy-${stamp}-${out.length}of${names.length}${dry ? "-dry" : ""}.json`;
+  const suffix = trivial ? "-trivial" : dry ? "-dry" : "";
+  const file = `evals/results/extraction-tidy-${trivial ? "baseline" : stamp}-${out.length}of${names.length}${suffix}.json`;
   await writeFile(file, JSON.stringify(out, null, 2));
   console.log(`\nwrote ${file}`);
   /* Said out loud, because a results file that is short by two pages looks

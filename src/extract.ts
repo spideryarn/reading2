@@ -245,6 +245,60 @@ export function unhideCollapsedSections(doc: Document): void {
  * function of bytes we already hold: re-running it costs nothing and asks
  * nobody's server for anything. The queue relies on that.
  */
+/**
+ * **Everything stage 2 does to a page before anything is written down** — the
+ * DOM prep and the Readability call, with no filesystem, no metadata and no
+ * side effect.
+ *
+ * Split out of `runExtract` on 2026-08-31 because two eval instruments were
+ * re-deriving it and got it wrong. `evals/extraction/probe.mts` and
+ * `tidy.mts` each did `unhide → Readability → split`, missing
+ * `canonicaliseNotes` — and the cost of that omission was not theoretical:
+ * `acx_footnotes.html` reports **18 stranded footnote-marker blocks** through
+ * the instruments' version and **zero** through this one, because
+ * canonicalisation is precisely what turns those markers into notes. An
+ * instrument measuring a pipeline that does not exist reported a failure the
+ * real pipeline had already fixed, and nothing could have caught it except
+ * running the two side by side. Found by GPT Sol's review.
+ *
+ * So the order below is the contract, not an implementation detail, and it has
+ * exactly one home.
+ *
+ * `article` is `null` when Readability declines the page — the caller decides
+ * whether that is an error (`runExtract`: yes) or a row in a table (an eval:
+ * no). It is deliberately not thrown from here.
+ */
+export function readArticle(
+  html: string,
+  url: string,
+): { article: ReturnType<Readability["parse"]>; notes: NoteStats } {
+  /* **A `VirtualConsole` with nothing attached to it**, and this is not tidiness.
+     JSDOM's default forwards its own errors straight to `console`, and one of
+     them quotes the page: a malformed `@import` produces `Could not parse CSS
+     @import URL "<whatever the page said>" relative to base URL "<the full
+     source URL, query string included>"`. That is fetched-page-controlled text
+     and a possibly private URL on the server's stderr, going round Pino,
+     `errorFields` and redaction alike — none of which can reach a string
+     somebody else's library printed.
+
+     Ordinary CSS parse failures print a fixed sentence and are harmless; it is
+     the `@import` branch that carries the page's own words. Dropping the lot is
+     right anyway: we are here for the article text, and JSDOM's opinion of a
+     stylesheet is not something anybody running this needs.
+
+     Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
+     of the same class, and the first one where the leak was a dependency's
+     rather than ours. See docs/project/logging.md. */
+  const dom = new JSDOM(html, { url, virtualConsole: new VirtualConsole() });
+  unhideCollapsedSections(dom.window.document);
+  /* Before Readability, and it has to be: Readability's `keepClasses: false`
+     takes the identifying classes off, and the sanitiser downstream of it
+     deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
+     3 there is nothing left to recognise a note by. See src/notes.ts. */
+  const notes = canonicaliseNotes(dom.window.document);
+  return { article: new Readability(dom.window.document).parse(), notes };
+}
+
 export async function runExtract(opts: {
   html: string;
   url: string;
@@ -279,17 +333,7 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const dom = new JSDOM(opts.html, {
-    url: opts.url,
-    virtualConsole: new VirtualConsole(),
-  });
-  unhideCollapsedSections(dom.window.document);
-  /* Before Readability, and it has to be: Readability's `keepClasses: false`
-     takes the identifying classes off, and the sanitiser downstream of it
-     deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
-     3 there is nothing left to recognise a note by. See src/notes.ts. */
-  const notes = canonicaliseNotes(dom.window.document);
-  const article = new Readability(dom.window.document).parse();
+  const { article, notes } = readArticle(opts.html, opts.url);
   if (!article) {
     throw new Error("Readability could not parse this page.");
   }
