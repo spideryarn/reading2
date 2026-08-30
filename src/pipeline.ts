@@ -21,6 +21,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { eq } from "drizzle-orm";
 import {
   generateArc,
   inputFingerprint as arcFingerprint,
@@ -62,8 +63,10 @@ import {
 import { generateToc } from "./toc.js";
 import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
 import type { JobUpload, Meta, StepName } from "./types.js";
-
-const ROOT = path.resolve(import.meta.dirname, "..");
+import { getDb } from "./db/client.js";
+import { articleRevisions, articles } from "./db/schema.js";
+import { STORE } from "./store/live.js";
+import { ownedSlug } from "./store/owned-slug.js";
 
 /**
  * One line per step, saying what the step cost.
@@ -753,14 +756,95 @@ export async function assertProduced(
  * find its artefact, skip, and report a row of successes over somebody else's
  * document. The same silent success `freeSlug` was written against, arriving
  * through the one door that function does not watch.
+ *
+ * ## Why it asks Postgres, since 2026-08-30
+ *
+ * It used to read `data/<slug>/meta.json` and nothing else. On Vercel that
+ * directory is empty on every fresh invocation — `/tmp` is per-instance and
+ * scoped to one job (src/store/data-root.ts) — so this answered **"no article
+ * exists" for every slug in the library**, and so did `urlForSlug`. What that
+ * costs, traced from `freeSlug` (src/jobs.ts) through `onShelfOrInFlight`:
+ *
+ * 1. `freeSlug` believes the slug is unclaimed and hands it out.
+ * 2. The pipeline runs, and is paid for.
+ * 3. `importArticle` (src/store/import.ts) derives its article id from the slug,
+ *    so it resolves to the article that was **already there**.
+ * 4. Different owner ⇒ the import refuses, at the end, after the money.
+ * 5. **Same owner ⇒ it replaces that article and deletes-then-reinserts its
+ *    reader state** — comments, chat threads, saved searches, glossary
+ *    lookups — and every write reports success.
+ *
+ * Case 5 is silent data loss, and it is what asking the live store fixes.
+ *
+ * ## Owner-scoped, deliberately, and what that leaves open
+ *
+ * The Postgres branch asks for **the current owner's** articles, not for
+ * anybody's, via `ownedSlug` (src/store/owned-slug.ts). `slugIsTaken`
+ * (src/store/slug-is-taken.ts) is the sanctioned *global* boolean and is not
+ * what these want, because of what happens next door: `urlForSlug` returns a
+ * URL, so a global version of it would hand the caller **another owner's source
+ * URL** while resolving a collision. GPT Sol: *"Do not expose another owner's
+ * URL while resolving the collision."*
+ *
+ * So this closes the **destructive** case — same owner, reader state
+ * overwritten — and knowingly leaves the **wasteful** one open: two owners
+ * racing for one free slug, where the second pays for a whole pipeline before
+ * publication refuses it (case 4 above). Fixing that needs a return shape that
+ * can say *"taken, but not yours"* without disclosing what it is, and it
+ * belongs in `freeSlug` rather than here. It is a known gap, not an oversight.
+ *
+ * **Broader than `meta.json` was**, and in the safe direction: this is true as
+ * soon as the article row exists, which is before the first revision is
+ * published. A slug with a row under it is spoken for, and saying otherwise is
+ * the failure this function exists to prevent.
+ *
+ * ## The filesystem branch asks `fsLocations`, and must go on doing so
+ *
+ * It used to resolve `data/` from a module-scope
+ * `path.resolve(import.meta.dirname, "..")`, which is the constant
+ * src/store/data-root.ts exists to end — the repository root on a laptop,
+ * `/var` inside the Vercel bundle, and deaf to `SPIDERYARN_DATA_ROOT`.
+ *
+ * **So this function and `contextPaths` disagreed about where `data/` is**, and
+ * they are called one line apart: `slugIsSpokenFor` (src/jobs.ts) asks
+ * `articleExists` and then reads `raw.json` from `contextPaths(candidate).dir`.
+ * With the override set, that read `meta.json` out of one tree and `raw.json`
+ * out of another and had no way to notice. Nothing had tripped over it yet;
+ * both now go through `dataRoot()`, and putting the constant back would
+ * reintroduce it silently.
  */
 export async function articleExists(slug: string): Promise<boolean> {
+  if (STORE === "postgres") return (await ownedArticle(slug)) !== undefined;
   try {
-    await readFile(path.join(ROOT, "data", slug, "meta.json"), "utf8");
+    await readFile(path.join(fsLocations(slug).dir, "meta.json"), "utf8");
     return true;
   } catch {
     return false;
   }
+}
+
+/**
+ * The current owner's article row for this slug, with its published revision's
+ * URL if it has one — one query, so the two functions above cannot disagree.
+ *
+ * `undefined` means no such article *for this owner*. The URL is `null` for an
+ * upload (which has no address) and for an article whose first extraction has
+ * not been published yet, and those two are the same answer to the only
+ * question `urlForSlug` is asked: there is no address to compare against.
+ *
+ * **A left join, so an article with no published revision still counts as
+ * existing.** An inner join would have made `articleExists` false for a slug
+ * whose ingest crashed after the row was created, which is precisely the state
+ * where handing the slug out again does damage.
+ */
+async function ownedArticle(slug: string): Promise<{ url: string | null } | undefined> {
+  const rows = await getDb()
+    .select({ url: articleRevisions.finalUrl })
+    .from(articles)
+    .leftJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
+    .where(ownedSlug(slug))
+    .limit(1);
+  return rows[0];
 }
 
 /**
@@ -776,11 +860,28 @@ export function stepLabel(name: StepName, upload: boolean): string {
   return name === "fetch" && upload ? "Checking the file" : STEPS[name].label;
 }
 
-/** The source URL for a slug, from its meta.json. Undefined if there isn't one yet. */
+/**
+ * The source URL for a slug. Undefined if there isn't one yet.
+ *
+ * **The question `freeSlug` actually asks**, through `onShelfOrInFlight`
+ * (src/jobs.ts): given a slug somebody wants, what address is already under it,
+ * so that `urlKey` can decide whether the two are one article. Answering
+ * `undefined` when there *is* an article is what makes the pipeline overwrite
+ * it — see `articleExists` above for the whole chain, for why the Postgres
+ * branch is owner-scoped, and for the cross-owner case this deliberately does
+ * not fix.
+ *
+ * Under Postgres this is the **published** revision's `final_url`, which is the
+ * same column every other reader treats as `Meta.url` (src/store/pg.ts §
+ * `metaFrom`). A run still in flight has no published revision and so no answer
+ * here; `activeFor` is what covers that, and `onShelfOrInFlight` already asks
+ * it second.
+ */
 export async function urlForSlug(slug: string): Promise<string | undefined> {
+  if (STORE === "postgres") return (await ownedArticle(slug))?.url ?? undefined;
   try {
     const meta = JSON.parse(
-      await readFile(path.join(ROOT, "data", slug, "meta.json"), "utf8"),
+      await readFile(path.join(fsLocations(slug).dir, "meta.json"), "utf8"),
     ) as Meta;
     return meta.url;
   } catch {
