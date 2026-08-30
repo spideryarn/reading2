@@ -2,7 +2,8 @@
 
 **Status: in progress. Written 2026-08-29, re-cut 2026-08-30 after GPT Sol's second review
 ([v1-imports-review-sol.md](v1-imports-review-sol.md)) returned NO-SHIP on the first cut.**
-Stage 0 is committed (`f3db91e`). Stages 3 and 4 moved to the D1b owner; stage 5 is cut. Supersedes
+Stages 0 and 1 are committed (`f3db91e`, `0fdd2fe`). Stages 3 and 4 moved to the D1b owner; stage 5
+is cut. Supersedes
 [durable-artefacts-on-vercel.md](durable-artefacts-on-vercel.md), which measured the problem
 correctly and then proposed the wrong fix — GPT Sol returned NO-SHIP on it and was right.
 
@@ -75,8 +76,9 @@ Re-cut after Sol's second review and agreed with the D1b owner (spideryarn2-84) 
 | # | What | Holder | State |
 |---|---|---|---|
 | 0 | lease, `maxDuration`, Fluid | this session | **done**, `f3db91e` |
-| 1 | job-scoped scratch root | this session | in flight |
-| 2 | global slug reservation | this session | next |
+| 1 | job-scoped scratch root | this session | **done**, `0fdd2fe` |
+| 2a | slug checks ask Postgres | this session | **done**, `55e532a` |
+| 2b | global slug reservation (`freeSlug`) | needs `src/jobs.ts` | blocked on D1b landing |
 | 3 | `advanceJobToCompletion` in the coordinator | spideryarn2-84 | after D1b |
 | 4 | transactional job finalizer | spideryarn2-84 | **written** as `pg-session.ts`, tests in flight |
 | 5 | hydration | — | **cut**, see below |
@@ -102,6 +104,11 @@ reads free; job B for a **different URL** is handed that slug, finds A's valid f
 skips those steps, and **publishes A's content under B's request**. A retry gets a new job id and
 repurchases the work, which is the correct trade.
 
+**Nothing a reader can see improves until stage 3.** Worth stating because the commit log implies
+otherwise: stages 1 and 2 make production *more* obviously broken, not less. Stage 1 removes the
+accidental cross-job warm cache that was the only thing that could rescue a job whose steps land on
+different instances. The import begins working when the coordinator change lands, and not before.
+
 **Stage 2 — global slug reservation.** Not merely an owned-article lookup. Article slugs are
 globally unique (`schema.ts:129`) while active jobs reserve only `(ownerId, slug)`
 (`schema.ts:1175`), so two owners can queue the same free slug and one pays for the whole pipeline
@@ -126,6 +133,27 @@ warm receipt could skip publication when Postgres does not contain it, which is 
 quiet success again. Publication and the fenced terminal settlement must be **one transaction**, or
 a kill between them leaves the article published, the job failed, and Retry blocked by the
 first-ingest guard.
+
+## Known v1 limitations, found while building rather than guessed
+
+**An upload retried on Vercel gets a new slug and pays again.** `slugIsSpokenFor` tells "this slug is
+my own upload resuming" from "this slug is an article that already exists" by reading
+`RawManifest.origin` / `uploadId` out of `raw.json` — and `readRaw` ([`src/fetch.ts:235`](../../src/fetch.ts))
+is filesystem-only, with no Postgres version. Per
+[`src/store/artifacts-pg.ts`](../../src/store/artifacts-pg.ts)'s own comment, `uploadId` is *"not
+durably recoverable at all, because publication clears `jobs.draft_revision_id` and a job can be
+deleted, so the revision keeps no link back."*
+
+So under the Postgres store the retry-resume property **does not exist**. Stage 2a did not create
+that hole; it made it the branch that gets taken. Before, `articleExists` short-circuited past it and
+clobbered the existing article instead. **Trading silent data loss for a duplicate slug is the right
+way round**, and the cost is stated here rather than discovered: a retried upload becomes `paper-2`
+and re-pays for its transcription.
+
+**A slug that collides with a *stranger's* article still costs a whole pipeline.** Owner-scoped
+checks cannot see it, so the job runs, is paid for, and is refused at publication. Wasteful rather
+than destructive, and it is the same gap `urlForSlug` leaves — both close together in the `freeSlug`
+stage, which needs a return shape that can say *"taken, but not yours"* without disclosing what.
 
 ## Stage 5 is cut
 
@@ -153,9 +181,22 @@ arrived yet. Re-ingest and refresh stay as broken as they are today until D1b re
 ## Decisions Greg made on 2026-08-30
 
 - **Durability lands straight after v1, not in it.** v1 runs the whole job in one invocation on
-  ephemeral scratch. The reason it is safe to defer: only `toc`, `arc` and a little `pdf` ever cost
-  money, and `arc` and `assets` have already left `DEFAULT_INGEST_STEPS` — so a re-run is nearly
-  free, and "resume where it left off" and "do it again" differ by seconds rather than pounds.
+  ephemeral scratch. The reason it is safe to defer: only `toc` and a little `pdf` cost money on the
+  default path, and `arc` left `DEFAULT_INGEST_STEPS` on 2026-08-29 — so a re-run is nearly free,
+  and "resume where it left off" and "do it again" differ by seconds rather than pounds.
+
+  **`assets` did *not* leave the default, and an earlier draft of this document said it had.**
+  Corrected on 2026-08-30 by spideryarn2-d7, and it matters more than a stale sentence. `assets`
+  allows 200 images, 2 concurrent, 2 attempts, 15s each, so its worst case approaches **3,000s — on
+  the default path, for every article**. That makes it the binding constraint on the whole ingest,
+  ahead of `toc`'s 324s, and it needs a wall-clock budget before v1 can work at all.
+
+  It also **cannot be fixed by taking it out of the default**, and the reason is a privacy property
+  rather than a preference — the step's own comment: *"an article whose images are still hot-linked
+  to the publisher announces the reader's IP to that publisher on every single read. That is the
+  privacy leak this step exists to close, so closing it cannot be something somebody has to ask
+  for."* So a budget trades privacy against completion on heavy articles, and that trade is Greg's
+  to make rather than ours.
 - **Publish once everything has run**, not as soon as the article is readable — getting to a working
   v1 beats latency, and latency comes after.
 - **Where large artefacts belong**, when durability does land: structured JSON in Postgres, opaque
