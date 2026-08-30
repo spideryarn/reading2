@@ -131,6 +131,21 @@ async function ensureDomMatrix(): Promise<void> {
  * So we import the worker **by name**, which nft can read, and put it where
  * pdf.js looks. Same disease, same cure.
  *
+ * **Do not "simplify" this to a bare import, and do not drop the assignment.**
+ * The two halves hold each other up, and it is not obvious which is doing the
+ * work:
+ *
+ *   - The *import* is what makes nft ship the file. That is the part that
+ *     fixes production — and note it would fix it even without the handoff,
+ *     because the file lands next to `pdf.mjs`, which is exactly where
+ *     pdf.js's own `./pdf.worker.mjs` resolves to.
+ *   - The *assignment* is what stops the bundler eliding the import. An import
+ *     whose result is unused is dead code, and this repo has already watched
+ *     rollup tree-shake away a function nothing called, in `runInJob`, and ship
+ *     a fix that could not run.
+ *
+ * So the line that looks redundant is what keeps the line that matters alive.
+ *
  * tests/pdf-bundle-trace.test.ts runs the real tracer over the built bundle and
  * asserts both files land in it, because nothing else here can see that.
  */
