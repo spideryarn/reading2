@@ -879,6 +879,38 @@ export type ArtifactReads = Pick<
 >;
 
 /**
+ * Refused before the write: this product is not one a commit may act on.
+ *
+ * **Its own type so that it survives `guardDbStore`.** The transactional
+ * session returns its object through that wrapper (src/store/db-errors.ts),
+ * which replaces every error not on its allowlist with *"this app asked its
+ * database for something it would not do"* — and none of these four refusals
+ * ever reaches a database. Scrubbed, the one sentence saying **which** rule was
+ * broken and **which** artefact was missing is gone, the guard logs
+ * `database call failed` for a call nobody made, and whoever is converting a
+ * stage is sent to the store. Measured, 2026-08-30, by asking for the message.
+ *
+ * **It lives here rather than beside `checkProduct` in src/store/session.ts**, and
+ * that is a cycle rather than a preference: `db-errors.ts` has to import the
+ * class to recognise it, `session.ts` imports src/pipeline.ts for real, and
+ * pipeline → src/jobs.ts → pg-jobs.ts → db-errors.ts closes the loop. `npm run
+ * check` gates on cycles. This module imports nothing at runtime, which is what
+ * makes it the place.
+ *
+ * It qualifies for that allowlist on the test the allowlist states: the type is
+ * closed and its message is built from values *we* chose — a `StepName` and
+ * `ArtifactKind`s, both closed unions declared in this repo. Nothing a reader,
+ * a page or a model wrote can reach it. Exactly the argument
+ * `CheckpointRequestError` is on the list for.
+ */
+export class ProductRefused extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProductRefused";
+  }
+}
+
+/**
  * The stamp a caller passes to `write` must be the stamp inside the artefact.
  *
  * On the filesystem there is nowhere else to put it — `sourceHash`, `version`

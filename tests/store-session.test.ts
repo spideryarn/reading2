@@ -127,20 +127,48 @@ function watch(store: ArtifactStore): Watched {
 interface FakeJobs extends JobSettles {
   releases: number;
   finishes: number;
+  /** Stop was pressed while the step ran, so the *release* is where it lands. */
+  cancelling: boolean;
 }
 
+/**
+ * **The row each method returns is the row the real adapters return**, and this
+ * used to be one frozen `status: "running"` object for both.
+ *
+ * That fake could not go red for anything: a release that had not released and
+ * a finish that had not finished came back looking the same, and the session's
+ * answer was read off the transition it had been handed rather than off the row.
+ * `settlementOf` reads the row now, so a stub that lies about the row is a stub
+ * that proves nothing — see docs/reusable/silent-success.md, and the note on
+ * `JobSettlement`.
+ *
+ * So: `releaseStep` answers `queued`, or `cancelled` when `cancelling` is set,
+ * exactly as `jobs-fs.ts` and `pg-jobs.ts` both do; `finish` answers with the
+ * ending it was given.
+ */
 function fakeJobs(): FakeJobs {
-  const job = { id: "spya-testjb", slug: SLUG, ownerId: "owner", steps: [], status: "running", createdAt: "" } as unknown as Job;
+  const base = {
+    id: "spya-testjb",
+    slug: SLUG,
+    ownerId: "owner",
+    steps: [],
+    createdAt: "",
+  } as unknown as Job;
   const jobs: FakeJobs = {
     releases: 0,
     finishes: 0,
-    releaseStep: async () => {
+    cancelling: false,
+    releaseStep: async (_id, _attempt, steps) => {
       jobs.releases += 1;
-      return job;
+      return {
+        ...base,
+        steps,
+        status: jobs.cancelling ? ("cancelled" as const) : ("queued" as const),
+      };
     },
-    finish: async () => {
+    finish: async (_id, _attempt, ending) => {
       jobs.finishes += 1;
-      return job;
+      return { ...base, steps: ending.steps, status: ending.status };
     },
   };
   return jobs;
@@ -513,9 +541,32 @@ describe("the job moves on inside the commit", () => {
     await writeFile(pathFor(at, "toc", "tree"), JSON.stringify(treeSaying("Mine")), "utf-8");
     await writeFile(pathFor(at, "toc", "labels"), JSON.stringify(labelsSaying("Mine")), "utf-8");
 
-    await session.commit(ctx, step, attempt, { detail: "1 section" }, RELEASE);
+    const settled = await session.commit(ctx, step, attempt, { detail: "1 section" }, RELEASE);
     expect(jobs.releases).toBe(1);
     expect(jobs.finishes).toBe(0);
+    expect(settled.kind).toBe("released");
+    expect(settled.job.status).toBe("queued");
+  });
+
+  it("reports the ending when a Stop turns the release into a cancellation", async () => {
+    /* **The one place a caller cannot read its own request.** Both stores settle
+       a Stop inside `releaseStep` — the flag was set while the step ran, and
+       releasing to `queued` with `cancelling` still on is a state nothing moves
+       on. So the transition says "release" and the row comes back `cancelled`,
+       and a session that answered from the transition would tell the reader the
+       job was still working. */
+    jobs.cancelling = true;
+    const session = sessionFor(new Set<StepName>(["toc"]));
+    const step = stepProducing("toc", ["tree", "labels"]);
+    const attempt = await session.beginStep(SLUG, step.name);
+    await writeFile(pathFor(at, "toc", "tree"), JSON.stringify(treeSaying("Mine")), "utf-8");
+    await writeFile(pathFor(at, "toc", "labels"), JSON.stringify(labelsSaying("Mine")), "utf-8");
+
+    const settled = await session.commit(ctx, step, attempt, { detail: "1 section" }, RELEASE);
+    expect(settled.kind).toBe("ended");
+    if (settled.kind !== "ended") throw new Error("unreachable");
+    expect(settled.ending.status).toBe("cancelled");
+    expect(settled.job.status).toBe("cancelled");
   });
 
   it("leaves the job alone when the product is refused", async () => {

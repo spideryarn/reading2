@@ -2710,6 +2710,92 @@ rather than covering it. **D3 converts six stages, not five.** Found by another 
 production ingest failure; the plan had no mechanism that would have caught it, which is the more
 useful half of the finding.
 
+#### What D1b's tests found — [tests/store-pg-session.test.ts](../../tests/store-pg-session.test.ts)
+
+Ten cases, and every one of them watched red with the guard it targets mutated. Three findings came
+out of doing that rather than out of reading the code.
+
+**A refusal that never touched the database was reported as a database failure.** The session's
+returned object goes through `guardDbStore`, as the review asked — and that wrapper replaces every
+error not on its allowlist. So `checkProduct`'s *"arc returned a product missing arc, so nothing was
+written"*, which is refused **before** the transaction opens, came out as *"this app asked its
+database for something it would not do"*, and the guard logged `database call failed` for a call
+nobody made. Measured by asking a guarded session for the message, 2026-08-30. It is exactly the case
+`CheckpointRequestError` is on that allowlist for, so `checkProduct` now throws a closed
+`ProductRefused` (in [`src/store/artifacts.ts`](../../src/store/artifacts.ts), not beside
+`checkProduct`, because `db-errors.ts` importing `session.ts` closes a cycle the gate catches —
+checked by trying it) and that class is the allowlist's sixth entry.
+
+**Deleting the article lock from `commit` reddened nothing.** All eight of the owed tests stayed
+green with `lockArticleFor` gone, which is the honest state of a lock-order guarantee under
+single-threaded tests. A tenth case now holds the article row `for update` from a second connection
+and asserts that a **non-publishing** commit does not settle while it is held — the case that has no
+other use for the lock. Whether the lock is taken *before* the artefact fence or after it is still
+not testable from outside: an uncommitted write is invisible to every other connection, so the draft
+reads unchanged either way.
+
+**Three of the fences are redundant with each other, and that is worth knowing before anyone removes
+one.** A stale claim between `beginStep` and `commit` is refused by `requireLiveJobOwnsDraft` inside
+`writeArtefacts`, again inside `finishStepRun`, and again by `fence()` in the job transition —
+removing any one of them leaves the test green. Same for the skip check: `stepInterrupted` and
+`hasArtefacts`'s `run?.status !== 'done'` both refuse an interrupted step, and only removing both
+makes the next claim skip it. The mutations that redden are recorded in the test file's header.
+
+**And one mutation could not be run at all.** Publishing in a transaction of its own — the shape the
+review rejected — does not fail, it **hangs**: the outer transaction holds the article row and the
+job row, and the inner one waits for them on another connection, which Postgres's deadlock detector
+cannot see because one side of the wait is an `await` rather than a lock. That is a stronger argument
+for one transaction than the test that replaced it.
+
+#### What D1b's code review changed — [delete-the-importer-d1b-sol.md](delete-the-importer-d1b-sol.md)
+
+**NO-SHIP, the sixth in a row on this plan, and the core survived it.** *"`commit` locks the article
+first, then performs the artefact fence/write, postcondition, step completion, publication/failure,
+and job transition through the same `tx`. `settleJob` also locks article before job. Re-locking
+inside publication/failure does not invert the order. Logging occurs only after the transaction
+resolves."* Publishing on the all-skipped path was confirmed as *"the correct simple rule"* — it
+preserves work an earlier request committed, and no case was found where it loses or corrupts data.
+`guardDbStore` was confirmed to preserve the generic signatures and to scrub the free helpers'
+rejections, because they happen inside wrapped session methods.
+
+What did not survive was the edges.
+
+**Terminal drafts still leaked, and the design had closed only the doors it walked through.**
+`failExpired` and a queued `requestCancel` both make a job terminal without clearing
+`draftRevisionId` ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)), and the sweeper spares
+pointers belonging to every job including dead ones. Both are reachable after a step has released. The
+session cleared the pointer on every path that went through the session — which is exactly the shape
+of mistake this plan keeps making: a guarantee established where the new code runs, and absent where
+the old code ends the same job.
+
+**A failed stage left its step run saying `running` for ever.** `settleIn` failed the revision and the
+job and never marked the begun step `error`, though `finishStepRun(… status: "error")` already
+existed. `interrupted` reads exactly that status, so the next claim over the draft would refuse to
+believe the step had ended. The fix has an ordering constraint worth keeping: it must come **before**
+the draft failure and the job finish, because `finishStepRun` fences on the job still being `running`
+and still pointing at this revision, and either of the other two makes that false.
+
+**The rollback test could pass on the wrong exception.** A bare `rejects.toThrow()` accepts a failure
+thrown anywhere before `finishIn`, so an early write or validation error would leave every
+"rolled back" assertion trivially true. It now requires the scrubbed failure including SQLSTATE
+`23502` — which, as the review points out, also proves errors from the free `finishIn` helper travel
+through the session's guard. **The author had already named this shape** as a `rejects` lid in their
+own report, and I read it as an acceptable limitation rather than a defect. It was a defect.
+
+**`discardAfterCancel`'s comment asserted something false.** The unfenced pointer clear is sound on
+the commit path, where `writeArtefacts` has already proved job, attempt, status and draft ownership
+and the row stays locked through `releaseStepIn`. But `settleJob` accepted **any** transition
+including `release`, without that earlier fence, and `releaseStepIn` checks job, attempt and status —
+not the draft pointer. `settleJob` is narrowed to `end` transitions, which is what every caller
+already passed, and the conditional clear throws rather than warns when it touches other than one row.
+
+**And two tests were the shapes this repo keeps writing down.** The lock test used a one-second sleep,
+which a merely slow unlocked commit would pass; it now uses `pg_blocking_pids`, as the draft-lock
+suite already did. The all-skipped test published a **byte-for-byte copy** — so discarding would have
+produced the same reader-visible result, and the test proved publication was *called* rather than that
+it was *right*. It now runs the real two-request case: the first request writes and releases, the
+second finds every step current, and the first request's work has to become visible.
+
 #### What D0's code review found — [delete-the-importer-d0-sol.md](delete-the-importer-d0-sol.md)
 
 **NO-SHIP, and the finding was that the test proving the fix could not fail.** The stamp conversion

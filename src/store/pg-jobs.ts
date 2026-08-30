@@ -90,7 +90,6 @@ function toJob(row: Row): Job {
     createdAt: row.createdAt.toISOString(),
     ...(row.url !== null && { url: row.url }),
     ...(row.title !== null && { title: row.title }),
-    ...(row.guidance !== null && { guidance: row.guidance }),
     ...(row.profile !== null && { profile: row.profile }),
     ...(row.error !== null && { error: row.error }),
     ...(row.failureKind !== null && { failureKind: row.failureKind as FailureKind }),
@@ -125,7 +124,6 @@ workKey: string,
       createdAt: new Date(job.createdAt),
       url: job.url ?? null,
       title: job.title ?? null,
-      guidance: job.guidance ?? null,
       profile: job.profile ?? null,
       uploadId: job.upload?.id ?? null,
       uploadFilename: job.upload?.filename ?? null,
@@ -283,6 +281,15 @@ const rawPgJobStore: JobStore = {
         leaseExpiresAt: null,
         cancelling: false,
         finishedAt: new Date(),
+        /* **The draft goes with the claim, and a terminal job may not keep a
+           pointer.** `sweepAbandonedDrafts` spares a revision that *any* job
+           row names, terminal ones included — so a job failed here while
+           holding a pointer is a draft nothing will ever publish and nothing
+           will ever reclaim. The path is ordinary rather than exotic: a step
+           releases, the next advance never comes, the lease lapses, and this
+           statement is what ends the job. GPT Sol, 2026-08-30,
+           docs/plans/delete-the-importer-d1b-sol.md finding 1. */
+        draftRevisionId: null,
         error: INTERRUPTED.message,
         /* `retry`, said out loud rather than left to the absent-means-yes rule.
            Both offer the button; only one of them says why, and a kind that is
@@ -351,6 +358,20 @@ const rawPgJobStore: JobStore = {
         cancelling: sql`${jobs.status} <> 'queued'`,
         attemptId: sql`case when ${jobs.status} = 'queued' then null else ${jobs.attemptId} end`,
         leaseExpiresAt: sql`case when ${jobs.status} = 'queued' then null else ${jobs.leaseExpiresAt} end`,
+        /* **Only on the branch that ends the job**, and that asymmetry is the
+           whole of it. A queued job is terminal one statement later, and a
+           terminal job holding a pointer is a draft `sweepAbandonedDrafts`
+           spares for ever — it treats any job's pointer as ownership. A
+           *running* job's pointer belongs to the claimant that is still inside
+           a step: taking it away here would leave that claimant's next fenced
+           write refused for a reason nothing could explain, and the claimant is
+           the one that disposes of the draft when its release resolves to a
+           cancellation (src/store/pg-session.ts, case 4). The pointer really
+           can be set on a queued job: `releaseStepIn` leaves it alone
+           deliberately, so the next request continues into the same draft.
+           GPT Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md
+           finding 1. */
+        draftRevisionId: sql`case when ${jobs.status} = 'queued' then null else ${jobs.draftRevisionId} end`,
         finishedAt: sql`case when ${jobs.status} = 'queued' then now() else ${jobs.finishedAt} end`,
       })
       .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), inArray(jobs.status, ACTIVE)))

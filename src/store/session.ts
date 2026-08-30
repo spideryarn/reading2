@@ -28,6 +28,7 @@
  */
 import { assertProduced, UNCONVERTED_STEPS } from "../pipeline.js";
 import type { PipelineStep, StepContext, StepProduct } from "../pipeline.js";
+import { ProductRefused } from "./artifacts.js";
 import type {
   ArtifactKind,
   ArtifactMap,
@@ -60,13 +61,106 @@ export type JobTransition =
   | { kind: "end"; jobId: string; attempt: string; ending: JobEnding };
 
 /**
+ * The half of `JobTransition` that ends the job — **the only kind `settleJob`
+ * takes.**
+ *
+ * A named type rather than an inline `Extract`, because the narrowing is a
+ * safety property and not a tidy-up. `settleJob` is the door for the endings
+ * that have no product, and every caller in src/jobs.ts passes an `end`. Letting
+ * a `release` through it would reach `discardAfterCancel` in
+ * src/store/pg-session.ts on a path where the draft has *not* been fenced one
+ * statement earlier — `releaseStepIn` checks job, attempt and status, and says
+ * nothing about which draft the job points at. On the commit path that fence is
+ * already proved by `writeArtefacts`; through this door it would not be. GPT
+ * Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md finding 4.
+ */
+export type JobEndTransition = Extract<JobTransition, { kind: "end" }>;
+
+/**
  * The two job writes a session performs, and no others.
  *
  * Narrowed the way `ArtifactReads` is: a session may end a claim, and it may not
  * claim, cancel, sweep or enumerate. It also makes the session testable against
  * a two-method stub rather than a whole `JobStore`.
+ *
+ * **The transactional session must not accept this**, and that is not a style
+ * preference. Its methods reach `getDb()` for themselves, so handing them to a
+ * session binds them to nothing: the artefacts and the step state would commit
+ * while the release failed separately, which is the exact fault the whole seam
+ * exists to remove. It calls `releaseStepIn(tx, …)` and `finishIn(tx, …)`
+ * instead. GPT Sol, 2026-08-29,
+ * docs/plans/delete-the-importer-d1b-design-sol.md critical 2.
  */
 export type JobSettles = Pick<JobStore, "releaseStep" | "finish">;
+
+/**
+ * **What the settlement actually did** — never what it was asked to do.
+ *
+ * `commit` and `settleJob` used to return the `Job` alone, and every caller
+ * worked out what had happened by looking at the transition it had *requested*.
+ * That is wrong on one path, and the path is reachable: `releaseStep` resolves
+ * to **cancelled** when a Stop arrived while the step was running (see the
+ * `case` expression in src/store/pg-jobs.ts, and the same branch in
+ * src/store/jobs-fs.ts). A caller that infers "released, so the job goes on"
+ * from its own request then tells the reader the job is still working, and
+ * `/advance` answers `done: false` about a job that is over.
+ *
+ * So the two shapes here mirror `JobTransition`'s two, and the mapping between
+ * them is not the identity — a `release` can come back as `ended`. GPT Sol,
+ * 2026-08-29, docs/plans/delete-the-importer-d1b-design-sol.md critical 1.
+ *
+ * `ending` travels with the ending rather than being re-derived by each caller,
+ * because src/jobs.ts needs it for the log line and the retention sweep, and a
+ * release that resolved to cancellation has no `JobEnding` anywhere else — the
+ * transition it was given holds a `steps` list and nothing that says how it
+ * finished.
+ */
+export type JobSettlement =
+  /** The claim went back; the job is `queued` and the next request takes it. */
+  | { readonly kind: "released"; readonly job: Job }
+  /** The job is over, however it got there. */
+  | { readonly kind: "ended"; readonly job: Job; readonly ending: JobEnding };
+
+/**
+ * The requested transition plus the row that came back, read as what happened.
+ *
+ * **One dispatcher, shared by both sessions**, so the filesystem and Postgres
+ * cannot disagree about what a release-that-cancelled is. Both stores really do
+ * settle a cancellation inside `releaseStep`, so this is not a Postgres-only
+ * shape.
+ *
+ * It reads `job.status` and not the flag it was set from: the status is what the
+ * store committed and what the reader will be shown, and asking the same
+ * question twice in two places is how the two answers drift.
+ */
+export function settlementOf(transition: JobTransition, job: Job): JobSettlement {
+  if (transition.kind === "end") return { kind: "ended", job, ending: transition.ending };
+  if (job.status === "queued") return { kind: "released", job };
+  return { kind: "ended", job, ending: endingOf(job) };
+}
+
+/**
+ * The ending a store has already written, read back off the row.
+ *
+ * Only ever called for a release that did not release. `queued` and `running`
+ * are refused loudly rather than coerced, because a release that came back
+ * `running` means the fence let something through and the honest answer is that
+ * nobody knows what state the job is in.
+ */
+function endingOf(job: Job): JobEnding {
+  if (job.status !== "done" && job.status !== "error" && job.status !== "cancelled") {
+    throw new Error(
+      `A release of job ${job.id} came back "${job.status}", which is neither queued nor an ending.`,
+    );
+  }
+  return {
+    status: job.status,
+    steps: job.steps,
+    ...(job.error !== undefined && { error: job.error }),
+    ...(job.failureKind !== undefined && { failureKind: job.failureKind }),
+    ...(job.title !== undefined && { title: job.title }),
+  };
+}
 
 /**
  * One claim's worth of store access, split into what the run phase may do and
@@ -110,6 +204,9 @@ export interface StoreSession {
    * Throws rather than returning an outcome. Every caller treats a refusal as a
    * step failure, and an outcome that has to be checked is one that can be
    * ignored.
+   *
+   * **It returns the settlement that happened, not the one it was handed** —
+   * see `JobSettlement`.
    */
   commit(
     ctx: StepContext,
@@ -117,7 +214,7 @@ export interface StoreSession {
     attempt: string,
     product: StepProduct,
     transition: JobTransition,
-  ): Promise<Job>;
+  ): Promise<JobSettlement>;
   /**
    * The job transition on its own, for the endings that have no product.
    *
@@ -126,8 +223,18 @@ export interface StoreSession {
    * was the third gap the review found. Routing them here means every terminal
    * job write in the runner goes through the session, so D1b has one seam rather
    * than one seam and three exceptions.
+   *
+   * **And the all-skipped case is not merely a job write.** Under Postgres this
+   * claim opened a draft that copied the published revision forward, so an
+   * ending that only touched the `jobs` row would leave that copy behind for the
+   * sweeper and leave the reader on a revision this job never confirmed. The
+   * transactional session publishes or discards it explicitly — see
+   * `pgStoreSession` in src/store/pg-session.ts.
+   *
+   * **`JobEndTransition`, not `JobTransition`** — see that type for why a
+   * release may not come through this door.
    */
-  settleJob(transition: JobTransition): Promise<Job>;
+  settleJob(transition: JobEndTransition): Promise<JobSettlement>;
 }
 
 /**
@@ -204,7 +311,7 @@ export function checkProduct(
   unconverted: ReadonlySet<StepName>,
 ): void {
   if (step.produces.length === 0) {
-    throw new Error(
+    throw new ProductRefused(
       `${step.name} declares no artefacts, so nothing can say whether it ran. ` +
         `A step's "produces" is what the postcondition and the skip check are ` +
         `both asked about, and has([]) is false — this step could never be done.`,
@@ -212,7 +319,7 @@ export function checkProduct(
   }
   if (product.parts === undefined) {
     if (unconverted.has(step.name)) return;
-    throw new Error(
+    throw new ProductRefused(
       `${step.name} returned no artefacts to write, and it is not marked unconverted. ` +
         `A step that writes its own artefacts inside run() must be named in ` +
         `LEGACY_UNCONVERTED_STEPS (src/pipeline.ts); one that has been converted ` +
@@ -224,7 +331,7 @@ export function checkProduct(
     (kind) => !Object.hasOwn(parts, kind) || parts[kind] === undefined,
   );
   if (missing.length > 0) {
-    throw new Error(
+    throw new ProductRefused(
       `${step.name} returned a product missing ${missing.join(" and ")}, ` +
         `so nothing was written. A step that declares an artefact has to produce it: ` +
         `an artefact carried forward from the previous run would otherwise pass the ` +
@@ -234,7 +341,7 @@ export function checkProduct(
   const declared = new Set<string>(step.produces);
   const extra = Object.keys(parts).filter((kind) => !declared.has(kind));
   if (extra.length > 0) {
-    throw new Error(
+    throw new ProductRefused(
       `${step.name} returned ${extra.join(" and ")}, which it does not declare in "produces". ` +
         `Refused before the write, because a store told to write an artefact a step does not ` +
         `own writes the valid ones first and then throws on the unknown one.`,
@@ -269,10 +376,22 @@ export function fsStoreSession(options: {
   unconverted?: ReadonlySet<StepName>;
 }): StoreSession {
   const { artifacts, jobs, unconverted = UNCONVERTED_STEPS } = options;
-  const settleJob = (transition: JobTransition): Promise<Job> =>
-    transition.kind === "release"
-      ? jobs.releaseStep(transition.jobId, transition.attempt, transition.steps, transition.fields)
-      : jobs.finish(transition.jobId, transition.attempt, transition.ending);
+  /* **Through `settlementOf`, on the filesystem too.** `jobs-fs.ts`'s
+     `releaseStep` has the same cancelling branch the Postgres one has — Stop
+     arriving mid-step lands on the release — so a filesystem caller that read
+     the outcome off its own request would be wrong in exactly the same way. */
+  const settleJob = async (transition: JobTransition): Promise<JobSettlement> =>
+    settlementOf(
+      transition,
+      transition.kind === "release"
+        ? await jobs.releaseStep(
+            transition.jobId,
+            transition.attempt,
+            transition.steps,
+            transition.fields,
+          )
+        : await jobs.finish(transition.jobId, transition.attempt, transition.ending),
+    );
 
   return {
     reads: readsOf(artifacts),

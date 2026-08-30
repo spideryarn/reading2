@@ -73,6 +73,15 @@
  *    of them has a database and so only one of them came through here. It is a
  *    caller's bug either way, and the whole point of it is to name the
  *    transition that was asked for.
+ * 5. **`ProductRefused`.** The same shape again, and found the same way — by
+ *    asking a guarded store for the message it actually produced, 2026-08-30.
+ *    `checkProduct` (src/store/session.ts) refuses a step's product **before**
+ *    the transaction opens, so none of its four refusals has been near a
+ *    database; the transactional session goes through this wrapper, so all four
+ *    came out as *"this app asked its database for something it would not
+ *    do"*. That is a false sentence about a real bug, and it drops the half
+ *    that says which artefact was missing — which is the whole content of the
+ *    refusal, and the thing whoever is converting a stage needs.
  *
  * What the four have in common is the test to apply to a fifth: the type is
  * **closed** and its message is built from values *we* chose. `StaleAttemptError`
@@ -112,6 +121,7 @@ import { CheckpointRequestError } from "./checkpoints.js";
 import { log } from "../log.js";
 import { STORAGE_BUSY, STORAGE_FAILED } from "../messages.js";
 import { StaleAttemptError } from "./jobs.js";
+import { ProductRefused } from "./artifacts.js";
 import { IllegalTransition } from "./uploads.js";
 
 const logger = log("store");
@@ -257,6 +267,10 @@ function mayPassThrough(err: unknown): boolean {
   if (err instanceof CheckpointRequestError) return true;
   if (err instanceof StaleAttemptError) return true;
   if (err instanceof IllegalTransition) return true;
+  /* A step's product refused before the commit ever opened a transaction —
+     `checkProduct` in src/store/session.ts. Its message names a step and the
+     artefact kinds it declared, both closed unions of ours. See the header. */
+  if (err instanceof ProductRefused) return true;
   return typeof (err as { status?: unknown }).status === "number";
 }
 

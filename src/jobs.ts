@@ -66,12 +66,13 @@ import { errorFields, log, type Log, since } from "./log.js";
 import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import { fsStoreSession } from "./store/session.js";
-import type { JobTransition, StoreSession } from "./store/session.js";
+import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
 import {
   articleExists,
   contextPaths,
   DEFAULT_INGEST_STEPS,
   FORCE_ONLY_WHEN_NAMED,
+  type PipelineStep,
   sharesArticleCache,
   STEP_ORDER,
   STEPS,
@@ -308,8 +309,9 @@ async function runStep(
   jlog: Log,
   note: () => Promise<void>,
   session: StoreSession,
+  registry: StepRegistry,
   decide: () => JobTransition,
-): Promise<{ outcome: StepOutcome; after?: Job; transition?: JobTransition }> {
+): Promise<{ outcome: StepOutcome; settlement?: JobSettlement }> {
   const { dir, htmlFile } = contextPaths(job.slug);
 
   const ctx: StepContext = {
@@ -332,7 +334,6 @@ async function runStep(
       step.name,
       job.steps.slice(job.steps.indexOf(step) + 1).map((s) => s.name),
     ),
-    ...(job.guidance !== undefined && { guidance: job.guidance }),
     ...(job.profile !== undefined && { profile: job.profile }),
   };
 
@@ -340,7 +341,7 @@ async function runStep(
      have to ask the same store, or a step decides whether to skip by looking at
      one place and does its work against another — which under Postgres means
      files on disk answering for rows in a draft. */
-  if (!stillForced(step) && (await stepIsDone(STEPS[step.name], ctx, session.reads))) {
+  if (!stillForced(step) && (await stepIsDone(registry[step.name], ctx, session.reads))) {
     /* **A step this job already ran keeps saying so.** `runJob` never meets
        this case — it visits each step once, at `pending` — but `advanceJob`
        walks the whole list on every call, so without the guard the second
@@ -392,7 +393,7 @@ async function runStep(
        say nothing and this still gets the whole bill.
 
        What it is told about the work is below rather than here. */
-    const { result: product } = await collectSpend(() => STEPS[step.name].run(ctx, session.reads), {
+    const { result: product } = await collectSpend(() => registry[step.name].run(ctx, session.reads), {
       /* **Everything the ledger cannot work out for itself.** A gateway sees a
          model id and a body; this is the frame that knows whose article it is,
          which job, and which step — so it says so once and every call inside
@@ -443,7 +444,13 @@ async function runStep(
        leave a completed step looking interrupted, and the Retry that follows a
        cancel would buy the same model call twice. */
     const transition = decide();
-    const after = await session.commit(ctx, STEPS[step.name], attempt, product, transition);
+    /* **The settlement that happened, not the one that was asked for.** A
+       release resolves to *cancelled* when a Stop landed while the step ran, and
+       reading the outcome off `transition` would have this call report a job
+       that is still working and `/advance` answer `done: false` about a job that
+       is over. GPT Sol, 2026-08-29; see `JobSettlement` in
+       src/store/session.ts. */
+    const settlement = await session.commit(ctx, registry[step.name], attempt, product, transition);
     /* **`step.detail` is deliberately not logged**, though it is the obvious
        thing to put here and the first version did.
 
@@ -462,7 +469,7 @@ async function runStep(
       { step: step.name, ms: since(stepStarted), ...spendFields(spend) },
       `step done: ${step.name} — ${job.slug}`,
     );
-    return { outcome: "ran", after, transition };
+    return { outcome: "ran", settlement };
   } catch (err) {
     /* **The one thing that is not a step failure, and it has to leave first.**
        `commit` now carries the job's own release or finish, and those are fenced:
@@ -599,9 +606,9 @@ async function endJob(
      a step the reader cancelled, and a claim where every step skipped — so they
      take the session's other door rather than the store directly. One seam for
      D1b to make transactional, rather than one seam and three exceptions. */
-  const after = await session.settleJob({ kind: "end", jobId: job.id, attempt, ending });
+  const settled = await session.settleJob({ kind: "end", jobId: job.id, attempt, ending });
   await noteEnded(job, ending, jlog, startedMs);
-  return after;
+  return settled.job;
 }
 
 /**
@@ -802,6 +809,65 @@ export interface Advanced {
  * @returns null if there is no such job, so the route can 404.
  */
 export async function advanceJob(id: string): Promise<Advanced | null> {
+  return advanceJobWith(id, PRODUCTION);
+}
+
+/**
+ * The two things a claim runs with, and the **only** two a caller may replace.
+ *
+ * ## Why this exists at all, since production never passes anything
+ *
+ * Three of the tests this stage owes cannot honestly be written without it. The
+ * Postgres session's preflight-over-misleading-files claim, its all-skipped
+ * path, and its handling of a release that resolves to cancellation are all
+ * claims about **the coordinator driving that session** — and production is
+ * hardwired to `fsStoreSession` and will stay that way until D2. A test that
+ * called a session method directly would be proving something else: the whole
+ * point of the first of those is that `stepIsDone` goes through `session.reads`
+ * and not through a store the caller happens to have. GPT Sol, 2026-08-29,
+ * docs/plans/delete-the-importer-d1b-design-sol.md finding 4.
+ *
+ * ## Narrow means these two and no more
+ *
+ * Not an injection framework and not a seam for anything else in this file:
+ * `store`, `costStore`, the abort map and the lease are all still module-level
+ * and still not replaceable. A session and a step registry are exactly what a
+ * different *storage backend* changes, which is why they are the two.
+ *
+ * **Production behaviour does not change.** `PRODUCTION` builds the same session
+ * from the same filesystem store `advanceJob` built inline before, and nothing
+ * selects Postgres — src/jobs.ts still imports `fsArtifacts`.
+ */
+export interface AdvanceParts {
+  /**
+   * Built **once per successful claim**, which is the lifetime a claim has: a
+   * Postgres draft reference embeds the attempt token, so one per job is stale
+   * on the second request and one per step could not carry a draft at all.
+   */
+  readonly session: (job: Job, attempt: string) => Promise<StoreSession>;
+  /** Which `PipelineStep` each name means, so a test can supply converted fakes. */
+  readonly steps: StepRegistry;
+}
+
+/** The pipeline's own shape, named so `AdvanceParts` can say it once. */
+export type StepRegistry = { [K in StepName]: PipelineStep<K> };
+
+const PRODUCTION: AdvanceParts = {
+  /* Async only because the interface is; the filesystem session needs nothing
+     awaited to build. `src/jobs.ts:57` still picks the filesystem artefact
+     store, and this line is where the Postgres session goes in D2. */
+  session: async () => fsStoreSession({ artifacts: pipelineStore, jobs: store }),
+  steps: STEPS,
+};
+
+/**
+ * `advanceJob`, with the session and the step registry named rather than
+ * assumed. See `AdvanceParts` for why it is exported and how narrow "narrow" is.
+ */
+export async function advanceJobWith(
+  id: string,
+  parts: AdvanceParts,
+): Promise<Advanced | null> {
   const owner = currentOwnerId();
 
   /**
@@ -869,10 +935,11 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
    * (docs/plans/delete-the-importer-d1-design-sol.md, finding 3).
    *
    * On the filesystem it holds no transaction and says so out loud
-   * (src/store/session.ts). `src/jobs.ts:57` still picks the filesystem artefact
-   * store; this line is where the Postgres session goes.
+   * (src/store/session.ts). `PRODUCTION` above is what supplies it, and it still
+   * picks the filesystem artefact store; that is the line the Postgres session
+   * replaces in D2, and this one does not change.
    */
-  const session = fsStoreSession({ artifacts: pipelineStore, jobs: store });
+  const session = await parts.session(job, attempt);
   /* A child logger, made here and used locally — never a module-level "current
      job". Rule 4 at the top of src/log.ts, and it matters more here than
      anywhere: several advance requests for *different* jobs really can be in
@@ -949,7 +1016,16 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
     };
 
     for (const step of job.steps) {
-      const ran = await runStep(job, step, controller, jlog, note, session, transitionAfter);
+      const ran = await runStep(
+        job,
+        step,
+        controller,
+        jlog,
+        note,
+        session,
+        parts.steps,
+        transitionAfter,
+      );
 
       if (ran.outcome === "skipped") continue;
 
@@ -972,9 +1048,14 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
          next one would only skip: the caller comes straight back for it, and a
          request that returns keeps every step inside its own serverless
          invocation, which is the whole reason this endpoint exists. */
-      const after = ran.after as Job;
-      const ended = ran.transition?.kind === "end";
-      if (ended && ran.transition?.kind === "end") {
+      /* **`settlement`, not the transition that was asked for.** A release
+         resolves to *cancelled* when Stop landed while the step ran, and this is
+         the branch that would otherwise report `done: false` for a job the store
+         has already ended — and skip `noteEnded`, so the ending would never be
+         logged and retention would never run. */
+      const settlement = ran.settlement as JobSettlement;
+      const ended = settlement.kind === "ended";
+      if (settlement.kind === "ended") {
         if (overran) {
           jlog.warn(
             { step: step.name },
@@ -985,9 +1066,9 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
         }
         /* The finish itself happened inside the commit; this is the half of
            `endJob` that is not a store write. */
-        await noteEnded(job, ran.transition.ending, jlog, startedMs);
+        await noteEnded(job, settlement.ending, jlog, startedMs);
       }
-      return { job: after, ran: step.name, busy: false, done: ended };
+      return { job: settlement.job, ran: step.name, busy: false, done: ended };
     }
 
     // Every step skipped: there was nothing left to do. A job re-added after
@@ -1063,7 +1144,6 @@ export interface EnqueueRequest {
    * survives a restart and so that two differently-steered requests are two
    * different jobs (`sameWork` below).
    */
-  guidance?: string;
   /**
    * Who is reading, **already rendered** — `renderProfile` in src/profile.ts.
    *
@@ -1101,14 +1181,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
      the job gets one from `meta.json` — and the key has to be a property of the
      *request*, or two callers asking for the same thing would hash differently
      depending on what happened to be on disk when each of them asked. */
-  const workKey = workKeyFor(
-    names,
-    forced,
-    request.guidance,
-    request.profile,
-    request.upload,
-    request.url,
-  );
+  const workKey = workKeyFor(names, forced, request.profile, request.upload, request.url);
 
   /* **The loop is the deduplication, and the insert is what decides.**
    *
@@ -1160,7 +1233,6 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       steps: names.map((n) => newStep(n, forced.has(n), request.upload !== undefined)),
       status: "queued",
       createdAt: new Date().toISOString(),
-      ...(request.guidance ? { guidance: request.guidance } : {}),
       ...(request.profile ? { profile: request.profile } : {}),
     };
 
@@ -1261,7 +1333,6 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
 export function workKeyFor(
   names: StepName[],
   forced: Set<StepName>,
-  guidance?: string,
   profile?: string,
   upload?: JobUpload,
   url?: string,
@@ -1271,7 +1342,6 @@ export function workKeyFor(
       JSON.stringify({
         steps: names.map((n) => [n, forced.has(n)]),
         upload: upload?.id ?? "",
-        guidance: guidance ?? "",
         profile: profile ?? "",
         /* **`urlKey`, not the URL.** `http://x.test/p` and `https://x.test/p/`
            are one article — src/ingest.ts is the only thing in this codebase
@@ -1311,21 +1381,27 @@ async function activeFor(slug: string): Promise<Job | undefined> {
  * Which makes deleting it the wrong tidy-up. A hash is not readable, and "what
  * counts as the same piece of work" is a decision worth being able to read.
  *
- * The guidance is part of the comparison, and has to be. Without it, a reader
- * who presses "Write them again", changes their mind about what they are after,
- * and presses it once more gets handed the *first* job: it succeeds, the panel
- * refreshes, and the summaries are the ones written to the note they replaced.
- * Nothing anywhere would say so. Same trap the `steps` comparison was added
- * for, one field later.
+ * **A `guidance` steer used to be compared here and is gone**, with the box that
+ * fed it (docs/plans/steer-becomes-the-profile.md). What it was defending
+ * against now lives entirely on `profile` one line down: a reader who changes
+ * what they are after and presses the button again is asking for a *different
+ * artefact*, and being handed the first job would refresh the panel with
+ * summaries written to the intent they replaced, with nothing anywhere saying
+ * so.
  *
- * `?? ""` on both sides so "no steer" and "" are one case rather than two that
- * fail to match each other.
+ * **Removing it moved every parameter after it**, and `guidance` and `profile`
+ * were both `string | undefined`, so nothing in the type system could have
+ * caught a call site left with its arguments shifted by one. Both call sites
+ * were changed by hand and `tests/jobs.test.ts` holds this and `workKeyFor` to
+ * the same answer for a set of jobs, which is what would catch a drift here.
+ *
+ * `?? ""` on both sides so "no profile" and "" are one case rather than two
+ * that fail to match each other.
  */
 export function sameWork(
   job: Job,
   names: StepName[],
   forced: Set<StepName>,
-  guidance?: string,
   profile?: string,
   upload?: JobUpload,
   url?: string,
@@ -1336,7 +1412,7 @@ export function sameWork(
      hands two attempts the same slug, so `activeFor` should not have found the
      other one at all — and it is here because the cost of the two mechanisms
      disagreeing is that a reader watches somebody else's document succeed
-     under their own filename. Sol's finding on the plan: `sameWork` compares
+     under their own filename. Sol's finding on the plan: `sameWork` compared
      steps, guidance and profile only, and had no upload identity at all. */
   if ((job.upload?.id ?? "") !== (upload?.id ?? "")) return false;
   /* **And the URL, which was missing until 2026-08-27.**
@@ -1353,7 +1429,6 @@ export function sameWork(
    * `urlKey` rather than the string, so two spellings of one address stay one
    * piece of work — src/ingest.ts § `urlKey`. */
   if ((job.url ? urlKey(job.url) : "") !== (url ? urlKey(url) : "")) return false;
-  if ((job.guidance ?? "") !== (guidance ?? "")) return false;
   /* And the profile, for the identical reason one field up — plus a sharper
      one. Unticking "use your profile" and pressing the button again is a
      request for a *different artefact*, not a retry of the one already
@@ -1536,7 +1611,7 @@ const KEEP_FINISHED = 50;
  *
  * **Yours, inside a request.** Until 2026-08-27 this returned everybody's, and
  * a job record is not a small disclosure: it carries the slug, the source URL,
- * the uploaded filename, the reader's guidance text and the error message. It
+ * the uploaded filename and the error message. It
  * was also the index a stranger needed to start naming other people's slugs at
  * the rest of the API. GPT Sol, 2026-08-27.
  */
@@ -1619,7 +1694,6 @@ export async function retryJob(id: string): Promise<Job | null> {
     force: forceForRetry(old.steps),
     // Copied, unlike force. The steer is not a thing the first attempt used up
     // — a retry of a summary run that was steered is still that run.
-    ...(old.guidance ? { guidance: old.guidance } : {}),
     ...(old.profile ? { profile: old.profile } : {}),
   });
 }

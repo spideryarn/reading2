@@ -366,8 +366,16 @@ async function lockArticle(
  * when `openOrBeginJobDraft` came to need the same thing one step earlier. A
  * fresh insert is locked by definition: nobody else can see the row until this
  * transaction commits.
+ *
+ * **Exported for the transactional store session** (src/store/pg-session.ts),
+ * which takes this lock at the top of every commit — including the commits that
+ * will not publish and therefore have no other reason to want it. That is the
+ * lock order being enforceable rather than argued: a transaction that took the
+ * job lock first and reached `publishRevisionIn` later would still be
+ * job→article, and being inside one transaction does not stop it deadlocking
+ * with an article→job one.
  */
-async function lockOrCreateArticle(
+export async function lockOrCreateArticle(
   tx: Tx,
   slug: string,
 ): Promise<typeof articles.$inferSelect> {
