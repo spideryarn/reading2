@@ -68,6 +68,7 @@ import { captureFailure } from "./monitoring.js";
 import { currentOwnerId, type OwnerId, runAsOwner } from "./owner.js";
 import { fsStoreSession } from "./store/session.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
+import { publishingSession } from "./store/publish-session.js";
 import {
   articleExists,
   contextPaths,
@@ -239,6 +240,15 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
   summary: 180_000,
   /* GUESS, in `summary`'s family and never measured on its own. */
   ideas: 120_000,
+  /* **MEASURED**, over seven draws of five articles on 2026-08-30: 121–194
+     seconds, one model call each, the longest being the constitution at 194.4s
+     with the shape-claims section added to the prompt. Rounded up hard, because
+     this is the slowest single call in the app and the cost of being under is a
+     mid-step kill. Grouped by `runId` from `data/_ai-calls.jsonl` and read as
+     `max(finishedAt) − min(startedAt)` — summing durations would have said 408s
+     for a batch of three separate articles, which is the trap this table's
+     header warns about from the other direction. */
+  sketch: 240_000,
 };
 
 /**
@@ -959,13 +969,50 @@ export interface AdvanceParts {
 /** The pipeline's own shape, named so `AdvanceParts` can say it once. */
 export type StepRegistry = { [K in StepName]: PipelineStep<K> };
 
-const PRODUCTION: AdvanceParts = {
-  /* Async only because the interface is; the filesystem session needs nothing
-     awaited to build. `src/jobs.ts:57` still picks the filesystem artefact
-     store, and this line is where the Postgres session goes in D2. */
-  session: async () => fsStoreSession({ artifacts: pipelineStore, jobs: store }),
-  steps: STEPS,
-};
+/**
+ * The session one claim runs on, and **the one place a finished job publishes.**
+ *
+ * Async only because the interface is; the filesystem session needs nothing
+ * awaited to build. `src/jobs.ts:57` still picks the filesystem artefact store,
+ * and this line is where `pgStoreSession` goes once D3–D5 have converted the
+ * stages.
+ *
+ * ## Why the wrapper, and why the flag rather than a parameter
+ *
+ * Until 2026-08-30 a job that ran every step to completion published nothing:
+ * `grep -c publishRevision src/jobs.ts` answered 0, and
+ * `articles.current_revision_id` never moved, so the reader's shelf stayed empty
+ * after a perfectly successful ingest. `publishingSession` is the fix and it is
+ * described in src/store/publish-session.ts — including why it wraps the session
+ * rather than living in `walkClaim`, which is that a `done` ending reaches the
+ * store through `commit` *and* through `settleJob` and only one of those two is
+ * here.
+ *
+ * **Gated on the live store, and nothing else.** With `SPIDERYARN_STORE` unset
+ * the session is byte-for-byte what it was before: no draft, no publication,
+ * nothing new. That is what every laptop runs and what `data/` is for, and this
+ * change must not alter it. Under `postgres` the files the stages wrote become
+ * the revision a reader opens.
+ *
+ * **Exported so a test can drive the real one.** `advanceJobWith` takes a
+ * session because a test must be able to supply fake *steps* — the ten real ones
+ * cost money and reach the network — but the session under them has to be
+ * production's, or a test of the finalizer would be a test of its own wiring.
+ * See `AdvanceParts` for how narrow "narrow" is.
+ */
+export async function claimSession(job: Job, attempt: string): Promise<StoreSession> {
+  const inner = fsStoreSession({ artifacts: pipelineStore, jobs: store });
+  if (STORE !== "postgres") return inner;
+  return publishingSession(inner, {
+    job: { id: job.id, attemptId: attempt },
+    slug: job.slug,
+    /* The same store the stages just wrote to, named rather than reached for —
+       see `PublishingSessionOptions.from`. */
+    from: pipelineStore,
+  });
+}
+
+const PRODUCTION: AdvanceParts = { session: claimSession, steps: STEPS };
 
 /**
  * `advanceJob`, with the session and the step registry named rather than

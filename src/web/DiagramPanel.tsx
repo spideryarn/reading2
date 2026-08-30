@@ -60,6 +60,7 @@ import {
   ChevronUp,
   LoaderCircle,
   Network,
+  PenLine,
   Route,
   Waypoints,
 } from "lucide-react";
@@ -83,6 +84,7 @@ import type { SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
 import { stepTarget } from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
+import { SketchView } from "./SketchView.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 
 interface Props {
@@ -161,6 +163,17 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb:
     blurb:
       "The same dots with both axes spent on meaning, joined in reading order — so you can see whether the piece travels through its subject or circles back over it.",
     how: "Shares Drift's model call, so opening one pays for both. This is the only picture here where down the page is not later in the article; colour by Progress if you need that back.",
+  },
+  /* The odd one out, and the card has to say so before it is pressed: the three
+     above are geometry over the article's own tree, and this one is a model's
+     drawing. Its `how` leads with the price because it is the only picture here
+     that costs two minutes and cannot be redrawn for free. */
+  sketch: {
+    label: "Sketch",
+    icon: PenLine,
+    blurb:
+      "A model reads the article, works out what shape the argument is — three supports converging, a ladder, a spine with asides — and draws that. The only picture here that is not the same shape for every article.",
+    how: "Costs one model call and about two minutes, and is never drawn until you ask. Down the page is still reading order; nothing is to scale. Click a box to jump there, or to open the part inside it.",
   },
 };
 
@@ -936,6 +949,22 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
         </TooltipGroup>
       </div>
 
+      {/* **Sketch replaces everything below the chips, rather than adding a
+          branch to each of them.** The three pictures above are one
+          `DiagramLayout` and every control under here is about it — the axis
+          chips, the step bar, the footer card, the roving tabstop. A Sketch has
+          none of those things and has its own. Splitting once, here, is what
+          keeps the other three unbraided; src/web/SketchView.tsx says the rest.
+
+          The hooks above still run and cost nothing: `useSimilar` and
+          `useProjection` are already gated on the kind that wants them, so
+          pressing Sketch spends no money on the pictures the reader is not
+          looking at. */}
+      {kind === "sketch" ? (
+        <SketchView slug={slug} blocks={blocks} atRow={atRow} onJump={onJump} />
+      ) : (
+        <>
+
       {/* The two things a scatter lets the reader change, and neither is a
           different picture — which is why they are a second row of quieter
           chips rather than more of the row above, and why they are `replace` in
@@ -1298,6 +1327,8 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
         onJump={onJump}
         related={related}
       />
+        </>
+      )}
     </aside>
   );
 }

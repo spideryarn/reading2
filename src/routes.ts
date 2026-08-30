@@ -79,6 +79,7 @@ import {
   lookUpTerm,
   loadArc,
   loadIdeas,
+  loadSketch,
   loadSummaries,
   loadTweets,
 } from "./store/index.js";
@@ -170,6 +171,7 @@ import type {
   LibrarySearchResponse,
   ShelfState,
   IdeasResponse,
+  SketchResponse,
   ReviewStance,
   ThreadKind,
   SummariesResponse,
@@ -3477,6 +3479,11 @@ export async function serveAuthenticatedApi(
      throw away. Asking for these is
      POST /api/jobs { slug, steps: ["ideas"] }. */
   const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(url);
+  /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
+     four reads around it: drawing one is
+     POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
+     again" is spelled, because the step replaces rather than appends. */
+  const sketch = /^\/api\/sketch\/([\w.%-]+)$/.exec(url);
   /* The arc on its own. It also travels inside `/api/article/:slug`, and this is
      not a second way to do the same thing — since 2026-08-29 the arc is not built
      by every ingest, so a reader can arrive without one, ask for one, and need to
@@ -3729,6 +3736,25 @@ export async function serveAuthenticatedApi(
       {
         const at = slugPart(ideas, 1);
         send(res, 200, await withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas));
+      }
+      return;
+    }
+    if (sketch && req.method === "GET") {
+      {
+        const at = slugPart(sketch, 1);
+        /* `found.sketch` is `unknown` on the wire and a `Sketch` in both stores,
+           and the cast is only about reaching `profileHash` for the comparison
+           below — the client parses the scene itself on arrival. See
+           SketchResponse in src/types.ts for why the field is not typed here. */
+        send(
+          res,
+          200,
+          await withProfileChanged<SketchResponse>(
+            at,
+            () => loadSketch(at),
+            (found) => found.sketch as { profileHash?: string | null },
+          ),
+        );
       }
       return;
     }

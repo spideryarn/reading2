@@ -243,6 +243,14 @@ export const REVISION_CARRY_POLICY: Record<
      was written for and `stepIsDone` compares it, so the *step* re-runs while
      the *reader* keeps something to look at until it does. */
   ideas: "carry",
+  /* Carries, like its five neighbours, and its staleness is answered the same
+     way: `sourceHash` on the artefact against the blocks and tree now, computed
+     at read time. Carrying matters more here than for any of them — a re-ingest
+     that dropped the picture would leave the band empty for two minutes and
+     $0.20, where a carried one goes on being *drawn* and loses only the clicks
+     whose block ids no longer resolve. That degradation is `readSketch`'s, and
+     it is the reason a stale sketch is worth keeping rather than discarding. */
+  sketch: "carry",
 };
 
 const MINTED = new Set(

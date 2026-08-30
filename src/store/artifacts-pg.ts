@@ -163,7 +163,8 @@ type WholeColumn =
   | "tweets"
   | "glossary"
   | "summary"
-  | "ideas";
+  | "ideas"
+  | "sketch";
 
 /**
  * Where one `(step, kind)` lives in Postgres.
@@ -234,6 +235,7 @@ export const STORAGE: {
   glossary: { glossary: { at: "column", column: "glossary" } },
   summary: { summary: { at: "column", column: "summary" } },
   ideas: { ideas: { at: "column", column: "ideas" } },
+  sketch: { sketch: { at: "column", column: "sketch" } },
 };
 
 /** The site for one `(step, kind)`, or a clear error rather than `undefined`. */

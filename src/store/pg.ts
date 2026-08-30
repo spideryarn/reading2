@@ -50,6 +50,8 @@ import {
   inputFingerprint as ideasFingerprint,
   PROMPT_VERSION as IDEAS_PROMPT_VERSION,
 } from "../ideas.js";
+import { isStale as sketchIsStale, PROMPT_VERSION as SKETCH_PROMPT_VERSION } from "../sketch.js";
+import type { Sketch } from "../sketch-scene.js";
 import { isSlug } from "../ingest.js";
 import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "../library-scalars.js";
 import { log } from "../log.js";
@@ -71,6 +73,7 @@ import type {
   GlossaryFound,
   Ideas,
   IdeasFound,
+  SketchFound,
   LibraryEntry,
   ListOptions,
   Meta,
@@ -269,6 +272,7 @@ type RevisionReader =
   | "glossary"
   | "summaries"
   | "ideas"
+  | "sketch"
   | "arc";
 
 const REVISION_READ_POLICY: Record<
@@ -347,6 +351,12 @@ const REVISION_READ_POLICY: Record<
   glossary: { metadata: "value", glossary: "value", library: "presence" },
   summary: { metadata: "value", summaries: "value", library: "presence" },
   ideas: { metadata: "value", ideas: "value" },
+  /* Its own reader and the metadata page, and **not the library**: a card shows
+     four ticks and a fifth would not fit, and a scene is the widest artefact
+     here — up to 46KB of coordinates — so reading it to answer a boolean on a
+     list of forty articles is exactly the cost docs/plans/library-read-latency.md
+     was written about. */
+  sketch: { metadata: "value", sketch: "value" },
 
   /* **Read by nobody through here**, and the first three are why this map
      exists. `raw_bytes` is up to 32 MiB of source document. The two HTML
@@ -493,6 +503,12 @@ export const REVISION_PROJECTIONS = {
   glossary: { id: articleRevisions.id, glossary: articleRevisions.glossary },
   summaries: { id: articleRevisions.id, summary: articleRevisions.summary },
   ideas: { id: articleRevisions.id, ideas: articleRevisions.ideas, tree: articleRevisions.tree },
+  /* The tree beside the sketch, for the reason `ideas` gives one line up: this
+     artefact's fingerprint covers the outline as well as the blocks, so a
+     blocks-only comparison here would call a re-sectioned article's picture
+     current while the filesystem store called it stale — and two stores
+     disagreeing about staleness is what the parity tests exist to catch. */
+  sketch: { id: articleRevisions.id, sketch: articleRevisions.sketch, tree: articleRevisions.tree },
   /* Wider than its neighbours by three columns, and only by three. The arc's
      fingerprint covers the blocks, the tree **and** the metadata the prompt
      carries, so `title`, `byline` and `siteName` have to be here — but nothing
@@ -818,6 +834,7 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   glossary: ["article_revisions.glossary"],
   summary: ["article_revisions.summary"],
   ideas: ["article_revisions.ideas"],
+  sketch: ["article_revisions.sketch"],
 };
 
 /**
@@ -1232,6 +1249,7 @@ export const pgArticleReader: Pick<
   | "loadGlossary"
   | "loadSummaries"
   | "loadIdeas"
+  | "loadSketch"
   | "loadArc"
 > = {
   async loadArticle(slug: string): Promise<Article> {
@@ -1694,6 +1712,39 @@ export const pgArticleReader: Pick<
       ideas,
       stale: !tree || ideasAreStale(ideas, blocks, tree),
       outdated: ideas.version !== IDEAS_PROMPT_VERSION,
+    };
+  },
+
+  /**
+   * The Sketch picture on its own — the Postgres half of `loadSketch`.
+   *
+   * Three inputs like `loadIdeas` above, and the same reason for the third: the
+   * fingerprint covers the tree as well as the blocks, so comparing only the
+   * blocks here would call a re-sectioned article's picture current while the
+   * filesystem store called it stale.
+   */
+  async loadSketch(slug: string): Promise<SketchFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "sketch");
+    if (!found) throw notFound(slug);
+
+    const sketch = found.revision.sketch as Sketch | null;
+    /* **And a scene list that is empty counts as none**, which is the same hole
+       `accept` closes when writing and `readSketchFile` closes on disk. A
+       column can hold `{"scenes": []}` — from an import, or from a hand edit —
+       and a panel handed that would draw an empty band and report success. */
+    if (!sketch || !Array.isArray(sketch.scenes) || sketch.scenes.length === 0) {
+      throw Object.assign(
+        new Error(`No sketch for "${slug}" yet. Draw one with \`npm run sketch -- ${slug}\`.`),
+        { status: 404 },
+      );
+    }
+    const blocks = await blockHashInputs(found.revision.id);
+    const tree = found.revision.tree as Tree | null;
+    return {
+      sketch,
+      stale: !tree || sketchIsStale(sketch, blocks, tree),
+      outdated: sketch.version !== SKETCH_PROMPT_VERSION,
     };
   },
 

@@ -65,6 +65,7 @@ import {
 
 import { ID_PATTERN } from "../ids.js";
 import type { Assets } from "../assets.js";
+import type { Sketch } from "../sketch-scene.js";
 import type { LabelsFile } from "../labels.js";
 import type {
   Arc,
@@ -571,6 +572,29 @@ export const articleRevisions = spideryarn.table(
      * article"* rather than take a delete with it or block one.
      */
     ideas: jsonb("ideas").$type<Ideas>(),
+
+    /**
+     * The picture a model drew of the argument — `Sketch`,
+     * src/sketch-scene.ts, written by the `sketch` step.
+     * docs/project/diagram.md § Sketch.
+     *
+     * The WHOLE artefact, like the six above, and here the reason is sharper
+     * than for any of them: **a scene is a set of coordinates that only means
+     * anything against the article it was drawn for.** Every node may carry a
+     * `block`, and a re-extraction moves every block id — so a column holding
+     * `scenes` without `sourceHash` and `profileHash` could not answer whether
+     * the picture is still about this text, and the panel would go on drawing a
+     * confident diagram whose clicks land nowhere. The source hash covers the
+     * **tree** as well as the blocks, because the prompt shows the model the
+     * outline: re-cut the sections and the question changes with every block
+     * byte-identical (src/ideas.ts § inputFingerprint has the reasoning).
+     *
+     * **No foreign key from a node's `block` to `revision_blocks`**, on the
+     * same argument the glossary and the ideas make: a dropped paragraph should
+     * cost that node its click, which is what `readSketch` does, rather than
+     * take the picture down with it or block the delete.
+     */
+    sketch: jsonb("sketch").$type<Sketch>(),
 
     /**
      * The article's own images, and what became of each — `Assets`,

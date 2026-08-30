@@ -158,6 +158,9 @@ export const PATHS: {
   ideas: {
     ideas: (at) => path.join(at.dir, "ideas.json"),
   },
+  sketch: {
+    sketch: (at) => path.join(at.dir, "sketch.json"),
+  },
 };
 
 
@@ -245,6 +248,11 @@ const DECODERS: Record<ArtifactKind, Decoder> = {
   arc: { maxBytes: 16 * MiB, decode: json("arc") },
   tweets: { maxBytes: 16 * MiB, decode: json("tweets") },
   glossary: { maxBytes: 32 * MiB, decode: json("glossary") },
+  /* Four scenes of coordinates and short strings — the largest drawn so far is
+     46KB. The ceiling is a guard against a corrupt file, not an estimate, and
+     it is well under the others because a picture that needs a megabyte of
+     geometry is not a picture anybody can read. */
+  sketch: { maxBytes: 4 * MiB, decode: json("sketch") },
   /* Far smaller than a glossary in practice — three to ten ideas rather than a
      hundred terms — but the same ceiling, because the cap is a guard against a
      corrupt or hostile file rather than a size estimate. */

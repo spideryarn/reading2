@@ -129,7 +129,7 @@ import type { SummaryNode } from "./tree.js";
  * the other two show a spinner rather than borrowing a picture that is not
  * theirs. See [diagrams.ts](./diagrams.ts).
  */
-export const DIAGRAMS = ["force", "drift", "trail"] as const;
+export const DIAGRAMS = ["force", "drift", "trail", "sketch"] as const;
 export type DiagramKind = (typeof DIAGRAMS)[number];
 
 /**
@@ -375,11 +375,25 @@ const CHAR_W = 0.52;
  * arithmetic and the stylesheet would be disagreeing again with nothing to
  * catch it.
  */
-export const UNLABELLED: ReadonlySet<DiagramKind> = new Set<DiagramKind>(["drift", "trail"]);
+/* `sketch` is here for a different reason from the other two, and it is worth
+   the sentence. Drift and Trail draw dots that have no room for a word. Sketch
+   is nothing BUT words — it simply does not come through this module at all:
+   its geometry is src/sketch-paint.ts and its type scale is `SIZE_PX` in
+   src/sketch-scene.ts, so `LABEL_PX` has nothing to say about it and a number
+   here would be a rule nothing reads. */
+export const UNLABELLED: ReadonlySet<DiagramKind> = new Set<DiagramKind>([
+  "drift",
+  "trail",
+  "sketch",
+]);
 
 export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
   // Only a number goes inside a force bubble, and it is small.
   force: { 0: 10, 1: 10, 2: 10 },
+  /* Never read: `sketch` does not use this module's geometry at all. Present
+     because the record is keyed by `DiagramKind`, and `UNLABELLED` above is
+     what makes that a stated fact rather than a forgotten row. */
+  sketch: {},
   /* Nothing is written on a scatter dot at all — `lines` is always empty
      (src/web/scatter.ts). These entries exist because the record is keyed by
      `DiagramKind` and a missing one would be a type error rather than a
@@ -399,6 +413,8 @@ export const LABEL_PX: Record<DiagramKind, Record<number, number>> = {
  * as slightly uneven spacing rather than as an overflow.
  */
 export const LINE_STEP: Record<DiagramKind, { title: number; gist: number }> = {
+  /* Never read, for the reason `LABEL_PX` gives one table up. */
+  sketch: { title: 0, gist: 0 },
   // Force puts one line on a node and the rest in the footer card.
   force: { title: 12, gist: 12 },
   // The two scatters write nothing on a dot; everything is in the card.

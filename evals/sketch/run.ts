@@ -168,10 +168,12 @@ async function draw(opts: Options): Promise<void> {
     process.stdout.write(`${slug}: drawing…`);
     const r = await generateSketch({
       dir,
-      outFile: path.join(opts.outDir, `${slug}.json`),
       ...(systemOverride ? { systemOverride } : {}),
       onProgress: (d) => process.stdout.write(`\r${slug}: ${d}          `),
     });
+    /* The harness writes the scene, because `generateSketch` writes nothing —
+       see its note on being the first converted step. */
+    await writeFile(path.join(opts.outDir, `${slug}.json`), JSON.stringify(r.sketch, null, 2), "utf-8");
     /* The raw answer beside the cleaned scene. `--render` reads the cleaned
        one and can therefore never reproduce a fault; this is the file that
        can, and it is also the only record of what the prompt actually got

@@ -32,6 +32,11 @@ import {
   PROMPT_VERSION as IDEAS_PROMPT_VERSION,
   readIdeas,
 } from "./ideas.js";
+import {
+  isStale as sketchIsStale,
+  PROMPT_VERSION as SKETCH_PROMPT_VERSION,
+  readSketchFile,
+} from "./sketch.js";
 import { isStale as summariesStale, readSummaries } from "./summarise.js";
 import { isSlug } from "./ingest.js";
 import { errorFields, log } from "./log.js";
@@ -51,6 +56,7 @@ import type {
   Block,
   GlossaryFound,
   IdeasFound,
+  SketchFound,
   SummariesFound,
   LibraryEntry,
   ListOptions,
@@ -402,6 +408,42 @@ export async function loadIdeas(slug: string): Promise<IdeasFound> {
     ideas,
     stale: !blocksFile || !tree || ideasAreStale(ideas, blocksFile.blocks, tree),
     outdated: ideas.version !== IDEAS_PROMPT_VERSION,
+  };
+}
+
+/**
+ * The Sketch picture, plus whether the article has moved underneath it — the
+ * filesystem half. docs/project/diagram.md § Sketch.
+ *
+ * Shaped exactly on `loadIdeas` above, including the "unknown counts as stale"
+ * rule, and differing in one place: a **404 here is the ordinary case**. Sketch
+ * is off `DEFAULT_INGEST_STEPS`, so most articles have never had one drawn, and
+ * the panel's job on a 404 is to offer the button rather than to report a
+ * failure.
+ */
+export async function loadSketch(slug: string): Promise<SketchFound> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const sketch = await readSketchFile(dir);
+  if (!sketch) {
+    throw Object.assign(
+      new Error(
+        `No sketch for "${slug}" yet. Draw one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["sketch"] }.`,
+      ),
+      { status: 404 },
+    );
+  }
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  return {
+    sketch,
+    stale: !blocksFile || !tree || sketchIsStale(sketch, blocksFile.blocks, tree),
+    outdated: sketch.version !== SKETCH_PROMPT_VERSION,
   };
 }
 

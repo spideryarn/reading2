@@ -31,7 +31,7 @@ import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
-import { parseJsonFrom, stripFence } from "./parse-json.js";
+import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
 import { hashProfile, PROFILE_RULES, profileSection } from "./profile.js";
 import {
   accept,
@@ -44,7 +44,7 @@ import {
   type SketchScore,
   SKETCH_VERSION,
 } from "./sketch-scene.js";
-import { hashBlocks, structureHash } from "./source-hash.js";
+import { type BlockFingerprint, hashBlocks, structureHash } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Meta, Tree, TreeNode } from "./types.js";
 
@@ -62,6 +62,45 @@ export const PROMPT_VERSION = "sketch/1";
 export const OVERVIEW_MIN = 6;
 export const OVERVIEW_MAX = 16;
 
+/**
+ * **The blocks and the section boundaries this was drawn against, together.**
+ *
+ * Both halves, for the reason `inputFingerprint` in src/ideas.ts gives at
+ * length: the prompt shows the model the outline *before* the article, so
+ * re-cutting the sections changes the question being asked while every block
+ * stays byte-identical, and a blocks-only hash would report no change at all.
+ */
+export function inputFingerprint(blocks: readonly BlockFingerprint[], tree: Tree): string {
+  return `${hashBlocks(blocks)}.${structureHash(tree)}`;
+}
+
+/** Has the article moved underneath this picture? */
+export function isStale(
+  sketch: Sketch,
+  blocks: readonly BlockFingerprint[],
+  tree: Tree,
+): boolean {
+  return sketch.sourceHash !== inputFingerprint(blocks, tree);
+}
+
+/**
+ * The sketch on disk, or `null` — for the API and this file's own CLI.
+ *
+ * Every road to `null` is the same road: no file, a truncated one, a document
+ * of the wrong shape. That is right for the panel, which has one thing to say
+ * either way. **Including a scene list that is empty**, which `readSketch`
+ * would happily hand back as a valid `Sketch` with nothing in it — the same
+ * hole `accept` closes on the writing side, closed again here because a file
+ * can arrive from an import or a hand edit without ever passing through
+ * `generateSketch`.
+ */
+export async function readSketchFile(dir: string): Promise<Sketch | null> {
+  const found = await readJsonOrNull<Sketch>(path.join(dir, "sketch.json"));
+  if (!found || typeof found !== "object") return null;
+  if (!Array.isArray(found.scenes) || found.scenes.length === 0) return null;
+  return found;
+}
+
 export interface SketchRun {
   sketch: Sketch;
   /**
@@ -75,7 +114,6 @@ export interface SketchRun {
   raw: string;
   report: SketchReport;
   score: SketchScore;
-  outFile: string;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -402,8 +440,6 @@ export async function generateSketch(opts: {
   profile?: string | null;
   /** Overrides SYSTEM, for the prompt harness only. Never set in the app. */
   systemOverride?: string;
-  /** Where to write. Defaults to `<dir>/sketch.json`. */
-  outFile?: string;
 }): Promise<SketchRun> {
   const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
     await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
@@ -524,15 +560,20 @@ export async function generateSketch(opts: {
     );
   }
 
-  const outFile = opts.outFile ?? path.join(opts.dir, "sketch.json");
-  await writeFile(outFile, JSON.stringify(sketch, null, 2), "utf-8");
-
+  /* **Nothing is written here**, and that is what makes `sketch` the first
+     *converted* step in this pipeline (src/pipeline.ts § LEGACY_UNCONVERTED_STEPS).
+     The other nine stages write their own file inside `run`, which works on a
+     laptop and cannot work through a store that puts the artefact in a Postgres
+     column. This one hands the sketch back and lets its three callers decide:
+     the pipeline returns it as `parts`, the CLI writes `sketch.json` beside the
+     article, and the harness writes it into a results directory. A generator
+     that wrote the file *and* returned it would give the pipeline two writes,
+     one of them to a path that does not exist in production. */
   return {
     sketch,
     raw,
     report,
     score,
-    outFile,
     model: CAPABLE_MODEL,
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
@@ -570,13 +611,15 @@ async function main(): Promise<void> {
     dir,
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
+  const outFile = path.join(dir, "sketch.json");
+  await writeFile(outFile, JSON.stringify(run.sketch, null, 2), "utf-8");
   console.log(`\n${run.sketch.title} — ${run.sketch.caption}\n`);
   for (const line of summarise(run)) console.log(`  ${line}`);
   if (run.report.faults.length > 0) {
     console.log("\nFaults:");
     for (const f of run.report.faults.slice(0, 20)) console.log(`  ${f.where}: ${f.what}`);
   }
-  console.log(`\nWrote ${run.outFile}`);
+  console.log(`\nWrote ${outFile}`);
 }
 
 /** Kept for the harness, which reports it beside a run. */

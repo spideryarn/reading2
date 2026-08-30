@@ -54,6 +54,7 @@ import type {
 import type { LabelsFile } from "../labels.js";
 import type { RawManifest } from "../fetch.js";
 import type { Assets } from "../assets.js";
+import type { Sketch } from "../sketch-scene.js";
 
 /**
  * Every kind of thing the pipeline durably produces.
@@ -82,7 +83,8 @@ export type ArtifactKind =
   | "tweets"
   | "glossary"
   | "summary"
-  | "ideas";
+  | "ideas"
+  | "sketch";
 
 /**
  * Each kind, and the TypeScript type of the thing itself.
@@ -134,6 +136,7 @@ export interface ArtifactMap {
   glossary: Glossary;
   summary: Summaries;
   ideas: Ideas;
+  sketch: Sketch;
 }
 
 /** Some or all of one step's artefacts, handed to `write` in one call. */
@@ -237,6 +240,13 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
   glossary: { field: "entries", ok: isArray },
   ideas: { field: "ideas", ok: isArray },
   summary: { field: "entries", ok: isArray },
+  /* **`scenes`, and an empty one is NOT usable**, unlike the assets manifest
+     two rows up. An article with no images legitimately has an empty list; a
+     picture with no scenes is not a picture, and `accept` in
+     src/sketch-scene.ts refuses to write one. This is the shallow half of that
+     rule, at the store boundary, so a hand-written or imported file cannot get
+     round it either. */
+  sketch: { field: "scenes", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
 };
 
 /**
@@ -586,6 +596,7 @@ export const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
   glossary: "glossary",
   summary: "summary",
   ideas: "ideas",
+  sketch: "sketch",
 };
 
 /**

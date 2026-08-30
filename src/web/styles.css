@@ -7929,6 +7929,148 @@ tr:hover .block-chat,
 }
 .diag-card-linkterms { overflow: hidden; text-overflow: ellipsis; }
 
+/* --------------------------------------------------------------- § sketch ----
+ *
+ * The picture a model draws of the argument — docs/project/diagram.md § Sketch,
+ * src/web/SketchView.tsx.
+ *
+ * **Every rule here is keyed off a class `src/sketch-paint.ts` emits, and there
+ * is no geometry in this file.** That is the whole arrangement: the painter is
+ * pure and shared with the offline harness in `evals/sketch/`, so what the
+ * stylesheet owns is colour, weight and dash — and what it must never own is a
+ * position, because the harness would not see it and the two renderings would
+ * quietly diverge on the one thing they exist to agree about.
+ *
+ * **No colour is named.** A primitive carries a `tone` (0–7), `Shape` in
+ * SketchView.tsx turns it into `--cat-rgb`, and everything below reads that —
+ * the same indirection the searches and the tree already use
+ * (docs/project/colour-scales.md). `--cat-7-rgb` is the palette's neutral and
+ * the fallback everywhere, and it has to be a TRIPLET rather than a colour for
+ * the reason `.diag-card` gives at length: `rgb(oklch(…) / 0.8)` is invalid at
+ * computed-value time and drops the whole declaration silently.
+ */
+
+.sk { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+/* The bar over the picture: where you are, and how big to draw it. */
+.sk-bar {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  font-family: var(--font-ui); font-size: 0.7rem;
+}
+.sk-title { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-crumb, .sk-zoom {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  color: var(--ink-soft); background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit;
+}
+.sk-zoom { margin-left: auto; }
+.sk-crumb:hover, .sk-zoom:hover { background: var(--surface-raised); color: var(--ink); }
+.sk-crumb:focus-visible, .sk-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+.sk-note {
+  margin: 0 0.6rem 0.3rem;
+  font-family: var(--font-ui); font-size: 0.65rem; line-height: 1.35;
+  color: var(--ink-faint);
+}
+
+/* **`auto` on both axes, and that is what the Read button is for.** At Fit the
+   svg is `width: 100%` and there is nothing to scroll sideways; at Read it is
+   760px in a 288px band and both scrollbars are the point. */
+.sk-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 0.4rem; }
+.sk-svg { display: block; }
+.sk-scroll.big .sk-svg { max-width: none; }
+
+/* ---- the primitives ---- */
+
+.sk-shape { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.16); stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.62); stroke-width: 1.2; }
+.sk-shape-note { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.09); stroke-dasharray: 3 3; }
+.sk-note-fold { fill: none; stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.5); stroke-width: 1; }
+
+.sk-region { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.07); stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.24); stroke-width: 1; }
+.sk-region-dashed { fill: none; stroke-dasharray: 5 4; }
+.sk-region-label { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.95); font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; }
+.sk-bracket { fill: none; stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.5); stroke-width: 1.5; }
+
+.sk-edge { fill: none; stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.62); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.sk-edge-dashed { stroke-dasharray: 6 4; }
+.sk-edge-dotted { stroke-dasharray: 1.5 3.5; }
+.sk-head { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.8); stroke: none; }
+.sk-free { fill: none; stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.55); stroke-width: 1.5; }
+.sk-free-fill { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.12); stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.32); stroke-width: 1; }
+
+.sk-text { fill: var(--ink); }
+.sk-sub { fill: var(--ink-faint); }
+.sk-label { fill: var(--ink-soft); }
+.sk-label-lg { fill: var(--ink); font-weight: 600; }
+.sk-label-xs { fill: var(--ink-faint); letter-spacing: 0.06em; text-transform: uppercase; }
+.sk-edge-label { fill: var(--ink-faint); }
+/* The plate under an edge label, so the line does not read through the words.
+   `--page` rather than `--panel`: the band's own ground is what the picture
+   sits on, and a plate in the wrong grey is a visible rectangle. */
+.sk-label-plate { fill: var(--page); stroke: none; }
+
+.sk-muted { opacity: 0.5; }
+
+/* ---- the nodes, which are the only thing that can be pressed ---- */
+
+/* Invisible and on top of its own node's paint: a `bare` node has no shape at
+   all, and the middle of a diamond is mostly not the diamond. Without this the
+   hit target would be whatever the model happened to draw. */
+.sk-hit { fill: transparent; stroke: none; }
+.sk-node.links, .sk-node.opens { cursor: pointer; }
+.sk-node.links:hover .sk-shape, .sk-node.opens:hover .sk-shape {
+  fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.3);
+}
+/* A node that opens another scene gets a heavier edge, because "there is more
+   inside this" is a fact about the picture and not a state of the pointer. */
+.sk-node.opens .sk-shape { stroke-width: 2; }
+/* Where the reader is: a ring, never a fill change — the fill already means
+   which group, and a position marker must not change colour as you read.
+   The same rule the other three pictures follow (docs/project/diagram.md). */
+.sk-node.on .sk-shape { stroke: var(--highlight); stroke-width: 2.5; }
+.sk-node.focus .sk-shape { stroke: var(--highlight-ink); stroke-width: 2; }
+.sk-svg:focus-visible { outline: 2px solid var(--highlight); outline-offset: -2px; }
+
+/* ---- the card under the picture ---- */
+
+.sk-card {
+  flex: none;
+  border-top: 1px solid var(--rule);
+  border-left: 3px solid rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.8);
+  padding: 0.45rem 0.6rem 0.5rem;
+  background: var(--panel);
+  /* Fixed height, for the reason `.diag-card` gives: a card that grew with its
+     text would resize the picture above it every time the pointer crossed a box. */
+  height: 6.2rem;
+  overflow: hidden;
+  font-family: var(--font-ui);
+}
+.sk-card.empty { border-left-color: var(--rule); }
+.sk-card-caption { margin: 0; font-size: 0.72rem; line-height: 1.4; color: var(--ink-faint); }
+.sk-card-title { margin: 0; font-size: 0.8rem; line-height: 1.3; color: var(--ink); font-weight: 500; }
+.sk-card-sub { margin: 0.1rem 0 0; font-size: 0.68rem; color: var(--ink-faint); }
+.sk-card-detail {
+  margin: 0.2rem 0 0; font-size: 0.7rem; line-height: 1.35; color: var(--ink-soft);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sk-card-jump {
+  margin-top: 0.25rem; padding: 0;
+  background: none; border: none; cursor: pointer;
+  font-family: inherit; font-size: 0.68rem; color: var(--highlight);
+}
+.sk-card-jump:hover { text-decoration: underline; }
+
+/* ---- before there is a picture ---- */
+
+.sk-wait, .sk-empty { padding: 0.75rem 0.7rem; font-family: var(--font-ui); font-size: 0.75rem; color: var(--ink-soft); }
+.sk-wait { display: flex; align-items: center; gap: 0.4rem; }
+.sk-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
+.sk-empty-why { font-size: 0.7rem; color: var(--ink-faint); }
+.sk-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
+
 /* ---------------------------------------------------- § drift and trail ----
  *
  * The two pictures whose axes came out of a model: one dot per paragraph,

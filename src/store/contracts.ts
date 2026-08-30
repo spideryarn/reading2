@@ -65,6 +65,7 @@ import type {
   SummariesFound,
   ArcFound,
   IdeasFound,
+  SketchFound,
   ThreadFound,
   ThreadKind,
 } from "../types.js";
@@ -110,6 +111,23 @@ export interface ArticleReader {
    * rule rather than a variation on theirs. src/ideas.ts § `inputFingerprint`.
    */
   loadIdeas(slug: string): Promise<IdeasFound>;
+
+  /**
+   * The Sketch picture, plus whether it still describes the article.
+   *
+   * Staleness is answered exactly as `loadIdeas` answers it — at read time,
+   * against the blocks **and** the tree — because the two artefacts are
+   * fingerprinted the same way and for the same reason: both prompts show the
+   * model the outline before the article.
+   *
+   * **`stale` here is softer than it is anywhere else**, and the panel is meant
+   * to treat it that way. A stale glossary entry points at a paragraph that has
+   * gone; a stale sketch is a picture that is still a fair account of an
+   * argument which has not changed, drawn over an article whose ids have. It
+   * keeps its shape and loses the clicks that no longer resolve, which is
+   * `readSketch`'s job on arrival. So: a note, not a refusal to draw.
+   */
+  loadSketch(slug: string): Promise<SketchFound>;
 
   /**
    * The arc, plus whether it still describes the article.

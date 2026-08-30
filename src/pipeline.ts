@@ -43,6 +43,11 @@ import {
   PROMPT_VERSION as IDEAS_PROMPT_VERSION,
 } from "./ideas.js";
 import { stageFailure } from "./job-failure.js";
+import {
+  generateSketch,
+  inputFingerprint as sketchFingerprint,
+  PROMPT_VERSION as SKETCH_PROMPT_VERSION,
+} from "./sketch.js";
 import { runPdfExtract } from "./pdf-read.js";
 import { generateSummaries, PROMPT_VERSION as SUMMARY_PROMPT_VERSION } from "./summarise.js";
 import { log } from "./log.js";
@@ -129,6 +134,10 @@ export const STEP_ORDER: StepName[] = [
   "glossary",
   "summary",
   "ideas",
+  /* Last, and off `DEFAULT_INGEST_STEPS`: nothing reads what it writes, and it
+     is the slowest single model call in the app at 121–194 seconds measured.
+     docs/project/diagram.md § Sketch. */
+  "sketch",
 ];
 
 /**
@@ -267,6 +276,14 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
      silently lengthen anything — `ideas` replaces rather than appends — but the
      first reason stands on its own. */
   "ideas",
+  /* The same two reasons, and a third that is about the clock rather than the
+     money. `sketch` is the slowest call here — 194s measured on the
+     constitution — and every step self-aborts at 400s inside an 800s
+     invocation that must also fit a `toc` measured at 320s. A positional
+     cascade that swept this in beside `toc` would not merely waste a call, it
+     would run the invocation out of time, and the way that fails is a platform
+     kill that takes the whole job rather than a recorded failure. */
+  "sketch",
 ]);
 
 export interface StepContext {
@@ -1922,6 +1939,97 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         `ideas ${ctx.slug}: ${total} ideas (${assumed} to bring)`,
       );
       return { detail: `${total} ${total === 1 ? "idea" : "ideas"}, ${assumed} to bring` };
+    },
+  },
+  /**
+   * **The picture a model draws of the argument** — docs/project/diagram.md
+   * § Sketch, docs/plans/sketch-diagram.md.
+   *
+   * The first **converted** step in this pipeline: it returns `parts` and
+   * writes no file of its own, where its nine neighbours are all still on
+   * `LEGACY_UNCONVERTED_STEPS`. That is not a flourish — a step that writes
+   * `<dir>/sketch.json` inside `run` works on a laptop and cannot work through
+   * a store that puts the artefact in a Postgres column, and `PipelineStep`'s
+   * types make the safe answer the one you get by doing nothing.
+   */
+  sketch: {
+    name: "sketch",
+    label: "Drawing the argument",
+    outputs: (ctx) => [path.join(ctx.dir, "sketch.json")],
+    produces: ["sketch"],
+    /**
+     * The blocks, the tree, the prompt, the model and the reader — all five.
+     *
+     * The same shape `ideas` uses two steps up and for the same two reasons.
+     * **The tree as well as the blocks**, because the prompt shows the model
+     * the outline before the article, so re-cutting the sections changes the
+     * question with every block byte-identical. **And the profile**, because it
+     * changes what the picture is *for*: a reader who has said they want the
+     * evidence and not the history wants a different arrangement of the same
+     * article, not a differently-worded one.
+     */
+    stamp: async (ctx, store) => {
+      const blocksFile = await store.read(ctx.slug, "toc", "blocks");
+      const tree = await store.read(ctx.slug, "toc", "tree");
+      /* `null` is "we cannot tell", which is not the same answer as a hash that
+         fails to match. Both mean not-current; only one means stale. */
+      if (!blocksFile?.blocks || !tree) return null;
+      return {
+        inputHash: sketchFingerprint(blocksFile.blocks, tree),
+        promptVersion: SKETCH_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+        profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
+      };
+    },
+    async run(ctx) {
+      const run = await generateSketch({
+        dir: ctx.dir,
+        profile: ctx.profile ?? null,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const s = run.score;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "sketch",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          ms: run.elapsedMs,
+          scenes: s.scenes,
+          nodes: s.nodes,
+          linked: s.linked,
+          /* **The four quality signals, and this stage needs them more than any
+             other.** Everything else here produces prose, which a reader can
+             judge by reading. This produces geometry, and every way it goes
+             wrong is invisible: `flow` under 1 is a picture that stops running
+             down the page with the article, `widestGap` is how much of the
+             piece nothing points into, `overlap` is boxes drawn on top of each
+             other, and `overflowing` is text cut to fit. None of them is an
+             error and none may fail the step — `accept` has already refused
+             anything that is not a picture at all — but a run where they start
+             drifting is a prompt that has stopped working, and that is
+             completely invisible from outside. The scene itself is never
+             logged: its node text is the article's own argument in the model's
+             words. docs/project/logging.md. */
+          flow: s.flow,
+          widestGap: Number(s.reach.toFixed(3)),
+          overlap: Number(s.overlap.toFixed(3)),
+          overflowing: s.overflowing,
+          faults: run.report.faults.length,
+          written: run.report.written,
+          profileChars: ctx.profile?.length ?? 0,
+        },
+        `sketch ${ctx.slug}: ${s.nodes} nodes over ${s.scenes} scenes, flow ${s.flow?.toFixed(2) ?? "n/a"}`,
+      );
+      return {
+        parts: { sketch: run.sketch },
+        detail: `${run.sketch.title} — ${s.nodes} nodes, ${s.scenes} scenes`,
+      };
     },
   },
 };

@@ -111,6 +111,24 @@ const SHARED = new Set([
   // the point: two spellings of "is this Greg" is one place for them to
   // disagree. See docs/project/admin.md.
   "admin.js",
+  /* The Sketch diagram's schema, its validator and its painter — the two files
+     that turn a model's scene into geometry. On the list for the reason the
+     header states rather than for convenience: `sketch-scene.js` imports
+     `types.js` and `ids.js`, `sketch-paint.js` imports `sketch-scene.js`, and
+     neither reaches a `node:` module or has a side effect.
+     The client needs them because **the browser is where the scene is checked**,
+     and that is the design rather than an implementation detail: what arrives
+     from `/api/sketch/:slug` is a stored artefact that may have been written by
+     an older schema or against an article whose block ids have since moved, and
+     the panel must drop what it cannot draw before drawing anything. Putting
+     `readSketch` on the server only would make the client trust a validation it
+     could not see, which is the arrangement docs/reusable/silent-success.md is
+     about. `sketch-paint.js` is on the same list for the sibling reason: it is
+     the ONE painter, and the offline harness in evals/sketch/ renders the same
+     primitives — a second painter in the panel is two answers to one question.
+     See docs/project/diagram.md § Sketch. */
+  "sketch-scene.js",
+  "sketch-paint.js",
   /* What a stranger is served — the wire shapes of `/api/public/…`. On the list
      for the reason the header of the file gives rather than for convenience: it
      imports `types.js` and nothing else, and it is a `.ts` of nothing but

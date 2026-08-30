@@ -669,6 +669,7 @@ export type GlossaryFound = Omit<GlossaryResponse, "profileChanged">;
 export type SummariesFound = Omit<SummariesResponse, "profileChanged">;
 /** As `ThreadFound`, for the ideas. */
 export type IdeasFound = Omit<IdeasResponse, "profileChanged">;
+export type SketchFound = Omit<SketchResponse, "profileChanged">;
 
 
 /* ------------------------------------------------------------------ ideas --
@@ -863,6 +864,29 @@ export interface IdeasResponse {
   /** The article is the same and we would write these differently now. */
   outdated: boolean;
   /** You are not who you were when we wrote it. */
+  profileChanged: boolean;
+}
+
+/**
+ * The Sketch diagram as the panel receives it — docs/project/diagram.md § Sketch.
+ *
+ * **The scene is `unknown` here, and that is deliberate rather than lazy.** The
+ * real type is `Sketch` in src/sketch-scene.ts, which imports *this* file, so
+ * naming it here would be an import cycle — and `npm run check` gates on those.
+ * More usefully, the client has to run the scene through `readSketch` on
+ * arrival anyway: what crosses the wire is a stored artefact that may have been
+ * written by an older version of the schema or against an article that has since
+ * moved, and a type assertion is exactly the reassurance that would stop anyone
+ * checking. See src/web/useSketch.ts, which does the parse.
+ */
+export interface SketchResponse {
+  /** A `Sketch`, unvalidated. Run it through `readSketch` before drawing it. */
+  sketch: unknown;
+  /** The article moved underneath this picture. */
+  stale: boolean;
+  /** The article is the same and we would draw it differently now. */
+  outdated: boolean;
+  /** You are not who you were when we drew it. */
   profileChanged: boolean;
 }
 
@@ -1640,7 +1664,10 @@ export interface Comment {
  * docs/project/glossary.md and docs/project/summaries.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "toc" | "assets" | "arc" | "tweets" | "glossary" | "summary" | "ideas";
+  | "fetch" | "extract" | "blocks" | "toc" | "assets" | "arc" | "tweets" | "glossary" | "summary" | "ideas"
+  /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
+     Last in the list and last in `STEP_ORDER`: nothing reads what it writes. */
+  | "sketch";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
 export type StepStatus = "pending" | "running" | "done" | "skipped" | "error";

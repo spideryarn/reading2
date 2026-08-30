@@ -155,6 +155,7 @@ import {
   ListOrdered,
   ListTree,
   MessageCircle,
+  PenLine,
   RefreshCw,
   ScanLine,
   Target,
@@ -231,6 +232,7 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   glossary: BookA,
   summary: Layers,
   ideas: Lightbulb,
+  sketch: PenLine,
 };
 
 /**
