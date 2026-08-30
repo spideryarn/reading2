@@ -42,22 +42,39 @@ The remote does not soften this. It holds *commits*; everything dangerous here i
 ### Commit your own files, by name, in one command
 
 ```bash
-git reset && git add <your files> && git commit -F <msg> -- <your files>
+git add -- <any NEW files> && git commit -F <msg> -- <all your files>
 ```
 
-The leading `git reset` unstages whatever someone else left staged. Never `git add -A`, `git add .`
-or `git commit -a`.
-
 **The `--` at the end is the load-bearing part**, and the recipe did not have it until 2026-08-26,
-when it produced exactly the accident it exists to prevent. `git reset && git add …` and
-`git commit …` are two commands and **the index is shared**: another agent running its own
-`git reset` in the gap unstages your files and stages its own, and your commit lands *their* work
-under *your* message. This is not a race you win by being quick — the gap is however long the tool
-call takes. A pathspec on `git commit` bypasses the index entirely and commits those paths whatever
-anybody has done to it.
+when it produced exactly the accident it exists to prevent. A pathspec on `git commit` bypasses the
+index entirely and commits those paths from the working tree, whatever anybody has done to the
+index. Use `-F <file>` rather than `-m`; a long message in `-m` is one shell-quoting mistake away
+from the same mess. Never `git add -A`, `git add .` or `git commit -a`.
 
-Use `-F <file>` rather than `-m`. A long message in `-m` is one shell-quoting mistake away from the
-same mess.
+`git add` is there for one reason only: **a pathspec cannot name a file git has never seen.**
+`git commit -F msg -- brand-new.txt` fails with *"did not match any file(s) known to git"*, which
+reads like a typo and is not one. Tracked files need no `git add` at all.
+
+**The recipe used to open with `git reset`, and that was wrong.** It was described here as a
+feature — "unstages whatever someone else left staged" — which is the same sentence as "destroys
+whatever a peer spent ten minutes staging". It buys you nothing, because the pathspec has already
+made the index irrelevant. Measured on 2026-08-30, with a peer holding `peer.txt` staged *and*
+further modified, running `git commit -F msg -- mine.txt` with no reset at all:
+
+```
+before   M  mine.txt    MM peer.txt    ?? brand-new.txt
+commit   mine.txt | 1 +                     ← only my file, as intended
+after                   MM peer.txt    ?? brand-new.txt    ← peer untouched, both halves intact
+```
+
+So the reset was pure cost. It is also the only part of the old recipe that could be interrupted:
+one `git add && git commit` is a single invocation, and there is no gap for a peer to land in.
+
+**And the plain form repairs the shared index rather than corrupting it.** An ordinary `git commit`
+rewrites the index entries for the paths it commits, so any staleness in them is gone. That matters
+more than it sounds — see [the section below](#the-cause-was-the-recipes-own-last-line-not-a-stray-command-2026-08-29),
+where a whole day of phantom reverts survived precisely because every session was carefully
+avoiding the shared index.
 
 ### And the other half of that, which cost us twice on 2026-08-28
 
@@ -80,13 +97,25 @@ git show                   # BOTH lines. The staging was discarded.
 
 Drop the pathspec and the same setup commits line 1 alone, leaving line 2 unstaged and untouched.
 
-**The two protections are mutually exclusive**, so it is a choice per file, and the cheap check that
-decides it is `git diff <file>` — are there hunks in there that are not yours?
+So it is a question per file, and the cheap check is **`git diff HEAD -- <file>`** — are there hunks
+in there that are not yours? Use that form, not bare `git diff`, which asks "how does the tree
+differ from the *index*" and in this tree is a question about your colleagues rather than your files
+([below](#a-stale-index-reports-the-file-deleted-while-it-sits-there-full-of-content-2026-08-29)).
 
 | | |
 |---|---|
-| **Nobody else is in the file** | The recipe above. The pathspec is the right protection, and the risk it guards is real. |
-| **A peer has uncommitted hunks in it** | `git reset`, stage only your hunks (`git apply --cached` a filtered patch), confirm with `git diff --cached` **and** `git diff`, then `git commit -F <msg>` with **no pathspec** — so the index is what gets committed. |
+| **Nobody else is in the file** | The recipe above. Nothing further to think about. |
+| **A peer has uncommitted hunks in it** | Either commit it anyway and name their work in your message, or leave that file out and ship the rest. Both are fine. |
+
+**Sweeping a peer's hunks is a cheap accident and it is meant to stay cheap.** It is loud, it is
+recorded in your message, and nothing is destroyed — the two 2026-08-28 incidents cost a paragraph
+each. Do not trade it for something worse, and both clever alternatives are worse: partial staging
+into the shared index cost us the accident described two paragraphs down, and the private index cost
+six hours of phantom reverts across the whole tree on 2026-08-29 and nearly removed the
+DNS-rebinding fix under somebody else's message.
+
+If a file really cannot be swept and really cannot wait, **ask Greg** rather than reaching for the
+recipe below.
 
 Both accidents on 2026-08-28 were this: 338 lines of public-read-only work landed under an
 error-monitoring message, and 114 lines of embeddings copy landed under a public-read-only message.
@@ -102,57 +131,74 @@ the careful thing and then following the recipe was worse than either alone.
 Commit when a piece of work is done and working, without waiting to be asked. And don't stress if
 someone sweeps up one of your changes anyway — it happens, it's recoverable, keep going.
 
-### A third way, when you cannot touch the shared index either — 2026-08-28
+### The private index — a last resort, and ask Greg first — 2026-08-28
 
-The right-hand recipe in that table opens with `git reset`, which resyncs the **whole** index. That
-is fine when nothing is staged and wrong when a peer has spent ten minutes staging hunks — and you
-cannot always tell, because `git diff --cached` is a snapshot of a thing several agents are writing.
+**This recipe has cost far more than everything it has ever saved, and until 2026-08-30 it was
+wrong as written** (below). It is kept because the mechanism is worth understanding, not because it
+is a move to reach for. The everyday answer to a shared file is in the table above: commit it and
+say so, or leave it out.
 
-A **private index** avoids the question. It writes neither the shared index nor the working tree, so
-a peer mid-commit cannot be disturbed:
+A **private index** writes neither the shared index nor the working tree, so a peer mid-commit
+cannot be disturbed. The corrected form:
 
 ```sh
-export GIT_INDEX_FILE=$(mktemp) && rm -f "$GIT_INDEX_FILE"
-BASE=$(git rev-parse HEAD)                                # pin ONCE, here, and reuse it below
-git read-tree "$BASE"
-git update-index --add -- <your clean files>              # read from the working tree
-git show "$BASE:src/shared.ts" > /tmp/mine.ts             # then add ONLY your lines to it
-BLOB=$(git hash-object -w /tmp/mine.ts)
-git update-index --add --cacheinfo 100644,$BLOB,src/shared.ts
-TREE=$(git write-tree)
-NEW=$(git commit-tree "$TREE" -p "$BASE" -F msg.txt)      # $BASE, never a fresh rev-parse
-git update-ref refs/heads/main "$NEW" "$BASE"             # $BASE = refuses on a race
-git reset -q -- <every path you just committed>           # NOT optional — see below
-git diff --name-only "$BASE" "$NEW"                       # must list your files and NOTHING else
+IDX=$(mktemp -u) && BASE=$(git rev-parse HEAD) && [ -s msg.txt ] &&      # pin BASE ONCE, here
+GIT_INDEX_FILE=$IDX git read-tree "$BASE" &&
+GIT_INDEX_FILE=$IDX git update-index --add -- <your clean files> &&      # from the working tree
+git show "$BASE:src/shared.ts" > /tmp/mine.ts &&                         # HEAD's copy + ONLY your lines
+BLOB=$(git hash-object -w /tmp/mine.ts) &&
+GIT_INDEX_FILE=$IDX git update-index --add --cacheinfo 100644,$BLOB,src/shared.ts &&
+TREE=$(GIT_INDEX_FILE=$IDX git write-tree) &&
+NEW=$(git commit-tree "$TREE" -p "$BASE" -F msg.txt) && [ -n "$NEW" ] &&
+git update-ref refs/heads/main "$NEW" "$BASE" &&                         # $BASE = refuses on a race
+git reset -q -- <every path you just committed> &&                       # SHARED index. No prefix!
+[ "$(git rev-parse HEAD)" = "$NEW" ] &&
+git diff --name-only "$BASE" "$NEW"                                      # your files and NOTHING else
 ```
 
-**Run the whole block in ONE shell invocation, and prove it before you trust it.** This is the
-single most expensive mistake in this file, because it is silent, it looks exactly like a deliberate
-surgical back-out, and it frames somebody else.
+**Two things changed on 2026-08-30, and the second one is why this section had been producing the
+accident it warns about.**
 
-An agent harness gives each tool call a **fresh shell**: the working directory persists, and
-environment variables do not. So `export GIT_INDEX_FILE=…` in one call and `git read-tree` in the
-next is not a subtle race — the variable is simply gone, and `read-tree` writes **`.git/index`**,
-the shared one, from a tree that is usually stale. Measured here on 2026-08-29, two consecutive
-calls:
+**One: `GIT_INDEX_FILE=… git …` per command, never `export`.** An agent harness gives each tool call
+a **fresh shell** — the working directory persists, environment variables do not. So `export
+GIT_INDEX_FILE=…` in one call and `git read-tree` in the next is not a subtle race; the variable is
+simply gone and `read-tree` writes **`.git/index`**, the shared one, from a stale tree. Measured
+2026-08-29 across two consecutive calls:
 
 ```
 call 1 sees: GIT_INDEX_FILE=/…/probe.index      call 1 git would use: /…/probe.index
 call 2 sees: GIT_INDEX_FILE=<unset>             call 2 git would use: .git/index
 ```
 
-The recipe above is written as one block because it **must** be run as one — join the lines with
-`&&` or newlines inside a single invocation, and do not "tidy" it into readable separate steps.
+A per-command prefix cannot leak out of the command it is attached to, so the hazard disappears
+rather than being guarded against. The block must still run as **one invocation** — `$BASE`, `$TREE`
+and `$NEW` do not survive either — so join it with `&&` and do not "tidy" it into readable steps.
 
-So make the first line an assertion rather than a hope, in the same invocation as everything else:
+**Two: the final `git reset` must NOT carry the prefix, and in the old block it did.** It was
+written inside the `export`, so it resynced the *private* index — the one about to be thrown away —
+and the shared index was never repaired at all. **Following this section exactly still produced the
+phantom staged revert.** Reproduced 2026-08-30 in a throwaway repo, running the old block verbatim:
+
+```
+which index did that reset use:  /var/folders/…/tmp.C5GxZM5OU0      ← the private one
+what every peer then saw:        MM base.txt        ← staged blob = a revert of the commit
+                                 D  new.txt         ← staged deletion …
+                                 ?? new.txt         ← … of a file in HEAD and on disk
+```
+
+With the prefix removed from that one line, `git status` comes back empty. So the six hours of
+2026-08-29 were not carelessness and not a stray command: the instruction was the defect, and the
+prose above it correctly named the omitted reset while the block below it could not run one.
+
+Assert the private index rather than hoping, in the same invocation:
 
 ```sh
-test "$(git rev-parse --git-path index)" != ".git/index" || { echo "PRIVATE INDEX NOT IN EFFECT"; exit 1; }
+[ "$(GIT_INDEX_FILE=$IDX git rev-parse --git-path index)" = "$IDX" ] || { echo "NOT PRIVATE"; exit 1; }
 ```
 
 `GIT_INDEX_FILE` is honoured by `git rev-parse --git-path index`, so this is the one command that
-can tell you which index you actually got. A recipe whose failure mode is silent needs a check that
-speaks.
+can tell you which index you actually got. Run it once with the variable unset and watch it print
+`.git/index` — a recipe whose failure mode is silent needs a check you have seen speak.
 
 ### The cause was the recipe's own last line, not a stray command — 2026-08-29
 
@@ -181,6 +227,13 @@ SHARED INDEX SAYS:  D  late.txt
 and for a modified file, the staged blob is the *old* content while HEAD holds the new one — a
 byte-identical revert, staged, with nobody having staged anything. **With** the final reset, the
 shared index stays empty. That control is what makes the reset the cause rather than a correlate.
+
+**And on 2026-08-30 the second half of it turned up: you could run that line faithfully and still
+get this.** The recipe printed in this file had the reset *inside* the `export GIT_INDEX_FILE`, so
+it resynced the private index rather than the shared one. Sessions that dropped the line and
+sessions that kept it produced the same damage, which is why "somebody is omitting it" never quite
+accounted for the volume. Both are fixed in
+[the corrected recipe](#the-private-index-a-last-resort-and-ask-greg-first-2026-08-28).
 
 **Why it went unattributed for six hours.** Nobody was running a stray command, so nobody could find
 one. Each session omitted one line, the effects accumulated, and every clear was undone within minutes

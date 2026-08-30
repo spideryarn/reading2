@@ -153,23 +153,29 @@ Locally the bar is lower, but still ask before you wipe or overwrite data you di
   on my own file", because you can't tell whose edits are in it. Other agents' unsaved work is in
   this tree and there is no second copy. Undo your own mistake by editing the text back. If you
   think you really need one of these, ask Greg first.
-- **Commit only your own files, and name them twice:**
+- **Commit only your own files, by name, in one command:**
 
   ```
-  git reset && git add <your files> && git commit -F <msg> -- <your files>
+  git add -- <any NEW files> && git commit -F <msg> -- <all your files>
   ```
 
-  Never `git add -A`, `git add .` or `git commit -a`. The trailing `--` pathspec is the load-bearing
-  part: the index is shared, so without it another agent's `git reset` in the gap lands *their* work
-  under *your* message — which has happened. Use `-F <file>`, not `-m`.
+  That is the whole recipe, and it is one command so there is no gap for a peer to land in. The
+  trailing `--` pathspec commits those paths **from the working tree, ignoring the index**, so
+  whatever anyone else has staged is neither committed nor disturbed. `git add` is only for files
+  git does not know about yet — a pathspec cannot name an untracked file. Use `-F <file>`, not
+  `-m`. Never `git add -A`, `git add .` or `git commit -a`.
 
-  **Unless a peer has uncommitted changes in a file you are committing — then drop the pathspec.**
-  `git commit -- <path>` commits the *working tree* of that path and ignores the index, so it also
-  sweeps up their unfinished edits; that happened twice on 2026-08-28. Check with `git diff <file>`
-  first. If there are hunks that are not yours: `git reset`, stage only yours (`git apply --cached` a
-  filtered patch), confirm with `git diff --cached`, then `git commit -F <msg>` with **no** pathspec.
-  [version-control.md](docs/project/version-control.md) has both accidents, the reproduction and both
-  recipes.
+  **Do not put `git reset` in front of it.** The recipe used to, and that was a mistake: the
+  pathspec already makes the index irrelevant, so the reset buys you nothing and throws away
+  whatever a peer had staged.
+
+  **If a peer has unfinished work inside a file you are committing**, the pathspec form takes their
+  hunks too — check with `git diff HEAD -- <file>`, never bare `git diff`, which is index-relative
+  and lies in both directions here. Then either commit it and say in the message whose work rode
+  along, or leave that file out and ship the rest. Both are cheap and nothing is lost. Do **not**
+  reach for the private-index recipe to avoid it: that is what silently staged a revert of other
+  people's work across the whole tree for six hours on 2026-08-29. Ask Greg instead.
+  [version-control.md](docs/project/version-control.md) has the accidents and the reproductions.
 - **Commit when the work is done**, or when you reach a good stopping point, without being asked.
 
 ### Before you call it finished
