@@ -53,6 +53,7 @@ import {
 } from "../messages.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { Link } from "./Link.js";
+import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LOGIN_HREF } from "./router.js";
 import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.js";
 
@@ -191,6 +192,11 @@ export function SignUp({ reason }: { reason: string }) {
  * the reader is friendly.
  */
 export function NotSharedPage() {
+  /* The tab, which this page did not set until 2026-08-30 — see the
+     `not-shared` variant in page-title.ts for what went wrong without it. It
+     says what the heading below says and nothing more: the tab must not be the
+     thing that confirms an article exists. */
+  useDocumentTitle(pageTitle({ kind: "not-shared" }));
   return (
     <>
       <HomeLogo />
