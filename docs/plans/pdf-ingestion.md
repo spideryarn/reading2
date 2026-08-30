@@ -1817,6 +1817,18 @@ It matters beyond this article for two reasons, both from the session working on
 `https://spideryarn.com/add/https://arxiv.org/pdf/1503.02531` reproduces it: everything through
 `blocks` now succeeds reliably, so this is the fixture the headingless case has never had.
 
+> **Decided 2026-08-30, and not yet landed when this was written** — flagged that way on purpose,
+> because a note asserting a future that never arrives is how `token-budget.ts` came to state as
+> fact a change nobody had made. Greg's two calls, being built by the session that owns
+> [`src/toc.ts`](../../src/toc.ts): a **flat-tree fallback** when the structure call fails outright,
+> so a failed ToC costs a contents list rather than the whole article; and **tiling gaps stop being
+> fatal** — snapped shut at any size with the size of every repair reported, rather than thrown.
+> Greg on the second: *"for now, we should allow gaps. It's not ideal, but it's not the end of the
+> world, and better than things failing fatally. Perhaps in future, it should trigger a re-run of
+> the LLM, where we feed in the previous output, with information about the gaps and ask it to
+> adjust."* Under either change the run above would have published. Check the code before relying on
+> this paragraph.
+
 ### The gate refused both papers, and both were right
 
 This is the finding. **The checker compares the model against pdf.js's text layer, and that layer
