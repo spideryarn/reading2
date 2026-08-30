@@ -492,6 +492,33 @@ article earlier, so every option must either wait for `assets` or suppress exter
 manifest lands. This is a security property, not a polish item, and it belongs in
 [security-map.md](../project/security-map.md)'s terms rather than in a latency table.
 
+> **Updated 2026-08-30, and "wait" is now dead.** Two findings from the session that owns
+> `src/collect-assets.ts`, both landed:
+>
+> - **The step now has a wall-clock bound, `ASSETS_BUDGET_MS = 300_000`.** So waiting is bounded
+>   rather than unbounded — but 300s on top of `toc`'s measured 320s worst case is not a page anyone
+>   holds. **Suppression is the only route to opening early.** Take this option off the table.
+> - **The step used to go on fetching after it returned.** The budget's first implementation handed
+>   back the manifest on time while ~38 queued fetches drained afterwards, so the article kept
+>   talking to the publisher's CDN for a step that had already finished. Every test passed and
+>   deleting the guard changed nothing. Fixed, with a test that re-reads the request count 150ms
+>   after the step returns.
+>
+> The second is a finding about *this* design, not only theirs. Suppression was going to lift when
+> the assets step reported done — which, under the old behaviour, would have uncovered the images
+> while the leak it exists to close was still draining. **So suppression keys on the manifest, not
+> on the completion signal.** A manifest is a fact about bytes we hold; a completion signal is a
+> claim about a process, and this one was wrong.
+>
+> The step also now records `out-of-time` as its own entry state, distinct from `budget` (the
+> 200-image cap) and `network` (a fetch that was attempted and failed). That is the distinction the
+> reading view needs, because the question it must answer per image is *"will waiting help?"* — and
+> the three states answer it: yes, no, and maybe.
+>
+> **Sizing, measured 2026-08-30:** the frightening 3,000s figure comes from the 200-image policy cap.
+> The real corpus tops out at **18 images** (`noema`), then 9, then 7; most articles have one or
+> none. So the bound is generous rather than tight.
+
 ### Stage 3 does not publish the blocks the reader opens
 
 Stage 3 writes `output/<slug>.blocks.json`. **The ToC stage is what copies them into
