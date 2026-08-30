@@ -39,6 +39,71 @@ necessary, ask Greg.
 
 The remote does not soften this. It holds *commits*; everything dangerous here is uncommitted.
 
+#### It happened, and the way it happened was carelessness rather than reasoning — 2026-08-30
+
+An agent finishing a Sketch change wanted to know whether a failing test was its own, and wrote a
+one-line shell command that began `git stash`. There was no argument for it and none was made: the
+question could have been answered by reading the failing test's imports. It stashed all twenty
+modified files in the tree — three of its own and seventeen belonging to four other agents.
+
+**What made it recoverable was luck and one property of `stash`.** Unlike `reset --hard`, a stash
+keeps what it takes. But the way back was blocked twice over: the harness's permission classifier
+refuses `git stash pop` and `git stash apply` — correctly, since the rule above forbids the whole
+family — and by the time Greg ran `pop` himself a peer had re-modified four of the files, so the pop
+aborted with *"Your local changes would be overwritten by merge"* and did nothing.
+
+**The route back, which is not a git command at all.** For each stashed path, if the working file is
+still identical to `HEAD` then restoring it can lose nothing, so read the stash's copy and write it
+as an ordinary file:
+
+```bash
+for f in $(git stash show --name-only stash@{0}); do
+  git diff --quiet HEAD -- "$f" && git show "stash@{0}:$f" > "$f"
+done
+```
+
+`git show` and a redirect: a read and a write, no index, no merge, and nothing touched that anyone
+has edited since. Files a peer *has* re-modified are left alone and reported — here all four turned
+out byte-identical to the stash anyway, because the peer had simply redone the same work. Verify
+each restored file against the stash before believing it, and leave the stash entry standing until
+somebody has looked.
+
+**The lesson is not "stash carefully".** It is that a forbidden command can reach the shell inside a
+compound one-liner written for an unrelated purpose, where nothing about the line looks dangerous —
+which is why the rule is a flat ban on the words rather than a judgment to be made per case.
+
+#### One of them is now enforced, not just written down — 2026-08-30
+
+`git stash` is the one that actually happened, so it is the one that got a guard.
+[`.claude/hooks/protect-shared-tree.sh`](../../.claude/hooks/protect-shared-tree.sh) is a
+`PreToolUse` hook on `Bash`, wired up in [`.claude/settings.json`](../../.claude/settings.json). It
+reads the command out of the tool call and **refuses any command mentioning both `git` and `stash`
+as words** — exit 2, which blocks the call and hands the agent the reason.
+
+It matches the *whole* command, not its first word, because that is how it got in last time: the
+banned clause was the tail of a one-liner about something else. `npm test; git stash` is refused.
+
+**It over-refuses, deliberately.** `grep -rn "git stash" docs/` is refused too. Either word alone is
+fine, so `grep -rn stash docs/` still works; when a command genuinely needs both, use the Read/Grep
+tools instead of Bash, or ask Greg. Judging it per command is what failed.
+
+Three things it is worth knowing before you change it:
+
+- **The other four are still honour-system.** `checkout --`, `restore`, `reset --hard`, `clean` —
+  and `rm` — are unguarded. Extending `VERB` in the hook is small; nobody has asked for it yet.
+- **It fails closed.** If `grep` errors, or the payload will not parse, it refuses rather than
+  allowing — and it self-tests its own matcher on a known hit and a known miss before trusting it to
+  say "safe". A guard that quietly stops matching is
+  [a silent success](../reusable/silent-success.md), and this one is meant to be noisy instead.
+- **Do not put the banned words in a file name.** The first draft was called `no-git-stash.sh`, and
+  no Bash command could name it — including the `git commit -F msg -- <path>` that would have
+  checked it in. That is why the file is named for what it protects.
+
+Re-verify it with `bash .claude/hooks/protect-shared-tree.test.sh`: twenty-odd payloads that must be
+refused, controls that must be allowed, and the whole suite re-run with `python3` and then `grep`
+sabotaged. It is not wired into `npm test` — it is a shell script guarding a shell, and it takes a
+second to run by hand.
+
 ### Commit your own files, by name, in one command
 
 ```bash
