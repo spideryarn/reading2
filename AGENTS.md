@@ -107,6 +107,8 @@ A doc under `docs/project/` is two things: **intent** — Greg's directions, the
 constraints, the decisions and why they were made, mostly in his own words — and **signposts** to
 the other docs and to the code. Not descriptions of code, which the code already provides.
 
+- **Less is more.** Where Greg gave instructions, follow them rather than embroidering. Say each
+  thing once, briefly, and leave the next agent room to use its judgment.
 - **Update the docs as you go.** If you change what something does, fix the doc in the same piece of
   work.
 - **Every doc has a parent.** New doc under `docs/project/` ⇒ add a line for it to the entry-point
