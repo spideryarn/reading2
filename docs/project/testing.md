@@ -540,6 +540,18 @@ Vary the hold rather than taking a single reading. Nothing else on the machine k
 chose to hold the key, so nothing else can track it — which is what makes this survive a busy tree,
 where a single before-and-after cannot tell a lock wait from a peer's test run.
 
+**Read the slope, not the deltas.** A file does not start waiting the moment you start holding: the
+lock is taken after transform and import begin, so each delta comes in short by a constant startup
+offset, and read on its own each one looks like a loose match you might talk yourself out of. The
+*difference between two deltas* cancels that offset exactly. Above: delta(10s) = 6.17s and
+delta(30s) = 26.38s, both about 1.7s short of their effective holds — but **delta(30) − delta(10) =
+20.21s against a predicted 20.00s**. That quantity is robust against the two things that could
+otherwise fool you, the constant overhead and the background load, and it is the number to quote.
+
+Run the trials **serially** — a locked file holds the key for its whole run, so a second trial
+launched alongside queues behind the first and measures that instead — and start the hold before
+launching vitest, or the wait is entered late and the delta is short by more than the offset.
+
 **Nearly all of the delay lands in `import`.** That is the signature, and it is what separates a lock
 wait from ordinary contention: `takeRunLock` is called at module load under a top-level `await`, which
 vitest counts as import, whereas contention is *database* contention and shows up in the queries in
