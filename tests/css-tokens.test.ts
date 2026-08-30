@@ -280,3 +280,44 @@ describe("no component reaches a surface token through a Tailwind text utility",
     ).toEqual([]);
   });
 });
+
+/**
+ * **A percentage in a grid track's max position is not a cap.**
+ *
+ * Its own defect, kept next to the token checks because it is the same shape:
+ * CSS that reads as one thing and computes as another, with nothing to say so.
+ *
+ * `minmax(0, 40%)` looks like "size to content, but never past 40%". It is not.
+ * A percentage max makes the track *fixed*, so the maximise-tracks step grows
+ * it to the whole 40% before any `fr` track beside it is fed. Written on
+ * `.outln-row` to bound a runaway number, it made the number column 40% of the
+ * outline panel on every row — a hand's width of nothing between `1` and its
+ * title. It shipped, and Greg saw it within the hour.
+ *
+ * jsdom does no layout, so no rendering test in this repo could have caught
+ * that; it needs a browser, and the browser was not available that day. What a
+ * text scan *can* say is that the track went back to `auto` and stayed there.
+ * The cap belongs on the item (`max-width`), which constrains the content the
+ * `auto` track is sizing to.
+ */
+describe("the outline row's number track is content-sized, not a percentage", () => {
+  const css = sheets.find((s) => s.path === "src/web/styles.css")?.css ?? "";
+  const rule = css.match(/\.outln-row\s*\{([^}]*)\}/)?.[1] ?? "";
+
+  it("has a rule to check", () => {
+    /* The vacuity guard again: a renamed class makes the regex match nothing,
+       and an empty rule passes every assertion below. */
+    expect(rule, "no `.outln-row { … }` rule found — the scanner is broken").not.toBe("");
+  });
+
+  it("uses an auto first track", () => {
+    const tracks = rule.match(/grid-template-columns:\s*([^;]*)/)?.[1]?.trim();
+    expect(tracks, "`.outln-row` declares no grid-template-columns").toBeDefined();
+    expect(
+      tracks,
+      "a `%` in a track's max position makes the track fixed, and grid grows it to " +
+        "the full percentage before the `fr` beside it — cap the item with max-width instead",
+    ).not.toMatch(/%/);
+    expect(tracks).toMatch(/^auto\s/);
+  });
+});

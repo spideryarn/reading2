@@ -743,6 +743,35 @@ and `colourscales.css`, which are token definitions and quite properly paint not
 `grep "tw:text-muted\b"` reports all 88 correct call sites as broken, since `\b` matches happily
 between `d` and `-`. The needle has to be the one that can tell the two apart.
 
+### The cap for the runaway number was itself the bug
+
+Shipped in the commit above and reported within the hour, with a screenshot: a hand's width of
+nothing between every number and its title.
+
+Sol's P3 was that the number's `auto` track has no ceiling, so a pathological number could take the
+whole panel. I wrote `grid-template-columns: minmax(0, 40%) minmax(0, 1fr)`, read it back as "size
+to content, but never past 40%", and shipped it. **That is not what it means.** A percentage in the
+max position makes the track *fixed*, so grid's maximise-tracks step grows it to the full 40% before
+the `1fr` beside it is fed anything. The number column was 40% of the panel on every row.
+
+The cap belongs on the **item**, not the track: `.outln-num { max-width: 6em }` constrains the
+content that the `auto` track is sizing to, which is the thing that was unbounded. A number past it
+wraps and makes its own row taller — measured by the hidden copies like everything else — instead of
+squeezing the title toward nothing.
+
+Two things worth keeping from this:
+
+- **The finding was right and the fix was wrong, and those are separate.** A P3 about a case the
+  reviewer itself called unlikely turned into a P1 on the common case. A review says what is wrong;
+  it does not say your reading of the remedy is correct.
+- **jsdom does no layout, so nothing in this suite could have seen it.** It needed a browser, and
+  the Chrome extension reported no connected browser for the whole session — so the change went out
+  reasoned rather than looked at, which is exactly the trade
+  [browser-testing.md](../project/browser-testing.md) warns about. What a text scan *can* say is
+  that the track went back to `auto` and stays there, and
+  [`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) now says it, driven red against the
+  literal line that shipped.
+
 ## See also
 
 - [column-context.md](../project/column-context.md) — the centred fisheye per column, the research

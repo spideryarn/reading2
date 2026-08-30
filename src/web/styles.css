@@ -8964,13 +8964,16 @@ table.only-prose thead { display: none; }
      title at the same x, which is most of what makes a run of them read as a
      run. */
   display: grid;
-  /* `minmax(0, 40%)`, not bare `auto`: an `auto` track has no ceiling, so a
-     pathologically deep number could take the whole panel and leave the title
-     nothing. 40% bounds that without touching the ordinary case, where the
-     track is content-sized well under the cap. Sol, 2026-08-30, and it is the
-     bound rather than the alignment that matters — a number wider than its
-     gutter shifts one title right, which is a blemish, not a broken row. */
-  grid-template-columns: minmax(0, 40%) minmax(0, 1fr);
+  /* **`auto`, and the cap goes on the ITEM — never a percentage in the
+     track.** `minmax(0, 40%)` looks like "content-sized, at most 40%" and is
+     not: a percentage in the max position makes the track *fixed*, so grid's
+     maximise-tracks step grows it to the full 40% before the `1fr` beside it
+     gets anything. The number column became 40% of the panel on every row,
+     with a hand's width of nothing between `1` and its title. Shipped, and
+     Greg saw it within the hour. `.outln-num`'s own `max-width` is the bound
+     that actually bounds, because it constrains the content the `auto` track
+     is sizing to rather than the track itself. */
+  grid-template-columns: auto minmax(0, 1fr);
   column-gap: 0.4rem;
   /* **Baseline, not the grid's default stretch.** The number is set smaller
      than the title, and `line-height: 1.35` below is unitless — so it resolves
@@ -9015,6 +9018,11 @@ table.only-prose thead { display: none; }
   color: var(--ink-faint);
   font-size: 0.82em;
   font-variant-numeric: tabular-nums;
+  /* The ceiling the `auto` track does not have. A number past this wraps and
+     makes its own row taller — which the hidden copies measure too, so the fit
+     still sees the truth — rather than squeezing the title toward zero. It
+     sits above every gutter below, so it never fights the floors. */
+  max-width: 6em;
 }
 /* **A gutter per level, not one width for all of them.** "1", "1.10" and
    "1.10.12" are three different widths, and a shared `min-width` either wastes
