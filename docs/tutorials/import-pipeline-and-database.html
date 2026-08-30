@@ -1,0 +1,1233 @@
+<!doctype html>
+<html lang="en">
+<!--
+    TUTORIAL REQUEST
+
+    User prompt: "run it to create a detailed tutorial about the Spideryarn import
+    pipeline and database architecture, and potential complexity/issues/complications"
+
+    Generated: 2026-08-30
+    Audience:  a product manager or engineer who knows Spideryarn and has never read the code
+    Complexity: complex
+    Written to: docs/reusable/write-tutorial.md
+
+    Source files read:
+      docs/project/architecture.md      the pipeline, stage ownership, storage layout
+      docs/project/database.md          the Postgres move, roles, poolers, the traps
+      docs/project/ingest-queue.md      the queue, the steps, the claim, the failures
+      docs/plans/v1-imports-on-vercel.md        the live plan for making imports work
+      docs/plans/durable-artefacts-on-vercel.md the withdrawn plan, and the measurement
+      docs/plans/delete-the-importer.md          the D-series, the publication gate
+      src/db/schema.ts, src/pipeline.ts, src/jobs.ts, src/store/*.ts
+
+    State of the tree when written: v1-imports Stage 0 landed (f3db91e); Stages 1-5
+    not started; src/store/pg-session.ts uncommitted in the working tree.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="How an article gets from a pasted URL into Spideryarn's database, why every import on production currently fails, and the judgment calls that decide what happens next.">
+<title>The Import Pipeline and Its Database</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --ink-soft: #5b6470;
+    --rule: #e2e0dc;
+    --accent: #db8a45;
+    --link: #1a5fb4;
+
+    --c-browser: #b45309;  --c-browser-fill: #fdf1dc;
+    --c-server:  #1d4ed8;  --c-server-fill:  #e2ebfe;
+    --c-disk:    #6d28d9;  --c-disk-fill:    #eee9fd;
+    --c-db:      #0f766e;  --c-db-fill:      #dcf5f1;
+    --c-model:   #15803d;  --c-model-fill:   #ddf5e3;
+    --c-warn:    #b3261e;  --c-warn-fill:    #fdeaea;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --panel: #1e2128; --ink: #e6e6e3; --ink-soft: #a3adba;
+      --rule: #333842; --link: #7fb4ff;
+      --c-browser: #f0b167; --c-browser-fill: #3a2c17;
+      --c-server:  #8fb6ff; --c-server-fill:  #1b2740;
+      --c-disk:    #b79cf5; --c-disk-fill:    #271e3d;
+      --c-db:      #63d3c1; --c-db-fill:      #10302c;
+      --c-model:   #7fd396; --c-model-fill:   #142b1c;
+      --c-warn:    #f38b84; --c-warn-fill:    #351a19;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.25rem 6rem;
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 62rem; margin-inline: auto;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 2.1rem; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 .4rem; }
+  h2 {
+    font-size: 1.42rem; line-height: 1.25; letter-spacing: -0.01em;
+    margin: 3.2rem 0 .8rem; padding-bottom: .35rem; border-bottom: 2px solid var(--rule);
+  }
+  h3 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+  h4 { font-size: .96rem; margin: 1.4rem 0 .4rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+  p, li { max-width: 46rem; }
+  a { color: var(--link); text-decoration-color: color-mix(in srgb, var(--link) 40%, transparent); text-underline-offset: 2px; }
+  a:hover { text-decoration-color: currentColor; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .875em;
+         background: color-mix(in srgb, var(--ink) 7%, transparent); padding: .1em .35em; border-radius: 3px; }
+  pre { background: color-mix(in srgb, var(--ink) 6%, transparent); border: 1px solid var(--rule);
+        border-radius: 6px; padding: .85rem 1rem; overflow-x: auto; font-size: .84rem; line-height: 1.5; }
+  pre code { background: none; padding: 0; font-size: 1em; }
+  .lede { font-size: 1.06rem; color: var(--ink-soft); max-width: 44rem; }
+  .meta { font-size: .84rem; color: var(--ink-soft); margin: .6rem 0 2rem; }
+  .meta strong { color: var(--ink); font-weight: 600; }
+
+  .callout { border: 1px solid var(--rule); border-left: 4px solid var(--accent);
+             background: var(--panel); border-radius: 5px; padding: .9rem 1.1rem; margin: 1.2rem 0; }
+  .callout p { margin: .4rem 0 0; }
+  .callout .title { font-weight: 650; }
+  .callout.warn { border-left-color: var(--c-warn); background: var(--c-warn-fill); }
+  .callout.key  { border-left-color: var(--c-db); background: var(--c-db-fill); }
+
+  .toc { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 1rem 1.4rem; margin: 1.6rem 0; }
+  .toc ol { margin: .4rem 0; padding-left: 1.3rem; }
+  .toc li { margin: .18rem 0; }
+  .paths { margin-top: 1rem; padding-top: .9rem; border-top: 1px dashed var(--rule); font-size: .93rem; }
+  .paths p { margin: .35rem 0; }
+
+  figure { margin: 1.6rem 0; }
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px;
+            background: var(--panel); padding: .6rem; }
+  svg { display: block; width: 100%; min-width: 640px; height: auto; }
+  figcaption { font-size: .85rem; color: var(--ink-soft); margin-top: .5rem; max-width: 46rem; }
+
+  table { border-collapse: collapse; width: 100%; max-width: 52rem; margin: 1.1rem 0; font-size: .92rem; }
+  th, td { text-align: left; vertical-align: top; padding: .5rem .7rem; border-bottom: 1px solid var(--rule); }
+  th { font-weight: 650; font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); }
+
+  details { border: 1px solid var(--rule); border-radius: 6px; background: var(--panel);
+            padding: .35rem .9rem; margin: 1rem 0; }
+  details[open] { padding-bottom: .9rem; }
+  summary { cursor: pointer; font-weight: 600; padding: .5rem 0; }
+  summary::marker { color: var(--accent); }
+  details > *:not(summary) { max-width: 46rem; }
+
+  .pass { display: inline-block; font-size: .74rem; letter-spacing: .08em; text-transform: uppercase;
+          color: var(--accent); font-weight: 700; border: 1px solid currentColor;
+          border-radius: 3px; padding: .1em .5em; vertical-align: .25em; margin-right: .5rem; }
+  .here { color: var(--c-warn); font-weight: 700; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
+</style>
+</head>
+<body>
+
+<h1>The import pipeline and its database</h1>
+<p class="lede">How a pasted URL becomes an article you can read — and why, on
+<code>spideryarn.com</code> today, it doesn't.</p>
+<p class="meta"><strong>8 minutes</strong> to skim · <strong>~30</strong> to read everything ·
+written 2026-08-30, against the tree at commit <code>80ff5b4</code></p>
+
+<h2 id="tldr">TL;DR</h2>
+
+<p>Pasting a URL creates a <strong>job</strong>: a list of six steps that run one at a time, each
+turning what the last one made into something a bit more useful — raw bytes, then clean HTML, then
+numbered paragraphs, then a table of contents, then a one-line summary of each part.</p>
+
+<p>Every step writes its result as a <strong>JSON file on a disk</strong>. That is the whole design,
+and it is also the whole problem: <strong>Vercel has no disk.</strong> So all nine imports ever
+attempted on production have failed, in about sixteen milliseconds, on the first step.</p>
+
+<p>Meanwhile the <em>reading</em> side of the product already runs on Postgres and works fine. There
+are effectively two stores — files and a database — and today the only bridge between them is a
+human running <code>npm&nbsp;run&nbsp;db:import</code> at a terminal. Closing that gap is the
+single biggest piece of unfinished work in the product.</p>
+
+<h2 id="models">Five mental models</h2>
+
+<p>Everything below is an elaboration of these. If you read nothing else, read these.</p>
+
+<div class="callout">
+  <span class="title">🏭 The assembly line</span>
+  <p>An import is a line of six stations. Each takes the part the station before it made, does one
+  thing, and puts the result on the bench. Nothing is done in parallel, and any station can be
+  re-run on its own. If a station finds its part already on the bench, it skips — which is what
+  makes re-adding the same article take a second instead of two minutes.</p>
+</div>
+
+<div class="callout">
+  <span class="title">🪑 The workbench and the display case</span>
+  <p>The <strong>workbench</strong> is a folder of scratch files, one per article. Messy,
+  rewritable, and where all the work happens. The <strong>display case</strong> is Postgres: what
+  readers actually see, versioned, owned, and never half-finished. Today somebody carries finished
+  pieces from one to the other by hand. The plan is for the line to build directly into the case.</p>
+</div>
+
+<div class="callout">
+  <span class="title">🎫 The cloakroom ticket</span>
+  <p>Every paragraph gets a random id like <code>spya-k3m9qt</code> the first time we see it, and
+  keeps it for ever. A reader's comment holds the <em>ticket</em>, not the coat. So the article can
+  be re-extracted, re-worded, even lose that paragraph entirely, and the comment survives and knows
+  what it was about. Everything in the product — table of contents, scroll position, highlights,
+  search results — addresses text by ticket, never by "the 14th paragraph".</p>
+</div>
+
+<div class="callout">
+  <span class="title">👷 The browser is the foreman</span>
+  <p>Nothing slow happens inside a web request. You paste a URL, the server says
+  <em>"accepted, here's a receipt"</em>, and then <strong>your browser</strong> pokes the server
+  once per step and polls for progress. That is why the progress list names each stage as it runs,
+  and why a job survives you closing the tab on a laptop but not on production.</p>
+</div>
+
+<div class="callout">
+  <span class="title">🎟️ A claim, not a lock</span>
+  <p>Only one job may run at a time. That used to be a promise one server process made to itself.
+  Now it is a rule the database enforces, and a runner "claims" a job with a token and a time-limited
+  lease. If the runner dies, the lease lapses and the job becomes a visible failure with a Retry
+  button — never a spinner that spins for ever.</p>
+</div>
+
+<h2 id="contents">Contents</h2>
+<div class="toc">
+<ol>
+  <li><a href="#pass1">What happens when you paste a URL</a> — the whole thing, no detail</li>
+  <li><a href="#pass2">The pieces</a> — the job, the steps, the two stores, the schema</li>
+  <li><a href="#pass3">One article, all the way through</a> — the worked example</li>
+  <li><a href="#pass4">The parts that are genuinely hard</a> — freshness, forcing, quiet failure</li>
+  <li><a href="#broken">Why it does not work on production</a></li>
+  <li><a href="#judgment">Trade-offs, risks and open questions</a></li>
+  <li><a href="#faq">Common questions</a></li>
+  <li><a href="#appendix">Appendix</a> — the tables, the files, the vocabulary</li>
+</ol>
+<div class="paths">
+  <p><strong>If you want to know why production is broken and what it will take</strong> →
+     <a href="#broken">§5</a>, then <a href="#judgment">§6</a>.</p>
+  <p><strong>If you're weighing what to build next</strong> →
+     <a href="#judgment">§6</a> alone; it is written to stand on its own.</p>
+  <p><strong>If you're thinking about data model or migrations</strong> →
+     <a href="#stores">§2 The two stores</a> and <a href="#schema">§2 The shape of the database</a>,
+     then the <a href="#tables">table dictionary</a>.</p>
+  <p><strong>If you want to understand cost and speed</strong> →
+     <a href="#pass3">§3</a> for where the time goes, <a href="#ceiling">§5 The ceiling</a> for the
+     numbers.</p>
+  <p><strong>If you have ten minutes</strong> → <a href="#models">the five models</a>,
+     <a href="#pass1">§1</a>, and the <a href="#risks">risks</a> table.</p>
+</div>
+</div>
+
+<hr>
+
+<h2 id="pass1"><span class="pass">Pass 1</span>What happens when you paste a URL</h2>
+
+<p>No detail at all. Just the shape.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 980 545" role="img" aria-label="The import pipeline from a pasted URL to a readable article">
+  <defs>
+    <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-soft)"/>
+    </marker>
+  </defs>
+  <style>
+    .bx { rx: 6; ry: 6; stroke-width: 1.5; }
+    .lbl { font: 600 13px ui-sans-serif, system-ui, sans-serif; fill: var(--ink); }
+    .sub { font: 11.5px ui-sans-serif, system-ui, sans-serif; fill: var(--ink-soft); }
+    .mono{ font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--ink-soft); }
+    .ln  { stroke: var(--ink-soft); stroke-width: 1.4; fill: none; marker-end: url(#a1); }
+    .plain{ stroke: var(--ink-soft); stroke-width: 1.4; fill: none; }
+  </style>
+
+  <!-- band A -->
+  <rect class="bx" x="30" y="24" width="200" height="60" fill="var(--c-browser-fill)" stroke="var(--c-browser)"/>
+  <text class="lbl" x="130" y="49" text-anchor="middle">You paste a URL</text>
+  <text class="sub" x="130" y="68" text-anchor="middle">on the shelf</text>
+  <line class="ln" x1="230" y1="54" x2="288" y2="54"/>
+
+  <rect class="bx" x="294" y="24" width="250" height="60" fill="var(--c-server-fill)" stroke="var(--c-server)"/>
+  <text class="lbl" x="419" y="49" text-anchor="middle">POST /api/jobs</text>
+  <text class="sub" x="419" y="68" text-anchor="middle">answers 202 — a receipt, not a result</text>
+  <line class="ln" x1="544" y1="54" x2="602" y2="54"/>
+
+  <rect class="bx" x="608" y="24" width="342" height="60" fill="var(--c-server-fill)" stroke="var(--c-server)"/>
+  <text class="lbl" x="779" y="49" text-anchor="middle">a job record: six steps</text>
+  <text class="sub" x="779" y="68" text-anchor="middle">every one of them queued</text>
+
+  <line class="ln" x1="779" y1="84" x2="779" y2="114"/>
+
+  <!-- band B -->
+  <rect class="bx" x="560" y="118" width="390" height="44" fill="var(--c-browser-fill)" stroke="var(--c-browser)"/>
+  <text class="lbl" x="755" y="145" text-anchor="middle">the browser pokes: /advance, once per step</text>
+
+  <path class="plain" d="M755,162 L755,180 L95,180"/>
+  <path class="plain" d="M95,180 L885,180"/>
+  <line class="ln" x1="95"  y1="181" x2="95"  y2="196"/>
+  <line class="ln" x1="253" y1="181" x2="253" y2="196"/>
+  <line class="ln" x1="411" y1="181" x2="411" y2="196"/>
+  <line class="ln" x1="569" y1="181" x2="569" y2="196"/>
+  <line class="ln" x1="727" y1="181" x2="727" y2="196"/>
+  <line class="ln" x1="885" y1="181" x2="885" y2="196"/>
+
+  <!-- band C : the six steps -->
+  <g>
+    <rect class="bx" x="25"  y="198" width="140" height="78" fill="var(--panel)" stroke="var(--c-server)"/>
+    <text class="lbl" x="95"  y="221" text-anchor="middle">fetch</text>
+    <text class="sub" x="95"  y="240" text-anchor="middle">get the bytes</text>
+    <text class="mono" x="95" y="262" text-anchor="middle">raw.html</text>
+
+    <rect class="bx" x="183" y="198" width="140" height="78" fill="var(--panel)" stroke="var(--c-server)"/>
+    <text class="lbl" x="253" y="221" text-anchor="middle">extract</text>
+    <text class="sub" x="253" y="240" text-anchor="middle">strip the page</text>
+    <text class="mono" x="253" y="262" text-anchor="middle">article.html</text>
+
+    <rect class="bx" x="341" y="198" width="140" height="78" fill="var(--panel)" stroke="var(--c-server)"/>
+    <text class="lbl" x="411" y="221" text-anchor="middle">blocks</text>
+    <text class="sub" x="411" y="240" text-anchor="middle">split + give ids</text>
+    <text class="mono" x="411" y="262" text-anchor="middle">blocks.json</text>
+
+    <rect class="bx" x="499" y="198" width="140" height="78" fill="var(--panel)" stroke="var(--c-model)"/>
+    <circle cx="625" cy="211" r="4.5" fill="var(--c-model)"/>
+    <text class="lbl" x="569" y="221" text-anchor="middle">toc</text>
+    <text class="sub" x="569" y="240" text-anchor="middle">build the tree</text>
+    <text class="mono" x="569" y="262" text-anchor="middle">tree.json</text>
+
+    <rect class="bx" x="657" y="198" width="140" height="78" fill="var(--panel)" stroke="var(--c-server)"/>
+    <text class="lbl" x="727" y="221" text-anchor="middle">assets</text>
+    <text class="sub" x="727" y="240" text-anchor="middle">copy the images</text>
+    <text class="mono" x="727" y="262" text-anchor="middle">assets.json</text>
+
+    <rect class="bx" x="815" y="198" width="140" height="78" fill="var(--panel)" stroke="var(--c-model)"/>
+    <circle cx="941" cy="211" r="4.5" fill="var(--c-model)"/>
+    <text class="lbl" x="885" y="221" text-anchor="middle">arc</text>
+    <text class="sub" x="885" y="240" text-anchor="middle">a line per part</text>
+    <text class="mono" x="885" y="262" text-anchor="middle">arc.json</text>
+  </g>
+  <line class="ln" x1="166" y1="237" x2="180" y2="237"/>
+  <line class="ln" x1="324" y1="237" x2="338" y2="237"/>
+  <line class="ln" x1="482" y1="237" x2="496" y2="237"/>
+  <line class="ln" x1="640" y1="237" x2="654" y2="237"/>
+  <line class="ln" x1="798" y1="237" x2="812" y2="237"/>
+
+  <!-- band D : the disk -->
+  <path class="plain" d="M95,276 L95,292 M253,276 L253,292 M411,276 L411,292 M569,276 L569,292 M727,276 L727,292 M885,276 L885,292"/>
+  <path class="plain" d="M95,292 L885,292"/>
+  <line class="ln" x1="490" y1="292" x2="490" y2="322"/>
+
+  <rect class="bx" x="25" y="326" width="930" height="56" fill="var(--c-disk-fill)" stroke="var(--c-disk)" stroke-dasharray="6 4"/>
+  <text class="lbl" x="490" y="350" text-anchor="middle">data/&lt;slug&gt;/ — JSON files, one folder per article</text>
+  <text class="sub" x="490" y="369" text-anchor="middle" fill="var(--c-warn)">…on a writable disk, which Vercel does not have</text>
+
+  <line class="ln" x1="490" y1="382" x2="490" y2="410"/>
+
+  <!-- band E : publication -->
+  <rect class="bx" x="25" y="414" width="300" height="58" fill="var(--c-warn-fill)" stroke="var(--c-warn)" stroke-dasharray="6 4"/>
+  <text class="lbl" x="175" y="438" text-anchor="middle">npm run db:import</text>
+  <text class="sub" x="175" y="457" text-anchor="middle">a human, at a terminal</text>
+  <line class="ln" x1="325" y1="443" x2="383" y2="443"/>
+
+  <rect class="bx" x="389" y="414" width="230" height="58" fill="var(--c-db-fill)" stroke="var(--c-db)"/>
+  <text class="lbl" x="504" y="438" text-anchor="middle">Postgres</text>
+  <text class="sub" x="504" y="457" text-anchor="middle">the published article</text>
+  <line class="ln" x1="619" y1="443" x2="677" y2="443"/>
+
+  <rect class="bx" x="683" y="414" width="272" height="58" fill="var(--c-browser-fill)" stroke="var(--c-browser)"/>
+  <text class="lbl" x="819" y="438" text-anchor="middle">/read/&lt;slug&gt;</text>
+  <text class="sub" x="819" y="457" text-anchor="middle">what the reader opens</text>
+
+  <!-- legend -->
+  <g transform="translate(25,500)">
+    <rect x="0"   y="0" width="12" height="12" rx="2" fill="var(--c-browser-fill)" stroke="var(--c-browser)"/>
+    <text class="sub" x="18"  y="10">browser</text>
+    <rect x="90"  y="0" width="12" height="12" rx="2" fill="var(--c-server-fill)" stroke="var(--c-server)"/>
+    <text class="sub" x="108" y="10">server</text>
+    <rect x="172" y="0" width="12" height="12" rx="2" fill="var(--c-disk-fill)" stroke="var(--c-disk)"/>
+    <text class="sub" x="190" y="10">disk</text>
+    <rect x="240" y="0" width="12" height="12" rx="2" fill="var(--c-db-fill)" stroke="var(--c-db)"/>
+    <text class="sub" x="258" y="10">database</text>
+    <circle cx="346" cy="6" r="5" fill="var(--c-model)"/>
+    <text class="sub" x="358" y="10">a paid model call — these are the slow, expensive steps</text>
+  </g>
+</svg>
+</div>
+<figcaption><strong>Diagram 1.</strong> The whole import, top to bottom. The two dashed boxes are
+the two places it currently comes apart: a disk that isn't there in production, and a publication
+step that a person has to run.</figcaption>
+</figure>
+
+<p>In words, the same thing:</p>
+
+<ol>
+  <li><strong>You paste a URL.</strong> The app works out what to call the article — its
+  <em>slug</em>, taken from the last bit of the address — and checks whether it already has one.</li>
+  <li><strong>The server writes down a job</strong> and immediately answers, without doing any of
+  the work. The answer is a receipt.</li>
+  <li><strong>Your browser drives the job forward</strong>, one step per request, polling for
+  progress in between. The progress panel names the stage that's running.</li>
+  <li><strong>Each step writes a file</strong> and the next one reads it. A step whose file is
+  already there skips itself.</li>
+  <li><strong>The last step finishes</strong>, and the article is on the shelf.</li>
+</ol>
+
+<div class="callout warn">
+  <span class="title">Step 5 is not actually true yet</span>
+  <p>Finishing the last step does <em>not</em> put the article in the database. Publication is a
+  separate command a human runs. On a laptop this is invisible — the app can read straight off the
+  workbench. In production it is the difference between a green tick and a shelf that never
+  changes. <a href="#broken">§5</a>.</p>
+</div>
+
+<hr>
+
+<h2 id="pass2"><span class="pass">Pass 2</span>The pieces</h2>
+
+<h3 id="job">A job is a list, not a function</h3>
+
+<p>The obvious way to build an importer is four function calls in a row. Spideryarn doesn't, and the
+reason is worth knowing because it explains most of the product's flexibility.</p>
+
+<p>A job is <strong>a slug plus a list of step names</strong>. That one decision gives you, with no
+special cases:</p>
+
+<table>
+<tr><th>What the reader does</th><th>What the job is</th></tr>
+<tr><td>Add an article</td><td>the six default steps</td></tr>
+<tr><td>Refresh it from the source</td><td>the same six, with <code>fetch</code> forced</td></tr>
+<tr><td>Re-run one stage after a prompt change</td><td>just that stage, forced</td></tr>
+<tr><td>Write the tweet thread (a button on its own page)</td><td>one step, <code>tweets</code></td></tr>
+</table>
+
+<p>There are ten steps in existence and only six run by default. The other four — the tweet thread,
+the glossary, the longer summaries, and the "ideas" the piece assumes — each cost a model call, so
+nobody gets one unless they ask.</p>
+
+<details>
+<summary>The full step list, and the difference between order and default</summary>
+<p>Two lists, deliberately not the same list:</p>
+<pre><code>STEP_ORDER          fetch  extract  blocks  toc  assets  arc  tweets  glossary  summary  ideas
+DEFAULT_INGEST_STEPS fetch  extract  blocks  toc  assets  arc</code></pre>
+<p><code>STEP_ORDER</code> answers two questions — what order do steps run in, and which names will
+the API accept — and <code>DEFAULT_INGEST_STEPS</code> answers a third: what does a plain "add this
+URL" do. They were one array until the tweet thread arrived and needed to be a valid, orderable step
+that nobody pays for by accident.</p>
+<p><code>assets</code> is in the default despite not being needed to read the article, and the
+reason is privacy rather than completeness: an article whose images are still hot-linked to the
+publisher announces the reader's IP address to that publisher on every single read.</p>
+</details>
+
+<h3 id="stores">The two stores</h3>
+
+<p>This is the single most important thing to hold in your head about the architecture. There are
+two places an article can live, they hold different things, and the app can be pointed at either
+one.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 900 440" role="img" aria-label="The filesystem workbench and the Postgres display case, and the import and export commands between them">
+  <defs>
+    <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-soft)"/>
+    </marker>
+  </defs>
+  <style>
+    .b2 { rx:7; ry:7; stroke-width:1.5; }
+    .h2t{ font: 650 14px ui-sans-serif, system-ui, sans-serif; }
+    .it { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--ink); }
+    .n  { font: 11.5px ui-sans-serif, system-ui, sans-serif; fill: var(--ink-soft); }
+    .l2 { stroke: var(--ink-soft); stroke-width: 1.6; fill:none; marker-end: url(#a2); }
+  </style>
+
+  <rect class="b2" x="20" y="46" width="330" height="270" fill="var(--c-disk-fill)" stroke="var(--c-disk)" stroke-dasharray="6 4"/>
+  <text class="h2t" x="185" y="72" text-anchor="middle" fill="var(--c-disk)">the workbench</text>
+  <text class="n" x="185" y="90" text-anchor="middle">data/&lt;slug&gt;/ — plain JSON files</text>
+  <text class="it" x="44" y="122">raw.html · raw.json</text>
+  <text class="it" x="44" y="144">article.html · meta.json</text>
+  <text class="it" x="44" y="166">blocks.json</text>
+  <text class="it" x="44" y="188">tree.json</text>
+  <text class="it" x="44" y="210">assets.json · arc.json</text>
+  <text class="it" x="44" y="232">comments.json · reader.json</text>
+  <text class="n"  x="44" y="262">rewritable, no owner, no history</text>
+  <text class="n"  x="44" y="282">every step writes its own</text>
+
+  <rect class="b2" x="550" y="46" width="330" height="270" fill="var(--c-db-fill)" stroke="var(--c-db)"/>
+  <text class="h2t" x="715" y="72" text-anchor="middle" fill="var(--c-db)">the display case</text>
+  <text class="n" x="715" y="90" text-anchor="middle">Postgres — 18 tables, 30 migrations</text>
+  <text class="it" x="574" y="122">articles</text>
+  <text class="it" x="574" y="144">article_revisions  (draft → published)</text>
+  <text class="it" x="574" y="166">block_identities   (never deleted)</text>
+  <text class="it" x="574" y="188">revision_blocks</text>
+  <text class="it" x="574" y="210">jobs · revision_step_runs</text>
+  <text class="it" x="574" y="232">comments · chat · searches</text>
+  <text class="n"  x="574" y="262">owned, versioned, one writer at a time</text>
+  <text class="n"  x="574" y="282">a reader sees old or new, never a mixture</text>
+
+  <line class="l2" x1="356" y1="140" x2="544" y2="140"/>
+  <text class="it" x="450" y="128" text-anchor="middle">npm run db:import</text>
+  <text class="n"  x="450" y="160" text-anchor="middle">a person, at a terminal</text>
+
+  <line class="l2" x1="544" y1="238" x2="356" y2="238"/>
+  <text class="it" x="450" y="226" text-anchor="middle">npm run db:export</text>
+  <text class="n"  x="450" y="258" text-anchor="middle">the rollback, and the backup</text>
+
+  <rect class="b2" x="20" y="352" width="860" height="58" fill="var(--c-server-fill)" stroke="var(--c-server)"/>
+  <text class="h2t" x="450" y="376" text-anchor="middle" fill="var(--c-server)">the app reads through one seam, and picks a side with one environment variable</text>
+  <text class="it" x="450" y="396" text-anchor="middle">SPIDERYARN_STORE = files | postgres      (default: files; production refuses "files")</text>
+</svg>
+</div>
+<figcaption><strong>Diagram 2.</strong> Reads go through a single interface, so the app cannot tell
+which store it is on. Writes do not — every pipeline step writes files directly, which is what makes
+the left-hand box load-bearing.</figcaption>
+</figure>
+
+<p>Three facts about this picture carry most of the consequences:</p>
+
+<ul>
+  <li><strong>Reads are abstracted; writes are not.</strong> One interface answers "give me this
+  article" from either store. But there is no equivalent for writing — every step opens a file and
+  writes it. So "move to Postgres" is a change in ten places, not one.</li>
+  <li><strong>There is no fallback, on purpose.</strong> If Postgres errors, the app does not quietly
+  read a file instead. A fallback would hide exactly the divergence you built two stores to notice,
+  and it would hide it in production, where nobody is comparing.</li>
+  <li><strong>Files have no owner column.</strong> That is why the whole multi-reader story —
+  accounts, sharing, public links — is a Postgres story by nature and not by preference. A folder
+  named after a slug has nowhere to record who may read it.</li>
+</ul>
+
+<h3 id="schema">The shape of the database</h3>
+
+<p>The interesting part of the schema is one decision, made early and defended repeatedly: an
+article's <em>identity</em> and an article's <em>content</em> are different tables with different
+lifetimes.</p>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 900 500" role="img" aria-label="The database's identity and revision split, and where a reader's comment points">
+  <defs>
+    <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-soft)"/>
+    </marker>
+  </defs>
+  <style>
+    .b3 { rx:6; ry:6; stroke-width:1.5; }
+    .t3 { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--ink); }
+    .s3 { font: 11.5px ui-sans-serif, system-ui, sans-serif; fill: var(--ink-soft); }
+    .l3 { stroke: var(--ink-soft); stroke-width:1.5; fill:none; marker-end:url(#a3); }
+    .d3 { stroke: var(--c-db); stroke-width:1.5; fill:none; stroke-dasharray:5 4; marker-end:url(#a3); }
+  </style>
+
+  <rect class="b3" x="300" y="20" width="300" height="52" fill="var(--c-db-fill)" stroke="var(--c-db)"/>
+  <text class="t3" x="450" y="42" text-anchor="middle">articles</text>
+  <text class="s3" x="450" y="60" text-anchor="middle">one row per article, for ever · owner_id · slug</text>
+  <line class="l3" x1="450" y1="72" x2="450" y2="102"/>
+
+  <rect class="b3" x="300" y="106" width="300" height="112" fill="var(--panel)" stroke="var(--c-db)"/>
+  <text class="t3" x="450" y="128" text-anchor="middle">article_revisions</text>
+  <rect class="b3" x="316" y="140" width="86" height="26" fill="var(--c-db-fill)" stroke="var(--c-db)"/>
+  <text class="s3" x="359" y="157" text-anchor="middle">rev 1</text>
+  <rect class="b3" x="408" y="140" width="86" height="26" fill="var(--c-db-fill)" stroke="var(--c-db)"/>
+  <text class="s3" x="451" y="157" text-anchor="middle">rev 2</text>
+  <rect class="b3" x="500" y="140" width="86" height="26" fill="var(--c-model-fill)" stroke="var(--c-model)"/>
+  <text class="s3" x="543" y="157" text-anchor="middle">rev 3</text>
+  <text class="s3" x="450" y="190" text-anchor="middle">each one a whole extraction: title, blocks, tree</text>
+  <text class="s3" x="450" y="207" text-anchor="middle">status: draft → published (or failed)</text>
+
+  <path class="d3" d="M600,46 L660,46 L660,153 L590,153"/>
+  <text class="s3" x="672" y="98">articles.current_revision_id</text>
+  <text class="s3" x="672" y="115">points at exactly one</text>
+
+  <line class="l3" x1="450" y1="218" x2="450" y2="250"/>
+
+  <rect class="b3" x="300" y="254" width="300" height="56" fill="var(--c-db-fill)" stroke="var(--c-db)"/>
+  <text class="t3" x="450" y="276" text-anchor="middle">revision_blocks</text>
+  <text class="s3" x="450" y="295" text-anchor="middle">the paragraph's text, as this revision saw it</text>
+  <text class="s3" x="620" y="284">replaced on every re-extraction</text>
+
+  <line class="l3" x1="450" y1="310" x2="450" y2="344"/>
+  <text class="s3" x="462" y="332">keyed on (article_id, block_id)</text>
+
+  <rect class="b3" x="300" y="348" width="300" height="56" fill="var(--c-browser-fill)" stroke="var(--c-browser)"/>
+  <text class="t3" x="450" y="370" text-anchor="middle">block_identities</text>
+  <text class="s3" x="450" y="389" text-anchor="middle">the id alone — a row is never deleted</text>
+  <text class="s3" x="620" y="378" fill="var(--c-browser)">THE SPINE</text>
+
+  <rect class="b3" x="300" y="440" width="300" height="46" fill="var(--panel)" stroke="var(--ink-soft)"/>
+  <text class="t3" x="450" y="462" text-anchor="middle">comments · highlights · notes</text>
+  <text class="s3" x="450" y="479" text-anchor="middle">everything the reader made</text>
+  <line class="l3" x1="450" y1="440" x2="450" y2="410"/>
+  <text class="s3" x="30" y="455">a paragraph can vanish</text>
+  <text class="s3" x="30" y="472">from the article and the</text>
+  <text class="s3" x="30" y="489">question about it survives</text>
+</svg>
+</div>
+<figcaption><strong>Diagram 3.</strong> Content is versioned; identity is not. Reader-created things
+point at the identity table, one level below the text, which is what lets a re-extraction be
+non-destructive.</figcaption>
+</figure>
+
+<div class="callout key">
+  <span class="title">The rule that everything else rests on</span>
+  <p><strong>A block id is an identity; a block's text is a revision.</strong> If comments pointed
+  at the current text rows, then re-extracting an article — which happens whenever the publisher
+  edits their page, or we improve the extractor — would delete the reader's questions along with the
+  paragraphs. Instead the reader keeps a pointer to something that is never deleted, and the app can
+  show them "you asked about a paragraph that isn't in this version any more".</p>
+</div>
+
+<details>
+<summary>Two smaller schema decisions with outsized consequences</summary>
+<p><strong>Block ids are unique only <em>within</em> an article.</strong> Every key that touches one
+is composite on <code>(article_id, block_id)</code>. Making them globally unique looks tidier and
+starts silently rejecting valid rows at around a hundred articles — and a global <em>upsert</em>
+would overwrite one article's paragraph with another's. Nobody may "tidy" these into single-column
+keys.</p>
+<p><strong>Document order is a written-down number, not an insertion order.</strong>
+<code>revision_blocks.ordinal</code> is set explicitly from the array index. Block ids are random and
+carry no position, so if that column were ever wrong there would be nothing left to recover the
+order of the article from.</p>
+<p><strong>Search is per paragraph, not per article.</strong> Each block row carries its own
+full-text index, generated by the database rather than filled in by the pipeline. A search hit
+therefore deep-links to the paragraph — which is the entire point of the feature — and a column the
+pipeline had to remember to fill would be empty for exactly the article somebody just re-ran.</p>
+</details>
+
+<h3 id="claim">Who is allowed to run a job</h3>
+
+<p>One job at a time, globally. Not one per server — one, full stop. Three of the ten steps are long
+model calls billed by the token and one is a fetch of somebody else's server, so running two
+articles at once would double the spend rate, halve the politeness, and turn the progress display
+into a race.</p>
+
+<p>That used to be a promise a single server process made to itself. It stopped being true the moment
+there could be two servers, so it moved into the database as an index that permits at most one
+running row. A second claim comes back as a constraint violation and the caller is told
+<em>busy</em>.</p>
+
+<details>
+<summary>The claim, the lease, and why a dead runner becomes a visible failure</summary>
+<p>A runner claims a job with an <strong>attempt token</strong> and a <strong>lease</strong> — a
+deadline. Every subsequent write is conditional on <code>id = $id AND attempt_id = $attempt AND
+status = 'running'</code>, so a runner that has been superseded cannot write anything, even if it is
+still alive and confused.</p>
+<p>The claimant also sets <em>its own</em> timer, slightly shorter than the lease, and aborts its own
+work when it fires. That is what makes an expired lease mean something: it says <em>the process is
+gone</em>, not <em>the process is slow</em>.</p>
+<p>An expired lease does <strong>not</strong> get taken over by another runner. It gets marked
+failed, with a sentence saying it was interrupted and a Retry button. Guessing that an owner is dead
+is how two runners end up writing one article, and that only becomes safe once every durable write
+is inside one fenced transaction — which is the work described in <a href="#judgment">§6</a>.</p>
+<p>The expiry sweep runs at the top of every advance rather than on a timer, because there is no
+scheduler on Vercel, and because that is the exact moment somebody wants the slot.</p>
+</details>
+
+<hr>
+
+<h2 id="pass3"><span class="pass">Pass 3</span>One article, all the way through</h2>
+
+<p>Take a real one. You paste:</p>
+
+<pre><code>https://www.noemamag.com/the-mythology-of-conscious-ai/</code></pre>
+
+<p>It's a long essay, about 54 minutes of reading, and almost entirely without headings — the
+deliberate hard case this project tests against.</p>
+
+<h4>Before anything is queued</h4>
+
+<p>The app derives a slug from the last path segment: <code>the-mythology-of-conscious-ai</code>.
+Then it asks two questions that look like one:</p>
+
+<table>
+<tr><th>Question</th><th>Answered by</th><th>May it change the address?</th></tr>
+<tr><td>What do we fetch and store?</td><td><code>normaliseUrl</code></td>
+    <td><strong>No.</strong> Whatever comes out is what gets fetched.</td></tr>
+<tr><td>Is this the article we already have?</td><td><code>urlKey</code></td>
+    <td>It is never fetched, so yes — freely.</td></tr>
+</table>
+
+<p>The second one is why pasting <code>http://noemamag.com/the-mythology-of-conscious-ai</code>
+tomorrow finds the same article rather than paying for a second copy. It strips the scheme, a
+leading <code>www.</code>, a trailing slash, and the tracking parameters a share button staples on.</p>
+
+<div class="callout">
+  <span class="title">The asymmetry this is designed around</span>
+  <p><strong>Failing to merge two spellings of one article costs a duplicate</strong> — a second card
+  on the shelf, visible, deletable, paid for once. <strong>Merging two different articles costs the
+  wrong article</strong>, silently, under the headline the reader pasted, with nothing anywhere
+  saying so. So a merge is only made where the URL specification or universal practice actually
+  guarantees it — never where it is merely usually right.</p>
+  <p>Which is why <code>/Why-Trees</code> and <code>/why-trees</code> are <em>not</em> merged (plenty
+  of servers are case-sensitive and mean it), and neither are <code>?tag=a&amp;tag=b</code> and
+  <code>?tag=b&amp;tag=a</code> (a repeated parameter's order is part of the request).</p>
+</div>
+
+<h4>The six steps</h4>
+
+<p class="here">&gt;&gt;&gt; WE ARE HERE &gt;&gt;&gt; — the job has been accepted and your browser
+has started poking.</p>
+
+<table>
+<tr><th>#</th><th>Step</th><th>What actually happens</th><th>Time</th></tr>
+<tr><td>1</td><td><code>fetch</code></td>
+    <td>Downloads the page. Counts bytes on the decompressed stream, honours the page's own declared
+    encoding rather than assuming UTF-8, tells a PDF from HTML by its <em>bytes</em> rather than the
+    server's claim, and re-checks the address at every redirect hop. Writes the bytes, plus a small
+    manifest saying which file is authoritative and where it came from.</td><td>~10s</td></tr>
+<tr><td>2</td><td><code>extract</code></td>
+    <td>Mozilla Readability strips the navigation, the ads and the newsletter box, leaving the
+    article. Also writes the article's identity — title, byline, site, language, the final URL.</td><td>~5s</td></tr>
+<tr><td>3</td><td><code>blocks</code></td>
+    <td><strong>Sanitises</strong> the HTML, then splits it into blocks and gives each one a
+    permanent random id. This is the step that mints the tickets.</td><td>~5s</td></tr>
+<tr><td>4</td><td><code>toc</code> 🟢</td>
+    <td>A model reads the whole article and returns a deeply nested table of contents — down to
+    paragraph level. <strong>The most expensive step in the product by a wide margin.</strong></td><td>up to 5½ min</td></tr>
+<tr><td>5</td><td><code>assets</code></td>
+    <td>Copies the article's images to our own storage, so reading it doesn't tell the publisher who
+    is reading.</td><td>~30s</td></tr>
+<tr><td>6</td><td><code>arc</code> 🟢</td>
+    <td>A model writes one sentence per part of the article: where the argument stands there.</td><td>~30s</td></tr>
+</table>
+
+<p>Total, worst case measured: <strong>about seven minutes</strong>, of which
+<strong>the table of contents is 80%</strong>.</p>
+
+<div class="callout key">
+  <span class="title">Why a block is the <em>smallest</em> readable unit</span>
+  <p>A list item is a block; the list around it is not. That looks like a detail and is actually a
+  product decision. If the whole list were one block, there would be no id pointing at an individual
+  item — so no reader could ever comment on one, and no table of contents could ever give one a row.
+  Making blocks the finest unit costs nothing and turns "how much detail does this list deserve?"
+  into a choice the table of contents makes per list, rather than one the splitter makes for
+  everybody in advance.</p>
+</div>
+
+<h4>What you now have, and what you don't</h4>
+
+<p>On a laptop: an article on the shelf, fully readable, with a zoomable table of contents and an
+arc. On production: nothing. The job would have died at step 1.</p>
+
+<details>
+<summary>What happens on the second run — and why re-adding is instant</summary>
+<p>Each step declares the files it produces, and a step whose files are all present skips itself. So
+re-adding the same URL takes about a second: six steps, six skips, and the article.</p>
+<p>"Present" is more careful than it sounds. The store answers by <strong>parsing</strong> the file,
+not by checking it exists — a write killed halfway leaves a file that exists and won't parse, and
+that used to report its step done for ever.</p>
+<p>And presence is not the only question. A step also records that it <em>started</em>, in a marker
+that only the success path removes. A marker still sitting there means a run that did not finish,
+and a run that did not finish is not done however good its files look. That catches the case
+existence checks cannot: a rerun that overwrote one of three outputs with a perfectly good new
+generation and then died, leaving every file present, parseable, individually beyond reproach —
+and two different generations of the article on disk at once.</p>
+</details>
+
+<hr>
+
+<h2 id="pass4"><span class="pass">Pass 4</span>The parts that are genuinely hard</h2>
+
+<p>Everything above is the happy path. This section is the four things that make this system harder
+than it looks. All four are collapsed; none is needed to understand the rest of the document.</p>
+
+<details>
+<summary>1. "Already done" and "still correct" are different questions</summary>
+<p>A step that checks only whether its file exists will happily skip a file describing last week's
+version of the article — and report a green tick while doing it. The reading view then serves a
+table of contents for text that has since changed, and nothing anywhere says so.</p>
+<p>So steps are moving from <em>presence</em> to a <strong>freshness stamp</strong>: a hash of the
+inputs, plus the prompt version and the model id. Change any of the three and the step re-runs on its
+own, with nobody having to remember.</p>
+<p><strong>Where this stands is uneven, and that unevenness is the interesting part.</strong> Four
+steps stamp; the table of contents does not. That is deliberate rather than pending — a stamp on
+<code>toc</code> needs consumer invalidation first, because the tree is the thing five other
+artefacts are joined to. A stamp landed there once and was withdrawn.</p>
+<p>The hash input matters more than the idea. It hashes each block's id and text, deliberately
+<em>not</em> the bytes of the file — because those bytes change when an unread field is recomputed,
+and don't change when two blocks swap ids.</p>
+</details>
+
+<details>
+<summary>2. Forcing one step forces every step after it</summary>
+<p>"Refresh from source" was originally written as: force the two steps that touch the outside world,
+leave the rest alone. Which produced <strong>a freshly fetched article under last week's table of
+contents and last week's arc</strong> — every summary describing paragraphs that had moved, three
+green ticks, and nothing saying anything was wrong.</p>
+<p>So forcing a step now expands to include everything downstream of it. The pipeline is a chain;
+invalidating a link invalidates what comes after it, by definition.</p>
+<p><strong>With one exception, and it is about money.</strong> The tweet thread isn't a link in that
+chain — it reads the same inputs the arc reads and nothing reads what it writes. Its position in the
+list is about running order, not dependency, and reading it as dependency would spend a model call
+rewriting a thread whose inputs never moved. So a small list holds the steps the positional cascade
+may not speak for.</p>
+</details>
+
+<details>
+<summary>3. Retry is not always offered, and that is a feature</summary>
+<p>Until a fix in August, the Retry button appeared under every failure — including the ones that are
+arithmetic. A long article was pasted, the table-of-contents step worked out that its answer would
+not fit in one model response, said so clearly, and offered a Retry that made the identical call and
+failed identically.</p>
+<p>A failure now says what <em>kind</em> it is, and the card asks before drawing the button. Roughly:</p>
+<table>
+<tr><th>Cannot come out differently</th><th>Might</th></tr>
+<tr><td>an answer too long for one response</td><td>a model answer that would not parse</td></tr>
+<tr><td>a page Readability already refused, over bytes we still have</td><td>an empty answer, a refusal, a timeout</td></tr>
+<tr><td>a PDF over the page cap</td><td>a fetch that failed at somebody else's server</td></tr>
+</table>
+<p>The direction of the doubt is chosen: <strong>a failure that says nothing gets the button.</strong>
+Not because a wasted click is cheap — here a false retry costs minutes of pipeline and another billed
+model call — but because every job recorded before the field existed carries nothing, and so does one
+that a restart swept up, which really is worth another go.</p>
+<p>What makes any of this trustworthy is that a retry never re-runs a step that already succeeded. So
+a step that failed while reading an artefact an earlier step wrote will read that identical artefact
+again — which is precisely why the left-hand column is certain.</p>
+</details>
+
+<details>
+<summary>4. Silent success — the failure mode this codebase is organised around</summary>
+<p>Most of the hard-won detail in this system is defence against one shape of bug: <strong>something
+reports success while doing nothing, and the check you would naturally run agrees with it, because
+it shares an assumption with the code.</strong></p>
+<p>A partial list from this pipeline alone, every one of them real:</p>
+<ul>
+<li>A refresh that fetched new bytes and left the old tree, reporting three green ticks.</li>
+<li>Two URL spellings of one article read as two articles: a second fetch, a second tree, a second
+arc, two cards under one headline, nothing errored.</li>
+<li>A migration command that migrated the laptop instead of the remote database and printed
+<code>✓ migrations applied</code>.</li>
+<li>A <code>GRANT</code> that is correct SQL the platform will never obey — Postgres answers a grant
+you lack permission for with a warning, not an error.</li>
+<li>An export that read a directory that had never held the source documents, and wrote
+<strong>a backup that looks complete and is not</strong> — in the one command anybody runs after
+losing something.</li>
+<li>An importer that read the comments file with the wrong shape and imported 17 KB of the reader's
+questions as zero comments, while printing a tick.</li>
+</ul>
+<p>The recurring lesson is the same each time: <strong>prove it rather than reading it back.</strong>
+A grant is verified by creating a table and asking whether the app role can see it. A test that has
+never been watched go red is not evidence.</p>
+</details>
+
+<hr>
+
+<h2 id="broken">Why it does not work on production</h2>
+
+<p>Signed in at <code>spideryarn.com</code> on 2026-08-29, the shelf said <strong>"9 earlier imports
+· 9 failed"</strong>. Every one stopped at step 1 with the same line:</p>
+
+<pre><code>ENOENT: no such file or directory, mkdir '/var/data'</code></pre>
+
+<p><strong>Reading works fine.</strong> The shelf renders out of Postgres and the reading view is
+healthy. It is only <em>ingest</em> that has nowhere to put anything. There are three causes, and
+they stack.</p>
+
+<h3>Cause 1 — a path that bundling invalidates</h3>
+
+<p>Two files work out where to write by asking "where am I, and go up two directories". That is
+correct for a file living in the source tree. It ships <em>bundled</em> into a single file, and
+<code>where am I</code> is a fact about where the code ended up, not where it was written. Two levels
+up from there is <code>/var</code>, which is not writable.</p>
+
+<p><strong>No local test can catch this</strong>, because the arithmetic is right on a laptop and
+wrong in the bundle — the check and the thing it checks share the assumption.</p>
+
+<h3>Cause 2 — six steps, six machines</h3>
+
+<figure>
+<div class="scroll">
+<svg viewBox="0 0 960 320" role="img" aria-label="Six serverless invocations each with its own empty temporary disk, so artefacts never reach the next step">
+  <defs>
+    <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="var(--c-warn)"/>
+    </marker>
+  </defs>
+  <style>
+    .b4{rx:6;ry:6;stroke-width:1.5;}
+    .t4{font:600 12.5px ui-sans-serif,system-ui,sans-serif;fill:var(--ink);}
+    .s4{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;fill:var(--ink-soft);}
+    .x4{font:600 15px ui-sans-serif,system-ui,sans-serif;fill:var(--c-warn);}
+    .l4{stroke:var(--c-warn);stroke-width:1.5;fill:none;stroke-dasharray:4 3;marker-end:url(#a4);}
+  </style>
+  <text class="t4" x="30" y="28">Your browser makes six separate requests. Vercel may answer each one on a different machine.</text>
+
+  <g>
+    <rect class="b4" x="30"  y="50" width="140" height="52" fill="var(--c-server-fill)" stroke="var(--c-server)"/>
+    <text class="t4" x="100" y="72"  text-anchor="middle">invocation 1</text>
+    <text class="s4" x="100" y="90"  text-anchor="middle">fetch</text>
+    <rect class="b4" x="30"  y="120" width="140" height="46" fill="var(--panel)" stroke="var(--c-disk)" stroke-dasharray="5 4"/>
+    <text class="s4" x="100" y="140" text-anchor="middle">/tmp</text>
+    <text class="s4" x="100" y="157" text-anchor="middle">raw.html ✓</text>
+
+    <rect class="b4" x="185" y="50" width="140" height="52" fill="var(--c-server-fill)" stroke="var(--c-server)"/>
+    <text class="t4" x="255" y="72"  text-anchor="middle">invocation 2</text>
+    <text class="s4" x="255" y="90"  text-anchor="middle">extract</text>
+    <rect class="b4" x="185" y="120" width="140" height="46" fill="var(--panel)" stroke="var(--c-disk)" stroke-dasharray="5 4"/>
+    <text class="s4" x="255" y="140" text-anchor="middle">/tmp</text>
+    <text class="s4" x="255" y="157" text-anchor="middle">empty</text>
+
+    <rect class="b4" x="340" y="50" width="140" height="52" fill="var(--c-server-fill)" stroke="var(--c-server)"/>
+    <text class="t4" x="410" y="72"  text-anchor="middle">invocation 3</text>
+    <text class="s4" x="410" y="90"  text-anchor="middle">blocks</text>
+    <rect class="b4" x="340" y="120" width="140" height="46" fill="var(--panel)" stroke="var(--c-disk)" stroke-dasharray="5 4"/>
+    <text class="s4" x="410" y="140" text-anchor="middle">/tmp</text>
+    <text class="s4" x="410" y="157" text-anchor="middle">empty</text>
+
+    <rect class="b4" x="495" y="50" width="140" height="52" fill="var(--c-server-fill)" stroke="var(--c-server)"/>
+    <text class="t4" x="565" y="72"  text-anchor="middle">invocation 4</text>
+    <text class="s4" x="565" y="90"  text-anchor="middle">toc</text>
+    <rect class="b4" x="495" y="120" width="140" height="46" fill="var(--panel)" stroke="var(--c-disk)" stroke-dasharray="5 4"/>
+    <text class="s4" x="565" y="140" text-anchor="middle">/tmp</text>
+    <text class="s4" x="565" y="157" text-anchor="middle">empty</text>
+
+    <rect class="b4" x="650" y="50" width="140" height="52" fill="var(--c-server-fill)" stroke="var(--c-server)"/>
+    <text class="t4" x="720" y="72"  text-anchor="middle">invocation 5</text>
+    <text class="s4" x="720" y="90"  text-anchor="middle">assets</text>
+    <rect class="b4" x="650" y="120" width="140" height="46" fill="var(--panel)" stroke="var(--c-disk)" stroke-dasharray="5 4"/>
+    <text class="s4" x="720" y="140" text-anchor="middle">/tmp</text>
+    <text class="s4" x="720" y="157" text-anchor="middle">empty</text>
+
+    <rect class="b4" x="805" y="50" width="140" height="52" fill="var(--c-server-fill)" stroke="var(--c-server)"/>
+    <text class="t4" x="875" y="72"  text-anchor="middle">invocation 6</text>
+    <text class="s4" x="875" y="90"  text-anchor="middle">arc</text>
+    <rect class="b4" x="805" y="120" width="140" height="46" fill="var(--panel)" stroke="var(--c-disk)" stroke-dasharray="5 4"/>
+    <text class="s4" x="875" y="140" text-anchor="middle">/tmp</text>
+    <text class="s4" x="875" y="157" text-anchor="middle">empty</text>
+  </g>
+
+  <line class="l4" x1="172" y1="143" x2="182" y2="143"/><text class="x4" x="173" y="112">✗</text>
+  <line class="l4" x1="327" y1="143" x2="337" y2="143"/><text class="x4" x="328" y="112">✗</text>
+  <line class="l4" x1="482" y1="143" x2="492" y2="143"/><text class="x4" x="483" y="112">✗</text>
+  <line class="l4" x1="637" y1="143" x2="647" y2="143"/><text class="x4" x="638" y="112">✗</text>
+  <line class="l4" x1="792" y1="143" x2="802" y2="143"/><text class="x4" x="793" y="112">✗</text>
+
+  <rect class="b4" x="30" y="212" width="915" height="76" fill="var(--c-warn-fill)" stroke="var(--c-warn)"/>
+  <text class="t4" x="487" y="238" text-anchor="middle" fill="var(--c-warn)">ENOENT: no such file or directory, mkdir '/var/data'</text>
+  <text class="s4" x="487" y="260" text-anchor="middle">…and if the path were fixed, step 2 would find an empty disk and re-fetch the article,</text>
+  <text class="s4" x="487" y="277" text-anchor="middle">or — worse — find a stale file left over from a previous job on a warm machine.</text>
+</svg>
+</div>
+<figcaption><strong>Diagram 4.</strong> Each step is a separate HTTP request, and on a serverless
+host each request is a separate machine with its own throwaway disk. The step boundary is exactly
+where the article would have to be handed over — and there is nothing to hand it over on.</figcaption>
+</figure>
+
+<div class="callout warn">
+  <span class="title">Why "just point it at <code>/tmp</code>" is worse than the bug</span>
+  <p>Sequential requests often <em>do</em> land on the same warm machine. So imports would succeed in
+  testing and fail unpredictably in use — and when they failed, the step-skipping logic would find no
+  artefacts and silently re-run a step that had already been paid for. <strong>A reliable loud
+  failure would become an intermittent quiet one</strong>, which is strictly the worse trade.</p>
+</div>
+
+<h3>Cause 3 — a finished job publishes nothing</h3>
+
+<p>This is the one that decides the size of the job, and it was missed in the first plan written
+about this. Even with perfectly durable artefacts, a green ingest leaves the production shelf
+unchanged, because the function that publishes a revision is <strong>not called from the pipeline at
+all</strong>. It is called by the importer and by tests. Publication today is a person running a
+command.</p>
+
+<p>So there is no route to working imports that does not also build the publication bridge.</p>
+
+<h3 id="ceiling">The ceiling nobody had measured</h3>
+
+<p>While planning the fix, somebody grouped the recorded model calls into per-article totals. The
+result changed the plan's order:</p>
+
+<table>
+<tr><th>Step</th><th>Calls</th><th>Total</th></tr>
+<tr><td><code>toc</code></td><td>3</td><td><strong>324 seconds</strong></td></tr>
+<tr><td><code>summarise</code></td><td>10</td><td>240 seconds</td></tr>
+<tr><td><code>toc</code> (another article)</td><td>1</td><td>163 seconds</td></tr>
+<tr><td><code>arc</code></td><td>1</td><td>10 seconds</td></tr>
+</table>
+
+<p>The lease was four minutes with a twenty-second margin, so <strong>every step aborted itself at
+220 seconds</strong> — on a laptop too. A 324-second table of contents therefore could not complete
+through a job <em>at all</em>, on any machine. It had only ever succeeded when run directly from the
+command line, which takes no lease.</p>
+
+<p>That was a live bug that predated the whole Vercel question, and fixing it went first: the lease
+is now seven minutes and the platform limit 800 seconds. It is the only stage of the current plan
+that has landed.</p>
+
+<hr>
+
+<h2 id="judgment">Trade-offs, risks and open questions</h2>
+
+<p>This section is written to be read on its own.</p>
+
+<h3 id="decision">The decision that is live right now</h3>
+
+<p>Two plans were written for making imports work. The first proposed giving the pipeline a durable
+artefact store built on the object storage that already works in production. It was reviewed by a
+different model family before anything was built, came back <strong>NO-SHIP</strong> with three
+criticals, and was withdrawn the same day. The criticals are worth knowing because they generalise:</p>
+
+<ol>
+<li><strong>All ten steps still write their own files directly.</strong> So no storage adapter can
+intercept them, whatever you plug in. The plan had written down the condition that should kill it —
+"if most of the ingest path bypasses the seam, this is not a store-adapter job" — and the condition
+was met.</li>
+<li><strong>A finished job doesn't publish</strong>, so durable artefacts alone change nothing a
+reader can see.</li>
+<li><strong>The object store has the wrong semantics.</strong> It is content-addressed and
+create-only; artefacts need mutable, retryable, attempt-fenced generations.</li>
+</ol>
+
+<p>The replacement plan is deliberately smaller and explicitly temporary: <strong>run the whole job
+in one invocation on an injected writable root, and publish by calling the existing importer as a
+real pipeline step.</strong> Five stages, each ending committable. Stage 0 (the time budget) has
+landed; stages 1–5 have not.</p>
+
+<div class="callout key">
+  <span class="title">The trade-off worth having an opinion about</span>
+  <p>The long-term-right answer is to make every step write into a database transaction, delete the
+  importer entirely, and stop having a workbench at all. That is 2–3 weeks and gated on the largest
+  unstarted piece of it.</p>
+  <p>The v1 above works in days and throws away roughly fifteen lines of glue when the real thing
+  lands. Everything expensive it builds — the store-backed identity checks, the injected root, the
+  end-to-end tests, and the <em>position</em> of publication inside the job machinery — survives into
+  the end state.</p>
+  <p><strong>Greg's framing, 2026-08-29:</strong> <em>"Look for simplicity, and getting to a v1 now,
+  while being aware of the long-term-best eventual state and choosing stepping stones towards
+  that."</em></p>
+</div>
+
+<h3 id="risks">The risks, and how bad each one is</h3>
+
+<table>
+<tr><th>Risk</th><th>What it costs</th><th>Where it stands</th></tr>
+<tr><td><strong>Slug identity asks the filesystem</strong></td>
+    <td>The worst one. Three functions on the live path decide "does this slug already exist?" by
+    reading a file. On production that read can never succeed, so every slug reads as free — and a
+    different URL deriving the same slug could be handed an existing article's identity. If it is
+    the same owner's article, the import <em>replaces</em> it and deletes its reader state. Every
+    write reports success.</td>
+    <td>Harmless today only because nothing can be ingested at all. Reachable the moment imports
+    start working. This is why "slug identity asks Postgres" is its own stage, before publication.</td></tr>
+<tr><td><strong>Re-publishing deletes reader state</strong></td>
+    <td>The importer treats <em>the files win</em> as its contract. Re-importing an article whose
+    temporary disk has no comments file deletes the reader's real comments and reinserts nothing.</td>
+    <td>Contained by publishing first ingests only, until the stage that copies the database back
+    onto the disk before a job starts.</td></tr>
+<tr><td><strong>Repeat model spend on retry</strong></td>
+    <td>A retry on a cold machine re-runs everything, including the 5-minute table of contents.
+    Real money.</td>
+    <td>Accepted for v1 and stated rather than discovered. On a warm machine the skip logic resumes
+    real artefacts for free.</td></tr>
+<tr><td><strong>Stop gets slower</strong></td>
+    <td>A cancel arriving at a different machine can't abort the work in flight, so it is read at the
+    next step boundary. Stopping mid-table-of-contents means waiting for it.</td>
+    <td>Acceptable, and said out loud. Stop is two halves: a flag everybody can see, and a local
+    abort that only helps when the runner happens to be here.</td></tr>
+<tr><td><strong>Deleting a user is impossible</strong></td>
+    <td>All seven owner foreign keys refuse deletion while any row is owned. That is inherited from a
+    default rather than chosen.</td>
+    <td>Defensible for a reading library, but it needs an export-and-delete workflow rather than
+    silence. Open.</td></tr>
+<tr><td><strong>Row-level security is deferred</strong></td>
+    <td>Database permissions carry the whole weight of keeping one reader out of another's library.</td>
+    <td>Structurally rather than carefully: the schema is simply not exposed through the public data
+    API, so it cannot be served whatever key is presented. Verified with a real anonymous request,
+    not by reading a settings page.</td></tr>
+<tr><td><strong>The uplink can be the constraint</strong></td>
+    <td>On a slow connection a single large insert blew a two-minute database timeout; the next
+    morning the same import took under two minutes.</td>
+    <td>Known. Measure the upload before blaming the database.</td></tr>
+</table>
+
+<h3 id="open">Open questions worth a product opinion</h3>
+
+<ul>
+<li><strong>Uploaded PDFs get their slug from the filename.</strong> <code>paper.pdf</code> becomes
+<code>paper</code>, then <code>paper-2</code>. <code>document.pdf</code> and
+<code>download.pdf</code> are extremely common and the counters will pile up. The alternative is to
+store under a provisional id and rename from the title once we know it — but renames here are
+expensive for exactly the reasons in the identity model above.</li>
+<li><strong>Canonical URLs aren't read.</strong> Two genuinely different addresses that serve the
+same piece — a syndication, an AMP page, a link shortener — are two articles. The
+<code>&lt;link rel="canonical"&gt;</code> tag is sitting in HTML we already fetch and would close most
+of that gap.</li>
+<li><strong>Should the queue become a library?</strong> A mature Postgres job library was reconsidered
+honestly and rejected again, for a weaker reason than last time: our job records are unusually rich —
+per-step state, a cancellation that must not release the global slot — and would have to exist beside
+the library's own, leaving two sources of truth about the same work. <strong>Revisit when redelivery
+or backoff becomes a requirement rather than a nicety.</strong></li>
+<li><strong>Concurrency 1 is a real product decision, not a limitation.</strong> Raising it doubles
+the spend rate and halves the politeness to publishers, for a single reader adding a handful of
+articles a day. It is changed by editing a database index, not a constant.</li>
+</ul>
+
+<hr>
+
+<h2 id="faq">Common questions</h2>
+
+<details>
+<summary>If reading already works on Postgres, why is importing so much harder?</summary>
+<p>Because reading needed <em>one</em> seam and writing needs ten. There is a single interface that
+answers "give me this article", and pointing it at the database was one implementation behind it.
+There is no equivalent for writing: every step opens a file and writes it, inside its own function.
+Ten stages have to move behind a boundary that has been built and is currently empty.</p>
+</details>
+
+<details>
+<summary>Why does the browser drive the job instead of the server?</summary>
+<p>On a laptop, the server does drive it — there is a loop that keeps a job going after you close the
+tab. On production that loop cannot exist, because it can't outlive the request that created it; all
+it could produce is a job marked running whose owner is already frozen. So the browser is the only
+driver in production, which is what the "advance" endpoint was built for. It is also why the current
+plan's fix is to <em>loop that endpoint server-side</em> until the time budget runs out, rather than
+rewriting the runner.</p>
+</details>
+
+<details>
+<summary>Why polling rather than a live connection?</summary>
+<p>A job is six steps over one or two minutes, so a one-second poll is at worst a second behind
+something that changes every twenty; nobody can tell. What it buys is that the client holds no
+connection: it survives the dev server restarting, it is the same three lines against a serverless
+host, and there is no reconnect logic to get wrong. The failure mode of a dropped live connection is
+a progress panel that quietly stops updating — which looks exactly like a stuck job.</p>
+</details>
+
+<details>
+<summary>What actually happens if the same article is added twice at once?</summary>
+<p>The second request is handed the job already working on that article rather than starting a
+second one. That is also why the add page can be reloaded, bookmarked and shared: reloading picks up
+the same job where it was.</p>
+<p>The claim check consults the stored article <em>and</em> the live queue — because a job that is
+queued has taken a slug and not yet written anything for it. Without that second half, two different
+articles with the same last path segment added within a minute of each other both get the bare slug,
+and the later one is quietly handed the earlier one's job and never happens.</p>
+</details>
+
+<details>
+<summary>Can we run migrations against production safely?</summary>
+<p>Yes, and there is one line to read. The documented command used to migrate <em>the laptop</em>
+while printing <code>✓ migrations applied</code>, because the local environment file is deliberately
+allowed to beat the shell. Four migrations were missing from production for a day because of it, and
+the homepage rendered a failed SQL query in red.</p>
+<p>The migration script now prints a password-stripped <code>Target:</code> line whatever happens.
+Read that line, not the success line. And verify afterwards <em>as the application's own role</em>,
+not as the admin — they are different roles over different connections, and a migration that
+succeeds for one while leaving a table the app cannot see looks identical from the migrator's side.</p>
+</details>
+
+<details>
+<summary>What is the "arc", and why does it join to the tree by range?</summary>
+<p>The arc is one sentence per part of the article saying where the argument stands there — the thing
+that makes a long unstructured essay navigable. It is joined to the table of contents by
+<strong>range of blocks</strong>, never by node id, exactly as the longer summaries are. Node ids are
+regenerated when the tree is re-cut; a range of block ids is stable, because block ids are stable.
+Same principle as everything else: address text by ticket.</p>
+</details>
+
+<hr>
+
+<h2 id="appendix">Appendix</h2>
+
+<h3 id="tables">The tables, and what each is for</h3>
+
+<table>
+<tr><th>Table</th><th>What it holds</th></tr>
+<tr><td><code>articles</code></td><td>One row per article, for as long as it exists. Carries the
+owner and the slug, and points at whichever revision is currently published.</td></tr>
+<tr><td><code>article_revisions</code></td><td>One whole extraction: title, byline, the URLs, the
+fetched bytes' provenance. Goes <code>draft → published</code>, or fails.</td></tr>
+<tr><td><code>block_identities</code></td><td><strong>The spine.</strong> A block id, once minted, is
+never deleted from here.</td></tr>
+<tr><td><code>revision_blocks</code></td><td>A paragraph's text as one revision saw it, plus its
+position and its own full-text search index.</td></tr>
+<tr><td><code>jobs</code>, <code>queue_state</code></td><td>The import queue. A partial unique index
+on <code>jobs</code> is what makes "one at a time" a database fact.</td></tr>
+<tr><td><code>revision_step_runs</code></td><td>Which steps ran against which revision, with what
+inputs, and whether they finished. This is what publication is gated on.</td></tr>
+<tr><td><code>raw_sources</code></td><td>Facts about a stored source document, keyed by its own
+contents — so two readers with the same paper converge on one object.</td></tr>
+<tr><td><code>uploads</code></td><td>One upload attempt's state. Moved off the filesystem first,
+because minting a grant and queueing the job are two requests that may not share a machine.</td></tr>
+<tr><td><code>checkpoints</code></td><td>Work a failed attempt already paid for — transcribed PDF
+pages, half-finished label batches. Keyed on the article and the question, never the revision.</td></tr>
+<tr><td><code>comments</code>, <code>chat_threads</code>, <code>chat_messages</code>,
+<code>search_runs</code>, <code>glossary_lookups</code>, <code>reader_profiles</code></td>
+<td>Everything the reader makes or asks.</td></tr>
+<tr><td><code>ai_calls</code></td><td>Every paid model call, for the spend ledger.</td></tr>
+<tr><td><code>article_visibility_changes</code></td><td>The audit trail for public read-only links.</td></tr>
+</table>
+
+<details>
+<summary>The publication gate, as a truth table</summary>
+<p>A draft revision does not become the published one unless it passes. The interesting row is the
+middle one, and it exists because of a real bug: the guard read the table-of-contents step's input
+hash and never read its <em>status</em>, so a run that ended in error published — and the hash
+matched <em>especially</em> in that case, because a step records its hash when it starts.</p>
+<table>
+<tr><th>Was there a <code>fetch</code> run?</th><th>Rule</th></tr>
+<tr><td>none</td><td>No source requirement — but the no-blocks and no-tree checks still refuse it.</td></tr>
+<tr><td>done</td><td>A reference to the stored source document is required.</td></tr>
+<tr><td>running, or error</td><td>Publication refused outright.</td></tr>
+</table>
+</details>
+
+<h3 id="vocab">Vocabulary</h3>
+
+<table>
+<tr><th>Word</th><th>Means</th></tr>
+<tr><td><strong>slug</strong></td><td>The article's short name in the URL, derived from the last part
+of the address. Globally unique.</td></tr>
+<tr><td><strong>block</strong></td><td>The finest unit a reader takes in as one thing — a paragraph,
+a list item, a heading. Never a container.</td></tr>
+<tr><td><strong>block id</strong></td><td>A random permanent handle like <code>spya-k3m9qt</code>.
+Everything addresses text by these.</td></tr>
+<tr><td><strong>artefact</strong></td><td>A file (or, later, a set of rows) a step produces:
+<code>blocks.json</code>, <code>tree.json</code>.</td></tr>
+<tr><td><strong>the tree</strong></td><td>One structure serving two purposes: rendered as navigation
+it is the table of contents; rendered as text it is the zoomable article. They must never diverge
+into two trees.</td></tr>
+<tr><td><strong>step</strong> / <strong>stage</strong></td><td>Same thing. One station on the line.</td></tr>
+<tr><td><strong>force</strong></td><td>Run a step even though its artefact is there — and everything
+after it.</td></tr>
+<tr><td><strong>stamp</strong></td><td>A step's freshness record: a hash of its inputs, plus the
+prompt version and model id.</td></tr>
+<tr><td><strong>the store</strong></td><td>Whichever of files-or-Postgres the app is pointed at.</td></tr>
+<tr><td><strong>revision</strong></td><td>One extraction of an article. Articles have many; exactly
+one is published.</td></tr>
+</table>
+
+<h3 id="files">Where the code is</h3>
+
+<table>
+<tr><th>File</th><th>What it decides</th></tr>
+<tr><td><code>src/pipeline.ts</code></td><td>The ten steps, as data. The only place that knows the
+pipeline's order.</td></tr>
+<tr><td><code>src/jobs.ts</code></td><td>The queue, the claim, the lease, and what a retry forces.</td></tr>
+<tr><td><code>src/ingest.ts</code></td><td>What an article gets called, and whether that name is safe
+to join onto a path.</td></tr>
+<tr><td><code>src/db/schema.ts</code></td><td>The tables, in TypeScript. The source of truth; the
+migrations are generated from it.</td></tr>
+<tr><td><code>src/store/contracts.ts</code></td><td>The read seam — the interface both stores
+implement.</td></tr>
+<tr><td><code>src/store/index.ts</code></td><td>Which store is in use. No fallback lives here, by
+design.</td></tr>
+<tr><td><code>src/store/import.ts</code> / <code>export.ts</code></td><td>The importer, and the
+exporter that is its rollback.</td></tr>
+<tr><td><code>src/store/session.ts</code></td><td>The commit boundary a step's product will one day
+go through. Landed empty on purpose, so the stages can move behind it one at a time.</td></tr>
+</table>
+
+<h3 id="docs">Where to read more</h3>
+
+<ul>
+<li><code>docs/project/architecture.md</code> — the pipeline stage by stage, and who owns each one</li>
+<li><code>docs/project/ingest-queue.md</code> — the queue in full, including every failure mode</li>
+<li><code>docs/project/database.md</code> — the Postgres move: roles, connections, and the traps that
+turn a five-minute job into an afternoon</li>
+<li><code>docs/project/block-ids.md</code> — the contract everything else depends on</li>
+<li><code>docs/plans/v1-imports-on-vercel.md</code> — the live plan, and its own kill-checks</li>
+<li><code>docs/plans/delete-the-importer.md</code> — the long-term-best end state</li>
+<li><code>docs/reusable/silent-success.md</code> — the failure mode this codebase is organised
+around</li>
+</ul>
+
+</body>
+</html>

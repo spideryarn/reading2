@@ -75,6 +75,9 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
   the reasoning and the evidence survive.
 - **`docs/postmortems/`** — one file per bug worth understanding: the real root cause, the commit
   that introduced it, the fix that's right for the long term, and what would have caught the class.
+- **`docs/tutorials/`** — self-contained HTML explainers of how one area works, written for somebody
+  who has never read the code — [reusable/write-tutorial.md](docs/reusable/write-tutorial.md) is how
+  to write one.
 - **`docs/research/`** — the working behind a decision: the options weighed, the sources, the dead
   ends. A plan says what we're doing; a research doc says what else we could have done and why not.
 - **[`docs/reusable/`](docs/reusable/README.md)** — notes that aren't about this project and are
