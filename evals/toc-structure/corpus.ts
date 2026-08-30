@@ -36,6 +36,15 @@ export interface CorpusEntry {
   /** sha256 of blocks.json as measured when this entry was written. */
   sha256: string;
   role: "dev" | "heldout" | "duplicate" | "fixture";
+  /**
+   * Gistable body blocks of one word or less — stage 3's inline-promotion
+   * artefacts, a second confound found AFTER these documents were chosen
+   * (2026-08-30, the read.html postmortem). Recorded rather than re-picked:
+   * the pollution is real data about real articles, and without the count a
+   * later reader cannot tell an arm that handled a messy article from one
+   * that got a clean one. scoreTree carries the same number on every row.
+   */
+  fragments: number;
   /** Part of the phase-2 noise panel (incumbent x4). Dev docs only. */
   calibration?: boolean;
   /** For duplicates: the canonical slug whose document this repeats. */
@@ -47,6 +56,7 @@ export interface CorpusEntry {
 export const CORPUS: readonly CorpusEntry[] = [
   {
     slug: "constitution",
+    fragments: 1,
     dir: "data/constitution",
     sha256: "58dd654c87248ce4fc966ad83074b7b6cdaf6569e36ae477e09d28803afdec5f",
     role: "dev",
@@ -55,6 +65,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "fowler-phrenology",
+    fragments: 3,
     dir: "data/fowler-phrenology",
     sha256: "b9fa248d7fe9c4f141afe3fed09fc9de2706be8af7f7ebc2aa5f319f36bbcf4b",
     role: "dev",
@@ -63,6 +74,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "noema-mythology-of-conscious-ai",
+    fragments: 0,
     dir: "data/noema-mythology-of-conscious-ai",
     sha256: "2b755acf95c4a1dc6dac7b0fbcc40df6465bb2ca3da2203624caec12ab446255",
     role: "dev",
@@ -70,6 +82,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "revistes-ub-30977",
+    fragments: 1,
     dir: "data/revistes-ub-30977",
     sha256: "63a6fbb537437fca6d6524655b7bcdde8f08f2a324af487cbd2bbc5ce21ce66c",
     role: "dev",
@@ -77,6 +90,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "scaling-hypothesis",
+    fragments: 6,
     dir: "data/scaling-hypothesis",
     sha256: "9678ff8ed6375fdc4eabc27bb8e8d5d8b9baa121a7e2c798d85b104d5286f2db",
     role: "dev",
@@ -84,6 +98,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+    fragments: 1,
     dir: "data/what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
     sha256: "34c07e328524f4d0760bd8624c29327107e1fb201206789a3b9f650416c57706",
     role: "dev",
@@ -91,6 +106,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "writes",
+    fragments: 0,
     dir: "data/writes",
     sha256: "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
     role: "dev",
@@ -104,6 +120,7 @@ export const CORPUS: readonly CorpusEntry[] = [
      whole value of holding them out. */
   {
     slug: "greatwork",
+    fragments: 89,
     dir: "data/greatwork",
     sha256: "282a0abaa783337ba67f685793ca9bf635f5cef5c113da3594891c52b336a6c2",
     role: "heldout",
@@ -111,6 +128,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "meditations-on-moloch",
+    fragments: 8,
     dir: "data/meditations-on-moloch",
     sha256: "27ee9412affd8770b91d7ddd0e210a9a7a05d744c65c76b3a92610c2c078701d",
     role: "heldout",
@@ -118,6 +136,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "consciousness",
+    fragments: 24,
     dir: "data/consciousness",
     sha256: "1305baf2f48fc7b39a993464152bf524fd9193f867103f81d662888feb759fe7",
     role: "heldout",
@@ -125,6 +144,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "spaced-repetition",
+    fragments: 18,
     dir: "data/spaced-repetition",
     sha256: "bbdadbfc0b26064e91be6e9344bb210be38f4057740bef073d113509dd9e6087",
     role: "heldout",
@@ -132,6 +152,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "arxiv-2308",
+    fragments: 8,
     dir: "data/arxiv-2308",
     sha256: "dbda9f7300172c5772460cb0167db15302cf1e72994d46d6bbc05c90e802a33d",
     role: "heldout",
@@ -139,6 +160,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "source",
+    fragments: 1,
     dir: "data/source",
     sha256: "d0671bf3ea34b00293c892cfa369e7803c14d89e7047c4e27c097e8efe20c4cf",
     role: "duplicate",
@@ -147,6 +169,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "source-2",
+    fragments: 1,
     dir: "data/source-2",
     sha256: "d69af507437380c5fb5cae0074e029dea4c476322f855f647e7d7d5c93ac1fff",
     role: "duplicate",
@@ -155,6 +178,7 @@ export const CORPUS: readonly CorpusEntry[] = [
   },
   {
     slug: "example",
+    fragments: 0,
     dir: "example",
     sha256: "7589dc3e354769e43c180802dc199e03b1b028c0fe005aed653ac3d6e0681205",
     role: "fixture",

@@ -58,6 +58,15 @@ export interface StructureScore {
   blocks: number;
   bodyBlocks: number;
   headingBlocks: number;
+  /**
+   * Gistable body blocks of one word or less — stage 3's inline-promotion
+   * artefacts (Wikipedia's "[edit]" links, a bold "Notes", a section numeral
+   * promoted to a block). The ARTICLE's fact, not the tree's, recorded per
+   * row so a later reader can tell an arm that handled a messy document from
+   * one that got a clean one: 13 of 15 corpus articles carry at least one,
+   * and greatwork carries 89 (found 2026-08-30, the read.html postmortem).
+   */
+  fragmentBlocks: number;
 
   /**
    * `checkTree`, split in two — because the free heading arm cannot produce
@@ -365,6 +374,7 @@ export function scoreTree(blocks: Block[], tree: Tree): StructureScore {
     blocks: blocks.length,
     bodyBlocks: bodyBlocks.length,
     headingBlocks: headingIdx.size,
+    fragmentBlocks: bodyBlocks.filter((b) => b.gistable && b.words <= 1).length,
     validity: {
       gistProblems,
       otherProblems: check.problems.length,

@@ -35,7 +35,7 @@ import type { Block, Tree } from "../../src/types.js";
 import { ARMS, armByName, type ArmSpec, type Comparison } from "./arms.js";
 import { defaultCorpus, entryForDir } from "./corpus.js";
 import { buildHeadingTree } from "./heading-tree.js";
-import { runModelArm, type CallStats } from "./model-arms.js";
+import { ArmFailure, runModelArm, type CallStats } from "./model-arms.js";
 import { compareTrees, scoreTree, type StructureScore, type TreeAgreement } from "./score.js";
 
 interface Article {
@@ -60,12 +60,22 @@ interface ArmResult {
   run: number;
   callOrder: number;
   /**
+   * `"threw"` means the recipe spent its money and produced nothing — a
+   * legitimate outcome at a measured ~1-in-5 per structure call, recorded
+   * rather than retried: a floor over the surviving runs alone would be the
+   * variance of the survivors, which is a selection effect. The wasted calls
+   * stay on the arm's cost and latency.
+   */
+  outcome: "ok" | "threw";
+  error?: string;
+  /**
    * What was actually measured. `data/` is gitignored and regenerates, so a
    * results file that only named a slug would name bytes nothing can recover;
    * a mismatch against the manifest is printed at run time and recorded here.
    */
   blocksSha256: { measured: string; manifest: string | null; matchesManifest: boolean | null };
-  score: StructureScore;
+  /** Absent on a threw row: there is no tree to score. */
+  score?: StructureScore;
   /** What this arm chose, where that is a fact worth keeping (headings arm). */
   sectionLevel?: number | null;
   flat?: boolean;
@@ -156,7 +166,14 @@ async function loadArticle(dir: string): Promise<Article> {
 async function treeFor(
   arm: ArmSpec,
   article: Article,
-): Promise<{ tree: Tree; sectionLevel?: number | null; flat?: boolean; calls?: CallStats[] }> {
+): Promise<{
+  tree?: Tree;
+  sectionLevel?: number | null;
+  flat?: boolean;
+  calls?: CallStats[];
+  /** Set when a model arm spent its money and produced nothing. */
+  threw?: string;
+}> {
   switch (arm.kind) {
     case "headings": {
       const built = buildHeadingTree(article.blocks, article.slug, article.title);
@@ -169,11 +186,20 @@ async function treeFor(
       return { tree: article.diskTree };
     }
     default: {
-      /* Executor failures propagate — loud on purpose. A runner that skipped
-         an arm it cannot run would produce a results file that reads exactly
-         like that arm scoring nothing — docs/reusable/silent-success.md. */
-      const run = await runModelArm(arm, article.blocks, article.slug);
-      return { tree: run.tree, calls: run.calls };
+      /* An ArmFailure is a recipe's own outcome — "spent the money, produced
+         nothing" — recorded as a row so the floor covers the recipe rather
+         than the survivors. Anything else (a config error, a dead network)
+         still crashes the run: a harness fault recorded as an arm outcome
+         would blame the arm for the bench. */
+      try {
+        const run = await runModelArm(arm, article.blocks, article.slug);
+        return { tree: run.tree, calls: run.calls };
+      } catch (err) {
+        if (err instanceof ArmFailure) {
+          return { threw: err.message, calls: err.calls };
+        }
+        throw err;
+      }
     }
   }
 }
@@ -182,6 +208,18 @@ const pct = (x: number | null): string => (x === null ? "   —" : `${(x * 100).
 const num = (x: number, dp = 2): string => x.toFixed(dp);
 
 function print(r: ArmResult): void {
+  if (r.outcome === "threw" || !r.score) {
+    console.log(`\n${r.slug}  [${r.arm}${r.run > 1 ? ` r${r.run}` : ""}]  (${r.comparison})`);
+    console.log("─".repeat(Math.max(8, r.slug.length + r.arm.length + 4)));
+    console.log(`  THREW         ${r.error ?? "(no message)"}`);
+    if (r.calls?.length) {
+      const spent = r.calls.reduce((n, c) => n + (c.costUsd ?? 0), 0);
+      console.log(
+        `  paid anyway   ${r.calls.length} call(s), $${spent.toFixed(4)} — the wasted call stays on this arm's bill`,
+      );
+    }
+    return;
+  }
   const s = r.score;
   /* **Arm-aware, and the first version was not.** It said "expected for the
      free arm" about any gistless tree, whoever built it — so a paid arm that
@@ -232,6 +270,9 @@ function print(r: ArmResult): void {
   console.log(
     `  no-heading    longest run ${s.headings.longestHeadinglessRun.blocks} blocks ` +
       `(${s.headings.longestHeadinglessRun.words} words) — the article's fact, not the tree's`,
+  );
+  console.log(
+    `  fragments     ${s.fragmentBlocks} gistable one-word block(s) (stage-3 promotion artefacts)`,
   );
   console.log(
     `  titles        ${s.titles.count} (${s.titles.copiedHeadings} copied headings), ` +
@@ -383,8 +424,8 @@ async function main(): Promise<void> {
   for (let run = 1; run <= repeat; run++) {
     for (const article of articles) {
       for (const arm of arms) {
-        const { tree, ...chose } = await treeFor(arm, article);
-        const result: ArmResult = {
+        const { tree, threw, ...chose } = await treeFor(arm, article);
+        const shared = {
           arm: arm.name,
           comparison: arm.comparison,
           slug: article.slug,
@@ -397,24 +438,44 @@ async function main(): Promise<void> {
               ? article.manifestSha256 === article.measuredSha256
               : null,
           },
-          score: scoreTree(article.blocks, tree),
-          ...chose,
-          /* Only when the tree being scored is not itself the disk tree —
-             comparing a tree with itself would print a row of 100%s that reads
-             like a finding. */
-          ...(arm.kind !== "disk" && article.diskTree
-            ? { vsDisk: compareTrees(article.blocks, tree, article.diskTree) }
-            : {}),
         };
-        /* Every arm's tree is preserved, the disk arm's included — data/ is
-           gitignored and regenerates, so the copy here is the only one a later
-           reader can rely on existing. */
-        const suffix = repeat > 1 ? `.r${run}` : "";
-        await writeFile(
-          path.join(runDir, "trees", `${arm.name}.${article.slug}${suffix}.json`),
-          `${JSON.stringify(tree, null, 2)}\n`,
-          "utf-8",
-        );
+        /* Field-by-field spreads, for exactOptionalPropertyTypes: an optional
+           key must be absent, never present-and-undefined. */
+        const optional = {
+          ...(chose.sectionLevel !== undefined ? { sectionLevel: chose.sectionLevel } : {}),
+          ...(chose.flat !== undefined ? { flat: chose.flat } : {}),
+          ...(chose.calls ? { calls: chose.calls } : {}),
+        };
+        const result: ArmResult = tree
+          ? {
+              ...shared,
+              outcome: "ok",
+              score: scoreTree(article.blocks, tree),
+              ...optional,
+              /* Only when the tree being scored is not itself the disk tree —
+                 comparing a tree with itself would print a row of 100%s that
+                 reads like a finding. */
+              ...(arm.kind !== "disk" && article.diskTree
+                ? { vsDisk: compareTrees(article.blocks, tree, article.diskTree) }
+                : {}),
+            }
+          : {
+              ...shared,
+              outcome: "threw",
+              ...(threw !== undefined ? { error: threw } : {}),
+              ...optional,
+            };
+        if (tree) {
+          /* Every arm's tree is preserved, the disk arm's included — data/ is
+             gitignored and regenerates, so the copy here is the only one a
+             later reader can rely on existing. */
+          const suffix = repeat > 1 ? `.r${run}` : "";
+          await writeFile(
+            path.join(runDir, "trees", `${arm.name}.${article.slug}${suffix}.json`),
+            `${JSON.stringify(tree, null, 2)}\n`,
+            "utf-8",
+          );
+        }
         runFile.results.push(result);
         await checkpoint();
         print(result);

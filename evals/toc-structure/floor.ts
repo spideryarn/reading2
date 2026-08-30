@@ -30,7 +30,9 @@ interface RunLike {
     arm: string;
     slug: string;
     run: number;
-    score: StructureScore;
+    outcome?: "ok" | "threw";
+    error?: string;
+    score?: StructureScore;
     calls?: { ms: number; costUsd: number | null }[];
   }[];
 }
@@ -80,12 +82,23 @@ async function main(): Promise<void> {
     for (const arm of arms) {
       const repeats = rows.filter((r) => r.arm === arm).sort((a, b) => a.run - b.run);
       if (repeats.length < 2) continue;
+      /* The throw rate comes FIRST: a floor computed over the surviving runs
+         alone is the variance of the survivors, and an arm that fails a fifth
+         of its attempts is not better for carving consistently when it does
+         not. Roughly 1-in-5 measured on HEAD, 2026-08-30. */
+      const scored = repeats.filter((r) => r.outcome !== "threw" && r.score);
+      const threw = repeats.length - scored.length;
 
-      console.log(`\n${slug}  [${arm}] × ${repeats.length}`);
+      console.log(`\n${slug}  [${arm}] — ${repeats.length} attempts, ${threw} threw`);
       console.log("─".repeat(slug.length + arm.length + 8));
+      if (threw > 0) {
+        for (const r of repeats.filter((x) => x.outcome === "threw")) {
+          console.log(`  r${r.run} THREW: ${(r.error ?? "").slice(0, 90)}`);
+        }
+      }
       for (const [name, read] of Object.entries(MEASURES)) {
-        const values = repeats
-          .map((r) => read(r.score))
+        const values = scored
+          .map((r) => read(r.score!))
           .filter((v): v is number => v !== null);
         if (values.length < 2) continue;
         const lo = Math.min(...values);
@@ -113,22 +126,32 @@ async function main(): Promise<void> {
         await readFile(blocksPathFor(runDir, slug), "utf-8"),
         "blocks.json",
       );
-      const trees: Tree[] = [];
-      for (const r of repeats) {
-        const suffix = repeats.length > 1 ? `.r${r.run}` : "";
-        trees.push(
-          parseJsonFrom<Tree>(
-            await readFile(path.join(runDir, "trees", `${arm}.${slug}${suffix}.json`), "utf-8"),
-            "tree",
-          ),
-        );
+      /* Only the runs that produced a tree have one to compare; the thrown
+         attempts are already on the record above. A tree file may carry an
+         .rN suffix (a --repeat run) or not (a single run) — try both. */
+      const trees: { run: number; tree: Tree }[] = [];
+      for (const r of scored) {
+        for (const name of [`${arm}.${slug}.r${r.run}.json`, `${arm}.${slug}.json`]) {
+          try {
+            trees.push({
+              run: r.run,
+              tree: parseJsonFrom<Tree>(
+                await readFile(path.join(runDir, "trees", name), "utf-8"),
+                "tree",
+              ),
+            });
+            break;
+          } catch {
+            // Try the other spelling.
+          }
+        }
       }
       const pairs: string[] = [];
       for (let i = 0; i < trees.length; i++) {
         for (let j = i + 1; j < trees.length; j++) {
-          const a = compareTrees(blocks, trees[i]!, trees[j]!);
+          const a = compareTrees(blocks, trees[i]!.tree, trees[j]!.tree);
           pairs.push(
-            `r${repeats[i]!.run}~r${repeats[j]!.run}: L1 ${(a.l1Boundaries * 100).toFixed(0)}% ` +
+            `r${trees[i]!.run}~r${trees[j]!.run}: L1 ${(a.l1Boundaries * 100).toFixed(0)}% ` +
               `all ${(a.allBoundaries * 100).toFixed(0)}%` +
               (a.boundaryDistance
                 ? ` ±1blk ${(a.boundaryDistance.within1Block * 100).toFixed(0)}%`
@@ -136,7 +159,7 @@ async function main(): Promise<void> {
           );
         }
       }
-      console.log(`  ${"tree agreement".padEnd(22)} ${pairs.join("   ")}`);
+      if (pairs.length > 0) console.log(`  ${"tree agreement".padEnd(22)} ${pairs.join("   ")}`);
     }
   }
   console.log(

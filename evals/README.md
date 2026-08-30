@@ -336,7 +336,11 @@ rather than printing a zero (`assertCallAccounted`, model-arms.ts). Then, after 
 `verify-costs.ts` asks OpenRouter's generation endpoint about every stored generation id — the
 provider's own number, not our arithmetic — writes the answers into `run.json`, and exits non-zero
 on any disagreement over 10% or any call the provider has no record of. **A run is not quotable
-until it passes.** The reconciliation is its own GET-only file because the spend scan rightly
+until it passes.** (The 10% band is a judgement call, not a discovered constant: the failures it
+exists for — a zero, a dropped field, a different call's figure — miss by orders of magnitude,
+while legitimate drift (rounding on sub-cent calls, billing lag) stays in single digits; 1% would
+false-alarm on rounding, and a band wide enough to pass a halved cost would defeat the point. If
+the verifier cannot find a record, fix the id, never the threshold.) The reconciliation is its own GET-only file because the spend scan rightly
 forbids a raw fetch inside a declared-bypass file. All of this exists because the observer seam
 maps Messages-shaped usage into OpenRouter-shaped rows, and the failure mode of that mapping is a
 cost landing as zero, silently — a free-looking arm someone quotes in three months.

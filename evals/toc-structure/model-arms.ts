@@ -90,6 +90,16 @@ export function assertCallAccounted(stats: CallStats, label: string): void {
     );
   }
   if (stats.costUsd !== null && stats.providerCostUsd !== null) {
+    /* 10% is a JUDGEMENT CALL, not a discovered constant, and here is the
+       judgement: the failures this check exists for — a zero, a mapping that
+       dropped the field, a figure about a different call — miss by orders of
+       magnitude or by everything, while legitimate drift between the in-band
+       figure and the generation record (rounding on a sub-cent call, billing
+       lag, a cache-pricing detail settling) stays in single-digit percent. A
+       1% band would false-alarm on rounding noise for the smallest calls;
+       anything wide enough to pass a halved cost would defeat the point. If
+       the band ever needs moving, move it in the open — fix the id or the
+       mapping, never the threshold, when the verifier cannot find a record. */
     const gap = Math.abs(stats.costUsd - stats.providerCostUsd) / Math.max(stats.providerCostUsd, 1e-9);
     if (gap > 0.1) {
       throw new Error(
@@ -115,6 +125,25 @@ export function assertCallAccounted(stats: CallStats, label: string): void {
 export interface ModelArmRun {
   tree: Tree;
   calls: CallStats[];
+}
+
+/**
+ * **A throw with the bill attached.** Roughly one structure call in five
+ * returns a tree whose children do not tile (measured on HEAD, 2026-08-30 —
+ * the postmortem agent's finding, reproduced by this eval's own fourth
+ * calibration call), and "produced nothing" is a legitimate outcome of the
+ * recipe, not an accident to retry past: a calibration that retried and
+ * measured the survivors would understate the floor by a selection effect,
+ * and the wasted calls belong on the arm's cost and latency. So an executor
+ * failure after money was spent carries the completed calls' stats out with
+ * it, and the runner records the cell as `outcome: "threw"` and continues.
+ */
+export class ArmFailure extends Error {
+  readonly calls: CallStats[];
+  constructor(message: string, calls: CallStats[]) {
+    super(message);
+    this.calls = calls;
+  }
 }
 
 /* ------------------------------------------------------------- the seams -- */
@@ -463,7 +492,7 @@ async function runWaves(
   };
   const send = senderFor(arm.call.model);
   const calls: CallStats[] = [];
-
+  try {
   // Wave 1: the whole article, chapters only.
   const base = structureRequest(body);
   const l1 = await send({
@@ -532,6 +561,10 @@ async function runWaves(
   }
 
   return { tree: assembleTree(root, blocks, slug), calls };
+  } catch (err) {
+    // The bill travels with the failure — see ArmFailure.
+    throw err instanceof ArmFailure ? err : new ArmFailure((err as Error).message, calls);
+  }
 }
 
 /** Cheap proposes with production's prompt; capable revises with the draft in hand. */
@@ -540,27 +573,32 @@ async function runRevise(
   blocks: Block[],
   slug: string,
 ): Promise<ModelArmRun> {
-  const { body } = splitBlocks(blocks);
-  const base = structureRequest(body);
-  const proposal = await senderFor(arm.propose.model)({
-    call: arm.propose,
-    system: base.system,
-    user: base.user,
-    maxTokens: base.maxTokens,
-  });
-  /* The draft is passed on as the model wrote it (fence stripped). It is NOT
-     validated first: a draft the reviser has to repair is precisely the
-     strategy under test, and pre-filtering it would measure a kinder one. */
-  const revised = await senderFor(arm.revise.model)({
-    call: arm.revise,
-    system: base.system + REVISE_ADDENDUM,
-    user: `${base.user}\n\nDRAFT:\n${stripFence(proposal.raw)}`,
-    maxTokens: base.maxTokens,
-  });
-  return {
-    tree: parseStructureResponse(revised.raw, blocks, slug),
-    calls: [proposal.stats, revised.stats],
-  };
+  const calls: CallStats[] = [];
+  try {
+    const { body } = splitBlocks(blocks);
+    const base = structureRequest(body);
+    const proposal = await senderFor(arm.propose.model)({
+      call: arm.propose,
+      system: base.system,
+      user: base.user,
+      maxTokens: base.maxTokens,
+    });
+    calls.push(proposal.stats);
+    /* The draft is passed on as the model wrote it (fence stripped). It is NOT
+       validated first: a draft the reviser has to repair is precisely the
+       strategy under test, and pre-filtering it would measure a kinder one. */
+    const revised = await senderFor(arm.revise.model)({
+      call: arm.revise,
+      system: base.system + REVISE_ADDENDUM,
+      user: `${base.user}\n\nDRAFT:\n${stripFence(proposal.raw)}`,
+      maxTokens: base.maxTokens,
+    });
+    calls.push(revised.stats);
+    return { tree: parseStructureResponse(revised.raw, blocks, slug), calls };
+  } catch (err) {
+    // The bill travels with the failure — see ArmFailure.
+    throw err instanceof ArmFailure ? err : new ArmFailure((err as Error).message, calls);
+  }
 }
 
 /* ------------------------------------------------------------ the dispatch */
@@ -587,7 +625,14 @@ export async function runModelArm(
         user: `${user}${seed}`,
         maxTokens,
       });
-      return { tree: parseStructureResponse(raw, blocks, slug), calls: [stats] };
+      try {
+        return { tree: parseStructureResponse(raw, blocks, slug), calls: [stats] };
+      } catch (err) {
+        /* The call succeeded and the answer failed the pipeline's rules — a
+           tiling gap, an invented id. The money is spent and the outcome is
+           "produced nothing"; both travel with the failure. See ArmFailure. */
+        throw new ArmFailure((err as Error).message, [stats]);
+      }
     }
     case "waves":
       return runWaves(arm, blocks, slug);
