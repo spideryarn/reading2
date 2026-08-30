@@ -56,6 +56,9 @@ interface ArmResult {
   /** What kind of claim this arm's numbers can support — from arms.ts. */
   comparison: Comparison;
   slug: string;
+  /** Which repeat this is (1-based) and where in the whole run's call order it sat. */
+  run: number;
+  callOrder: number;
   /**
    * What was actually measured. `data/` is gitignored and regenerates, so a
    * results file that only named a slug would name bytes nothing can recover;
@@ -166,10 +169,9 @@ async function treeFor(
       return { tree: article.diskTree };
     }
     default: {
-      /* The executor's own PendingError propagates from here while the
-         transports are unarmed — loud on purpose. A runner that skipped the
-         arms it cannot run would produce a results file that reads exactly
-         like those arms scoring nothing — docs/reusable/silent-success.md. */
+      /* Executor failures propagate — loud on purpose. A runner that skipped
+         an arm it cannot run would produce a results file that reads exactly
+         like that arm scoring nothing — docs/reusable/silent-success.md. */
       const run = await runModelArm(arm, article.blocks, article.slug);
       return { tree: run.tree, calls: run.calls };
     }
@@ -187,7 +189,7 @@ function print(r: ArmResult): void {
      headings arm is structurally unable to write gists; for every other arm a
      missing gist is damage. GPT Sol, 2026-08-30. */
   const gistless = armByName(r.arm).kind === "headings";
-  console.log(`\n${r.slug}  [${r.arm}]  (${r.comparison})`);
+  console.log(`\n${r.slug}  [${r.arm}${r.run > 1 ? ` r${r.run}` : ""}]  (${r.comparison})`);
   console.log("─".repeat(Math.max(8, r.slug.length + r.arm.length + 4)));
   if (r.blocksSha256.matchesManifest === false) {
     console.log(
@@ -306,11 +308,15 @@ async function main(): Promise<void> {
   const armNames: string[] = [];
   const dirs: string[] = [];
   let wantSensitivity = false;
+  let repeat = 1;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--arm") {
       const name = args[++i];
       if (!name) throw new Error("--arm needs a name");
       armNames.push(name);
+    } else if (args[i] === "--repeat") {
+      repeat = Number(args[++i]);
+      if (!Number.isInteger(repeat) || repeat < 1) throw new Error("--repeat needs a positive integer");
     } else if (args[i] === "--sensitivity") {
       wantSensitivity = true;
     } else if (args[i] === "--list") {
@@ -324,7 +330,7 @@ async function main(): Promise<void> {
   }
   if (armNames.length === 0 && !wantSensitivity) {
     console.error(
-      "Usage: npm run eval:toc-structure -- --arm <name> [--arm <name>…] [--sensitivity] [dir…]\n" +
+      "Usage: npm run eval:toc-structure -- --arm <name> [--arm <name>…] [--repeat <n>] [--sensitivity] [dir…]\n" +
         `Arms: ${ARMS.map((a) => a.name).join(", ")}   (--list to see kinds)\n` +
         "With no dirs, the committed corpus manifest (corpus.ts) decides what is scored.",
     );
@@ -367,41 +373,52 @@ async function main(): Promise<void> {
   const checkpoint = async () =>
     writeFile(path.join(runDir, "run.json"), `${JSON.stringify(runFile, null, 2)}\n`, "utf-8");
 
-  for (const dir of articleDirs) {
-    const article = await loadArticle(dir);
-    for (const arm of arms) {
-      const { tree, ...chose } = await treeFor(arm, article);
-      const result: ArmResult = {
-        arm: arm.name,
-        comparison: arm.comparison,
-        slug: article.slug,
-        blocksSha256: {
-          measured: article.measuredSha256,
-          manifest: article.manifestSha256,
-          matchesManifest: article.manifestSha256
-            ? article.manifestSha256 === article.measuredSha256
-            : null,
-        },
-        score: scoreTree(article.blocks, tree),
-        ...chose,
-        /* Only when the tree being scored is not itself the disk tree —
-           comparing a tree with itself would print a row of 100%s that reads
-           like a finding. */
-        ...(arm.kind !== "disk" && article.diskTree
-          ? { vsDisk: compareTrees(article.blocks, tree, article.diskTree) }
-          : {}),
-      };
-      /* Every arm's tree is preserved, the disk arm's included — data/ is
-         gitignored and regenerates, so the copy here is the only one a later
-         reader can rely on existing. */
-      await writeFile(
-        path.join(runDir, "trees", `${arm.name}.${article.slug}.json`),
-        `${JSON.stringify(tree, null, 2)}\n`,
-        "utf-8",
-      );
-      runFile.results.push(result);
-      await checkpoint();
-      print(result);
+  /* Loaded once, then repeats INTERLEAVED — doc1 r1, doc2 r1, doc3 r1, doc1
+     r2, … — and the call order persisted per result, so a drift over the
+     minutes of a run (a provider warming a cache, a rate limiter engaging)
+     lands across every document's repeats rather than inside one document's. */
+  const articles = [];
+  for (const dir of articleDirs) articles.push(await loadArticle(dir));
+  let callOrder = 0;
+  for (let run = 1; run <= repeat; run++) {
+    for (const article of articles) {
+      for (const arm of arms) {
+        const { tree, ...chose } = await treeFor(arm, article);
+        const result: ArmResult = {
+          arm: arm.name,
+          comparison: arm.comparison,
+          slug: article.slug,
+          run,
+          callOrder: ++callOrder,
+          blocksSha256: {
+            measured: article.measuredSha256,
+            manifest: article.manifestSha256,
+            matchesManifest: article.manifestSha256
+              ? article.manifestSha256 === article.measuredSha256
+              : null,
+          },
+          score: scoreTree(article.blocks, tree),
+          ...chose,
+          /* Only when the tree being scored is not itself the disk tree —
+             comparing a tree with itself would print a row of 100%s that reads
+             like a finding. */
+          ...(arm.kind !== "disk" && article.diskTree
+            ? { vsDisk: compareTrees(article.blocks, tree, article.diskTree) }
+            : {}),
+        };
+        /* Every arm's tree is preserved, the disk arm's included — data/ is
+           gitignored and regenerates, so the copy here is the only one a later
+           reader can rely on existing. */
+        const suffix = repeat > 1 ? `.r${run}` : "";
+        await writeFile(
+          path.join(runDir, "trees", `${arm.name}.${article.slug}${suffix}.json`),
+          `${JSON.stringify(tree, null, 2)}\n`,
+          "utf-8",
+        );
+        runFile.results.push(result);
+        await checkpoint();
+        print(result);
+      }
     }
   }
 

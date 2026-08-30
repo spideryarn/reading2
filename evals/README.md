@@ -248,6 +248,17 @@ without it the constitution grows a 6-word title part, and scaling-hypothesis a 
 part and three trailing furniture parts. `heading-tree.ts` has the reasoning and the failure it
 keeps (fowler).
 
+**The 20 was fitted to this corpus — and `--sensitivity` shows it sits on a plateau.** Thresholds
+of 10, 20 and 40 words produce *identical carvings on all seven dev documents*; only 0 (no merging
+at all) differs. So the constant is not knife-edged: anywhere in a broad band gives the same
+trees, which is the difference between a tuned number and a discovered one. Both sentences belong
+together — "fitted" alone overstates the fragility, "plateau" alone hides where it came from.
+
+(Operational note, 2026-08-30: nine test files once went red at load average 187 — several agents
+running suites concurrently — because importing src/toc.js took 22 seconds and 5s-default timeouts
+fired en masse. If you see many unrelated suites time out at once, check `uptime` before
+concluding your change broke something.)
+
 ### What it measures
 
 Mechanical proxies, per (blocks, tree); none is "is this a good tree". Validity (`checkTree`,

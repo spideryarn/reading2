@@ -30,9 +30,11 @@
  * generation endpoint answers to, and Luna's treatment of `max_tokens` vs
  * `max_completion_tokens` (both are sent; providers ignore unknowns silently).
  *
- * The `waves` and `cheap-then-revise` strategies still throw `PENDING`: their
- * prompts are new design, waiting on the phase-2 design relay so they are
- * written once rather than twice.
+ * The `waves` and `cheap-then-revise` strategies are governed by one rule
+ * (the team lead's, 2026-08-30): hold constant everything the arm is not
+ * about. Both reuse production's SYSTEM verbatim and append a scoped
+ * addendum; every delta is documented in the arm's own `deltas` declaration
+ * (arms.ts), so a reader of the results knows exactly what varied.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -117,12 +119,6 @@ export interface ModelArmRun {
 
 /* ------------------------------------------------------------- the seams -- */
 
-/**
- * Thrown by the two functions below. `run.ts` lets it propagate — a runner
- * that caught it and moved on would write a results file in which these arms
- * scored nothing, which reads identically to these arms being worthless.
- */
-export class PendingError extends Error {}
 
 /** The one Messages-wire request this eval makes. Body is Anthropic's Messages shape. */
 export type MessagesSend = (req: {
@@ -360,17 +356,13 @@ export function renderSeedProposal(blocks: Block[], slug: string): string {
 }
 
 /**
- * A model's raw answer, turned into the same artefact the pipeline stores:
- * fence stripped, JSON parsed, leaves grown mechanically, supplement appended,
- * invariants asserted. Reusing `buildTree` is the point — an arm judged on a
- * tree assembled by different code is being judged partly on that code.
+ * A proposed root, turned into the same artefact the pipeline stores: leaves
+ * grown mechanically, supplement appended, invariants asserted. Reusing
+ * `buildTree` is the point — an arm judged on a tree assembled by different
+ * code is being judged partly on that code.
  */
-export function parseStructureResponse(raw: string, blocks: Block[], slug: string): Tree {
+export function assembleTree(root: ModelNode, blocks: Block[], slug: string): Tree {
   const { body, groups } = splitBlocks(blocks);
-  const { root } = parseJsonFrom<{ root: ModelNode }>(
-    stripFence(raw),
-    "the structure-arm response",
-  );
   const tree = appendSupplement(buildTree(root, {}, body, slug), groups);
   /* The labels pass never runs here, so structural leaves have no navLabel and
      checkTree would advise about every one; that advice is scoreTree's to
@@ -379,6 +371,15 @@ export function parseStructureResponse(raw: string, blocks: Block[], slug: strin
      the gist rule genuinely applies. */
   assertTreeSound(blocks, tree);
   return tree;
+}
+
+/** A raw answer through `assembleTree`: fence stripped, JSON parsed, then the pipeline's rules. */
+export function parseStructureResponse(raw: string, blocks: Block[], slug: string): Tree {
+  const { root } = parseJsonFrom<{ root: ModelNode }>(
+    stripFence(raw),
+    "the structure-arm response",
+  );
+  return assembleTree(root, blocks, slug);
 }
 
 /**
@@ -392,6 +393,174 @@ export function structuralLeaves(tree: Tree, blocks: Block[]): TreeNode[] {
     const block = byId.get(n.range[0]);
     return !!block && isStructural(block);
   });
+}
+
+/* ----------------------------------------------------- waves and revise -- */
+
+/* The addenda are APPENDED to production's SYSTEM, never spliced into it —
+   every byte of the shipping prompt survives, and the addendum IS the
+   documented delta (arms.ts § deltas). If a wave wants a better prompt, that
+   is a different arm. */
+
+const WAVE_L1_ADDENDUM = `
+
+THIS CALL IS WAVE 1 OF SEVERAL. Propose ONLY the root and its depth-1 chapters:
+the root's "children" are the chapters, and the chapters carry NO "children" of
+their own. Later calls will subdivide each chapter separately. Everything above
+still applies — headings as hard boundaries, titles, and a gist for the root
+and for every chapter.`;
+
+const WAVE_SUB_ADDENDUM = `
+
+THIS CALL IS A LATER WAVE. The numbered blocks you receive are ONE PART of a
+larger article, and its boundaries are already fixed: your root must cover
+exactly the full block range you were given, and its "children" partition it
+one level deep — no deeper. Everything above still applies.`;
+
+const REVISE_ADDENDUM = `
+
+A DRAFT of the tree, produced by an earlier pass, follows the article. Revise
+it freely: keep what is right, move any boundary, retitle, rewrite any gist, or
+discard it entirely and start over. The draft is a suggestion; the article is
+the authority.`;
+
+/** Which transport a model id speaks. */
+const senderFor = (model: string): MessagesSend =>
+  model.startsWith("anthropic/") ? sendMessages : sendChat;
+
+function parseWave(raw: string, what: string): ModelNode {
+  const { root } = parseJsonFrom<{ root: ModelNode }>(stripFence(raw), what);
+  return root;
+}
+
+/**
+ * Waves: L1 over the whole article, then one call per long part, then one per
+ * long section — later waves in parallel, each seeing only its own slice.
+ * Parts of nine blocks or fewer are left whole (production's own long-run
+ * rule, applied as scope). The assembled proposal then goes through the same
+ * `buildTree` as every other arm, whose `assertChildrenPartition` is what
+ * enforces that every wave tiled its parent exactly.
+ */
+async function runWaves(
+  arm: Extract<ArmSpec, { kind: "waves" }>,
+  blocks: Block[],
+  slug: string,
+): Promise<ModelArmRun> {
+  const { body } = splitBlocks(blocks);
+  const index = new Map(body.map((b, i) => [b.id, i]));
+  const span = (node: ModelNode): number => {
+    const lo = index.get(node.range[0]);
+    const hi = index.get(node.range[1]);
+    if (lo === undefined || hi === undefined || lo > hi) {
+      throw new Error(`a wave returned a range that is not in this article`);
+    }
+    return hi - lo + 1;
+  };
+  const slice = (node: ModelNode): Block[] => {
+    const lo = index.get(node.range[0])!;
+    const hi = index.get(node.range[1])!;
+    return body.slice(lo, hi + 1);
+  };
+  const send = senderFor(arm.call.model);
+  const calls: CallStats[] = [];
+
+  // Wave 1: the whole article, chapters only.
+  const base = structureRequest(body);
+  const l1 = await send({
+    call: arm.call,
+    system: base.system + WAVE_L1_ADDENDUM,
+    user: base.user,
+    maxTokens: base.maxTokens,
+  });
+  calls.push(l1.stats);
+  const root = parseWave(l1.raw, "the wave-1 response");
+  if (!root.children?.length) throw new Error("wave 1 proposed no chapters at all");
+  if (root.children.some((c) => c.children?.length)) {
+    /* The wave discipline is part of what the arm tests; silently stripping
+       the extra depth would score a different strategy under this name. */
+    throw new Error("wave 1 returned children below depth 1, against its scope");
+  }
+
+  /**
+   * One deeper wave over `parent`'s children: subdivide every child longer
+   * than nine blocks, in parallel, each call seeing only its own slice plus
+   * the context the team lead specified — the parent's title and gist and the
+   * sibling titles.
+   */
+  const subdivide = async (parents: ModelNode[]): Promise<ModelNode[]> => {
+    const next: ModelNode[] = [];
+    await Promise.all(
+      parents.flatMap((parent) =>
+        (parent.children ?? []).map(async (child) => {
+          if (span(child) <= 9 || child.children?.length) return;
+          const part = slice(child);
+          const req = structureRequest(part);
+          const siblings = (parent.children ?? []).map((c) => c.title).join("; ");
+          const context =
+            `CONTEXT (locating this part; do not summarise it): this is one part of a larger ` +
+            `article. The part is "${child.title}"` +
+            (child.gist ? ` — ${child.gist}` : "") +
+            `. Its sibling parts, in order: ${siblings}.\n\n`;
+          const answer = await send({
+            call: arm.call,
+            system: req.system + WAVE_SUB_ADDENDUM,
+            user: context + req.user,
+            maxTokens: req.maxTokens,
+          });
+          calls.push(answer.stats);
+          const sub = parseWave(answer.raw, "a later-wave response");
+          if (sub.range[0] !== child.range[0] || sub.range[1] !== child.range[1]) {
+            throw new Error(
+              "a later wave answered about a different range than the part it was given",
+            );
+          }
+          child.children = sub.children ?? [];
+          /* The sub-root's own title/gist are discarded: the part's identity
+             was fixed by the earlier wave, and letting a later one rename it
+             would let the waves disagree about what a part is. */
+          next.push(child);
+        }),
+      ),
+    );
+    return next;
+  };
+
+  // Waves 2..levels: subdivide the previous wave's long survivors.
+  let frontier: ModelNode[] = [root];
+  for (let level = 2; level <= arm.levels && frontier.length > 0; level++) {
+    frontier = await subdivide(frontier);
+  }
+
+  return { tree: assembleTree(root, blocks, slug), calls };
+}
+
+/** Cheap proposes with production's prompt; capable revises with the draft in hand. */
+async function runRevise(
+  arm: Extract<ArmSpec, { kind: "revise" }>,
+  blocks: Block[],
+  slug: string,
+): Promise<ModelArmRun> {
+  const { body } = splitBlocks(blocks);
+  const base = structureRequest(body);
+  const proposal = await senderFor(arm.propose.model)({
+    call: arm.propose,
+    system: base.system,
+    user: base.user,
+    maxTokens: base.maxTokens,
+  });
+  /* The draft is passed on as the model wrote it (fence stripped). It is NOT
+     validated first: a draft the reviser has to repair is precisely the
+     strategy under test, and pre-filtering it would measure a kinder one. */
+  const revised = await senderFor(arm.revise.model)({
+    call: arm.revise,
+    system: base.system + REVISE_ADDENDUM,
+    user: `${base.user}\n\nDRAFT:\n${stripFence(proposal.raw)}`,
+    maxTokens: base.maxTokens,
+  });
+  return {
+    tree: parseStructureResponse(revised.raw, blocks, slug),
+    calls: [proposal.stats, revised.stats],
+  };
 }
 
 /* ------------------------------------------------------------ the dispatch */
@@ -421,11 +590,9 @@ export async function runModelArm(
       return { tree: parseStructureResponse(raw, blocks, slug), calls: [stats] };
     }
     case "waves":
+      return runWaves(arm, blocks, slug);
     case "revise":
-      throw new PendingError(
-        `Arm "${arm.name}" needs a prompt that does not exist yet — held for GPT Sol's ` +
-          `review of the phase-2 design so it is written once, not twice.`,
-      );
+      return runRevise(arm, blocks, slug);
     default:
       throw new Error(`runModelArm was handed the free arm "${arm.name}" — run.ts owns those.`);
   }

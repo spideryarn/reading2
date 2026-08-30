@@ -97,6 +97,46 @@ export const CORPUS: readonly CorpusEntry[] = [
     calibration: true,
     why: "Nineteen blocks, one heading: the article too short for any structure rule. Calibration: short.",
   },
+  /* ---- The held-out five, ingested 2026-08-30 (free stages 1–3 only). ----
+     Chosen by GPT Sol's five structural categories BEFORE the heading rule saw
+     them, approved by the team lead; the rule is judged on them exactly as it
+     stands, and nothing is retuned after seeing the results — that is the
+     whole value of holding them out. */
+  {
+    slug: "greatwork",
+    dir: "data/greatwork",
+    sha256: "282a0abaa783337ba67f685793ca9bf635f5cef5c113da3594891c52b336a6c2",
+    role: "heldout",
+    why: "Category 1, long prose with no headings: Paul Graham's 'How to Do Great Work' — 330 blocks, one title heading, a 329-block headingless run. The typical case fowler only pathologically imitates.",
+  },
+  {
+    slug: "meditations-on-moloch",
+    dir: "data/meditations-on-moloch",
+    sha256: "27ee9412affd8770b91d7ddd0e210a9a7a05d744c65c76b3a92610c2c078701d",
+    role: "heldout",
+    why: "Category 2, and the ingest itself was the finding: the essay's authored roman-numeral section markers do NOT extract as headings, so a document that looks structured arrives structureless (one heading, 288-block run). Kept as that finding, per the team lead — not swapped for something tidier.",
+  },
+  {
+    slug: "consciousness",
+    dir: "data/consciousness",
+    sha256: "1305baf2f48fc7b39a993464152bf524fd9193f867103f81d662888feb759fe7",
+    role: "heldout",
+    why: "Category 3, dense and furniture-heavy headings: Wikipedia's Consciousness — h2–h4 throughout, 276 of 499 blocks classified supplement.",
+  },
+  {
+    slug: "spaced-repetition",
+    dir: "data/spaced-repetition",
+    sha256: "bbdadbfc0b26064e91be6e9344bb210be38f4057740bef073d113509dd9e6087",
+    role: "heldout",
+    why: "Category 4, genuinely deep hierarchy: gwern's 'Spaced Repetition for Efficient Learning' — h2×12 down to h5×2, plus 73 supplement endnotes and a 60-block headingless run of its own.",
+  },
+  {
+    slug: "arxiv-2308",
+    dir: "data/arxiv-2308",
+    sha256: "dbda9f7300172c5772460cb0167db15302cf1e72994d46d6bbc05c90e802a33d",
+    role: "heldout",
+    why: "Category 5, an academic paper: Butlin et al. 2023 (arXiv 2308.08708, native HTML), 38k words, numbered sections h2–h4. The ingest surfaced two real stage-2/3 findings this eval inherits as-is: the 251-block bibliography is NOT classified supplement, and the extracted title is a mangled label ('1Indicator Properties').",
+  },
   {
     slug: "source",
     dir: "data/source",

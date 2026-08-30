@@ -61,8 +61,20 @@ export type ArmSpec =
    * `levels`. Three, not two: the book-length motivation for waves is depth
    * the single call cannot reach, and an L1→L2 pilot would not test the
    * process it argues for (REVIEW-SOL.md, 8).
+   *
+   * `deltas` documents EVERY way this arm's prompts differ from production's,
+   * per the governing rule: hold constant everything the arm is not about.
+   * The arm tests *waves*, not "waves plus a prompt somebody rewrote" — a
+   * better prompt is a different arm.
    */
-  | { name: string; kind: "waves"; comparison: "bakeoff"; call: CallSpec; levels: number }
+  | {
+      name: string;
+      kind: "waves";
+      comparison: "bakeoff";
+      call: CallSpec;
+      levels: number;
+      deltas: readonly string[];
+    }
   /** A cheap model proposes the whole tree; a capable one revises it. */
   | {
       name: string;
@@ -70,6 +82,7 @@ export type ArmSpec =
       comparison: "bakeoff";
       propose: CallSpec;
       revise: CallSpec;
+      deltas: readonly string[];
     };
 
 const INCUMBENT: CallSpec = { model: CAPABLE_MODEL_OPENROUTER, effort: "high" };
@@ -124,13 +137,28 @@ export const ARMS: readonly ArmSpec[] = [
     call: INCUMBENT,
     seed: "heading-tree",
   },
-  { name: "waves", kind: "waves", comparison: "bakeoff", call: INCUMBENT, levels: 3 },
+  {
+    name: "waves",
+    kind: "waves",
+    comparison: "bakeoff",
+    call: INCUMBENT,
+    levels: 3,
+    deltas: [
+      "system: production SYSTEM verbatim, plus a scoped wave addendum (wave 1: root and chapters only, no deeper; later waves: subdivide one given part, no deeper)",
+      "later waves see ONLY their own part's blocks — that is where the latency and cost case lives — plus the parent's title and gist and the sibling titles as a context preamble",
+      "a part or section spanning nine blocks or fewer is not subdivided, which is production's own long-run rule applied as scope",
+    ],
+  },
   {
     name: "cheap-then-revise",
     kind: "revise",
     comparison: "bakeoff",
     propose: { model: QUICK_MODEL_OPENROUTER, effort: "high" },
     revise: INCUMBENT,
+    deltas: [
+      "call 1 (cheap, chat wire): production prompt verbatim",
+      "call 2 (capable, messages wire): production SYSTEM verbatim plus a revise addendum; the user prompt is the article followed by the draft, with explicit permission to change anything including starting over",
+    ],
   },
 ];
 
