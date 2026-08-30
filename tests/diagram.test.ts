@@ -33,8 +33,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Block, BlockId, NodeId, Tree } from "../src/types.js";
 import {
+  CHAIN_NEAR_LEVELS,
+  chainNearness,
+  chainReach,
   charsThatFit,
   DIAGRAMS,
+  type DiagramLink,
   type DiagramNode,
   MAX_DRAWN_DEPTH,
   stepStops,
@@ -399,5 +403,174 @@ describe("siblingRuns", () => {
     const of = (id: string) => runs[nodes.findIndex((n) => n.id === id)];
     expect(of("a")).toEqual({ size: 2, pos: 1 });
     expect(of("b1")).toEqual({ size: 2, pos: 1 });
+  });
+});
+
+/**
+ * **The ramp along the sequence chain**, which is the one thing in Diagram mode
+ * that both pictures compute the same way and neither picture owns.
+ *
+ * Greg, 2026-08-30: *"making the connections directly either side of the
+ * current node most prominent. Then a bit fainter for the ones at one remove,
+ * then a bit fainter for the ones at two removes, etc etc."*
+ *
+ * Tested on a synthetic chain rather than through a layout, because the two
+ * properties that matter here are hard to see through one: what happens on a
+ * chain too short for the full reach, and what happens when the chain is not
+ * the only thing in the links array. Both draw perfectly well when wrong.
+ */
+describe("chainNearness", () => {
+  /** `n` links joining `n + 1` nodes, in order. */
+  function chain(n: number): DiagramLink[] {
+    return Array.from({ length: n }, (_, i) => ({
+      id: `l${i}`,
+      d: "",
+      part: -1,
+      depth: 0,
+      kind: "sequence" as const,
+      from: `n${i}` as NodeId,
+      to: `n${i + 1}` as NodeId,
+    }));
+  }
+
+  it("puts the two links either side of the reader at step 0", () => {
+    const near = chainNearness(chain(20), "n10" as NodeId);
+    expect(near.get("l9")).toBe(0);
+    expect(near.get("l10")).toBe(0);
+    expect(near.get("l8")).toBeGreaterThan(0);
+    expect(near.get("l11")).toBeGreaterThan(0);
+  });
+
+  it("never falls as it walks away, in either direction", () => {
+    const near = chainNearness(chain(40), "n20" as NodeId);
+    for (let i = 9; i >= 0; i--) {
+      const inner = near.get(`l${20 + i}`);
+      const outer = near.get(`l${20 + i + 1}`);
+      if (inner !== undefined && outer !== undefined) expect(outer).toBeGreaterThanOrEqual(inner);
+      const innerBack = near.get(`l${19 - i}`);
+      const outerBack = near.get(`l${19 - i - 1}`);
+      if (innerBack !== undefined && outerBack !== undefined) {
+        expect(outerBack).toBeGreaterThanOrEqual(innerBack);
+      }
+    }
+  });
+
+  /**
+   * **The one that separates the scaled hop count from the raw one**, and the
+   * reason it needs a short chain: on anything long enough for the full reach
+   * the two are the same number, so tests/scatter.test.ts cannot see the
+   * difference and says so.
+   *
+   * A three-hop reach with a raw count tops out at step 2 of 8 — the ramp then
+   * stops a long way above the chain's own weight, and every article shorter
+   * than fifty sections gets a visible edge where the run ends. Probed by
+   * replacing the scaling with `d` on 2026-08-30: this reddens, and nothing in
+   * scatter.test.ts does.
+   */
+  it("spans its whole range on a chain too short for the full reach", () => {
+    const short = chain(12);
+    const reach = chainReach(short.length);
+    expect(reach).toBeLessThan(CHAIN_NEAR_LEVELS); // precondition
+    const near = chainNearness(short, "n6" as NodeId);
+    expect(Math.max(...near.values())).toBeGreaterThanOrEqual(CHAIN_NEAR_LEVELS - 3);
+  });
+
+  /**
+   * **The reach rule itself, at its boundaries.**
+   *
+   * The scaling test above distinguishes a scaled hop count from a raw one, and
+   * GPT Sol pointed out on 2026-08-30 that it does not pin the rule: a constant
+   * reach of 4 passes it. These are the five cases where `min(8, max(3,
+   * round(n / 6)))` changes its mind, so a different rule that happens to look
+   * right on one fixture cannot survive them.
+   *
+   * Both caps matter to something real. The floor of 3 keeps a twelve-section
+   * article from getting one bright pair and a hard edge; the sixth keeps
+   * Trail's 29-segment chain from having most of itself lit, which is the
+   * "landmark, not a wash" rule the plateau this replaced also had.
+   */
+  it("changes its reach where the rule says it does", () => {
+    for (const [segments, want] of [
+      [1, 3],
+      [20, 3],
+      [21, 4],
+      [26, 4],
+      [27, 5],
+      [47, 8],
+      [400, 8],
+    ] as const) {
+      expect(chainReach(segments), `${segments} segments`).toBe(want);
+    }
+  });
+
+  it("stops at the reach, leaving the far chain unclassed", () => {
+    const near = chainNearness(chain(60), "n30" as NodeId);
+    expect(near.has("l0")).toBe(false);
+    expect(near.has("l59")).toBe(false);
+    expect(near.size).toBeLessThan(60);
+  });
+
+  /**
+   * **The vocabulary mesh must not be a shortcut, and the type is what stops
+   * it now.**
+   *
+   * Force puts all five kinds of edge in one array, and on a well-connected
+   * article the vocabulary edges join nearly everything to nearly everything —
+   * so a walk that followed them would cross the article in two hops and paint
+   * the whole chain at step 0 or 1. It would look like a picture with a
+   * slightly brighter chain.
+   *
+   * This was a runtime test that built a vocabulary edge carrying endpoints and
+   * checked the walk ignored it. GPT Sol pointed out on 2026-08-30 that it did
+   * not test what it claimed: `chainNearness` filters on `kind`, so adding
+   * endpoints to a vocabulary edge never could flatten the ramp. It was testing
+   * that producers stay tidy.
+   *
+   * So the state is forbidden instead. `DiagramLink` is a union on `kind` where
+   * `sequence` requires both endpoints and the other four declare them `never`,
+   * and this is the test of *that* — a `@ts-expect-error` goes red by failing to
+   * be an error, so loosening the union back to two optional fields breaks the
+   * typecheck rather than quietly re-permitting the edge.
+   *
+   * Both forms, because they fail for different reasons: excess-property
+   * checking catches the fresh literal, and `from?: never` is what catches the
+   * named `const` that excess-property checking does not run on.
+   */
+  it("forbids a non-chain line from naming endpoints, at compile time", () => {
+    // @ts-expect-error — a vocabulary edge may not carry `from`/`to`.
+    const fresh: DiagramLink = {
+      id: "v",
+      d: "",
+      part: -1,
+      depth: 0,
+      kind: "vocabulary",
+      from: "n0" as NodeId,
+      to: "n29" as NodeId,
+    };
+
+    const named = {
+      id: "v2",
+      d: "",
+      part: -1,
+      depth: 0,
+      kind: "vocabulary" as const,
+      from: "n0" as NodeId,
+      to: "n29" as NodeId,
+    };
+    // @ts-expect-error — …and a named const is not a way round that.
+    const laundered: DiagramLink = named;
+
+    // The walk drops them either way, which is the runtime half of the same
+    // claim: a chain of 30 with these two in the array reaches nothing new.
+    const links = [...chain(30), fresh, laundered];
+    const near = chainNearness(links, "n1" as NodeId);
+    expect(near.has("v")).toBe(false);
+    expect(near.has("v2")).toBe(false);
+    expect(near.has("l28")).toBe(false);
+  });
+
+  it("says nothing at all when the reader is nowhere, or is off the chain", () => {
+    expect(chainNearness(chain(20), null).size).toBe(0);
+    expect(chainNearness(chain(20), "n99" as NodeId).size).toBe(0);
   });
 });

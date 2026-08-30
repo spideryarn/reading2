@@ -318,16 +318,38 @@ export function layoutForce(graph: ArticleGraph, opts: DiagramOptions): DiagramL
   const drawnLinks: DiagramLink[] = links
     .slice()
     .sort((a, b) => (ORDER[a.e.kind] ?? 0) - (ORDER[b.e.kind] ?? 0))
-    .map((l, i) => ({
-      id: `f${i}-${l.e.source}-${l.e.target}`,
-      d: l.e.kind === "sequence" ? arrowPath(l.source, l.target) : straight(l.source, l.target),
-      part: l.e.kind === "vocabulary" || l.e.kind === "semantic" ? -1 : (l.source.n.part ?? -1),
-      /* Kept honest rather than kept as a kind: this really is the depth of the
-         node the line hangs off. The stylesheet now reads `kind`. */
-      depth: l.source.n.depth,
-      kind: l.e.kind,
-      ...(l.e.kind === "sequence" ? { arrow: true } : {}),
-    }));
+    /* **A branch rather than a conditional spread, because `DiagramLink` is a
+       union on `kind` now.** The spread form — one object literal with
+       `kind: l.e.kind` and `...(kind === "sequence" ? { from, to } : {})` —
+       cannot be checked against it: TypeScript sees a `kind` of all five
+       literals beside an optional `from`, which is exactly the half-formed
+       chain link the union exists to forbid. Narrowing first and returning one
+       shape or the other is what makes the endpoints a fact about the kind
+       instead of a hopeful pair of optional fields. */
+    .map((l, i): DiagramLink => {
+      const base = {
+        id: `f${i}-${l.e.source}-${l.e.target}`,
+        part: l.e.kind === "vocabulary" || l.e.kind === "semantic" ? -1 : (l.source.n.part ?? -1),
+        /* Kept honest rather than kept as a kind: this really is the depth of
+           the node the line hangs off. The stylesheet now reads `kind`. */
+        depth: l.source.n.depth,
+      };
+      /* Endpoints only on the chain, because `chainNearness` (diagram.ts) is
+         the only reader of them and it walks the chain. Emitting them on all
+         five kinds would invite the vocabulary mesh into that walk, where every
+         node is a hop from every other and the ramp would come out flat. */
+      if (l.e.kind === "sequence") {
+        return {
+          ...base,
+          d: arrowPath(l.source, l.target),
+          kind: "sequence",
+          arrow: true,
+          from: l.source.n.id,
+          to: l.target.n.id,
+        };
+      }
+      return { ...base, d: straight(l.source, l.target), kind: l.e.kind };
+    });
 
   return { width: opts.width, height, nodes: out, links: drawnLinks, axis: null, nowY: null };
 }

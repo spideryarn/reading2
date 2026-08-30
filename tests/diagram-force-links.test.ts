@@ -206,6 +206,44 @@ describe("the sequence chain", () => {
     ]);
   });
 
+  it("carries its own endpoints, and only the chain does", () => {
+    /* **The ramp around the reader walks these.** `chainNearness`
+       (src/web/diagram.ts) is handed the drawn links and has to find the chain
+       in among the parent, anchor, vocabulary and semantic lines — so the chain
+       says which two nodes it joins and the other four kinds say nothing, or
+       the walk crosses the article on a vocabulary edge and comes out flat.
+
+       **This is a test of the producer, not of the walk**, and the difference
+       matters: `chainNearness` filters on `kind`, so endpoints on a vocabulary
+       edge could never have flattened the ramp. An earlier version of this
+       comment claimed a probe to that effect and it would not have reddened —
+       GPT Sol, 2026-08-30. The walk's own safety is now the type's job; the
+       compile-time test for it is in tests/diagram.test.ts. What is left here
+       is the runtime fact worth pinning: the chain is n3 → n4 → n6 → n7, in
+       that order, and nothing else names an endpoint. */
+    const { root, blocks } = twoParts();
+    const out = drawn(
+      layoutDiagram(
+        "force",
+        root,
+        { width: 320, height: 600, collapsed: NONE },
+        buildGraph(root, blocks),
+      ),
+    );
+    const seq = out.links.filter((l) => l.kind === "sequence");
+    expect(seq.length).toBeGreaterThan(0);
+    expect(seq.map((l) => [l.from, l.to])).toEqual([
+      ["n3", "n4"],
+      ["n4", "n6"],
+      ["n6", "n7"],
+    ]);
+    for (const l of out.links) {
+      if (l.kind === "sequence") continue;
+      expect(l.from, `a ${l.kind} line named its endpoints`).toBeUndefined();
+      expect(l.to).toBeUndefined();
+    }
+  });
+
   it("draws no chain at all when the root itself is closed", () => {
     const { root, blocks } = twoParts();
     // Nothing but the root is drawn, and the root is not on the picture. A

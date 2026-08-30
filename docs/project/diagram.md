@@ -353,11 +353,51 @@ that looks the same and is not:
   takes `atRow`, for the one reader-dependent thing that is geometry rather than
   styling: a segment carrying an arrowhead is trimmed further back to make room
   for it, so that decision cannot wait for the stylesheet.
-- **The hop count is scaled to the chain's length.** A nine-section article and a
-  fifty-section one both get the full eight steps, so the ramp never stops
-  part-way down. The reach itself is capped at a sixth of the chain, which is the
+- **The hop count is scaled to the chain's length.** A nine-section article and
+  a fifty-section one both cover the same range, so the ramp always ends on the
+  chain's own weight rather than stopping part-way down. It does not always
+  spend all eight steps getting there — three hops come out as 0, 3, 5 — and the
+  end is the part that matters. The reach itself is capped at a sixth of the chain, which is the
   rule the plateau this replaced also had and for the same reason: a "you are
   here" covering three fifths of the picture is not a landmark, it is a wash.
+
+**Four defects came out of the review of this, and they are the interesting
+part.** GPT Sol read the built code on 2026-08-30
+([prompt](../plans/v1-diagram-chain-ramp-review-prompt.md),
+[answer](../plans/v1-diagram-chain-ramp-review-sol.md)); each of these draws
+perfectly well when wrong.
+
+- **Trail's ramp ended in the cliff it was designed to remove.** Its chain
+  carries *two* fades — how far through the article, and how near the reader —
+  and both were plain `opacity` at equal specificity, so the near rules simply
+  replaced the progress ones. The ramp's last step, whose whole job is to be
+  indistinguishable from no step, painted an early-article segment at 0.52 beside
+  an unclassed neighbour at 0.16. The fix is composition rather than replacement:
+  the global fade is a custom property and each near step is
+  `calc(fade + (1 - fade) × k)`, with `k` reaching 0 at the last one. Force never
+  had the problem because its chain has a single base weight, which is exactly
+  why a Force-shaped boundary test did not catch it.
+- **The arrowhead window was shifted one segment down the article.** A segment
+  `i` joins dot `i` to dot `i + 1`, so `|i - here|` calls the link arriving at
+  the reader's dot one step further out than the link leaving it. The run had
+  heads on both sides and looked symmetric; it was not. The measure is the
+  distance to the segment's *nearer* end, which is the same rule `chainNearness`
+  uses for a link's level.
+- **The heads and the ramp sized themselves off different chains.** The
+  arrowheads used every *candidate* segment and the ramp uses the ones actually
+  drawn, so a picture with a coincident pair could put a head outside the run —
+  27 against 26 is `chainReach` 5 against 4. Trail now decides drawability in a
+  first pass and both read that count.
+- **Two tests claimed more than they proved**, including one whose comment named
+  a probe that would not have reddened. Both were corrected rather than deleted,
+  and the reach rule gained a table of its boundary cases, because the test that
+  was there would have passed with a constant reach of 4.
+
+The endpoint pair became a **discriminated union** at the same time —
+`sequence` requires `from`/`to`, the other four kinds declare them `never`. A
+chain link that failed to name its endpoints would not be a line with a missing
+field, it would be a break in the chain with the ramp silently stopping either
+side of it, and optional fields left a producer one edit away from that.
 
 **It centres on where the reader is standing, not on what they are pointing at.**
 Hover moves the footer card and the highlight ring; it deliberately does not move
@@ -1149,7 +1189,20 @@ The count comes back so the reader can be told the picture is older than the
 article, rather than being quietly handed a diagram whose clicks do nothing.
 
 It is the same rule at both ends of a wire that has a database and a year in the
-middle of it.
+middle of it. The same pass is where a region's door gets *derived* when the
+model did not write one, which is why both ends of that wire agree about which
+names are pressable without the artefact on disk having to change.
+
+**Reachability is two numbers, and they answer different questions.** A scene
+nothing opens is a scene the reader can never get to — the plainest silent
+success this feature produced, unnoticed through six runs, and the reason
+`score.unreachable` exists at all. But once a link can be inferred, that one
+number stops being able to say whether the *prompt* is still working: a picture
+whose doors we fitted ourselves scores exactly like one the model wired
+properly. So `unreachable` counts what the reader cannot reach, inferred doors
+included, and `score.inferred` counts how many of the doors are ours. Watch the
+second one: it rising is the prompt quietly giving up on `opens`, and nothing
+else would show it.
 
 ### What it costs, and what that decides
 
@@ -1233,6 +1286,24 @@ that file protects first. A modal takes it from nothing.
   more of. **The name, never the panel**: a region is a large area lying *behind*
   the nodes, and making all of it pressable would put a second meaning on every
   pixel between the boxes.
+- **The name is pressable even when the model never said so.** Greg pressed
+  "WHY WE'RE TEMPTED TO SEE IT" and nothing happened: that drawing was made
+  before the prompt asked for `opens`, and the region carried none. Redrawing
+  costs $0.20 and fixes one article, leaving every reader holding an older
+  sketch pressing names that do nothing — so the link is *derived* instead.
+  `inferRegionOpens` in [`src/sketch-scene.ts`](../../src/sketch-scene.ts) reads
+  the blocks under the region and the blocks in each zoom scene, and joins them
+  when one scene takes a strict majority of the region's and the runner-up takes
+  at most half of that. It is deliberately shy — **a wrong door is worse than
+  none**, because a reader who presses a name and lands somewhere else has been
+  lied to by the picture, where one who presses a name and gets nothing has
+  learnt only that this name is not a control. On the six regions of the two
+  real drawings it links three and abstains on three, and all six are right. Not
+  string similarity: "THE CORE ARGUMENT" and "Why Scale Works: The Ladder" share
+  no word, and their blocks match five to nil. A link the model wrote is never
+  overruled, and a derived one is marked `opensInferred` — see
+  [§ The scene is checked again in the browser](#the-scene-is-checked-again-in-the-browser)
+  for why the score then needs two numbers rather than one.
 - **Back** appears whenever a zoom is open, and Escape does the same. The scene
   row beside it is the other way around the picture — Back is out of where you
   are, the row is a list of where you could be — and neither depends on the model

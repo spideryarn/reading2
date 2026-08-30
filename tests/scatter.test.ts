@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Block, BlockId, NodeId, ProjectionPoint } from "../src/types.js";
-import { nodeAt, type DiagramOptions } from "../src/web/diagram.js";
+import { chainNearness, chainReach, nodeAt, type DiagramOptions } from "../src/web/diagram.js";
 import { laneTerms, layoutDrift, layoutTrail, type ScatterInput } from "../src/web/scatter.js";
 import type { SummaryNode } from "../src/web/tree.js";
 
@@ -349,12 +349,120 @@ describe("trail", () => {
        there is no run, so there must be no heads. */
     expect(layoutTrail(root, bs, opts(), input(pts)).links.some((l) => l.arrow)).toBe(false);
 
-    const out = layoutTrail(root, bs, opts({ atRow: 30 }), input(pts));
+    const at = 30;
+    const out = layoutTrail(root, bs, opts({ atRow: at }), input(pts));
     const arrows = out.links.filter((l) => l.arrow);
     expect(arrows.length).toBeGreaterThan(0);
-    expect(arrows.length).toBeLessThan(out.links.length / 8);
-    // And every one of them is on a segment of the bright run.
-    for (const a of arrows) expect(a.depth).toBe(8);
+
+    /* **Checked against the rule, not against a ratio.** This used to assert
+       "fewer than an eighth of the links", which is not the rule and was only
+       true of this fixture — and it was true of it because of the off-by-one
+       below, so the bound was quietly measuring a bug. GPT Sol, 2026-08-30.
+
+       The rule is: a head goes on a segment whose *nearer* end is inside half
+       the reach, where the reach is `chainReach` over the segments actually
+       drawn. Both halves of that had defects — the distance was measured to the
+       segment's start rather than to its nearer end, and the reach was taken
+       over the candidate segments rather than the drawn ones. */
+    const index = (id: string) => Number(/^trail(\d+)-/.exec(id)?.[1]);
+    const hereDot = out.nodes.findIndex((n) => n.id === nodeAt(out.nodes, at));
+    expect(hereDot).toBeGreaterThanOrEqual(0); // precondition
+    const reach = chainReach(out.links.length);
+    for (const l of arrows) {
+      const i = index(l.id);
+      const near = Math.min(Math.abs(i - hereDot), Math.abs(i + 1 - hereDot));
+      expect(near * 2, `a head on a segment ${near} hops out, reach ${reach}`).toBeLessThan(reach);
+    }
+
+    // Both sides get heads. The *shape* of the window is the next test — this
+    // one would pass on a window shifted a segment down the article.
+    const sides = arrows.map((l) => index(l.id));
+    expect(sides.some((i) => i < hereDot), "no head behind the reader").toBe(true);
+    expect(sides.some((i) => i >= hereDot), "no head ahead of the reader").toBe(true);
+  });
+
+  /**
+   * **The run surrounds the reader rather than starting at them.**
+   *
+   * A segment `i` joins dot `i` to dot `i + 1`, so measuring `|i - here|` calls
+   * the link *arriving* at the reader's dot one step further out than the link
+   * *leaving* it. The window comes out shifted one segment down the article:
+   * it draws perfectly well, it has heads on both sides, and it is wrong.
+   * GPT Sol's finding, 2026-08-30.
+   *
+   * The property that catches it is not "heads on both sides" but "the dots the
+   * run touches are centred on the reader's dot" — so the two ends of the run
+   * have to be equidistant. Spread points, so that no segment is dropped for
+   * want of room and the window is the rule rather than the geometry: the
+   * shared fixture's dots are close enough together that trimming could hide
+   * the asymmetry behind a missing head.
+   *
+   * Probed on 2026-08-30 with `Math.abs(i - here)`: the run then reaches 3 dots
+   * back and 4 forward, and this reddens.
+   */
+  it("centres the arrowhead run on the reader's dot", () => {
+    const wide = pts.map((p, i) => ({ ...p, x: i % 2 === 0 ? -1 : 1, y: i / pts.length }));
+    const at = 30;
+    const out = layoutTrail(root, bs, opts({ atRow: at }), input(wide));
+    const index = (id: string) => Number(/^trail(\d+)-/.exec(id)?.[1]);
+    const hereDot = out.nodes.findIndex((n) => n.id === nodeAt(out.nodes, at));
+    expect(hereDot).toBeGreaterThan(4); // precondition: room for a run behind it
+
+    const arrows = out.links.filter((l) => l.arrow).map((l) => index(l.id));
+    expect(arrows.length).toBeGreaterThan(2);
+    // Nothing was dropped for room, so the window really is the rule.
+    expect(out.links.length).toBe(out.nodes.length - 1);
+
+    // Each segment touches dots i and i + 1; the span of those has to sit
+    // symmetrically around the reader.
+    const dots = arrows.flatMap((i) => [i, i + 1]);
+    const back = hereDot - Math.min(...dots);
+    const forward = Math.max(...dots) - hereDot;
+    expect(back, `run reaches ${back} back and ${forward} forward`).toBe(forward);
+  });
+
+  /**
+   * **The heads and the ramp size themselves off the same chain.**
+   *
+   * The arrowhead run is geometry and lives in this file; the brightness ramp is
+   * `chainNearness` and lives in the panel. Both call `chainReach`, but this
+   * file used to hand it the *candidate* segments and the panel hands it the
+   * ones actually drawn — so on a picture with a coincident pair the two
+   * disagree, and a head lands on a segment the ramp has already let go. Sol's
+   * arithmetic: 27 candidates against 26 drawn is `chainReach` 5 against 4.
+   *
+   * This fixture makes exactly that state — one coincident pair inside a chain
+   * long enough for the two counts to straddle a `chainReach` boundary.
+   */
+  it("sizes the arrowhead run off the segments it drew, not the ones it considered", () => {
+    const n = 28;
+    const short = blocks(n * 2);
+    const spread: ProjectionPoint[] = Array.from({ length: n }, (_, i) => ({
+      id: short[i * 2]!.id,
+      x: i % 2 === 0 ? -1 : 1,
+      y: i / n,
+      c: i % 4,
+    }));
+    // Two dots on top of one another, so one segment is dropped.
+    spread[3] = { ...spread[3]!, x: spread[2]!.x, y: spread[2]!.y };
+    const out = layoutTrail(tree(short), short, opts({ atRow: 30 }), input(spread));
+
+    /* The two preconditions, asserted rather than assumed — a fixture that
+       dropped nothing, or whose two counts landed on the same reach, would make
+       every assertion below pass for the wrong reason. Coinciding one pair also
+       shortens its neighbour, so the drop is read off rather than predicted. */
+    const candidates = n - 1;
+    expect(out.links.length).toBeLessThan(candidates);
+    expect(chainReach(candidates)).not.toBe(chainReach(out.links.length));
+
+    const index = (id: string) => Number(/^trail(\d+)-/.exec(id)?.[1]);
+    const hereDot = out.nodes.findIndex((n2) => n2.id === nodeAt(out.nodes, 30));
+    const reach = chainReach(out.links.length);
+    for (const l of out.links.filter((x) => x.arrow)) {
+      const i = index(l.id);
+      const near = Math.min(Math.abs(i - hereDot), Math.abs(i + 1 - hereDot));
+      expect(near * 2, `head ${near} hops out, drawn-chain reach ${reach}`).toBeLessThan(reach);
+    }
   });
 
   it("never draws an arrow it has no room for", () => {
@@ -374,24 +482,65 @@ describe("trail", () => {
     }
   });
 
-  it("draws the chain brightest where the reader is standing", () => {
-    /* The mitigation that does the real work: a bright run of segments around
-       the reader is a route they can follow, where a fade over 359 segments is
-       only styling. Everything else must be dimmer, or the reader's own stretch
-       is not findable. */
+  it("fades the chain from beginning to end, and says nothing about the reader", () => {
+    /* `depth` used to carry two things: how far through the article a segment
+       is, and whether it was one of the seventeen around the reader. The second
+       left on 2026-08-30 (`chainStep`), and this is the test that it really did
+       — the same layout at two reading positions has to produce the *same*
+       depths, or the panel's ramp is fighting a second one underneath it. */
+    const early = layoutTrail(root, bs, opts({ atRow: 3 }), input(pts));
+    const late = layoutTrail(root, bs, opts({ atRow: 200 }), input(pts));
+    const nobody = layoutTrail(root, bs, opts({ atRow: null }), input(pts));
+    expect(early.links.map((l) => l.depth)).toEqual(nobody.links.map((l) => l.depth));
+    expect(late.links.map((l) => l.depth)).toEqual(nobody.links.map((l) => l.depth));
+
+    // And it is still a ramp: 0 at the top of the article, 6 at the bottom.
+    const depths = nobody.links.map((l) => l.depth);
+    expect(Math.min(...depths)).toBe(0);
+    expect(Math.max(...depths)).toBe(6);
+    for (let i = 1; i < depths.length; i++) {
+      expect(depths[i]!).toBeGreaterThanOrEqual(depths[i - 1]!);
+    }
+  });
+
+  it("grades the chain outward from the dot the reader is standing on", () => {
+    /* The mitigation that does the real work: a run of segments around the
+       reader is a route they can follow, where a fade over 359 segments is only
+       styling. Greg asked for it graded rather than flat, 2026-08-30 — so what
+       has to hold is that the two segments touching the reader's dot are at
+       step 0, and that the step never *falls* as you walk away from them.
+
+       Probed on 2026-08-30: a `chainNearness` that returns 0 for everything in
+       the run — the plateau this replaced — reddens this. The *scaling* of the
+       hop count is not tested here and cannot be: this fixture's chain is long
+       enough that the reach is the full eight, where scaled and raw are the
+       same number. tests/diagram.test.ts has the short chain that separates
+       them. */
     const at = 30;
     const out = layoutTrail(root, bs, opts({ atRow: at }), input(pts));
-    const top = out.links.filter((l) => l.depth === 8);
-    expect(top.length).toBeGreaterThan(0);
-    expect(top.length).toBeLessThan(out.links.length / 2);
-    for (const l of out.links) {
-      expect(l.depth).toBeGreaterThanOrEqual(0);
-      expect(l.depth).toBeLessThanOrEqual(8);
+    const near = chainNearness(out.links, nodeAt(out.nodes, at));
+    expect(near.size).toBeGreaterThan(0);
+
+    const index = (id: string) => Number(/^trail(\d+)-/.exec(id)?.[1]);
+    const zeros = [...near].filter(([, lvl]) => lvl === 0).map(([id]) => index(id));
+    // Either side of one dot: two segments, or one at the ends of the article.
+    expect(zeros.length).toBeGreaterThanOrEqual(1);
+    expect(zeros.length).toBeLessThanOrEqual(2);
+    expect(Math.max(...zeros) - Math.min(...zeros)).toBeLessThanOrEqual(1);
+
+    // Monotonic outward, in both directions, and it does use more than one step.
+    const centre = (Math.min(...zeros) + Math.max(...zeros)) / 2;
+    const byDistance = [...near]
+      .map(([id, lvl]) => ({ d: Math.abs(index(id) - centre), lvl }))
+      .sort((a, b) => a.d - b.d);
+    for (let i = 1; i < byDistance.length; i++) {
+      expect(byDistance[i]!.lvl).toBeGreaterThanOrEqual(byDistance[i - 1]!.lvl);
     }
-    // With no reader anywhere, nothing gets the top step — the fade is then
-    // only the global one, which is what the stylesheet's opacity rules expect.
-    const nobody = layoutTrail(root, bs, opts({ atRow: null }), input(pts));
-    expect(nobody.links.some((l) => l.depth === 8)).toBe(false);
+    expect(new Set([...near.values()]).size).toBeGreaterThan(3);
+
+    // With no reader anywhere, no segment is on the ramp at all — the chain is
+    // then only the global fade, which is what the stylesheet expects.
+    expect(chainNearness(out.links, null).size).toBe(0);
   });
 });
 
@@ -465,13 +614,21 @@ describe("a reader inside the apparatus", () => {
   });
 
   /* **What the reader actually sees is Trail's chain going bright around them.**
-     `here` is the dot index the reader is standing on, and it only surfaces as
-     link brightness — `chainStep` lights the segments either side of it at the
-     top step. With the apparatus swallowed by the last dot's range, standing in
-     the notes lit the end of the *argument*: the brightest thing in the picture
-     was a paragraph the reader had already left. */
-  const brightest = (links: readonly { depth?: number | undefined }[]) =>
-    links.filter((l) => l.depth === 8).length;
+     `here` is the dot index the reader is standing on. With the apparatus
+     swallowed by the last dot's range, standing in the notes lit the end of the
+     *argument*: the brightest thing in the picture was a paragraph the reader
+     had already left.
+
+     **The probe moved from `depth === 8` to the arrowheads**, because that is
+     where `here` surfaces in this layout now. Brightness around the reader is
+     `chainNearness` in diagram.ts and it is computed from the node the panel
+     says the reader is in, not from the row — so it cannot see this bug and a
+     test written against it would be green either way. The heads are still
+     decided here, from `here`, and they are still drawn only on the reader's
+     own run. Probed on 2026-08-30: putting the tiling back reddens both of the
+     tests below. */
+  const brightest = (links: readonly { arrow?: boolean | undefined }[]) =>
+    links.filter((l) => l.arrow).length;
 
   it("trail: does not light the end of the argument for a reader in the notes", () => {
     const out = layoutTrail(tree(body), all, opts({ atRow: firstNoteRow + 2 }), input(points(body)));

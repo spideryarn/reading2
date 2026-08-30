@@ -67,6 +67,7 @@ import {
 import type { Block, BlockId, NodeId } from "../types.js";
 import {
   DIAGRAMS,
+  chainNearness,
   type DiagramKind,
   LINE_STEP,
   type DiagramLayout,
@@ -85,7 +86,7 @@ import { useRenderCount } from "./perf.js";
 import { stepTarget } from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
 import { SketchView } from "./SketchView.js";
-import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
 interface Props {
   /**
@@ -338,6 +339,17 @@ function rank(kind: LinkKind): number {
  */
 const PART_HUES = 8;
 
+/**
+ * The second paragraph on both step buttons' cards.
+ *
+ * Written once because it is the same fact about both, and because the thing it
+ * has to say is the thing neither arrow can show: **the unit is whatever the
+ * picture is made of**, which is sections on Force and single paragraphs on the
+ * two scatters. The readout between them is the only other place that says so.
+ */
+const STEP_HOW =
+  "The same step the ↑ and ↓ keys make, and it steps by a row of the picture rather than by a node — so one press is always one visible move. Part-way into something, the first press goes to the top of what you are in before it steps past it, which is the rule every music player uses.";
+
 export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, axis, onAxis, hue, onHue }: Props) {
   useRenderCount("DiagramPanel");
   /**
@@ -503,9 +515,11 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
 
   /* **The two scatters, and only those two.** Same narrow gate as `similar`
      above and for the same reason: this costs a model call the first time, and
-     pressing a toggle is not a purchase decision. The server shares the vectors
-     between the two endpoints, so a reader who has already opened Force pays
-     only for the arithmetic here. See useProjection.ts. */
+     pressing a toggle is not a purchase decision. **A whole one, not a share**:
+     this said the server pooled the vectors between the two endpoints so Force
+     paid for them once, which is what `src/article-vectors.ts` exists for and
+     is not wired up — `similar.ts` still embeds the article itself, so a cold
+     Force → Drift buys them twice. ⟨Sol⟩, 2026-08-30. See useProjection.ts. */
   const wantsPoints = NEEDS_POINTS.has(kind);
   const projection = useProjection(slug, drawable && wantsPoints);
 
@@ -596,6 +610,25 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
      nodes rather than from the tree, so a closed section's mark lands on the
      closed section rather than vanishing. */
   const here = useMemo(() => nodeAt(layout?.nodes ?? [], atRow), [layout, atRow]);
+
+  /**
+   * **The sequence chain, graded by how far each line is from the reader.**
+   *
+   * Greg, 2026-08-30: *"making the connections directly either side of the
+   * current node most prominent. Then a bit fainter for the ones at one remove,
+   * then a bit fainter for the ones at two removes, etc etc."*
+   *
+   * Here rather than in either layout, and centred on `here` rather than on
+   * `shown`. `here` is where the reader is *standing*; `shown` follows the
+   * pointer, and a chain that re-centres itself under the mouse would stop
+   * being a position readout the moment you tried to read anything else with
+   * it. The one place in this panel where hover deliberately changes nothing.
+   *
+   * Memoised on the layout and on `here`, which between them are the only two
+   * inputs — so scrolling within one section costs nothing, and crossing into
+   * the next costs one walk of the chain.
+   */
+  const nearness = useMemo(() => chainNearness(layout?.links ?? [], here), [layout, here]);
 
   /* `aria-setsize` / `aria-posinset` for every node, computed once per layout
      rather than twice per node per render — the walk is O(n) each and there are
@@ -896,13 +929,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                    § keepSide has the measurement. */
                 keepSide
                 className="tip-soon"
-                content={
-                  <>
-                    <div className="tip-soon-head">{ui.label}</div>
-                    <p>{ui.blurb}</p>
-                    <p className="diag-tip-how">{ui.how}</p>
-                  </>
-                }
+                content={<ControlTip head={ui.label} what={ui.blurb} how={ui.how} />}
               >
                 {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern, and the same call Dock.tsx and SearchPanel.tsx already make — a real <input type="radio"> cannot carry an icon beside its label, and styling one to match means hiding the input and faking every state it already had */}
                 <button
@@ -982,11 +1009,19 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
               value={axis}
               onChange={onAxis}
               options={[
-                { value: "lanes", label: "Lanes", blurb: "One column per topic the model found" },
+                {
+                  value: "lanes",
+                  label: "Lanes",
+                  blurb:
+                    "One column per topic the model found, left to right by where the article gets to each. A subject the piece returns to is a second stack of dots in the same column, a long way further down.",
+                  how: "Within a lane, sideways is how central that paragraph is to its own topic — the core is a tight column, marginal members lean out. The number of lanes is worked out from the article's length and capped at eight, which is a fact about a 300px band rather than about the article.",
+                },
                 {
                   value: "spread",
                   label: "Spread",
-                  blurb: "One sliding scale — the single biggest axis of variation in the article",
+                  blurb:
+                    "Every paragraph on one sliding scale — the single biggest axis of variation in the article.",
+                  how: "Honest about degree where Lanes is honest about grouping. Nothing more to buy: both are arithmetic over the same model call.",
                 },
               ]}
             />
@@ -996,13 +1031,25 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
             value={hue}
             onChange={onHue}
             options={[
-              { value: "section", label: "Section", blurb: "The same eight hues the other pictures use" },
+              {
+                value: "section",
+                label: "Section",
+                blurb:
+                  "The same eight hues the rest of the app uses, one per part of the article, reused round it.",
+                how: "Positional, and it means nothing beyond it: the hue says these dots belong together, so the eye can group them without reading anything.",
+              },
               {
                 value: "progress",
                 label: "Progress",
-                blurb: "Dark at the start of the article, bright at the end",
+                blurb: "Dark at the start of the article, bright at the end.",
+                how: "The one setting that answers \u201cdoes this piece travel through its subject or circle back over it?\u201d without following the chain — which on a long article is a web you cannot trace.",
               },
-              { value: "topic", label: "Topic", blurb: "The model's own grouping" },
+              {
+                value: "topic",
+                label: "Topic",
+                blurb: "The model\u2019s own grouping — one hue per topic, the same one the Lanes columns use.",
+                how: "The way to see the grouping on Trail, which has no lanes to show it in. The words each topic was named after are in the legend under Drift.",
+              },
             ]}
           />
         </div>
@@ -1022,21 +1069,36 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           style={{ "--lanes": lanes.length } as React.CSSProperties}
         >
           {lanes.map((words, i) => (
-            <li
+            /* **A card, because one word is not a name.** The chip shows the
+                lane's top word and the other two are the difference between a
+                label a reader can argue with and one they have to take on
+                trust — which is the whole reason the legend exists. A `title`
+                held them and was unreachable on the device this band is
+                narrowest on. */
+            <Tooltip
               // The lane index IS the identity here — lane 3 is lane 3 whatever
               // words it happens to hold this time.
               // biome-ignore lint/suspicious/noArrayIndexKey: see above
               key={i}
-              className="diag-lane"
-              style={hue === "topic" ? slotStyle(i) : undefined}
-              title={
-                words.length > 0
-                  ? `Column ${i + 1}: ${words.join(" · ")}`
-                  : `Column ${i + 1}: no distinctive words`
+              placement="bottom"
+              keepSide
+              className="tip-soon"
+              content={
+                <ControlTip
+                  head={`Column ${i + 1} of ${lanes.length}`}
+                  what={
+                    words.length > 0
+                      ? `The paragraphs in this column are the ones about: ${words.join(", ")}.`
+                      : "Nothing distinguishes this column's paragraphs from the rest — it is a group the arithmetic found and cannot name."
+                  }
+                  how="The words are the ones most distinctive to this column rather than commonest in it, so a word that is everywhere in the article scores zero and drops out. Columns run left to right by where the article gets to each topic."
+                />
               }
             >
-              {words[0] ?? "—"}
-            </li>
+              <li className="diag-lane" style={hue === "topic" ? slotStyle(i) : undefined}>
+                {words[0] ?? "—"}
+              </li>
+            </Tooltip>
           ))}
         </ul>
       )}
@@ -1073,7 +1135,20 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
 
       {kind === "force" && similar.status !== "idle" && (
         <p className="diag-note" role="status">
-          {similar.status === "loading" && "Reading the article for related passages…"}
+          {/* **The spinner, in the strip rather than over the picture.** Greg,
+              2026-08-30: *"Make sure the diagrams in Diagram mode show loading
+              spinners if they're generating."* Force is four fifths drawn while
+              this call is in flight, so a spinner across it would say the wrong
+              thing about what is missing — but a line of 10.5px grey that only
+              changes its *words* when the answer lands does not read as work in
+              progress either, it reads as a caption. Size 11 to sit on this
+              strip's own line rather than doubling its height. */}
+          {similar.status === "loading" && (
+            <>
+              <LoaderCircle className="cmt-spinner" size={11} aria-hidden="true" />
+              Reading the article for related passages…
+            </>
+          )}
           {/* **Counted from the lines actually drawn, not from the pairs that
               came back.** Those are different numbers: the client drops pairs
               whose passages sit in one section, and pairs whose sections the
@@ -1091,8 +1166,21 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
               allowed to use the model, which no amount of reaching would have
               fixed. It also threw away a bracketed code the reader could quote.
               ⟨Sol⟩, 2026-08-28. */}
-          {similar.status === "error" &&
-            `There are no dotted lines, and the rest of the picture is unaffected. ${similar.error ?? "The reason did not come back."}`}
+          {similar.status === "error" && (
+            <>
+              {`There are no dotted lines, and the rest of the picture is unaffected. ${similar.error ?? "The reason did not come back."}`}{" "}
+              {/* **A verb to go with the reason.** The fetch runs once from an
+                  effect, so without this the reader has the failure on screen
+                  and nothing to do about it — the only way back is to leave the
+                  mode and come in again, which nothing says. Greg, 2026-08-30:
+                  *"And/or a button to trigger generation if needed."* */}
+              <TryAgain
+                onClick={similar.retry}
+                what="the dotted lines"
+                how="One embedding call, and the picture you can already see is unaffected either way — the four other kinds of line never needed the server."
+              />
+            </>
+          )}
         </p>
       )}
 
@@ -1231,8 +1319,17 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                 /* `kind` where the picture has kinds, `depth` where it does not.
                    Both classes are emitted rather than one, because the three
                    tree pictures' stylesheets are written against `diag-d*` and
-                   this must not change what they draw. */
-                className={`diag-link diag-d${l.depth}${l.kind ? ` diag-link-${l.kind}` : ""}`}
+                   this must not change what they draw.
+
+                   `diag-near-*` is the third, and only the sequence chain ever
+                   gets one — see `nearness` above. It is absent, rather than set
+                   to its faintest step, on every line the ramp does not reach
+                   and on every line at all when the reader is nowhere; the
+                   stylesheet's job is then to make the ramp's last step land on
+                   what an unclassed chain already looks like. */
+                className={`diag-link diag-d${l.depth}${l.kind ? ` diag-link-${l.kind}` : ""}${
+                  nearness.has(l.id) ? ` diag-near-${nearness.get(l.id)}` : ""
+                }`}
                 style={slotStyle(l.part)}
                 d={l.d}
                 fill="none"
@@ -1293,31 +1390,101 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           pictures (a section on Tree and Force, a paragraph on the two
           scatters) and the one thing a pair of arrows cannot show. */}
       <div className="diag-step">
-        <button
-          type="button"
-          className="diag-step-btn"
-          onClick={() => stepTo(-1)}
-          disabled={!canStep(-1)}
-          aria-label={`Previous ${unit}`}
+        <Tooltip
+          placement="top"
+          keepSide
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={`Previous ${unit}`}
+              what={
+                canStep(-1)
+                  ? `Moves the article back one ${unit}, and the mark in the picture with it.`
+                  : `Nothing to go back to — you are at the first ${unit} the picture draws.`
+              }
+              how={STEP_HOW}
+            />
+          }
         >
-          <ChevronUp size={22} />
-        </button>
+          {/* **`aria-disabled`, not `disabled`, and the card is the whole
+              reason.** A disabled button cannot be focused and does not fire
+              mouse events, so its card is unreachable by any route — and the
+              reader who most wants to know why this button is dead is exactly
+              the reader who cannot open the sentence saying so. So it stays in
+              the tab order, keeps its greyed look, announces itself as
+              unavailable, and the press does nothing. Nothing had to be added
+              for that last part: `stepTo` already returns when `stepTarget`
+              gives no row, which is the same condition `canStep` reports — so
+              the button was never doing anything at the ends anyway, and
+              `disabled` was only ever the styling and the announcement. */}
+          <button
+            type="button"
+            className="diag-step-btn"
+            onClick={() => stepTo(-1)}
+            aria-disabled={!canStep(-1)}
+            aria-label={`Previous ${unit}`}
+          >
+            <ChevronUp size={22} />
+          </button>
+        </Tooltip>
         {/* `aria-live` off: this changes on every scroll, and a screen reader
             announcing "12 of 47" continuously while the reader moves down the
             page is noise over the prose they are actually reading. The buttons
             say what they do, and the card below says where you have landed. */}
-        <span className="diag-step-at" title={`${unit} ${rung} of ${starts.length}`}>
-          {starts.length > 0 ? `${rung} / ${starts.length}` : "—"}
-        </span>
-        <button
-          type="button"
-          className="diag-step-btn"
-          onClick={() => stepTo(1)}
-          disabled={!canStep(1)}
-          aria-label={`Next ${unit}`}
+        <Tooltip
+          placement="top"
+          keepSide
+          className="tip-soon"
+          content={
+            <ControlTip
+              head="Where you are"
+              what={
+                starts.length > 0
+                  ? `The ${unit} you are standing in, out of ${starts.length} the picture draws.`
+                  : "There is nothing to step through in this picture yet."
+              }
+              how={`The unit is read off what is actually drawn rather than off which picture is lit — so it says ${unit} here, and would say something else on a picture made of different rows.`}
+            />
+          }
         >
-          <ChevronDown size={22} />
-        </button>
+          {/* **A tab stop, because the card on it is otherwise unreachable.**
+              This is the one place that says what a press of the arrows moves
+              *by* — a section here, a paragraph on the two scatters — and the
+              number beside it is a count of exactly that unit. A card on an
+              element nothing can focus is a card a keyboard reader cannot open,
+              which is the same failure the `title` attribute had for touch. So
+              the readout takes a tab stop it does not need for its own sake. */}
+          {/* biome-ignore lint/a11y/noNoninteractiveTabindex: see above — the tab stop exists so the hover card on this readout is reachable by keyboard, which is the whole point of it not being a `title` */}
+          <span className="diag-step-at" tabIndex={0}>
+            {starts.length > 0 ? `${rung} / ${starts.length}` : "—"}
+          </span>
+        </Tooltip>
+        <Tooltip
+          placement="top"
+          keepSide
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={`Next ${unit}`}
+              what={
+                canStep(1)
+                  ? `Moves the article on one ${unit}, and the mark in the picture with it.`
+                  : `Nothing to go on to — you are at the last ${unit} the picture draws.`
+              }
+              how={STEP_HOW}
+            />
+          }
+        >
+          <button
+            type="button"
+            className="diag-step-btn"
+            onClick={() => stepTo(1)}
+            aria-disabled={!canStep(1)}
+            aria-label={`Next ${unit}`}
+          >
+            <ChevronDown size={22} />
+          </button>
+        </Tooltip>
       </div>
 
       <DetailCard
@@ -1368,10 +1535,24 @@ function Waiting({ projection }: { projection: UseProjection | null }) {
   if (projection === null) return <p className="diag-wait">This picture has nothing to draw yet.</p>;
   if (projection.status === "error") {
     return (
-      <p className="diag-wait" role="status">
-        Could not place these paragraphs.{" "}
-        {projection.error ?? "The reason did not come back."}
-      </p>
+      /* **A column, and the sentence gets its own element.** `.diag-wait` is a
+         centred flex row — right for a spinner beside six words, wrong here: the
+         reason is the server's own and runs to three lines in a 288px band, and
+         a row would stand the button beside it and squeeze both. `wide` turns
+         the axis rather than letting the text wrap around the button. */
+      <div className="diag-wait wide" role="status">
+        <span>
+          Could not place these paragraphs.{" "}
+          {projection.error ?? "The reason did not come back."}
+        </span>
+        {/* Unlike Force, this failure leaves the band with nothing in it at all,
+            so the button is the only thing on screen the reader can press. */}
+        <TryAgain
+          onClick={projection.retry}
+          what="this picture"
+          how="One embedding call, which reads every paragraph. Drift and Trail share the answer, so paying here pays for both."
+        />
+      </div>
     );
   }
   /* Ready, and no dots came back at all: an article of one long paragraph, or
@@ -1395,6 +1576,43 @@ function Waiting({ projection }: { projection: UseProjection | null }) {
 }
 
 /**
+ * **The second try**, shown beside a failure and nowhere else.
+ *
+ * Both fetches in this panel run once from an effect, and until 2026-08-30 a
+ * reader whose request failed had the server's reason on screen and no verb
+ * anywhere — the way back was to leave the mode and come in again, which nothing
+ * said. Greg: *"And/or a button to trigger generation if needed."*
+ *
+ * A plain `<button>` rather than shadcn's, because both places it lands are a
+ * sentence of 10.5–12.5px chrome and a real button in the middle of a sentence
+ * changes the line height around it. It is inline text with a little padding
+ * around it — and that padding is worth about 23px of height in the band and
+ * less in the strip, which is under WCAG 2.2's 24px minimum and a long way under
+ * Apple's 44. Said plainly rather than described as "hittable on touch", which
+ * is what this claimed (⟨Sol⟩, 2026-08-30): the honest version is that it is a
+ * link-sized target in a line of chrome, and the step bar below is what this
+ * panel offers a thumb.
+ *
+ * `what` goes in the accessible name, never in the visible label. Not because
+ * two of these can be on screen together — they cannot, and it is worth saying
+ * so rather than implying otherwise: `similar` is gated on Force and
+ * `projection` on the two scatters, so the picture on screen decides which
+ * failure exists. It is that **"Try again" on its own names nothing**, and a
+ * reader arriving at this button by Tab, out of the two sentences of chrome
+ * around it, gets "button, Try again" and no object.
+ */
+function TryAgain({ onClick, what, how }: { onClick(): void; what: string; how: string }) {
+  return (
+    <Tooltip placement="top" keepSide className="tip-soon" content={<ControlTip head="Try again" what={`Ask the server for ${what} a second time.`} how={how} />}>
+      <button type="button" className="diag-again" onClick={onClick} aria-label={`Try ${what} again`}>
+        Try again
+      </button>
+    </Tooltip>
+  );
+}
+
+
+/**
  * One row of the second control strip — a radiogroup of small chips.
  *
  * The same one-tab-stop-plus-arrows shape as the kind switcher above it and as
@@ -1412,7 +1630,7 @@ function Choice<T extends string>({
   label: string;
   value: T;
   onChange(next: T): void;
-  options: { value: T; label: string; blurb: string }[];
+  options: { value: T; label: string; blurb: string; how: string }[];
 }) {
   return (
     /* The caption sits OUTSIDE the radiogroup. A `<span>` among the radios is a
@@ -1421,17 +1639,32 @@ function Choice<T extends string>({
        of index the focus move below has to get right. */
     <div className="diag-opt">
       <span className="diag-opt-label">{label}</span>
+      {/* **Hover cards, not `title` attributes** — see `ControlTip`. These are
+          the chips that decide what an axis *means*, which is the one thing a
+          reader cannot recover by pressing them and looking: two arrangements
+          of the same dots both look like arrangements of dots. Grouped, so
+          reading along the row is one gesture. */}
       <div className="diag-opt-set" role="radiogroup" aria-label={label}>
+        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {options.map((o, i) => (
-        /* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern — see the kind switcher above */
-        <button
+        <Tooltip
           key={o.value}
+          placement="bottom"
+          /* Same finding as the kind chips': the card is wider than a chip and
+             these sit near the band's left edge, so without this the card is
+             thrown sideways onto the neighbours the reader is reading towards.
+             Tooltip.tsx § keepSide. */
+          keepSide
+          className="tip-soon"
+          content={<ControlTip head={o.label} what={o.blurb} how={o.how} />}
+        >
+        {/* biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern — see the kind switcher above */}
+        <button
           type="button"
           role="radio"
           aria-checked={o.value === value}
           tabIndex={o.value === value ? 0 : -1}
           className={`diag-opt-btn${o.value === value ? " on" : ""}`}
-          title={o.blurb}
           onClick={() => onChange(o.value)}
           onKeyDown={(e) => {
             const d =
@@ -1454,12 +1687,29 @@ function Choice<T extends string>({
                lands back inside the group instead of leaving it. The kind
                switcher above already does this; this one did not until GPT Sol
                read it, and the failure is one press away from looking fine. */
-            (e.currentTarget.parentElement?.children[at] as HTMLElement | undefined)?.focus();
+            /* **By value, not by walking the parent's children.** Each button
+               is now wrapped in a `<Tooltip>`, and although the wrapper clones
+               its child rather than adding an element — so the walk still
+               happens to work — relying on that is one refactor away from a
+               control that silently stops moving. The kind switcher above was
+               changed the same way and for the same reason. */
+            /* Scoped to *this* group with `closest`, not to the document:
+               there are two of these rows on screen at once, and a value name
+               shared between them would otherwise move focus into the other
+               one. Nothing collides today, which is what would make that bug
+               arrive later and look like nothing to do with this line. */
+            e.currentTarget
+              .closest(".diag-opt-set")
+              ?.querySelector<HTMLElement>(`[data-diag-opt="${next.value}"]`)
+              ?.focus();
           }}
+          data-diag-opt={o.value}
           >
             {o.label}
           </button>
+        </Tooltip>
         ))}
+        </TooltipGroup>
       </div>
     </div>
   );

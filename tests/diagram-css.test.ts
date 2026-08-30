@@ -21,7 +21,13 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { DIAGRAMS, LABEL_PX, LINK_KINDS, UNLABELLED } from "../src/web/diagram.js";
+import {
+  CHAIN_NEAR_LEVELS,
+  DIAGRAMS,
+  LABEL_PX,
+  LINK_KINDS,
+  UNLABELLED,
+} from "../src/web/diagram.js";
 
 const CSS = readFileSync("src/web/styles.css", "utf8");
 
@@ -156,6 +162,91 @@ describe("the Force picture's five kinds of line", () => {
     const token = /var\((--[\w-]+)\)/.exec(head)?.[1];
     expect(token, "the arrowhead should use a custom property").toBeTruthy();
     expect(line).toContain(`var(${token})`);
+  });
+
+  it("draws the reader's own stretch of the chain more strongly than the rest", () => {
+    /* Greg, 2026-08-30: *"making the connections directly either side of the
+       current node most prominent. Then a bit fainter for the ones at one
+       remove, then a bit fainter for the ones at two removes, etc etc."*
+
+       `chainNearness` (src/web/diagram.ts) emits `diag-near-0` … `diag-near-7`
+       and nothing else, so a level with no rule is a segment silently drawn at
+       the base weight — the exact failure this whole block exists for: the
+       picture still draws, and the ramp just has a hole in it. */
+    for (const picture of ["force", "trail"]) {
+      const missing = Array.from({ length: CHAIN_NEAR_LEVELS }, (_, i) => i).filter(
+        (i) => !new RegExp(`\\.diag-${picture} [^{]*\\.diag-near-${i}[\\s,{]`).test(CSS),
+      );
+      expect(missing, `${picture} is missing a step`).toEqual([]);
+    }
+  });
+
+  it("lands the ramp's far end on the weight the chain has anyway", () => {
+    /* **The ramp only ever brightens** — see `chainNearness`. Its last step has
+       to equal the unclassed chain, or every article gets a visible edge at the
+       point the ramp stops, which is worse than no ramp: it reads as a boundary
+       in the article rather than as the end of a highlight.
+
+       Force only. Trail's chain has a global fade underneath it, so its far
+       step is a blend rather than a match, and asserting equality there would
+       be asserting a number nobody chose. */
+    const base = /\.diag-force \.diag-link-sequence\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
+    const last =
+      new RegExp(
+        `\\.diag-force \\.diag-link-sequence\\.diag-near-${CHAIN_NEAR_LEVELS - 1}\\s*\\{([^}]*)\\}`,
+      ).exec(CSS)?.[1] ?? "";
+    const of = (rule: string, prop: string) =>
+      Number(new RegExp(`${prop}:\\s*([\\d.]+)`).exec(rule)?.[1] ?? Number.NaN);
+    expect(of(base, "opacity")).toBeGreaterThan(0);
+    expect(of(last, "opacity")).toBe(of(base, "opacity"));
+    expect(of(last, "stroke-width")).toBe(of(base, "stroke-width"));
+
+    // And step 0 really is the loud end, or the ramp is pointing the wrong way.
+    const first =
+      /\.diag-force \.diag-link-sequence\.diag-near-0\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
+    expect(of(first, "opacity")).toBeGreaterThan(of(last, "opacity"));
+    expect(of(first, "stroke-width")).toBeGreaterThan(of(last, "stroke-width"));
+  });
+
+  it("lands Trail's ramp on the global fade the segment would have had anyway", () => {
+    /* **The cliff GPT Sol found on 2026-08-30, and the test that would have.**
+       Trail's chain carries two fades: how far through the article a segment is
+       (`diag-d0`–`diag-d6`, 0.16 → 0.5) and how near the reader it is
+       (`diag-near-*`). Both were plain `opacity`, equally specific, and the near
+       rules came second — so the ramp's *last* step, which exists to be
+       indistinguishable from no step at all, painted an early-article segment at
+       0.52 beside an unclassed neighbour at 0.16. A threefold jump at exactly
+       the boundary the design claims not to have.
+
+       The fix is composition: the global fade is a custom property, and every
+       near step is a lerp that resolves to it at level 7. So what has to hold is
+       that no `diag-d*` rule spends `opacity` — spending it there is what makes
+       the two fades fight instead of compose — and that level 7 spends no
+       literal of its own.
+
+       Probed by putting the eight literal opacities back: this reddens on both
+       counts, and the Force boundary test above stays green, which is why this
+       one has to exist separately. */
+    for (let d = 0; d <= 6; d++) {
+      const rule = new RegExp(`\\.diag-trail \\.diag-link\\.diag-d${d}\\s*\\{([^}]*)\\}`).exec(CSS)?.[1];
+      expect(rule, `no rule for diag-d${d}`).toBeTruthy();
+      expect(rule, `diag-d${d} should carry the fade as a property`).toContain("--chain-fade");
+      expect(/(^|[\s;])opacity\s*:/.test(rule ?? ""), `diag-d${d} spends opacity`).toBe(false);
+    }
+
+    const base = /\.diag-trail \.diag-link\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
+    expect(base).toMatch(/opacity:\s*var\(--chain-fade/);
+
+    const last =
+      new RegExp(
+        `\\.diag-trail \\.diag-link\\.diag-near-${CHAIN_NEAR_LEVELS - 1}\\s*\\{([^}]*)\\}`,
+      ).exec(CSS)?.[1] ?? "";
+    // No literal: the last step IS the global fade, whatever it happens to be.
+    expect(last).toMatch(/opacity:\s*var\(--chain-fade/);
+    // …and the near end is still the loud one, or the ramp points the wrong way.
+    const first =
+      /\.diag-trail \.diag-link\.diag-near-0\s*\{([^}]*)\}/.exec(CSS)?.[1] ?? "";
+    expect(first).toMatch(/opacity:\s*1\b/);
   });
 
   it("puts the marker's tip at the end of the path, in fixed units", () => {

@@ -63,6 +63,7 @@
 import { isBody } from "../block-policy.js";
 import type { Block, BlockId, NodeId, ProjectionPoint } from "../types.js";
 import {
+  chainReach,
   type DiagramLayout,
   type DiagramLink,
   type DiagramNode,
@@ -118,21 +119,14 @@ const ROW = 6;
  */
 const TRAIL_MIN_H = 260;
 
-/** How many steps of fade the chain gets, oldest to newest. Matches the CSS. */
-const CHAIN_STEPS = 9;
 /**
- * How many segments either side of the reader are drawn at full strength, at
- * most — **and it scales down on a short article**.
+ * How many steps of fade the chain gets, oldest to newest. Matches the CSS.
  *
- * Eight either side is a bright run of seventeen, which on a 275-dot chain is a
- * local landmark and on a 29-dot chain is most of the picture. A "you are here"
- * that covers three fifths of the chain is not a landmark, it is a wash. Caught
- * by the test rather than by looking, which is the point of having one: at 320
- * pixels wide both versions look like a picture with a bright bit in it.
+ * **Seven, and it was nine.** The top two were reserved for the reader's own
+ * stretch, which is `chainNearness` in diagram.ts now (see `chainStep`), so the
+ * global ramp has its whole range back.
  */
-const NEAR_READER = 8;
-/** …but never more than this share of the whole chain. */
-const NEAR_READER_SHARE = 0.06;
+const CHAIN_STEPS = 7;
 /**
  * The shortest segment worth putting an arrowhead on, in px.
  *
@@ -622,10 +616,13 @@ function laneX(kept: readonly Dot[], k: number, left: number, right: number): (d
  *  - the chain is a hairline, and its **opacity ramps with reading position**,
  *    so the beginning of the article is a whisper and the end is clear. Even in
  *    the tangle the eye can find which way the piece was going.
- *  - **an arrowhead every eighth segment**, plus the last. 359 heads in this
- *    box is a texture rather than a direction.
- *  - **the reader's own position is drawn strongly** by the panel, so the
- *    picture can be read while scrolling.
+ *  - **arrowheads only on the reader's own stretch**, and none at all before
+ *    `?at=` exists. 359 heads in this box is a texture rather than a direction.
+ *  - **the reader's own position is drawn strongly**, as a ramp that is
+ *    brightest on the two segments either side of them and fades back into the
+ *    chain over the next few — `chainNearness` in diagram.ts, painted by the
+ *    panel — so the picture can be read while scrolling rather than only
+ *    studied.
  *  - colour by **progress** is the sensible default here, where the section
  *    hues are the default everywhere else — this is the one picture with no
  *    axis carrying position, so without it nothing says which end of the
@@ -687,16 +684,58 @@ export function layoutTrail(
   const here =
     at === null ? -1 : placed.findIndex((p) => at >= p.d.startRow && at <= p.d.endRow);
 
-  const links: DiagramLink[] = [];
+  /**
+   * **Pass one: which segments get drawn at all**, so that the arrowhead rule
+   * below and `chainNearness` in the panel are measuring the same chain.
+   *
+   * The arrowhead run used to be sized off `placed.length - 1` — every
+   * *candidate* segment — while the panel sizes its ramp off the links actually
+   * drawn. GPT Sol's finding, 2026-08-30: with 28 dots and one segment dropped
+   * the geometry reaches `chainReach(27) === 5` and the panel reaches
+   * `chainReach(26) === 4`, which puts a head on a segment the ramp has already
+   * let go. One count, computed once, and the two cannot disagree.
+   *
+   * **Drawability does not depend on the arrowhead, which is what makes a
+   * single pass possible.** `stop` below is larger when a head is drawn — but a
+   * head is only drawn when `len` has already cleared `tail + head +
+   * MIN_ARROW_RUN`, and `head` is `b.r + HEAD_GAP` against a bare `b.r + 0.5`.
+   * So the test here is the whole test, and nothing downstream can drop a
+   * segment this pass kept.
+   */
+  const segments = [];
   for (let i = 0; i + 1 < placed.length; i++) {
     const a = placed[i];
     const b = placed[i + 1];
-    if (!a || !b) continue;
+    /* The two drawn nodes, taken alongside the two placed dots so the segment
+       can name its endpoints — `nodes` is `placed` mapped one to one, so these
+       are the same two things and the guard is for the type checker. */
+    const an = nodes[i];
+    const bn = nodes[i + 1];
+    if (!a || !b || !an || !bn) continue;
     const dx = b.cx - a.cx;
     const dy = b.cy - a.cy;
     const len = Math.hypot(dx, dy);
-    const ux = len > 0 ? dx / len : 0;
-    const uy = len > 0 ? dy / len : 0;
+    /* Two dots on top of one another — the article saying the same thing twice
+       in a row, or two paragraphs the model cannot tell apart. There is no
+       direction to draw and no room to draw it in. */
+    if (len <= a.r + 0.5 + b.r + 0.5) continue;
+    segments.push({
+      i,
+      a,
+      b,
+      an,
+      bn,
+      len,
+      ux: len > 0 ? dx / len : 0,
+      uy: len > 0 ? dy / len : 0,
+    });
+  }
+
+  /** One reach for the heads and the ramp, over the chain that exists. */
+  const reach = chainReach(segments.length);
+
+  const links: DiagramLink[] = [];
+  for (const { i, a, b, an, bn, len, ux, uy } of segments) {
     const tail = a.r + 0.5;
     /* **An arrowhead at the centre of the target dot is under the dot**, and
        nothing errors — the line still draws and the feature reads as "the
@@ -712,21 +751,36 @@ export function layoutTrail(
        arrow**. Direction is carried by the other heads and by the fade; a gap
        would be carried by nothing. */
     const head = b.r + HEAD_GAP;
-    const step = chainStep(i, placed.length, here);
-    /* **Every segment of the bright run gets a head, and nothing else gets
-       one.** Globally there are none, which is the change two design reviews
-       and a browser pass reached independently, 2026-08-27: thirty-odd heads
-       scattered through a hairball of 263 crossing segments are clutter, and
-       *direction along a path you cannot trace is not information*. Inside the
-       run the path genuinely is traceable, and there it is a dozen or so heads
-       on a line the eye can follow — so every one of them earns its ink. */
-    const wanted = step === CHAIN_STEPS - 1;
+    const step = chainStep(i, placed.length);
+    /* **Every segment of the reader's own run gets a head, and nothing else
+       gets one.** Globally there are none, which is the change two design
+       reviews and a browser pass reached independently, 2026-08-27: thirty-odd
+       heads scattered through a hairball of 263 crossing segments are clutter,
+       and *direction along a path you cannot trace is not information*. Inside
+       the run the path genuinely is traceable, and there it is a dozen or so
+       heads on a line the eye can follow — so every one of them earns its ink.
+
+       **This is the one thing left here that needs `here`, and it is geometry
+       rather than styling**: a segment carrying a head is trimmed further back
+       so the head has room (`stop` below), so the decision cannot be deferred
+       to the panel the way the brightness ramp now is.
+
+       **The inner half of the ramp, not all of it** — halved because the ramp's
+       outer steps are back at the chain's own weight by design, and a head out
+       there is the clutter this rule exists to prevent. `reach` is the one the
+       panel's ramp uses, over the segments this picture actually drew, so the
+       heads cannot land outside the run they belong to.
+
+       **Distance to the nearer end of the segment, not to its start.** Link `i`
+       joins dot `i` to dot `i + 1`, so `|i - here|` calls the link *into* the
+       reader's dot one step further away than the link *out* of it — a window
+       shifted one segment down the article, always missing one link backwards.
+       It looked symmetric and was not. GPT Sol's finding, 2026-08-30; the same
+       asymmetry is why `chainNearness` takes the nearer of a link's two ends. */
+    const near = Math.min(Math.abs(i - here), Math.abs(i + 1 - here));
+    const wanted = here >= 0 && near * 2 < reach;
     const arrow = wanted && len > tail + head + MIN_ARROW_RUN;
     const stop = arrow ? head : b.r + 0.5;
-    /* Two dots on top of one another — the article saying the same thing twice
-       in a row, or two paragraphs the model cannot tell apart. There is no
-       direction to draw and no room to draw it in. */
-    if (len <= tail + stop) continue;
     links.push({
       id: `trail${i}-${a.d.block.id}`,
       d: `M ${round(a.cx + ux * tail)} ${round(a.cy + uy * tail)} L ${round(b.cx - ux * stop)} ${round(b.cy - uy * stop)}`,
@@ -734,14 +788,24 @@ export function layoutTrail(
       // chain that took its colour from one end would look like a claim about
       // which section owns the transition.
       part: -1,
-      /* **`depth` carries how far through the article this segment is**, 0–8,
+      /* **`depth` carries how far through the article this segment is**, 0–6,
          and the stylesheet reads it back as opacity. It is not a depth here and
          there is no tree to have one — the field is the one channel a link
          already has, and inventing a second would mean touching every picture's
          stylesheet. Written down because `diagram.ts` is emphatic that `depth`
-         stopped being used as a kind, and this is a third use of it. */
+         stopped being used as a kind, and this is a third use of it.
+
+         It used to carry the reader's position too, as a top step the segments
+         around them jumped to. That half moved to `chainNearness` (diagram.ts)
+         on 2026-08-30, so this is now only the global ramp — see `chainStep`. */
       depth: step,
       kind: "sequence",
+      /* The chain's topology, for the ramp the panel paints around the reader.
+         Trail's links array is *not* "index i joins dot i to dot i+1" — the
+         `continue` above drops any segment whose two dots coincide — so the
+         endpoints have to be said rather than inferred. */
+      from: an.id,
+      to: bn.id,
       /* `arrow`, not `wanted`. The first version computed the room-for-a-head
          check into a variable and then emitted the raw every-eighth rule here,
          so a segment with no room got its arrowhead anyway — a 6px marker on a
@@ -759,30 +823,33 @@ function round(v: number): number {
 }
 
 /**
- * How strongly to draw one segment of the chain, 0 (a whisper) to 8 (clear).
+ * How strongly to draw one segment of the chain from how far through the
+ * article it is — 0 (a whisper) to 6 (clear).
  *
- * Two things at once, and they are meant to be:
+ * The chain brightens as the article goes on, so even in the tangle the eye can
+ * tell which end it started at.
  *
- * - **globally**, the chain brightens as the article goes on, so even in the
- *   tangle the eye can tell which end it started at;
- * - **locally**, the eight segments either side of where the reader is standing
- *   are drawn at full strength, so the picture can be read *while* scrolling
- *   rather than only studied.
+ * **This used to do two things, and the other one has left.** It also lifted
+ * the sixteen segments either side of the reader to a top step, which is what
+ * made the picture readable while scrolling rather than only studiable — GPT
+ * Sol's review, 2026-08-27, was blunt that fading a 359-segment chain changes
+ * its styling and not its information density, and a bright run the reader can
+ * follow was the answer to that.
  *
- * The local half is the one that does real work. GPT Sol's review, 2026-08-27,
- * was blunt that fading a 359-segment chain changes its styling and not its
- * information density — which is true, and the answer is not a prettier fade
- * but a picture that answers "where am I in this?" A bright run of sixteen
- * segments is a route a reader can actually follow.
+ * That half is now `chainNearness` in diagram.ts, painted by the panel, for two
+ * reasons. Greg asked for the run to be *graded* rather than a plateau —
+ * "directly either side of the current node most prominent … then a bit fainter
+ * for the ones at one remove", 2026-08-30 — and the Force picture wanted the
+ * same thing, which it could not have from here: its layout is a d3 simulation
+ * and giving it the reader's scroll position would re-run several hundred ticks
+ * to change a class name.
  *
- * The global half is therefore compressed into the lower steps, so that the
- * brightest thing on the picture is always the reader rather than the ending.
+ * What is left is therefore only the global half, and it no longer needs to
+ * hold itself below a reserved top step: it spans the whole of its own range.
  */
-function chainStep(i: number, total: number, here: number): number {
-  const near = Math.min(NEAR_READER, Math.max(2, Math.round(total * NEAR_READER_SHARE)));
-  if (here >= 0 && Math.abs(i - here) <= near) return CHAIN_STEPS - 1;
+function chainStep(i: number, total: number): number {
   const progress = total > 1 ? (i + 1) / total : 1;
-  return Math.min(CHAIN_STEPS - 3, Math.floor(progress * (CHAIN_STEPS - 2)));
+  return Math.min(CHAIN_STEPS - 1, Math.floor(progress * CHAIN_STEPS));
 }
 
 /* ── naming the topics ────────────────────────────────────────────────────── */

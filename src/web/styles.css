@@ -6895,7 +6895,7 @@ td.text.has-hit[data-hues="8"] {
    costs, under what it shows. Quieter than the blurb above it, because it is
    the footnote to a sentence rather than a second sentence. `.tip-soon p` sets
    the shared shape; this only takes the colour down. */
-.tip-soon p.diag-tip-how { color: var(--ink-faint); }
+.tip-soon p.tip-soon-how { color: var(--ink-faint); }
 
 /* ---- the step bar ----
  *
@@ -6944,16 +6944,20 @@ td.text.has-hit[data-hues="8"] {
      a finger can land on in this panel. */
   width: 100%;
 }
-.diag-step-btn:hover:not(:disabled) {
+.diag-step-btn:hover:not([aria-disabled="true"]) {
   color: var(--highlight);
   border-color: var(--highlight);
   background: var(--highlight-wash);
 }
-.diag-step-btn:active:not(:disabled) { background: var(--surface-raised); }
-/* **Disabled, not hidden.** At the two ends of the article one of these does
-   nothing, and a button that disappeared would move the other one under the
-   reader's thumb between presses. */
-.diag-step-btn:disabled { opacity: 0.3; cursor: default; }
+.diag-step-btn:active:not([aria-disabled="true"]) { background: var(--surface-raised); }
+/* **Unavailable, not hidden, and not `:disabled` either.** At the two ends of
+   the article one of these does nothing, and a button that disappeared would
+   move the other one under the reader's thumb between presses. It is
+   `aria-disabled` rather than `disabled` because a disabled button cannot be
+   focused and fires no mouse events — so its hover card, which is the thing
+   that says *why* it is dead, would be unreachable by exactly the reader asking
+   the question. See DiagramPanel.tsx § the step bar. */
+.diag-step-btn[aria-disabled="true"] { opacity: 0.3; cursor: default; }
 .diag-step-at {
   font-family: var(--font-ui);
   font-size: 0.72rem;
@@ -7849,8 +7853,10 @@ tr:hover .block-chat,
  * then a bit fainter for the ones at two removes, etc etc."*
  *
  * `diag-near-0` is the two lines touching the section the reader is standing
- * in; the level is a hop count scaled to the chain's length, so the ramp spans
- * the same eight steps on a nine-section article and a fifty-section one
+ * in; the level is a hop count scaled to the chain's length, so the ramp covers
+ * the same range on a nine-section article and a fifty-section one — it ends
+ * where the chain's ordinary weight begins, either way. It does not always use
+ * all eight steps to get there: three hops come out as 0, 3, 5
  * (`chainNearness`, src/web/diagram.ts).
  *
  * **It brightens toward the reader and never dims below the base**, which is
@@ -8224,6 +8230,21 @@ tr:hover .block-chat,
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  margin: 0;
+  padding: 0.15rem 0.7rem 0.3rem;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+}
+/* The other end of `.sk-busy`: a redraw that came back failed.
+
+   **The same grey as every other failure in this band**, not a red. Both of the
+   diagram panel's failures — `.diag-wait`'s and the Force strip's — say what
+   went wrong in `--ink-faint` and let the words carry it, and a red here would
+   be the one message in the band shouting. It would also have to name
+   `--destructive`, which this stylesheet references six times and defines
+   nowhere: bare, the declaration is simply dropped. */
+.sk-failed {
   margin: 0;
   padding: 0.15rem 0.7rem 0.3rem;
   font-family: var(--font-ui);

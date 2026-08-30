@@ -235,7 +235,7 @@ export const LINK_KINDS = [
   "semantic",
 ] as const;
 
-export interface DiagramLink {
+interface DiagramLinkBase {
   id: string;
   d: string;
   part: number;
@@ -255,15 +255,6 @@ export interface DiagramLink {
    */
   depth: number;
   /**
-   * What the line claims. **Required**, and that is the point of it.
-   *
-   * An optional discriminator would leave the exact trap this replaced: a sixth
-   * kind of Force edge could be added, forget to say what it is, and compile.
-   * Every layout therefore names the kind of every line it draws, even where a
-   * picture only ever draws one kind and saying so costs a word.
-   */
-  kind: LinkKind;
-  /**
    * Draw an arrowhead at the target end.
    *
    * A field rather than something the stylesheet derives from `kind`, because
@@ -272,6 +263,218 @@ export interface DiagramLink {
    * writes.
    */
   arrow?: boolean;
+}
+
+/**
+ * One drawn line.
+ *
+ * **A union on `kind`, not an interface with two optional fields**, and that is
+ * the whole of why it is shaped like this. `kind` itself is required for the
+ * reason it always was: an optional discriminator would let a sixth kind of
+ * Force edge be added, forget to say what it is, and compile.
+ *
+ * The `from`/`to` pair is newer and needed the union. `chainNearness` walks the
+ * chain by its endpoints, so a `sequence` link that failed to name them is not
+ * a line with a missing field — it is a **break in the chain**, and the ramp
+ * either side of it silently stops. Optional fields make that state
+ * representable and a producer one edit away from it; here `sequence` requires
+ * both and the other four kinds forbid them.
+ *
+ * **`from?: never` rather than leaving them off**, because leaving them off
+ * forbids the bad combination only in a fresh object literal — assign a named
+ * `const` with a stray `from` on it and excess-property checking does not run.
+ * The `never` is what makes the second branch reject it either way.
+ *
+ * GPT Sol asked for a runtime guard as well, and there is deliberately none:
+ * with two producers, both in this repo and both compiled against this type,
+ * the malformed case cannot be constructed, and a check no fixture can redden
+ * is decoration. These are never deserialised — they are built in-process and
+ * handed straight to React.
+ */
+export type DiagramLink =
+  | (DiagramLinkBase & {
+      kind: "sequence";
+      /**
+       * The two nodes the line runs between, in the direction it is drawn.
+       *
+       * Node *ids*, not indices. The chain is a sorted subset of the drawn nodes
+       * on Force and every dot on Trail, so an index into "the links array"
+       * means a different thing in each — and the panel, which is where the two
+       * meet, holds neither array's ordering.
+       */
+      from: NodeId;
+      to: NodeId;
+    })
+  | (DiagramLinkBase & {
+      kind: Exclude<LinkKind, "sequence">;
+      from?: never;
+      to?: never;
+    });
+
+/**
+ * How many steps of the ramp the sequence chain gets, nearest the reader first.
+ *
+ * Greg, 2026-08-30:
+ *
+ * > making the connections directly either side of the current node most
+ * > prominent. Then a bit fainter for the ones at one remove, then a bit
+ * > fainter for the ones at two removes, etc etc.
+ *
+ * Eight, because the range the ramp has to spend is about 0.45 of opacity — the
+ * chain sits at 0.5 and the top of the ramp is as bright as its colour goes —
+ * and eight steps of it is 0.06 apiece, which is roughly the smallest change in
+ * a 2px stroke that reads as a difference rather than as the same line. More
+ * steps would be a finer gradient than an eye can pick up; fewer would show the
+ * banding.
+ *
+ * Level 8 is *not* a class. It is the chain's ordinary styling, which is what
+ * the ramp lands on — see `chainNearness`.
+ */
+export const CHAIN_NEAR_LEVELS = 8;
+
+/**
+ * How far the ramp reaches along the chain, in hops — the distance at which it
+ * has finished fading back into the chain's ordinary styling.
+ *
+ * Capped at `CHAIN_NEAR_LEVELS` so no two adjacent segments share a level, and
+ * **capped again at a sixth of the whole chain**. The second cap is the one
+ * that was learnt rather than chosen: Trail's chain runs to 359 segments on a
+ * long article and 29 on a short one, and a fixed reach of eight is a local
+ * landmark on the first and *most of the picture* on the second — a "you are
+ * here" covering three fifths of the chain is not a landmark, it is a wash.
+ * That was caught by a test rather than by looking, because at 320 pixels wide
+ * both versions look like a picture with a bright bit in it.
+ *
+ * The floor of 3 is so that a twelve-section article still gets a gradient
+ * rather than one bright pair and a hard edge. A sixth where the plateau this
+ * replaced used a sixteenth, for the same reason: the run is *graded* now, so
+ * its outer segments are already back at the chain's own weight and reaching
+ * further costs the picture almost nothing.
+ */
+export function chainReach(segments: number): number {
+  return Math.min(CHAIN_NEAR_LEVELS, Math.max(3, Math.round(segments / 6)));
+}
+
+/** Every chain link touching a node, so a walk can step from one to the next. */
+type ChainLink = Extract<DiagramLink, { kind: "sequence" }>;
+
+function chainAdjacency(chain: readonly ChainLink[]): Map<NodeId, ChainLink[]> {
+  const touching = new Map<NodeId, ChainLink[]>();
+  for (const l of chain) {
+    for (const end of [l.from, l.to]) {
+      const at = touching.get(end);
+      if (at) at.push(l);
+      else touching.set(end, [l]);
+    }
+  }
+  return touching;
+}
+
+/**
+ * How many links along the chain each node is from `here`, out to `reach`.
+ *
+ * Node distances rather than link distances, because a link's distance is then
+ * the *nearer* of its two ends — which is what makes the two lines either side
+ * of the reader both come out at zero. Walking link to link instead needs this
+ * same map to find the neighbours and then has to remember not to count the
+ * node they share.
+ */
+function hopsFrom(
+  touching: ReadonlyMap<NodeId, ChainLink[]>,
+  here: NodeId,
+  reach: number,
+): Map<NodeId, number> {
+  const hops = new Map<NodeId, number>([[here, 0]]);
+  let frontier: NodeId[] = [here];
+  for (let d = 1; d <= reach && frontier.length > 0; d++) {
+    const next: NodeId[] = [];
+    for (const n of frontier) {
+      for (const l of touching.get(n) ?? []) {
+        const other = l.from === n ? l.to : l.from;
+        if (hops.has(other)) continue;
+        hops.set(other, d);
+        next.push(other);
+      }
+    }
+    frontier = next;
+  }
+  return hops;
+}
+
+/**
+ * Which step of the ramp each sequence link is painted at — 0 for the two lines
+ * that touch the node the reader is standing in, rising to `CHAIN_NEAR_LEVELS`
+ * for everything far enough away to be drawn as the chain always was.
+ *
+ * **Computed here rather than in the layouts, and that is the point.** Force's
+ * layout is a d3 simulation of several hundred ticks; handing it the reader's
+ * scroll position would re-run the whole thing on every scroll in order to
+ * change a class name. Trail's layout does already take `atRow` — it needs it
+ * for the arrowheads, which are geometry — but having it decide brightness too
+ * left two pictures computing one idea in two files and two units. So the
+ * layouts say what the chain *is* (`from`/`to` on `DiagramLink`) and this says
+ * where the reader is standing on it.
+ *
+ * **The ramp only ever brightens.** Its far end is the chain's ordinary
+ * styling, so a link past the reach is left unclassed rather than dimmed — the
+ * alternative, fading the distant chain away, puts a visible cliff wherever the
+ * ramp stops and takes the far half of the article with it. Emphasis near the
+ * reader and emphasis-by-dimming-everything-else look the same to an eye and
+ * are not the same picture.
+ *
+ * A breadth-first walk rather than index arithmetic, because "the chain" is a
+ * path the layout built and not a property of the array's order: Force sorts
+ * its chain by `startRow` and puts the parent, anchor, vocabulary and semantic
+ * edges in the same array, and Trail drops any segment whose two dots coincide.
+ * Neither array means "index i joins node i to node i+1".
+ *
+ * Returns an empty map when the reader is nowhere — no `?at=`, or above the
+ * article — which leaves the chain unmodulated rather than silently picking the
+ * first node as a centre. Likewise when the reader's node is not on the chain
+ * at all, which is a real state: Trail draws no dot for a paragraph inside the
+ * apparatus, and a reader standing in the endnotes belongs nowhere on a chain
+ * made of body paragraphs.
+ *
+ * **It assumes the chain is a simple path**, which both producers guarantee —
+ * Force sorts a set of distinct leaves, Trail walks distinct dots. Hand it a
+ * chain that visits one node twice and the walk would collapse the two
+ * occurrences and take the shorter graph distance, lighting both places the
+ * node appears. Written down rather than defended against: a guard for a shape
+ * no producer can emit is a clause no test can redden.
+ */
+export function chainNearness(
+  links: readonly DiagramLink[],
+  here: NodeId | null,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  if (here === null) return out;
+
+  const chain = links.filter((l) => l.kind === "sequence");
+  const touching = chainAdjacency(chain);
+  if (!touching.has(here)) return out;
+
+  const reach = chainReach(chain.length);
+  const hops = hopsFrom(touching, here, reach);
+
+  for (const l of chain) {
+    const a = hops.get(l.from);
+    const b = hops.get(l.to);
+    if (a === undefined && b === undefined) continue;
+    const d = Math.min(a ?? Number.POSITIVE_INFINITY, b ?? Number.POSITIVE_INFINITY);
+    /* Scaled to the reach rather than used raw, so that the ramp covers the
+       same *range* whether it is walking 8 hops of a long article or 3 of a
+       short one — and so its far end always lands on `CHAIN_NEAR_LEVELS`, the
+       unclassed chain, rather than stopping part-way down and leaving a step.
+
+       The range, not eight distinct steps: at reach 3 the levels emitted are 0,
+       3 and 5, and then the boundary. Three hops cannot be graded eight ways,
+       and the thing worth preserving is where the ramp *ends*, not how finely
+       it is cut on the way. GPT Sol, 2026-08-30, on an earlier version of this
+       comment that said "the same eight steps" and meant it literally. */
+    const level = Math.round((d / reach) * CHAIN_NEAR_LEVELS);
+    if (level < CHAIN_NEAR_LEVELS) out.set(l.id, level);
+  }
+  return out;
 }
 
 export interface DiagramLayout {

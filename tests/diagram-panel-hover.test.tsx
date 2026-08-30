@@ -104,6 +104,39 @@ function rootOnlyArticle(): { root: SummaryNode; blocks: Block[] } {
   return { root: summary, blocks };
 }
 
+/**
+ * Twelve sections over twelve paragraphs, so the reading-order chain is long
+ * enough to have a middle — the two-section fixture above has one link in it,
+ * and a ramp with one step in it proves nothing about a ramp.
+ */
+function longArticle(): { root: SummaryNode; blocks: Block[] } {
+  const blocks = Array.from({ length: 12 }, (_, i) =>
+    block(`b${i}`, `${TOPICS[i % TOPICS.length]} ${i}`),
+  );
+  const mk = (i: number) => ({
+    id: `n${i + 2}`,
+    depth: 1,
+    parent: "n1",
+    children: [],
+    range: [blocks[i]?.id, blocks[i]?.id],
+    title: `Section ${i}`,
+    gist: `Gist ${i}`,
+  });
+  const tree = {
+    version: "1", generator: "t", slug: "s", rootId: "n1",
+    nodes: {
+      n1: {
+        id: "n1", depth: 0, parent: null, children: blocks.map((_, i) => `n${i + 2}`),
+        range: [blocks[0]?.id, blocks[11]?.id], title: "Section n1", gist: "Gist for n1",
+      },
+      ...Object.fromEntries(blocks.map((_, i) => [`n${i + 2}`, mk(i)])),
+    },
+  } as unknown as Tree;
+  const summary = buildSummaryTree(tree, blocks, null);
+  if (!summary) throw new Error("fixture tree is unusable");
+  return { root: summary, blocks };
+}
+
 let host: HTMLDivElement;
 let root: Root;
 
@@ -128,7 +161,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mount(kind: DiagramKind = "force", from: () => { root: SummaryNode; blocks: Block[] } = article) {
+function mount(
+  kind: DiagramKind = "force",
+  from: () => { root: SummaryNode; blocks: Block[] } = article,
+  atRow = 0,
+) {
   const { root: tree, blocks } = from();
   act(() => {
     root.render(
@@ -137,7 +174,7 @@ function mount(kind: DiagramKind = "force", from: () => { root: SummaryNode; blo
         root={tree}
         kind={kind}
         onKind={() => {}}
-        atRow={0}
+        atRow={atRow}
         onJump={() => {}}
         blocks={blocks}
         /* The two scatter pictures' controls. Passed because the panel requires
@@ -409,5 +446,354 @@ describe("what the panel asks the server for", () => {
     const byForce = calls.slice(beforeForce);
     expect(byForce.map(([, method]) => method)).toContain("POST");
     expect(byForce.every(([url]) => url.includes("/api/similar/"))).toBe(true);
+  });
+});
+
+/**
+ * **A wait the reader can see, and a failure they can act on.**
+ *
+ * Greg, 2026-08-30:
+ *
+ * > Make sure the diagrams in Diagram mode show loading spinners if they're
+ * > generating. And/or a button to trigger generation if needed.
+ *
+ * Two states were text-only. Force's strip said *"Reading the article for
+ * related passages…"* in the same faint grey as the sentence it shows when the
+ * answer has landed — a line that changes its words and nothing else does not
+ * read as *working*, it reads as a caption. And a failed request, on any of the
+ * three, left the reader with a reason and no verb: the fetch runs once from an
+ * effect, so the only way back was to leave the mode and come in again, which
+ * nothing on screen said.
+ */
+describe("saying it is working, and offering a second try", () => {
+  /* A request that never answers, so the panel stays in the state this is
+     about. Returning a pending promise rather than a slow one keeps the test
+     free of timers. */
+  const neverAnswers = () => vi.stubGlobal("fetch", () => new Promise<Response>(() => {}));
+  const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+  /** The Force strip — the one line of chrome that picture grows, and on Force
+      the only `.diag-note` there is: the projection's own strip belongs to the
+      two scatters. Found by class rather than by its words, so a state that has
+      lost its sentence fails here rather than quietly matching nothing. */
+  const strip = () => host.querySelector(".diag-note");
+
+  it("spins while Force is buying the embeddings", async () => {
+    neverAnswers();
+    mount("force");
+    await settle();
+    const note = strip();
+    expect(note, "the strip says nothing while the call is in flight").not.toBeNull();
+    expect(note?.textContent).toContain("related passages");
+    expect(note?.querySelector(".cmt-spinner"), "no spinner while a model call is in flight").not.toBeNull();
+  });
+
+  it("stops spinning once the embeddings have landed", async () => {
+    mount("force");
+    await settle();
+    expect(strip()?.querySelector(".cmt-spinner"), "still spinning after the answer").toBeNull();
+  });
+
+  it("gives Force a way to ask again when the embeddings fail", async () => {
+    let asked = 0;
+    vi.stubGlobal("fetch", async () => {
+      asked += 1;
+      return new Response(JSON.stringify({ error: "no credit [E_QUOTA]" }), { status: 402 });
+    });
+    mount("force");
+    await settle();
+    expect(asked, "the panel never asked").toBeGreaterThan(0);
+    expect(strip()?.textContent, "the failure is not on screen").toContain("E_QUOTA");
+    const again = strip()?.querySelector<HTMLButtonElement>("button") ?? null;
+    expect(again, "a failure with no verb — the reader can only leave the mode").not.toBeNull();
+    const before = asked;
+    await act(async () => {
+      again?.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(asked, "the button did not start a second request").toBeGreaterThan(before);
+  });
+
+  it("gives Drift a way to ask again when the projection fails", async () => {
+    let asked = 0;
+    vi.stubGlobal("fetch", async (url: RequestInfo | URL) => {
+      if (!String(url).includes("/api/projection/")) {
+        return new Response(JSON.stringify({ model: "m", blocks: 0, eligible: 0, omitted: 0, pairs: [] }), { status: 200 });
+      }
+      asked += 1;
+      return new Response(JSON.stringify({ error: "no credit [E_QUOTA]" }), { status: 402 });
+    });
+    mount("drift");
+    await settle();
+    const wait = host.querySelector(".diag-wait");
+    expect(wait?.textContent, "the failure is not on screen").toContain("Could not place");
+    const again = wait?.querySelector<HTMLButtonElement>("button") ?? null;
+    expect(again, "a failure with no verb — the reader can only leave the mode").not.toBeNull();
+    const before = asked;
+    await act(async () => {
+      again?.click();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(asked, "the button did not start a second request").toBeGreaterThan(before);
+  });
+});
+
+/**
+ * **The ramp along the sequence chain, at the one seam nothing else covers.**
+ *
+ * `chainNearness` is tested as arithmetic in tests/diagram.test.ts and the
+ * stylesheet's steps are checked in tests/diagram-css.test.ts — and both of
+ * those stay green if the panel never puts the class on the path. That is the
+ * whole failure: every level computed, every rule written, and a chain drawn
+ * flat, with nothing thrown and nothing logged.
+ *
+ * Greg, 2026-08-30: *"making the connections directly either side of the
+ * current node most prominent. Then a bit fainter for the ones at one remove,
+ * then a bit fainter for the ones at two removes, etc etc."*
+ */
+describe("the chain's ramp reaches the DOM", () => {
+  const levels = () =>
+    [...host.querySelectorAll(".diag-link-sequence")].map((el) =>
+      Number(/diag-near-(\d+)/.exec(el.getAttribute("class") ?? "")?.[1] ?? Number.NaN),
+    );
+
+  it("brightens the two lines either side of the section the reader is in", () => {
+    mount("force", longArticle, 6);
+    const on = levels();
+    expect(on.length).toBeGreaterThan(6);
+    // Exactly the pair touching the reader's own section is at the top step.
+    expect(on.filter((l) => l === 0)).toHaveLength(2);
+    // And the ramp really is a ramp rather than one bright pair and a cliff.
+    expect(new Set(on.filter((l) => Number.isFinite(l))).size).toBeGreaterThan(2);
+  });
+
+  it("moves the bright pair when the reader moves", () => {
+    /* The property a static class name would pass without: the ramp has to
+       follow `atRow`. Watched fail with the memo keyed on the layout alone. */
+    mount("force", longArticle, 1);
+    const early = levels();
+    mount("force", longArticle, 10);
+    const late = levels();
+    expect(early).not.toEqual(late);
+    expect(early.indexOf(0)).toBeLessThan(late.indexOf(0));
+  });
+
+  it("leaves the chain unclassed when the reader is above the article", () => {
+    /* `nodeAt` answers null for a reader who has not reached the first section,
+       and the chain must then look exactly as it always did rather than picking
+       the first node as a centre. */
+    mount("force", longArticle, -1);
+    expect(levels().every((l) => Number.isNaN(l))).toBe(true);
+  });
+});
+
+/**
+ * **A revalidation that fails must not take the picture away.**
+ *
+ * Both fetches re-run whenever their picture becomes the one on screen again —
+ * Force → Drift → Force asks for the embeddings a second time. The comment
+ * beside that guard has always promised that toggling away and back "must not
+ * throw away an answer already paid for", and only half of it was true: the
+ * *loading* state was suppressed, and the `catch` then replaced the ready data
+ * with nothing at all. So one flaky second request emptied a picture that was
+ * complete, and reported a failure about a picture the reader already had.
+ *
+ * It is the rule `useSketch` and `useIdeas` already write down — a failed
+ * revalidation is not news, because the artefact on screen is still good —
+ * applied to the two hooks that had not got it. ⟨Sol⟩, 2026-08-30, reviewing
+ * the spinner work.
+ */
+describe("a second request that fails, over an answer that already landed", () => {
+  /** A successful projection holding nothing, for the routes a test is not about. */
+  const EMPTY_PROJECTION = {
+    model: "m", blocks: 0, k: 0, variance: [0, 0],
+    skipped: { tooShort: 0, nonProse: 0, capped: 0 }, points: [],
+  };
+  const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+  it("keeps Force's dotted lines when the repeat request is refused", async () => {
+    let asked = 0;
+    vi.stubGlobal("fetch", async (url: RequestInfo | URL) => {
+      /* **A body per route.** The detour below is through Drift, which reads
+         `points.length` off whatever comes back — an empty object takes the
+         whole render down, and a stub that answers the wrong shape tests the
+         code against a server that does not exist. */
+      if (!String(url).includes("/api/similar/")) return new Response(JSON.stringify(EMPTY_PROJECTION), { status: 200 });
+      asked += 1;
+      return asked === 1
+        ? new Response(JSON.stringify({ model: "m", blocks: 7, eligible: 7, omitted: 0, pairs: [] }), { status: 200 })
+        : new Response(JSON.stringify({ error: "no credit [E_QUOTA]" }), { status: 402 });
+    });
+
+    mount("force");
+    await settle();
+    const before = host.querySelector(".diag-note")?.textContent ?? "";
+    expect(before, "the first answer never landed").toContain("7 passages");
+
+    /* Away and back, which is what a reader does with a chip row. The panel
+       stays mounted — `root.render` on the same root with the same component —
+       so the hook's state is the same state, which is the whole point. */
+    mount("drift");
+    await settle();
+    mount("force");
+    await settle();
+    expect(asked, "the second visit did not re-ask, so this proves nothing").toBeGreaterThan(1);
+
+    const after = host.querySelector(".diag-note")?.textContent ?? "";
+    expect(after, "a failed repeat blanked an answer the reader already had").toContain("7 passages");
+    expect(after, "a failed repeat reported a failure about a picture that is fine").not.toContain("E_QUOTA");
+  });
+
+  it("keeps Drift's dots when the repeat request is refused", async () => {
+    /* `id`, `x`, `y`, `c` — the real `ProjectionPoint`. Two ids the fixture
+       article actually has, because `scatter.ts` drops any point whose block the
+       article no longer holds, and a fixture that lied here would draw nothing
+       and read as the bug this test is about. */
+    const points = [
+      { id: "spya-b0", x: -0.4, y: 0.1, c: 0 },
+      { id: "spya-b2", x: 0.4, y: -0.1, c: 1 },
+    ];
+    let asked = 0;
+    vi.stubGlobal("fetch", async (url: RequestInfo | URL) => {
+      if (!String(url).includes("/api/projection/")) {
+        return new Response(JSON.stringify({ model: "m", blocks: 0, eligible: 0, omitted: 0, pairs: [] }), { status: 200 });
+      }
+      asked += 1;
+      return asked === 1
+        ? new Response(
+            JSON.stringify({
+              model: "m", blocks: 2, k: 2, variance: [0.2, 0.1],
+              skipped: { tooShort: 0, nonProse: 0, capped: 0 }, points,
+            }),
+            { status: 200 },
+          )
+        : new Response(JSON.stringify({ error: "no credit [E_QUOTA]" }), { status: 402 });
+    });
+
+    mount("drift");
+    await settle();
+    expect(host.querySelectorAll("svg .diag-node").length, "the first answer never drew").toBeGreaterThan(0);
+
+    mount("force");
+    await settle();
+    mount("drift");
+    await settle();
+    expect(asked, "the second visit did not re-ask, so this proves nothing").toBeGreaterThan(1);
+
+    expect(
+      host.querySelectorAll("svg .diag-node").length,
+      "a failed repeat emptied a picture that was already drawn",
+    ).toBeGreaterThan(0);
+    expect(host.querySelector(".diag-wait"), "a drawn picture was replaced by a failure").toBeNull();
+  });
+});
+
+/**
+ * **Every control in this band explains itself, and in a card rather than a
+ * `title`.**
+ *
+ * Greg, 2026-08-27, about the chip row: *"add tooltips when hovering over each
+ * Diagram button to explain how it works"* — and again on 2026-08-30 about
+ * everything under it: *"add detailed tooltips to the various diagram-buttons
+ * etc to explain how things work."*
+ *
+ * The `title` attribute is what the second ask is against, and it is not a
+ * smaller version of a card: it waits about a second, cannot be styled,
+ * truncates at the OS's idea of a line, and **does not exist at all on a touch
+ * device** — which is the device the step bar was specifically built for. So
+ * what this pins is the absence: a `title` creeping back onto a control here is
+ * the regression, and it is invisible on a laptop because it still shows
+ * *something*.
+ *
+ * The cards' contents are not asserted. They are copy, they will be edited, and
+ * a test that spelled them out would be a second copy of the words to keep in
+ * step. What has to hold is that a control has one at all.
+ */
+describe("the controls explain themselves", () => {
+  const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+
+  /**
+   * **Open the card and read it**, rather than looking for a mark on the
+   * trigger.
+   *
+   * Floating UI puts nothing durable on the trigger — `aria-describedby`
+   * appears only while the card is open — so an attribute check is a check that
+   * passes on a control with no card at all. Focus is the opener that works
+   * here: `Tooltip` includes `useFocus`, and a hover in jsdom does not reach
+   * it (measured, not assumed — `mouseover` leaves nothing on screen and
+   * `focus()` renders the panel). It is also the interaction that matters most
+   * for the ask, because a keyboard reader is the one a `title` serves worst
+   * after a touch reader.
+   *
+   * The card is portalled to the end of `<body>`, so it is looked for in the
+   * document rather than in the host.
+   */
+  const cardFor = async (el: Element): Promise<string> => {
+    (el as HTMLElement).focus();
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    const card = document.querySelector('[role="tooltip"]');
+    const text = card?.textContent ?? "";
+    (el as HTMLElement).blur();
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    return text;
+  };
+
+  /** A card worth having: a name, a sentence, and the sentence a press cannot teach. */
+  const isDetailed = (text: string) => text.length > 80;
+
+  it("puts a card on every chip in the picture row", async () => {
+    mount("force");
+    await settle();
+    const chips = [...host.querySelectorAll(".diag-kind")];
+    expect(chips.length, "the chip row is not drawn").toBeGreaterThan(3);
+    for (const chip of chips) {
+      const label = chip.textContent ?? "?";
+      expect(isDetailed(await cardFor(chip)), `${label} has no card, or a thin one`).toBe(true);
+      expect(chip.hasAttribute("title"), `${label} fell back to a title attribute`).toBe(false);
+    }
+  });
+
+  it("puts a card on the step bar, which is the one built for a device titles do not reach", async () => {
+    mount("force");
+    await settle();
+    const bar = host.querySelector(".diag-step");
+    expect(bar, "the step bar is not drawn").not.toBeNull();
+    const parts = [...(bar?.querySelectorAll(".diag-step-btn, .diag-step-at") ?? [])];
+    expect(parts.length, "the bar should be two buttons and a readout").toBe(3);
+    for (const part of parts) {
+      expect(isDetailed(await cardFor(part)), `${part.className} has no card, or a thin one`).toBe(true);
+      expect(part.hasAttribute("title"), "a step control fell back to a title").toBe(false);
+    }
+  });
+
+  it("puts a card on the axis and colour chips, which is where a title used to be", async () => {
+    /* These need a drawn scatter: the second control row renders only when
+       there are dots. A ready projection with two points is the smallest
+       article that gets there. */
+    const points = [
+      { id: "spya-b0", x: -0.4, y: 0.1, c: 0 },
+      { id: "spya-b2", x: 0.4, y: -0.1, c: 1 },
+    ];
+    vi.stubGlobal("fetch", async (url: RequestInfo | URL) =>
+      String(url).includes("/api/projection/")
+        ? new Response(
+            JSON.stringify({
+              model: "m", blocks: 2, k: 2, variance: [0.2, 0.1],
+              skipped: { tooShort: 0, nonProse: 0, capped: 0 }, points,
+            }),
+            { status: 200 },
+          )
+        : new Response(JSON.stringify({ model: "m", blocks: 0, eligible: 0, omitted: 0, pairs: [] }), { status: 200 }),
+    );
+    mount("drift");
+    await settle();
+
+    const opts = [...host.querySelectorAll(".diag-opt-btn")];
+    expect(opts.length, "the second control row is not drawn").toBeGreaterThan(2);
+    for (const o of opts) {
+      const label = o.textContent ?? "?";
+      expect(isDetailed(await cardFor(o)), `${label} has no card, or a thin one`).toBe(true);
+      expect(o.hasAttribute("title"), `${label} kept its title attribute`).toBe(false);
+    }
   });
 });
