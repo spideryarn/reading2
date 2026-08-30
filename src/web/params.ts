@@ -140,7 +140,11 @@ export const spineParam = parseAsBit.withOptions({ history: "push" });
  */
 export const colsParam = parseAsDepths.withOptions({ history: "push" });
 
-/** Reading position, as the first block of the section in view. */
+/**
+ * Reading position, as a block id. Ordinary scrolling writes the first block of
+ * the section in view; a deliberate jump may name a finer block, which the spy
+ * then preserves — position.ts § positionToWrite.
+ */
 export const atParam = parseAsBlockId.withOptions({
   history: "replace",
   limitUrlUpdates: debounce(POSITION_SETTLE_MS),

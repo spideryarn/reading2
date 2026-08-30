@@ -1,8 +1,11 @@
 /**
  * Reading position — the pure half. The DOM half lives in TableView.tsx.
  *
- * Position is stored as a *section*, not as an exact scroll offset. Greg,
- * 2026-08-25:
+ * **`?at=` always holds a block id.** Ordinary scrolling writes the first block
+ * of the section in view; a deliberate jump may name a finer block, and the spy
+ * preserves it while the reader stays inside that block's section
+ * (§ positionToWrite, at the bottom of this file). What follows is about the
+ * first of those, which is the unit the *spy* works in. Greg, 2026-08-25:
  *
  * > store the section rather than the exact position?
  *
@@ -106,4 +109,85 @@ export function activeSectionIndex(tops: number[], line: number): number {
     active = i;
   }
   return active;
+}
+
+/**
+ * **The section a block sits inside** — that section's own first block, which
+ * is the id the address uses for it.
+ *
+ * `rowOf` is the article's block → row index. A block it does not know is not a
+ * position we can place, and the answer is `null` rather than a guess: an id
+ * the article no longer has must not pin the reader's position forever.
+ */
+export function sectionContaining(
+  sections: Section[],
+  rowOf: ReadonlyMap<BlockId, number>,
+  blockId: BlockId | null,
+): BlockId | null {
+  if (blockId === null) return null;
+  const row = rowOf.get(blockId);
+  if (row === undefined) return null;
+  return sections[activeSectionIndex(sections.map((s) => s.row), row)]?.blockId ?? null;
+}
+
+/**
+ * **What the scroll spy should write into `?at=`, or `null` for "leave the
+ * address alone".**
+ *
+ * An object means write `at` — where `at: null` is the top of the article, and
+ * is why this cannot simply return the id: `null` has to mean two different
+ * things and only one of them is a value.
+ *
+ * Three rules, and the middle one is the fix for a reported bug.
+ *
+ * **A jump of ours in flight writes nothing at all.** `glide` (scroll.ts)
+ * animates by calling `window.scrollTo` on every frame, so a long jump fires
+ * exactly the scroll events a reader's own hand would. Without this the spy
+ * names every section the page flies *over* on the way, and lands holding the
+ * destination's section rather than the block the jump was aimed at. This is
+ * not the "was that scroll mine or theirs?" guess the rest of this app refuses
+ * to make: `glideTarget()` is the animation's own handle, and the reader taking
+ * over with a wheel or a finger clears it (scroll.ts § cancel). It comes
+ * **before** the top-of-the-article branch, because a jump that passes near the
+ * top would otherwise clear the address on its way past. GPT Sol, 2026-08-30.
+ *
+ * **A reader still inside the section the address already names has not gone
+ * anywhere the address needs to say**, so a finer value stands. That is the
+ * whole of the springback fix: `?at=` is a section, but a jump is allowed to
+ * put a *paragraph* there — the diagram panel's ↑ / ↓ buttons do, because on
+ * Trail and Drift a rung is one paragraph (diagram.ts § stepStops). Comparing
+ * the measured section against the *held value* rather than against the section
+ * the held value is *in* found them different, wrote the section's first block
+ * over the paragraph when the queued position write landed, and left
+ * the next press computing from the top of the section again — so it moved
+ * nothing. tests/reading-position.test.ts § two presses.
+ *
+ * **The section is derived here, every time, rather than remembered.** A
+ * remembered one goes stale the moment `sections` changes under it — a column
+ * toggle, a granularity change, a re-extraction — and a stale section is a spy
+ * that has quietly stopped writing. Also GPT Sol, same review.
+ */
+export function positionToWrite(opts: {
+  sections: Section[];
+  rowOf: ReadonlyMap<BlockId, number>;
+  /** Each section's distance from the top of the viewport, in document order. */
+  tops: number[];
+  /** The line we measure against — under the sticky bars. */
+  line: number;
+  /** Whether a jump we started is still animating. `glideTarget() !== null`. */
+  jumpInFlight: boolean;
+  /** Whether the reader is above the first section, where nothing is named. */
+  atTop: boolean;
+  /** What `?at=` says now. */
+  held: BlockId | null;
+}): { at: BlockId | null } | null {
+  const { sections, rowOf, tops, line, jumpInFlight, atTop, held } = opts;
+  if (jumpInFlight) return null;
+  // Above the first section there is no section to name, and saying so keeps
+  // ?at= out of the URL until the reader has actually moved.
+  if (atTop) return held === null ? null : { at: null };
+  const visible = sections[activeSectionIndex(tops, line)]?.blockId ?? null;
+  if (visible === null) return null;
+  if (visible === sectionContaining(sections, rowOf, held)) return null;
+  return { at: visible };
 }

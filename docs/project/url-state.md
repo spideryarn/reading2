@@ -302,8 +302,11 @@ flew over on the way. `POSITION_SETTLE_MS` is 300ms.
 >
 > — Greg, 2026-08-25
 
-`?at=` holds the id of the **first block of the section the reader is in** — depth `leafDepth - 1`,
-which is what `columnLabel` already calls "Sections". Three things follow:
+`?at=` always holds a **block id**. Ordinary scrolling writes the id of the **first block of the
+section the reader is in** — depth `leafDepth - 1`, which is what `columnLabel` already calls
+"Sections". A deliberate jump may name a finer block, and the spy preserves it while the reader
+stays inside that block's section; that is the paragraph below on what the spy writes. Three things
+follow from the unit the spy works in:
 
 - **The update rate collapses.** The example article is 139 blocks but 36 sections, so most scrolling
   writes nothing at all.
@@ -313,8 +316,34 @@ which is what `columnLabel` already calls "Sections". Three things follow:
 - **It is a block id**, so it obeys [the one contract](block-ids.md). Position is a block id, never an
   offset and never a selector.
 
-Stated plainly, the cost: reopening a link puts you at the top of the section you were in, not on the
-paragraph you were on. Within a section that is a few paragraphs of backtracking.
+Stated plainly, the cost: after ordinary scrolling, reopening a link puts you at the top of the
+section you were in, not on the paragraph you were on. Within a section that is a few paragraphs of
+backtracking. A URL last written by a jump to a finer block reopens on that block.
+
+**A section is what the *scroll spy* writes, not a limit on what `?at=` may hold.** A deliberate jump
+is allowed to leave a finer block there, and one routinely does: the diagram panel's ↑ / ↓ buttons
+step by paragraph on Drift and Trail ([diagram.md § the step bar](diagram.md#the-step-bar-and-the-key-that-was-firing-twice)).
+The spy's rule is therefore **"is the reader still inside the section the address already names?"**,
+not "does the address equal the section I just measured" — those are the same question only while
+every value in the address is a section, and the day one was not, the spy wrote the section's first
+block over the paragraph when the queued position write landed. The mark moved and sprang back, and
+the next press, computing from the top of the section again, moved nothing at all.
+
+The other half of that rule is that **a jump of ours in flight writes nothing.** `glide`
+([`scroll.ts`](../../src/web/scroll.ts)) animates by calling `window.scrollTo` on every frame, so a
+long jump fires exactly the scroll events a hand would; without the guard the spy names every section
+the page flies *over* and lands holding the destination's section rather than the block the jump was
+aimed at. This is not the "was that scroll mine or theirs?" guess the rest of the app refuses to
+make — `glideTarget()` is the animation's own handle, and the reader taking over with a wheel or a
+finger clears it. It is checked **before** the top-of-the-article branch, or a jump passing near the
+top clears the address on its way past.
+
+Both rules are `positionToWrite` in [`position.ts`](../../src/web/position.ts) — pure, so each clause
+can be watched failing, which is how they were checked
+([`tests/reading-position.test.ts`](../../tests/reading-position.test.ts)). GPT Sol found the glide
+half of it in review of the first fix, 2026-08-30. The whole story, including the two commits between
+which the assumption stopped being true and why it stayed invisible for five days, is
+[the-spy-wrote-a-section-over-the-paragraph.md](../postmortems/the-spy-wrote-a-section-over-the-paragraph.md).
 
 **It is emphatically not a node id.** Node ids (`n0003`) are handed out sequentially when the tree is
 generated and are regenerated whenever `tree.json` is rebuilt, so a URL holding one would silently

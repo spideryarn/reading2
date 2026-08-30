@@ -115,15 +115,17 @@ import {
 } from "./params.js";
 import {
   arrivalTarget,
+  glideTarget,
   isBlockOnScreen,
   scrollToBlock,
+  scrollToTop,
   stickyOffset,
   watchBarVisibility,
 } from "./scroll.js";
 import { orderComments, positionOf, stepComment } from "./comment-nav.js";
 import {
-  activeSectionIndex,
   buildSections,
+  positionToWrite,
   sectionDepth,
   type Section,
 } from "./position.js";
@@ -922,15 +924,23 @@ function useWindowWidth(): number {
  * a section rather than an offset — is in position.ts. Written by
  * spideryarn2-cd, 2026-08-25.
  */
-function useReadingPosition(sections: Section[], layoutKey: string) {
+function useReadingPosition(sections: Section[], blocks: Block[], layoutKey: string) {
   const [at, setAt] = useQueryState("at", atParam);
   const synced = useRef<BlockId | null>(null);
+  /* The article's block → row index. The spy needs it to ask which section the
+     address's current value lies in, which is no longer the same question as
+     what the value *is*: a jump may have put a paragraph there. One pass over
+     an array the caller already holds. */
+  const rowOf = useMemo(() => new Map(blocks.map((b, i) => [b.id, i])), [blocks]);
 
   // URL → page: first load, back/forward, pasted link.
   useEffect(() => {
     if (at === synced.current) return;
     synced.current = at;
-    if (at === null) window.scrollTo({ top: 0 });
+    /* `scrollToTop`, not a bare `window.scrollTo` — Back with a glide still in
+       flight would otherwise arrive at the top and be dragged forward again by
+       the jump it had just undone. scroll.ts § scrollToTop. */
+    if (at === null) scrollToTop();
     else scrollToBlock(at, "auto");
   }, [at]);
 
@@ -942,21 +952,32 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
     let frame = 0;
     const measure = () => {
       frame = 0;
-      // Above the first section there is no section to name, and saying so keeps
-      // ?at= out of the URL until the reader has actually moved.
-      if (window.scrollY <= stickyOffset()) {
-        if (synced.current === null) return;
-        synced.current = null;
-        void setAt(null);
-        return;
-      }
-      const tops = rows.map((el) =>
-        el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
-      );
-      const id = sections[activeSectionIndex(tops, stickyOffset() + 1)]?.blockId ?? null;
-      if (id === null || id === synced.current) return;
-      synced.current = id;
-      void setAt(id);
+      /* Every rule this makes is in position.ts, and it is pure so that the one
+         that matters can be watched failing — an untested guard against a race
+         is the shape silent-success.md is about.
+
+         `jumpInFlight` is read out here rather than passed inline because
+         arguments are evaluated before the call, so an inline version would do
+         a rect read per section on every frame of a jump only to have the
+         function throw the answer away. The rects are the expensive half of
+         this measurement (performance.md). GPT Sol, 2026-08-30. */
+      const jumpInFlight = glideTarget() !== null;
+      const next = positionToWrite({
+        sections,
+        rowOf,
+        tops: jumpInFlight
+          ? []
+          : rows.map((el) =>
+              el ? el.getBoundingClientRect().top : Number.POSITIVE_INFINITY,
+            ),
+        line: stickyOffset() + 1,
+        jumpInFlight,
+        atTop: window.scrollY <= stickyOffset(),
+        held: synced.current,
+      });
+      if (next === null) return;
+      synced.current = next.at;
+      void setAt(next.at);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(measure);
@@ -967,7 +988,7 @@ function useReadingPosition(sections: Section[], layoutKey: string) {
       window.removeEventListener("scroll", onScroll);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [sections, setAt, layoutKey]);
+  }, [sections, rowOf, setAt, layoutKey]);
 
   /* The controls bar gets out of the way while you read forwards, on a viewport
      short enough for 44px to matter — scroll.ts § watchBarVisibility, and
@@ -1236,7 +1257,7 @@ function Reader({
   // sideways: the rail's width is taken out of the prose column's, so hiding it
   // rewraps every paragraph in the article and every row changes height.
   const layoutKey = `${fit.columns.join(",")}|${proseOn}|${windowWidth}|${fit.modeW}|${fit.spine}`;
-  const { at, jumpTo } = useReadingPosition(sections, layoutKey);
+  const { at, jumpTo } = useReadingPosition(sections, article.blocks, layoutKey);
 
   /**
    * Where the reader is, for the outline band — the same sampler the gist
@@ -2281,7 +2302,7 @@ function Reader({
         <VisitorSummaryBand article={article} summaries={artefacts.summary} onJump={jumpTo} />
       )}
       {owner && mode === "diagram" && (
-        <DiagramBand slug={slug} article={article} onJump={jumpTo} />
+        <DiagramBand slug={slug} article={article} at={at} onJump={jumpTo} />
       )}
       {owner && mode === "ideas" && (
         <IdeasBand
@@ -3483,10 +3504,24 @@ function useSummaryMode(article: Article, summaries: { entries: SummaryEntry[] }
 function DiagramBand({
   slug,
   article,
+  at,
   onJump,
 }: {
   slug: string;
   article: Article;
+  /**
+   * Where the reader is, **from `useReadingPosition`'s own state rather than
+   * from `location.search`.**
+   *
+   * The other bands read the address at render time, and that is fine for them.
+   * It is not fine here, because this panel has buttons that *move* the reader
+   * and then compute their next move from where they think the reader is.
+   * `jumpTo` writes the URL with `throttle(0)`, which lands on the next task —
+   * so a render triggered by the state change can still see the old
+   * `location.search`, and a second press inside that window steps from the
+   * stale row and lands on the rung it has just used. GPT Sol, 2026-08-30.
+   */
+  at: BlockId | null;
   onJump(id: BlockId): void;
 }) {
   useRenderCount("DiagramBand");
@@ -3508,12 +3543,9 @@ function DiagramBand({
     [article.tree, article.blocks],
   );
 
-  /* Read, never written — `?at=` is tracked by useReadingPosition in the
-     parent, so this re-renders when it changes. Same read-at-render trick
-     SummaryBand uses, and turned into a row index for the same reason: the
-     question is "which node contains the reader", and containment is a
-     comparison of row indices. Block ids carry no order. */
-  const at = new URLSearchParams(location.search).get("at");
+  /* Turned into a row index because the question is "which node contains the
+     reader", and containment is a comparison of row indices. Block ids carry no
+     order. */
   const atRow = useMemo(() => {
     if (at === null) return null;
     const i = article.blocks.findIndex((b) => b.id === at);

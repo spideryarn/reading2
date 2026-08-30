@@ -480,6 +480,27 @@ export function reducedMotion(): boolean {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
+/**
+ * **Back to the top of the article, and stop anything already in flight.**
+ *
+ * A bare `window.scrollTo({ top: 0 })` is not enough, and that is the whole
+ * reason this exists. `glide` keeps its own `requestAnimationFrame` loop, and
+ * that loop does not care that somebody else has moved the page: its next tick
+ * carries on toward the destination it was given, so the reader presses Back,
+ * arrives at the top, and is then dragged forward again to wherever the jump
+ * they just undid was going. `cancel()` is what says the jump is over — the
+ * same call `scrollToBlock`'s instant branch already makes.
+ *
+ * GPT Sol found it, 2026-08-30, reviewing the fix for a different bug in the
+ * same hook. It predates that fix: the `at === null` branch of the URL → page
+ * effect (App.tsx § useReadingPosition) has always scrolled raw.
+ */
+export function scrollToTop() {
+  cancel();
+  markOurScroll(150); // instant, so only the event it fires needs covering
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
 export function scrollToBlock(id: string, behavior: ScrollBehavior = "smooth") {
   const row = document.querySelector<HTMLElement>(
     `tr[data-block="${CSS.escape(id)}"]`,
