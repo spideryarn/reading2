@@ -131,74 +131,40 @@ the careful thing and then following the recipe was worse than either alone.
 Commit when a piece of work is done and working, without waiting to be asked. And don't stress if
 someone sweeps up one of your changes anyway — it happens, it's recoverable, keep going.
 
-### The private index — a last resort, and ask Greg first — 2026-08-28
+### The private index is gone — 2026-08-30
 
-**This recipe has cost far more than everything it has ever saved, and until 2026-08-30 it was
-wrong as written** (below). It is kept because the mechanism is worth understanding, not because it
-is a move to reach for. The everyday answer to a shared file is in the table above: commit it and
-say so, or leave it out.
+There used to be a third recipe here. When a file held your finished work *and* a peer's unfinished
+work, it built a commit off to one side — a private staging area of your own (`GIT_INDEX_FILE`),
+`hash-object` for a hand-made version of the file, `write-tree`, `commit-tree`, `update-ref` — so
+that neither the shared index nor the working tree was touched.
 
-A **private index** writes neither the shared index nor the working tree, so a peer mid-commit
-cannot be disturbed. The corrected form:
+**Greg removed it on 2026-08-30.** Do not use it, do not reintroduce it, and if you find a plan or a
+commit message describing it, that is a record of what we used to do.
 
-```sh
-IDX=$(mktemp -u) && BASE=$(git rev-parse HEAD) && [ -s msg.txt ] &&      # pin BASE ONCE, here
-GIT_INDEX_FILE=$IDX git read-tree "$BASE" &&
-GIT_INDEX_FILE=$IDX git update-index --add -- <your clean files> &&      # from the working tree
-git show "$BASE:src/shared.ts" > /tmp/mine.ts &&                         # HEAD's copy + ONLY your lines
-BLOB=$(git hash-object -w /tmp/mine.ts) &&
-GIT_INDEX_FILE=$IDX git update-index --add --cacheinfo 100644,$BLOB,src/shared.ts &&
-TREE=$(GIT_INDEX_FILE=$IDX git write-tree) &&
-NEW=$(git commit-tree "$TREE" -p "$BASE" -F msg.txt) && [ -n "$NEW" ] &&
-git update-ref refs/heads/main "$NEW" "$BASE" &&                         # $BASE = refuses on a race
-git reset -q -- <every path you just committed> &&                       # SHARED index. No prefix!
-[ "$(git rev-parse HEAD)" = "$NEW" ] &&
-git diff --name-only "$BASE" "$NEW"                                      # your files and NOTHING else
-```
+> get rid of the private index approach altogether … and accept that sometimes other agents' work
+> might get included in a commit, and/or skip the file.
+>
+> — Greg, 2026-08-30
 
-**Two things changed on 2026-08-30, and the second one is why this section had been producing the
-accident it warns about.**
+**Why.** It was clever, it worked for the person running it, and it broke things for everybody else.
+A commit built that way deliberately never touches the shared index, so the shared index is left
+describing the world *before* that commit — and to every other agent that reads as somebody having
+staged an undo of the work. Six hours of 2026-08-29 went on hunting a stray command that nobody had
+run. The recipe printed here was also **wrong as written**: its final resync was inside the `export`,
+so it fixed the private staging area and left the shared one stale. Sessions that dropped that line
+and sessions that followed the recipe exactly produced identical damage.
 
-**One: `GIT_INDEX_FILE=… git …` per command, never `export`.** An agent harness gives each tool call
-a **fresh shell** — the working directory persists, environment variables do not. So `export
-GIT_INDEX_FILE=…` in one call and `git read-tree` in the next is not a subtle race; the variable is
-simply gone and `read-tree` writes **`.git/index`**, the shared one, from a stale tree. Measured
-2026-08-29 across two consecutive calls:
+It also cost more than it ever saved. What it was avoiding — sweeping a peer's hunks into your commit
+— is loud, recorded in your message, and recoverable; the two 2026-08-28 incidents cost a paragraph
+each. What it caused nearly removed the DNS-rebinding fix from `src/fetch.ts` under somebody else's
+message.
 
-```
-call 1 sees: GIT_INDEX_FILE=/…/probe.index      call 1 git would use: /…/probe.index
-call 2 sees: GIT_INDEX_FILE=<unset>             call 2 git would use: .git/index
-```
+**What to do instead** is the table above: commit the file and say whose work rode along, or leave
+that file out and ship the rest. Both are fine. Waiting is also fine.
 
-A per-command prefix cannot leak out of the command it is attached to, so the hazard disappears
-rather than being guarded against. The block must still run as **one invocation** — `$BASE`, `$TREE`
-and `$NEW` do not survive either — so join it with `&&` and do not "tidy" it into readable steps.
-
-**Two: the final `git reset` must NOT carry the prefix, and in the old block it did.** It was
-written inside the `export`, so it resynced the *private* index — the one about to be thrown away —
-and the shared index was never repaired at all. **Following this section exactly still produced the
-phantom staged revert.** Reproduced 2026-08-30 in a throwaway repo, running the old block verbatim:
-
-```
-which index did that reset use:  /var/folders/…/tmp.C5GxZM5OU0      ← the private one
-what every peer then saw:        MM base.txt        ← staged blob = a revert of the commit
-                                 D  new.txt         ← staged deletion …
-                                 ?? new.txt         ← … of a file in HEAD and on disk
-```
-
-With the prefix removed from that one line, `git status` comes back empty. So the six hours of
-2026-08-29 were not carelessness and not a stray command: the instruction was the defect, and the
-prose above it correctly named the omitted reset while the block below it could not run one.
-
-Assert the private index rather than hoping, in the same invocation:
-
-```sh
-[ "$(GIT_INDEX_FILE=$IDX git rev-parse --git-path index)" = "$IDX" ] || { echo "NOT PRIVATE"; exit 1; }
-```
-
-`GIT_INDEX_FILE` is honoured by `git rev-parse --git-path index`, so this is the one command that
-can tell you which index you actually got. Run it once with the variable unset and watch it print
-`.git/index` — a recipe whose failure mode is silent needs a check you have seen speak.
+The forensics are kept below because they explain why a stale index reads as a deliberate revert,
+which you still need in order to read `git status` in this tree — not because the recipe is coming
+back.
 
 ### The cause was the recipe's own last line, not a stray command — 2026-08-29
 
@@ -232,8 +198,8 @@ shared index stays empty. That control is what makes the reset the cause rather 
 get this.** The recipe printed in this file had the reset *inside* the `export GIT_INDEX_FILE`, so
 it resynced the private index rather than the shared one. Sessions that dropped the line and
 sessions that kept it produced the same damage, which is why "somebody is omitting it" never quite
-accounted for the volume. Both are fixed in
-[the corrected recipe](#the-private-index-a-last-resort-and-ask-greg-first-2026-08-28).
+accounted for the volume. Rather than fix it, Greg
+[removed the recipe](#the-private-index-is-gone-2026-08-30).
 
 **Why it went unattributed for six hours.** Nobody was running a stray command, so nobody could find
 one. Each session omitted one line, the effects accumulated, and every clear was undone within minutes
@@ -420,18 +386,12 @@ index, so a corrupted index both invents changes and hides them. `git diff HEAD`
 can be believed; `git diff HEAD` reporting a deletion cannot; bare `git diff` cannot be believed in
 either direction.
 
-Build the blob from `git show "$BASE":<file>` **plus your own lines**, never from the working tree, and
-anchor each insertion on an exact string that occurs once. That is what guarantees none of their work
-rides along. Check afterwards that every symbol you know to be theirs appears zero times in your
-version, and parse it (`npx esbuild <file> --loader:.ts=ts --outfile=/dev/null`) — a hand-built blob
-is exactly the kind of thing that looks right and is truncated.
-
-**Pin `$BASE` once and pass that same value to all four commands**, and treat the last line as part
-of the recipe rather than a flourish. The version above this one captured `OLD=$(git rev-parse HEAD)`
-*after* `read-tree HEAD`, which reads as a race guard and is the opposite of one: if a peer commits in
-the gap, `OLD` is the **new** head while the tree was read from the old one, so `update-ref` compares
-the moved HEAD against itself, succeeds, and silently reverts everything the peer landed in between.
-The guard is defeated rather than tripped, and nothing prints.
+**The second fault, which is why the recipe is gone rather than fixed.** It read the tree at one
+commit and then moved the branch, and if a peer committed in the gap, everything they landed in
+between was silently reverted. There was a guard against exactly that — `update-ref`'s
+expected-old-value — and an earlier version of the recipe captured that value *after* reading the
+tree, which compares the moved HEAD against itself. It succeeds every time. The guard was defeated
+rather than tripped, and nothing printed.
 
 That is not hypothetical. On 2026-08-28 a session doing outline-mode work landed a commit that
 carried its own new files **and a stale-base snapshot of twenty-six files belonging to another
@@ -441,10 +401,9 @@ work, the shared index still held it, and only the committed tree had lost it, w
 nobody looks. It was found because the next `git diff --cached` showed twenty-six files staged that
 should have been empty.
 
-The gap between `read-tree` and `update-ref` is normally seconds. It is **minutes** whenever you do
-the right thing and verify the commit in a detached worktree first, so the safer the process, the
-wider this window gets. `git diff --name-only "$BASE" "$NEW"` costs nothing and names every file you
-did not mean to touch; run it before you tell anyone the work has landed.
+And the window was widened by care rather than narrowed by it: the gap was seconds if you committed
+blind and **minutes** if you verified the commit in a detached worktree first. The safer the process,
+the more likely a peer landed in the middle of it.
 
 **The last line is the half that bites, and it bites your peers rather than you.** `update-ref` moves
 HEAD; the shared index is still the one from before, so it is now stale against the *new* HEAD, and
@@ -456,10 +415,9 @@ run an index-based `git commit` commits that deletion under their own message, w
 the accident this whole section exists to prevent, arriving by a new door.
 
 It happened on 2026-08-28. A peer read the status, could not tell it from a deliberate revert,
-refused to touch it, and asked — which was the right call and is the behaviour to copy. Run the
-`reset` in the **same command** as the ref move rather than as a follow-up step, keep it
-path-limited to the paths you just committed so a peer's staged work is untouched, and if somebody
-asks, the answer is: transient, mine, not a revert.
+refused to touch it, and asked — which was the right call and is the behaviour to copy. That shape
+cannot arise any more, because nothing writes a commit without going through the shared index. If you
+see it in an old plan or commit message, it is a record of the removed recipe.
 
 ### A stale index reports the file deleted while it sits there full of content — 2026-08-29
 
