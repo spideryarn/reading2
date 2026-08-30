@@ -30,7 +30,7 @@ import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { streamMessage, wasRefused } from "./messages-stream.js";
-import { CAPABLE_MODEL } from "./models.js";
+import { CAPABLE_MODEL, type Effort } from "./models.js";
 import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -197,6 +197,39 @@ function renderBlocks(blocks: Block[]): string {
 export function estimateTocTokens(blocks: Block[]): number {
   const internal = Math.ceil(blocks.length / 4) + 6;
   return 500 + internal * 175;
+}
+
+/**
+ * The structure call's request, assembled in the one place `generateToc`
+ * itself uses.
+ *
+ * Exported for the structure eval (evals/toc-structure/model-arms.ts), whose
+ * incumbent arm must send byte-identical bytes to what ships — a copied
+ * prompt drifts silently, and an executor one byte adrift is measuring a
+ * recipe the pipeline does not run. Because this is the single assembly
+ * point, parity is by construction rather than by assertion; the pin that
+ * proves it — and was seen red under two perturbations (a space in SYSTEM, a
+ * flipped effort) before being trusted — is
+ * tests/toc-structure-request-parity.test.ts.
+ *
+ * Takes the BODY, after `splitBlocks`, exactly as `generateToc` sends it:
+ * the apparatus is never shown to the structure model. `budgetFor` throws
+ * here for an article whose answer cannot fit one response, which is the
+ * same moment it threw before the extraction — before the call, not six
+ * minutes into it.
+ */
+export function structureRequest(body: Block[]): {
+  system: string;
+  user: string;
+  maxTokens: number;
+  effort: Effort;
+} {
+  return {
+    system: SYSTEM,
+    user: renderBlocks(body),
+    maxTokens: budgetFor("table of contents", estimateTocTokens(body)),
+    effort: EFFORT,
+  };
 }
 
 /**
@@ -686,9 +719,10 @@ export async function generateToc(opts: {
 
   /* Before the call, and before a minute of anyone's time is spent: an article
      whose table of contents cannot fit in one response is refused here rather
-     than discovered six minutes in. `budgetFor` throws for that case. */
+     than discovered six minutes in. `budgetFor`, inside `structureRequest`,
+     throws for that case. */
   const answerTokens = estimateTocTokens(body);
-  const maxTokens = budgetFor("table of contents", answerTokens);
+  const { system, user, maxTokens, effort } = structureRequest(body);
 
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
      anywhere upstream of here, and the installed SDK builds `Error.message`
@@ -707,9 +741,9 @@ export async function generateToc(opts: {
     const call = streamMessage("toc", {
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
-      output_config: { effort: EFFORT },
-      system: SYSTEM,
-      messages: [{ role: "user", content: renderBlocks(body) }],
+      output_config: { effort },
+      system,
+      messages: [{ role: "user", content: user }],
     }, { ...(opts.signal ? { signal: opts.signal } : {}) });
 
     if (opts.onProgress) {

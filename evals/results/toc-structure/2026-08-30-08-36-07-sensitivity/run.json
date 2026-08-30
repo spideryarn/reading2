@@ -1,0 +1,208 @@
+{
+  "startedAt": "2026-08-30T08:36:07.154Z",
+  "commit": "88724116f88019ea35f1807582891c1b02ec6c31",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words."
+  ],
+  "arms": [],
+  "results": [],
+  "sensitivity": [
+    {
+      "slug": "constitution",
+      "threshold": 0,
+      "parts": 8,
+      "flat": false,
+      "l1VsDisk": 0.8571428571428571
+    },
+    {
+      "slug": "constitution",
+      "threshold": 10,
+      "parts": 7,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "constitution",
+      "threshold": 20,
+      "parts": 7,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "constitution",
+      "threshold": 40,
+      "parts": 7,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "fowler-phrenology",
+      "threshold": 0,
+      "parts": 8,
+      "flat": false,
+      "l1VsDisk": 0.07142857142857142
+    },
+    {
+      "slug": "fowler-phrenology",
+      "threshold": 10,
+      "parts": 0,
+      "flat": true,
+      "l1VsDisk": 0
+    },
+    {
+      "slug": "fowler-phrenology",
+      "threshold": 20,
+      "parts": 0,
+      "flat": true,
+      "l1VsDisk": 0
+    },
+    {
+      "slug": "fowler-phrenology",
+      "threshold": 40,
+      "parts": 0,
+      "flat": true,
+      "l1VsDisk": 0
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "threshold": 0,
+      "parts": 5,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "threshold": 10,
+      "parts": 5,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "threshold": 20,
+      "parts": 5,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "noema-mythology-of-conscious-ai",
+      "threshold": 40,
+      "parts": 5,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "revistes-ub-30977",
+      "threshold": 0,
+      "parts": 5,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "revistes-ub-30977",
+      "threshold": 10,
+      "parts": 5,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "revistes-ub-30977",
+      "threshold": 20,
+      "parts": 5,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "revistes-ub-30977",
+      "threshold": 40,
+      "parts": 5,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "threshold": 0,
+      "parts": 15,
+      "flat": false,
+      "l1VsDisk": 0.4
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "threshold": 10,
+      "parts": 11,
+      "flat": false,
+      "l1VsDisk": 0.4166666666666667
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "threshold": 20,
+      "parts": 11,
+      "flat": false,
+      "l1VsDisk": 0.4166666666666667
+    },
+    {
+      "slug": "scaling-hypothesis",
+      "threshold": 40,
+      "parts": 11,
+      "flat": false,
+      "l1VsDisk": 0.4166666666666667
+    },
+    {
+      "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+      "threshold": 0,
+      "parts": 9,
+      "flat": false,
+      "l1VsDisk": 0.875
+    },
+    {
+      "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+      "threshold": 10,
+      "parts": 8,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+      "threshold": 20,
+      "parts": 8,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+      "threshold": 40,
+      "parts": 8,
+      "flat": false,
+      "l1VsDisk": 1
+    },
+    {
+      "slug": "writes",
+      "threshold": 0,
+      "parts": 0,
+      "flat": true,
+      "l1VsDisk": 0
+    },
+    {
+      "slug": "writes",
+      "threshold": 10,
+      "parts": 0,
+      "flat": true,
+      "l1VsDisk": 0
+    },
+    {
+      "slug": "writes",
+      "threshold": 20,
+      "parts": 0,
+      "flat": true,
+      "l1VsDisk": 0
+    },
+    {
+      "slug": "writes",
+      "threshold": 40,
+      "parts": 0,
+      "flat": true,
+      "l1VsDisk": 0
+    }
+  ]
+}

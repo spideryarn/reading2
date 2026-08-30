@@ -1,33 +1,40 @@
 /**
- * The phase-2 executor for the arms that spend money — built, deliberately not
- * yet armed. Everything deterministic is real and tested: rendering the seed
- * proposal, turning a model's answer into a validated Tree, the per-arm
- * dispatch. The two places a request would actually leave the machine throw
- * `PENDING`, each naming exactly what has to happen first, because both need
- * things this eval may not take for itself:
+ * The executor for the arms that spend money.
  *
- * 1. **Two rows in `DECLARATIONS`** (src/spend-declarations.ts) — one for the
- *    Messages wire through OpenRouter, one for chat/completions — naming this
- *    file. That table lives under src/, and tests/no-undeclared-spend.test.ts
- *    fails any file that gains spend capability (an endpoint literal, a client
- *    construction, `declaredFetch`) without a row. This file therefore carries
- *    NO capability yet: no endpoint, no credential name, no client import.
- * 2. **`SYSTEM` and `renderBlocks` exported from src/toc.ts.** The incumbent
- *    arm must send byte-identical bytes to what ships, and a copied prompt
- *    drifts silently — the first re-word of the shipping prompt would turn
- *    "incumbent" into a label for a recipe nothing runs. Export keyword only,
- *    no behaviour change; held for approval rather than reached for.
+ * **The prompt is production's own**: `structureRequest` in src/toc.ts is the
+ * one assembly point, called by `generateToc` itself, so the incumbent arm's
+ * bytes cannot drift from what ships — parity by construction, pinned (and
+ * seen red under perturbation) by tests/toc-structure-request-parity.test.ts.
+ * The answer comes back through the pipeline's own `buildTree` +
+ * `appendSupplement` + `assertTreeSound`, so an arm is judged on the
+ * pipeline's rules, not this file's.
  *
- * The `waves` and `cheap-then-revise` strategies also need prompts that do not
- * exist yet — new design, not plumbing — and those wait for GPT Sol's review
- * of this design before they are written once rather than twice.
+ * **The transports are declared bypasses** — `toc-structure-messages` and
+ * `toc-structure-chat` in src/spend-declarations.ts name this file — because
+ * the arms vary model and effort per call and both seams own those on purpose.
+ * Every request goes through `withDeclaredExternalCall`, which refuses to run
+ * without an open ledger, and `declaredFetch`, which refuses to run outside a
+ * declaration; `maxRetries: 0` so one logical call is one billed attempt.
+ *
+ * **Nothing here has made a live call yet** (the paid hold stands), so two
+ * wire facts are flagged rather than asserted, to be verified on the first
+ * calibration call: whether the Messages Skin's non-streaming response carries
+ * `usage.cost` (the streaming meter reads it from raw events —
+ * src/messages-stream.ts), and Luna's treatment of `max_tokens` vs
+ * `max_completion_tokens` (both are sent; providers ignore unknowns silently).
+ *
+ * The `waves` and `cheap-then-revise` strategies still throw `PENDING`: their
+ * prompts are new design, waiting on the phase-2 design relay so they are
+ * written once rather than twice.
  */
 
+import Anthropic from "@anthropic-ai/sdk";
+import { declaredFetch, withDeclaredExternalCall } from "../declared-spend.js";
 import { isStructural } from "../../src/block-policy.js";
+import { MESSAGES_PROVIDER, wasRefused } from "../../src/messages-stream.js";
 import { parseJsonFrom, stripFence } from "../../src/parse-json.js";
 import { appendSupplement, splitBlocks } from "../../src/supplement.js";
-import { buildTree, estimateTocTokens, type ModelNode } from "../../src/toc.js";
-import { budgetFor } from "../../src/token-budget.js";
+import { buildTree, structureRequest, type ModelNode } from "../../src/toc.js";
 import { assertTreeSound } from "../../src/tree-invariants.js";
 import type { Block, Tree, TreeNode } from "../../src/types.js";
 import type { ArmSpec, CallSpec } from "./arms.js";
@@ -66,31 +73,151 @@ export type MessagesSend = (req: {
 /** The one chat/completions request this eval makes. */
 export type ChatSend = MessagesSend;
 
-export const sendMessages: MessagesSend = () => {
-  throw new PendingError(
-    "The Messages-wire transport is not armed: it needs a DECLARATIONS row in " +
-      "src/spend-declarations.ts naming this file (account openrouter, wire messages), " +
-      "which is under src/ and held for team-lead approval. See the header of " +
-      "evals/toc-structure/model-arms.ts.",
-  );
-};
-
-export const sendChat: ChatSend = () => {
-  throw new PendingError(
-    "The chat-wire transport is not armed: it needs a DECLARATIONS row in " +
-      "src/spend-declarations.ts naming this file (account openrouter, wire chat), " +
-      "held for team-lead approval. See the header of evals/toc-structure/model-arms.ts.",
-  );
-};
-
-/** The prompt the pipeline ships — src/toc.ts's SYSTEM plus its renderBlocks. */
-export function shippingPrompt(_body: Block[]): { system: string; user: string } {
-  throw new PendingError(
-    "The shipping prompt is not wired: it needs `SYSTEM` and `renderBlocks` exported " +
-      "from src/toc.ts (export keyword only), held for team-lead approval rather than " +
-      "copied — a copy would drift from what ships and quietly relabel the incumbent arm.",
-  );
+function apiKey(): string {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) {
+    throw new Error(
+      "OPENROUTER_API_KEY is not set. The runner loads .env.local at its own edge; " +
+        "nothing deeper reads credentials (src/messages-stream.ts § loadEnvLocal).",
+    );
+  }
+  return key;
 }
+
+/**
+ * The Messages wire, through OpenRouter's Anthropic-compatible Skin — the same
+ * endpoint, provider pin and `require_parameters` production uses
+ * (`MESSAGES_PROVIDER`, src/messages-stream.ts), with only model and effort
+ * varying per arm. Non-streaming, because nobody watches an eval.
+ */
+export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens }) => {
+  const client = new Anthropic({
+    baseURL: "https://openrouter.ai/api",
+    apiKey: apiKey(),
+    authToken: apiKey(),
+    logLevel: "off",
+    /* One logical call is one billed attempt, or the spend row understates —
+       the same reason streamMessage sets it (src/messages-stream.ts). */
+    maxRetries: 0,
+    fetch: declaredFetch,
+  });
+  const startedAt = Date.now();
+  return withDeclaredExternalCall("toc-structure-messages", { model: call.model }, async ({ observe }) => {
+    const message = await client.messages.create({
+      model: call.model,
+      max_tokens: maxTokens,
+      thinking: { type: "adaptive" },
+      output_config: { effort: call.effort },
+      system,
+      messages: [{ role: "user", content: user }],
+      provider: MESSAGES_PROVIDER,
+    } as unknown as Anthropic.MessageCreateParamsNonStreaming);
+
+    /* Fields the SDK's types do not know, read through a cast — the same move
+       as meterStream. Whether `cost` is present on a NON-streaming Skin
+       response is unverified until the first calibration call; a null cost
+       degrades the ledger row to a computed estimate, never to silence. */
+    const u = (message.usage ?? {}) as unknown as {
+      input_tokens?: number | null;
+      output_tokens?: number | null;
+      cost?: number | null;
+      output_tokens_details?: { thinking_tokens?: number | null } | null;
+    };
+    observe.openRouter({
+      usage: {
+        prompt_tokens: u.input_tokens ?? null,
+        completion_tokens: u.output_tokens ?? null,
+        cost: u.cost ?? null,
+      },
+      model: message.model,
+      provider: (message as unknown as { provider?: string | null }).provider ?? null,
+    });
+
+    if (wasRefused(message)) throw new Error("the model refused the structure request");
+    if (message.stop_reason === "max_tokens") {
+      throw new Error(
+        `truncated at max_tokens=${maxTokens} (${message.usage.output_tokens} output tokens) — ` +
+          `the answer cannot be scored`,
+      );
+    }
+    const raw = message.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+    return {
+      raw,
+      stats: {
+        ms: Date.now() - startedAt,
+        inputTokens: u.input_tokens ?? null,
+        outputTokens: u.output_tokens ?? null,
+        reasoningTokens: u.output_tokens_details?.thinking_tokens ?? null,
+      },
+    };
+  });
+};
+
+/**
+ * chat/completions, for the models the Messages wire cannot reach. Effort maps
+ * onto OpenRouter's `reasoning.effort` (high|medium|low are all valid there).
+ * `max_tokens` AND `max_completion_tokens` are both sent: Luna advertises the
+ * second, providers ignore parameters they do not take silently
+ * (src/models.ts § the completion ceilings), and a truncated answer is caught
+ * below by `finish_reason` rather than trusted to the parameter.
+ */
+export const sendChat: ChatSend = async ({ call, system, user, maxTokens }) => {
+  const key = apiKey();
+  const startedAt = Date.now();
+  return withDeclaredExternalCall("toc-structure-chat", { model: call.model }, async ({ observe }) => {
+    const res = await declaredFetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: call.model,
+        reasoning: { effort: call.effort },
+        max_tokens: maxTokens,
+        max_completion_tokens: maxTokens,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+      }),
+    });
+    const json = (await res.json()) as {
+      error?: { message?: string };
+      choices?: { message?: { content?: string }; finish_reason?: string }[];
+      usage?: {
+        prompt_tokens?: number | null;
+        completion_tokens?: number | null;
+        completion_tokens_details?: { reasoning_tokens?: number | null } | null;
+        cost?: number | null;
+      };
+      model?: string;
+      provider?: string;
+    };
+    /* Before any early return: a refusal that reports usage still cost money —
+       the same ordering the PDF bake-off's OpenRouter arm uses. */
+    observe.openRouter(json);
+    if (!res.ok || json.error) {
+      throw new Error(`chat wire ${res.status}: ${json.error?.message?.slice(0, 400) ?? "no error body"}`);
+    }
+    const choice = json.choices?.[0];
+    if (!choice?.message?.content) throw new Error("chat wire returned no message content");
+    /* `length` is not an error anywhere in the app, which src/models.ts flags
+       as the first thing to bite on this wire — here it is one. */
+    if (choice.finish_reason === "length") {
+      throw new Error(`truncated (finish_reason: length) at max ${maxTokens} — the answer cannot be scored`);
+    }
+    return {
+      raw: choice.message.content,
+      stats: {
+        ms: Date.now() - startedAt,
+        inputTokens: json.usage?.prompt_tokens ?? null,
+        outputTokens: json.usage?.completion_tokens ?? null,
+        reasoningTokens: json.usage?.completion_tokens_details?.reasoning_tokens ?? null,
+      },
+    };
+  });
+};
 
 /* --------------------------------------------------- the deterministic half */
 
@@ -194,7 +321,7 @@ export async function runModelArm(
   const { body } = splitBlocks(blocks);
   switch (arm.kind) {
     case "one-call": {
-      const { system, user } = shippingPrompt(body);
+      const { system, user, maxTokens } = structureRequest(body);
       const seed =
         arm.seed === "heading-tree"
           ? `\n\n${renderSeedProposal(blocks, slug)}`
@@ -206,7 +333,7 @@ export async function runModelArm(
         call: arm.call,
         system,
         user: `${user}${seed}`,
-        maxTokens: maxTokensFor(body),
+        maxTokens,
       });
       return { tree: parseStructureResponse(raw, blocks, slug), calls: [stats] };
     }
@@ -221,7 +348,3 @@ export async function runModelArm(
   }
 }
 
-/** The pipeline's own budget arithmetic, via its exports. */
-function maxTokensFor(body: Block[]): number {
-  return budgetFor("table of contents", estimateTocTokens(body));
-}

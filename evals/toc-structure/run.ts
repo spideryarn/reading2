@@ -27,6 +27,8 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { withLedger } from "../../src/cli-ledger.js";
+import { loadEnvLocal } from "../../src/env.js";
 import { isMain } from "../../src/is-main.js";
 import { parseJsonFrom } from "../../src/parse-json.js";
 import type { Block, Tree } from "../../src/types.js";
@@ -75,8 +77,34 @@ interface RunFile {
   startedAt: string;
   /** HEAD when the run started, so a March result can name the scorer that made it. */
   commit: string;
+  /** Standing measurement notes a later reader needs beside the numbers. */
+  notes: string[];
   arms: ArmSpec[];
   results: ArmResult[];
+  /** Only under --sensitivity: the heading rule at other stub thresholds. */
+  sensitivity?: SensitivityRow[];
+}
+
+/**
+ * In the results file rather than only in a comment, because a later reader
+ * compares runs against these numbers without opening the code.
+ */
+const STANDING_NOTES = [
+  "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for " +
+    "scaling-hypothesis; that figure includes the trailing bibliography (supplement " +
+    "blocks), which never needed navigation bands. The body answer is 29.",
+  "The heading rule's 20-word stub threshold and its >=3-headings level rule were " +
+    "FITTED to the seven dev documents (corpus.ts freezes them as the development " +
+    "set); --sensitivity reports the carving at 0/10/20/40 words.",
+];
+
+interface SensitivityRow {
+  slug: string;
+  threshold: number;
+  parts: number;
+  flat: boolean;
+  /** L1 boundary agreement with the tree on disk, when there is one. */
+  l1VsDisk: number | null;
 }
 
 async function readJson<T>(file: string): Promise<T> {
@@ -234,15 +262,51 @@ function print(r: ArmResult): void {
   }
 }
 
+/**
+ * Finding 4's report: the same rule at four stub thresholds, so a reader can
+ * see how much of the carving the fitted 20 is carrying. Never re-tune on a
+ * held-out document's row — that is the one forbidden move.
+ */
+async function sensitivity(articleDirs: string[]): Promise<SensitivityRow[]> {
+  const rows: SensitivityRow[] = [];
+  for (const dir of articleDirs) {
+    const article = await loadArticle(dir);
+    for (const threshold of [0, 10, 20, 40]) {
+      const built = buildHeadingTree(article.blocks, article.slug, article.title, threshold);
+      rows.push({
+        slug: article.slug,
+        threshold,
+        parts: built.parts,
+        flat: built.flat,
+        l1VsDisk: article.diskTree
+          ? compareTrees(article.blocks, built.tree, article.diskTree).l1Boundaries
+          : null,
+      });
+    }
+  }
+  console.log("\nstub threshold sensitivity (parts / L1 agreement with disk tree)");
+  for (const dir of articleDirs) {
+    const slug = path.basename(dir);
+    const cells = rows
+      .filter((r) => r.slug === slug)
+      .map((r) => `${r.threshold}w: ${r.flat ? "flat" : r.parts} ${r.l1VsDisk === null ? "" : `(${pct(r.l1VsDisk)})`}`);
+    console.log(`  ${slug.slice(0, 40).padEnd(42)} ${cells.join("   ")}`);
+  }
+  return rows;
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const armNames: string[] = [];
   const dirs: string[] = [];
+  let wantSensitivity = false;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--arm") {
       const name = args[++i];
       if (!name) throw new Error("--arm needs a name");
       armNames.push(name);
+    } else if (args[i] === "--sensitivity") {
+      wantSensitivity = true;
     } else if (args[i] === "--list") {
       for (const a of ARMS) console.log(`${a.name}  (${a.kind}, ${a.comparison})`);
       return;
@@ -252,9 +316,9 @@ async function main(): Promise<void> {
       dirs.push(args[i]!);
     }
   }
-  if (armNames.length === 0) {
+  if (armNames.length === 0 && !wantSensitivity) {
     console.error(
-      "Usage: npm run eval:toc-structure -- --arm <name> [--arm <name>…] [dir…]\n" +
+      "Usage: npm run eval:toc-structure -- --arm <name> [--arm <name>…] [--sensitivity] [dir…]\n" +
         `Arms: ${ARMS.map((a) => a.name).join(", ")}   (--list to see kinds)\n` +
         "With no dirs, the committed corpus manifest (corpus.ts) decides what is scored.",
     );
@@ -283,13 +347,14 @@ async function main(): Promise<void> {
     "..",
     "results",
     "toc-structure",
-    `${stamp}-${armNames.join("+")}`,
+    `${stamp}-${armNames.length > 0 ? armNames.join("+") : "sensitivity"}`,
   );
   await mkdir(path.join(runDir, "trees"), { recursive: true });
 
   const runFile: RunFile = {
     startedAt: new Date().toISOString(),
     commit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf-8" }).trim(),
+    notes: STANDING_NOTES,
     arms: [...arms],
     results: [],
   };
@@ -334,9 +399,19 @@ async function main(): Promise<void> {
     }
   }
 
+  if (wantSensitivity) {
+    runFile.sensitivity = await sensitivity(articleDirs);
+    await checkpoint();
+  }
+
   console.log(`\nWrote ${path.relative(process.cwd(), runDir)}/`);
 }
 
 if (isMain(import.meta.url)) {
-  await main();
+  /* The program's edge: credentials load here and nowhere deeper
+     (src/messages-stream.ts § loadEnvLocal), and the ledger wraps the whole
+     run — withDeclaredExternalCall refuses to spend without one open, so a
+     model arm run outside this entrypoint fails closed rather than unmetered. */
+  loadEnvLocal();
+  await withLedger("eval", main);
 }

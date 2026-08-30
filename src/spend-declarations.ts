@@ -141,6 +141,28 @@ export const DECLARATIONS: readonly Declaration[] = [
     metered: false,
     why: "Ordinary chat/completions and could go through `openRouterJson` today — the only reason it has not is that a successor (`bench-vocabulary-sources.ts`) was being written in the same directory on 2026-08-28 and re-plumbing a file mid-rewrite loses somebody's work.",
   },
+  {
+    id: "toc-structure-messages",
+    kind: "bypass",
+    since: "2026-08-30",
+    account: "openrouter",
+    file: "evals/toc-structure/model-arms.ts",
+    job: "eval",
+    wire: "messages",
+    metered: true,
+    why: "The structure eval's arms vary model and effort per call, and `streamMessage` owns both on purpose — `modelFor(task)` is applied after the spread precisely so a stage cannot quietly switch models, and src/toc.ts pins its effort. The prompt itself is shared (`structureRequest` in src/toc.ts, parity-pinned by tests/toc-structure-request-parity.test.ts); only the transport differs.",
+  },
+  {
+    id: "toc-structure-chat",
+    kind: "bypass",
+    since: "2026-08-30",
+    account: "openrouter",
+    file: "evals/toc-structure/model-arms.ts",
+    job: "eval",
+    wire: "chat",
+    metered: true,
+    why: "The cheap arm's model (the quick tier) is served only on chat/completions, and the seam for that wire (`openRouterJson`) owns the per-job provider policy — this eval's arms deliberately differ from the app's policy and from each other, which is the same reason the PDF bake-off's OpenRouter arm is a declared bypass.",
+  },
 ];
 
 export function declarationFor(id: string): Declaration {

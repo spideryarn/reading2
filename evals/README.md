@@ -265,10 +265,16 @@ moved one block reads as total disagreement and run-to-run wobble would dominate
 built on it. Between an arm and the incumbent it is descriptive; between repeats of the incumbent
 it is **the noise floor**, the resolution of the whole instrument, to be reported before any
 comparison. The mechanical measures are diagnostics and guards, not the verdict — every one of
-them can be won by a worse arm (GPT Sol's review has the table), so the primary outcome for
-choosing between close arms is a **blinded human pass over the finalists' trees**, which the
-per-run `trees/` directory exists to feed. Never treat either tree as the reference: the third
-warning in the design was to never derive an expectation from the thing under test.
+them can be won by a worse arm (GPT Sol's review has the table) — so close arms go to a **blinded
+judging pass over the finalists' trees** (`toc-structure/blind.ts`, fed by the per-run `trees/`
+directory). **The judge is a model, not a person** — Greg's decision, 2026-08-30, with a budget of
+about ten comparisons, spent on the documents where arms disagree. The weakness is stated here
+rather than discovered later: a model judging model output tends to prefer writing that resembles
+its own, which is why the free heading tree is always in the lineup as a non-model anchor, and why
+the standing rule is that **a judge who cannot separate the arms by more than the noise floor does
+not rank them — the decision then falls to latency, cost and simplicity, and the results file says
+so plainly rather than reaching for a winner.** Never treat either tree as the reference: the
+third warning in the design was to never derive an expectation from the thing under test.
 
 Each run writes a **directory** under `results/toc-structure/` — `run.json` (scores, arm specs,
 the git commit, and the measured input hashes), rewritten incrementally after every article × arm
@@ -288,6 +294,19 @@ salience), `headings-seeded` (isolated: the whole deterministic heading tree as 
 model, wire and thinking semantics move together), `waves` (bakeoff, and it must exercise **three**
 levels — the book-length motivation is depth the single call cannot reach, so an L1→L2 pilot would
 not test the process it argues for), `cheap-then-revise` (bakeoff).
+
+Every paid arm sends **production's own prompt** through `structureRequest` (src/toc.ts) — the one
+assembly point, called by `generateToc` itself, pinned byte-for-byte (and seen red under
+perturbation) by [`tests/toc-structure-request-parity.test.ts`](../tests/toc-structure-request-parity.test.ts)
+— and its transports are declared bypasses (`toc-structure-messages` / `toc-structure-chat` in
+src/spend-declarations.ts) that refuse to run without an open ledger.
+
+Two facts recorded so nobody rediscovers them mid-run: Greg wants deeper-than-three trees
+supported **eventually, not measured for yet** — and the reading view is not ready for them anyway
+(`columnLabel`, src/web/tree.ts, falls through to depth-number naming past depth 3), which is a
+known product gap, not this eval's to fix. And the heading rule's thresholds were **fitted to the
+dev corpus** — `--sensitivity` prints the carving at 0/10/20/40 stub words, and held-out documents
+judge the rule as it stands, never re-tuned.
 
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 

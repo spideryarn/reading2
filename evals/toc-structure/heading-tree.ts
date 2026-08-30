@@ -79,8 +79,14 @@ export const PREAMBLE_TITLE = "Before the first heading";
 /**
  * A segment whose non-heading prose is under this many words is a stub — a
  * bare title, a heading followed directly by another heading, a "Backlinks"
- * footer — and merges into its neighbour. 20 sits between the biggest stub
- * this corpus produces (a 14-word preamble) and the smallest real section.
+ * footer — and merges into its neighbour.
+ *
+ * **20 was fitted to the seven dev documents**, not discovered: it sits
+ * between the biggest stub this corpus produces (a 14-word preamble) and the
+ * smallest real section, and a different corpus could want a different value.
+ * That is why the dev set is frozen (corpus.ts) and why the runner's
+ * `--sensitivity` mode reports the carving at 0/10/20/40 — held-out documents
+ * judge the rule as it stands, with no re-tuning after seeing them.
  */
 export const MIN_SEGMENT_PROSE_WORDS = 20;
 
@@ -106,6 +112,8 @@ export function buildHeadingTree(
   blocks: Block[],
   slug: string,
   articleTitle?: string,
+  /** Override for --sensitivity only; every arm uses the fitted default. */
+  stubThreshold: number = MIN_SEGMENT_PROSE_WORDS,
 ): HeadingTreeResult {
   /* Body only, apparatus appended after — the same order generateToc uses
      (src/toc.ts), so a bibliography can never sit inside a section. */
@@ -175,7 +183,7 @@ export function buildHeadingTree(
     let pendingLo: number | null = null;
     for (const seg of segments) {
       const lo: number = pendingLo ?? seg.lo;
-      if (proseWords(seg) < MIN_SEGMENT_PROSE_WORDS) {
+      if (proseWords(seg) < stubThreshold) {
         pendingLo = lo;
         continue;
       }

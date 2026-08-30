@@ -359,12 +359,23 @@ describe("parseStructureResponse", () => {
 });
 
 describe("runModelArm", () => {
-  it("is loud, not silent, while the transports are unarmed", async () => {
+  it("fails closed outside a ledger: no spend row means no request at all", async () => {
+    // withDeclaredExternalCall checks for an open ledger BEFORE any HTTP is
+    // possible, so under vitest (no ledger) a paid arm rejects loudly and no
+    // request leaves the machine. The key may also be absent; either error is
+    // the closed path.
     const blocks = [heading(2, "One"), block()];
-    await expect(runModelArm(armByName("incumbent"), blocks, "pending")).rejects.toThrow(
+    await expect(runModelArm(armByName("incumbent"), blocks, "no-ledger")).rejects.toThrow(
+      /ledger|OPENROUTER_API_KEY/,
+    );
+  });
+
+  it("waves and revise are loud, not silent, while their prompts are pending", async () => {
+    const blocks = [heading(2, "One"), block()];
+    await expect(runModelArm(armByName("waves"), blocks, "pending")).rejects.toThrow(
       PendingError,
     );
-    await expect(runModelArm(armByName("waves"), blocks, "pending")).rejects.toThrow(
+    await expect(runModelArm(armByName("cheap-then-revise"), blocks, "pending")).rejects.toThrow(
       PendingError,
     );
   });
