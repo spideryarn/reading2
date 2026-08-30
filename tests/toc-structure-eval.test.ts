@@ -18,6 +18,8 @@ import { ARMS, armByName } from "../evals/toc-structure/arms.js";
 import { CORPUS, defaultCorpus } from "../evals/toc-structure/corpus.js";
 import { buildHeadingTree, PREAMBLE_TITLE } from "../evals/toc-structure/heading-tree.js";
 import {
+  assertCallAccounted,
+  type CallStats,
   parseStructureResponse,
   PendingError,
   renderHeadingList,
@@ -463,6 +465,50 @@ describe("the arms registry", () => {
     const waves = armByName("waves");
     if (waves.kind !== "waves") throw new Error("waves changed kind");
     expect(waves.levels).toBeGreaterThanOrEqual(3); // the book-length motivation needs L3
+  });
+});
+
+describe("assertCallAccounted", () => {
+  const stats = (over: Partial<CallStats>): CallStats => ({
+    ms: 1000,
+    inputTokens: 27_000,
+    outputTokens: 18_000,
+    reasoningTokens: 13_000,
+    generationId: "gen-abc",
+    costUsd: 0.24,
+    providerCostUsd: 0.24,
+    ...over,
+  });
+
+  it("passes when tokens arrived and the two cost sources agree", () => {
+    expect(() => assertCallAccounted(stats({}), "t")).not.toThrow();
+  });
+
+  it("passes on a single cost source - the other may legitimately be absent", () => {
+    expect(() => assertCallAccounted(stats({ costUsd: null }), "t")).not.toThrow();
+    expect(() => assertCallAccounted(stats({ providerCostUsd: null }), "t")).not.toThrow();
+  });
+
+  it("fails loudly when a paid call reports no tokens", () => {
+    expect(() => assertCallAccounted(stats({ inputTokens: null }), "t")).toThrow(/no token usage/);
+    expect(() => assertCallAccounted(stats({ outputTokens: null }), "t")).toThrow(/no token usage/);
+  });
+
+  it("fails loudly when no cost source answered - a paid arm must not score as free", () => {
+    expect(() =>
+      assertCallAccounted(stats({ costUsd: null, providerCostUsd: null }), "t"),
+    ).toThrow(/must not score as free/);
+  });
+
+  it("fails loudly when the two cost sources disagree beyond 10%", () => {
+    // 0.24 vs 0.30 is a 20% gap against the provider's number.
+    expect(() => assertCallAccounted(stats({ costUsd: 0.24, providerCostUsd: 0.3 }), "t")).toThrow(
+      /disagree/,
+    );
+    // 0.24 vs 0.25 is a 4% gap: within rounding and billing lag.
+    expect(() =>
+      assertCallAccounted(stats({ costUsd: 0.24, providerCostUsd: 0.25 }), "t"),
+    ).not.toThrow();
   });
 });
 

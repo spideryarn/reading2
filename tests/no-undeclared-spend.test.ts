@@ -120,6 +120,8 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "src/vercel-health.ts": "Reports which credentials are configured, never their values.",
   "scripts/ai-cost.ts":
     "Reads GET /api/v1/key to reconcile. Costs nothing and buys no inference.",
+  "evals/toc-structure/verify-costs.ts":
+    "Reads GET /api/v1/generation to reconcile a finished eval run's stored ids against the provider's own cost figures. Costs nothing and buys no inference — and it cannot live in the declared file, because a metered declaration covers only what declaredFetch guards.",
   "evals/declared-spend.ts":
     "The bypass wrapper itself, and the guarded fetch that makes one safe.",
   "src/spend-declarations.ts": "The register. Data, not transport.",

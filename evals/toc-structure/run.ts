@@ -96,6 +96,12 @@ const STANDING_NOTES = [
   "The heading rule's 20-word stub threshold and its >=3-headings level rule were " +
     "FITTED to the seven dev documents (corpus.ts freezes them as the development " +
     "set); --sensitivity reports the carving at 0/10/20/40 words.",
+  "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal " +
+    "cut points, so 100% L1 agreement beside a ~3-block mean distance is the level " +
+    "below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the " +
+    "five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so " +
+    "roughly a quarter to a third of the deep disagreement is one-block wobble - " +
+    "which softens, without erasing, 'the model earns its money below L1'.",
 ];
 
 interface SensitivityRow {

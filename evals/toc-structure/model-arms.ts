@@ -16,11 +16,18 @@
  * without an open ledger, and `declaredFetch`, which refuses to run outside a
  * declaration; `maxRetries: 0` so one logical call is one billed attempt.
  *
+ * **A paid call that cannot account for itself fails the run**
+ * (`assertCallAccounted`): tokens must arrive and a cost figure must arrive
+ * with them, in-band — the Messages wire streams so the raw events' `cost`
+ * can be read exactly as meterStream reads it, and the chat wire asks with
+ * `usage: {include: true}`. After the run, verify-costs.ts reconciles every
+ * stored generation id against OpenRouter's generation endpoint — the
+ * provider's own number — and a run is not quotable until it passes.
+ *
  * **Nothing here has made a live call yet** (the paid hold stands), so two
  * wire facts are flagged rather than asserted, to be verified on the first
- * calibration call: whether the Messages Skin's non-streaming response carries
- * `usage.cost` (the streaming meter reads it from raw events —
- * src/messages-stream.ts), and Luna's treatment of `max_tokens` vs
+ * calibration call: whether the Skin's raw-event `message.id` is the id the
+ * generation endpoint answers to, and Luna's treatment of `max_tokens` vs
  * `max_completion_tokens` (both are sent; providers ignore unknowns silently).
  *
  * The `waves` and `cheap-then-revise` strategies still throw `PENDING`: their
@@ -46,7 +53,62 @@ export interface CallStats {
   inputTokens: number | null;
   outputTokens: number | null;
   reasoningTokens: number | null;
+  /** The response id, which is what OpenRouter's generation endpoint is asked about. */
+  generationId: string | null;
+  /** What the response's own usage said the call cost, in USD. */
+  costUsd: number | null;
+  /** The generation endpoint's answer for the same call — the provider's own number. */
+  providerCostUsd: number | null;
 }
+
+/**
+ * **A paid call that cannot account for itself fails the run.** The riskiest
+ * seam in this executor is the observer mapping — an openrouter-account
+ * declaration expects OpenRouter-shaped usage while the Messages wire answers
+ * in Anthropic's shape — and the failure mode of getting it wrong is a cost
+ * that lands as zero, silently, after which the results file reports a free
+ * arm that was not free and somebody quotes it in three months
+ * (docs/reusable/silent-success.md). So the rule is enforced per call, not
+ * checked once: tokens must have arrived, at least one cost source must have
+ * answered, and when both answered they must agree — a >10% gap means one of
+ * them is about a different call.
+ */
+export function assertCallAccounted(stats: CallStats, label: string): void {
+  if (stats.inputTokens === null || stats.outputTokens === null) {
+    throw new Error(
+      `${label}: the call returned no token usage. It cost money and reported nothing — ` +
+        `the observer mapping is broken, and scoring would record a free arm that was not free.`,
+    );
+  }
+  if (stats.costUsd === null && stats.providerCostUsd === null) {
+    throw new Error(
+      `${label}: no cost from the response's usage AND none from the generation endpoint ` +
+        `(id ${stats.generationId ?? "missing"}). A paid arm must not score as free — ` +
+        `fix the accounting before re-running.`,
+    );
+  }
+  if (stats.costUsd !== null && stats.providerCostUsd !== null) {
+    const gap = Math.abs(stats.costUsd - stats.providerCostUsd) / Math.max(stats.providerCostUsd, 1e-9);
+    if (gap > 0.1) {
+      throw new Error(
+        `${label}: usage.cost ($${stats.costUsd}) and the generation endpoint ` +
+          `($${stats.providerCostUsd}) disagree by ${(gap * 100).toFixed(0)}% — one of them ` +
+          `describes a different call, and neither can be trusted into a results file.`,
+      );
+    }
+  }
+}
+
+/* `providerCostUsd` is NOT fetched here. The scan (tests/no-undeclared-spend.
+   test.ts) forbids a raw fetch in a declared file — a metered declaration
+   covers only what declaredFetch guards, and that rule is right. The
+   generation-endpoint reconciliation is therefore its own GET-only step,
+   evals/toc-structure/verify-costs.ts, run against a finished run.json; a run
+   is not quotable until it passes. In-process, `costUsd` comes in-band:
+   OpenRouter puts `cost` in the raw stream events on the Messages wire — the
+   fact src/messages-stream.ts § meterStream is built on, pinned by
+   tests/messages-stream.test.ts — and in `usage` on chat/completions when
+   `usage: {include: true}` is sent. */
 
 export interface ModelArmRun {
   tree: Tree;
@@ -103,7 +165,14 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
   });
   const startedAt = Date.now();
   return withDeclaredExternalCall("toc-structure-messages", { model: call.model }, async ({ observe }) => {
-    const message = await client.messages.create({
+    /* Streamed, not for anybody watching — for the COST. `finalMessage()`'s
+       merge drops the `cost` field the Skin puts in the raw `message_delta`
+       usage (src/messages-stream.ts § the three things that fail silently
+       here), so the raw events are subscribed exactly as meterStream does;
+       tests/messages-stream.test.ts is what pins that the field arrives. */
+    let streamCostUsd: number | null = null;
+    let streamGenerationId: string | null = null;
+    const stream = client.messages.stream({
       model: call.model,
       max_tokens: maxTokens,
       thinking: { type: "adaptive" },
@@ -111,23 +180,27 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
       system,
       messages: [{ role: "user", content: user }],
       provider: MESSAGES_PROVIDER,
-    } as unknown as Anthropic.MessageCreateParamsNonStreaming);
+    } as unknown as Anthropic.MessageStreamParams);
+    stream.on("streamEvent", (event) => {
+      const raw = event as unknown as {
+        message?: { id?: string };
+        usage?: { cost?: unknown };
+      };
+      if (typeof raw.usage?.cost === "number") streamCostUsd = raw.usage.cost;
+      if (raw.message?.id) streamGenerationId = raw.message.id;
+    });
+    const message = await stream.finalMessage();
 
-    /* Fields the SDK's types do not know, read through a cast — the same move
-       as meterStream. Whether `cost` is present on a NON-streaming Skin
-       response is unverified until the first calibration call; a null cost
-       degrades the ledger row to a computed estimate, never to silence. */
     const u = (message.usage ?? {}) as unknown as {
       input_tokens?: number | null;
       output_tokens?: number | null;
-      cost?: number | null;
       output_tokens_details?: { thinking_tokens?: number | null } | null;
     };
     observe.openRouter({
       usage: {
         prompt_tokens: u.input_tokens ?? null,
         completion_tokens: u.output_tokens ?? null,
-        cost: u.cost ?? null,
+        cost: streamCostUsd,
       },
       model: message.model,
       provider: (message as unknown as { provider?: string | null }).provider ?? null,
@@ -144,15 +217,20 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
       .join("");
-    return {
-      raw,
-      stats: {
-        ms: Date.now() - startedAt,
-        inputTokens: u.input_tokens ?? null,
-        outputTokens: u.output_tokens ?? null,
-        reasoningTokens: u.output_tokens_details?.thinking_tokens ?? null,
-      },
+    const stats: CallStats = {
+      ms: Date.now() - startedAt,
+      inputTokens: u.input_tokens ?? null,
+      outputTokens: u.output_tokens ?? null,
+      reasoningTokens: u.output_tokens_details?.thinking_tokens ?? null,
+      /* The raw event's id, like meterStream's generationId — with the merged
+         message's id as the fallback. verify-costs.ts asks the generation
+         endpoint about it after the run. */
+      generationId: streamGenerationId ?? message.id ?? null,
+      costUsd: streamCostUsd,
+      providerCostUsd: null, // verify-costs.ts fills this from the provider's record
     };
+    assertCallAccounted(stats, `messages wire, ${call.model}`);
+    return { raw, stats };
   });
 };
 
@@ -176,6 +254,8 @@ export const sendChat: ChatSend = async ({ call, system, user, maxTokens }) => {
         reasoning: { effort: call.effort },
         max_tokens: maxTokens,
         max_completion_tokens: maxTokens,
+        /* The settled figure, in-band, per call — what assertCallAccounted requires. */
+        usage: { include: true },
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
@@ -191,6 +271,7 @@ export const sendChat: ChatSend = async ({ call, system, user, maxTokens }) => {
         completion_tokens_details?: { reasoning_tokens?: number | null } | null;
         cost?: number | null;
       };
+      id?: string;
       model?: string;
       provider?: string;
     };
@@ -207,15 +288,17 @@ export const sendChat: ChatSend = async ({ call, system, user, maxTokens }) => {
     if (choice.finish_reason === "length") {
       throw new Error(`truncated (finish_reason: length) at max ${maxTokens} — the answer cannot be scored`);
     }
-    return {
-      raw: choice.message.content,
-      stats: {
-        ms: Date.now() - startedAt,
-        inputTokens: json.usage?.prompt_tokens ?? null,
-        outputTokens: json.usage?.completion_tokens ?? null,
-        reasoningTokens: json.usage?.completion_tokens_details?.reasoning_tokens ?? null,
-      },
+    const stats: CallStats = {
+      ms: Date.now() - startedAt,
+      inputTokens: json.usage?.prompt_tokens ?? null,
+      outputTokens: json.usage?.completion_tokens ?? null,
+      reasoningTokens: json.usage?.completion_tokens_details?.reasoning_tokens ?? null,
+      generationId: json.id ?? null,
+      costUsd: typeof json.usage?.cost === "number" ? json.usage.cost : null,
+      providerCostUsd: null, // verify-costs.ts fills this from the provider's record
     };
+    assertCallAccounted(stats, `chat wire, ${call.model}`);
+    return { raw: choice.message.content, stats };
   });
 };
 

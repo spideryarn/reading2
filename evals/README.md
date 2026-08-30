@@ -270,11 +270,27 @@ judging pass over the finalists' trees** (`toc-structure/blind.ts`, fed by the p
 directory). **The judge is a model, not a person** — Greg's decision, 2026-08-30, with a budget of
 about ten comparisons, spent on the documents where arms disagree. The weakness is stated here
 rather than discovered later: a model judging model output tends to prefer writing that resembles
-its own, which is why the free heading tree is always in the lineup as a non-model anchor, and why
-the standing rule is that **a judge who cannot separate the arms by more than the noise floor does
-not rank them — the decision then falls to latency, cost and simplicity, and the results file says
-so plainly rather than reaching for a winner.** Never treat either tree as the reference: the
-third warning in the design was to never derive an expectation from the thing under test.
+its own, which is why the free heading tree is always in the lineup as a non-model anchor.
+
+**The decision rules, declared before any run rather than argued after one:**
+
+- An **unusable flag disqualifies an arm regardless of its scores** — a model can raise it, and a
+  tree nobody would navigate by does not win on retention numbers.
+- Where the judge and the mechanical measures **disagree on a close call, neither wins**: the
+  decision falls through to latency, cost and simplicity.
+- A judge who cannot separate the arms by more than the noise floor does not rank them — the
+  honest output is *"not separable on quality"*, and the results file says so plainly rather than
+  reaching for a winner.
+
+Never treat either tree as the reference: the third warning in the design was to never derive an
+expectation from the thing under test.
+
+**Reading the two agreement numbers together:** `l1Boundaries` is depth-one cut points only;
+`boundaryDistance` is over **all** internal cut points — so `l1Boundaries: 1.0` beside a mean
+distance of ~3 blocks is not a contradiction, it is the level below L1 disagreeing. And on this
+corpus the means are `within1Block` 0.56 against exact `allBoundaries` 0.39 (0.65 vs 0.48 on the
+constitution alone), so **roughly a quarter to a third of the deep "disagreement" is one-block
+wobble** — which softens, without erasing, the claim that the model earns its money below L1.
 
 Each run writes a **directory** under `results/toc-structure/` — `run.json` (scores, arm specs,
 the git commit, and the measured input hashes), rewritten incrementally after every article × arm
@@ -300,6 +316,24 @@ assembly point, called by `generateToc` itself, pinned byte-for-byte (and seen r
 perturbation) by [`tests/toc-structure-request-parity.test.ts`](../tests/toc-structure-request-parity.test.ts)
 — and its transports are declared bypasses (`toc-structure-messages` / `toc-structure-chat` in
 src/spend-declarations.ts) that refuse to run without an open ledger.
+
+**Cost accounting is loud by construction, twice.** In-process, every paid call must return token
+usage AND an in-band cost figure — the Messages wire streams so the raw events' `cost` is read
+exactly as `meterStream` reads it (the fact tests/messages-stream.test.ts pins), the chat wire
+asks with `usage: {include: true}` — and a call that cannot account for itself **fails the run**
+rather than printing a zero (`assertCallAccounted`, model-arms.ts). Then, after the run,
+`verify-costs.ts` asks OpenRouter's generation endpoint about every stored generation id — the
+provider's own number, not our arithmetic — writes the answers into `run.json`, and exits non-zero
+on any disagreement over 10% or any call the provider has no record of. **A run is not quotable
+until it passes.** The reconciliation is its own GET-only file because the spend scan rightly
+forbids a raw fetch inside a declared-bypass file. All of this exists because the observer seam
+maps Messages-shaped usage into OpenRouter-shaped rows, and the failure mode of that mapping is a
+cost landing as zero, silently — a free-looking arm someone quotes in three months.
+
+(A possible future tidy, declined for now: typed issue codes on `checkTree`. The scorer's
+gist/other split is made by construction instead — placeholder gists injected, then `checkTree`
+re-asked — and src/tree-invariants.ts is load-bearing enough that it does not get opened for an
+eval's convenience.)
 
 Two facts recorded so nobody rediscovers them mid-run: Greg wants deeper-than-three trees
 supported **eventually, not measured for yet** — and the reading view is not ready for them anyway

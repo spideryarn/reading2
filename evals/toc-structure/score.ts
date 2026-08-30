@@ -73,8 +73,8 @@ export interface StructureScore {
    * `otherProblems` is what `checkTree` says about the same tree with a
    * placeholder gist on each of them — so a reworded message cannot silently
    * move a problem between the two buckets. (Typed issue codes on `checkTree`
-   * itself would be cleaner still; that is a src/ change and held for
-   * approval.)
+   * itself were considered and declined, 2026-08-30: tree-invariants.ts is
+   * load-bearing and this construction needs nothing from it.)
    */
   validity: {
     gistProblems: number;
