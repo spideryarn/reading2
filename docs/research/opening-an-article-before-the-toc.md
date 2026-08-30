@@ -257,6 +257,51 @@ That last point is the honest form of the denominator claim, and it is sharper t
 are nearly as good": **the author gives us the parts for free on most articles; the model earns its
 money on the sections inside them.** Which is an argument for waves (§ 6) as much as for B.
 
+#### A headingless article does not just degrade the free tree — it destabilises the model
+
+**Observed on a real ingest, 2026-08-30, not in a test.** Someone added
+`paulgraham.com/read.html` ("The Need to Read", 23 blocks, **exactly one heading** — its own h1
+title) through the ordinary queue. It took **16 model calls and $0.39** and produced no article.
+A 23-block piece should cost one structure call and one label batch.
+
+```
+attempt 1  FAIL     n0025: sourceHeading does not match any heading block in its range
+attempt 2  SUCCEED  11 sections, 58.2s
+attempt 3  FAIL     n0022: same
+attempt 4  FAIL     n0025: same
+attempt 5  SUCCEED   9 sections, 69.7s
+attempt 6  nav labels: asked 21, got 17 (missing 6,14,17,20)
+           retry:      asked 21, got 13 (missing 6,10,11,14,16)
+cost:      0.06 -> 0.19 -> 0.30 -> 0.39
+```
+
+**Eleven sections one run and nine the next, on byte-identical input.** That is not a model being
+slightly unreliable; it is a model with nothing to hold onto. `src/toc.ts`'s prompt tells it a node
+must begin at a heading wherever one exists — with one heading it improvises, and three runs in five
+improvised a `sourceHeading` for a range containing none, which `checkTree` correctly refused.
+
+The label failure is the same cause wearing a second face: `src/labels.ts` batches along the
+**tree's own section boundaries**, so an article with almost no boundaries gets one batch containing
+everything — the unbounded-output problem the batching was built to prevent, arriving through the
+one door it does not close. The missing indices scattered differently between attempts (overlapping
+only on 6), which is what a too-large batch looks like; four genuinely hard labels would fail on
+roughly the same four each time.
+
+**Under investigation** — root cause and postmortem in progress; the reproduction has to clear a
+confound first, since the ingest ran inside a `src/toc.ts` refactor window. The observed facts above
+are from the server log and `data/_ai-calls.jsonl` and are not in doubt.
+
+**What it changes here.** § 2 treated "an article with no headings" as the case where option B
+degrades to the flat tree — a free tree that is poor. That was the wrong way round. On such an
+article **the expensive path is the unreliable one**, so there is no good tree to wait four minutes
+for. That is an argument *for* opening on something free and honest, not against it.
+
+It also says something about the corpus. Five held-out documents were approved that morning to probe
+exactly this hole, with another Paul Graham essay as the top pick for exactly this reason — and the
+gap arrived on its own, on an ordinary ingest, for 39 cents, before anyone paid to look for it. The
+lesson generalises past headings: **a real ingest of an ordinary article is a cheaper instrument
+than a corpus, and we were not running any.**
+
 #### The two that fail, and why they fail differently
 
 **`scaling-hypothesis` over-segments** — 11 heading parts where the model chose 8. Recoverable: a
@@ -513,10 +558,10 @@ there is a pattern); and input tokens rise unless the article prefix caches well
 
 **The measurement in § 2 says the model is already doing this, unprompted.** Heading blocks are in
 `blocks.json`, so they are already in the prompt, and `sourceHeading` is where the model records
-that it quoted one. On 6 of 9 articles it chooses the author's structure (7/7 on the constitution,
-8/8 on bigger-brains). On the two where it does not — `scaling-hypothesis`, where 14 h2s over-segment
-what it wanted as 9 parts, and `fowler-phrenology`, where it ignored them entirely — that is the
-judgement Greg is asking for, being exercised.
+that it quoted one. On 4 of 7 documents it chooses the author's structure outright (7/7 on the
+constitution, 8/8 on bigger-brains). On `scaling-hypothesis` it takes 8 parts where the headings
+offer 11; on `fowler-phrenology` the headings are catalogue front-matter over one unbroken lecture
+and no rule could use them. That is the judgement Greg is asking for, being exercised.
 
 So the resolution: **headings are an excellent placeholder and a poor final answer.** Use them for
 the tree the reader opens on; let the model overwrite it. `sourceHeading` preserves the legitimacy
@@ -554,7 +599,7 @@ and the tree-replacement seam of § 5 is a prerequisite for all three rather tha
 | # | Change | Effort | Risk | Why here |
 |---|---|---|---|---|
 | **0** | Remove the `example/` fallback for non-fixture slugs; decide what "safe to open" means (incl. `assets`); build **one** article-refetch / tree-replacement seam | small–medium | low | Serving the wrong article is a live bug. The seam is a prerequisite for A, B and C. |
-| **B** | Heading tree at a new publication boundary, upgraded in place | medium | medium | The only option that answers the ask. Evidence supports it: 8/10 articles, 6/9 near-identical. |
+| **B** | Heading tree at a new publication boundary, upgraded in place | medium | medium | The only option that answers the ask. Evidence: 6/7 documents have usable headings, 4/7 match the model's L1 exactly. |
 | **A** | Fold the labels into the same upgrade state machine | small | low | Once B's machine exists this is a state in it, not a project. 12%. |
 | **W** | Progressive waves | medium–large | medium | Shares B's machinery. The only answer to book-length depth, and it attacks the 88%. |
 | **C** | NDJSON + progressive render | medium | medium–high | Needs the browser delivery path that does not exist. Measure first-text timing first. |
