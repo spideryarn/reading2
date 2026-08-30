@@ -1,10 +1,15 @@
 /**
- * Stage 6 server side — src/api.ts. The whole point of loadArticle is the
- * fallback: an unknown slug quietly serves the hand-authored example/ fixture,
- * so the client works before the pipeline has run.
+ * Stage 6 server side — src/api.ts. The reads the client makes, and the one
+ * rule that decides which article answers a slug: `data/<slug>/`, and the
+ * hand-authored `example/` fixture for the fixture's own slug and nothing else.
+ *
+ * That rule is younger than this file. `candidateDirs` used to append `example/`
+ * for *every* slug, so an article with no tree yet — and a slug with no article
+ * at all — was answered with the fixture's prose under the reader's name. The
+ * describe block below is the one that would have said so.
  */
 import { afterAll, describe, expect, it } from "vitest";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { articleMetadata, loadArticle, loadGlossary } from "../src/api.js";
 import { PROMPT_VERSION } from "../src/glossary.js";
@@ -13,14 +18,100 @@ import type { Block } from "../src/types.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { STEP_ORDER, STEPS } from "../src/pipeline.js";
 
-describe("loadArticle", () => {
-  it("falls back to example/ for a slug with no data/ directory", async () => {
-    const article = await loadArticle("no-such-article-slug");
-    expect(article.blocks.length).toBeGreaterThan(0);
-    expect(article.meta.title).toBeTruthy();
-    expect(article.tree.nodes[article.tree.rootId]).toBeDefined();
+/**
+ * **The fixture answers for its own slug and for no other.**
+ *
+ * Two states have to refuse, and the second is the one that stops being
+ * hypothetical: an article that does not exist, and an article whose blocks are
+ * written but whose tree is not. The second is a normal few seconds of every
+ * ingest once the ToC moves out of the critical path
+ * (docs/plans/faster-ingest-and-concurrency.md), and serving the fixture there
+ * means a reader who opens their own article early reads somebody else's.
+ *
+ * Asserted as "not the fixture" rather than only as a 404, because a 404 for the
+ * wrong reason would still pass — src/api.ts's own standing alarm was that
+ * nothing about the fixture's response distinguishes it from a correct refusal.
+ */
+describe("the example/ fixture is not a fallback for other slugs", () => {
+  const EXAMPLE = path.join(process.cwd(), "example");
+  const slugs: string[] = [];
+  afterAll(async () => {
+    for (const slug of slugs) {
+      await rm(path.join(process.cwd(), "data", slug), { recursive: true, force: true });
+    }
   });
 
+  /** A `data/<slug>/` with blocks and no tree — half an ingest, mid-flight. */
+  async function halfBuilt(): Promise<string> {
+    const slug = `zz-test-nofallback-${process.pid}-${slugs.length}`;
+    slugs.push(slug);
+    const dir = path.join(process.cwd(), "data", slug);
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, "blocks.json"),
+      JSON.stringify({
+        blocks: [
+          {
+            id: "spya-aaaaab",
+            kind: "text",
+            tag: "p",
+            gistable: true,
+            html: "<p>Mine, not the fixture's.</p>",
+            text: "Mine, not the fixture's.",
+            words: 4,
+          } satisfies Block,
+        ],
+      }),
+    );
+    return slug;
+  }
+
+  const fixtureBlockIds = async (): Promise<Set<string>> => {
+    const parsed = JSON.parse(await readFile(path.join(EXAMPLE, "blocks.json"), "utf8")) as {
+      blocks: Block[];
+    };
+    return new Set(parsed.blocks.map((b) => b.id));
+  };
+
+  it("refuses a slug with no data/ directory instead of serving the fixture", async () => {
+    await expect(loadArticle("zz-no-such-article-slug")).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("refuses an article whose blocks are written and whose tree is not", async () => {
+    const slug = await halfBuilt();
+    await expect(loadArticle(slug)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("never hands the fixture's blocks back under another slug", async () => {
+    const ids = await fixtureBlockIds();
+    for (const slug of ["zz-no-such-article-slug", await halfBuilt()]) {
+      const article = await loadArticle(slug).catch(() => null);
+      if (!article) continue;
+      expect(article.blocks.some((b) => ids.has(b.id)), slug).toBe(false);
+    }
+  });
+
+  it("describes no article rather than the fixture's files", async () => {
+    // `articleDir` is the second door into the same fallback, and the metadata
+    // page walked through it: a confident 200 whose `dir` said "example" for an
+    // address with no article behind it at all.
+    for (const slug of ["zz-no-such-article-slug", await halfBuilt()]) {
+      await expect(articleMetadata(slug), slug).rejects.toMatchObject({ status: 404 });
+    }
+  });
+
+  it("still opens the fixture under its own slug", async () => {
+    // The control. Six test files read `example/` as static data and
+    // docs/plans/postgres-migration.md says it stays, so the refusal above must
+    // be about the slug and not about the directory.
+    const article = await loadArticle("example");
+    expect(article.blocks.length).toBeGreaterThan(0);
+    expect(article.tree.nodes[article.tree.rootId]).toBeDefined();
+    expect((await articleMetadata("example")).dir).toBe("example");
+  });
+});
+
+describe("loadArticle", () => {
   it("returns blocks whose ids are the ones the tree ranges over", async () => {
     const { blocks, tree } = await loadArticle("example");
     const ids = new Set(blocks.map((b) => b.id));
@@ -98,14 +189,13 @@ describe("articleMetadata", () => {
     expect(m.dir).toBe("example");
   });
 
-  it("falls through to the fixture exactly as loadArticle does", async () => {
+  it("refuses an unknown slug exactly as loadArticle does", async () => {
     // The metadata page must describe the article the reading view is actually
-    // showing. `loadArticle` serves the fixture for an unknown slug, so this
-    // has to describe the fixture's files or the two pages would disagree about
-    // the same URL — and `dir` is what says where they came from.
-    const m = await articleMetadata("no-such-article-slug");
-    expect(m.slug).toBe("no-such-article-slug");
-    expect(m.dir).toBe("example");
+    // showing, so the two share `candidateDirs` and must agree about the same
+    // URL. This test used to assert the opposite — that both answered with the
+    // fixture — which was true and was the bug: `dir: "example"` under a slug
+    // nobody has ever ingested. See the describe block at the top of this file.
+    await expect(articleMetadata("zz-no-such-article-slug")).rejects.toMatchObject({ status: 404 });
   });
 
   it("says when each stage last wrote, and what it left, without saying what from", async () => {
@@ -145,10 +235,12 @@ describe("articleMetadata", () => {
     // shell). This endpoint is already looking in the article's directory.
     const m = await articleMetadata("example");
     expect(typeof m.comments).toBe("number");
-    // A slug with no comments file reports none, rather than throwing or
-    // reporting NaN — `loadComments` owns that, and this is the check that it
-    // still does.
-    expect((await articleMetadata("no-such-article-slug")).comments).toBe(0);
+    /* And an article with no comments file reports none, rather than throwing
+       or reporting NaN — `loadComments` owns that, and this is the check that
+       it still does. The fixture is that article: reader state lives under
+       `data/<slug>/` even for it, and `data/example/` holds no comments.json.
+       This used to reach for an unknown slug instead, which now 404s. */
+    expect(m.comments).toBe(0);
   });
 
   it("refuses a slug that is not one, before it joins any path", async () => {

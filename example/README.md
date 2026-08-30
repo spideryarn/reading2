@@ -30,8 +30,14 @@ that the left-right axis has something to say.
 ## Replacing it
 
 [`src/api.ts`](../src/api.ts) looks in `data/<slug>/` **first** and falls back
-here. So the moment the real pipeline writes `data/<slug>/`, the client picks it
-up with no code change — visit `/?slug=<slug>`.
+here — but only for the slug `example`. So the moment the real pipeline writes
+`data/example/`, the client picks it up with no code change; every other slug
+opens its own directory or 404s.
+
+It used to fall back here for *any* slug, which meant an article with no tree
+yet — or no article at all — was served this text under the reader's own
+address. `candidateDirs` in [`src/api.ts`](../src/api.ts) says why that had to
+go. Nothing about this fixture changed.
 
 Whatever writes a tree must satisfy the invariants in
 [granularity-zoom.md § The tree](../docs/project/granularity-zoom.md#the-tree).

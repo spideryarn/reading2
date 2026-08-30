@@ -237,9 +237,9 @@ export const glossaryLookupStore: GlossaryLookupStore = guarded(
  * filter is the divergence this whole seam exists to make impossible.
  * src/term-lookup.ts.
  *
- * `assertWritable` is the one genuinely file-shaped piece: `articleDir` falls
- * through to the committed `example/` directory for any slug with no artefacts,
- * so the filesystem needs a 403 that Postgres does not (no row, 404).
+ * `assertWritable` is the one genuinely file-shaped piece: the filesystem can
+ * reach the committed `example/` article, which nobody owns, so it needs a 403
+ * that Postgres does not (no such article there at all).
  */
 export const lookUpTerm = makeLookUpTerm({
   reader,

@@ -22,6 +22,12 @@ import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 const SLUG = "test-routes-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
+/** The committed fixture, which several blocks here copy in to have an article
+    with real block ids. It used to arrive for free — an unknown slug fell
+    through to `example/` — and that fallback is gone (src/api.ts §
+    `candidateDirs`), because it also answered a reader's own half-built article
+    with the fixture's prose. */
+const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
 afterEach(() => rm(DIR, { recursive: true, force: true }));
 
 /** A comment as a route answers with it — the fields these tests read off one. */
@@ -190,7 +196,6 @@ describe("the library route", () => {
 describe("the shelf routes", () => {
   const SHELF = "test-routes-shelf";
   const SHELF_DIR = path.resolve(import.meta.dirname, "..", "data", SHELF);
-  const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
 
   /** A complete-enough article, because the shelf routes now refuse to write for one that isn't. */
   const makeArticle = () => cp(EXAMPLE, SHELF_DIR, { recursive: true });
@@ -541,12 +546,17 @@ describe("the library route, continued", () => {
  * planted under /tmp came back through `GET /api/article/` as HTTP 200 with the
  * planted text in the body, 2026-08-25.
  *
- * **The reason this survived is how a shallow attempt fails.** `../../etc` finds
- * no blocks.json, so the loader falls through to the `example/` fixture and
- * serves it — which looks exactly like a refusal. You have to traverse all the
- * way to a directory you control before the behaviour differs at all, so a test
- * that stops short reports the endpoint safe. Hence the long escapes below:
- * a short one here would pass against the vulnerable code.
+ * **The reason this survived is how a shallow attempt failed.** `../../etc`
+ * found no blocks.json, so the loader fell through to the `example/` fixture
+ * and served it — which looks exactly like a refusal. You had to traverse all
+ * the way to a directory you control before the behaviour differed at all, so a
+ * test that stopped short reported the endpoint safe. Hence the long escapes
+ * below: a short one here would pass against the vulnerable code.
+ *
+ * That fallback was taken away on 2026-08-30 (src/api.ts § `candidateDirs`), so
+ * a shallow attempt now 404s honestly. The long escapes stay: they are what
+ * proves the *guard* refuses, and a 404 that happens to be right is not the
+ * same evidence as a 400 that was reached before any path was joined.
  *
  * See docs/project/security.md § The URL is the second untrusted party.
  */
@@ -637,12 +647,14 @@ describe("what a failure is reported as", () => {
     expect(r.handled).toBe(false);
   });
 
-  it("serves any slug, because an unknown one falls back to the example fixture", async () => {
-    // Not a missing-article test: `loadArticle` tries `data/<slug>/` and then
-    // `example/`, so in a dev checkout every slug resolves (src/api.ts). The
-    // 404 path is exercised by the tagged error there, not reachable from here.
+  it("404s an unknown slug, rather than serving the example fixture under it", async () => {
+    /* This test asserted the opposite until 2026-08-30, and was right about the
+       code: `loadArticle` tried `data/<slug>/` and then `example/`, so every
+       slug in a dev checkout resolved with a 200. What it made unreachable from
+       here was the 404 — and what the 200 hid was a reader being shown somebody
+       else's prose under their own address (src/api.ts § `candidateDirs`). */
     const r = await call("GET", "/api/article/no-such-article-anywhere");
-    expect(r.status).toBe(200);
+    expect(r.status).toBe(404);
   });
 
   it("is not ours if the path is not /api/", async () => {
@@ -724,13 +736,17 @@ describe("a pending comment nobody is answering", () => {
 
 describe("making a comment costs nothing", () => {
   /* **A real block, and a quote really inside it.** The route checks the anchor
-     against the article now, so a made-up passage is a 400 rather than a stored
+     against the article, so a made-up passage is a 400 rather than a stored
      comment nothing can draw. These three come from `example/blocks.json`,
-     which is what `loadArticle` falls through to for a slug with no data of its
-     own — the same source `HIT` below uses, for the same reason. */
+     which is why the fixture is copied under this slug — the same source `HIT`
+     below uses, for the same reason. */
   const BLOCK = "spya-gp3g6s";
   const QUOTE = "Berggruen Prize";
   const AT = 30;
+
+  // The article the anchors are checked against. `data/<SLUG>/` is torn down by
+  // the file-level afterEach, so this rebuilds it before each case.
+  beforeEach(() => cp(EXAMPLE, DIR, { recursive: true }));
 
   /* **The value that crosses the wire.** Both halves of this app can be right
      about a body and still disagree — the store keeps it, the route drops it,
@@ -875,14 +891,15 @@ describe("the tweets route", () => {
 describe("POST /api/search/:slug is a stream too", () => {
   // Its own slug, and its own OpenRouter mock, so stubbing `fetch` here cannot
   // touch any other describe block in this file — none of the rest reach a
-  // model. loadArticle falls back to example/ for an unknown slug, same as
-  // every other route test here, so `data/<this slug>/` only ever holds
-  // searches.json.
+  // model. The fixture's artefacts are copied under the slug so the search has
+  // an article to run over; `searches.json` then lands beside them.
   const SEARCH_SLUG = "test-routes-search-fixture";
   const SEARCH_DIR = path.resolve(import.meta.dirname, "..", "data", SEARCH_SLUG);
 
   let fetchMock: ReturnType<typeof vi.fn>;
-  beforeEach(() => {
+  beforeEach(async () => {
+    await rm(SEARCH_DIR, { recursive: true, force: true });
+    await cp(EXAMPLE, SEARCH_DIR, { recursive: true });
     process.env.OPENROUTER_API_KEY = "test-key";
     fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

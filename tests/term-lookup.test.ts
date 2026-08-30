@@ -85,16 +85,22 @@ async function fixture(opts: {
 
 describe("the guards, through the store's own wiring", () => {
   it("refuses to write into the built-in example", async () => {
-    /* `articleDir` falls through to `example/` for any slug with no output of
-       its own — including a slug that does not exist — so without this guard a
-       lookup on a typo would edit the one committed directory in the repo. The
-       same guard `deleteGlossary` carries, for the same reason. It is the one
-       piece of this that is genuinely filesystem-shaped: Postgres has no
-       fixture to fall into and 404s an unknown slug instead. */
-    await expect(lookUpTerm("no-such-article-slug", "spya-k3m9qt")).rejects.toThrow(
-      /built-in example/,
-    );
+    /* `example/` is an article the filesystem store can reach and nobody owns,
+       so a lookup on it must be a 403 rather than an edit to the one committed
+       directory in the repo. The same guard `deleteGlossary` carries, for the
+       same reason. It is the one piece of this that is genuinely
+       filesystem-shaped: Postgres has no fixture at all. */
     await expect(lookUpTerm("example", "spya-k3m9qt")).rejects.toThrow(/built-in example/);
+
+    /* And a typo is a 404 now, not a 403 — `articleDir` used to fall through to
+       `example/` for any slug with no output of its own, which is what put an
+       unknown slug one request away from writing into the fixture (src/api.ts §
+       `candidateDirs`). Asserted rather than dropped, because "no article" and
+       "not yours" are different things to be told, and the guard above must not
+       be what is answering this one. */
+    await expect(lookUpTerm("no-such-article-slug", "spya-k3m9qt")).rejects.toMatchObject({
+      status: 404,
+    });
   });
 
   it("rejects a slug that is not one", async () => {

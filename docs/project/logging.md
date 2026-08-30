@@ -335,20 +335,25 @@ that emits nothing at all; the same harness and the same reasoning as
 ### The fixture alarm, and what it can never fire for
 
 The `store` warning on [`src/api.ts`](../../src/api.ts) says when an article was answered out of
-`example/` rather than out of its own directory. That is the fallback which
+`example/` rather than out of its own directory. That was the fallback which
 [disguised a real path traversal as a refusal](security.md#why-it-survived-being-looked-at): a
-shallow `../../etc` finds no `blocks.json`, falls through to the fixture, and returns HTTP 200 with
-plausible content. The response cannot tell you which directory answered. Now one line can.
+shallow `../../etc` found no `blocks.json`, fell through to the fixture, and returned HTTP 200 with
+plausible content. The response cannot tell you which directory answered. One line could.
+
+**The fallback was removed on 2026-08-30** and the warning stayed. It is now an assertion rather than
+a report: nothing can reach it, and if it ever fires again somebody has widened `candidateDirs` and
+the symptom would otherwise be invisible in the response. That is the whole reason it is a log line
+and not a comment.
 
 Two things about it are worth knowing, both found while wiring it up:
 
 - **It stays quiet for `example` itself.** Asking for the fixture and getting the fixture is the
   fixture working. Warning there would put a line on every fresh-clone page load, and an alarm that
   fires when nothing is wrong is an alarm nobody reads.
-- **A corrupt article cannot trigger it.** `readJson` returns `null` for `ENOENT` and *rethrows*
+- **A corrupt article could never trigger it.** `readJson` returns `null` for `ENOENT` and *rethrows*
   everything else, so a `blocks.json` that exists and will not parse throws out of `loadArticle` as a
-  500 — it never reaches the fallback. Absent falls through; malformed does not. Two genuinely
-  separate paths, which is worth writing down because the natural assumption is that both end up at
+  500 — it never reached the fallback. Absent fell through; malformed did not. Two genuinely
+  separate paths, which is worth writing down because the natural assumption is that both ended up at
   the fixture, and a corrupt article looking like a fixture read is exactly the confusion this
   warning would otherwise cause.
 

@@ -53,7 +53,7 @@ Everything here is **deterministic**: no network, no LLM calls, no clock, no uns
 | [`tests/toc-build.test.ts`](../../tests/toc-build.test.ts) | `buildTree` — the model's proposal → the stored tree, and leaf growth |
 | [`tests/token-budget.test.ts`](../../tests/token-budget.test.ts) | that a model call's `max_tokens` **grows with the article**, and that the estimate clears what a real tree cost — written after a typed-in number failed a 360-block article ([postmortem](../postmortems/toc-max-tokens.md)) |
 | [`tests/labels-batching.test.ts`](../../tests/labels-batching.test.ts) | that cutting the article into label calls loses no block, duplicates none, and **never splits a sibling set** — plus the wire format that makes a dropped label a hard error instead of a shifted list ([toc-scaling.md](../plans/toc-scaling.md)) |
-| [`tests/api.test.ts`](../../tests/api.test.ts) | `data/<slug>/` → `example/` fallback — [web-client.md](web-client.md) |
+| [`tests/api.test.ts`](../../tests/api.test.ts) | which directory answers a slug — and that `example/` answers for **its own slug only** — [web-client.md](web-client.md) |
 | [`tests/url-state.test.ts`](../../tests/url-state.test.ts) | what a link means, and the section arithmetic behind `?at=` — [url-state.md](url-state.md) |
 | [`tests/layout.test.ts`](../../tests/layout.test.ts) | column fitting: the pixel widths [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) promises, and that a wider window never shows *less* of the article |
 | [`tests/keynav.test.ts`](../../tests/keynav.test.ts) | where ← / → land, and that → then ← is reversible — [keyboard.md](keyboard.md) |

@@ -31,7 +31,7 @@
  * `SweepOptions` in src/store/contracts.ts.
  */
 
-import { rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -120,6 +120,11 @@ const { SEARCH_TIMEOUT_MS } = await import("../src/search.js");
 
 const SLUG = "test-store-wiring-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
+/* An article to answer about. This slug used to get one for nothing — an
+   unknown slug fell through to the committed `example/` fixture — and that
+   fallback is gone (src/api.ts § `candidateDirs`), because it also answered a
+   reader's own half-built article with the fixture's prose. */
+const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
 
 /* The same hanging body tests/chat-live-turn.test.ts uses: one word, then
    silence for ever. It is the only way to have a `pending` row that this
@@ -142,7 +147,9 @@ function hangingBody(): ReadableStream<Uint8Array> {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await rm(DIR, { recursive: true, force: true });
+  await cp(EXAMPLE, DIR, { recursive: true });
   process.env.OPENROUTER_API_KEY = "test-key";
   for (const list of [
     seen.chatBegin,

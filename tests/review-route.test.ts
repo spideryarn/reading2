@@ -19,17 +19,26 @@
  * tests/chat-route.test.ts, because everything under test happens before the
  * first model call.
  */
-import { rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { handleApi } from "../src/routes.js";
 import { loadThreads } from "../src/chat.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 const SLUG = "test-review-route-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-afterEach(() => rm(DIR, { recursive: true, force: true }));
+/* The committed fixture's artefacts, copied in so the turn has an article. This
+   slug used to get them for nothing — an unknown slug fell through to
+   `example/` — and that fallback is gone (src/api.ts § `candidateDirs`), which
+   is why the block ids asserted below are still the fixture's own. */
+const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
+beforeEach(async () => {
+  await rm(DIR, { recursive: true, force: true });
+  await cp(EXAMPLE, DIR, { recursive: true });
+});
+afterAll(() => rm(DIR, { recursive: true, force: true }));
 
 const realFetch = globalThis.fetch;
 beforeAll(() => {

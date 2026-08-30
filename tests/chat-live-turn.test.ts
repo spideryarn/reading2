@@ -26,7 +26,7 @@
  * with the lock removed, which is worse than no test. What is checked instead is
  * the lock's own contract — see tests/turn-order.test.ts.
  */
-import { rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,6 +37,13 @@ import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
 const SLUG = "test-chat-live-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
+/* The turn needs an article to answer about, and this slug used to get one for
+   nothing: an unknown slug fell through to the committed `example/` fixture.
+   That fallback is gone (src/api.ts § `candidateDirs`) — it answered a reader's
+   own half-built article with the fixture's prose — so the artefacts are copied
+   in, and the directory is thrown away after each test because the chat file
+   lands in it too. */
+const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
 
 const frame = (text: string) =>
   `data: ${JSON.stringify({ model: "test/model", choices: [{ delta: { content: text } }] })}\n\n`;
@@ -57,7 +64,9 @@ function hangingBody(): ReadableStream<Uint8Array> {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await rm(DIR, { recursive: true, force: true });
+  await cp(EXAMPLE, DIR, { recursive: true });
   process.env.OPENROUTER_API_KEY = "test-key";
   vi.stubGlobal(
     "fetch",

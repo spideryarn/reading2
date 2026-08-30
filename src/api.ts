@@ -7,9 +7,10 @@
  * src/routes.ts. When a standalone Node server arrives (architecture.md §
  * Server and client) it wraps these rather than reimplementing the reads.
  *
- * Lookup order for one article: data/<slug>/ (the real pipeline output) then
- * example/ (the hand-authored placeholder). So the moment stages 3–5 write
- * data/<slug>/, the client picks it up with no changes here or in the UI.
+ * Lookup for one article: data/<slug>/ (the real pipeline output), and for the
+ * fixture's own slug the hand-authored example/ placeholder. **Not a fallback
+ * for anything else** — see `candidateDirs`, which is where that used to be a
+ * fallback and where the reasoning for taking it away is written down.
  *
  * **This file is the seam Postgres goes behind.** Nothing above it knows there
  * are directories: the client sees `Article` and `LibraryEntry`, and both are
@@ -126,6 +127,13 @@ async function readJson<T>(file: string, unreadable?: string[]): Promise<T | nul
   }
 }
 
+/** The fixture's slug, which is its directory name and NOT the slug in its own
+    meta.json — that one names the real article it is an excerpt of, and listing
+    it under that would collide with the full piece in data/. `loadArticle`
+    resolves "example" through `candidateDirs` below, so the slug that lists is
+    the slug that opens. */
+const FIXTURE_SLUG = "example";
+
 /**
  * Directories to try, in order, for a given slug.
  *
@@ -135,9 +143,30 @@ async function readJson<T>(file: string, unreadable?: string[]): Promise<T | nul
  * function below checks the slug before calling this; `slugPart` in
  * src/routes.ts checks it again at the door, which is where a bad one becomes a
  * 400 instead of a stack trace. See docs/project/security.md § The URL.
+ *
+ * **`example/` is a candidate for its own slug and for no other**, and that is
+ * a fix rather than the original design. This used to append the fixture
+ * unconditionally, so *any* slug with no `blocks.json` + `tree.json` of its own
+ * was answered with the fixture's prose under the reader's name — an article
+ * that does not exist, and an article whose blocks are written but whose tree
+ * is not. The second is the one that stopped being hypothetical: the ToC is
+ * moving off the critical path (docs/plans/faster-ingest-and-concurrency.md),
+ * so "blocks yes, tree no" is a normal few seconds of every ingest, and a
+ * reader opening their own article early would have read somebody else's.
+ *
+ * It was already load-bearing before that. Nothing about the fixture's response
+ * distinguishes it from a correct refusal, which is exactly how a shallow
+ * `../../etc` probe reported this API safe while a deeper one walked out of the
+ * repo and got HTTP 200 (docs/project/security.md § Why it survived being
+ * looked at). A 404 is the answer that can be told apart.
+ *
+ * The fixture itself stays: it is what a fresh clone with no `data/` opens, six
+ * test files read it as static data, and docs/plans/postgres-migration.md keeps
+ * it. Only its reach changes.
  */
 function candidateDirs(slug: string): string[] {
-  return [path.join(ROOT, "data", slug), path.join(ROOT, "example")];
+  const own = path.join(ROOT, "data", slug);
+  return slug === FIXTURE_SLUG ? [own, path.join(ROOT, "example")] : [own];
 }
 
 /**
@@ -163,18 +192,16 @@ export async function loadArticle(slug: string): Promise<Article> {
     const tree = await readJson<Tree>(path.join(dir, "tree.json"));
     if (!blocksFile || !tree) continue;
 
-    // **The standing alarm for the fallback that hid a path traversal.**
-    //
-    // When data/<slug>/ has no artefacts we fall through to example/ and serve
-    // the fixture — and the response looks exactly like the endpoint correctly
-    // refusing an unknown slug. That is precisely how a shallow `../../etc`
-    // probe reported this API safe while a deeper one walked out of the repo
-    // and got HTTP 200 (docs/project/security.md § Why it survived being looked
-    // at). Nothing about the response distinguishes the two cases, so the log is
-    // the only place the difference can be seen at all.
-    //
-    // Asking for "example" is not a fallback — that is the fixture's own slug,
-    // and falling through is how it is meant to open (see FIXTURE_SLUG below).
+    /* **The standing alarm for the fallback that hid a path traversal, kept as
+       an assertion now that the fallback is gone.**
+       `candidateDirs` no longer offers `example/` to anything but the fixture's
+       own slug, so this can only fire if that rule is loosened again — and the
+       reason it is worth a line rather than a comment is that the symptom is
+       invisible: the fixture's 200 and a correct refusal look identical from
+       outside, which is how a shallow `../../etc` probe reported this API safe
+       while a deeper one walked out of the repo (docs/project/security.md § Why
+       it survived being looked at). The log is the only place the difference
+       has ever been visible. */
     if (dir !== path.join(ROOT, "data", slug) && slug !== FIXTURE_SLUG) {
       log("store").warn(
         { slug, dir: path.relative(ROOT, dir) },
@@ -277,9 +304,9 @@ export async function loadArticle(slug: string): Promise<Article> {
  *
  * **`articleDir`, not a directory of its own.** The thread has to come from the
  * same place the article does, or `stale` is computed against somebody else's
- * `blocks.json` and means nothing. That also inherits the fixture fallback for
- * free: `example/` has no thread, so the fixture answers 404 and the page
- * offers to write one.
+ * `blocks.json` and means nothing. The fixture comes out right for free:
+ * `example/` has no thread, so `example` answers 404 and the page offers to
+ * write one.
  *
  * `stale` is computed here rather than stored, because a flag written at
  * generation time is right until the moment it matters. 404 for "no thread yet"
@@ -495,17 +522,18 @@ export async function loadArc(slug: string): Promise<ArcFound> {
  * The article's own directory, or a refusal — the guard the reader-facing
  * glossary writes share.
  *
- * `articleDir` falls through to `example/` for any slug with no pipeline output
- * of its own, **including a slug that does not exist at all**, so without this
- * the one committed directory in the repo is one request away from an unknown
- * article. It has no `glossary.json` today, which is exactly the kind of "it
- * can't happen" that stops being true the first time somebody hand-authors one.
+ * An unknown slug now 404s here rather than resolving to the fixture
+ * (`candidateDirs`), so what is left for this to catch is the fixture's *own*
+ * slug: `example/` opens for `example`, and it is nobody's to write to. It has
+ * no `glossary.json` today, which is exactly the kind of "it can't happen" that
+ * stops being true the first time somebody hand-authors one.
  *
  * Exported because `lookUpTerm` no longer lives in this file: it is
  * store-independent now (src/term-lookup.ts) and takes this as its
- * `assertWritable`. Postgres has no fixture to fall into and needs no
- * counterpart — an unknown slug there has no row and 404s. **A stated
- * difference with a test on each side**, rather than something to discover.
+ * `assertWritable`. Postgres has no fixture at all and needs no counterpart —
+ * an unknown slug there has no row and 404s, which is now what happens here
+ * too. **A stated difference with a test on each side**, rather than something
+ * to discover.
  *
  * @param verb what the caller is about to do, for the 403's wording. The
  *   sentence a reader sees says which act was refused, and the two acts are not
@@ -551,10 +579,9 @@ export async function deleteGlossary(slug: string): Promise<{ deleted: boolean }
   if (!dir) {
     throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
   }
-  /* The fixture is not the reader's to delete. `articleDir` falls through to
-     `example/` for any slug with no pipeline output of its own — including a
-     slug that does not exist at all — so without this the one committed
-     directory in the repo is one DELETE away from an unknown article. It has no
+  /* The fixture is not the reader's to delete. An unknown slug 404s above now
+     (`candidateDirs`), so the case this still guards is a DELETE addressed to
+     `example` itself — the one committed directory in the repo. It has no
      glossary.json today, which is exactly the kind of "it can't happen" that
      stops being true the first time somebody hand-authors one. */
   const own = path.join(ROOT, "data", slug);
@@ -647,11 +674,16 @@ async function exists(file: string): Promise<boolean> {
  * Where this article's artefacts actually are, or null if there aren't any.
  *
  * `candidateDirs` again, so this and `loadArticle` cannot come to disagree
- * about which directory an article opens from. Two cases make it matter, and
- * the second is easy to get wrong: `example/` is not under `data/`, and an
- * *unknown* slug falls through to the fixture as well. The metadata page has to
- * describe whatever the reading view is actually showing, so it inherits both —
- * and `ArticleMetadata.dir` is what says where the files came from.
+ * about which directory an article opens from. That sharing is the whole point:
+ * the metadata page has to describe whatever the reading view is actually
+ * showing, and `ArticleMetadata.dir` is what says where the files came from. It
+ * was also the second door into the fixture fallback — `articleDir` had its own
+ * copy of "then try example/" and the metadata page walked through it, so an
+ * address with no article behind it got a confident 200 whose `dir` said
+ * "example". One `candidateDirs` is why fixing that was one edit.
+ *
+ * `example/` is still not under `data/`, which is the case worth remembering
+ * here — the two candidates are not two `data/` siblings.
  */
 async function articleDir(slug: string): Promise<string | null> {
   for (const dir of candidateDirs(slug)) {
@@ -741,10 +773,10 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
   };
 
   /* A store pinned to the directory we actually found, not to `data/<slug>/`.
-     `articleDir` falls back to `example/` for an article with no directory of
-     its own, and the default store would then report every stage of the fixture
-     unfinished — the page saying nothing has run over an article it is
-     displaying. Same `ctx.dir`, so the two halves of each row agree. */
+     The two differ for the fixture, whose artefacts live in `example/`, and the
+     default store would then report every stage of it unfinished — the page
+     saying nothing has run over an article it is displaying. Same `ctx.dir`, so
+     the two halves of each row agree. */
   const store = createFsArtifactStore(() => ({ dir: ctx.dir, htmlFile: ctx.htmlFile }));
 
   const stages: StageState[] = await Promise.all(
@@ -865,13 +897,6 @@ async function weigh(files: string[]): Promise<{ ranAt: string | null; bytes: nu
 
 /* ------------------------------------------------------------ the library --
    Everything below serves the homepage: docs/project/library.md. */
-
-/** The fixture's slug, which is its directory name and NOT the slug in its own
-    meta.json — that one names the real article it is an excerpt of, and listing
-    it under that would collide with the full piece in data/. `loadArticle`
-    resolves "example" by falling through, so the slug that lists is the slug
-    that opens. */
-const FIXTURE_SLUG = "example";
 
 /**
  * One shelf-ready record, assembled from things already in memory.

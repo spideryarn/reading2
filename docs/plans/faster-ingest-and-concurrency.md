@@ -40,6 +40,15 @@ And inside `toc`, [table-of-contents.md](../project/table-of-contents.md) measur
 **So one model call is 60–90% of the time a reader spends staring at a progress panel.** Everything
 else on this page is a rounding error beside it, and that single fact sets the order of the stages.
 
+**That is an HTML article, and the qualifier matters.** For a PDF, `extract` is a model reading the
+pages, and the session that owns PDF ingest measured it on production the same afternoon: **98s for a
+9-page PDF (3 calls, $0.021) and 272s for a 14-page one (6 calls, $0.047)**, against about one second
+for HTML. So a PDF reader still waits out the whole transcription before anything can be published,
+and the "in at ~20 seconds" figure below is **true for HTML and false for PDFs**. Getting a PDF
+reader in early is a different piece of work — a publication boundary inside `extract`, page by page —
+and it is not in these stages. Quoting the 20s unqualified would have been the kind of number the
+next person builds on.
+
 ## What is already decided, and by whom
 
 Four questions were put to Greg on 2026-08-30 and answered:
@@ -291,6 +300,25 @@ own**, which was the review's first finding.
 Both are on the ToC path, both are already costing real readers, and both are independent of every
 design decision below. Sol endorsed keeping 1a as its own thing.
 
+**1a — DONE, 2026-08-30.** `candidateDirs` now offers `example/` to the fixture's own slug and to
+nothing else ([`src/api.ts`](../../src/api.ts)). One line of behaviour; the reach was the rest of it.
+Twenty-four tests were relying on the fallback — three asserting the bug directly, twenty-one using
+it as a free article — and each of those now seeds its own copy from `example/`, an idiom
+`routes.test.ts` already used. Four sibling modules documented the old fallback in their own comments
+and one, [`src/searches.ts`](../../src/searches.ts), *mirrored* it in code: it hashed `example/` for
+every slug, so a slug the reader is now refused would still have had a fingerprint taken from prose
+they were not being shown. Postgres was checked rather than assumed and was already correct.
+
+**The test that matters compares block ids against `example/blocks.json`** — it proves *whose prose
+came back*, not merely that a status code changed, because a 404 alone would pass for the wrong
+reason. It was seen red first, 4 of 5, with the control ("still opens the fixture under its own
+slug") green.
+
+One thing to carry into stage 2: `describeDir` needs no change, but it returns `{skipped: slug}` for
+a tree-less directory, so **a mid-ingest article is absent from the shelf rather than listed and
+unopenable**. After stage 2 that window is every ingest, and it may want a "still building" row
+instead.
+
 **1a. `loadArticle` serves the wrong article.** `candidateDirs` returns `[data/<slug>, example]`
 unconditionally, so an article with no tree falls through to the hand-authored fixture and **serves
 somebody else's prose under the reader's slug**. `articleDir`
@@ -306,12 +334,68 @@ not a tidy-up next to it.
 (244 blocks) died on 2026-08-30 with *"this call asked for 58 labels and got 57, missing 4. Nothing
 has been written"* — twice, with identical numbers after a retry at double the reasoning allowance.
 
-The arithmetic does not close: 58 asked, 57 returned and 4 missing means about three returned labels
-were for ids nobody asked about. The identical retry says the failure is structural rather than a
-flaky model. **The root cause is being established in a subagent and this stage does not start until
-it lands** — Sol's recut says the same, and a partial-accept fix chosen before the cause is known
-would be a guess. The likely shape is the R2/R3 argument one level along: a call that delivered 54 of
-58 labels is discarded entirely and the article gets no table of contents at all.
+**The root cause, found 2026-08-30, and the first thing it did was correct this plan.** The plan
+said the arithmetic did not close and guessed that three returned labels were for ids nobody asked
+about. That was wrong, and the code rules it out: **`missing` is a list of ordinals, not a count.**
+
+```
+src/labels.ts:840   `, missing ${missing.slice(0, 5).join(", ")}`
+```
+
+So "missing 4" means *the label for paragraph number 4 was absent* — **one** label out of 58, not
+four. `asked` is `batch.blocks.length`, `got` is `seen.size`, and the numbers were self-consistent
+all along. The three hypotheses in the investigation brief were each ruled out by a code path that
+would have thrown a different error: a duplicate ordinal throws *"paragraph N was labelled twice"*
+before reaching this message, and an out-of-range one appends *", and N were not asked for"*, which
+the production string does not contain. **The message cost real investigation time by looking like an
+inconsistency, and fixing its wording is the cheapest item in this stage.**
+
+**Underneath it is a real failure, and it is stage 3's, not the label pass's.** Stages 1–3 were
+re-run on the live URL for nothing — they make no model calls — and reproduced production exactly:
+167.8 KB, 244 blocks, 244 minted, 0 reused. Of those 244 blocks, **80 are Wolfram Language code cells
+that stage 3 strips to empty non-gistable `<p>`s**, leaving 15 bare lead-in fragments pointing at
+nothing:
+
+```
+  S#50  <p> "Sometimes it's less obvious, but it still seems fairly clear that nothing can escape…"
+   -    <p> ""                                   ← stripped code cell
+  S#51  <p> "But what about in a case like this:"
+   -    <p> ""                                   ← stripped code cell
+  S#52  <p> "It looks awfully similar to the cases we saw above…"
+```
+
+One fragment's entire text is the word **"or"**. The label prompt demands 6–20 words that are *"a
+CLAIM or a MOVE, not a topic label"* and forbids introducing any fact not in the paragraph
+([`src/labels.ts:415`](../../src/labels.ts)). For those blocks those instructions are **jointly
+unsatisfiable — the fact was in the image that got stripped — so skipping is the compliant move**,
+and no retry can change it. That is why doubling the reasoning allowance produced byte-identical
+numbers: completions are never cached, `batchFingerprint` excludes `max_tokens` so the retry sent the
+same bytes, and the drop is a property of one line of the prompt rather than of sampling. It is the
+**third recorded instance** of this shape; `src/labels.ts:60` documents 41-of-42, twice.
+
+**Two gates must move together or a repair does nothing.** `parseLabels` throws per batch
+([`src/labels.ts:837`](../../src/labels.ts)), and downstream `COVERAGE_FLOOR = 1`
+([`src/toc.ts:254`](../../src/toc.ts)) plus `assertEveryBlockLabelled` demand 100%. `COVERAGE_FLOOR`
+was *tightened* from 0.95 to 1 on the argument that *"there is no longer a path by which a block is
+legitimately unlabelled."* **This failure is that path, and it exists** — so the fix restores the old
+floor with a new justification rather than inventing one.
+
+The fix is three pieces of rising risk: **fix the message** (it is a list, say so); **retry only the
+shortfall** rather than re-buying 58 labels, since a second full draw has now failed to help three
+times on record; and **partial-accept with a bounded budget**, `k = max(1, ceil(2% of batch))`, with
+the dropped count surfaced in `LabelRun`. The client already tolerates a bare leaf — `rowText`
+([`src/web/outline.ts:120`](../../src/web/outline.ts)) falls through to null and skips the row — so
+the visible cost is one blank row for a paragraph whose text is "or".
+
+**The risk, named plainly:** partial-accept re-opens the hole the 100% floor was closed to shut, and
+an unlabelled leaf renders as nothing rather than as an error, which is a
+[silent-success](../reusable/silent-success.md) shape. The mitigation is that the drop is **counted
+and reported**, which the old 0.95 floor never was — the "the eval had to be told" lesson from the
+R2/R3 build, applied before rather than after.
+
+**And the upstream fix is item F**, which is not ours: stage 3 promoting sentence fragments to
+blocks. This article is a second independent witness for it — 15 fragments and 80 code cells reduced
+to empty paragraphs — and that belongs in the research doc's F entry whatever we do here.
 
 *Done looks like:* a failing test reproducing the 58/57/4 counting, seen red before the fix; that
 article ingests to completion; no non-fixture slug can be served `example/`, with a test; a

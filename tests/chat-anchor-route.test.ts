@@ -18,7 +18,7 @@
  * exists. What *is* tested here is the check that makes the foreign key a 400
  * anybody can read rather than a 500 out of a transaction.
  */
-import { rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -28,12 +28,23 @@ import { loadThreads } from "../src/chat.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
-/* An unknown slug falls through to the committed fixture article, so the turn
-   has real blocks to anchor to without this test owning an article. The chat
-   file is written under this slug, which is why it is a throwaway. */
+/* The turn needs real blocks to anchor to, so this throwaway slug is given the
+   committed fixture's artefacts. It used to get them for nothing: an unknown
+   slug fell through to `example/`, which is the bug src/api.ts § `candidateDirs`
+   describes — a reader's own half-built article was answered with the fixture's
+   prose. Copying is now the price of a test article, and it is a fair one. The
+   chat file is written under this slug too, which is why it is a throwaway. */
 const SLUG = "test-chat-anchor-route";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-afterEach(() => rm(DIR, { recursive: true, force: true }));
+const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
+/** Article artefacts, and nothing a previous test wrote beside them. */
+const reseed = async () => {
+  await rm(DIR, { recursive: true, force: true });
+  await cp(EXAMPLE, DIR, { recursive: true });
+};
+await reseed();
+afterEach(reseed);
+afterAll(() => rm(DIR, { recursive: true, force: true }));
 
 const realFetch = globalThis.fetch;
 beforeAll(() => {

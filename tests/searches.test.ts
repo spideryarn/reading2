@@ -465,33 +465,40 @@ describe("a saved search knows which article it answered", () => {
   });
 
   /**
-   * The fixture fallback, which is the one case a naive implementation gets
-   * silently wrong.
+   * The fixture, which is the one article whose files are not under `data/` and
+   * the one case a naive implementation gets silently wrong in both directions.
    *
-   * `loadArticle` serves `example/` for a slug with no directory of its own
-   * (src/api.ts § `articleDir`), so a search on such a slug is answered against
-   * the fixture's blocks. Hashing `data/<slug>/blocks.json` and finding nothing
-   * would make every saved search on that article read as out of date for ever,
+   * `loadArticle` opens `example` out of `example/` (src/api.ts §
+   * `candidateDirs`), so hashing `data/example/blocks.json` and finding nothing
+   * would make every saved search on the demo read as out of date for ever,
    * with the article on screen perfectly unchanged.
+   *
+   * And no further. This test used to assert the opposite half — that an
+   * *unknown* slug got the fixture's hash — back when `loadArticle` served the
+   * fixture for any slug at all. That fallback is gone, so a fingerprint taken
+   * from prose the reader is being refused would be a number about somebody
+   * else's article.
    */
-  it("fingerprints the fixture when that is the article being served", async () => {
+  it("fingerprints the fixture under its own slug, and under no other", async () => {
     const example = JSON.parse(
       await readFile(path.resolve(import.meta.dirname, "..", "example", "blocks.json"), "utf8"),
     ) as { blocks: Block[] };
 
-    // No directory of its own, so this slug is served from example/.
-    const hash = await currentSourceHash("test-searches-no-such-article");
-    expect(hash).toBe(hashBlocks(example.blocks));
+    expect(await currentSourceHash("example")).toBe(hashBlocks(example.blocks));
+    expect(await currentSourceHash("test-searches-no-such-article")).toBeUndefined();
   });
 
   it("ignores a directory that is not a whole article", async () => {
-    /* Half an ingest: blocks written, tree not. `articleDir` refuses this and
-       shows the fixture instead, so hashing it here would fingerprint one
-       article while the reader looks at another. */
+    /* Half an ingest: blocks written, tree not. `articleDir` refuses to serve
+       this — with a 404 now, where it used to show the fixture — so a
+       fingerprint of it would date a saved search to an article nobody has been
+       shown. */
     await mkdir(DIR, { recursive: true });
     await writeFile(path.join(DIR, "blocks.json"), JSON.stringify({ blocks: ONE }), "utf8");
 
     expect(await currentSourceHash(SLUG)).not.toBe(hashBlocks(ONE));
+    // And specifically nothing, rather than something else's hash.
+    expect(await currentSourceHash(SLUG)).toBeUndefined();
   });
 
   it("re-answers a retried run against today's article, not the failed attempt's", async () => {

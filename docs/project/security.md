@@ -518,24 +518,31 @@ refusing them is not among its responsibilities. Anywhere a value that came from
 
 ### Why it survived being looked at
 
-The disguise is the fixture fallback. `loadArticle` tries `data/<slug>/` and then `example/`, so a
-*shallow* traversal — `../../etc`, the thing you would naturally try — finds no `blocks.json`, falls
-through, and serves the example article. That reads exactly like a refusal. You have to climb all the
-way out and land on a directory you control before the behaviour differs at all, so a probe that
-stops short reports the endpoint safe. Another [silent success](../reusable/silent-success.md): the
-check you would naturally run returns the answer you were hoping for, because it shares an
+The disguise was the fixture fallback. `loadArticle` tried `data/<slug>/` and then `example/`, so a
+*shallow* traversal — `../../etc`, the thing you would naturally try — found no `blocks.json`, fell
+through, and served the example article. That reads exactly like a refusal. You had to climb all the
+way out and land on a directory you control before the behaviour differed at all, so a probe that
+stopped short reported the endpoint safe. Another [silent success](../reusable/silent-success.md):
+the check you would naturally run returns the answer you were hoping for, because it shares an
 assumption with the code.
 
 The tests in [`tests/routes.test.ts`](../../tests/routes.test.ts) therefore use a deliberately deep
 escape, and say why — a short one would pass against the vulnerable code.
 
-**The fallback now says when it fires.** `loadArticle` logs a `warn` — *"article served from the
-fixture, not from its own directory"* — whenever a slug other than `example` is answered out of
-`example/`. It does not make the disguise less convincing in the *response*, which is still an
-indistinguishable HTTP 200; it means the server says out loud what the response cannot. See
+**The fallback is gone, 2026-08-30.** `candidateDirs` in [`src/api.ts`](../../src/api.ts) offers
+`example/` for the slug `example` and for nothing else, so an unknown slug — and a traversal, shallow
+or deep — is now an honest 404. What removed it was not this: it was the ToC moving off the critical
+path, which makes "blocks written, tree not" a normal few seconds of every ingest and would have had
+readers opening their own article onto the fixture's prose
+([faster-ingest-and-concurrency.md](../plans/faster-ingest-and-concurrency.md)). The security case
+was already made and had been answered with a log line instead.
+
+That log line stays, as an assertion rather than a report: `loadArticle` still `warn`s — *"article
+served from the fixture, not from its own directory"* — if a slug other than `example` is ever
+answered out of `example/` again. See
 [logging.md § The fixture alarm](logging.md#the-fixture-alarm-and-what-it-can-never-fire-for), which
-also records the thing that surprised us: an *absent* `blocks.json` falls through to the fixture, but
-a *malformed* one throws a 500 and never reaches it.
+also records the thing that surprised us: an *absent* `blocks.json` fell through to the fixture, but
+a *malformed* one threw a 500 and never reached it.
 
 ### The write side, which was already guarded
 

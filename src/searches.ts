@@ -51,6 +51,12 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 
 const fileFor = (slug: string) => path.join(ROOT, "data", slug, "searches.json");
 
+/** The one slug whose article lives outside `data/` — the committed `example/`
+    fixture. A second copy of `FIXTURE_SLUG` in src/api.ts, for the same reason
+    `currentSourceHash` below is a second copy of `candidateDirs`: importing it
+    would pull that module's whole graph into a storage module. */
+const FIXTURE_SLUG = "example";
+
 /**
  * The fingerprint of the article as it stands right now, or `undefined` if the
  * blocks cannot be read.
@@ -74,23 +80,30 @@ const fileFor = (slug: string) => path.join(ROOT, "data", slug, "searches.json")
  * fingerprints of the same thing can only ever disagree, and the day they do,
  * one artefact reports itself fresh against a rule nothing else uses.
  *
- * **It has to look where `loadArticle` looks, which is two places.**
- * `articleDir` in src/api.ts tries `data/<slug>/` and then falls back to
- * `example/`, and accepts a directory only when it holds *both* `blocks.json`
- * and `tree.json`. Hashing `data/<slug>/blocks.json` unconditionally would be
- * right for every real article and wrong for exactly the ones the fixture
- * serves: no file, no hash, and every saved search on the demo article reads as
+ * **It has to look where `loadArticle` looks.** `candidateDirs` in src/api.ts
+ * tries `data/<slug>/`, adds `example/` for the fixture's own slug and for no
+ * other, and accepts a directory only when it holds *both* `blocks.json` and
+ * `tree.json`. Hashing `data/<slug>/blocks.json` unconditionally would be right
+ * for every real article and wrong for exactly one: the demo, whose files are
+ * not under `data/` — no file, no hash, and every saved search on it reads as
  * out of date for ever with nothing saying why. That the rule is written out
  * twice is the cost of not dragging src/api.ts's module graph — pipeline,
  * glossary, summaries — into a storage module; the two are pinned against each
  * other by a test rather than left to agree by memory.
+ *
+ * `example/` used to be tried for *every* slug here, mirroring the fallback
+ * src/api.ts had at the time. When that fallback went, this had to go with it:
+ * a slug the reader is now refused must not still have a fingerprint, and one
+ * taken from prose they are not being shown is the worst kind to have.
  *
  * The Postgres half is src/store/pg-searches.ts, which asks its own store the
  * same question and gets the same number (tests/store-parity.test.ts).
  */
 export async function currentSourceHash(slug: string): Promise<string | undefined> {
   assertSlug(slug);
-  for (const dir of [path.join(ROOT, "data", slug), path.join(ROOT, "example")]) {
+  const dirs = [path.join(ROOT, "data", slug)];
+  if (slug === FIXTURE_SLUG) dirs.push(path.join(ROOT, "example"));
+  for (const dir of dirs) {
     const hash = await hashDir(dir, slug);
     if (hash !== undefined) return hash;
   }

@@ -82,10 +82,11 @@ export interface LookUpTermDeps {
   /**
    * The 403 the filesystem needs and Postgres does not.
    *
-   * `articleDir` falls through to `example/` for any slug with no artefacts of
-   * its own, so without this a lookup on an unknown slug edits the one
-   * committed directory in the repo. Postgres has no fixture to fall into: an
-   * unknown slug has no row and 404s. **A stated difference with a test on each
+   * The filesystem store can reach one article nobody owns — the committed
+   * `example/` — so without this a lookup on it edits the repo. An unknown slug
+   * is a 404 on both sides now that `articleDir` no longer falls through to the
+   * fixture (src/api.ts § `candidateDirs`); Postgres has no fixture at all, so
+   * it needs no counterpart to this. **A stated difference with a test on each
    * side**, rather than something for somebody to discover.
    */
   readonly assertWritable?: (slug: string) => Promise<void>;

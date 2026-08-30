@@ -108,8 +108,8 @@ export const fsGlossaryStore: Pick<GlossaryStore, "deleteGlossary"> = {
  * The 403 the filesystem needs and Postgres does not — see `assertOwnArticle`.
  *
  * Handed to `makeLookUpTerm` in index.ts when the filesystem is live. There is
- * no Postgres counterpart: an unknown slug has no row there and 404s, where
- * `articleDir` falls through to the committed `example/` directory.
+ * no Postgres counterpart: what this refuses is the committed `example/`
+ * article, which only the filesystem has. An unknown slug 404s on both sides.
  */
 export const fsAssertWritableGlossary = (slug: string): Promise<void> =>
   assertOwnArticle(slug, "write to");

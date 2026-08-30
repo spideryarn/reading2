@@ -14,7 +14,7 @@
  * test is written before it. See tests/routes.test.ts for the same fake
  * request/response pair without the streaming parts.
  */
-import { rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -22,13 +22,23 @@ import { handleApi } from "../src/routes.js";
 import { loadThreads } from "../src/chat.js";
 import { acceptAny, AUTHED_HEADERS } from "./helpers/authed.js";
 
-/* An unknown slug falls through to the committed fixture article (see
-   `loadArticle` in src/api.ts), so the turn has blocks to cite without this
-   test owning an article. The chat file, though, is written under this slug —
-   which is why it is a throwaway and why it is removed after. */
+/* This throwaway slug is given the committed fixture's artefacts, so the turn
+   has blocks to cite. It used to get them for nothing — an unknown slug fell
+   through to `example/` — which is the fallback src/api.ts § `candidateDirs`
+   took away, because it also answered a reader's own half-built article with
+   the fixture's prose. The chat file is written under this slug too, which is
+   why it is a throwaway and why the directory is rebuilt between tests. */
 const SLUG = "test-chat-route-fixture";
 const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
-afterEach(() => rm(DIR, { recursive: true, force: true }));
+const EXAMPLE = path.resolve(import.meta.dirname, "..", "example");
+/** Article artefacts, and nothing a previous test wrote beside them. */
+const reseed = async () => {
+  await rm(DIR, { recursive: true, force: true });
+  await cp(EXAMPLE, DIR, { recursive: true });
+};
+beforeAll(reseed);
+afterEach(reseed);
+afterAll(() => rm(DIR, { recursive: true, force: true }));
 
 const realFetch = globalThis.fetch;
 beforeAll(() => {
