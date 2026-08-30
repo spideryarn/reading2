@@ -40,6 +40,14 @@ file lists are not.
 Each project states its own file list. `src/web` and `tests` also state `"exclude": []` explicitly,
 which is belt-and-braces — it neutralises an inherited exclusion if one ever reappears.
 
+**So `npx tsc --noEmit -p tsconfig.json` is not "the typecheck", and reaching for it is a trap with
+no error message.** That project is the node side only: a test file is not in it, and neither is
+`src/web`. Run `npm run typecheck`, which runs all three and then checks that every `.ts`/`.tsx` in
+the repo was resolved by one of them. The way this bites is a **type-level assertion in a test** —
+a `Record<Derived, …>` written to make a missing case fail the build. Mutate the code it guards,
+run the wrong project, get a clean exit, and conclude the assertion does not work. It does; you did
+not run it. 2026-08-30, on `tests/messages.test.ts`.
+
 ### Why three, and not one
 
 They genuinely differ, and the differences are the kind that catch bugs:
