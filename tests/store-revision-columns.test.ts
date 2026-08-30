@@ -141,20 +141,42 @@ describe("the presence flags", () => {
   });
 });
 
+/**
+ * Every projection, named rather than looped over `Object.keys` — so that
+ * deleting one fails here instead of quietly reducing the tests below to the
+ * ones that are left.
+ *
+ * **And the coverage test right underneath, because naming them buys only half
+ * of it.** Deleting a projection failed; *adding* one failed nothing, so
+ * `sketch` and `arc` were both checked against the policy by nobody. That is
+ * not a coincidence — the bug this file caught (a `metadata` projection missing
+ * the sketch column, which is what told an owner their personalised picture was
+ * not personalised, docs/postmortems/the-dialog-said-nothing-was-personalised.md)
+ * was a hand-written list that had fallen behind, and this file had the same
+ * defect one level up while catching it. GPT Sol found the list was six once
+ * already, and the answer then was to write down eight.
+ */
+const READS = [
+  "article",
+  "library",
+  "metadata",
+  "publish",
+  "tweets",
+  "glossary",
+  "summaries",
+  "ideas",
+  "sketch",
+  "arc",
+] as const;
+
+describe("the list of projections this file checks", () => {
+  it("is every projection there is", () => {
+    expect([...READS].sort()).toEqual(Object.keys(REVISION_PROJECTIONS).sort());
+  });
+});
+
 describe("every projection obeys the policy", () => {
-  /* Named one at a time rather than looped over `Object.keys(REVISION_PROJECTIONS)`,
-     so that deleting a projection fails here instead of quietly reducing the
-     test to the ones that are left. */
-  for (const read of [
-    "article",
-    "library",
-    "metadata",
-    "publish",
-    "tweets",
-    "glossary",
-    "summaries",
-    "ideas",
-  ] as const) {
+  for (const read of READS) {
     it(`${read} selects exactly what it is allowed`, () => {
       expect(Object.keys(REVISION_PROJECTIONS[read]).sort()).toEqual(policyGrants(read));
     });
@@ -209,19 +231,11 @@ describe("the query actually uses its projection", () => {
     currentRevisionQuery(new QueryBuilder() as never, "some-slug", read).toSQL().sql;
 
   it("never sends the source document or the whole-article HTML", () => {
-    /* **All eight**, not the six the first version listed. `tweets` and
-       `summaries` were missing, which is how a projection acquires a column
-       nobody notices. GPT Sol, third review. */
-    for (const read of [
-      "article",
-      "library",
-      "metadata",
-      "publish",
-      "tweets",
-      "glossary",
-      "summaries",
-      "ideas",
-    ] as const) {
+    /* **All of them**, from the one list above. It said six, then eight, and
+       was missing `sketch` and `arc` both times — which is how a projection
+       acquires a column nobody notices. It is a shared const now, and the test
+       above holds it against the real thing. */
+    for (const read of READS) {
       const sql = sqlFor(read);
       expect({ read, raw: sql.includes('"raw_bytes"') }).toEqual({ read, raw: false });
       expect({ read, x: sql.includes('"extracted_html"') }).toEqual({ read, x: false });

@@ -281,9 +281,15 @@ const REVISION_READ_POLICY: Record<
   Partial<Record<RevisionReader, ColumnUse>>
 > = {
   /* Identity. Every read has to know which revision it is looking at. */
+  /* Every read, without exception — a projection with no `id` cannot say which
+     revision it read. `sketch` and `arc` were absent until 2026-08-30, and
+     their projections had been selecting it all along: the two reads were not
+     in the loop in tests/store-revision-columns.test.ts, so nothing compared
+     them to this. */
   id: {
     article: "value", library: "value", metadata: "value", publish: "value",
     tweets: "value", glossary: "value", summaries: "value", ideas: "value",
+    sketch: "value", arc: "value",
   },
   articleId: { publish: "value" },
   /* `publish` refuses a revision that is not still a draft. */
@@ -318,7 +324,11 @@ const REVISION_READ_POLICY: Record<
      continue`. */
   tree: {
     article: "value", metadata: "value", publish: "value", ideas: "value",
-    arc: "value",
+    /* `arc` and `sketch` for the same reason `ideas` has it: all three hash the
+       outline as well as the blocks, so a blocks-only comparison would call a
+       re-sectioned article's artefact current while the filesystem store called
+       it stale — see `REVISION_PROJECTIONS.sketch`. */
+    arc: "value", sketch: "value",
     library: "presence",
   },
   arc: { article: "value", library: "presence", metadata: "value", arc: "value" },
@@ -1210,9 +1220,9 @@ export function scalarInputsQuery(
  *
  * `profileHash` is non-null exactly when one was used — `src/profile.ts` — and
  * only five artefacts can carry it (`sketch` was the fifth, and was missing from
- * this list for a day: the picture is drawn for a profile like every other model
- * call here, and an owner asking what would go public was told about four of
- * them). The tree and the arc deliberately do not
+ * this list for two hours on the afternoon it was written: the picture is drawn
+ * for a profile like every other model call here, and an owner asking what would
+ * go public was told about four of them). The tree and the arc deliberately do not
  * vary by profile (docs/project/reader-profile.md: a reader-specific tree is one
  * that shifts under a reader who edits their box), and `fetch`, `extract` and
  * `blocks` have no model call to personalise. So this is exhaustive over the
@@ -1250,7 +1260,7 @@ export function scalarInputsQuery(
  * false, and `Tree extends { profileHash?: string | null; version?: string }`
  * is **true**. A rule held up by the absence of a shared field is not a rule.
  */
-type ProfileCarrying = {
+export type ProfileCarrying = {
   [K in keyof ArtifactMap]: "profileHash" extends keyof ArtifactMap[K] ? K : never;
 }[keyof ArtifactMap] &
   StepName;

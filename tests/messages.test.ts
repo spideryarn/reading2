@@ -9,6 +9,8 @@
  */
 import { describe, expect, it } from "vitest";
 import * as messages from "../src/messages.js";
+import { OWNED_ARTEFACT, sharingPersonalisedList } from "../src/messages.js";
+import type { ProfileCarrying } from "../src/store/pg.js";
 import {
   canRetry,
   CODE_KINDS,
@@ -250,5 +252,38 @@ describe("saying nothing", () => {
 
   it("keeps a plain empty answer retryable", () => {
     expect(saidNothing(null).kind).toBe("retry");
+  });
+});
+
+describe("naming what was written for your reader profile", () => {
+  /**
+   * **A type-level assertion, which fails `npm run typecheck` rather than
+   * here.** `ProfileCarrying` is derived from `ArtifactMap`, so an artefact
+   * that gains a `profileHash` and no entry in `OWNED_ARTEFACT` stops the build
+   * — and this is the only place both halves can be looked at together, since
+   * `messages.ts` has to stay a leaf and may not import from the store even
+   * with `import type` (tests/client-imports.test.ts pins that).
+   *
+   * The fallback would still produce *"your sketch"*, which reads fine and is
+   * exactly why this is worth pinning: a table quietly falling behind is
+   * invisible when the fallback is plausible. `personalisedSteps` fell behind
+   * the same way and its sentence was not plausible, it was wrong —
+   * docs/postmortems/the-dialog-said-nothing-was-personalised.md.
+   */
+  const _ownedNamesEveryProfiledArtefact: Record<ProfileCarrying, string> = OWNED_ARTEFACT;
+  void _ownedNamesEveryProfiledArtefact;
+
+  it("names the sketch as a thing, not as a step id", () => {
+    /* The one that was missing. `startsWith` rather than `toContain`, because
+       the fallback for this step is "your sketch" — a substring of the real
+       noun, so `toContain("your sketch")` passes either way and would be a test
+       that cannot fail. */
+    expect(sharingPersonalisedList(["sketch"])).toMatch(/^your sketch diagram —/);
+  });
+
+  it("joins several with a comma and an and", () => {
+    expect(sharingPersonalisedList(["glossary", "ideas", "sketch"])).toMatch(
+      /^your glossary, your list of ideas and your sketch diagram —/,
+    );
   });
 });

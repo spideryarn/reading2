@@ -1351,13 +1351,23 @@ export const SHARING_NOT_PERSONALISED =
   "Nothing here was written for your reader profile.";
 
 /** What the owner's own copy of each artefact is called, in a sentence. */
-const OWNED_ARTEFACT: Partial<Record<StepName, string>> = {
+/* Exported for one reason: `tests/messages.test.ts` holds it against
+   `ProfileCarrying` from the store, which this file may not import — it has to
+   stay a leaf (tests/client-imports.test.ts), and the rule refuses even an
+   erased `import type`. The exhaustiveness check therefore lives where both
+   halves can be seen at once. */
+export const OWNED_ARTEFACT = {
   tweets: "your tweet thread",
   glossary: "your glossary",
   summary: "your summary",
   ideas: "your list of ideas",
   sketch: "your sketch diagram",
-};
+  /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
+     declared type makes every value `string | undefined`, and the coverage
+     check in tests/messages.test.ts would then be unsatisfiable without a cast
+     — a cast that would make it pass whatever this table said. This keeps the
+     keys checked against `StepName` and the shape exact. */
+} satisfies Partial<Record<StepName, string>>;
 
 /**
  * **These were**, named — Sol's improvement on the plan's first draft, and the
@@ -1382,7 +1392,15 @@ const OWNED_ARTEFACT: Partial<Record<StepName, string>> = {
  * of the sentence is that it is complete.
  */
 export function sharingPersonalisedList(kinds: StepName[]): string {
-  const nouns = kinds.map((k) => OWNED_ARTEFACT[k] ?? `your ${k}`);
+  /* `Object.hasOwn` rather than indexing by `StepName`: the table's type is now
+     exactly its five keys, which is what makes the coverage check in
+     tests/messages.test.ts mean anything — and a `StepName` is deliberately not
+     one of them. The fallback below is still the answer for any other step. */
+  const nouns = kinds.map((k) =>
+    Object.hasOwn(OWNED_ARTEFACT, k)
+      ? OWNED_ARTEFACT[k as keyof typeof OWNED_ARTEFACT]
+      : `your ${k}`,
+  );
   const list =
     nouns.length <= 1
       ? (nouns[0] ?? "")
