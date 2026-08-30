@@ -29,10 +29,13 @@
  * - **The owner's private rename.** `Article.meta.title` is run through
  *   `titleFor()` by both stores, which substitutes `articles.title_override`.
  *   The public reader never calls it and never selects the column.
- * - **`meta.url`.** That is `final_url`, the URL *after redirects*, and it can
- *   carry credentials or signed query parameters. Stage 2 needs a canonical
- *   link and will have to validate one through `isWebUrl` rather than reach
- *   for this.
+ * - **`meta.url` — no longer withheld, since 2026-08-30.** It was, and the
+ *   reason was that `final_url` is the URL *after redirects* and can carry
+ *   credentials or signed query parameters. Greg decided a public article
+ *   should show where it came from, so the reason is now enforced on the
+ *   *value* instead of on the key: `publicSourceUrl` (src/urls.ts) refuses a
+ *   credential, a query of any kind, a non-public host and a non-web scheme,
+ *   and what it returns is what `PublicMeta.url` carries. See the field.
  * - **`meta.fetchedAt`, `meta.note`, and the whole PDF provenance block**
  *   (`source`, `method`, `pages`, `rawSha256`, `unverified`, `recall`,
  *   `pagesChecked`). Facts about our pipeline and about somebody's uploaded
@@ -84,6 +87,23 @@ export interface PublicMeta {
   lang?: string;
   /** Readability's own one-or-two sentences, from the page. */
   excerpt?: string;
+  /**
+   * **Where the article came from, for whoever can read it.** Greg, 2026-08-30:
+   * *"I think Public-readable articles should show their provenance-url to all
+   * reader[s]."*
+   *
+   * **Not `articles.final_url`.** It is that column run through
+   * `publicSourceUrl` (src/urls.ts), which is the named field the
+   * `PUBLIC_PROJECTIONS` comment in src/store/public-reader.ts asked for when it
+   * held the column back — the policy, and what it refuses, are in that
+   * function's header.
+   *
+   * **Absent does not mean "uploaded".** It also means the address would not
+   * survive the policy, and a visitor cannot tell those apart; only a reader who
+   * owns the article may turn an absence into that sentence. `OriginMark` in
+   * src/web/Masthead.tsx is the one place that does, and says so.
+   */
+  url?: string;
 }
 
 /**

@@ -38,7 +38,37 @@
  */
 import { useState } from "react";
 
+import type { Meta } from "../types.js";
 import { apiFetch } from "./lib/api.js";
+
+/**
+ * **The article's own web address, or `null` when it has none.**
+ *
+ * Two callers ask this — the masthead and the metadata page — and they must
+ * agree, because between them they decide whether the reader is offered a way
+ * out to the publisher or told the article was uploaded. Two spellings of the
+ * question is how those two answers come to disagree on the same article.
+ *
+ * It is stricter than `meta.url` in one way that matters. `npm run pdf --
+ * <file.pdf>` records `url: "file:///Users/…/thing.pdf"` (src/pdf-read.ts §
+ * `main`), which is not an address anybody can follow and *is* somebody's
+ * home directory printed on the page. Rendered as a link it looked like a
+ * source and did nothing; here it is a file, which is what it is.
+ *
+ * **Absence does not mean "uploaded" on its own**, and no caller may read it
+ * that way. A visitor's `PublicMeta.url` is `articles.final_url` put through
+ * `publicSourceUrl` (src/urls.ts), which withholds an address carrying a
+ * credential — so for a visitor a `null` here is *either* an upload *or* an
+ * address we would not publish, and nothing on this side can tell them apart.
+ * Whoever turns a `null` into the sentence "this was uploaded" has to establish
+ * the reader owns the article first; `OriginMark` in Masthead.tsx is the one
+ * place that does.
+ */
+export function webSource(meta: Meta): string | null {
+  const url = meta.url?.trim();
+  if (!url) return null;
+  return /^https?:\/\//i.test(url) ? url : null;
+}
 
 export function SourceLink({ slug, children }: { slug: string; children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);

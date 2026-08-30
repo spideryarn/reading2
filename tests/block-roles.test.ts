@@ -517,6 +517,7 @@ describe("all five roles", () => {
       lang: null,
       excerpt: null,
       headingTitle: "Roles",
+      finalUrl: null,
       blocks: SYNTHETIC,
       tree,
       arc: null,

@@ -106,6 +106,101 @@ export function safePublicCanonical(value: string): string | null {
 }
 
 /**
+ * **The article's own address, published to whoever can read the article.**
+ *
+ * Greg, 2026-08-30:
+ *
+ * > I think Public-readable articles *should* show their provenance-url to all
+ * > reader[s].
+ *
+ * That is the product decision `public-reader.ts` was waiting on. Its
+ * `PUBLIC_PROJECTIONS` comment had held `final_url` back and said so in as many
+ * words — *"a visible 'read the original' link is a separate product decision
+ * and would want its own named field rather than this one leaking sideways into
+ * a DTO"* — so this is that named field's policy, and the column still does not
+ * reach the wire as itself.
+ *
+ * ## It is `safePublicCanonical`, and the first draft of it was not
+ *
+ * A separate policy was written first, differing in one clause: **keep the query
+ * string**, on the reasoning that a canonical tag is a machine's claim about
+ * which document this is, whereas this is a person clicking through to read the
+ * piece — and on a great many sites `?id=123` *is* the article, so refusing
+ * would leave a chunk of the library with no way back to the original.
+ *
+ * `tests/public-visibility-pg.test.ts` § the eight canaries went red on it, and
+ * it was right to. Its fixture's `final_url` is `…/piece?sig=SECRETSIGNATURE`,
+ * and *signed* is the case the argument above skips: a tracking parameter is
+ * noise, an id is the article, and a signature is **a capability the owner
+ * holds** — very often their own paywall bypass. Publishing an essay is a
+ * decision about the essay. Nothing in it implies handing out the key that got
+ * us in, and from here the three are indistinguishable.
+ *
+ * So the honest answer to *I cannot tell which of those this is* stays the one
+ * `safePublicCanonical` already gives, and the cost was measured rather than
+ * assumed: **of the twenty articles in `data/` with a URL, none carries a
+ * query** (2026-08-30). The clause defended against a case that does not arise
+ * and would have cost a real credential when it did.
+ *
+ * ## Then why a second name at all
+ *
+ * Because the two are one policy by *coincidence of the current rules*, not by
+ * definition — they are published for different purposes, and the query clause
+ * is the one that could ever come apart (a canonical must never name the wrong
+ * page; a reader's link merely disappoints). This is the seam that argument
+ * would need, and the header it would need to be written in. Delegating rather
+ * than copying is what stops the two silently disagreeing in the meantime.
+ *
+ * Returns the URL to publish, or `null` to publish none. A `null` here does
+ * **not** mean the article was uploaded — that inference needs a reader who owns
+ * the article, and `OriginMark` in src/web/Masthead.tsx says why.
+ */
+export function publicSourceUrl(value: string): string | null {
+  const safe = safePublicCanonical(value);
+  if (safe === null) return null;
+  return publishableHost(new URL(safe)) ? safe : null;
+}
+
+/**
+ * **Is this host one a stranger could have reached anyway?**
+ *
+ * Stage 1 already refuses to *fetch* a private destination — `guardAddress` in
+ * src/fetch.ts resolves the name and checks every address, which is the real
+ * SSRF guard and is far stronger than anything here. But `src/store/import.ts`
+ * writes a revision without going through stage 1, so a `final_url` of
+ * `http://10.0.0.5/token` or `http://localhost/private` can exist in the
+ * database, and this is the boundary that would publish it to the world. Raised
+ * by GPT Sol, 2026-08-30.
+ *
+ * **A shape rule, not an address rule**, and deliberately the blunter of the
+ * two. The honest version needs DNS — a public name can resolve to 10.0.0.5 —
+ * and this runs inside a synchronous DTO with no network and no `await` to
+ * spare. So it refuses by the only evidence it has:
+ *
+ *  - **Any IP literal, public ones included.** Enumerating RFC 1918, loopback,
+ *    link-local, CGNAT and their six IPv6 counterparts is a list to keep right
+ *    forever, and getting one range wrong fails open. An article addressed by
+ *    bare IP is not a thing anybody publishes, so the whole class goes.
+ *  - **Any host with no dot in it** — `localhost`, a container name, an
+ *    intranet short name. Every public site has one.
+ *  - **`.local`, `.localhost`, `.internal`**, which have dots and are not public.
+ *
+ * What it does **not** catch is a public name pointing inward. That is the
+ * narrower hole and it is stage 1's to close for everything except an import;
+ * saying so here is better than a comment implying this function is a security
+ * boundary it cannot be.
+ */
+function publishableHost(url: URL): boolean {
+  /* `hostname` keeps the brackets on an IPv6 literal, which is what makes the
+     first test catch `[::1]` without parsing it. */
+  const host = url.hostname.toLowerCase();
+  if (host.startsWith("[")) return false;
+  if (/^[\d.]+$/.test(host)) return false;
+  if (!host.includes(".")) return false;
+  return !/\.(local|localhost|internal)$/.test(host);
+}
+
+/**
  * The hostname, with a leading `www.` dropped — or `""` if the string will not
  * parse.
  *

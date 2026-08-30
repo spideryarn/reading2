@@ -239,7 +239,19 @@ const ASSETS: Assets = {
  * assertions instead, as the set that must not appear in the output.
  */
 const FORBIDDEN_ON_META = [
-  "url", // the FINAL fetched URL — credentials, signed query parameters
+  /* **`url` was on this list until 2026-08-30** — "the FINAL fetched URL —
+     credentials, signed query parameters" — and Greg took it off: *"I think
+     Public-readable articles should show their provenance-url to all
+     reader[s]."* The credentials half of that reason is still real and is now
+     enforced where it belongs, on the value rather than on the key:
+     `publicSourceUrl` in src/urls.ts refuses a `user:pw@` address, and § the
+     source URL at the end of this file is what says so. Leaving the key
+     forbidden here *and* publishing it would have been the two halves of this
+     suite disagreeing, with the whole-key-set assertion above the one that wins.
+
+     `requestedUrl` is not published and is not on this list either, because the
+     DTO cannot be handed one — there is no such argument. That is the design
+     this file's header describes, and it is why the list below is short. */
   "fetchedAt",
   "note", // the extraction note
   "source", // and the whole PDF/upload provenance block below
@@ -268,6 +280,12 @@ describe("the public article payload", () => {
     lang: "en",
     excerpt: "Two sentences of Readability's own.",
     headingTitle: "The mythology of conscious AI",
+    /* **A real address, not `null`**, for the same reason `assets` below is a
+       real manifest: with `null` in, the whole-key-set assertion never sees
+       `meta.url` at all, and would stay green over a projection that published
+       the raw column beside three more of them. The published value itself is
+       § the source URL at the end of this file. */
+    finalUrl: "https://www.noemamag.com/the-mythology-of-conscious-ai/",
     blocks: [HEADING, BLOCK],
     tree: TREE,
     arc: ARC,
@@ -335,6 +353,11 @@ describe("the public article payload", () => {
         "meta.siteName",
         "meta.slug",
         "meta.title",
+        /* Published since 2026-08-30, and this line is the allowlist entry for
+           it — Greg: *"Public-readable articles should show their
+           provenance-url to all reader[s]."* It is `publicSourceUrl`'s answer,
+           never `articles.final_url` itself. */
+        "meta.url",
         "tree",
         "tree.generator",
         "tree.nodes",
@@ -445,6 +468,7 @@ describe("the public article payload", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [HEADING, BLOCK],
       tree: { ...TREE, provisional: "headings" as const },
       arc: null,
@@ -536,6 +560,7 @@ describe("the public article payload", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [EVERY_BLOCK_FIELD],
       tree: TREE,
       arc: null,
@@ -585,6 +610,7 @@ describe("the public article payload", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [BLOCK],
       tree: withExtra,
       arc: null,
@@ -604,6 +630,7 @@ describe("the public article payload", () => {
       lang: null,
       excerpt: null,
       headingTitle: "From the article's own h1",
+      finalUrl: null,
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
@@ -625,6 +652,7 @@ describe("the public article payload", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
@@ -780,6 +808,7 @@ describe("the four artefacts a shared link carries", () => {
     lang: null,
     excerpt: null,
     headingTitle: null,
+    finalUrl: null,
     blocks: [BLOCK],
     tree: TREE,
     arc: null,
@@ -894,6 +923,7 @@ describe("the four artefacts a shared link carries", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
@@ -920,6 +950,7 @@ describe("the four artefacts a shared link carries", () => {
       lang: null,
       excerpt: null,
       headingTitle: null,
+      finalUrl: null,
       blocks: [BLOCK],
       tree: TREE,
       arc: null,
@@ -977,4 +1008,125 @@ describe("the public metadata payload", () => {
       expect(keyPaths(built)).not.toContain(forbidden);
     });
   }
+});
+
+/**
+ * **The source URL, published to whoever can read the article.**
+ *
+ * Greg, 2026-08-30: *"I think Public-readable articles should show their
+ * provenance-url to all reader[s]."* `final_url` had been held out of the
+ * public projection until then, so this is the whole of what changed on the
+ * public path, and the policy that replaced the absence is `publicSourceUrl`
+ * in src/urls.ts.
+ *
+ * Asserted **through the DTO** rather than against that function directly. The
+ * function has its own unit tests; what nothing else can see is whether
+ * `publicMeta` actually calls it — a projection that published `row.finalUrl`
+ * raw would pass every test of the policy and leak every credential it refuses.
+ * Same reason `tests/public-reads.test.ts` reads the generated SQL rather than
+ * the projection object beside it.
+ */
+describe("the source URL a stranger receives", () => {
+  /** One article, one `finalUrl`, and only the published `meta.url` back. */
+  const published = (finalUrl: string | null): string | undefined =>
+    publicArticle({
+      slug: "noema",
+      title: "The mythology of conscious AI",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      finalUrl,
+      blocks: [HEADING, BLOCK],
+      tree: TREE,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+    }).meta.url;
+
+  it("publishes an ordinary address", () => {
+    expect(published("https://www.noemamag.com/the-mythology-of-conscious-ai/")).toBe(
+      "https://www.noemamag.com/the-mythology-of-conscious-ai/",
+    );
+  });
+
+  /**
+   * **A query string is refused outright**, and this is the clause the first
+   * draft of `publicSourceUrl` got wrong. Keeping it looked right — on a great
+   * many sites `?id=123` *is* the article, and dropping it names a section index
+   * — until the fixture in `tests/public-visibility-pg.test.ts` reminded us what
+   * else a query holds: `?sig=…`, a capability the owner holds and very often
+   * their own paywall bypass. From here an id, a `utm_` and a signature are the
+   * same string, so refusing is the honest answer. Measured before it was
+   * accepted: of the twenty articles in `data/` with a URL, none has a query.
+   */
+  it("refuses an address carrying a query, which may be a signature", () => {
+    expect(published("https://example.com/read?id=123")).toBeUndefined();
+    expect(published("https://example.com/piece?sig=SECRETSIGNATURE")).toBeUndefined();
+  });
+
+  it("drops the fragment, which is a scroll position and not a document", () => {
+    expect(published("https://example.com/a#section-3")).toBe("https://example.com/a");
+  });
+
+  /**
+   * The one thing publishing an essay does not imply. A share token in a query
+   * grants access to the piece the visitor is already reading; a password in the
+   * authority grants access to a *site*, and no decision to publish an article
+   * covers that.
+   */
+  it("refuses an address carrying a credential", () => {
+    expect(published("https://user:pw@example.com/a")).toBeUndefined();
+    /* A password with an empty username is the same disclosure and a different
+       URL field — `new URL` keeps them apart, so a check on `username` alone
+       would pass this one straight through. */
+    expect(published("https://:pw@example.com/a")).toBeUndefined();
+  });
+
+  it("refuses a scheme a browser would not follow", () => {
+    expect(published("javascript:alert(1)")).toBeUndefined();
+    expect(published("file:///Users/greg/Documents/thing.pdf")).toBeUndefined();
+  });
+
+  it("refuses a payload wearing an address as a disguise", () => {
+    expect(published(`https://example.com/${"a".repeat(2100)}`)).toBeUndefined();
+  });
+
+  /**
+   * **A host a stranger could not have reached anyway.**
+   *
+   * Stage 1 refuses to *fetch* a private destination and resolves the name to do
+   * it (`guardAddress`, src/fetch.ts) — but `src/store/import.ts` writes a
+   * revision without going through stage 1, so a `final_url` of
+   * `http://10.0.0.5/token` can exist in the database and this boundary is what
+   * would hand it out. Raised by GPT Sol, 2026-08-30.
+   *
+   * The rule is a shape rule, because a DTO has no DNS: any IP literal, any host
+   * with no dot, and the three private suffixes. A public name pointing inward
+   * is not caught and cannot be from here.
+   */
+  it("refuses a host nobody outside could reach", () => {
+    expect(published("http://localhost/private")).toBeUndefined();
+    expect(published("http://10.0.0.5/token")).toBeUndefined();
+    expect(published("http://192.168.1.10/a")).toBeUndefined();
+    expect(published("http://[::1]/a")).toBeUndefined();
+    expect(published("http://build-box/a")).toBeUndefined();
+    expect(published("http://printer.local/a")).toBeUndefined();
+    /* A public IP literal goes too, and that is deliberate rather than an
+       over-reach: enumerating the private ranges is a list that fails open when
+       one is wrong, and nobody publishes an article addressed by bare IP. */
+    expect(published("http://93.184.216.34/a")).toBeUndefined();
+  });
+
+  /**
+   * **The absence, and the two different things behind it.** An uploaded article
+   * has no address at all; a refused one has an address we will not publish. A
+   * visitor is told the same nothing by both, and so may never conclude
+   * "uploaded" from it — the gate on that sentence is in src/web/Masthead.tsx.
+   */
+  it("says nothing at all when there is nothing it may say", () => {
+    expect(published(null)).toBeUndefined();
+    expect(published("https://user:pw@example.com/a")).toBeUndefined();
+  });
 });

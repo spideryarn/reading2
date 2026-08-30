@@ -14,7 +14,7 @@
  * `GET /api/public/article/:slug` and `GET /api/public/metadata/:slug` — and
  * neither fetches anything of its own.
  */
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 
 import type { Article } from "../types.js";
 import type { PublicArtefacts, PublicTweets } from "../public-types.js";
@@ -22,11 +22,37 @@ import { SHARING_WHAT_VISITORS_SEE } from "../messages.js";
 import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { carriedSearch, readHref, type ArticleView } from "./router.js";
+import { webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice, VisitorNotice } from "./PublicChrome.js";
 import { markedModes, notBuiltGap, type VisitorGap } from "./visitor.js";
 import { ThreadCounts, ThreadPosts } from "./Tweets.js";
+
+/**
+ * The link out to the publisher, or nothing.
+ *
+ * Nothing rather than a line saying there is no link: this page is short and a
+ * visitor has no way to act on the difference. The owner's page does say it,
+ * because on that one the absence is a fact about their own library
+ * (src/web/Metadata.tsx § `Origin`).
+ */
+function SourceRow({ url }: { url: string | null }) {
+  if (url === null) return <div className="tw:mb-6" />;
+  return (
+    <p className="tw:m-0 tw:mb-6 tw:text-xs">
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer noopener"
+        className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight"
+      >
+        {url}
+        <ExternalLink size={12} className="tw:shrink-0" />
+      </a>
+    </p>
+  );
+}
 
 /** Room for the bottom bar, so the last line of a page is not under it. */
 const DOCK_CLEARANCE = "tw:pb-[calc(var(--dock-space)_+_2rem)]";
@@ -68,8 +94,24 @@ export function PublicMetadataPage({
           {meta.title}
         </h1>
         {facts.length > 0 && (
-          <p className="tw:m-0 tw:mb-6 tw:text-sm tw:text-ink-faint">{facts.join(" · ")}</p>
+          <p className="tw:m-0 tw:mb-2 tw:text-sm tw:text-ink-faint">{facts.join(" · ")}</p>
         )}
+        {/* **Where the piece came from, for a visitor too.** Greg, 2026-08-30:
+            *"I think Public-readable articles should show their provenance-url
+            to all reader[s]."* The owner's page grew this the same day and this
+            one was missed — the two pages answer the same question about the
+            same article, so a fact that is a visitor's business on one of them
+            is a visitor's business on both. GPT Sol found the gap.
+
+            `meta.url` here is `PublicMeta.url`, already through
+            `publicSourceUrl` on the server (src/urls.ts); `webSource` is the
+            client's own refusal of anything that is not `http(s)`, said once for
+            this page and the masthead.
+
+            **And no "uploaded" arm**, unlike the owner's page. An absent url
+            here means an upload *or* an address the policy withheld, and this
+            page cannot tell which — src/web/Masthead.tsx § `OriginMark`. */}
+        <SourceRow url={webSource(meta)} />
 
         <SharedNotice signedIn={signedIn} />
 

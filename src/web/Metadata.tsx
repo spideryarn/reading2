@@ -147,6 +147,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  FileQuestion,
   FileType,
   Fingerprint,
   Image,
@@ -162,6 +163,7 @@ import {
   Trash2,
   TriangleAlert,
   Undo2,
+  Upload,
   Waypoints,
 } from "lucide-react";
 import type {
@@ -179,6 +181,7 @@ import { Dock } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam } from "./params.js";
 import { LIBRARY_HREF, carriedSearch, readHref } from "./router.js";
+import { SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
@@ -405,6 +408,22 @@ export function Metadata({
    * only fail is worse than no button, because pressing it is how you find out.
    * Found by a cross-model review. One derivation, used twice, rather than the
    * same three terms written out again.
+   *
+   * **Dead since 2026-08-30, and kept only until someone unpicks it.** The
+   * state it describes — this page showing `example/`'s files under somebody
+   * else's slug — cannot happen any more: `candidateDirs` offers the fixture to
+   * its own slug and to no other, so `articleMetadata` 404s where it used to
+   * answer with a foreign `dir` (src/api.ts § `candidateDirs`, and the commit
+   * that closed it). The right half of the `&&` was always what made it
+   * *false* for `example` itself, so removing the whole thing changes nothing
+   * a reader can see.
+   *
+   * It is left in place rather than pulled out because it is threaded through a
+   * dozen sites here, and this file was being edited by other sessions on the
+   * day the fallback went. The reason to say so *here* is that the paragraph
+   * above now describes a hazard that no longer exists, and a comment arguing
+   * for a state the code can no longer reach is how the next person learns
+   * something untrue. docs/plans/faster-ingest-and-concurrency.md § Stage 1.
    */
   const showingFixture = provenance?.dir === "example" && slug !== "example";
   /**
@@ -514,19 +533,11 @@ export function Metadata({
               timestamp is what you want when the answer is surprising. */}
           <Fetched iso={meta.fetchedAt} lead={facts.length > 0} />
         </p>
-        {meta.url && (
-          <p className="tw:mt-1 tw:mb-0 tw:text-xs">
-            <a
-              href={meta.url}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight"
-            >
-              {meta.url}
-              <ExternalLink size={12} className="tw:shrink-0" />
-            </a>
-          </p>
-        )}
+        {/* Where it came from, and the way back to it — `Origin` below. `owner`
+            is `hasShelfRow` rather than a fresh test, because the link it gates
+            is the same private `GET /api/source/:slug` the masthead gates, and
+            this page already has one answer to *is this yours*. */}
+        <Origin meta={meta} slug={slug} owner={hasShelfRow} />
         <p className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-2 tw:font-mono tw:text-xs tw:text-ink-faint">
           <span className="tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5">{slug}</span>
           {provenance && (
@@ -966,6 +977,91 @@ function Questions({
     <Link href={href} className="tw:text-highlight">
       {count} question{count === 1 ? "" : "s"}
     </Link>
+  );
+}
+
+/**
+ * **Where the article came from: a web address, or a file the reader uploaded.**
+ *
+ * This line was the source URL and nothing else, `{meta.url && …}`, so an
+ * uploaded article got no line at all — and the page whose entire job is
+ * answering "where did this come from?" simply did not answer. Greg,
+ * 2026-08-30, having opened one and gone looking for the address:
+ *
+ * > Ah, maybe I'm being dense - I forgot that I uploaded it, so that would
+ * > explain why it doesn't have the original url where I got the article from!
+ * > In that case, make it clear that it was uploaded!
+ *
+ * **The absence had to be said out loud**, and that is the whole change: a
+ * missing row reads as a page that forgot, and the reader spends their
+ * attention deciding which. One line either way costs nothing and closes it.
+ *
+ * ## Saying "uploaded" is safe *here* and is not safe in general
+ *
+ * There is no field for it — the inference is *no web address, therefore a
+ * file* — and it holds only for a reader who owns the article. This page is
+ * unreachable for a visitor (`PublicMetadataPage` replaces it, App.tsx) and
+ * `/api/metadata/:slug` behind it is owner-only, so it holds here. The masthead
+ * is mounted for both and has to gate the same sentence on ownership;
+ * `OriginMark` there says what a visitor's absent `url` can also mean.
+ *
+ * ## Why the file link is on the uploaded branch only
+ *
+ * A fetched PDF has its address right here, which is the better answer to
+ * "where is this from" and the one a reader can share. An uploaded one has
+ * nowhere else to point, so the file is the only original there is — and it is
+ * also the only verification a scan ever gets (Masthead.tsx § `SeeTheOriginal`).
+ * Owner-gated because the route is: `GET /api/source/:slug` serves a stranger's
+ * bytes and refuses everyone else, so an ungated control could only ever open a
+ * blank tab and fail.
+ */
+function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolean }) {
+  const source = webSource(meta);
+  if (source) {
+    return (
+      <p className="tw:mt-1 tw:mb-0 tw:text-xs">
+        <a
+          href={source}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="tw:inline-flex tw:items-center tw:gap-1 tw:break-all tw:text-highlight"
+        >
+          {source}
+          <ExternalLink size={12} className="tw:shrink-0" />
+        </a>
+      </p>
+    );
+  }
+  /* **`meta.source` is the evidence, not the absent URL.** A missing `meta.json`
+     is tolerated (src/api.ts) and `src/store/import.ts` takes a revision with no
+     URL in either the metadata or the manifest, so an owner can hold an ordinary
+     web article with no address — and "you uploaded this" is a claim about what
+     they did, assembled from a gap in our own files. GPT Sol, 2026-08-30. The
+     other branch says what is actually true: we have no record of one. */
+  const uploaded = meta.source === "pdf";
+  return (
+    <p className="tw:mt-1 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+      {uploaded ? (
+        <Upload size={12} className="tw:shrink-0" aria-hidden="true" />
+      ) : (
+        <FileQuestion size={12} className="tw:shrink-0" aria-hidden="true" />
+      )}
+      <span>
+        {uploaded
+          ? "Uploaded from a file — there is no web address to go back to."
+          : "No web address was recorded for this article."}
+      </span>
+      {/* Only for a PDF: `GET /api/source/:slug` serves what stage 1 stored,
+          and an uploaded HTML document has nothing a reader would want opened
+          as a document. `slug` is the route's, never `meta.slug` — an address
+          with no article of its own is answered with the fixture's meta, and
+          this link must be about the address the reader is standing on. */}
+      {uploaded && owner && (
+        <span className="tw:text-highlight">
+          <SourceLink slug={slug}>View the original</SourceLink>
+        </span>
+      )}
+    </p>
   );
 }
 

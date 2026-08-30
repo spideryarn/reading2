@@ -46,10 +46,13 @@
  * stays with you as you read is the spine and the arc column, not this.
  */
 import { useMemo, type ReactNode } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileQuestion, Upload } from "lucide-react";
 import type { Article, Meta } from "../types.js";
+/* The shared one, which drops a leading `www.` — three copies of this used to
+   live in the client and its header asks the next caller not to make a fourth. */
+import { hostOf } from "../urls.js";
 import { Link } from "./Link.js";
-import { SourceLink } from "./SourceLink.js";
+import { SourceLink, webSource } from "./SourceLink.js";
 import { LIBRARY_HREF } from "./router.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, useArticleRename } from "./TitleEditor.js";
@@ -106,17 +109,49 @@ export function Masthead({ article, slug, onRenamed }: Props) {
   const stats = useMemo(() => articleStats(article), [article]);
   const root = tree.nodes[tree.rootId];
 
-  /** The heading itself, which is the same either way. */
+  /**
+   * Where this article came from — `null` when there is no web address for it.
+   *
+   * `webSource` rather than `meta.url` so that a `file://` from the local PDF
+   * command is not drawn as a link that goes nowhere and prints somebody's home
+   * directory on the way. SourceLink.tsx owns the question.
+   */
+  const source = webSource(meta);
+
+  /**
+   * The heading, and the one mark beside it saying where the piece came from.
+   *
+   * A fragment rather than a lone `<h1>` because both wrappers below lay their
+   * children out in a flex row — `EditableTitle`'s is the row the pencil sits
+   * in — so the mark lands beside the title without either of them being told
+   * about it. Outside the `<h1>` on purpose: `h1 a` in styles.css underlines on
+   * hover, which on an icon-only link is a stray dash under a glyph.
+   */
   const heading = (
-    <h1 className="tw:min-w-0 tw:flex-1">
-      {meta.url ? (
-        <a href={meta.url} target="_blank" rel="noreferrer noopener">
-          {meta.title}
-        </a>
-      ) : (
-        meta.title
-      )}
-    </h1>
+    <>
+      <h1 className="tw:min-w-0 tw:flex-1">
+        {source ? (
+          <a href={source} target="_blank" rel="noreferrer noopener">
+            {meta.title}
+          </a>
+        ) : (
+          meta.title
+        )}
+      </h1>
+      {/* **`onRenamed !== undefined` is what makes the second branch honest**,
+          and it is not a decoration — see `OriginMark`. This masthead cannot
+          otherwise tell "uploaded, so there is no address" from "a visitor, so
+          we did not send them one". Same stand-in for *is this yours* that
+          `SeeTheOriginal` below uses, asked once. */}
+      <OriginMark
+        source={source}
+        /* **`meta.source` is the evidence; the absent URL is only the
+           occasion.** See `OriginMark` — an owner can hold a *web* article with
+           no URL (a lost `meta.json`, an import that carried neither), and
+           calling that an upload is a false sentence about their library. */
+        origin={onRenamed === undefined ? null : meta.source === "pdf" ? "upload" : "unrecorded"}
+      />
+    </>
   );
 
   // Only the parts of the facts line this article actually has. Joining a
@@ -216,6 +251,134 @@ export function Masthead({ article, slug, onRenamed }: Props) {
         {root?.gist && <p className="root-gist">{root.gist}</p>}
       </div>
     </div>
+  );
+}
+
+/**
+ * **Where the article came from, as one glyph beside the title.**
+ *
+ * Greg, 2026-08-30, on opening a piece he had uploaded and looking for the link
+ * back to where he got it:
+ *
+ * > Ah, maybe I'm being dense - I forgot that I uploaded it, so that would
+ * > explain why it doesn't have the original url where I got the article from!
+ * > In that case, make it clear that it was uploaded!
+ *
+ * The title has linked to `meta.url` since the masthead existed, and that is
+ * the whole problem: a link that looks exactly like a heading tells you nothing
+ * when it is *absent*. An article with no web address was silently
+ * indistinguishable from one whose title you had simply never thought to click.
+ * So both states get a mark, and the absent one gets words.
+ *
+ * ## The link is for everybody; the *word* "uploaded" is not
+ *
+ * Greg, 2026-08-30: *"I think Public-readable articles should show their
+ * provenance-url to all reader[s]."* So a visitor gets `meta.url` too, since
+ * that day — `PublicMeta.url`, which is `articles.final_url` put through
+ * `publicSourceUrl` (src/urls.ts) — and the first branch below needs no gate.
+ *
+ * The second branch still does, and it is worth being exact about why, because
+ * the reason narrowed rather than went away. For a visitor an absent
+ * `PublicMeta.url` means *either* an upload *or* an address `publicSourceUrl`
+ * withheld — a credential in it, a private host, a query it could not vouch for
+ * — and the two are indistinguishable from here. Ungated, an article whose URL
+ * happened to carry a password would tell every stranger it was uploaded.
+ *
+ * Before that day the hole was wider: no visitor received a `url` at all, so
+ * *every* shared web article would have said it. The gate that fixed the wide
+ * version is the same one that fixes the narrow version, which is the argument
+ * for having written it against the reason rather than against the symptom.
+ *
+ * A visitor in that case gets no mark rather than a wrong one. The alternative —
+ * a third "we cannot say" glyph — would be chrome explaining our projection
+ * layer to somebody reading an essay.
+ *
+ * ## And "owner + no URL" is still not "uploaded"
+ *
+ * That was the first version's inference and it is false, which GPT Sol found by
+ * reading the two paths that produce an owner's `Meta` rather than the one that
+ * produces most of them. A missing `meta.json` is **explicitly tolerated**
+ * (src/api.ts), and `src/store/import.ts` will take a revision whose metadata and
+ * manifest both lack a URL. Either gives an owner a perfectly ordinary web
+ * article with no address, and the mark would have told them they had uploaded
+ * it — a claim about something they did, made out of a gap in our own files.
+ *
+ * So the evidence is `meta.source === "pdf"`, which is a fact stage 2 wrote
+ * down, and the absent URL is only the occasion for looking. Everything else
+ * gets "No web address was recorded", which is a statement about our records
+ * and is true in every one of those cases.
+ *
+ * The PDF sentence further down (`SeeTheOriginal`) is the other half of this
+ * and is not duplicated by it: that one is about *trusting the transcription*
+ * and links to the file itself; this one is about *where the piece is from*.
+ * An uploaded PDF shows both, and they say different things.
+ */
+function OriginMark({
+  source,
+  origin,
+}: {
+  source: string | null;
+  /**
+   * What to say when there is no address — or `null` for *say nothing*.
+   *
+   * `null` is a visitor, for the reason in the header. `"upload"` is a PDF, and
+   * is the only case with an actual explanation. `"unrecorded"` is an owner's
+   * article that is *not* a PDF and still has no address, which is a real state
+   * — src/api.ts tolerates a missing `meta.json` on purpose, and
+   * src/store/import.ts accepts a revision with no URL in either the metadata
+   * or the manifest. It gets its own words rather than borrowing the upload's,
+   * because "you uploaded this" is a claim about what the reader did.
+   */
+  origin: "upload" | "unrecorded" | null;
+}) {
+  /* The pencil's 28px square and `mt-1`, so title, mark and pencil sit on one
+     line at any title length — IconButton.tsx says why a stated size rather
+     than padding round a glyph. Not `IconButton` itself: that is a `<button>`
+     with an `onClick`, and one of these two is a link and the other is not a
+     control at all. */
+  const box =
+    "tw:mt-1 tw:inline-flex tw:size-7 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-md tw:text-ink-faint";
+
+  if (source) {
+    /* `""` when the address will not parse, which `webSource` has already made
+       impossible — and the fallback is here rather than a `!` because a throw in
+       render takes the whole reading view down through AppBoundary.tsx. */
+    const host = hostOf(source);
+    const label = host ? `View the original at ${host}` : "View the original";
+    return (
+      <a
+        href={source}
+        target="_blank"
+        rel="noreferrer noopener"
+        /* Both, and they are not the same thing — the same rule IconButton
+           states: `title` is the hover tooltip, `aria-label` is the name. An
+           icon-only link with neither is a link called "". */
+        title={label}
+        aria-label={label}
+        className={`${box} tw:no-underline tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground`}
+      >
+        <ExternalLink size={14} strokeWidth={1.75} />
+      </a>
+    );
+  }
+
+  if (origin === null) return null;
+
+  const label =
+    origin === "upload"
+      ? "Uploaded from a file — there is no web address to go back to."
+      : "No web address was recorded for this article.";
+  /* `role="img"`, because this one goes nowhere: it is a statement, and a
+     screen reader offered it as a control would be offered a control that does
+     nothing. No hover colour for the same reason. */
+  return (
+    <span role="img" title={label} aria-label={label} className={box}>
+      {origin === "upload" ? (
+        <Upload size={14} strokeWidth={1.75} />
+      ) : (
+        <FileQuestion size={14} strokeWidth={1.75} />
+      )}
+    </span>
   );
 }
 

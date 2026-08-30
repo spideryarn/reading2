@@ -1458,11 +1458,13 @@ export interface AssetFetchOptions extends FetchOptions {
  * reasoning that a request with no referer is the shape of a hotlinker. It is a
  * credential leak: the article's final URL can carry signed query parameters,
  * and five of the thirteen images in our own corpus sit behind imgix `s=`
- * signatures. This repo already keeps that URL out of public payloads for the
- * same reason (src/public-types.ts). Handing it to a third party as a header is
- * worse than the problem it solves, and all 54 measured URLs answer `200`
- * without one. If a real host ever refuses, send the *origin* only — never the
- * path, the query or the userinfo.
+ * signatures. A public payload carries that URL only after `publicSourceUrl`
+ * has refused every query string for this same reason (src/urls.ts) — which is
+ * the comparison worth making, because a `Referer` header is the raw column and
+ * has no such filter in front of it. Handing it to a third party is worse than
+ * the problem it solves, and all 54 measured URLs answer `200` without one. If a
+ * real host ever refuses, send the *origin* only — never the path, the query or
+ * the userinfo.
  * docs/plans/hosting-the-articles-images.md#no-referer.
  */
 function assetHeaders(opts: Resolved): Record<string, string> {

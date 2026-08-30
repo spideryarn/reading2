@@ -196,10 +196,19 @@ end`;
  * stops being able to tell a selected column from an unselected one — which is
  * most of what a projection is for.
  *
- * Read the absences. No `final_url` (the post-redirect URL, which can carry
- * credentials), no `fetched_at`, no `note`, and none of the six PDF provenance
- * columns. `articles.title_override` is not selected either, so there is
- * nothing here for a `titleFor()` to be called on.
+ * Read the absences. No `fetched_at`, no `note`, and none of the six PDF
+ * provenance columns. `articles.title_override` is not selected either, so there
+ * is nothing here for a `titleFor()` to be called on.
+ *
+ * **`final_url` is selected, since 2026-08-30, and does not reach the wire as
+ * itself.** It was held back here with a note saying a visible "read the
+ * original" link was a separate product decision; Greg made it — *"Public-readable
+ * articles should show their provenance-url to all reader[s]"* — and it wanted
+ * *"its own named field rather than this one leaking sideways into a DTO"*, which
+ * is what it now has. `publicMeta` in src/public/dto.ts runs the column through
+ * `publicSourceUrl` (src/urls.ts) and publishes the result under `PublicMeta.url`;
+ * the credential clause that made this column dangerous is enforced there, at the
+ * one boundary a reviewer reads, rather than by the column being absent here.
  */
 const PUBLIC_PROJECTIONS = {
   article: {
@@ -209,6 +218,7 @@ const PUBLIC_PROJECTIONS = {
     siteName: articleRevisions.siteName,
     lang: articleRevisions.lang,
     excerpt: articleRevisions.excerpt,
+    finalUrl: articleRevisions.finalUrl,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
     /* **The image manifest, and this is the half of the feature that is easy to
@@ -308,11 +318,18 @@ const PUBLIC_PROJECTIONS = {
    * that answered 200 there would put a title and a description on a link to a
    * blank screen — which is worse than no preview, because it is a claim.
    *
-   * `finalUrl` never reaches the wire as-is: it is the *candidate* canonical,
-   * and `safePublicCanonical` in src/urls.ts decides whether anything is
-   * published at all. It stays out of `PublicMeta` deliberately — a visible
-   * "read the original" link is a separate product decision and would want its
-   * own named field rather than this one leaking sideways into a DTO.
+   * `finalUrl` never reaches the wire as-is here either: for a head it is the
+   * *candidate* canonical, and `safePublicCanonical` in src/urls.ts decides
+   * whether a `<link rel="canonical">` is published at all.
+   *
+   * **This paragraph used to end by saying the column stays out of `PublicMeta`
+   * because a visible "read the original" link was a separate product decision.**
+   * Greg made that decision on 2026-08-30, so the article projection above
+   * selects the column too — and the two publish it under different policies,
+   * which is the point rather than an inconsistency. A canonical is a machine's
+   * claim about which document this is and refuses any query string; the
+   * reader's link is a person clicking through to the piece and keeps it.
+   * src/urls.ts § `publicSourceUrl` weighs the two against each other.
    */
   head: {
     id: articleRevisions.id,
@@ -466,6 +483,7 @@ export const pgPublicReader: PublicArticleReader = {
         lang: found.revision.lang,
         excerpt: found.revision.excerpt,
         headingTitle: headingTitleOf(blocks),
+        finalUrl: found.revision.finalUrl,
         blocks,
         tree,
         arc: found.revision.arc,

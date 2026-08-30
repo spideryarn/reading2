@@ -20,9 +20,17 @@
  *
  * Belt and braces, and the braces are the stronger half:
  * [public-reader.ts](../store/public-reader.ts) never fetches `note`,
- * `final_url`, `fetched_at` or the PDF provenance at all. A projection here is
- * one careless `...spread` away from being widened; a column that was never
- * selected has to be put back on purpose, in SQL, where a reviewer sees it.
+ * `fetched_at` or the PDF provenance at all. A projection here is one careless
+ * `...spread` away from being widened; a column that was never selected has to
+ * be put back on purpose, in SQL, where a reviewer sees it.
+ *
+ * **`final_url` is the exception, and it is fetched.** It has been since
+ * 2026-08-30, when a public article started showing where it came from — so for
+ * that one column the braces are off and this file is the only thing between it
+ * and a stranger. `publicMeta` runs it through `publicSourceUrl` (../urls.ts)
+ * and publishes the answer; the column itself never crosses. That is a heavier
+ * responsibility than any other line here carries, which is why it is written
+ * down twice — again at the field.
  *
  * ## Only two of these are exported, deliberately
  *
@@ -71,6 +79,7 @@ import type {
   PublicSummaries,
   PublicTweets,
 } from "../public-types.js";
+import { publicSourceUrl } from "../urls.js";
 
 /**
  * The masthead.
@@ -92,7 +101,21 @@ function publicMeta(row: {
   lang: string | null;
   excerpt: string | null;
   headingTitle: string | null;
+  /**
+   * Stage 1's post-redirect address, **still not the thing that goes out**.
+   *
+   * Named for the column so the reader below can hand its projection straight
+   * over, and converted here rather than there for the reason this whole file
+   * exists: the decision about what a stranger receives is made in one place,
+   * in code a reviewer reads. `publicSourceUrl` is the policy.
+   */
+  finalUrl: string | null;
 }): PublicMeta {
+  /* A named const rather than the expression inline, so the shorthand `{ url }`
+     below ties the published key to it. `opt()` cannot be used here — it copies
+     a field, and this computes one — and the spread it saves you from is the one
+     that compiles clean with the key misspelled. */
+  const url = row.finalUrl === null ? null : publicSourceUrl(row.finalUrl);
   return {
     slug: row.slug,
     title: row.title ?? row.headingTitle ?? row.slug,
@@ -103,6 +126,12 @@ function publicMeta(row: {
     ...(row.siteName === null ? {} : { siteName: row.siteName }),
     ...(row.lang === null ? {} : { lang: row.lang }),
     ...(row.excerpt === null ? {} : { excerpt: row.excerpt }),
+    /* **Two ways to get no key**, and they collapse on purpose: no address at
+       all, and an address the policy will not publish. A visitor is told the
+       same thing by both — nothing — because there is nothing they could do
+       differently, and a "we have one but will not show you" would be a fact
+       about us rather than about the piece. src/urls.ts § `publicSourceUrl`. */
+    ...(url === null ? {} : { url }),
   };
 }
 
@@ -374,6 +403,8 @@ export function publicArticle(row: {
   lang: string | null;
   excerpt: string | null;
   headingTitle: string | null;
+  /** Stage 1's post-redirect address — `publicMeta` decides what of it is published. */
+  finalUrl: string | null;
   blocks: (Block | PublicBlock)[];
   tree: Tree;
   arc: Arc | null;

@@ -433,7 +433,7 @@ hold.
 
 | Endpoint | What must not cross unchanged |
 |---|---|
-| `article` | **`meta.title` may be the owner's private rename** — both stores run it through `titleFor()` before returning it. Also `meta.url` is the *final fetched* URL and can carry credentials or signed query parameters; `fetchedAt`; the extraction `note`; per-block `note`; the comment count; and the PDF/upload provenance block (`source`, `method`, `pages`, `rawSha256`, `unverified`, `recall`, `pagesChecked`). |
+| `article` | **`meta.title` may be the owner's private rename** — both stores run it through `titleFor()` before returning it. Also `fetchedAt`; the extraction `note`; per-block `note`; the comment count; and the PDF/upload provenance block (`source`, `method`, `pages`, `rawSha256`, `unverified`, `recall`, `pagesChecked`). **`meta.url` was on this list and came off on 2026-08-30** — see § The source URL is published now, below. |
 | `metadata` | `profile`, `purpose`, `comments`, `archivedAt`, `dir`, and effectively the whole of `stages` — internal paths, column names, completion state, run times, byte counts. Replace it with a small `availableKinds` shape: which artefacts exist, and nothing about how they were made. |
 | `summary` | `profileHash`, `profileChanged`, and **especially `guidance`**, which is the owner's free-text steer. Also `generatedAt`, `elapsedMs`, `generator`, `version`, `sourceHash`. |
 | `glossary` | `profileHash`, `profileChanged`, `passes`, `generatedAt`, `elapsedMs`, and **every `entry.lookup`** — a lookup is the owner's requested answer, its citations, its search count, its model and its exact time, and the Postgres read seam attaches them deliberately. |
@@ -2160,13 +2160,50 @@ Six values — `title`, the `<h1>` fallback, `root_gist`, `final_url`, `hasTree`
 shape is the guard. **The function must not become a second renderer**, and the cheapest place to
 hold that line is the `select`: it cannot render a body from a projection the blocks are not in.
 
-**`final_url` is forbidden in the article read and required here**, which looks like a contradiction
-and is not. There it is the masthead's provenance and a visitor has no business with it. Here it
-never reaches a browser as data — it is the *candidate* canonical, and `safePublicCanonical` decides
-whether any tag is published at all. The fixture's `final_url` carries a signed query parameter on
-purpose, and the pg test asserts both halves of that seam in one line: the reader hands the value
-across untouched, and the sanitiser returns `null`. Neither the SQL test nor the unit tests can see
-that seam on their own.
+**`final_url` was forbidden in the article read and required here**, which looked like a
+contradiction and was not. There it was the masthead's provenance and a visitor had no business with
+it. Here it never reaches a browser as data — it is the *candidate* canonical, and
+`safePublicCanonical` decides whether any tag is published at all. The fixture's `final_url` carries
+a signed query parameter on purpose, and the pg test asserts both halves of that seam in one line:
+the reader hands the value across untouched, and the sanitiser returns `null`. Neither the SQL test
+nor the unit tests can see that seam on their own.
+
+The first half of that has since been reversed — see the section below — and the seam described here
+is unchanged: a head still publishes nothing when the address carries a query.
+
+### The source URL is published now
+
+> I think Public-readable articles *should* show their provenance-url to all reader[s].
+>
+> — Greg, 2026-08-30
+
+So `final_url` is selected in the **article** read too, and `meta.url` came off the forbidden list.
+The column still does not reach the wire as itself: `publicMeta` in
+[`dto.ts`](../../src/public/dto.ts) puts it through `publicSourceUrl`
+([`src/urls.ts`](../../src/urls.ts)) and publishes the result as `PublicMeta.url`. That is the
+"own named field" the projection's comment had asked for while it held the column back.
+
+**One policy over one column, and it was nearly two.** `publicSourceUrl` was first written to differ
+from `safePublicCanonical` in one clause — keep the query string, because a canonical is a machine's
+claim about *which document this is* while a source link is a person clicking through, and on many
+sites `?id=123` *is* the article.
+
+**The canary in `tests/public-visibility-pg.test.ts` went red on that, and was right to.** Its
+fixture's `final_url` is `…/piece?sig=SECRETSIGNATURE`, and *signed* is the case the argument skips:
+a tracking parameter is noise, an id is the article, and a signature is a capability the owner holds
+— very often their own paywall bypass. Publishing an essay is a decision about the essay; it does
+not imply handing out the key that got us in, and from the DTO the three are indistinguishable. So
+`publicSourceUrl` delegates, and the cost was measured rather than assumed: **of the twenty articles
+in `data/` with a URL, none carries a query** (2026-08-30).
+
+It keeps its own name and header because the two are one policy by coincidence of the current rules
+rather than by definition — the query clause is the one that could ever come apart, and this is the
+seam that argument would need.
+
+What a reader sees is one glyph beside the title, `OriginMark` in
+[`Masthead.tsx`](../../src/web/Masthead.tsx). **The link is for everybody; the word "uploaded" is
+not** — an absent `PublicMeta.url` means *either* an upload *or* an address the policy withheld, and
+only a reader who owns the article may read the absence as the first.
 
 #### `hasBlocks` is where the two existing reads disagree
 
