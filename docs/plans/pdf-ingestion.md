@@ -1763,6 +1763,76 @@ Asked one at a time; his wording where it changes something.
 - Page-by-page gold sign-off is by Greg or a named agent, recorded per page in `gold.json`.
 - Numbers, citations and equations are held to exact match; prose to a similarity score.
 
+## What the first PDFs on production actually did (2026-08-30)
+
+Until this date **no PDF had ever been ingested on production**, because until 2026-08-29 nothing
+could be ingested there at all ([deployment.md](../project/deployment.md)). Everything above was
+measured on a laptop. Three things showed up in the first hour, and only the third is about PDFs.
+
+**Two bundle-tracing bugs, both now fixed** — pdf.js reaches for `@napi-rs/canvas` and for
+`pdf.worker.mjs` through specifiers Vercel's tracer cannot read, so neither shipped.
+[pdfjs-dommatrix-serverless.md](../postmortems/pdfjs-dommatrix-serverless.md) is the write-up.
+Note for anyone measuring: the failure landed **83 ms into `extract`, before any model call**, so
+pass 0 running first makes the worst production failure also the cheapest to find.
+
+**The measurements, which are the first real ones.** Both arXiv papers, `openai/gpt-5.6-luna`:
+
+| | Pages | `extract` | Model calls | Cost |
+|---|---|---|---|---|
+| `1503.02531` Hinton, *Distilling the Knowledge* | 9 | **98.6 s** | 3 | **$0.021** |
+| `1607.06450` Ba et al., *Layer Normalization* | 14 | **272 s** | 6 | **$0.047** |
+
+Close to the laptop figures (8pp ≈ 65 s, about a penny) and comfortably inside the step deadline.
+Worth knowing for latency work: for a PDF, `extract` is most of the time-to-readable, where for HTML
+it is about a second — so a provisional publish after `blocks` buys a PDF reader almost nothing.
+
+### The gate refused both papers, and both were right
+
+This is the finding. **The checker compares the model against pdf.js's text layer, and that layer
+contains things that are not prose.** The nine-page paper failed for exactly one reason:
+
+```
+Pages 1, 2, 3, 4: 1 run(s) are missing from the transcription,
+  the longest 8 words — "arxiv 1503 02531v1 stat ml 9 mar 2015"
+```
+
+The arXiv identifier, printed **sideways down the left margin**. The fourteen-page paper showed the
+same thing and two more: chart **axis tick labels** (`"7 5 10 15 20 iteration x 50000 82 0 82 5 …"`)
+and **mathematical notation** (`1/H`, `Σi=1D`, `φf0(a, f0, F̄11`). Figure internals are what v1
+deliberately skips, and maths is spelled differently by the text layer and by the model.
+
+The fourteen-page run gives the cleanest proof that the stamp is a reading-order artefact rather
+than a transcription error, because pdf.js returns it *inside a word*:
+
+```
+"normalizaarxiv 1607 06450v1 stat ml 21 jul 2016 tion"
+```
+
+— the stamp spliced into the middle of "normalization". Nothing downstream can recover from that.
+
+**So the sample the thresholds were tuned on was the problem.** `evals/pdf/` is a journal article, a
+geoscience paper and a Victorian scan; the easy fixture scores 0.997 because it is single-column
+with no figures, no maths and no margin stamp. Every arXiv paper has all three. The gap the
+[thresholds section](#the-thresholds-and-why-they-are-not-yet-a-gate) calls "a property of the
+sample, not of the world" turned out to be exactly that, in the direction that refuses good work.
+
+### What changed, and what it cost
+
+1. **Sideways text is out of the baseline** — `isSideways` in [`src/pdf.ts`](../../src/pdf.ts).
+   pdf.js's transform gives the baseline direction, so `|b| > |a|` is "more than 45° off
+   horizontal", with no threshold to tune. The count is kept in `PageText.sideways` rather than
+   discarded. It also drops a genuinely landscape table, which is the stated cost.
+2. **A quality failure is recorded, not thrown** — Greg's call, against the stated order of
+   capability then robustness. `meta.quality` carries the complaints; the article publishes.
+
+**The second is a defence being stood down, and the plan should say so plainly.** A page the model
+returns *nothing* for now publishes too — `No records at all for page 3` is a `meta.quality` note
+like any other. That is categorically worse than a margin stamp, and if a gate is ever restored it
+is the first thing to make fatal, followed by the dropped-run check. `tests/pdf-read.test.ts` still
+asserts both are *detected*, precisely so that restoring the gate is a change of consequence rather
+than a rebuild of the detection. **Nothing automatically refuses a page any more: if nobody reads
+`meta.quality`, nobody is checking.**
+
 ## Honest assessment
 
 The uncertain parts are all in the measurement table, and GPT's review moved several of the first

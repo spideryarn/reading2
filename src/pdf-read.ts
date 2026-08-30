@@ -946,22 +946,41 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     opts.onProgress?.(i + 1, chunks.length, chunk.pages, result);
   }
 
+  /**
+   * **A quality failure is recorded on the article, not thrown.**
+   *
+   * This used to `throw`, and the argument for throwing was good: pass 0 exists
+   * precisely because a model can drop a paragraph, summarise one, or invent
+   * one, and all three read as fluent English. Refusing to publish a bad
+   * transcription is the point of the whole stage.
+   *
+   * What changed is evidence rather than opinion. The first two PDFs ever put
+   * through the deployed pipeline, on 2026-08-30, both transcribed correctly
+   * and both were refused. The nine-page one was refused over the arXiv margin
+   * stamp alone (now handled in `isSideways`); the fourteen-page one over that
+   * plus chart axis tick labels and mathematical notation — figure internals
+   * that v1 deliberately does not transcribe (docs/plans/pdf-ingestion.md), and
+   * maths that the text layer and the model spell differently. So the gate's
+   * observed behaviour on real papers was to refuse good work, and a reader who
+   * asked for a paper got nothing at all.
+   *
+   * Greg's call, 2026-08-30, against the stated order of capability, then
+   * robustness: publish it and say what looked wrong. A reader can see the note
+   * and judge; a reader with no article cannot.
+   *
+   * **What this costs, stated plainly, because it is the defence being stood
+   * down.** A genuinely bad transcription now reaches the shelf. `recall` and
+   * `pagesChecked` were already there to be read; `quality` is what makes a
+   * *specific* complaint visible rather than a number. Nothing automatically
+   * refuses a page any more, so if the reader does not look, nobody looks.
+   * Restoring a gate later means choosing which failures are fatal — the
+   * missing-run check is the one worth that, and figure and maths noise is
+   * exactly what has to be separated from it first.
+   */
   if (failures.length) {
-    /* A plain Error, so the job card keeps its Retry button — and that is the
-       right answer here even though `stageFailure("blocked")` is the right
-       answer three lines up for the page cap and the encode limit.
-       src/job-failure.ts asks "should this unchanged attempt be offered again
-       now?", and here it should: the reader is nondeterministic, this chunk has
-       already been asked twice inside one run, and a third ask is a real chance
-       rather than the identical arithmetic.
-
-       What makes that cheap, and what a later reader should know before
-       changing it: **every chunk that passed is cached**, so a Retry re-pays
-       only for the ones that failed. The general worry in job-failure.ts —
-       that a false retry costs minutes of pipeline and another billed call — is
-       much smaller here than it looks. */
-    throw new Error(
-      `The transcription of this PDF did not pass its checks:\n  ${failures.join("\n  ")}`,
+    log("pipeline").warn(
+      { slug: opts.slug, step: "extract", failures: failures.length },
+      `extract ${opts.slug}: published with ${failures.length} quality note(s)`,
     );
   }
 
@@ -1005,6 +1024,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
     ...(pass.isScan ? { unverified: true } : {}),
     pagesChecked: pass.isScan ? 0 : pagesChecked,
     ...(recall === null ? {} : { recall }),
+    ...(failures.length ? { quality: failures } : {}),
   };
   await writeFile(
     path.join(opts.dataDir, "meta.json"),

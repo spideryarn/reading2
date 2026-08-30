@@ -995,6 +995,16 @@ export interface Meta {
   recall?: number;
   /** How many pages the recall above is a mean of. `0` on a scan, where nothing could be checked. */
   pagesChecked?: number;
+  /**
+   * Specific things the transcription checker complained about, in its own
+   * words. Absent when it found nothing, which is the common case.
+   *
+   * These used to stop the article being published at all. They no longer do
+   * (Greg, 2026-08-30 — see the long note at the end of `runPdfExtract`), so
+   * this field is the whole of what is left of that defence: if nobody reads
+   * it, nobody is checking. `recall` is the number; this is the complaint.
+   */
+  quality?: string[];
 }
 
 /** What GET /api/article/:slug returns — everything needed for every zoom level. */

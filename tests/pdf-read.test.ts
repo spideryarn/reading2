@@ -356,26 +356,52 @@ describe("the whole stage, with the model stubbed out", () => {
     /* Not the fallback the plan forbids — the same call, judged by the same
        check. It exists because the reader drops a clause about one run in
        three, and a gate that fails a whole paper for that is a gate somebody
-       turns off. src/pdf-read.ts. */
-    await expect(run((records) => records.filter((r) => r.page !== 3))).rejects.toThrow();
+       turns off. src/pdf-read.ts.
+
+       That last sentence was written before it happened, and on 2026-08-30 it
+       did: the gate failed whole papers over a margin stamp and chart axis
+       labels, and it got turned off. So this no longer rejects — but the retry
+       it is actually about is unchanged, and the count below is the assertion
+       that was always doing the work. */
+    await run((records) => records.filter((r) => r.page !== 3));
     const chunks = asks;
     await run();
     expect(chunks).toBe(asks + 1);
   }, 60_000);
 
-  it("refuses to write anything when a page comes back empty", async () => {
-    await expect(run((records) => records.filter((r) => r.page !== 3))).rejects.toThrow(
-      /No records at all for page 3/,
-    );
+  /* ============================================== what the checker still sees ==
+     These two used to assert `rejects.toThrow`, and that was the right spec
+     until 2026-08-30. The stage no longer refuses: it publishes and records the
+     complaint on `meta.quality` (Greg's call — the long note at the end of
+     `runPdfExtract` has the production evidence and the cost).
+
+     So what is under test moved rather than went away, and it is worth being
+     exact about which half. **The detection is unchanged and still asserted
+     here**; only the consequence changed. If a later reader restores a gate,
+     these are the two cases to make fatal first — a page transcribed as nothing
+     at all, and a dropped paragraph, are the failures pass 0 was built for, and
+     are nothing like the margin stamp and chart axis labels that forced the
+     change. */
+
+  it("still notices a page that comes back empty, and says which", async () => {
+    const result = await run((records) => records.filter((r) => r.page !== 3));
+    expect(result.meta.quality?.join(" ")).toMatch(/No records at all for page 3/);
   }, 30_000);
 
-  it("refuses when a paragraph is silently dropped", async () => {
-    await expect(
-      run((records) => {
-        const victim = records.findIndex((r) => r.page === 5 && r.text.split(" ").length > 12);
-        return records.filter((_, i) => i !== victim);
-      }),
-    ).rejects.toThrow(/missing from the transcription/);
+  it("still notices a silently dropped paragraph", async () => {
+    const result = await run((records) => {
+      const victim = records.findIndex((r) => r.page === 5 && r.text.split(" ").length > 12);
+      return records.filter((_, i) => i !== victim);
+    });
+    expect(result.meta.quality?.join(" ")).toMatch(/missing from the transcription/);
+  }, 30_000);
+
+  it("says nothing when the transcription is clean", async () => {
+    /* The control, and it earns its place: both assertions above would pass if
+       `quality` were filled in unconditionally with every page's worth of
+       noise. An article that read correctly must carry no complaint at all. */
+    const result = await run();
+    expect(result.meta.quality).toBeUndefined();
   }, 30_000);
 
   /* ================================= the chunk cache, and what a crash leaves ==

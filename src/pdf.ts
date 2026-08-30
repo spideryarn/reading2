@@ -197,9 +197,18 @@ export interface TextItem {
 export interface PageText {
   /** 1-based, and the number every later artefact addresses this page by. */
   page: number;
-  /** Line breaks preserved; runs of spaces and tabs collapsed. */
+  /** Line breaks preserved; runs of spaces and tabs collapsed. Upright text only. */
   text: string;
   words: number;
+  /**
+   * Words on this page printed sideways, and therefore **not** in `text`.
+   * Almost always a margin stamp. See `isSideways`.
+   *
+   * Optional because a great many test fixtures build a `PageText` by hand and
+   * none of them is about rotation; absent means nobody counted, which is a
+   * different thing from zero and is worth being able to say.
+   */
+  sideways?: number;
   items: TextItem[];
 }
 
@@ -451,8 +460,14 @@ export async function pass0(
       const content = await page.getTextContent();
       const items: TextItem[] = [];
       let text = "";
+      let sideways = 0;
       for (const item of content.items) {
         if (!("str" in item)) continue;
+        if (isSideways(item.transform)) {
+          /* Counted, not silently dropped — see `isSideways`. */
+          sideways += item.str.trim() ? item.str.trim().split(/\s+/).length : 0;
+          continue;
+        }
         items.push({
           x: Math.round(item.transform[4]!),
           y: Math.round(item.transform[5]!),
@@ -465,6 +480,7 @@ export async function pass0(
         page: n,
         text: trimmed,
         words: trimmed ? trimmed.split(/\s+/).length : 0,
+        sideways,
         items,
       });
     }
@@ -498,6 +514,48 @@ export async function pass0(
     isScan: withText.length <= 1 && pages.length > 1,
     furniture: repeatedLines(pages),
   };
+}
+
+/**
+ * **Is this text run printed sideways?** If it is, it is not prose and it must
+ * not be part of the baseline a transcription is judged against.
+ *
+ * This exists because of one string, measured on production 2026-08-30 on the
+ * first two PDFs ever ingested there. A nine-page arXiv paper transcribed
+ * correctly, cost $0.021, and was refused publication for exactly one reason:
+ *
+ *     Pages 1, 2, 3, 4: 1 run(s) are missing from the transcription,
+ *       the longest 8 words — "arxiv 1503 02531v1 stat ml 9 mar 2015"
+ *
+ * That is the identifier arXiv prints **down the left margin** of page 1 of
+ * every paper it hosts. The model was right not to transcribe it, and the
+ * checker counted its absence as a missing run.
+ *
+ * The fourteen-page paper showed the same thing more plainly still, because
+ * pdf.js reads the stamp in the middle of the first word of the title:
+ *
+ *     "normalizaarxiv 1607 06450v1 stat ml 21 jul 2016 tion"
+ *
+ * — a stamp spliced into the middle of "normalization". Nothing downstream can
+ * recover from that; it has to be dropped here, where the geometry is still
+ * known.
+ *
+ * **The test.** pdf.js gives each run a transform `[a, b, c, d, e, f]`, whose
+ * first two entries are the baseline direction: for a rotation by θ, `a` is
+ * `s·cos θ` and `b` is `s·sin θ`. So `|b| > |a|` is exactly "more than 45° off
+ * horizontal", which is scale-independent and needs no threshold to tune.
+ *
+ * **What this deliberately also drops**, since it is the honest cost: a
+ * genuinely landscape table or figure rotated onto a portrait page. Its text
+ * stops counting towards recall, so a model that skipped it would not be
+ * caught by *this* check. That is the trade Greg chose, and the count is kept
+ * in `PageText.sideways` rather than thrown away, so a page that loses a lot
+ * this way can still be noticed rather than being a silent subtraction.
+ */
+function isSideways(transform: number[]): boolean {
+  const a = transform[0] ?? 0;
+  const b = transform[1] ?? 0;
+  return Math.abs(b) > Math.abs(a);
 }
 
 /**
