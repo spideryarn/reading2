@@ -125,6 +125,10 @@ the other docs and to the code. Not descriptions of code, which the code already
 - **Record decisions where they belong.** When something in
   [open-questions.md](docs/project/open-questions.md) gets decided, write it into the relevant doc
   and delete the question. That file should shrink.
+- **Harness memory is not where knowledge lives.** An agent's own auto-memory is for its
+  preferences, machine-local state, and a pointer to a thread left open. Anything a future reader
+  would need — a trap, a decision, a rule — goes in the doc that owns it, where Greg and the other
+  agents can see it too.
 - **Write down anything a future reader would otherwise have to reverse-engineer** — especially why
   a design went one way rather than the obvious other way, and *especially* where the decision went
   against the recommendation written down at the time.
