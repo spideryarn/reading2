@@ -7959,6 +7959,23 @@ tr:hover .block-chat,
   font-family: var(--font-ui); font-size: 0.7rem;
 }
 .sk-title { color: var(--ink); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The scene switcher: the overview and each zoom, as a row. Scrolls rather than
+   wraps — a second row would push the picture down by a line on exactly the
+   articles that have the most to show, and the titles are short. */
+.sk-scenes { display: flex; gap: 0.2rem; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.sk-scenes::-webkit-scrollbar { display: none; }
+.sk-scene {
+  flex: none;
+  border: 1px solid transparent; border-radius: 4px;
+  padding: 0.15rem 0.35rem;
+  color: var(--ink-faint); background: none; cursor: pointer;
+  font-family: inherit; font-size: inherit;
+  white-space: nowrap; max-width: 11rem; overflow: hidden; text-overflow: ellipsis;
+}
+.sk-scene:hover { color: var(--ink); background: var(--surface-raised); }
+.sk-scene.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); }
+.sk-scene:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
 .sk-crumb, .sk-zoom {
   display: inline-flex; align-items: center; gap: 0.2rem;
   border: 1px solid var(--rule); border-radius: 4px;

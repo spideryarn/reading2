@@ -453,6 +453,60 @@ to build before anyone has used this. The cheap mitigations already in are that
 edges are drawn *under* the nodes, so a box is never obscured, and that edge
 labels move along the line to a clear spot.
 
+### What a browser found: two paid-for pictures nobody could reach
+
+The panel went in front of a browser at 288px and 400px, and the first thing it
+showed was not a rendering bug.
+
+**Four of the six real drawings had scenes that no node opens** — three of them
+with no `opens` anywhere at all. The model had been asked for three scenes and
+had drawn three; the artefact said three, the score said three, and the reader
+could see **one**. Two extra pictures per article, paid for, drawn, and
+unreachable, with nothing anywhere reporting it. It is the plainest silent
+success this feature has produced and it survived six runs and a cross-family
+review.
+
+Three answers, and the order matters:
+
+1. **`readSketch` records it as a fault and `scoreSketch` counts it**
+   (`unreachable`). A fault rather than a refusal: the overview is usually fine
+   and throwing it away over a missing pointer is the wrong trade. What the
+   count buys is knowing the prompt has stopped working.
+2. **The prompt says it in the imperative** — every scene after the first must
+   be named in an overview node's `opens`, with an explicit last check.
+3. **And the panel stopped depending on it.** The bar lists every scene as a
+   row of chips, so a reader reaches all of them whether the model wired a node
+   or not. `opens` is a shortcut to a scene, not the way in.
+
+The third is the one that matters, and it replaced a breadcrumb. A breadcrumb
+tells you where you have been, which is no use at all when the way *in* was
+never drawn — it is a way back from somewhere you cannot get to.
+
+### The rest of the browser pass
+
+The first screenshot showed no diagram at all, at both widths, with nothing in
+the console — and that was the **preview harness**, not the component. `.reader`
+reserves the band's width as *padding*, because the real `.mode-band` is
+`position: fixed` and sits over the top of it; an `aside` nested inside and made
+static lands in the padded content box, which is two pixels wide. Fourteen nodes
+rendered into a 0×0 svg. Worth writing down because "the diagram does not draw"
+is exactly what it looked like.
+
+What the pass then confirmed, on the Noema essay:
+
+- **At 288px the shape is legible and the words are not**, which is what Fit is
+  for and the trade the two sizes were chosen to make. Two coloured phases, the
+  fan-out and convergence, the fork, and the loop back are all readable at a
+  glance; the box text is about 5px.
+- **At 400px it reads properly** without pressing anything.
+- **Read** redraws at 760 units in a 398px scroller and scrolls in both axes;
+  the text is then full size.
+- **The card** follows the pointer and the keyboard, and the picture above it
+  does not move when it changes.
+- **Four presses of ↓** moved the selection four nodes, took the card with it,
+  and did not scroll the page.
+- **The you-are-here ring** lands on the right node for the reader's row.
+
 ### Findings taken as fair and not acted on
 
 - **`flow` overclaims.** It is ordinal: three nodes at y = 100, 100.001 and

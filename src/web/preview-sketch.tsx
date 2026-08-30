@@ -55,31 +55,46 @@ window.fetch = ((orig) =>
     return orig(input, init);
   }) as typeof window.fetch)(window.fetch);
 
+/**
+ * One band, at one width.
+ *
+ * **NOT inside a `.reader`**, which was the first version and was wrong in a way
+ * worth writing down because it looked exactly like the component being broken:
+ * `.reader` reserves the band's width as *padding*, because the real
+ * `.mode-band` is `position: fixed` and sits over the top of it. An `aside`
+ * nested in there and made `static` lands in the padded content box, which is
+ * two pixels wide — so the picture rendered fourteen nodes into a 0×0 svg and
+ * the empty state wrapped one word per line. Nothing in the console, nothing in
+ * React, and a screenshot that reads as "the diagram does not draw".
+ *
+ * So the container here is a plain box the size the band actually gets, with
+ * the two custom properties on it, and `.mode-band`'s own positioning turned
+ * off. The tokens still matter: `styles.css § sketch` does not read them, but
+ * the shell rules around it do.
+ */
 function Band({ width, slug, label }: { width: number; slug: string; label: string }) {
   return (
     <div>
       <p style={{ fontFamily: "var(--font-ui)", fontSize: "0.7rem", color: "var(--ink-faint)", margin: "0 0 0.3rem" }}>
         {label} — {width}px
       </p>
-      <div
-        className="reader"
+      <aside
+        className="mode-band diag"
         style={
           {
             "--mode-w": `${width}px`,
             "--spine-w": `${SPINE_W}px`,
+            position: "static",
             width,
-            height: 900,
+            height: 860,
+            display: "flex",
+            flexDirection: "column",
             border: "1px dashed var(--rule)",
           } as React.CSSProperties
         }
       >
-        <aside
-          className="mode-band diag"
-          style={{ position: "static", width: "100%", height: "100%", display: "flex", flexDirection: "column" }}
-        >
-          <SketchView slug={slug} blocks={BLOCKS} atRow={40} onJump={(id: BlockId) => console.log("jump", id)} />
-        </aside>
-      </div>
+        <SketchView slug={slug} blocks={BLOCKS} atRow={40} onJump={(id: BlockId) => console.log("jump", id)} />
+      </aside>
     </div>
   );
 }

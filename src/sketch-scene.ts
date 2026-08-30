@@ -670,13 +670,41 @@ export function readSketch(
   /* `opens` last, because a scene can only be resolved once every scene has
      been read — a node in the overview may open the last one in the list. */
   const sceneIds = new Set(scenes.map((s) => s.id));
+  const opened = new Set<string>();
   for (const scene of scenes) {
     for (const item of scene.items) {
       if (item.kind !== "node" || !item.opens) continue;
-      if (sceneIds.has(item.opens) && item.opens !== scene.id) continue;
+      if (sceneIds.has(item.opens) && item.opens !== scene.id) {
+        opened.add(item.opens);
+        continue;
+      }
       faults.push({ where: item.id, what: `opens "${item.opens}", which is not a scene here` });
       delete item.opens;
     }
+  }
+
+  /**
+   * **A scene nothing opens is a scene the reader can never reach.**
+   *
+   * The plainest silent success this feature has produced, and it went
+   * unnoticed through six runs: the model returns three scenes, the artefact
+   * says three scenes, the score says three scenes — and in four of those six
+   * runs, three of them with no `opens` at all, the reader could see one. Two
+   * paid-for pictures each time, drawn and unreachable, with nothing anywhere
+   * reporting it.
+   *
+   * It is a **fault, not a refusal**. The overview is usually fine and throwing
+   * it away over a missing pointer would be the wrong trade — and the panel now
+   * lists the scenes itself rather than depending on `opens`, so an artefact
+   * like this is still usable. What the count buys is knowing the prompt has
+   * stopped working, which is exactly what nobody knew for six runs.
+   */
+  for (const scene of scenes.slice(1)) {
+    if (opened.has(scene.id)) continue;
+    faults.push({
+      where: scene.id,
+      what: "no node opens this scene — nothing in the overview leads to it",
+    });
   }
 
   const sketch: Sketch = {
@@ -696,6 +724,8 @@ export function readSketch(
 
 export interface SketchScore {
   scenes: number;
+  /** Scenes after the overview that no node's `opens` points at. */
+  unreachable: number;
   nodes: number;
   /** Nodes carrying a jump the article can honour. */
   linked: number;
@@ -996,8 +1026,10 @@ export function scoreSketch(
     if (area > 0) overlap = Math.max(overlap, Math.min(1, over / area));
   }
 
+  const opened = new Set(nodes.map((n) => n.opens).filter(Boolean));
   return {
     scenes: sketch.scenes.length,
+    unreachable: sketch.scenes.slice(1).filter((sc) => !opened.has(sc.id)).length,
     nodes: nodes.length,
     linked: nodes.filter((n) => n.block).length,
     reach: total === 0 ? 1 : widest / total,

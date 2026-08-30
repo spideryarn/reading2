@@ -290,9 +290,13 @@ to compress two or three parts of the piece into one box each, and those are
 the parts a reader will want to open.
 
 So return THREE scenes: the overview, then a zoom into each of the TWO parts
-that carry the most weight and have the most going on inside them. Give each
-zoom an id, and put that id in the "opens" of the overview node it belongs to,
-so a click on that node zooms in.
+that carry the most weight and have the most going on inside them.
+
+**Every scene after the first MUST be named in the "opens" of an overview node.**
+This is not a nicety. A scene no node opens is a picture the reader cannot get
+to — you will have drawn it for nothing, and nothing in the answer will look
+wrong. Before you finish: for each zoom scene, find its id in an overview node's
+"opens". If it is not there, either put it there or drop the scene.
 
 A zoom scene follows every rule above. It draws ONE part of the article at the
 granularity the overview had no room for — the individual moves, the specific
@@ -588,7 +592,8 @@ export function summarise(run: SketchRun): string[] {
   const s = run.score;
   const flow = s.flow === null ? "n/a" : s.flow.toFixed(2);
   return [
-    `${s.scenes} scenes, ${s.nodes} nodes, ${s.linked} of them linked to a block`,
+    `${s.scenes} scenes, ${s.nodes} nodes, ${s.linked} of them linked to a block` +
+      (s.unreachable > 0 ? ` — ${s.unreachable} scene(s) no node opens` : ""),
     `flow (down-the-page vs article order): ${flow}`,
     `widest run of the article no node points into: ${(s.reach * 100).toFixed(0)}%`,
     `overlap: ${(s.overlap * 100).toFixed(1)}% of node area`,

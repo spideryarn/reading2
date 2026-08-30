@@ -205,7 +205,14 @@ describe("readSketch — what survives, and what is counted", () => {
         title: "t",
         caption: "c",
         scenes: [
-          { id: "overview", title: "s", height: 400, items: [node({ opens: "last" })] },
+          /* Both zoom scenes opened, because an unopened one is now a fault of
+             its own and this test is about forward resolution rather than that. */
+          {
+            id: "overview",
+            title: "s",
+            height: 400,
+            items: [node({ id: "a", opens: "last" }), node({ id: "b", y: 200, opens: "mid" })],
+          },
           { id: "mid", title: "m", height: 400, items: [] },
           { id: "last", title: "l", height: 400, items: [] },
         ],

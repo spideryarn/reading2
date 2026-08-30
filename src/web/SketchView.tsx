@@ -35,9 +35,15 @@
  * offered — from the card, where it is labelled — so it is available and never
  * a surprise. GPT Sol flagged the ambiguity, 2026-08-30; this is the resolution
  * and it is a guess until somebody uses it.
+ *
+ * **And `opens` is a shortcut, not the way in.** The bar lists every scene, so
+ * a reader reaches all of them whether the model wired a node to them or not —
+ * which on four of the first six real drawings it did not, three of those with
+ * no `opens` anywhere. Depending on it would have meant paying for two pictures
+ * per article that nobody could ever see.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, PenLine } from "lucide-react";
+import { LoaderCircle, Maximize2, Minimize2, PenLine } from "lucide-react";
 import { paintScene, type Painted, type PaintedNode, type Prim } from "../sketch-paint.js";
 import type { SketchNode } from "../sketch-scene.js";
 import type { Block, BlockId } from "../types.js";
@@ -121,8 +127,19 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
   const view = useSketch(slug, blockOrder);
   const { sketch } = view;
 
-  /** The scenes the reader has opened, deepest last. `[]` is the overview. */
-  const [trail, setTrail] = useState<string[]>([]);
+  /**
+   * Which scene is open — `null` is the overview.
+   *
+   * **A flat choice rather than a stack, and that is a correction.** It was a
+   * breadcrumb trail, on the assumption that the reader arrives at a zoom by
+   * pressing a node that `opens` it. Then four of six real drawings turned out
+   * to have scenes **no node opens at all**, three of them with no `opens`
+   * anywhere — so the model had paid to draw two extra pictures the reader
+   * could never reach, and a trail is a way back from somewhere you cannot get
+   * to. The scene list below is the way in, `opens` is a shortcut to it, and
+   * the picture no longer depends on the model having wired one.
+   */
+  const [open, setOpen] = useState<string | null>(null);
   const [big, setBig] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
   const [focused, setFocused] = useState(0);
@@ -132,17 +149,16 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
   /* A new picture is a new set of scene ids, so a trail into the old one points
      at nothing. Reset rather than carry: a breadcrumb naming a scene that no
      longer exists would show the overview while claiming to be somewhere else. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the identity of the sketch is what invalidates the trail, not any field of it
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the identity of the sketch is what invalidates the open scene, not any field of it
   useEffect(() => {
-    setTrail([]);
+    setOpen(null);
     setFocused(0);
   }, [sketch]);
 
   const scene = useMemo(() => {
     if (!sketch) return null;
-    const wanted = trail[trail.length - 1];
-    return (wanted && sketch.scenes.find((s) => s.id === wanted)) || sketch.scenes[0] || null;
-  }, [sketch, trail]);
+    return (open && sketch.scenes.find((s) => s.id === open)) || sketch.scenes[0] || null;
+  }, [sketch, open]);
 
   const painted: Painted | null = useMemo(() => (scene ? paintScene(scene) : null), [scene]);
 
@@ -156,7 +172,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
    * confident lie about where they are.
    */
   const here = useMemo(() => {
-    if (!painted || atRow === null || trail.length > 0) return null;
+    if (!painted || atRow === null || open !== null) return null;
     const index = new Map(blockOrder.map((id, i) => [id, i]));
     let best: { id: string; row: number } | null = null;
     for (const n of painted.nodes) {
@@ -165,7 +181,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
       if (!best || row > best.row) best = { id: n.node.id, row };
     }
     return best?.id ?? null;
-  }, [painted, atRow, blockOrder, trail.length]);
+  }, [painted, atRow, blockOrder, open]);
 
   const shown = hover ?? (painted?.nodes[focused]?.node.id ?? null);
   const card = painted?.nodes.find((n) => n.node.id === shown)?.node ?? null;
@@ -174,7 +190,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
     (n: PaintedNode) => {
       /* `opens` wins — see the header. */
       if (n.node.opens) {
-        setTrail((t) => [...t, n.node.opens as string]);
+        setOpen(n.node.opens);
         setFocused(0);
         return;
       }
@@ -203,12 +219,13 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
         e.preventDefault();
         const target = painted.nodes[focused];
         if (target) activate(target);
-      } else if (e.key === "Escape" && trail.length > 0) {
+      } else if (e.key === "Escape" && open !== null) {
         e.preventDefault();
-        setTrail((t) => t.slice(0, -1));
+        setOpen(null);
+        setFocused(0);
       }
     },
-    [painted, focused, activate, trail.length],
+    [painted, focused, activate, open],
   );
 
   if (view.status === "loading") {
@@ -277,15 +294,37 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
   return (
     <div className="sk">
       <div className="sk-bar">
-        {trail.length > 0 ? (
-          <button
-            type="button"
-            className="sk-crumb"
-            onClick={() => setTrail((t) => t.slice(0, -1))}
-            aria-label="Back to the overview"
-          >
-            <ChevronLeft size={13} /> {sketch.scenes[0]?.title || "Overview"}
-          </button>
+        {sketch.scenes.length > 1 ? (
+          /* **The scenes as a row, not a breadcrumb.** A breadcrumb only tells
+             you where you have been, which is no use when the model has drawn
+             two pictures and wired nothing to reach them. This says how many
+             there are and gets you to any of them, and it keeps working when
+             `opens` is missing — which it is, on four of the six real drawings
+             so far. One tab stop and arrows, like every other switcher here. */
+          // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern, and the same call DiagramPanel's kind switcher makes
+          <div className="sk-scenes" role="radiogroup" aria-label="Which part of the picture">
+            {sketch.scenes.map((sc, i) => {
+              const on = i === 0 ? open === null : open === sc.id;
+              return (
+                // biome-ignore lint/a11y/useSemanticElements: see above
+                <button
+                  key={sc.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  tabIndex={on ? 0 : -1}
+                  className={`sk-scene${on ? " on" : ""}`}
+                  title={sc.caption ?? sc.title}
+                  onClick={() => {
+                    setOpen(i === 0 ? null : sc.id);
+                    setFocused(0);
+                  }}
+                >
+                  {i === 0 ? sketch.title : sc.title}
+                </button>
+              );
+            })}
+          </div>
         ) : (
           <span className="sk-title" title={sketch.caption}>
             {sketch.title}
