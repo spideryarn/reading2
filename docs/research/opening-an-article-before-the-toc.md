@@ -647,6 +647,75 @@ versus cheap-with-more; a cheap first pass revised by a capable model; and waves
 wave structure interact** — once L2 is a small call over twenty blocks it may not need `high` at all —
 so they must be evaluated together rather than separately.
 
+## 7b. Measured 2026-08-30: the model is stable exactly where we do not need it
+
+**The noise floor, and it is the most consequential number this work produced.** The eval ran the
+shipped recipe four times over three documents (`evals/results/toc-structure/`, reconciled against
+OpenRouter's own records; $3.96):
+
+```
+document      headings   parts across runs   L1 self-agreement   verdict
+constitution  36         7, 7                100%                rock stable, MADs ~ 0
+fowler        8 (all front-matter)  8, 7, 8, 3   13-44%          does not agree with itself
+writes        1          3, 5, 5             20-60%              unstable
+```
+
+**On an unheaded article the shipped recipe carved the same blocks into 8, 7, 8 and 3 parts.** Not
+four similar trees — four different articles' worth of structure, from byte-identical input.
+
+Set beside § 2's free-tree result, that inverts the case this document was written to weigh:
+
+- **Where headings exist**, the model is stable **and arm zero already matches it at L1**. We are
+  paying ~163s and ~$0.46 for a carving available instantly and for nothing.
+- **Where headings do not exist**, the model is the least reliable component in the pipeline. There
+  is no good tree to wait for.
+
+**So there is no case in which waiting for the structure call buys a better top-level carving.**
+That is a stronger argument for B than anything reasoned out above it, and it was not available
+without spending the money.
+
+It also **relocates the whole eval**: arm comparisons belong on unheaded documents, with repeats,
+because that is the only place an arm could beat the free tree — and it is exactly where the noise
+floor is widest. A single run per arm on a fowler-like document measures noise.
+
+### The throws are two families, and both already have a fix written
+
+4 of 13 attempts threw (**31%**), and the anatomy is bimodal by *kind*, not size — so no mean:
+
+| family | count | shape | fix |
+|---|---|---|---|
+| tiling | 2 | **gaps of exactly one block**, both of them | R2 in § 8: `child[0] = cursor` |
+| `sourceHeading` | 2 | claims outside the node's range, `constitution` only | R3 in § 8: drop the claim, keep the tree |
+
+**Every tiling failure anyone has observed — these two plus the two in
+[the-article-with-one-heading.md](../postmortems/the-article-with-one-heading.md) — is off by one
+block.** That is decisively the repair-sized world, and it means the two small fixes already written
+up would together have recovered **all four throws**, turning a 31% failure rate into zero on this
+evidence.
+
+Throws cluster by document (constitution 3/5, writes 1/4, fowler 0/4), so the rate is a property of
+the article rather than uniformly of the recipe.
+
+### The cost model was wrong by 3x, and waves are the casualty
+
+The full eight-arm screen is **$29 raw, ~$42 with the throw loading**, against the $9-13 first
+estimated. Two causes, and the second matters far beyond the eval:
+
+- the throw rate, which nobody had measured;
+- **a floor of ~6,300 reasoning tokens per call, regardless of how small the question is.**
+
+That floor is charged **per call**, so a three-level wave design paying it across ~39 calls instead
+of once is **dramatically more expensive per article in production**, not merely harder to evaluate.
+Waves buy latency and sell cost. § 6's assessment of them stands on the depth argument and on
+latency; its silence on cost was wrong.
+
+### The heading rule generalises
+
+Sol's finding 4 was that the rule's thresholds were fitted to seven documents and skill could not be
+told from memorisation. The held-out five now answer it: the carvings are structurally sound, every
+boundary lands on a heading, and **the 10/20/40 plateau holds on four of five documents the rule had
+never seen**. Fitted, but not memorised.
+
 ## 8. Prioritised — revised twice
 
 Sol declined to keep A → B → C, and having checked its reasoning I agreed: A is a 12% cut, not 31%,
