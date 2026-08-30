@@ -786,8 +786,31 @@ Reading an article, the shelf, comments, **chat and meaning-search** all come
 from Postgres now — the last two since step 10 landed on 2026-08-26. What still
 writes to a local filesystem, which a serverless host does not have:
 
-- **adding an article** ([`src/jobs.ts`](../../src/jobs.ts)) — and this one is
-  more than storage: the queue assumes one long-lived process.
+- **adding an article** — **fixed on 2026-08-30, and everything below it is the
+  history of a wall that is no longer there.** An article pasted at the live site
+  is fetched, extracted, split, ToC'd, published and readable. Production
+  `a63a5592`; the plan is
+  [v1-imports-on-vercel.md](../plans/v1-imports-on-vercel.md).
+
+  Three things made it work, and none of them was the storage rewrite this
+  section spent three days pointing at. The root became explicit and **scoped to
+  one job** rather than derived from a bundled module's location; **one claim
+  walks the whole job** in one invocation, so the steps share a scratch directory
+  instead of each landing on a different disk; and a decorator on the session
+  copies what the stages wrote into a draft and **publishes it in the same
+  transaction that finishes the job** — because until then a job could go `done`
+  having published nothing at all, which nothing in this file had noticed.
+
+  **What is still broken, stated plainly:** re-running one step against an
+  existing article. A `{steps:["arc"]}` job gets its own job id and therefore its
+  own empty scratch, and cannot see what the ingest wrote — so opening an article
+  that has no arc fails with the same `ENOENT` one directory deeper. The article
+  reads fine without it.
+
+  The rest of this entry is kept because the diagnosis took four wrong answers to
+  reach, and each wrong answer is written below in the order it was believed.
+
+- *(historical)* the queue assumes one long-lived process.
 
   **Confirmed on the live site, 2026-08-27**, and worth recording as the exact
   string somebody will one day search for. Everything in front of the pipeline
