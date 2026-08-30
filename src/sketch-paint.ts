@@ -93,12 +93,23 @@ export interface PaintedNode {
 export interface Painted {
   width: number;
   height: number;
-  /** Regions. Drawn first so everything sits on them. */
+  /** The regions' own panels. Drawn first, so everything sits on them. */
   behind: Prim[];
-  /** Edges, free paths and edge labels. Under the nodes, over the regions. */
+  /** Edges, free paths. Under the nodes, over the region panels. */
   links: Prim[];
   nodes: PaintedNode[];
-  /** Free labels. Over everything, because they are captions on the whole. */
+  /**
+   * Region labels, edge labels and free labels — everything that is words
+   * rather than shape.
+   *
+   * **Region labels are here rather than in `behind`, and that is a fix.** A
+   * region's panel belongs under the edges, so a line crosses it the way a line
+   * crosses a background; its *name* does not, and a connector drawn over
+   * "WHO WILL ACT ON IT" made the reader unable to tell whether the line
+   * terminated there. A fresh-eyes pass on three articles called it the single
+   * most valuable change, 2026-08-30. Words go on top; only the panel stays
+   * underneath.
+   */
   front: Prim[];
 }
 
@@ -544,7 +555,8 @@ function paintPath(p: SketchPath): Prim[] {
   return out;
 }
 
-function paintRegion(r: SketchRegion): Prim[] {
+/** A region's panel (under the edges) and its label (over them). */
+function paintRegion(r: SketchRegion): { panel: Prim[]; label: Prim[] } {
   const tone = r.tone;
   const out: Prim[] = [];
   if (r.style === "bracket") {
@@ -567,19 +579,21 @@ function paintRegion(r: SketchRegion): Prim[] {
       ...(tone !== undefined && { tone }),
     });
   }
-  if (r.label) {
-    out.push({
-      t: "text",
-      x: r.x + 10,
-      y: r.y + 15,
-      text: r.label,
-      px: 11,
-      anchor: "start",
-      cls: "sk-region-label",
-      ...(tone !== undefined && { tone }),
-    });
-  }
-  return out;
+  const label: Prim[] = r.label
+    ? [
+        {
+          t: "text",
+          x: r.x + 10,
+          y: r.y + 15,
+          text: r.label,
+          px: 11,
+          anchor: "start",
+          cls: "sk-region-label",
+          ...(tone !== undefined && { tone }),
+        },
+      ]
+    : [];
+  return { panel: out, label };
 }
 
 function paintLabel(l: SketchLabel): Prim[] {
@@ -621,7 +635,11 @@ export function paintScene(scene: SketchScene): Painted {
   const front: Prim[] = [];
 
   for (const item of scene.items) {
-    if (item.kind === "region") behind.push(...paintRegion(item));
+    if (item.kind === "region") {
+      const painted = paintRegion(item);
+      behind.push(...painted.panel);
+      front.push(...painted.label);
+    }
     else if (item.kind === "edge") {
       const painted = paintEdge(item, byId, scene.height, nodes);
       links.push(...painted.under);

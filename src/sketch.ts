@@ -162,8 +162,14 @@ THE FIVE THINGS YOU CAN DRAW
    size:  xs | sm | md | lg. sm for ordinary nodes, md or lg for the two or
           three nodes that carry the whole picture, xs for the crowd.
    tone:  OPTIONAL 0–7. A GROUP marker and nothing else — nodes that belong
-          together get the same number. Never "red means bad". If the picture
-          has no groups, leave it off everywhere and it will all be one colour.
+          together get the SAME number. Never "red means bad".
+
+          **If every node has a different tone you are using colour as
+          decoration, and it is worse than no colour**: a reader looking for
+          what the hues mean finds there is nothing to find, and stops trusting
+          the ones that do mean something. Two to four groups is the useful
+          range. If the piece has no groups, leave tone off everywhere and the
+          whole picture is one colour, which is a fine picture.
    block: the id of the block this node stands for, from the article below.
           Clicking the node takes the reader there, so this is what makes the
           picture navigable. Put one on EVERY node that stands for a passage.

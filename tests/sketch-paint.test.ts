@@ -361,6 +361,27 @@ describe("wrap", () => {
 });
 
 describe("what is drawn, and in what order", () => {
+  it("draws a region's panel under the edges and its NAME over them", () => {
+    /* A line crossing a panel is a line crossing a background. A line crossing
+       the panel's name made a reader unable to tell whether the connector
+       terminated there — a fresh-eyes pass over three articles called it the
+       single most valuable change, 2026-08-30. Words on top; only the panel
+       underneath. */
+    const painted = paintScene(
+      scene([
+        { kind: "region", x: 10, y: 10, w: 700, h: 400, style: "band", label: "WHO WILL ACT ON IT" },
+        node({ id: "a", x: 40, y: 60 }),
+        node({ id: "b", x: 40, y: 300 }),
+        { kind: "edge", from: "a", to: "b", via: "straight", line: "solid", arrow: "end" },
+      ]),
+    );
+    const isLabel = (p: Prim) => p.cls.includes("sk-region-label");
+    expect(painted.behind.some(isLabel)).toBe(false);
+    expect(painted.front.filter(isLabel)).toHaveLength(1);
+    // The panel itself stays underneath, where a line may cross it freely.
+    expect(painted.behind.some((p) => p.cls.includes("sk-region") && p.t === "rect")).toBe(true);
+  });
+
   it("puts regions behind, edges under the nodes, and free labels in front", () => {
     const painted = paintScene(
       scene([

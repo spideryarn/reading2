@@ -12,11 +12,8 @@
 <text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">returning to the opening stakes.</text>
 <text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
 <g transform="translate(0 65.9)"><rect x="20" y="130" width="720" height="240" rx="8" fill="rgba(232,112,58,0.07)" stroke="rgba(232,112,58,0.24)" stroke-width="1"/>
-<text x="30" y="145" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">WHY WE'RE TEMPTED TO SEE IT</text>
 <rect x="20" y="485" width="720" height="270" rx="8" fill="rgba(47,191,149,0.07)" stroke="rgba(47,191,149,0.24)" stroke-width="1"/>
-<text x="30" y="500" font-size="11" text-anchor="start" fill="rgba(47,191,149,0.95)" font-weight="500" letter-spacing="0.07em">FOUR ARGUMENTS AGAINST THAT ASSUMPTION</text>
 <rect x="20" y="880" width="720" height="150" rx="8" fill="rgba(240,228,66,0.07)" stroke="rgba(240,228,66,0.24)" stroke-width="1"/>
-<text x="30" y="895" font-size="11" text-anchor="start" fill="rgba(240,228,66,0.95)" font-weight="500" letter-spacing="0.07em">TWO DISTINCT RISKS</text>
 <path d="M380 110 C380 137 140 143 140 170" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
 <polygon points="140,170 136.5,160 143.5,160" fill="rgba(201,201,201,0.8)" stroke="none"/>
 <path d="M380 110 C380 137 380 143 380 170" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -96,9 +93,10 @@
 <g>
 <title>Assumes: computation = consciousness — computational functionalism — The whole case for conscious AI rests on this usually-unexamined assumption. — → spya-d3g67c</title>
 <polygon points="380,395 480,427.5 380,460 280,427.5" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
-<text x="380" y="417.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Assumes: computation =</text>
-<text x="380" y="432.972" font-size="12" text-anchor="middle" fill="#f7f7f7">consciousness</text>
-<text x="380" y="449.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">computational functionalism</text>
+<text x="380" y="410.472" font-size="12" text-anchor="middle" fill="#f7f7f7">Assumes:</text>
+<text x="380" y="425.472" font-size="12" text-anchor="middle" fill="#f7f7f7">computation =</text>
+<text x="380" y="440.472" font-size="12" text-anchor="middle" fill="#f7f7f7">consciousness</text>
+<text x="380" y="456.84" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">computati-</text>
 </g>
 <g>
 <title>Brains aren't software on hardware — No clean separation of mindware and wetware exists in real brains. — → spya-sk4su6</title>
@@ -133,8 +131,8 @@
 <g>
 <title>Given the uncertainty, don't build it — Deliberately creating conscious AI would risk new, uncontrollable suffering. — → spya-e7fdmb</title>
 <polygon points="380,790 480,822.5 380,855 280,822.5" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
-<text x="380" y="818.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Given the uncertainty, don't</text>
-<text x="380" y="833.9" font-size="12" text-anchor="middle" fill="#f7f7f7">build it</text>
+<text x="380" y="818.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Given the uncertainty,</text>
+<text x="380" y="833.9" font-size="12" text-anchor="middle" fill="#f7f7f7">don't build it</text>
 </g>
 <g>
 <title>If AI really is conscious: disaster — new suffering, hard to switch off — Rights would make dangerous systems harder to control or shut down. — → spya-vs0vpj</title>
@@ -152,10 +150,13 @@
 <g>
 <title>Recover a soul that's more breath than machine — embodied, not disembodied rationality — Mistaking algorithms for minds means overestimating them and underestimating ourselves. — → spya-zv36xq</title>
 <ellipse cx="380" cy="1115" rx="140" ry="45" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
-<text x="380" y="1103.09" font-size="15" text-anchor="middle" fill="#f7f7f7">Recover a soul that's more breath</text>
-<text x="380" y="1121.84" font-size="15" text-anchor="middle" fill="#f7f7f7">than machine</text>
+<text x="380" y="1103.09" font-size="15" text-anchor="middle" fill="#f7f7f7">Recover a soul that's more</text>
+<text x="380" y="1121.84" font-size="15" text-anchor="middle" fill="#f7f7f7">breath than machine</text>
 <text x="380" y="1142.3" font-size="11.4" text-anchor="middle" fill="#8f8f8f">embodied, not disembodied rationality</text>
 </g>
+<text x="30" y="145" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">WHY WE'RE TEMPTED TO SEE IT</text>
+<text x="30" y="500" font-size="11" text-anchor="start" fill="rgba(47,191,149,0.95)" font-weight="500" letter-spacing="0.07em">FOUR ARGUMENTS AGAINST THAT ASSUMPTION</text>
+<text x="30" y="895" font-size="11" text-anchor="start" fill="rgba(240,228,66,0.95)" font-weight="500" letter-spacing="0.07em">TWO DISTINCT RISKS</text>
 <rect x="610.2" y="704.7350400000003" width="145.8" height="14" rx="3" fill="#252525" stroke="none"/>
 <text x="683.1" y="714.7350400000003" font-size="10" text-anchor="middle" fill="#8f8f8f">echoes the opening warning</text></g>
 </g>
@@ -273,8 +274,8 @@
 <g>
 <title>Assumption: computation suffices — Computational functionalism, so ingrained it's rarely recognized as an assumption. — → spya-wepmnr</title>
 <ellipse cx="380" cy="70" rx="100" ry="30" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
-<text x="380" y="65.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Assumption: computation</text>
-<text x="380" y="84.25" font-size="15" text-anchor="middle" fill="#f7f7f7">suffices</text>
+<text x="380" y="65.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Assumption:</text>
+<text x="380" y="84.25" font-size="15" text-anchor="middle" fill="#f7f7f7">computation suffices</text>
 </g>
 <g>
 <title>Turing: software is hardware-independent — A universal Turing machine can run any algorithm on any suitable substrate. — → spya-cf70dt</title>

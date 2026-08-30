@@ -226,6 +226,64 @@ for the harness.
    complain, which is the same trap `diagram.md § Two things that are wrong in a
    way you cannot see` already records.
 
+## What a reader who had not read the articles made of them
+
+A Sonnet subagent was given the three overview PNGs and **nothing else** — no
+outline, no summary, not even the articles' titles beyond what the pictures say
+— and asked what each piece argues, what shape it is, and where it would click.
+Then it checked two of them against the real outlines. 2026-08-30.
+
+**It read all three correctly.** On the Noema essay, from the picture alone:
+*"AI probably isn't conscious yet, people are fooled into thinking otherwise,
+and treating it as conscious (or building it to be) is dangerous."* On the
+scaling hypothesis: *"GPT-3's results show that scale alone produces
+intelligence, and this will keep paying off if anyone commits to pushing it
+further."* Both are the article. That is the thing this feature is for, and it
+is the first evidence that it works.
+
+**Fidelity held, and the losses are compression rather than invention** — which
+is the distinction that matters, because a picture that invents an argument is
+worse than no picture. Two were found, and both are real:
+
+- The Noema picture draws the two ethical risks as **symmetric alternatives**,
+  where the article argues the bias is *asymmetric* — "human biases toward AI
+  are more likely to produce false positives than false negatives". The picture
+  flattens an emphasis the piece actually makes.
+- The scaling picture's single box *"Critics keep being wrong"* carries one of
+  the two arguments in that section and drops the other — the philosophical one
+  about reductionist dismissal.
+
+Neither is a fabricated relationship. Both are a 25-node picture of a 300-block
+article doing what a 25-node picture does. Worth knowing rather than fixing.
+
+### Three findings acted on
+
+- **A connector crossing a region's own name** made it impossible to tell
+  whether the line terminated there. Called the single most valuable change.
+  A region's *panel* belongs under the edges, the way a background does; its
+  *name* does not. Fixed — words on top, panel underneath.
+- **On the constitution, colour was decoration.** Every box a different hue with
+  no key, which is precisely the misuse [colour-scales.md](../project/colour-scales.md)
+  forbids: a reader looking for what the hues mean finds there is nothing to
+  find, and stops trusting the ones that do mean something. The other two
+  pictures used two and three groups and the evaluator called the colour there
+  "doing real work". The prompt now says so in those words.
+- **The constitution's chain hid that it was a list of elaborations.** Its boxes
+  restate the four priorities set out above them rather than following from
+  them, and drawn as one descending chain that has to be read box by box to see.
+  Not fixed — it is a prompt problem and the honest test is whether the next
+  draw does better.
+
+### And two left open
+
+- **No key to the shapes.** *"No legend says what hexagon-vs-rectangle-vs-diamond
+  means."* True, and a legend costs canvas that the picture is using. The likely
+  answer is the footer card rather than a legend, since the shapes are a
+  convention (diamond = a question, note = an aside) rather than a code.
+- **A long dashed connector is easy to lose**, even with a label on it. The
+  label sits on the line and the line is faint; the eye does not always join
+  them.
+
 ## What GPT Sol's review changed
 
 The plan and the built code went to `gpt-5.6-sol` at high effort

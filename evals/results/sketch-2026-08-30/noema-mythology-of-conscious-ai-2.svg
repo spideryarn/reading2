@@ -31,8 +31,8 @@
 <g>
 <title>Assumption: computation suffices — Computational functionalism, so ingrained it's rarely recognized as an assumption.</title>
 <ellipse cx="380" cy="70" rx="100" ry="30" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
-<text x="380" y="65.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Assumption: computation</text>
-<text x="380" y="84.25" font-size="15" text-anchor="middle" fill="#f7f7f7">suffices</text>
+<text x="380" y="65.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Assumption:</text>
+<text x="380" y="84.25" font-size="15" text-anchor="middle" fill="#f7f7f7">computation suffices</text>
 </g>
 <g>
 <title>Turing: software is hardware-independent — A universal Turing machine can run any algorithm on any suitable substrate.</title>
