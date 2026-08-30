@@ -91,6 +91,7 @@ import type {
   ArtifactMap,
   ArtifactOutcome,
   ArtifactParts,
+  ArtifactReads,
   ArtifactStore,
   StepStamp,
 } from "./artifacts.js";
@@ -1332,6 +1333,38 @@ export function readOnlyPgArtifacts(ref: JobDraftRef, exec: Executor): ReadOnlyA
 }
 
 /**
+ * The six reads a **stage** may make, over any executor.
+ *
+ * `ReadOnlyArtifactStore`'s four plus the two that only the stages inheriting
+ * identity from their own previous artefact ask for. It is the Postgres half of
+ * `ArtifactReads` (src/store/artifacts.ts), which is the type the run phase gets
+ * instead of the whole mutable store — so `write`, `beginStep` and `finishStep`
+ * are not merely undeclared here, they are unreachable.
+ *
+ * **`readBaseline` is a method, not an arrow property**, and so is `read` inside
+ * the view this spreads. Both are generic over `ArtifactKind`, and the arrow
+ * form loses the type parameter and hands every caller back `unknown` — the
+ * mistake `readsOf` in src/store/session.ts already wrote down.
+ *
+ * `Db` is fine here for the same reason it is fine for the read-only view: a
+ * read that sees a slightly older snapshot than the write that follows it is the
+ * ordinary state of a pipeline deciding what to skip, and the fenced write is
+ * what makes the decision safe.
+ */
+export function readsPgArtifacts(ref: JobDraftRef, exec: Executor): ArtifactReads {
+  return {
+    ...readOnlyPgArtifacts(ref, exec),
+    readBaseline<K extends ArtifactKind>(slug: string, step: StepName, kind: K) {
+      return baselineOutcome(ref, exec, slug, step, kind);
+    },
+    async hasEarlierBlocks(slug: string) {
+      requireBound(ref, slug);
+      return articleHasPublishedBlocks(exec, ref.articleId);
+    },
+  };
+}
+
+/**
  * The whole store, bound to one transaction.
  *
  * **`tx`, and there is no overload taking a `Db`.** An artefact write that
@@ -1365,17 +1398,12 @@ export function readOnlyPgArtifacts(ref: JobDraftRef, exec: Executor): ReadOnlyA
 export function pgArtifactsIn(ref: JobDraftRef, tx: Tx): ArtifactStore {
   const job = { id: ref.jobId, attemptId: ref.attemptId };
   return {
-    ...readOnlyPgArtifacts(ref, tx),
-    /* Not in the read-only view, and that is a scope decision rather than a
-       technical one: the only callers are the two stages that inherit ids from
-       their own previous artefact, and both run inside the job's transaction.
-       Widening the view to something nothing outside it asks for would make the
-       four questions it names into five with no fifth caller. */
-    readBaseline: (slug, step, kind) => baselineOutcome(ref, tx, slug, step, kind),
-    async hasEarlierBlocks(slug) {
-      requireBound(ref, slug);
-      return articleHasPublishedBlocks(tx, ref.articleId);
-    },
+    /* All six reads, from the one definition. `readBaseline` and
+       `hasEarlierBlocks` are still absent from `ReadOnlyArtifactStore`, which is
+       a scope decision rather than a technical one: the only callers are the two
+       stages that inherit ids from their own previous artefact, and both run
+       inside the job's transaction. */
+    ...readsPgArtifacts(ref, tx),
     write: (slug, step, parts, stamp) => writeArtefacts(ref, tx, slug, step, parts, stamp),
     async beginStep(slug, step) {
       requireBound(ref, slug);

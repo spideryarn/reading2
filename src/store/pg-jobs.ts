@@ -50,6 +50,22 @@ import {
 
 type Row = typeof jobs.$inferSelect;
 
+type Db = ReturnType<typeof getDb>;
+/** A transaction, spelled the way src/store/pg-revisions.ts already spells it. */
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+/**
+ * Either will do for a job transition.
+ *
+ * Not `Tx`-only, which is the rule src/store/artifacts-pg.ts sets for the
+ * artefact *write*, and the difference is worth saying. An artefact write is
+ * several statements that must land together, so a default executor there would
+ * make forgetting the caller's transaction both compile and succeed. A job
+ * transition is one fenced `UPDATE`: it is atomic on its own, which is why
+ * `rawPgJobStore` may keep passing the pool. It only needs a transaction when
+ * something *else* — the artefacts and the publication — has to land with it.
+ */
+type Executor = Db | Tx;
+
 /** The three statuses a job never leaves. */
 const TERMINAL = ["done", "error", "cancelled"] as const;
 const ACTIVE = ["queued", "running"] as const;
@@ -249,81 +265,12 @@ const rawPgJobStore: JobStore = {
     return { kind: "busy", why: "another request is inside this job" };
   },
 
-  async releaseStep(
-    id: string,
-    attempt: string,
-    steps: JobStep[],
-    outcome: StepOutcome,
-  ): Promise<Job> {
-    const db = getDb();
-    const moved = await db
-      .update(jobs)
-      .set({
-        /* **Back to `queued`, and the token cleared.** One claim covers one
-           step. Holding it across requests would mean the next advance — a
-           different request with a different token — is told `busy` until the
-           lease expires, which is the endpoint deadlocking itself on the happy
-           path. GPT Sol, 2026-08-27. */
-        /* **Back to `queued`, and the token cleared** — unless Stop arrived while
-           this step was running, in which case the release is where the cancel
-           lands. Releasing to `queued` with `cancelling` still set is a state
-           nothing moves on: the next claim reads the flag, answers `stopping`,
-           and does so for ever. GPT Sol found it from the cross-instance end —
-           instance B presses Stop on a job instance A is inside — and there is
-           a same-instance version of it too. Deciding here, in the statement
-           that already knows, is what closes both. */
-        status: sql`case when ${jobs.cancelling} then 'cancelled' else 'queued' end`,
-        cancelling: false,
-        finishedAt: sql`case when ${jobs.cancelling} then now() else ${jobs.finishedAt} end`,
-        attemptId: null,
-        leaseExpiresAt: null,
-        steps,
-        ...(outcome.title !== undefined && { title: outcome.title }),
-      })
-      .where(fence(id, attempt))
-      .returning();
-    if (!moved[0]) throw new StaleAttemptError(id);
-    return toJob(moved[0]);
+  releaseStep(id: string, attempt: string, steps: JobStep[], outcome: StepOutcome): Promise<Job> {
+    return releaseStepIn(getDb(), id, attempt, steps, outcome);
   },
 
-  async finish(id: string, attempt: string, ending: JobEnding): Promise<Job> {
-    const db = getDb();
-    /**
-     * **A Stop that arrives during the *last* step does not un-finish the job,
-     * and that asymmetry with `releaseStep` is deliberate.**
-     *
-     * GPT Sol flagged that `releaseStep` settles a cancellation and this does
-     * not. It is a real difference and it is the right one. `releaseStep` runs
-     * when there is work left: the reader asked for it to stop, and it stops.
-     * This runs when there is none — the last step succeeded, the artefacts are
-     * written and the article is on the shelf. Calling that `cancelled` would
-     * be a lie about a thing the reader can see, and it would put a Retry
-     * button on a job with nothing left to do.
-     *
-     * So the flag is cleared and the ending stands. Written down here because
-     * the two functions reading the same column and answering differently is
-     * exactly what a later reader would take for a bug.
-     */
-    const moved = await db
-      .update(jobs)
-      .set({
-        status: ending.status,
-        steps: ending.steps,
-        attemptId: null,
-        leaseExpiresAt: null,
-        cancelling: false,
-        finishedAt: new Date(),
-        error: ending.error ?? null,
-        /* Deleted rather than left alone when there is no kind, so the field
-           always describes *this* failure. A stale kind hides a button rather
-           than merely being untidy. */
-        failureKind: ending.failureKind ?? null,
-        ...(ending.title !== undefined && { title: ending.title }),
-      })
-      .where(fence(id, attempt))
-      .returning();
-    if (!moved[0]) throw new StaleAttemptError(id);
-    return toJob(moved[0]);
+  finish(id: string, attempt: string, ending: JobEnding): Promise<Job> {
+    return finishIn(getDb(), id, attempt, ending);
   },
 
   async failExpired(now: Date = new Date()): Promise<number> {
@@ -444,6 +391,127 @@ const rawPgJobStore: JobStore = {
     return gone.length;
   },
 };
+
+/* ------------------------------------- the two settlements, on an executor -- */
+
+/**
+ * **`releaseStepIn` and `finishIn` are outside `guardDbStore`, and that is the
+ * one thing to know before calling either of them.**
+ *
+ * A raw Drizzle error carries the query text *and its bound parameters* in
+ * `Error.message`, and on 2026-08-27 one of them rendered in red on the
+ * homepage under the Add box, because `src/jobs.ts` had selected the unguarded
+ * store (see the comment on `rawPgJobStore`). `guardDbStore` scrubs that, and it
+ * wraps **own enumerable function-valued properties of an object** — so a free
+ * function exported from a module is not covered by it and cannot be.
+ *
+ * These are exported anyway, because the transactional store session
+ * (docs/plans/delete-the-importer.md § D1b) has to settle the job inside the
+ * *artefact* transaction, and a method that calls `getDb()` for itself binds to
+ * nothing. Injecting the public `JobSettles` capability was the design the
+ * review rejected for exactly that reason.
+ *
+ * **So the scrubbing has to be re-provided by the caller, and here is where:**
+ * the session constructs its returned object through `guardDbStore`, the same
+ * way `pgJobStore` does at the foot of this file. Anything else calling these
+ * two directly is unprotected and must not be on a request path. Nothing in
+ * this file's own callers loses anything — `rawPgJobStore.releaseStep` and
+ * `.finish` still go through the wrapper, because the wrapper is applied to the
+ * store object and not to the statement.
+ */
+
+/**
+ * Hand the job back to the queue with this step's outcome recorded — or, if a
+ * Stop landed while the step ran, end it as cancelled.
+ */
+export async function releaseStepIn(
+  exec: Executor,
+  id: string,
+  attempt: string,
+  steps: JobStep[],
+  outcome: StepOutcome,
+): Promise<Job> {
+  const moved = await exec
+    .update(jobs)
+    .set({
+      /* **Back to `queued`, and the token cleared.** One claim covers one
+         step. Holding it across requests would mean the next advance — a
+         different request with a different token — is told `busy` until the
+         lease expires, which is the endpoint deadlocking itself on the happy
+         path. GPT Sol, 2026-08-27. */
+      /* **Back to `queued`, and the token cleared** — unless Stop arrived while
+         this step was running, in which case the release is where the cancel
+         lands. Releasing to `queued` with `cancelling` still set is a state
+         nothing moves on: the next claim reads the flag, answers `stopping`,
+         and does so for ever. GPT Sol found it from the cross-instance end —
+         instance B presses Stop on a job instance A is inside — and there is
+         a same-instance version of it too. Deciding here, in the statement
+         that already knows, is what closes both. */
+      status: sql`case when ${jobs.cancelling} then 'cancelled' else 'queued' end`,
+      cancelling: false,
+      finishedAt: sql`case when ${jobs.cancelling} then now() else ${jobs.finishedAt} end`,
+      attemptId: null,
+      leaseExpiresAt: null,
+      steps,
+      ...(outcome.title !== undefined && { title: outcome.title }),
+    })
+    .where(fence(id, attempt))
+    .returning();
+  if (!moved[0]) throw new StaleAttemptError(id);
+  /* The **actual** settlement, not the one that was asked for: the `case`
+     above may have answered `cancelled`, and a caller that assumed `queued`
+     because it called "release" would report the wrong thing to the reader.
+     GPT Sol, 2026-08-29, docs/plans/delete-the-importer-d1b-design-sol.md
+     finding 1 — which is why this returns the row rather than `void`, and
+     always did. */
+  return toJob(moved[0]);
+}
+
+/**
+ * End the job, for good.
+ *
+ * **A Stop that arrives during the *last* step does not un-finish the job, and
+ * that asymmetry with `releaseStepIn` is deliberate.**
+ *
+ * GPT Sol flagged that `releaseStep` settles a cancellation and this does not.
+ * It is a real difference and it is the right one. `releaseStep` runs when there
+ * is work left: the reader asked for it to stop, and it stops. This runs when
+ * there is none — the last step succeeded, the artefacts are written and the
+ * article is on the shelf. Calling that `cancelled` would be a lie about a thing
+ * the reader can see, and it would put a Retry button on a job with nothing left
+ * to do.
+ *
+ * So the flag is cleared and the ending stands. Written down here because the
+ * two functions reading the same column and answering differently is exactly
+ * what a later reader would take for a bug.
+ */
+export async function finishIn(
+  exec: Executor,
+  id: string,
+  attempt: string,
+  ending: JobEnding,
+): Promise<Job> {
+  const moved = await exec
+    .update(jobs)
+    .set({
+      status: ending.status,
+      steps: ending.steps,
+      attemptId: null,
+      leaseExpiresAt: null,
+      cancelling: false,
+      finishedAt: new Date(),
+      error: ending.error ?? null,
+      /* Deleted rather than left alone when there is no kind, so the field
+         always describes *this* failure. A stale kind hides a button rather
+         than merely being untidy. */
+      failureKind: ending.failureKind ?? null,
+      ...(ending.title !== undefined && { title: ending.title }),
+    })
+    .where(fence(id, attempt))
+    .returning();
+  if (!moved[0]) throw new StaleAttemptError(id);
+  return toJob(moved[0]);
+}
 
 /**
  * **The fence, in one place so that no transition can be written without it.**

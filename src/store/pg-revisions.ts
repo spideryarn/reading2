@@ -353,6 +353,62 @@ async function lockArticle(
 }
 
 /**
+ * The article row for this slug, **locked** — created first if it is not there.
+ *
+ * `lockArticle` can only lock a row that exists, and "there is no row yet" is
+ * the ordinary state of a first ingest. That is fine for a reader; it is not
+ * fine for the lock order, because *article lock before job lock, everywhere*
+ * cannot be kept by a caller that had nothing to lock. So this makes the row
+ * exist, and a caller that goes on to refuse the job simply rolls the insert
+ * back with the rest of its transaction.
+ *
+ * It was `beginDraftIn`'s opening block until 2026-08-29 and moved out unchanged
+ * when `openOrBeginJobDraft` came to need the same thing one step earlier. A
+ * fresh insert is locked by definition: nobody else can see the row until this
+ * transaction commits.
+ */
+async function lockOrCreateArticle(
+  tx: Tx,
+  slug: string,
+): Promise<typeof articles.$inferSelect> {
+  const found = await lockArticle(tx, slug);
+  if (found) return found;
+
+  const inserted = await tx
+    .insert(articles)
+    .values({ ownerId: currentOwnerId(), slug })
+    /* Another transaction may have inserted this slug between our lock
+       attempt and here — the lock cannot protect a row that does not exist
+       yet. `do nothing` plus a re-read is the honest handling; `do update`
+       would rewrite somebody's shelf state to defaults. */
+    .onConflictDoNothing({ target: articles.slug })
+    .returning();
+  const article = inserted[0] ?? (await lockArticle(tx, slug));
+  if (article) return article;
+
+  /* **Two readings of "we could not get this row", and they want different
+     words.**
+
+     `lockArticle` is owner-filtered (src/store/pg.ts § `ownedSlug`), and
+     `articles.slug` is globally unique — so the ordinary way to get here is not
+     a race at all: somebody else already owns this slug. The insert did nothing,
+     the reread found nothing, and the generic message sent whoever hit it
+     looking for a locking bug.
+
+     Distinguished by asking, unfiltered, whether the row exists at all.
+     GPT Sol raised the confusion reviewing the ownership work, 2026-08-27;
+     what it does NOT do is let two readers keep the same URL, which is still an
+     open question rather than a thing that works. */
+  if (await slugIsTaken(slug, tx)) {
+    throw new PublishRefused(slug, [
+      `the slug "${slug}" already belongs to another reader — ` +
+        "slugs are unique across the whole install, which is a known limit",
+    ]);
+  }
+  throw new Error(`Could not create or lock the article row for "${slug}".`);
+}
+
+/**
  * The blocks of one revision, in document order, as `Block`s.
  *
  * Not `src/store/pg.ts`'s `blocksFor`: that one runs the stored blocks through
@@ -507,41 +563,7 @@ async function beginDraftIn(
 ): Promise<BeginRevisionResult> {
   const { slug } = opts;
   {
-    let article = await lockArticle(tx, slug);
-    if (!article) {
-      const inserted = await tx
-        .insert(articles)
-        .values({ ownerId: currentOwnerId(), slug })
-        /* Another transaction may have inserted this slug between our lock
-           attempt and here — the lock cannot protect a row that does not exist
-           yet. `do nothing` plus a re-read is the honest handling; `do update`
-           would rewrite somebody's shelf state to defaults. */
-        .onConflictDoNothing({ target: articles.slug })
-        .returning();
-      article = inserted[0] ?? (await lockArticle(tx, slug));
-      if (!article) {
-        /* **Two readings of "we could not get this row", and they want
-           different words.**
-         *
-           `lockArticle` is owner-filtered (src/store/pg.ts § `ownedSlug`), and
-           `articles.slug` is globally unique — so the ordinary way to get here
-           is not a race at all: somebody else already owns this slug. The
-           insert did nothing, the reread found nothing, and the generic message
-           sent whoever hit it looking for a locking bug.
-
-           Distinguished by asking, unfiltered, whether the row exists at all.
-           GPT Sol raised the confusion reviewing the ownership work, 2026-08-27;
-           what it does NOT do is let two readers keep the same URL, which is
-           still an open question rather than a thing that works. */
-        if (await slugIsTaken(slug, tx)) {
-          throw new PublishRefused(slug, [
-            `the slug "${slug}" already belongs to another reader — ` +
-              "slugs are unique across the whole install, which is a known limit",
-          ]);
-        }
-        throw new Error(`Could not create or lock the article row for "${slug}".`);
-      }
-    }
+    const article = await lockOrCreateArticle(tx, slug);
 
     const revisionId = randomUUID();
     const basedOn = article.currentRevisionId;
@@ -690,7 +712,33 @@ export async function openOrBeginJobDraft(opts: {
 
   return getDb().transaction(async (tx) => {
     /**
-     * **Locked, not merely selected, and locked before the article.**
+     * **The article lock, first, before the job — and it may find nothing.**
+     *
+     * *Article lock before job lock, everywhere.* That is the one order this
+     * file keeps, and until 2026-08-29 this function was the exception to it:
+     * it took job-then-article while `publishRevision` and `failRevision` took
+     * article-then-job. The inversion was narrowly safe, on facts nobody could
+     * check from here — the claim fence stops one job opening and committing
+     * concurrently, and `failExpired` cannot make the cycle because a
+     * replacement job is a different row. D1b needs a single transaction that
+     * opens a draft *and* publishes it, so the invariant is now enforceable
+     * rather than argued: take the article first and no path can invert them.
+     * GPT Sol, 2026-08-29, docs/plans/delete-the-importer-d1b-design-sol.md.
+     *
+     * **`lockOrCreateArticle`, not `lockArticle`, and the difference is the
+     * whole point of doing it here.** On a first ingest there is no row yet, so
+     * a plain lock would take nothing and the two calls below would be
+     * serialised by the *job* row again — with a worse ending than before: the
+     * loser would come out of that wait holding "there is no article" from
+     * before the winner committed, find a draft pointer that now names a real
+     * revision, decide the pointer was unusable, and mint a second draft. That
+     * is precisely the orphaned-draft bug this function exists to prevent. A row
+     * that does not exist cannot be locked, so the row has to exist.
+     */
+    const article = await lockOrCreateArticle(tx, slug);
+
+    /**
+     * **Locked, not merely selected.**
      *
      * Fencing on the attempt is not enough on its own, which GPT Sol found in
      * the first version of this: two calls carrying the same live token both
@@ -700,15 +748,16 @@ export async function openOrBeginJobDraft(opts: {
      * exists to prevent, one level in.
      *
      * `for update` on the job row makes the read-decide-write one critical
-     * section. And it is taken **first**, before `lockArticle`, so that every
-     * caller takes the two locks in the same order — job then article — which
-     * is what stops two of them deadlocking against each other.
+     * section, and that is what closes it, not the order the two locks are
+     * taken in.
      *
      * It also closes the second race in that finding: an unlocked read could
      * see a live attempt and then have `failExpired` fail the job while this
-     * transaction waited for the article lock, after which the reopen branch
-     * returned a draft belonging to a job that was already over. `failExpired`
-     * cannot touch a row this transaction holds.
+     * transaction waited for a lock, after which the reopen branch returned a
+     * draft belonging to a job that was already over. Still closed with the
+     * article taken first: `failExpired` may commit while we wait for the
+     * article row, but then this statement's own `status = 'running'` no longer
+     * holds, no row comes back, and the call throws instead of proceeding.
      */
     const [row] = await tx
       .select({ draftRevisionId: jobs.draftRevisionId, slug: jobs.slug })
@@ -733,20 +782,21 @@ export async function openOrBeginJobDraft(opts: {
     }
 
     if (row.draftRevisionId) {
-      const article = await lockArticle(tx, slug);
-      const [draft] = article
-        ? await tx
-            .select({ id: articleRevisions.id, status: articleRevisions.status })
-            .from(articleRevisions)
-            .where(
-              and(
-                eq(articleRevisions.id, row.draftRevisionId),
-                eq(articleRevisions.articleId, article.id),
-              ),
-            )
-            .limit(1)
-        : [];
-      if (article && draft?.status === "draft") {
+      /* The row locked at the top of the transaction, not a second lock, and
+         never `undefined` any more — which is why there is no "was there an
+         article?" branch here. It was taken before the job row precisely so
+         that this branch never has to take it. */
+      const [draft] = await tx
+        .select({ id: articleRevisions.id, status: articleRevisions.status })
+        .from(articleRevisions)
+        .where(
+          and(
+            eq(articleRevisions.id, row.draftRevisionId),
+            eq(articleRevisions.articleId, article.id),
+          ),
+        )
+        .limit(1);
+      if (draft?.status === "draft") {
         logger.debug({ slug, revisionId: draft.id, jobId: job.id }, "reopened this job's draft");
         return {
           revisionId: draft.id,
@@ -846,11 +896,14 @@ export async function requireLiveJobOwnsDraft(
  * keeps it out of the deadlock that the two locks otherwise invite. Do not add
  * an article lock here without reading the next paragraph.
  *
- * `openOrBeginJobDraft` takes job-then-article; `publishRevision` and
- * `failRevision` take article-then-job. That inversion is real and predates
- * this function — `openOrBeginJobDraft`'s claim that "every caller takes the two
- * in one order" is not true of the file it sits in. GPT Sol, 2026-08-27;
- * docs/plans/c1-c2-code-review-sol.md finding 2.
+ * **Article lock before job lock, everywhere.** That is the whole rule, and
+ * since 2026-08-29 there is no exception to it: `openOrBeginJobDraft`,
+ * `publishRevisionIn` and `failRevisionIn` all take the article first. (It was
+ * an exception until then — that one took job-then-article, and GPT Sol's
+ * finding that the file contradicted its own comment is
+ * docs/plans/c1-c2-code-review-sol.md finding 2.) One lock is always safe, so
+ * this function is free to take the job on its own; taking the *article* here,
+ * after a caller already holds the job, is what would put the cycle back.
  *
  * **`NO_INPUT_HASH`, deliberately**, because a step that has not run yet has not
  * been *made from* anything. The real hash arrives with `finishStepRun`. Writing
@@ -1120,6 +1173,19 @@ export interface PublishRevisionOptions {
 }
 
 /**
+ * What a publication produced — and everything `logPublication` needs.
+ *
+ * Named rather than written inline twice, because `publishRevision` and
+ * `publishRevisionIn` return the same thing and a second copy is a second thing
+ * to keep in step.
+ */
+export interface PublishRevisionResult {
+  readonly revisionId: string;
+  readonly previousRevisionId: string | null;
+  readonly scalars: ReturnType<typeof deriveLibraryScalars>;
+}
+
+/**
  * Make a draft the article, or refuse and say why.
  *
  * ## What it refuses, and the one that is a behaviour change
@@ -1148,79 +1214,126 @@ export interface PublishRevisionOptions {
  * diverges. The fix for anyone who hits it is to run `toc` as well, which
  * `DEFAULT_INGEST_STEPS` and `cascadeForce` already do.
  *
+ * This is the wrapper: one transaction of its own around `publishRevisionIn`,
+ * and the log line **after** that transaction commits. See there for the order
+ * inside it and for why the logging moved out.
+ */
+export async function publishRevision(
+  opts: PublishRevisionOptions,
+): Promise<PublishRevisionResult> {
+  requireSlug(opts.slug);
+  const published = await getDb().transaction((tx) => publishRevisionIn(tx, opts));
+  logPublication(opts, published);
+  return published;
+}
+
+/**
+ * The body of `publishRevision`, taking the caller's transaction.
+ *
+ * Split out on 2026-08-29 for the same reason `beginDraftIn` was: a job's last
+ * step has to write its artefacts, finish the step, publish the revision and
+ * end the job **in one transaction**, and a function that opens its own cannot
+ * be part of one. docs/plans/delete-the-importer.md § D1b.
+ *
  * ## The order inside the transaction
  *
  * Lock the article, validate, fence the job, *then* move the pointer. The fence
  * is checked for `rowCount === 1` before anything a reader can see changes, in
  * the same transaction, so a stale worker's publication is impossible rather
  * than merely unlikely.
+ *
+ * The article lock is taken here whether or not the caller already holds it.
+ * Re-locking a row the same transaction already has is free, and this is the
+ * function that must not depend on the caller having remembered — **article
+ * lock before job lock, everywhere** (see `openOrBeginJobDraft`).
+ *
+ * ## It returns what to log instead of logging
+ *
+ * **This is the one part of the extraction that is not a pure move**, so it is
+ * written down rather than left to be noticed. `logger.info` used to run inside
+ * this transaction. That was harmless while the transaction was its own — it
+ * committed a line later — but a caller's transaction can go on to fail during
+ * job settlement, and then the log has announced a publication that never
+ * happened, in a file whose whole subject is a reader seeing either the old
+ * revision or the new one and never a mixture. So the caller calls
+ * `logPublication` after **its** commit. GPT Sol, 2026-08-29,
+ * docs/plans/delete-the-importer-d1b-design-sol.md finding 5.
  */
-export async function publishRevision(opts: PublishRevisionOptions): Promise<{
-  revisionId: string;
-  previousRevisionId: string | null;
-  scalars: ReturnType<typeof deriveLibraryScalars>;
-}> {
+export async function publishRevisionIn(
+  tx: Tx,
+  opts: PublishRevisionOptions,
+): Promise<PublishRevisionResult> {
   const { slug, revisionId } = opts;
   requireSlug(slug);
-  const db = getDb();
 
-  return db.transaction(async (tx) => {
-    const article = await lockArticle(tx, slug);
-    if (!article) throw new PublishRefused(slug, ["there is no such article"]);
+  const article = await lockArticle(tx, slug);
+  if (!article) throw new PublishRefused(slug, ["there is no such article"]);
 
-    /* A named projection, not `select()`. The bare form takes `raw_bytes` too —
-       up to 32 MiB of source document, pulled across the wire so that four
-       fields can be checked and the tree read. This used to share one selector
-       with every other revision read; since 2026-08-27 each read names its own
-       columns, and `publish` wants four. See `REVISION_CARRY_POLICY` in
-       src/store/pg.ts, and docs/plans/glossary-read-latency.md. */
-    const found = await tx
-      .select(REVISION_PROJECTIONS.publish)
-      .from(articleRevisions)
-      .where(eq(articleRevisions.id, revisionId))
-      .limit(1);
-    const draft = found[0];
-    if (!draft) throw new PublishRefused(slug, [`revision ${revisionId} does not exist`]);
-    if (draft.articleId !== article.id)
-      throw new PublishRefused(slug, [`revision ${revisionId} belongs to another article`]);
-    if (draft.status !== "draft")
-      throw new PublishRefused(slug, [`revision ${revisionId} is already ${draft.status}`]);
+  /* A named projection, not `select()`. The bare form takes `raw_bytes` too —
+     up to 32 MiB of source document, pulled across the wire so that four
+     fields can be checked and the tree read. This used to share one selector
+     with every other revision read; since 2026-08-27 each read names its own
+     columns, and `publish` wants four. See `REVISION_CARRY_POLICY` in
+     src/store/pg.ts, and docs/plans/glossary-read-latency.md. */
+  const found = await tx
+    .select(REVISION_PROJECTIONS.publish)
+    .from(articleRevisions)
+    .where(eq(articleRevisions.id, revisionId))
+    .limit(1);
+  const draft = found[0];
+  if (!draft) throw new PublishRefused(slug, [`revision ${revisionId} does not exist`]);
+  if (draft.articleId !== article.id)
+    throw new PublishRefused(slug, [`revision ${revisionId} belongs to another article`]);
+  if (draft.status !== "draft")
+    throw new PublishRefused(slug, [`revision ${revisionId} is already ${draft.status}`]);
 
-    const blocks = await storedBlocks(tx, revisionId);
-    const tree = draft.tree as Tree | null;
-    const reasons = await reasonsNotToPublish(tx, revisionId, blocks, tree);
+  const blocks = await storedBlocks(tx, revisionId);
+  const tree = draft.tree as Tree | null;
+  const reasons = await reasonsNotToPublish(tx, revisionId, blocks, tree);
 
-    if (reasons.length) throw new PublishRefused(slug, reasons);
+  if (reasons.length) throw new PublishRefused(slug, reasons);
 
-    const scalars = deriveLibraryScalars({ blocks, tree, excerpt: draft.excerpt });
+  const scalars = deriveLibraryScalars({ blocks, tree, excerpt: draft.excerpt });
 
-    await tx
-      .update(articleRevisions)
-      .set({ status: "published", ...scalars })
-      .where(eq(articleRevisions.id, revisionId));
+  await tx
+    .update(articleRevisions)
+    .set({ status: "published", ...scalars })
+    .where(eq(articleRevisions.id, revisionId));
 
-    // The fence, before the pointer. A job that is no longer the live attempt
-    // throws here, and the whole transaction — including the status change
-    // above — rolls back with it.
-    if (opts.job) await fenceJob(tx, opts.job.id, opts.job.attemptId, null);
+  // The fence, before the pointer. A job that is no longer the live attempt
+  // throws here, and the whole transaction — including the status change
+  // above — rolls back with it.
+  if (opts.job) await fenceJob(tx, opts.job.id, opts.job.attemptId, null);
 
-    await tx
-      .update(articles)
-      .set({ currentRevisionId: revisionId })
-      .where(eq(articles.id, article.id));
+  await tx
+    .update(articles)
+    .set({ currentRevisionId: revisionId })
+    .where(eq(articles.id, article.id));
 
-    logger.info(
-      {
-        slug,
-        revisionId,
-        previous: article.currentRevisionId,
-        blocks: scalars.blockCount,
-        words: scalars.wordCount,
-      },
-      "revision published",
-    );
-    return { revisionId, previousRevisionId: article.currentRevisionId, scalars };
-  });
+  return { revisionId, previousRevisionId: article.currentRevisionId, scalars };
+}
+
+/**
+ * The line a publication prints — **after** the transaction that made it.
+ *
+ * A function rather than five field names for each caller to get right, so that
+ * every publication says the same thing however it was committed. See
+ * `publishRevisionIn` for why it is not printed where it is decided.
+ */
+export function logPublication(
+  opts: Pick<PublishRevisionOptions, "slug">,
+  published: PublishRevisionResult,
+): void {
+  logger.info(
+    {
+      slug: opts.slug,
+      revisionId: published.revisionId,
+      previous: published.previousRevisionId,
+      blocks: published.scalars.blockCount,
+      words: published.scalars.wordCount,
+    },
+    "revision published",
+  );
 }
 
 /* ----------------------------------------------------------- failRevision -- */
@@ -1236,50 +1349,94 @@ export async function publishRevision(opts: PublishRevisionOptions): Promise<{
  * `sweepAbandonedDrafts` is what eventually reclaims the space. `reason` is
  * logged, not stored: `article_revisions` has no error column, and inventing one
  * for a string nothing reads would be a column to keep in step for ever.
+ *
+ * This is the wrapper: one transaction of its own around `failRevisionIn`, and
+ * the log line **after** that transaction commits.
  */
-export async function failRevision(opts: {
-  slug: string;
-  revisionId: string;
-  reason: string;
-  job?: { id: string; attemptId: string };
-}): Promise<void> {
+export async function failRevision(opts: FailRevisionOptions): Promise<void> {
+  requireSlug(opts.slug);
+  const failed = await getDb().transaction((tx) => failRevisionIn(tx, opts));
+  logDraftFailure(opts, failed);
+}
+
+export interface FailRevisionOptions {
+  readonly slug: string;
+  readonly revisionId: string;
+  readonly reason: string;
+  readonly job?: { readonly id: string; readonly attemptId: string };
+}
+
+/** How many rows the failure moved — nothing else about it is worth carrying. */
+export interface FailRevisionResult {
+  readonly changed: number | null;
+}
+
+/**
+ * The body of `failRevision`, taking the caller's transaction.
+ *
+ * The other half of `publishRevisionIn`, and it exists for the same reason: on
+ * a stage failure the same transaction has to mark the step, fail the draft and
+ * end the job, so none of the three can open a transaction of its own.
+ *
+ * **It returns what to log instead of logging**, by the same rule and for the
+ * same reason — see `publishRevisionIn`. The caller calls `logDraftFailure`
+ * after its commit. A warning about a draft that a rollback then un-failed is
+ * the more confusing of the two directions, because the row is still a live
+ * draft afterwards and the log says it is not.
+ *
+ * Article lock first, before the job fence, as everywhere.
+ */
+export async function failRevisionIn(
+  tx: Tx,
+  opts: FailRevisionOptions,
+): Promise<FailRevisionResult> {
   const { slug, revisionId } = opts;
   requireSlug(slug);
-  const db = getDb();
 
-  await db.transaction(async (tx) => {
-    const article = await lockArticle(tx, slug);
-    if (!article) throw new Error(`No article "${slug}" to fail a revision of.`);
+  const article = await lockArticle(tx, slug);
+  if (!article) throw new Error(`No article "${slug}" to fail a revision of.`);
 
-    /* Never the current one. A draft cannot be current — `publishRevision` is
-       the only thing that moves the pointer and it publishes as it moves — but
-       this is the statement that would destroy an article if that ever stopped
-       being true, so it checks rather than trusting. We hold the article lock,
-       so the value read here cannot change underneath the update below. */
-    if (article.currentRevisionId === revisionId) {
-      throw new Error(
-        `Refusing to fail revision ${revisionId}: it is what "${slug}" is currently serving.`,
-      );
-    }
-
-    const result = await tx
-      .update(articleRevisions)
-      .set({ status: "failed" })
-      .where(
-        and(
-          eq(articleRevisions.id, revisionId),
-          eq(articleRevisions.articleId, article.id),
-          eq(articleRevisions.status, "draft"),
-        ),
-      );
-
-    if (opts.job) await fenceJob(tx, opts.job.id, opts.job.attemptId, null);
-
-    logger.warn(
-      { slug, revisionId, reason: opts.reason, changed: result.rowCount },
-      "draft revision failed",
+  /* Never the current one. A draft cannot be current — `publishRevision` is
+     the only thing that moves the pointer and it publishes as it moves — but
+     this is the statement that would destroy an article if that ever stopped
+     being true, so it checks rather than trusting. We hold the article lock,
+     so the value read here cannot change underneath the update below. */
+  if (article.currentRevisionId === revisionId) {
+    throw new Error(
+      `Refusing to fail revision ${revisionId}: it is what "${slug}" is currently serving.`,
     );
-  });
+  }
+
+  const result = await tx
+    .update(articleRevisions)
+    .set({ status: "failed" })
+    .where(
+      and(
+        eq(articleRevisions.id, revisionId),
+        eq(articleRevisions.articleId, article.id),
+        eq(articleRevisions.status, "draft"),
+      ),
+    );
+
+  if (opts.job) await fenceJob(tx, opts.job.id, opts.job.attemptId, null);
+
+  return { changed: result.rowCount };
+}
+
+/**
+ * The line a failed draft prints — **after** the transaction that failed it.
+ *
+ * `changed` is in it because zero is a real and interesting answer: the draft
+ * was already failed, or already gone, and nothing moved.
+ */
+export function logDraftFailure(
+  opts: Pick<FailRevisionOptions, "slug" | "revisionId" | "reason">,
+  failed: FailRevisionResult,
+): void {
+  logger.warn(
+    { slug: opts.slug, revisionId: opts.revisionId, reason: opts.reason, changed: failed.changed },
+    "draft revision failed",
+  );
 }
 
 /* ------------------------------------------------------------ the sweeper -- */

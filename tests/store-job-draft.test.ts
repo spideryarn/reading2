@@ -22,7 +22,7 @@
  * live attempt.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles, jobs } from "../src/db/schema.js";
@@ -36,6 +36,8 @@ import { pgReady } from "./helpers/pg-ready.js";
 
 const SLUG = "test-job-draft";
 const OTHER_SLUG = "test-job-draft-other";
+/** Deliberately never given an article row by any other case in this file. */
+const FRESH_SLUG = "test-job-draft-fresh";
 
 /* ---------------------------------------------------- is there a database -- */
 
@@ -98,6 +100,59 @@ async function claimedJob(slug: string): Promise<{ id: string; attemptId: string
   });
 }
 
+/**
+ * A transaction that holds one row and does nothing until it is told to stop.
+ *
+ * It hands back the **backend pid** as well as the release, because the two lock
+ * tests below have to know that the call under test really is stuck behind this
+ * transaction before they probe anything — and `pg_blocking_pids` can only
+ * answer that if you can name the blocker. The earlier version of the first test
+ * slept 300ms and hoped, which is the kind of wait that passes on a fast laptop
+ * for the wrong reason.
+ */
+async function holdRow(
+  lockIt: (tx: Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0]) => Promise<unknown>,
+): Promise<{ pid: number; release: () => void; done: Promise<unknown> }> {
+  let release!: () => void;
+  const holdUntil = new Promise<void>((r) => {
+    release = r;
+  });
+  let settle!: (pid: number) => void;
+  const gotPid = new Promise<number>((r) => {
+    settle = r;
+  });
+
+  const done = getDb().transaction(async (tx) => {
+    const row = await tx.execute(sql`select pg_backend_pid() as pid`);
+    await lockIt(tx);
+    // Only after the lock is held: a pid published earlier would let a waiter
+    // start probing before there was anything to block on.
+    settle(Number((row.rows[0] as { pid: number | string }).pid));
+    await holdUntil;
+  });
+
+  return { pid: await gotPid, release, done };
+}
+
+/**
+ * Wait until some other backend is blocked by `pid` — or say so and fail.
+ *
+ * `pg_blocking_pids` rather than a count of ungranted locks: vitest runs test
+ * files at the same time, so "somebody somewhere is waiting" is a condition
+ * another suite can satisfy for us, and a probe that fires early would prove
+ * whatever the timing happened to be.
+ */
+async function waitUntilBlockedBy(pid: number): Promise<void> {
+  for (let i = 0; i < 200; i++) {
+    const found = await getDb().execute(
+      sql`select count(*)::int as n from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`,
+    );
+    if (Number((found.rows[0] as { n: number | string }).n) > 0) return;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error(`nothing ever queued behind backend ${pid} — the call under test never blocked`);
+}
+
 async function cleanUp(slug: string): Promise<void> {
   const db = getDb();
   // By id where we can, so a slug this file never made is never touched.
@@ -115,11 +170,13 @@ when("the draft a job owns", () => {
   beforeAll(async () => {
     await cleanUp(SLUG);
     await cleanUp(OTHER_SLUG);
+    await cleanUp(FRESH_SLUG);
   });
 
   afterAll(async () => {
     await cleanUp(SLUG);
     await cleanUp(OTHER_SLUG);
+    await cleanUp(FRESH_SLUG);
     await closeDb();
   });
 
@@ -175,53 +232,57 @@ when("the draft a job owns", () => {
    * primitive whose contract says "one draft" has to mean it whoever calls.
    */
   /**
-   * **The job row is held while we wait for the article lock**, which is the
-   * window the race actually lives in — and two more obvious tests do not prove
-   * it, which is why this one looks like this.
+   * **Article lock before job lock**, which since 2026-08-29 is the one order
+   * this whole file keeps — and the probe that can tell is the same one that
+   * used to assert the opposite.
    *
-   * The race: two callers both read `draft_revision_id = null`, both then queue
-   * on `lockArticle`, the first mints R1 and commits, and the second — still
-   * holding its stale null — mints R2 and repoints the job. Fencing on the
-   * attempt does not help; both tokens are live.
+   * ## What changed, and why the assertion flipped
    *
-   * **What does not prove it.** Firing two calls with `Promise.all` and
-   * asserting one draft: passes with `for update` deleted, because the two
-   * transactions do not interleave at the point that matters. Holding the *job*
-   * row and showing the call blocks: also passes with it deleted, because
-   * `fenceJob`'s `UPDATE` at the end of the call blocks on that row regardless.
-   * Both were written, both were watched, and both were green against the
-   * broken code — [silent success](../docs/reusable/silent-success.md), twice in
-   * a row, on the same fix.
+   * `openOrBeginJobDraft` used to take `for update` on the job row *first*, and
+   * this test asserted that it did. That was safe on facts nobody could check
+   * from here: `publishRevision` and `failRevision` take article-then-job, so
+   * the file contradicted itself, and only caller sequencing kept the cycle from
+   * closing. D1b needs one transaction that opens a draft *and* publishes it,
+   * so the order became an invariant instead of an argument.
+   * docs/plans/delete-the-importer-d1b-design-sol.md.
    *
-   * **What does.** Hold the **article** row from somewhere else, so the call is
-   * stuck inside `lockArticle` and has not reached `fenceJob`. Then ask a third
-   * connection for the job row `for update nowait`. If the call took the lock,
-   * that is refused (`55P03`); if it did not, it succeeds — and that success is
-   * precisely the gap two callers slip through.
+   * The race the old order closed is still closed, by the article lock instead:
+   * two callers both read `draft_revision_id = null`, both mint, and the second
+   * repoints the job leaving the first draft orphaned. The second caller now
+   * queues on the *article* row from before it looks at the job at all, so it
+   * cannot be holding a stale null when it decides.
+   *
+   * ## The two obvious tests that cannot tell the orders apart
+   *
+   * Both were written for the old order, both were watched, and both were green
+   * against the broken code — [silent success](../docs/reusable/silent-success.md),
+   * twice in a row on the same fix. Firing two calls with `Promise.all` and
+   * asserting one draft: the two transactions do not interleave at the point
+   * that matters. Holding the *job* row and showing the call blocks: it blocks
+   * either way, because `fenceJob`'s `UPDATE` needs that row at the end of the
+   * call regardless of what was locked at the start.
+   *
+   * **What does.** Hold the **article** row from somewhere else. Then ask a
+   * third connection for the job row `for update nowait`. Under the new order
+   * the call is stuck on the article and has not gone near the job, so that
+   * succeeds. Under the old order the call took the job row on its way to the
+   * article, and it is refused (`55P03`) — which is how this test goes red
+   * against the code as it stood the day before.
    */
-  it("holds the job row while it waits for the article lock", async () => {
+  it("takes the article lock before it touches the job row", async () => {
     const job = await claimedJob(SLUG);
     const db = getDb();
     const [article] = await db.select().from(articles).where(eq(articles.slug, SLUG)).limit(1);
     expect(article, "the earlier tests should have made this article").toBeTruthy();
+    const articleId = (article as { id: string }).id;
 
-    let release!: () => void;
-    const holdUntil = new Promise<void>((r) => {
-      release = r;
-    });
     // Somebody else holds the article. Our call will queue behind this.
-    const holder = db.transaction(async (tx) => {
-      await tx
-        .select({ id: articles.id })
-        .from(articles)
-        .where(eq(articles.id, (article as { id: string }).id))
-        .for("update");
-      await holdUntil;
-    });
-    await new Promise((r) => setTimeout(r, 100));
+    const holder = await holdRow((tx) =>
+      tx.select({ id: articles.id }).from(articles).where(eq(articles.id, articleId)).for("update"),
+    );
 
     const call = openOrBeginJobDraft({ slug: SLUG, job });
-    await new Promise((r) => setTimeout(r, 300));
+    await waitUntilBlockedBy(holder.pid);
 
     let jobRowWasFree = false;
     try {
@@ -234,14 +295,81 @@ when("the draft a job owns", () => {
         jobRowWasFree = true;
       });
     } catch {
-      // 55P03 lock_not_available — which is the answer we want.
+      // 55P03 lock_not_available — the old order's answer, and now a failure.
     }
 
-    release();
-    await holder;
+    holder.release();
+    await holder.done;
     await call;
 
-    expect(jobRowWasFree, "openOrBeginJobDraft left the job row unlocked").toBe(false);
+    expect(
+      jobRowWasFree,
+      "openOrBeginJobDraft took the job row before the article — the old order",
+    ).toBe(true);
+  });
+
+  /**
+   * **A row that does not exist cannot be locked**, which is why the article is
+   * created here rather than merely locked.
+   *
+   * This is the hole the reorder opens if it is done in the obvious way, and it
+   * is worth spelling out because the obvious way looks complete. `lockArticle`
+   * takes nothing on a first ingest — there is no row yet — so two callers would
+   * be serialised by the job row again, and the loser would come out of that
+   * wait carrying "there is no article" from *before* the winner committed. It
+   * would then find a draft pointer naming a real revision, decide the pointer
+   * was unusable, and mint a second draft: the orphan this function exists to
+   * prevent, arriving through the fix for it. So the top of the transaction
+   * calls `lockOrCreateArticle`.
+   *
+   * Proved from outside the call. Hold the **job** row, so the call gets past
+   * the article and stops there. Then have a third connection try to insert that
+   * same slug with a short `lock_timeout`. An uncommitted insert is invisible to
+   * a `select`, so `for update nowait` cannot see it — but a second insert of
+   * the same unique slug waits on the first one's speculative token, and the
+   * timeout is what turns that wait into an answer. With a plain `lockArticle`
+   * at the top there is nothing to wait for and the insert goes straight in.
+   */
+  it("creates and holds the article row for a slug it has never seen", async () => {
+    const job = await claimedJob(FRESH_SLUG);
+    const db = getDb();
+    const before = await db.select().from(articles).where(eq(articles.slug, FRESH_SLUG));
+    expect(before, "FRESH_SLUG must start with no article row").toHaveLength(0);
+
+    // The job row this time, so the call gets past the article and stops here.
+    const holder = await holdRow((tx) =>
+      tx.select({ id: jobs.id }).from(jobs).where(eq(jobs.id, job.id)).for("update"),
+    );
+
+    const call = openOrBeginJobDraft({ slug: FRESH_SLUG, job });
+    await waitUntilBlockedBy(holder.pid);
+
+    class Rollback extends Error {}
+    let articleWasFree = false;
+    try {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`set local lock_timeout = '1s'`);
+        await tx.insert(articles).values({ ownerId: DEV_OWNER_ID, slug: FRESH_SLUG });
+        articleWasFree = true;
+        // Never kept: the point is whether the insert was possible, not to make
+        // a row the call under test is about to make itself.
+        throw new Rollback();
+      });
+    } catch (err) {
+      if (!(err instanceof Rollback)) {
+        // 55P03 lock_not_available — the call is holding the row it created.
+      }
+    }
+
+    holder.release();
+    await holder.done;
+    const opened = await call;
+
+    expect(
+      articleWasFree,
+      "openOrBeginJobDraft reached the job row without creating the article",
+    ).toBe(false);
+    expect(opened.created, "and it still mints the first draft").toBe(true);
   });
 
   it("mints one draft when two callers ask together", async () => {
