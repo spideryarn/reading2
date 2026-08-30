@@ -1,0 +1,236 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 3018.9" width="760" height="3018.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="3018.9" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Scaling's Spine and Its Shadow</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">A seven-step spine — evidence, theory, mechanism, politics, vindication — that ends by turning the same scaling</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">logic on itself and finding it also breeds agency.</text>
+<g transform="translate(0 97.2)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">The Scaling Hypothesis</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">GPT-3's results build a case for scale, which is explained, then tested against who will actually act on it and</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">vindicated by a decade of wrong predictions — before the same logic is turned on agency itself.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><rect x="24" y="40" width="712" height="410" rx="8" fill="rgba(232,112,58,0.07)" stroke="rgba(232,112,58,0.24)" stroke-width="1"/>
+<text x="34" y="55" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">THE CASE FOR SCALING</text>
+<rect x="24" y="460" width="712" height="280" rx="8" fill="rgba(47,191,149,0.07)" stroke="rgba(47,191,149,0.24)" stroke-width="1"/>
+<text x="34" y="475" font-size="11" text-anchor="start" fill="rgba(47,191,149,0.95)" font-weight="500" letter-spacing="0.07em">WHO WILL ACT ON IT</text>
+<rect x="24" y="750" width="712" height="290" rx="8" fill="rgba(240,228,66,0.07)" stroke="rgba(240,228,66,0.24)" stroke-width="1"/>
+<text x="34" y="765" font-size="11" text-anchor="start" fill="rgba(240,228,66,0.95)" font-weight="500" letter-spacing="0.07em">APPENDIX: DOES AGENCY EMERGE TOO?</text>
+<path d="M380 170 L380 200" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,200 376.5,190 383.5,190" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 290 L380 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,320 376.5,310 383.5,310" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 410 L380 510" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,510 376.5,500 383.5,500" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 600 L380 630" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,630 376.5,620 383.5,620" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 720 L380 800" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,800 376.5,790 383.5,790" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 890 L380 920" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,920 376.5,910 383.5,910" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M230 675 C75.20000000000002 675 75.20000000000002 245 230 245" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="230,245 220,248.5 220,241.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>GPT-3 arrives — 175B params, meta-learning appears — A straightforward scale-up of GPT-2 unexpectedly learns to learn from examples alone. — → spya-dfggb3</title>
+<ellipse cx="380" cy="125" rx="150" ry="45" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="122.465" font-size="15" text-anchor="middle" fill="#f7f7f7">GPT-3 arrives</text>
+<text x="380" y="142.925" font-size="11.4" text-anchor="middle" fill="#8f8f8f">175B params, meta-learning appears</text>
+</g>
+<g>
+<title>Scale alone breeds intelligence — the blessings of scale, generalized — Across vision, games, robotics, and language, bigger models+data+compute reliably yield generalization and meta-learning. — → spya-jwq3zr</title>
+<rect x="230" y="200" width="300" height="90" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="242.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Scale alone breeds intelligence</text>
+<text x="380" y="262.925" font-size="11.4" text-anchor="middle" fill="#8f8f8f">the blessings of scale, generalized</text>
+</g>
+<g>
+<title>Why pretraining works — loss reduction tracks understanding — Minimizing next-token loss forces a model from letter statistics toward genuine world-modeling. — → spya-ce0ts7</title>
+<polygon points="275,320 485,320 530,365 485,410 275,410 230,365" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="362.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Why pretraining works</text>
+<text x="380" y="382.92499999999995" font-size="11.4" text-anchor="middle" fill="#8f8f8f">loss reduction tracks understanding</text>
+</g>
+<g>
+<title>Will anyone scale further? — hardware is ready; will is not — DeepMind and Google Brain have the compute but not the conviction to bet everything on scale. — → spya-b6zcpu</title>
+<polygon points="380,510 530,555 380,600 230,555" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="552.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Will anyone scale further?</text>
+<text x="380" y="572.9250000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">hardware is ready; will is not</text>
+</g>
+<g>
+<title>Critics keep being wrong — a decade of failed predictions — Confident 'AI winter' forecasts from respected experts were repeatedly falsified by events. — → spya-bp9mm2</title>
+<rect x="230" y="630" width="300" height="90" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="672.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Critics keep being wrong</text>
+<text x="380" y="692.9250000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">a decade of failed predictions</text>
+</g>
+<g>
+<title>Agency leaks in from data — GPT-3 learns to roleplay agents — Training on human-generated text inevitably teaches a model to imitate goal-pursuing agents. — → spya-hfcz8w</title>
+<rect x="230" y="800" width="300" height="90" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="842.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Agency leaks in from data</text>
+<text x="380" y="862.9250000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">GPT-3 learns to roleplay agents</text>
+</g>
+<g>
+<title>Even formal systems tempt it — cellular automata, Turing machines — Agency-like inference appears even when training on abstract rule systems with no agents at all. — → spya-myjtg3</title>
+<rect x="230" y="920" width="300" height="90" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="962.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Even formal systems tempt it</text>
+<text x="380" y="982.9250000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">cellular automata, Turing machines</text>
+</g>
+<g>
+<title>Backlinks, related pages, bibliography — → spya-g9ffua</title>
+<path d="M230 1070 L516 1070 L530 1084 L530 1120 L230 1120 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M516 1070 L516 1084 L530 1084" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="380" y="1098.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Backlinks, related pages, bibliography</text>
+</g>
+<rect x="83.4" y="446" width="61" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="113.9" y="456" font-size="10" text-anchor="middle" fill="#8f8f8f">vindicates</text></g>
+</g>
+<g transform="translate(0 1351.1000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Why Does Pretraining Work</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A ladder of ever-subtler linguistic mastery climbing toward human-level loss, with an unresolved doubt hanging off it</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">and an open question at the top.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-PRETRAINING</text>
+<g transform="translate(0 65.9)"><path d="M380 100 L380 130" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,130 376.5,120 383.5,120" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 200 L380 230" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,230 376.5,220 383.5,220" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 300 L380 330" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,330 376.5,320 383.5,320" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 400 L380 430" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,430 376.5,420 383.5,420" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M500 365 C527 365 533 375 560 375" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<path d="M645 420 C645 440 380 410 380 430" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="380,430 376.5,420 383.5,420" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Prediction forces understanding — the pretraining thesis — Humans emit text saturated with logic and causality; predicting it well requires learning those things. — → spya-ce0ts7</title>
+<ellipse cx="380" cy="65" rx="120" ry="35" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="62.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Prediction forces understanding</text>
+<text x="380" y="79.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">the pretraining thesis</text>
+</g>
+<g>
+<title>First: letters, words, spelling — rapid early gains — Loss drops fast as the model learns letter frequencies, valid words, and simple word associations. — → spya-r465ug</title>
+<rect x="260" y="130" width="240" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="162.972" font-size="12" text-anchor="middle" fill="#f7f7f7">First: letters, words, spelling</text>
+<text x="380" y="179.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">rapid early gains</text>
+</g>
+<g>
+<title>Then: pronouns, coherence — errors shrink, get rarer — Remaining errors become subtler and rarer, like keeping a character's gender pronoun consistent. — → spya-rz8jsm</title>
+<rect x="260" y="230" width="240" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="262.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Then: pronouns, coherence</text>
+<text x="380" y="279.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">errors shrink, get rarer</text>
+</g>
+<g>
+<title>The last bits are deepest — rare errors, real intelligence — The final fractions of a bit of loss correspond to the rare, consequential judgments that most resemble intelligence. — → spya-kmyg3w</title>
+<rect x="260" y="330" width="240" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="362.972" font-size="12" text-anchor="middle" fill="#f7f7f7">The last bits are deepest</text>
+<text x="380" y="379.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">rare errors, real intelligence</text>
+</g>
+<g>
+<title>What will GPT-4 unlock? — no one can say — Extrapolating the curve predicts roughly halved loss again, but no one knows what capability that buys. — → spya-uett4g</title>
+<polygon points="380,430 500,470 380,510 260,470" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="467.972" font-size="12" text-anchor="middle" fill="#f7f7f7">What will GPT-4 unlock?</text>
+<text x="380" y="484.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">no one can say</text>
+</g>
+<g>
+<title>But is this provable in advance? — reasons for doubt — Similar universal-learning arguments had failed before; only spending the compute actually proved it. — → spya-e5n86h</title>
+<path d="M560 330 L716 330 L730 344 L730 420 L560 420 Z" fill="rgba(47,191,149,0.09)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 330 L716 344 L730 344" fill="none" stroke="rgba(47,191,149,0.5)" stroke-width="1"/>
+<text x="645" y="366.15" font-size="10" text-anchor="middle" fill="#f7f7f7">But is this provable in</text>
+<text x="645" y="378.65" font-size="10" text-anchor="middle" fill="#f7f7f7">advance?</text>
+<text x="645" y="392.5" font-size="9" text-anchor="middle" fill="#8f8f8f">reasons for doubt</text>
+</g>
+<rect x="491.55" y="356" width="76.9" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="530" y="366" font-size="10" text-anchor="middle" fill="#8f8f8f">doubts remain</text>
+<rect x="474.05" y="411" width="76.9" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="512.5" y="421" font-size="10" text-anchor="middle" fill="#8f8f8f">yet it worked</text></g>
+</g>
+<g transform="translate(0 2005)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Agency From Data</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A funnel from GPT-3's obvious agency down to a general principle — agency is a cheap, convergent shortcut — then tested</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">and confirmed even in toy formal systems.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-AGENCY</text>
+<g transform="translate(0 65.9)"><path d="M380 80 L380 100" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,100 376.5,90 383.5,90" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 160 L380 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,180 376.5,170 383.5,170" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 240 L380 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,260 376.5,250 383.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 320 L380 340" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,340 376.5,330 383.5,330" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 400 L380 420" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,420 376.5,410 383.5,410" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 490 L380 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,520 376.5,510 383.5,510" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 580 L380 600" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,600 376.5,590 383.5,590" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 660 C380 680 170 680 170 700" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="170,700 166.5,690 173.5,690" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 660 C380 680 590 680 590 700" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="590,700 586.5,690 593.5,690" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M170 770 C170 790 380 790 380 810" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,810 376.5,800 383.5,800" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M590 770 C590 790 380 790 380 810" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,810 376.5,800 383.5,800" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>GPT-3 learns to roleplay agents — Trained on human-generated text, it inevitably learns to imitate goal-pursuing agents when prompted. — → spya-hfcz8w</title>
+<ellipse cx="380" cy="50" rx="120" ry="30" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="53.9" font-size="12" text-anchor="middle" fill="#f7f7f7">GPT-3 learns to roleplay agents</text>
+</g>
+<g>
+<title>Agency is built from atoms — no principled boundary — Since agents are made of non-agentic matter, no data can be guaranteed free of agency. — → spya-yb6wsc</title>
+<rect x="260" y="100" width="240" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="127.97200000000001" font-size="12" text-anchor="middle" fill="#f7f7f7">Agency is built from atoms</text>
+<text x="380" y="144.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">no principled boundary</text>
+</g>
+<g>
+<title>We model rivers as agents too — the intentional stance — Humans routinely use teleological, agent-like explanations for non-agentic natural systems. — → spya-frehf0</title>
+<rect x="260" y="180" width="240" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="207.972" font-size="12" text-anchor="middle" fill="#f7f7f7">We model rivers as agents too</text>
+<text x="380" y="224.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">the intentional stance</text>
+</g>
+<g>
+<title>Systems 'want' to optimize — variational shortcuts — Treating a system as maximizing some quantity is a computationally cheap, powerful shortcut a network could learn. — → spya-tyue6z</title>
+<rect x="260" y="260" width="240" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="287.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Systems 'want' to optimize</text>
+<text x="380" y="304.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">variational shortcuts</text>
+</g>
+<g>
+<title>But such shortcuts cost compute — only pay off at scale — Variational reasoning only emerges when a problem is rich and repeated enough to beat memorization. — → spya-wkqdua</title>
+<rect x="260" y="340" width="240" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="367.972" font-size="12" text-anchor="middle" fill="#f7f7f7">But such shortcuts cost compute</text>
+<text x="380" y="384.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">only pay off at scale</text>
+</g>
+<g>
+<title>What data induces agency? — An open empirical question: how much diversity pushes a model from safe modeling into agency. — → spya-ufadea</title>
+<polygon points="380,420 500,455 380,490 260,455" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="458.9" font-size="12" text-anchor="middle" fill="#f7f7f7">What data induces agency?</text>
+</g>
+<g>
+<title>Game of Life invites 'gliders' — cellular automata — Even a simple rule-based system naturally decomposes into agent-like entities pursuing trajectories. — → spya-myjtg3</title>
+<rect x="260" y="520" width="240" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="547.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Game of Life invites 'gliders'</text>
+<text x="380" y="564.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">cellular automata</text>
+</g>
+<g>
+<title>What about Turing machines? — Pushed to the most general computational setting: does training on program traces risk agency? — → spya-q88ypt</title>
+<polygon points="380,600 500,630 380,660 260,630" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="633.9" font-size="12" text-anchor="middle" fill="#f7f7f7">What about Turing machines?</text>
+</g>
+<g>
+<title>One machine: just follows rules — no clear agency — A single random Turing machine simply runs; nothing in it is trying to maximize or minimize anything. — → spya-etcjwv</title>
+<rect x="60" y="700" width="220" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="170" y="732.972" font-size="12" text-anchor="middle" fill="#f7f7f7">One machine: just follows rules</text>
+<text x="170" y="749.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">no clear agency</text>
+</g>
+<g>
+<title>Many machines: infer intent — a rudimentary theory of mind — Meta-learning over many programs forces the model to infer each one's underlying 'intent' from behavior. — → spya-yzb32b</title>
+<rect x="480" y="700" width="220" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="590" y="732.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Many machines: infer intent</text>
+<text x="590" y="749.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">a rudimentary theory of mind</text>
+</g>
+<g>
+<title>Agency is hard to exclude — like Turing-completeness itself — Agency is a convergent, useful capability; the broader and more powerful the system, the harder it is to keep out. — → spya-c8qwnc</title>
+<ellipse cx="380" cy="850" rx="120" ry="40" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="847.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Agency is hard to exclude</text>
+<text x="380" y="867.9250000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">like Turing-completeness itself</text>
+</g></g>
+</g>
+</svg>

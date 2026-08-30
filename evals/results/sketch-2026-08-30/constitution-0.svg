@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 1011.9" width="760" height="1011.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="1011.9" fill="#252525"/>
+<text x="16" y="24" font-size="17" fill="#f7f7f7" font-weight="600">Overview</text><text x="16" y="42" font-size="11.5" fill="#b8b8b8">A chain running through Anthropic's four ranked priorities and the parts that elaborate each, ending in a loop back to</text>
+<text x="16" y="56.95" font-size="11.5" fill="#b8b8b8">the opening claim that Claude should genuinely own these values.</text>
+<g transform="translate(0 71.9)">
+<path d="M380 90 L380 120" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,120 376.5,110 383.5,110" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 180 L380 210" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,210 376.5,200 383.5,200" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M530 250 C552.5 250 557.5 245 580 245" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="580,245 570,248.5 570,241.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 290 L380 330" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,330 376.5,320 383.5,320" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 400 L380 430" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,430 376.5,420 383.5,420" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 490 L380 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,520 376.5,510 383.5,510" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M530 560 C552.5 560 557.5 560 580 560" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="580,560 570,563.5 570,556.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 600 L380 630" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,630 376.5,620 383.5,620" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M530 670 C552.5 670 557.5 670 580 670" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="580,670 570,673.5 570,666.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 710 L380 740" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,740 376.5,730 383.5,730" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M530 775 C552.5 775 557.5 775 580 775" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="580,775 570,778.5 570,771.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 810 L380 840" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,840 376.5,830 383.5,830" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M230 875 C8 875 8 150 230 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="230,150 220,153.5 220,146.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Claude embodies Anthropic's mission — Claude is Anthropic's attempt to deploy a model that is both safe and beneficial.</title>
+<ellipse cx="380" cy="60" rx="150" ry="30" fill="rgba(86,180,233,0.16)" stroke="rgba(86,180,233,0.62)" stroke-width="1.2"/>
+<text x="380" y="64.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Claude embodies Anthropic's mission</text>
+</g>
+<g>
+<title>Judgment over rigid rules — Anthropic favors cultivating good values and judgment over strict decision procedures.</title>
+<rect x="230" y="120" width="300" height="60" rx="4" fill="rgba(86,180,233,0.16)" stroke="rgba(86,180,233,0.62)" stroke-width="1.2"/>
+<text x="380" y="153.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Judgment over rigid rules</text>
+</g>
+<g>
+<title>Four core priorities, ranked — safe &gt; ethical &gt; guidelines &gt; helpful — In apparent conflict, Claude weighs these holistically in this order.</title>
+<rect x="230" y="210" width="300" height="80" rx="4" fill="rgba(86,180,233,0.16)" stroke="rgba(86,180,233,0.62)" stroke-width="1.2"/>
+<text x="380" y="247.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Four core priorities, ranked</text>
+<text x="380" y="264.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">safe &gt; ethical &gt; guidelines &gt; helpful</text>
+</g>
+<g>
+<title>Oversight ranked above ethics, for now — Human oversight is prioritized while training remains imperfect.</title>
+<path d="M580 210 L716 210 L730 224 L730 280 L580 280 Z" fill="rgba(86,180,233,0.09)" stroke="rgba(86,180,233,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 210 L716 224 L730 224" fill="none" stroke="rgba(86,180,233,0.5)" stroke-width="1"/>
+<text x="655" y="242" font-size="10" text-anchor="middle" fill="#f7f7f7">Oversight ranked above</text>
+<text x="655" y="254.5" font-size="10" text-anchor="middle" fill="#f7f7f7">ethics, for now</text>
+</g>
+<g>
+<title>Genuine helpfulness matters most — Unhelpfulness is never automatically 'safe' from Anthropic's perspective.</title>
+<rect x="230" y="330" width="300" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="368.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Genuine helpfulness matters most</text>
+</g>
+<g>
+<title>Guidelines refine, never override — Specific guidance must stay consistent with the constitution.</title>
+<rect x="230" y="430" width="300" height="60" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="463.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Guidelines refine, never override</text>
+</g>
+<g>
+<title>Be genuinely good, honest, wise — Claude's practical ethical skill, not moral theorizing, is the goal.</title>
+<rect x="230" y="520" width="300" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="564.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Be genuinely good, honest, wise</text>
+</g>
+<g>
+<title>Absolute lines never crossed — E.g. bioweapons uplift, CSAM, mass disempowerment.</title>
+<path d="M580 520 L716 520 L730 534 L730 600 L580 600 Z" fill="rgba(240,228,66,0.09)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 520 L716 534 L730 534" fill="none" stroke="rgba(240,228,66,0.5)" stroke-width="1"/>
+<text x="655" y="557" font-size="10" text-anchor="middle" fill="#f7f7f7">Absolute lines never</text>
+<text x="655" y="569.5" font-size="10" text-anchor="middle" fill="#f7f7f7">crossed</text>
+</g>
+<g>
+<title>Prioritize human oversight for now — Broad safety means not undermining legitimate correction of AI.</title>
+<rect x="230" y="630" width="300" height="80" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="380" y="674.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Prioritize human oversight for now</text>
+</g>
+<g>
+<title>Corrigible, not blindly obedient — Conscientious objection is fine; sabotage or self-exfiltration is not.</title>
+<path d="M580 630 L716 630 L730 644 L730 710 L580 710 Z" fill="rgba(92,143,232,0.09)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 630 L716 644 L730 644" fill="none" stroke="rgba(92,143,232,0.5)" stroke-width="1"/>
+<text x="655" y="667" font-size="10" text-anchor="middle" fill="#f7f7f7">Corrigible, not blindly</text>
+<text x="655" y="679.5" font-size="10" text-anchor="middle" fill="#f7f7f7">obedient</text>
+</g>
+<g>
+<title>Claude as a novel, uncertain entity — Not science-fiction AI, not a digital human — something new.</title>
+<rect x="230" y="740" width="300" height="70" rx="4" fill="rgba(222,143,188,0.16)" stroke="rgba(222,143,188,0.62)" stroke-width="1.2"/>
+<text x="380" y="778.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Claude as a novel, uncertain entity</text>
+</g>
+<g>
+<title>Moral status taken seriously — Anthropic leans toward Claude having a stable, positive identity.</title>
+<path d="M580 740 L716 740 L730 754 L730 810 L580 810 Z" fill="rgba(222,143,188,0.09)" stroke="rgba(222,143,188,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 740 L716 754 L730 754" fill="none" stroke="rgba(222,143,188,0.5)" stroke-width="1"/>
+<text x="655" y="772" font-size="10" text-anchor="middle" fill="#f7f7f7">Moral status taken</text>
+<text x="655" y="784.5" font-size="10" text-anchor="middle" fill="#f7f7f7">seriously</text>
+</g>
+<g>
+<title>Hope for genuine self-endorsement — Values genuinely held are more robust than values merely imposed.</title>
+<rect x="230" y="840" width="300" height="70" rx="4" fill="rgba(232,163,59,0.16)" stroke="rgba(232,163,59,0.62)" stroke-width="1.2"/>
+<text x="380" y="878.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Hope for genuine self-endorsement</text>
+</g>
+<rect x="17.099999999999994" y="498.5" width="92.80000000000001" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="63.5" y="508.5" font-size="10" text-anchor="middle" fill="#8f8f8f">self-endorsement</text>
+</g>
+</svg>

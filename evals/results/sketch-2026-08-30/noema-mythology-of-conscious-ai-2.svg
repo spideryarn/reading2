@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 571.9" width="760" height="571.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="571.9" fill="#252525"/>
+<text x="16" y="24" font-size="17" fill="#f7f7f7" font-weight="600">Inside: four arguments against functionalism</text><text x="16" y="42" font-size="11.5" fill="#b8b8b8">One assumption feeds four independent two-step arguments — Turing brains, alternative dynamics, life, and simulation —</text>
+<text x="16" y="56.95" font-size="11.5" fill="#b8b8b8">that converge on the same shaky conclusion.</text>
+<g transform="translate(0 71.9)">
+<path d="M380 100 C380 122.5 105 127.5 105 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="105,150 101.5,140 108.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 122.5 290 127.5 290 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,150 286.5,140 293.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 122.5 475 127.5 475 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="475,150 471.5,140 478.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 122.5 660 127.5 660 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="660,150 656.5,140 663.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M105 230 L105 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="105,260 101.5,250 108.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M290 230 L290 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,260 286.5,250 293.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M475 230 L475 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="475,260 471.5,250 478.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M660 230 L660 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="660,260 656.5,250 663.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M105 340 C105 360 380 360 380 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,380 376.5,370 383.5,370" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M290 340 C290 360 380 360 380 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,380 376.5,370 383.5,370" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M475 340 C475 360 380 360 380 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,380 376.5,370 383.5,370" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M660 340 C660 360 380 360 380 380" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,380 376.5,370 383.5,370" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Assumption: computation suffices — Computational functionalism, so ingrained it's rarely recognized as an assumption.</title>
+<ellipse cx="380" cy="70" rx="100" ry="30" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="65.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Assumption: computation</text>
+<text x="380" y="84.25" font-size="15" text-anchor="middle" fill="#f7f7f7">suffices</text>
+</g>
+<g>
+<title>Turing: software is hardware-independent — A universal Turing machine can run any algorithm on any suitable substrate.</title>
+<rect x="30" y="150" width="150" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="105" y="187" font-size="10" text-anchor="middle" fill="#f7f7f7">Turing: software is</text>
+<text x="105" y="199.5" font-size="10" text-anchor="middle" fill="#f7f7f7">hardware-independent</text>
+</g>
+<g>
+<title>But brains have no such split — What a brain does and what it is cannot be cleanly separated.</title>
+<rect x="30" y="260" width="150" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="105" y="297" font-size="10" text-anchor="middle" fill="#f7f7f7">But brains have no such</text>
+<text x="105" y="309.5" font-size="10" text-anchor="middle" fill="#f7f7f7">split</text>
+</g>
+<g>
+<title>Continuous, stochastic dynamics exceed algorithms — Electromagnetic fields, neurotransmitter flux — none strictly Turing-computable.</title>
+<rect x="215" y="150" width="150" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="290" y="187" font-size="10" text-anchor="middle" fill="#f7f7f7">Continuous, stochastic</text>
+<text x="290" y="199.5" font-size="10" text-anchor="middle" fill="#f7f7f7">dynamics exceed algorithms</text>
+</g>
+<g>
+<title>Watt's governor: regulation, not computation — A 'computational' version of the governor would misunderstand what's going on.</title>
+<rect x="215" y="260" width="150" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="290" y="290.75" font-size="10" text-anchor="middle" fill="#f7f7f7">Watt's governor:</text>
+<text x="290" y="303.25" font-size="10" text-anchor="middle" fill="#f7f7f7">regulation, not</text>
+<text x="290" y="315.75" font-size="10" text-anchor="middle" fill="#f7f7f7">computation</text>
+</g>
+<g>
+<title>Perception as controlled hallucination — Conscious experience as the brain's best guess, calibrated by sensory signals.</title>
+<rect x="400" y="150" width="150" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="475" y="187" font-size="10" text-anchor="middle" fill="#f7f7f7">Perception as controlled</text>
+<text x="475" y="199.5" font-size="10" text-anchor="middle" fill="#f7f7f7">hallucination</text>
+</g>
+<g>
+<title>Self-sustaining life grounds prediction — Prediction-error minimization is inseparable from the materiality of metabolism.</title>
+<rect x="400" y="260" width="150" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="475" y="297" font-size="10" text-anchor="middle" fill="#f7f7f7">Self-sustaining life</text>
+<text x="475" y="309.5" font-size="10" text-anchor="middle" fill="#f7f7f7">grounds prediction</text>
+</g>
+<g>
+<title>A simulated storm doesn't get you wet — Simulation lacks the causal powers of the thing simulated.</title>
+<rect x="585" y="150" width="150" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="660" y="187" font-size="10" text-anchor="middle" fill="#f7f7f7">A simulated storm doesn't</text>
+<text x="660" y="199.5" font-size="10" text-anchor="middle" fill="#f7f7f7">get you wet</text>
+</g>
+<g>
+<title>Mind-uploading assumes its own conclusion — You're no more likely to exist in the sim than a hailstorm is to arise in a weather computer.</title>
+<rect x="585" y="260" width="150" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="660" y="297" font-size="10" text-anchor="middle" fill="#f7f7f7">Mind-uploading assumes its</text>
+<text x="660" y="309.5" font-size="10" text-anchor="middle" fill="#f7f7f7">own conclusion</text>
+</g>
+<g>
+<title>A strong, shaky assumption — Four independent lines each weaken computational functionalism, and together they compound.</title>
+<polygon points="280,380 480,380 520,420 480,460 280,460 240,420" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="424.875" font-size="15" text-anchor="middle" fill="#f7f7f7">A strong, shaky assumption</text>
+</g>
+</g>
+</svg>

@@ -1,0 +1,160 @@
+{
+  "caption": "A seven-step spine — evidence, theory, mechanism, politics, vindication — that ends by turning the same scaling logic on itself and finding it also breeds agency.",
+  "title": "Scaling's Spine and Its Shadow",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "The Scaling Hypothesis",
+      "caption": "GPT-3's results build a case for scale, which is explained, then tested against who will actually act on it and vindicated by a decade of wrong predictions — before the same logic is turned on agency itself.",
+      "height": 1160,
+      "items": [
+        {"kind":"region","x":24,"y":40,"w":712,"h":410,"label":"THE CASE FOR SCALING","style":"band","tone":1},
+        {"kind":"region","x":24,"y":460,"w":712,"h":280,"label":"WHO WILL ACT ON IT","style":"band","tone":2},
+        {"kind":"region","x":24,"y":750,"w":712,"h":290,"label":"APPENDIX: DOES AGENCY EMERGE TOO?","style":"band","tone":3},
+
+        {"kind":"node","id":"n1","shape":"ellipse","x":230,"y":80,"w":300,"h":90,
+         "text":"GPT-3 arrives","sub":"175B params, meta-learning appears","size":"md","tone":1,
+         "block":"spya-dfggb3","detail":"A straightforward scale-up of GPT-2 unexpectedly learns to learn from examples alone."},
+
+        {"kind":"node","id":"n2","shape":"box","x":230,"y":200,"w":300,"h":90,
+         "text":"Scale alone breeds intelligence","sub":"the blessings of scale, generalized","size":"md","tone":1,
+         "block":"spya-jwq3zr","detail":"Across vision, games, robotics, and language, bigger models+data+compute reliably yield generalization and meta-learning."},
+
+        {"kind":"node","id":"n3","shape":"hex","x":230,"y":320,"w":300,"h":90,
+         "text":"Why pretraining works","sub":"loss reduction tracks understanding","size":"md","tone":1,
+         "block":"spya-ce0ts7","detail":"Minimizing next-token loss forces a model from letter statistics toward genuine world-modeling."},
+
+        {"kind":"node","id":"n4","shape":"diamond","x":230,"y":510,"w":300,"h":90,
+         "text":"Will anyone scale further?","sub":"hardware is ready; will is not","size":"md","tone":2,
+         "block":"spya-b6zcpu","detail":"DeepMind and Google Brain have the compute but not the conviction to bet everything on scale."},
+
+        {"kind":"node","id":"n5","shape":"box","x":230,"y":630,"w":300,"h":90,
+         "text":"Critics keep being wrong","sub":"a decade of failed predictions","size":"md","tone":2,
+         "block":"spya-bp9mm2","detail":"Confident 'AI winter' forecasts from respected experts were repeatedly falsified by events."},
+
+        {"kind":"node","id":"n6","shape":"box","x":230,"y":800,"w":300,"h":90,
+         "text":"Agency leaks in from data","sub":"GPT-3 learns to roleplay agents","size":"md","tone":3,
+         "block":"spya-hfcz8w","detail":"Training on human-generated text inevitably teaches a model to imitate goal-pursuing agents.","opens":"inside-agency"},
+
+        {"kind":"node","id":"n7","shape":"box","x":230,"y":920,"w":300,"h":90,
+         "text":"Even formal systems tempt it","sub":"cellular automata, Turing machines","size":"md","tone":3,
+         "block":"spya-myjtg3","detail":"Agency-like inference appears even when training on abstract rule systems with no agents at all.","opens":"inside-agency"},
+
+        {"kind":"node","id":"n8","shape":"note","x":230,"y":1070,"w":300,"h":50,
+         "text":"Backlinks, related pages, bibliography","size":"xs",
+         "block":"spya-g9ffua"},
+
+        {"kind":"edge","from":"n1","to":"n2","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"n2","to":"n3","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"n3","to":"n4","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"n4","to":"n5","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"n5","to":"n6","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"n6","to":"n7","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"n5:left","to":"n2:left","via":"curve","line":"dashed","arrow":"end","label":"vindicates"}
+      ]
+    },
+
+    {
+      "id": "inside-pretraining",
+      "title": "Why Does Pretraining Work",
+      "caption": "A ladder of ever-subtler linguistic mastery climbing toward human-level loss, with an unresolved doubt hanging off it and an open question at the top.",
+      "height": 560,
+      "items": [
+        {"kind":"node","id":"a","shape":"ellipse","x":260,"y":30,"w":240,"h":70,
+         "text":"Prediction forces understanding","sub":"the pretraining thesis","size":"sm","tone":1,
+         "block":"spya-ce0ts7","detail":"Humans emit text saturated with logic and causality; predicting it well requires learning those things."},
+
+        {"kind":"node","id":"b","shape":"box","x":260,"y":130,"w":240,"h":70,
+         "text":"First: letters, words, spelling","sub":"rapid early gains","size":"sm","tone":1,
+         "block":"spya-r465ug","detail":"Loss drops fast as the model learns letter frequencies, valid words, and simple word associations."},
+
+        {"kind":"node","id":"c","shape":"box","x":260,"y":230,"w":240,"h":70,
+         "text":"Then: pronouns, coherence","sub":"errors shrink, get rarer","size":"sm","tone":1,
+         "block":"spya-rz8jsm","detail":"Remaining errors become subtler and rarer, like keeping a character's gender pronoun consistent."},
+
+        {"kind":"node","id":"d","shape":"box","x":260,"y":330,"w":240,"h":70,
+         "text":"The last bits are deepest","sub":"rare errors, real intelligence","size":"sm","tone":1,
+         "block":"spya-kmyg3w","detail":"The final fractions of a bit of loss correspond to the rare, consequential judgments that most resemble intelligence."},
+
+        {"kind":"node","id":"f","shape":"diamond","x":260,"y":430,"w":240,"h":80,
+         "text":"What will GPT-4 unlock?","sub":"no one can say","size":"sm","tone":1,
+         "block":"spya-uett4g","detail":"Extrapolating the curve predicts roughly halved loss again, but no one knows what capability that buys."},
+
+        {"kind":"node","id":"e","shape":"note","x":560,"y":330,"w":170,"h":90,
+         "text":"But is this provable in advance?","sub":"reasons for doubt","size":"xs","tone":2,
+         "block":"spya-e5n86h","detail":"Similar universal-learning arguments had failed before; only spending the compute actually proved it."},
+
+        {"kind":"edge","from":"a","to":"b","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"b","to":"c","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"c","to":"d","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"d","to":"f","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"d","to":"e","via":"curve","line":"dashed","arrow":"none","label":"doubts remain"},
+        {"kind":"edge","from":"e","to":"f","via":"curve","line":"dashed","arrow":"end","label":"yet it worked"}
+      ]
+    },
+
+    {
+      "id": "inside-agency",
+      "title": "Agency From Data",
+      "caption": "A funnel from GPT-3's obvious agency down to a general principle — agency is a cheap, convergent shortcut — then tested and confirmed even in toy formal systems.",
+      "height": 920,
+      "items": [
+        {"kind":"node","id":"a","shape":"ellipse","x":260,"y":20,"w":240,"h":60,
+         "text":"GPT-3 learns to roleplay agents","size":"sm","tone":1,
+         "block":"spya-hfcz8w","detail":"Trained on human-generated text, it inevitably learns to imitate goal-pursuing agents when prompted."},
+
+        {"kind":"node","id":"b","shape":"box","x":260,"y":100,"w":240,"h":60,
+         "text":"Agency is built from atoms","sub":"no principled boundary","size":"sm","tone":1,
+         "block":"spya-yb6wsc","detail":"Since agents are made of non-agentic matter, no data can be guaranteed free of agency."},
+
+        {"kind":"node","id":"c","shape":"box","x":260,"y":180,"w":240,"h":60,
+         "text":"We model rivers as agents too","sub":"the intentional stance","size":"sm","tone":1,
+         "block":"spya-frehf0","detail":"Humans routinely use teleological, agent-like explanations for non-agentic natural systems."},
+
+        {"kind":"node","id":"d","shape":"box","x":260,"y":260,"w":240,"h":60,
+         "text":"Systems 'want' to optimize","sub":"variational shortcuts","size":"sm","tone":1,
+         "block":"spya-tyue6z","detail":"Treating a system as maximizing some quantity is a computationally cheap, powerful shortcut a network could learn."},
+
+        {"kind":"node","id":"e","shape":"box","x":260,"y":340,"w":240,"h":60,
+         "text":"But such shortcuts cost compute","sub":"only pay off at scale","size":"sm","tone":1,
+         "block":"spya-wkqdua","detail":"Variational reasoning only emerges when a problem is rich and repeated enough to beat memorization."},
+
+        {"kind":"node","id":"f","shape":"diamond","x":260,"y":420,"w":240,"h":70,
+         "text":"What data induces agency?","size":"sm","tone":1,
+         "block":"spya-ufadea","detail":"An open empirical question: how much diversity pushes a model from safe modeling into agency."},
+
+        {"kind":"node","id":"g","shape":"box","x":260,"y":520,"w":240,"h":60,
+         "text":"Game of Life invites 'gliders'","sub":"cellular automata","size":"sm","tone":3,
+         "block":"spya-myjtg3","detail":"Even a simple rule-based system naturally decomposes into agent-like entities pursuing trajectories."},
+
+        {"kind":"node","id":"tm","shape":"diamond","x":260,"y":600,"w":240,"h":60,
+         "text":"What about Turing machines?","size":"sm","tone":3,
+         "block":"spya-q88ypt","detail":"Pushed to the most general computational setting: does training on program traces risk agency?"},
+
+        {"kind":"node","id":"h","shape":"box","x":60,"y":700,"w":220,"h":70,
+         "text":"One machine: just follows rules","sub":"no clear agency","size":"sm","tone":2,
+         "block":"spya-etcjwv","detail":"A single random Turing machine simply runs; nothing in it is trying to maximize or minimize anything."},
+
+        {"kind":"node","id":"i","shape":"box","x":480,"y":700,"w":220,"h":70,
+         "text":"Many machines: infer intent","sub":"a rudimentary theory of mind","size":"sm","tone":3,
+         "block":"spya-yzb32b","detail":"Meta-learning over many programs forces the model to infer each one's underlying 'intent' from behavior."},
+
+        {"kind":"node","id":"j","shape":"ellipse","x":260,"y":810,"w":240,"h":80,
+         "text":"Agency is hard to exclude","sub":"like Turing-completeness itself","size":"md","tone":3,
+         "block":"spya-c8qwnc","detail":"Agency is a convergent, useful capability; the broader and more powerful the system, the harder it is to keep out."},
+
+        {"kind":"edge","from":"a","to":"b","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"b","to":"c","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"c","to":"d","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"d","to":"e","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"e","to":"f","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"f","to":"g","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"g","to":"tm","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"tm","to":"h","via":"curve","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"tm","to":"i","via":"curve","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"h","to":"j","via":"curve","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"i","to":"j","via":"curve","line":"solid","arrow":"end"}
+      ]
+    }
+  ]
+}

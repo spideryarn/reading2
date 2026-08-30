@@ -305,6 +305,11 @@ export type Task =
   | "glossary"
   | "summarise"
   | "ideas"
+  /* The picture a model draws of the argument — docs/project/diagram.md
+     § Sketch. Article-reading like `ideas`, and like `ideas` it names block
+     ids, so it renders with `articleWithIds` and shares no cached prefix with
+     arc, tweets or glossary. */
+  | "sketch"
   | "explain"
   | "chat"
   | "search";
@@ -398,6 +403,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   glossary: "capable",
   summarise: "capable",
   ideas: "capable",
+  sketch: "capable",
   explain: "capable",
   chat: "capable",
   search: "capable",
@@ -481,6 +487,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   glossary: "messages",
   summarise: "messages",
   ideas: "messages",
+  sketch: "messages",
   explain: "chat",
   chat: "chat",
   search: "chat",
@@ -545,6 +552,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   glossary: null,
   summarise: null,
   ideas: null,
+  sketch: null,
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   search: "SPIDERYARN_SEARCH_MODEL",
@@ -730,8 +738,8 @@ for (const task of PIPELINE_TASKS) {
 /** The reasoning levels `output_config.effort` accepts. */
 export type Effort = "low" | "medium" | "high";
 
-/** The four stages that read the whole article and could share one cached copy of it. */
-export type ArticleStage = "arc" | "tweets" | "glossary" | "ideas";
+/** The stages that read the whole article and could share one cached copy of it. */
+export type ArticleStage = "arc" | "tweets" | "glossary" | "ideas" | "sketch";
 
 /**
  * **How hard each article-reading stage thinks — and it lives here because it is
@@ -789,6 +797,21 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      See `ARTICLE_RENDERER` below, which is what stops that mistake being made
      by the code as well as by the comment. */
   ideas: "high",
+  /* `high`, and for a reason that is not "it is a hard stage". This one has to
+     hold a whole geometry in its head — every box's position against every
+     other box's, on a canvas it cannot see — while also deciding what the
+     argument's shape *is*. Getting the second right and the first wrong
+     produces a picture that is true and unreadable, which is the failure this
+     stage is most prone to.
+
+     **It shares a cached prefix with `ideas` and with nothing else**, which is
+     worth stating because the obvious sentence — "it shares nothing, like
+     ideas" — was written here first and is false: `sharesArticleCache` groups
+     on effort AND renderer, and these two now agree on both (`high`, `ids`).
+     That is a real saving when a reader opens both on one article, and it is a
+     constraint: moving either stage's effort breaks it silently. GPT Sol,
+     2026-08-30. */
+  sketch: "high",
 };
 
 /**
@@ -817,6 +840,10 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   tweets: "text",
   glossary: "text",
   ideas: "ids",
+  /* Every node the picture draws may carry a block id for the reader to jump
+     to, so the ids have to be on the page — the same reason `ideas` is `ids`,
+     and the same consequence: no shared prefix with the four above. */
+  sketch: "ids",
 };
 
 /** One stage's effort, with the whole-run environment override applied. */

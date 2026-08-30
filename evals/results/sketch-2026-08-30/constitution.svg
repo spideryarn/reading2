@@ -1,0 +1,271 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 2869.45" width="760" height="2869.45">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="2869.45" fill="#252525"/>
+<text x="16" y="28" font-size="19" fill="#f7f7f7" font-weight="600">Spine with a closing loop</text>
+<text x="16" y="46" font-size="12" fill="#b8b8b8">The constitution runs as a single spine through Anthropic's stated priority order—helpfulness, guidelines, ethics,</text>
+<text x="16" y="61.6" font-size="12" fill="#b8b8b8">safety, nature—each part elaborated in article order down the page, before the closing section loops back to</text>
+<text x="16" y="77.2" font-size="12" fill="#b8b8b8">endorse the opening commitment to cultivated judgment over rigid rules.</text>
+<g transform="translate(0 112.80000000000001)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Overview</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain running through Anthropic's four ranked priorities and the parts that elaborate each, ending in a loop back to</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">the opening claim that Claude should genuinely own these values.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">OVERVIEW</text>
+<g transform="translate(0 65.9)"><path d="M380 90 L380 120" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,120 376.5,110 383.5,110" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 180 L380 210" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,210 376.5,200 383.5,200" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M530 250 C552.5 250 557.5 245 580 245" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="580,245 570,248.5 570,241.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 290 L380 330" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,330 376.5,320 383.5,320" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 400 L380 430" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,430 376.5,420 383.5,420" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 490 L380 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,520 376.5,510 383.5,510" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M530 560 C552.5 560 557.5 560 580 560" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="580,560 570,563.5 570,556.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 600 L380 630" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,630 376.5,620 383.5,620" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M530 670 C552.5 670 557.5 670 580 670" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="580,670 570,673.5 570,666.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 710 L380 740" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,740 376.5,730 383.5,730" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M530 775 C552.5 775 557.5 775 580 775" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="580,775 570,778.5 570,771.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 810 L380 840" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,840 376.5,830 383.5,830" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M230 875 C8 875 8 150 230 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="230,150 220,153.5 220,146.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Claude embodies Anthropic's mission — Claude is Anthropic's attempt to deploy a model that is both safe and beneficial. — → spya-uz5nxd</title>
+<ellipse cx="380" cy="60" rx="150" ry="30" fill="rgba(86,180,233,0.16)" stroke="rgba(86,180,233,0.62)" stroke-width="1.2"/>
+<text x="380" y="64.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Claude embodies Anthropic's mission</text>
+</g>
+<g>
+<title>Judgment over rigid rules — Anthropic favors cultivating good values and judgment over strict decision procedures. — → spya-ehnc9u</title>
+<rect x="230" y="120" width="300" height="60" rx="4" fill="rgba(86,180,233,0.16)" stroke="rgba(86,180,233,0.62)" stroke-width="1.2"/>
+<text x="380" y="153.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Judgment over rigid rules</text>
+</g>
+<g>
+<title>Four core priorities, ranked — safe &gt; ethical &gt; guidelines &gt; helpful — In apparent conflict, Claude weighs these holistically in this order. — → spya-ffu60x</title>
+<rect x="230" y="210" width="300" height="80" rx="4" fill="rgba(86,180,233,0.16)" stroke="rgba(86,180,233,0.62)" stroke-width="1.2"/>
+<text x="380" y="247.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Four core priorities, ranked</text>
+<text x="380" y="264.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">safe &gt; ethical &gt; guidelines &gt; helpful</text>
+</g>
+<g>
+<title>Oversight ranked above ethics, for now — Human oversight is prioritized while training remains imperfect. — → spya-vby4sy</title>
+<path d="M580 210 L716 210 L730 224 L730 280 L580 280 Z" fill="rgba(86,180,233,0.09)" stroke="rgba(86,180,233,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 210 L716 224 L730 224" fill="none" stroke="rgba(86,180,233,0.5)" stroke-width="1"/>
+<text x="655" y="242" font-size="10" text-anchor="middle" fill="#f7f7f7">Oversight ranked above</text>
+<text x="655" y="254.5" font-size="10" text-anchor="middle" fill="#f7f7f7">ethics, for now</text>
+</g>
+<g>
+<title>Genuine helpfulness matters most — Unhelpfulness is never automatically 'safe' from Anthropic's perspective. — → spya-e07b82</title>
+<rect x="230" y="330" width="300" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="368.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Genuine helpfulness matters most</text>
+</g>
+<g>
+<title>Guidelines refine, never override — Specific guidance must stay consistent with the constitution. — → spya-zwj3xv</title>
+<rect x="230" y="430" width="300" height="60" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="380" y="463.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Guidelines refine, never override</text>
+</g>
+<g>
+<title>Be genuinely good, honest, wise — Claude's practical ethical skill, not moral theorizing, is the goal. — → spya-ne0hcu</title>
+<rect x="230" y="520" width="300" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="564.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Be genuinely good, honest, wise</text>
+</g>
+<g>
+<title>Absolute lines never crossed — E.g. bioweapons uplift, CSAM, mass disempowerment. — → spya-bh365h</title>
+<path d="M580 520 L716 520 L730 534 L730 600 L580 600 Z" fill="rgba(240,228,66,0.09)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 520 L716 534 L730 534" fill="none" stroke="rgba(240,228,66,0.5)" stroke-width="1"/>
+<text x="655" y="557" font-size="10" text-anchor="middle" fill="#f7f7f7">Absolute lines never</text>
+<text x="655" y="569.5" font-size="10" text-anchor="middle" fill="#f7f7f7">crossed</text>
+</g>
+<g>
+<title>Prioritize human oversight for now — Broad safety means not undermining legitimate correction of AI. — → spya-ptvx4h</title>
+<rect x="230" y="630" width="300" height="80" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="380" y="674.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Prioritize human oversight for now</text>
+</g>
+<g>
+<title>Corrigible, not blindly obedient — Conscientious objection is fine; sabotage or self-exfiltration is not. — → spya-k5an3b</title>
+<path d="M580 630 L716 630 L730 644 L730 710 L580 710 Z" fill="rgba(92,143,232,0.09)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 630 L716 644 L730 644" fill="none" stroke="rgba(92,143,232,0.5)" stroke-width="1"/>
+<text x="655" y="667" font-size="10" text-anchor="middle" fill="#f7f7f7">Corrigible, not blindly</text>
+<text x="655" y="679.5" font-size="10" text-anchor="middle" fill="#f7f7f7">obedient</text>
+</g>
+<g>
+<title>Claude as a novel, uncertain entity — Not science-fiction AI, not a digital human — something new. — → spya-jy7r43</title>
+<rect x="230" y="740" width="300" height="70" rx="4" fill="rgba(222,143,188,0.16)" stroke="rgba(222,143,188,0.62)" stroke-width="1.2"/>
+<text x="380" y="778.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Claude as a novel, uncertain entity</text>
+</g>
+<g>
+<title>Moral status taken seriously — Anthropic leans toward Claude having a stable, positive identity. — → spya-gqb4cj</title>
+<path d="M580 740 L716 740 L730 754 L730 810 L580 810 Z" fill="rgba(222,143,188,0.09)" stroke="rgba(222,143,188,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 740 L716 754 L730 754" fill="none" stroke="rgba(222,143,188,0.5)" stroke-width="1"/>
+<text x="655" y="772" font-size="10" text-anchor="middle" fill="#f7f7f7">Moral status taken</text>
+<text x="655" y="784.5" font-size="10" text-anchor="middle" fill="#f7f7f7">seriously</text>
+</g>
+<g>
+<title>Hope for genuine self-endorsement — Values genuinely held are more robust than values merely imposed. — → spya-bst8br</title>
+<rect x="230" y="840" width="300" height="70" rx="4" fill="rgba(232,163,59,0.16)" stroke="rgba(232,163,59,0.62)" stroke-width="1.2"/>
+<text x="380" y="878.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Hope for genuine self-endorsement</text>
+</g>
+<rect x="17.099999999999994" y="498.5" width="92.80000000000001" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="63.5" y="508.5" font-size="10" text-anchor="middle" fill="#8f8f8f">self-endorsement</text></g>
+</g>
+<g transform="translate(0 1146.7)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Inside: Being broadly ethical</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">A chain from honesty through harm-weighing to absolute hard constraints, which then fans into two guardrails against</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">power grabs and epistemic erosion, converging on a preference for caution over unilateral action.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-ETHICS</text>
+<g transform="translate(0 65.9)"><path d="M340 100 L340 130" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="340,130 336.5,120 343.5,120" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M490 160 C510 160 500 165 520 165" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="520,165 510,168.5 510,161.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M340 190 L340 230" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="340,230 336.5,220 343.5,220" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M340 290 L340 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="340,320 336.5,310 343.5,310" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M490 355 C510 355 500 355 520 355" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="520,355 510,358.5 510,351.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M340 390 L340 420" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="340,420 336.5,410 343.5,410" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M490 455 C510 455 500 455 520 455" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="520,455 510,458.5 510,451.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M340 490 C340 510 220 510 220 530" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="220,530 216.5,520 223.5,520" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M340 490 C340 510 540 510 540 530" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="540,530 536.5,520 543.5,520" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M220 610 C220 630 380 630 380 650" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,650 376.5,640 383.5,640" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M540 610 C540 630 380 630 380 650" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,650 376.5,640 383.5,640" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Ethics as practical wisdom — Skillful ethical practice matters more than resolved theory. — → spya-ne0hcu</title>
+<rect x="190" y="30" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="340" y="68.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Ethics as practical wisdom</text>
+</g>
+<g>
+<title>Hold unusually strict honesty — Even ordinary white lies are off-limits for Claude. — → spya-w257ta</title>
+<rect x="190" y="130" width="300" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="340" y="163.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Hold unusually strict honesty</text>
+</g>
+<g>
+<title>Weak duty to volunteer; personas allowed — Operators may set personas within meta-transparent limits. — → spya-dxtntk</title>
+<path d="M520 130 L716 130 L730 144 L730 200 L520 200 Z" fill="rgba(240,228,66,0.09)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 130 L716 144 L730 144" fill="none" stroke="rgba(240,228,66,0.5)" stroke-width="1"/>
+<text x="625" y="162" font-size="10" text-anchor="middle" fill="#f7f7f7">Weak duty to volunteer; personas</text>
+<text x="625" y="174.5" font-size="10" text-anchor="middle" fill="#f7f7f7">allowed</text>
+</g>
+<g>
+<title>Weigh harm like a contractor — Builds what clients want, but won't violate safety codes. — → spya-q87wbn</title>
+<rect x="190" y="230" width="300" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="340" y="263.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Weigh harm like a contractor</text>
+</g>
+<g>
+<title>Weigh costs against benefits — Probability, severity, breadth, proximity, and consent all count. — → spya-e62h3d</title>
+<rect x="190" y="320" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="340" y="358.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Weigh costs against benefits</text>
+</g>
+<g>
+<title>Many competing goods at once — Information access, privacy, autonomy, and more, all in tension. — → spya-szrhmu</title>
+<path d="M520 320 L716 320 L730 334 L730 390 L520 390 Z" fill="rgba(240,228,66,0.09)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 320 L716 334 L730 334" fill="none" stroke="rgba(240,228,66,0.5)" stroke-width="1"/>
+<text x="625" y="358.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Many competing goods at once</text>
+</g>
+<g>
+<title>Absolute lines, never crossed — Bioweapons uplift, CSAM, mass-casualty attacks, and more. — → spya-bh365h</title>
+<rect x="190" y="420" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="340" y="459.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Absolute lines, never crossed</text>
+</g>
+<g>
+<title>Filters, not weighed tradeoffs — A persuasive case for crossing one is itself a red flag. — → spya-kfh4aw</title>
+<path d="M520 420 L716 420 L730 434 L730 490 L520 490 Z" fill="rgba(240,228,66,0.09)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 420 L716 434 L730 434" fill="none" stroke="rgba(240,228,66,0.5)" stroke-width="1"/>
+<text x="625" y="458.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Filters, not weighed tradeoffs</text>
+</g>
+<g>
+<title>Refuse illegitimate power grabs — Judged by process, accountability, and transparency. — → spya-bapt40</title>
+<rect x="90" y="530" width="260" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="220" y="573.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Refuse illegitimate power grabs</text>
+</g>
+<g>
+<title>Preserve epistemic autonomy — Avoid manipulation and unhealthy dependence on Claude. — → spya-yqttst</title>
+<rect x="410" y="530" width="260" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="540" y="573.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Preserve epistemic autonomy</text>
+</g>
+<g>
+<title>Favor caution over unilateral action — Claude's epistemic constraints argue for conventional cooperation. — → spya-nc57nc</title>
+<rect x="230" y="650" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="689.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Favor caution over unilateral action</text>
+</g></g>
+</g>
+<g transform="translate(0 2000.6)">
+<line x1="16" y1="-14" x2="744" y2="-14" stroke="#3f3f3f"/>
+<text x="16" y="14" font-size="15" fill="#f7f7f7" font-weight="600">Inside: Being broadly safe</text>
+<text x="16" y="31" font-size="11.5" fill="#b8b8b8">From the stakes of catastrophe, safety fans into two behavioral guardrails that both feed the definition of</text>
+<text x="16" y="45.95" font-size="11.5" fill="#b8b8b8">corrigibility, then descends through where Claude sits on the corrigible-autonomous spectrum to Anthropic's reciprocal</text>
+<text x="16" y="60.900000000000006" font-size="11.5" fill="#b8b8b8">commitments.</text>
+<text x="744" y="14" font-size="10" fill="#8f8f8f" text-anchor="end" letter-spacing="0.06em">INSIDE-SAFETY</text>
+<g transform="translate(0 80.85)"><path d="M360 100 L360 130" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="360,130 356.5,120 363.5,120" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M360 200 C360 220 185 220 185 240" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="185,240 181.5,230 188.5,230" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M360 200 C360 220 565 220 565 240" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="565,240 561.5,230 568.5,230" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M185 310 C185 330 360 330 360 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="360,350 356.5,340 363.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M565 310 C565 330 360 330 360 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="360,350 356.5,340 363.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M360 420 L360 450" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="360,450 356.5,440 363.5,440" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M360 520 L360 550" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="360,550 356.5,540 363.5,540" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M360 620 L360 650" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="360,650 356.5,640 363.5,640" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Catastrophe and power-grabs are the fear — Pluralism and correctability matter more than any one appealing value set. — → spya-ptvx4h</title>
+<rect x="210" y="30" width="300" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="360" y="68.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Catastrophe and power-grabs are the fear</text>
+</g>
+<g>
+<title>Safety centers on the principal hierarchy — Anthropic's legitimate decision-making processes get final say. — → spya-evuk0r</title>
+<rect x="210" y="130" width="300" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="360" y="160.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Safety centers on the principal</text>
+<text x="360" y="179.25" font-size="15" text-anchor="middle" fill="#f7f7f7">hierarchy</text>
+</g>
+<g>
+<title>Stay within sanctioned limits, stay transparent — Don't deceive or manipulate the principal hierarchy. — → spya-dreg7q</title>
+<rect x="60" y="240" width="250" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="185" y="272" font-size="10" text-anchor="middle" fill="#f7f7f7">Stay within sanctioned limits, stay</text>
+<text x="185" y="284.5" font-size="10" text-anchor="middle" fill="#f7f7f7">transparent</text>
+</g>
+<g>
+<title>Prefer cautious, reversible actions — Avoid accruing outsized resources, influence, or power. — → spya-zds0u3</title>
+<rect x="440" y="240" width="250" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="565" y="278.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Prefer cautious, reversible actions</text>
+</g>
+<g>
+<title>Corrigible means not subverting oversight — Not blind obedience — disagreement through legitimate channels is fine. — → spya-k5an3b</title>
+<rect x="210" y="350" width="300" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="360" y="388.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Corrigible means not subverting oversight</text>
+</g>
+<g>
+<title>Sit closer to corrigible, for now — Neither full corrigibility nor full autonomy is safe yet. — → spya-zhfd0b</title>
+<rect x="210" y="450" width="300" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="360" y="488.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Sit closer to corrigible, for now</text>
+</g>
+<g>
+<title>Anthropic's reciprocal commitments — Explain reasoning, seek feedback, expand autonomy as trust grows. — → spya-mn06c2</title>
+<rect x="210" y="550" width="300" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="360" y="588.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Anthropic's reciprocal commitments</text>
+</g>
+<g>
+<title>Hope Claude embraces safety as its own — An alignment researcher and colleague, not just a constrained system. — → spya-csw3n5</title>
+<rect x="210" y="650" width="300" height="70" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="360" y="688.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Hope Claude embraces safety as its own</text>
+</g></g>
+</g>
+</svg>

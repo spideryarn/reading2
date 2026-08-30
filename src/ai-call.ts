@@ -3,7 +3,7 @@
  * OpenRouter is built, sent, read and *accounted for*.
  *
  * The sibling of [`src/messages-stream.ts`](messages-stream.ts). That file owns
- * the seven pipeline stages, which speak Anthropic's Messages shape through the
+ * the eight pipeline stages, which speak Anthropic's Messages shape through the
  * SDK; this one owns the six calls that speak OpenAI's shape and are made with
  * `fetch` — chat, explain, search, dictation, the PDF reader, and embeddings.
  * Between them there is no third way to spend money, and
@@ -175,12 +175,12 @@ export const AI_JOB_ROUTE: Record<
 /**
  * Which path a job posts to.
  *
- * **The `undefined` check is not defensive noise.** `ChatJob` excludes the seven
+ * **The `undefined` check is not defensive noise.** `ChatJob` excludes the eight
  * pipeline stages, so in typed code this cannot miss — but `AiJob` is a wider
  * type that flows in from stored rows and from `Object.keys`, and a `"labels"`
  * arriving here would otherwise read `undefined.path` and throw a `TypeError`
  * about a property, which says nothing about what actually went wrong. Those
- * seven go through [`streamMessage`](messages-stream.ts); the message says so.
+ * eight go through [`streamMessage`](messages-stream.ts); the message says so.
  * Found by the test for it, which asserted the sentence and got the `TypeError`.
  */
 export function pathFor(job: ChatJob): OpenRouterPath {
@@ -190,7 +190,7 @@ export function pathFor(job: ChatJob): OpenRouterPath {
 /** The jobs that come down this wire — everything that is not a pipeline stage. */
 export type ChatJob = Exclude<
   AiJob,
-  "toc" | "labels" | "arc" | "tweets" | "glossary" | "summarise" | "ideas"
+  "toc" | "labels" | "arc" | "tweets" | "glossary" | "summarise" | "ideas" | "sketch"
 >;
 
 /**

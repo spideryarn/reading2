@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 651.9" width="760" height="651.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="651.9" fill="#252525"/>
+<text x="16" y="24" font-size="17" fill="#f7f7f7" font-weight="600">Inside: why we're tempted</text><text x="16" y="42" font-size="11.5" fill="#b8b8b8">One conflation (intelligence with consciousness) branches into three biases, each with its own mechanism, all</text>
+<text x="16" y="56.95" font-size="11.5" fill="#b8b8b8">converging on the same conclusion: this is pareidolia.</text>
+<g transform="translate(0 71.9)">
+<path d="M380 110 C380 130 140 130 140 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="140,150 136.5,140 143.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 110 C380 130 380 130 380 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,150 376.5,140 383.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 110 C380 130 620 130 620 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="620,150 616.5,140 623.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M140 220 L140 250" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="140,250 136.5,240 143.5,240" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 220 L380 250" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,250 376.5,240 383.5,240" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M620 220 L620 250" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="620,250 616.5,240 623.5,240" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M620 320 L620 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="620,350 616.5,340 623.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M140 320 C140 383 380 397 380 460" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,460 376.5,450 383.5,450" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 320 C380 383 380 397 380 460" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,460 376.5,450 383.5,450" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M620 420 C620 440 380 440 380 460" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,460 376.5,450 383.5,450" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Intelligence is doing; consciousness is being — Nagel: 'something it is like to be' an organism — a different property from problem-solving.</title>
+<ellipse cx="380" cy="75" rx="100" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="70.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Intelligence is doing;</text>
+<text x="380" y="89.25" font-size="15" text-anchor="middle" fill="#f7f7f7">consciousness is being</text>
+</g>
+<g>
+<title>Anthropocentrism: human as template — Taking the human example as definitional rather than one case among many.</title>
+<rect x="40" y="150" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="140" y="181.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Anthropocentrism: human as</text>
+<text x="140" y="196.4" font-size="12" text-anchor="middle" fill="#f7f7f7">template</text>
+</g>
+<g>
+<title>Exceptionalism &amp; anthropomorphism — Placing humans atop every hierarchy, then projecting human traits onto machines.</title>
+<rect x="40" y="250" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="140" y="281.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Exceptionalism &amp;</text>
+<text x="140" y="296.4" font-size="12" text-anchor="middle" fill="#f7f7f7">anthropomorphism</text>
+</g>
+<g>
+<title>Language especially triggers belief — LLMs, not protein-folders like AlphaFold, get called conscious — because they talk.</title>
+<rect x="280" y="150" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="181.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Language especially triggers</text>
+<text x="380" y="196.4" font-size="12" text-anchor="middle" fill="#f7f7f7">belief</text>
+</g>
+<g>
+<title>'Hallucinate' implies felt experience — Better word: 'confabulate' — doing, not experiencing.</title>
+<rect x="280" y="250" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="281.4" font-size="12" text-anchor="middle" fill="#f7f7f7">'Hallucinate' implies felt</text>
+<text x="380" y="296.4" font-size="12" text-anchor="middle" fill="#f7f7f7">experience</text>
+</g>
+<g>
+<title>Exponential growth feels imminent — On an exponential curve, every point feels like an inflection point.</title>
+<rect x="520" y="150" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="620" y="181.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Exponential growth feels</text>
+<text x="620" y="196.4" font-size="12" text-anchor="middle" fill="#f7f7f7">imminent</text>
+</g>
+<g>
+<title>Techno-rapture: Promethean immortality — Ex Machina: 'that's the history of Gods' — the lure of building minds forever.</title>
+<rect x="520" y="250" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="620" y="281.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Techno-rapture: Promethean</text>
+<text x="620" y="296.4" font-size="12" text-anchor="middle" fill="#f7f7f7">immortality</text>
+</g>
+<g>
+<title>Silicon Valley incentives amplify it — Magical AI narratives help justify valuations and salaries too.</title>
+<rect x="520" y="350" width="200" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="620" y="381.4" font-size="12" text-anchor="middle" fill="#f7f7f7">Silicon Valley incentives</text>
+<text x="620" y="396.4" font-size="12" text-anchor="middle" fill="#f7f7f7">amplify it</text>
+</g>
+<g>
+<title>Recognizing pareidolia is only step one — Seeing why we're fooled doesn't yet tell us whether artificial consciousness is possible.</title>
+<polygon points="280,460 480,460 520,500 480,540 280,540 240,500" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="495.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Recognizing pareidolia is only</text>
+<text x="380" y="514.25" font-size="15" text-anchor="middle" fill="#f7f7f7">step one</text>
+</g>
+</g>
+</svg>

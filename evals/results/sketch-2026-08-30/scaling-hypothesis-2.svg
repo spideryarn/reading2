@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 991.9" width="760" height="991.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="991.9" fill="#252525"/>
+<text x="16" y="24" font-size="17" fill="#f7f7f7" font-weight="600">Agency From Data</text><text x="16" y="42" font-size="11.5" fill="#b8b8b8">A funnel from GPT-3's obvious agency down to a general principle — agency is a cheap, convergent shortcut — then tested</text>
+<text x="16" y="56.95" font-size="11.5" fill="#b8b8b8">and confirmed even in toy formal systems.</text>
+<g transform="translate(0 71.9)">
+<path d="M380 80 L380 100" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,100 376.5,90 383.5,90" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 160 L380 180" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,180 376.5,170 383.5,170" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 240 L380 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,260 376.5,250 383.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 320 L380 340" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,340 376.5,330 383.5,330" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 400 L380 420" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,420 376.5,410 383.5,410" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 490 L380 520" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,520 376.5,510 383.5,510" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 580 L380 600" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,600 376.5,590 383.5,590" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 660 C380 680 170 680 170 700" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="170,700 166.5,690 173.5,690" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 660 C380 680 590 680 590 700" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="590,700 586.5,690 593.5,690" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M170 770 C170 790 380 790 380 810" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,810 376.5,800 383.5,800" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M590 770 C590 790 380 790 380 810" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,810 376.5,800 383.5,800" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>GPT-3 learns to roleplay agents — Trained on human-generated text, it inevitably learns to imitate goal-pursuing agents when prompted.</title>
+<ellipse cx="380" cy="50" rx="120" ry="30" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="53.9" font-size="12" text-anchor="middle" fill="#f7f7f7">GPT-3 learns to roleplay agents</text>
+</g>
+<g>
+<title>Agency is built from atoms — no principled boundary — Since agents are made of non-agentic matter, no data can be guaranteed free of agency.</title>
+<rect x="260" y="100" width="240" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="127.97200000000001" font-size="12" text-anchor="middle" fill="#f7f7f7">Agency is built from atoms</text>
+<text x="380" y="144.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">no principled boundary</text>
+</g>
+<g>
+<title>We model rivers as agents too — the intentional stance — Humans routinely use teleological, agent-like explanations for non-agentic natural systems.</title>
+<rect x="260" y="180" width="240" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="207.972" font-size="12" text-anchor="middle" fill="#f7f7f7">We model rivers as agents too</text>
+<text x="380" y="224.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">the intentional stance</text>
+</g>
+<g>
+<title>Systems 'want' to optimize — variational shortcuts — Treating a system as maximizing some quantity is a computationally cheap, powerful shortcut a network could learn.</title>
+<rect x="260" y="260" width="240" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="287.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Systems 'want' to optimize</text>
+<text x="380" y="304.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">variational shortcuts</text>
+</g>
+<g>
+<title>But such shortcuts cost compute — only pay off at scale — Variational reasoning only emerges when a problem is rich and repeated enough to beat memorization.</title>
+<rect x="260" y="340" width="240" height="60" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="367.972" font-size="12" text-anchor="middle" fill="#f7f7f7">But such shortcuts cost compute</text>
+<text x="380" y="384.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">only pay off at scale</text>
+</g>
+<g>
+<title>What data induces agency? — An open empirical question: how much diversity pushes a model from safe modeling into agency.</title>
+<polygon points="380,420 500,455 380,490 260,455" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="458.9" font-size="12" text-anchor="middle" fill="#f7f7f7">What data induces agency?</text>
+</g>
+<g>
+<title>Game of Life invites 'gliders' — cellular automata — Even a simple rule-based system naturally decomposes into agent-like entities pursuing trajectories.</title>
+<rect x="260" y="520" width="240" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="547.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Game of Life invites 'gliders'</text>
+<text x="380" y="564.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">cellular automata</text>
+</g>
+<g>
+<title>What about Turing machines? — Pushed to the most general computational setting: does training on program traces risk agency?</title>
+<polygon points="380,600 500,630 380,660 260,630" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="633.9" font-size="12" text-anchor="middle" fill="#f7f7f7">What about Turing machines?</text>
+</g>
+<g>
+<title>One machine: just follows rules — no clear agency — A single random Turing machine simply runs; nothing in it is trying to maximize or minimize anything.</title>
+<rect x="60" y="700" width="220" height="70" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="170" y="732.972" font-size="12" text-anchor="middle" fill="#f7f7f7">One machine: just follows rules</text>
+<text x="170" y="749.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">no clear agency</text>
+</g>
+<g>
+<title>Many machines: infer intent — a rudimentary theory of mind — Meta-learning over many programs forces the model to infer each one's underlying 'intent' from behavior.</title>
+<rect x="480" y="700" width="220" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="590" y="732.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Many machines: infer intent</text>
+<text x="590" y="749.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">a rudimentary theory of mind</text>
+</g>
+<g>
+<title>Agency is hard to exclude — like Turing-completeness itself — Agency is a convergent, useful capability; the broader and more powerful the system, the harder it is to keep out.</title>
+<ellipse cx="380" cy="850" rx="120" ry="40" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="847.465" font-size="15" text-anchor="middle" fill="#f7f7f7">Agency is hard to exclude</text>
+<text x="380" y="867.9250000000001" font-size="11.4" text-anchor="middle" fill="#8f8f8f">like Turing-completeness itself</text>
+</g>
+</g>
+</svg>

@@ -1,0 +1,97 @@
+{
+  "caption": "The constitution runs as a single spine through Anthropic's stated priority order—helpfulness, guidelines, ethics, safety, nature—each part elaborated in article order down the page, before the closing section loops back to endorse the opening commitment to cultivated judgment over rigid rules.",
+  "title": "Spine with a closing loop",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "caption": "A chain running through Anthropic's four ranked priorities and the parts that elaborate each, ending in a loop back to the opening claim that Claude should genuinely own these values.",
+      "height": 940,
+      "items": [
+        {"kind":"node","id":"mission","shape":"ellipse","x":230,"y":30,"w":300,"h":60,"text":"Claude embodies Anthropic's mission","size":"md","tone":0,"block":"spya-uz5nxd","detail":"Claude is Anthropic's attempt to deploy a model that is both safe and beneficial."},
+        {"kind":"node","id":"approach","shape":"box","x":230,"y":120,"w":300,"h":60,"text":"Judgment over rigid rules","size":"sm","tone":0,"block":"spya-ehnc9u","detail":"Anthropic favors cultivating good values and judgment over strict decision procedures."},
+        {"kind":"node","id":"core-values","shape":"box","x":230,"y":210,"w":300,"h":80,"text":"Four core priorities, ranked","sub":"safe > ethical > guidelines > helpful","size":"sm","tone":0,"block":"spya-ffu60x","detail":"In apparent conflict, Claude weighs these holistically in this order."},
+        {"kind":"node","id":"priority-note","shape":"note","x":580,"y":210,"w":150,"h":70,"text":"Oversight ranked above ethics, for now","size":"xs","tone":0,"block":"spya-vby4sy","detail":"Human oversight is prioritized while training remains imperfect."},
+        {"kind":"node","id":"helpful","shape":"box","x":230,"y":330,"w":300,"h":70,"text":"Genuine helpfulness matters most","size":"sm","tone":1,"block":"spya-e07b82","detail":"Unhelpfulness is never automatically 'safe' from Anthropic's perspective."},
+        {"kind":"node","id":"guidelines","shape":"box","x":230,"y":430,"w":300,"h":60,"text":"Guidelines refine, never override","size":"sm","tone":2,"block":"spya-zwj3xv","detail":"Specific guidance must stay consistent with the constitution."},
+        {"kind":"node","id":"ethics","shape":"box","x":230,"y":520,"w":300,"h":80,"text":"Be genuinely good, honest, wise","size":"md","tone":3,"block":"spya-ne0hcu","detail":"Claude's practical ethical skill, not moral theorizing, is the goal.","opens":"inside-ethics"},
+        {"kind":"node","id":"hard-constraints-sat","shape":"note","x":580,"y":520,"w":150,"h":80,"text":"Absolute lines never crossed","size":"xs","tone":3,"block":"spya-bh365h","detail":"E.g. bioweapons uplift, CSAM, mass disempowerment."},
+        {"kind":"node","id":"safe","shape":"box","x":230,"y":630,"w":300,"h":80,"text":"Prioritize human oversight for now","size":"md","tone":4,"block":"spya-ptvx4h","detail":"Broad safety means not undermining legitimate correction of AI.","opens":"inside-safety"},
+        {"kind":"node","id":"corrigibility-sat","shape":"note","x":580,"y":630,"w":150,"h":80,"text":"Corrigible, not blindly obedient","size":"xs","tone":4,"block":"spya-k5an3b","detail":"Conscientious objection is fine; sabotage or self-exfiltration is not."},
+        {"kind":"node","id":"nature","shape":"box","x":230,"y":740,"w":300,"h":70,"text":"Claude as a novel, uncertain entity","size":"sm","tone":5,"block":"spya-jy7r43","detail":"Not science-fiction AI, not a digital human — something new."},
+        {"kind":"node","id":"moral-status-sat","shape":"note","x":580,"y":740,"w":150,"h":70,"text":"Moral status taken seriously","size":"xs","tone":5,"block":"spya-gqb4cj","detail":"Anthropic leans toward Claude having a stable, positive identity."},
+        {"kind":"node","id":"concluding","shape":"box","x":230,"y":840,"w":300,"h":70,"text":"Hope for genuine self-endorsement","size":"sm","tone":6,"block":"spya-bst8br","detail":"Values genuinely held are more robust than values merely imposed."},
+
+        {"kind":"edge","from":"mission","to":"approach","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"approach","to":"core-values","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"core-values:right","to":"priority-note:left","via":"curve","line":"dashed","arrow":"end"},
+        {"kind":"edge","from":"core-values","to":"helpful","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"helpful","to":"guidelines","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"guidelines","to":"ethics","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"ethics:right","to":"hard-constraints-sat:left","via":"curve","line":"dashed","arrow":"end"},
+        {"kind":"edge","from":"ethics","to":"safe","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"safe:right","to":"corrigibility-sat:left","via":"curve","line":"dashed","arrow":"end"},
+        {"kind":"edge","from":"safe","to":"nature","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"nature:right","to":"moral-status-sat:left","via":"curve","line":"dashed","arrow":"end"},
+        {"kind":"edge","from":"nature","to":"concluding","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"concluding:left","to":"approach:left","via":"curve","line":"dashed","arrow":"end","label":"self-endorsement"}
+      ]
+    },
+    {
+      "id": "inside-ethics",
+      "title": "Inside: Being broadly ethical",
+      "caption": "A chain from honesty through harm-weighing to absolute hard constraints, which then fans into two guardrails against power grabs and epistemic erosion, converging on a preference for caution over unilateral action.",
+      "height": 760,
+      "items": [
+        {"kind":"node","id":"wisdom","shape":"box","x":190,"y":30,"w":300,"h":70,"text":"Ethics as practical wisdom","size":"sm","tone":3,"block":"spya-ne0hcu","detail":"Skillful ethical practice matters more than resolved theory."},
+        {"kind":"node","id":"honesty","shape":"box","x":190,"y":130,"w":300,"h":60,"text":"Hold unusually strict honesty","size":"sm","tone":3,"block":"spya-w257ta","detail":"Even ordinary white lies are off-limits for Claude."},
+        {"kind":"node","id":"honesty-practice","shape":"note","x":520,"y":130,"w":210,"h":70,"text":"Weak duty to volunteer; personas allowed","size":"xs","tone":3,"block":"spya-dxtntk","detail":"Operators may set personas within meta-transparent limits."},
+        {"kind":"node","id":"harm","shape":"box","x":190,"y":230,"w":300,"h":60,"text":"Weigh harm like a contractor","size":"sm","tone":3,"block":"spya-q87wbn","detail":"Builds what clients want, but won't violate safety codes."},
+        {"kind":"node","id":"cost-benefit","shape":"box","x":190,"y":320,"w":300,"h":70,"text":"Weigh costs against benefits","size":"sm","tone":3,"block":"spya-e62h3d","detail":"Probability, severity, breadth, proximity, and consent all count."},
+        {"kind":"node","id":"values-balance","shape":"note","x":520,"y":320,"w":210,"h":70,"text":"Many competing goods at once","size":"xs","tone":3,"block":"spya-szrhmu","detail":"Information access, privacy, autonomy, and more, all in tension."},
+        {"kind":"node","id":"hard-constraints","shape":"box","x":190,"y":420,"w":300,"h":70,"text":"Absolute lines, never crossed","size":"md","tone":3,"block":"spya-bh365h","detail":"Bioweapons uplift, CSAM, mass-casualty attacks, and more."},
+        {"kind":"node","id":"constraints-function","shape":"note","x":520,"y":420,"w":210,"h":70,"text":"Filters, not weighed tradeoffs","size":"xs","tone":3,"block":"spya-kfh4aw","detail":"A persuasive case for crossing one is itself a red flag."},
+        {"kind":"node","id":"power","shape":"box","x":90,"y":530,"w":260,"h":80,"text":"Refuse illegitimate power grabs","size":"sm","tone":3,"block":"spya-bapt40","detail":"Judged by process, accountability, and transparency."},
+        {"kind":"node","id":"epistemic","shape":"box","x":410,"y":530,"w":260,"h":80,"text":"Preserve epistemic autonomy","size":"sm","tone":3,"block":"spya-yqttst","detail":"Avoid manipulation and unhealthy dependence on Claude."},
+        {"kind":"node","id":"judgment","shape":"box","x":230,"y":650,"w":300,"h":70,"text":"Favor caution over unilateral action","size":"md","tone":3,"block":"spya-nc57nc","detail":"Claude's epistemic constraints argue for conventional cooperation."},
+
+        {"kind":"edge","from":"wisdom","to":"honesty","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"honesty:right","to":"honesty-practice:left","via":"curve","line":"dashed","arrow":"end"},
+        {"kind":"edge","from":"honesty","to":"harm","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"harm","to":"cost-benefit","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"cost-benefit:right","to":"values-balance:left","via":"curve","line":"dashed","arrow":"end"},
+        {"kind":"edge","from":"cost-benefit","to":"hard-constraints","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"hard-constraints:right","to":"constraints-function:left","via":"curve","line":"dashed","arrow":"end"},
+        {"kind":"edge","from":"hard-constraints","to":"power","via":"curve","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"hard-constraints","to":"epistemic","via":"curve","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"power","to":"judgment","via":"curve","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"epistemic","to":"judgment","via":"curve","line":"solid","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-safety",
+      "title": "Inside: Being broadly safe",
+      "caption": "From the stakes of catastrophe, safety fans into two behavioral guardrails that both feed the definition of corrigibility, then descends through where Claude sits on the corrigible-autonomous spectrum to Anthropic's reciprocal commitments.",
+      "height": 760,
+      "items": [
+        {"kind":"node","id":"stakes","shape":"box","x":210,"y":30,"w":300,"h":70,"text":"Catastrophe and power-grabs are the fear","size":"sm","tone":4,"block":"spya-ptvx4h","detail":"Pluralism and correctability matter more than any one appealing value set."},
+        {"kind":"node","id":"safe-behaviors","shape":"box","x":210,"y":130,"w":300,"h":70,"text":"Safety centers on the principal hierarchy","size":"md","tone":4,"block":"spya-evuk0r","detail":"Anthropic's legitimate decision-making processes get final say."},
+        {"kind":"node","id":"sanctioned-limits","shape":"box","x":60,"y":240,"w":250,"h":70,"text":"Stay within sanctioned limits, stay transparent","size":"xs","tone":4,"block":"spya-dreg7q","detail":"Don't deceive or manipulate the principal hierarchy."},
+        {"kind":"node","id":"avoiding-drastic","shape":"box","x":440,"y":240,"w":250,"h":70,"text":"Prefer cautious, reversible actions","size":"xs","tone":4,"block":"spya-zds0u3","detail":"Avoid accruing outsized resources, influence, or power."},
+        {"kind":"node","id":"corrigibility","shape":"box","x":210,"y":350,"w":300,"h":70,"text":"Corrigible means not subverting oversight","size":"sm","tone":4,"block":"spya-k5an3b","detail":"Not blind obedience — disagreement through legitimate channels is fine."},
+        {"kind":"node","id":"spectrum","shape":"box","x":210,"y":450,"w":300,"h":70,"text":"Sit closer to corrigible, for now","size":"sm","tone":4,"block":"spya-zhfd0b","detail":"Neither full corrigibility nor full autonomy is safe yet."},
+        {"kind":"node","id":"commitments","shape":"box","x":210,"y":550,"w":300,"h":70,"text":"Anthropic's reciprocal commitments","size":"sm","tone":4,"block":"spya-mn06c2","detail":"Explain reasoning, seek feedback, expand autonomy as trust grows."},
+        {"kind":"node","id":"collaborator","shape":"box","x":210,"y":650,"w":300,"h":70,"text":"Hope Claude embraces safety as its own","size":"sm","tone":4,"block":"spya-csw3n5","detail":"An alignment researcher and colleague, not just a constrained system."},
+
+        {"kind":"edge","from":"stakes","to":"safe-behaviors","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"safe-behaviors","to":"sanctioned-limits","via":"curve","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"safe-behaviors","to":"avoiding-drastic","via":"curve","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"sanctioned-limits","to":"corrigibility","via":"curve","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"avoiding-drastic","to":"corrigibility","via":"curve","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"corrigibility","to":"spectrum","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"spectrum","to":"commitments","via":"straight","line":"solid","arrow":"end"},
+        {"kind":"edge","from":"commitments","to":"collaborator","via":"straight","line":"solid","arrow":"end"}
+      ]
+    }
+  ]
+}

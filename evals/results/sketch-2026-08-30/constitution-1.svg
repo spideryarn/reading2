@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 831.9" width="760" height="831.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="831.9" fill="#252525"/>
+<text x="16" y="24" font-size="17" fill="#f7f7f7" font-weight="600">Inside: Being broadly ethical</text><text x="16" y="42" font-size="11.5" fill="#b8b8b8">A chain from honesty through harm-weighing to absolute hard constraints, which then fans into two guardrails against</text>
+<text x="16" y="56.95" font-size="11.5" fill="#b8b8b8">power grabs and epistemic erosion, converging on a preference for caution over unilateral action.</text>
+<g transform="translate(0 71.9)">
+<path d="M340 100 L340 130" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="340,130 336.5,120 343.5,120" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M490 160 C510 160 500 165 520 165" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="520,165 510,168.5 510,161.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M340 190 L340 230" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="340,230 336.5,220 343.5,220" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M340 290 L340 320" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="340,320 336.5,310 343.5,310" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M490 355 C510 355 500 355 520 355" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="520,355 510,358.5 510,351.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M340 390 L340 420" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="340,420 336.5,410 343.5,410" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M490 455 C510 455 500 455 520 455" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="520,455 510,458.5 510,451.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M340 490 C340 510 220 510 220 530" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="220,530 216.5,520 223.5,520" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M340 490 C340 510 540 510 540 530" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="540,530 536.5,520 543.5,520" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M220 610 C220 630 380 630 380 650" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,650 376.5,640 383.5,640" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M540 610 C540 630 380 630 380 650" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,650 376.5,640 383.5,640" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Ethics as practical wisdom — Skillful ethical practice matters more than resolved theory.</title>
+<rect x="190" y="30" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="340" y="68.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Ethics as practical wisdom</text>
+</g>
+<g>
+<title>Hold unusually strict honesty — Even ordinary white lies are off-limits for Claude.</title>
+<rect x="190" y="130" width="300" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="340" y="163.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Hold unusually strict honesty</text>
+</g>
+<g>
+<title>Weak duty to volunteer; personas allowed — Operators may set personas within meta-transparent limits.</title>
+<path d="M520 130 L716 130 L730 144 L730 200 L520 200 Z" fill="rgba(240,228,66,0.09)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 130 L716 144 L730 144" fill="none" stroke="rgba(240,228,66,0.5)" stroke-width="1"/>
+<text x="625" y="162" font-size="10" text-anchor="middle" fill="#f7f7f7">Weak duty to volunteer; personas</text>
+<text x="625" y="174.5" font-size="10" text-anchor="middle" fill="#f7f7f7">allowed</text>
+</g>
+<g>
+<title>Weigh harm like a contractor — Builds what clients want, but won't violate safety codes.</title>
+<rect x="190" y="230" width="300" height="60" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="340" y="263.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Weigh harm like a contractor</text>
+</g>
+<g>
+<title>Weigh costs against benefits — Probability, severity, breadth, proximity, and consent all count.</title>
+<rect x="190" y="320" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="340" y="358.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Weigh costs against benefits</text>
+</g>
+<g>
+<title>Many competing goods at once — Information access, privacy, autonomy, and more, all in tension.</title>
+<path d="M520 320 L716 320 L730 334 L730 390 L520 390 Z" fill="rgba(240,228,66,0.09)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 320 L716 334 L730 334" fill="none" stroke="rgba(240,228,66,0.5)" stroke-width="1"/>
+<text x="625" y="358.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Many competing goods at once</text>
+</g>
+<g>
+<title>Absolute lines, never crossed — Bioweapons uplift, CSAM, mass-casualty attacks, and more.</title>
+<rect x="190" y="420" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="340" y="459.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Absolute lines, never crossed</text>
+</g>
+<g>
+<title>Filters, not weighed tradeoffs — A persuasive case for crossing one is itself a red flag.</title>
+<path d="M520 420 L716 420 L730 434 L730 490 L520 490 Z" fill="rgba(240,228,66,0.09)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M716 420 L716 434 L730 434" fill="none" stroke="rgba(240,228,66,0.5)" stroke-width="1"/>
+<text x="625" y="458.25" font-size="10" text-anchor="middle" fill="#f7f7f7">Filters, not weighed tradeoffs</text>
+</g>
+<g>
+<title>Refuse illegitimate power grabs — Judged by process, accountability, and transparency.</title>
+<rect x="90" y="530" width="260" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="220" y="573.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Refuse illegitimate power grabs</text>
+</g>
+<g>
+<title>Preserve epistemic autonomy — Avoid manipulation and unhealthy dependence on Claude.</title>
+<rect x="410" y="530" width="260" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="540" y="573.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Preserve epistemic autonomy</text>
+</g>
+<g>
+<title>Favor caution over unilateral action — Claude's epistemic constraints argue for conventional cooperation.</title>
+<rect x="230" y="650" width="300" height="70" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="380" y="689.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Favor caution over unilateral action</text>
+</g>
+</g>
+</svg>

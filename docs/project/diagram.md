@@ -852,6 +852,35 @@ one worth attacking if this ever becomes a problem, and it is not this feature's
 to fix. What is *not* measured here is React re-rendering 276 `<g>` elements on
 each of those, which is a browser question rather than an arithmetic one.
 
+## A fifth, being built: Sketch
+
+<a id="sketch"></a>
+
+> I've been disappointed by Diagram mode so far. … Let the agent decide the
+> layout completely.
+>
+> — Greg, 2026-08-30
+
+**Not in the band yet** — the stage, the schema, the painter and the harness
+exist and three real articles have been drawn; the artefact, the pipeline step
+and the panel have not been wired up. Everything about it, including the review
+that found what would have shipped a blank picture as a success, is in
+[sketch-diagram.md](../plans/sketch-diagram.md).
+
+The short version, because it bears on the section below. The four pictures
+above each answer one question with one algorithm, so every article comes out
+the same shape. Sketch has no algorithm: a model reads the piece, decides what
+shape the argument is — three supports converging, a ladder, a spine with asides
+— and lays it out itself.
+
+**It does not emit SVG**, which is what makes it a different answer from the one
+this file rejects below rather than the same one again. The model writes a
+*scene* in five primitives with numbers in them
+([`src/sketch-scene.ts`](../../src/sketch-scene.ts)), and the numbers are checked
+against the article before anything is drawn: every block id has to exist, every
+edge has to name a node that is there, and the picture is measured for whether it
+still runs down the page. A structure you can check is the whole difference.
+
 ## What is deliberately not here
 
 <a id="not-doing"></a>
@@ -859,6 +888,8 @@ each of those, which is a browser question rather than an arithmetic one.
 - **No generated image.** GPT Images 2.0 rendering a Mermaid description was
   considered and rejected: not interactive, a model call per article, and — the
   serious one — an image of a structure cannot be checked against the structure.
+  (This is the objection [Sketch](#sketch) had to answer, and it answers it by
+  having the model write a *checkable scene* rather than a picture.)
   A picture that puts section 4 inside section 3 is wrong in a way that looks
   exactly like being right ([silent-success.md](../reusable/silent-success.md)).
   There *is* a good use for it, and it is a different feature: a static,
