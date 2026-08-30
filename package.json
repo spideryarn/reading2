@@ -60,6 +60,7 @@
     "@anthropic-ai/sdk": "^0.120.0",
     "@exodus/bytes": "^1.15.1",
     "@floating-ui/react": "^0.27.20",
+    "@napi-rs/canvas": "^1.0.8",
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@mozilla/readability": "^0.6.0",

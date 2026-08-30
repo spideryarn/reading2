@@ -8,6 +8,11 @@ a blank black page with nothing in the browser console.
 > promise. Verified in production: `/api/health` returns `200` with `ok: true`, `warnings: []`,
 > `store: postgres, articles: 5`. Everything in the present tense below the fix line describes the
 > code as it was.
+>
+> **That fix saved the API and left PDFs broken for another three days** — see
+> [The second act](#the-second-act-the-api-lived-and-pdfs-stayed-dead-for-three-days), which also
+> corrects two things this file got wrong: PDFs never needed the native binary at all, and the
+> claim below that no local test could have caught this.
 
 ## What actually happened
 
@@ -43,7 +48,11 @@ Four steps, each verified rather than assumed:
    than the build machine — that is the line that proves it is a tracing failure and not an install
    one.
 
-## Why no test and no laptop could ever have caught it
+## Why no test and no laptop could ever have caught it — which was not true
+
+> Kept as written, because being confidently wrong here is the interesting part. A test that
+> reproduces it on this laptop, exact line and stack, is
+> [below](#no-arrangement-of-local-tests-would-have-gone-red-was-wrong).
 
 `@napi-rs/canvas` is an **optional, platform-specific** package: one binary per platform, resolved at
 install time. The development machine has `@napi-rs/canvas-darwin-arm64` sitting in `node_modules`,
@@ -108,6 +117,80 @@ from "pdfjs-dist/legacy/build/pdf.mjs"      → gone
 import("pdfjs-dist/legacy/build/pdf.mjs")   → present
 ```
 
+## The second act: the API lived, and PDFs stayed dead for three days
+
+**2026-08-30.** The fix above was the right fix and it was not the whole fix, which this file said
+plainly — "the API comes up **whether or not** the canvas binary made it into the bundle" — and
+which nobody then tested. The binary had not made it into the bundle. Nothing had changed about
+that; only the blast radius had changed.
+
+It surfaced the first time anyone put a PDF through the deployed pipeline, which was three days
+later, because until 2026-08-30 no document of any kind could be ingested in production at all
+([deployment.md](../project/deployment.md)). The very first one, `arxiv-1503`:
+
+```
+fetch    ok, 291 ms          — the bytes were sniffed as a PDF and stored correctly
+extract  failed, 83 ms       — ReferenceError: DOMMatrix is not defined
+```
+
+83 milliseconds, before any model call, so finding out cost nothing. That is worth noticing on its
+own: **pass 0 runs before anything expensive**, so the worst production failure in this stage is
+also the cheapest to discover. The three warnings from the original outage were printed again,
+verbatim, in the same order.
+
+### The fix, and the thing that was hiding in plain sight
+
+`DOMMatrix` never needed the 26 MB native binary. `@napi-rs/canvas` is a 148 KB wrapper, and its
+`DOMMatrix` comes from **`geometry.js`** — 873 lines of plain JavaScript sitting beside `index.js`, a
+vendored copy of the standard geometry-polyfill. Only `index.js` requires the binding.
+
+So [`src/pdf.ts`](../../src/pdf.ts) now imports **that file, by name**, and sets `globalThis.DOMMatrix`
+before pdf.js is loaded. The specifier is a literal, which is the property that matters: Vercel's
+tracer could not read pdf.js's `require` inside a try/catch, and it can read this. One file, no
+native code, and the same `DOMMatrix` class pdf.js would have picked up on a laptop — so local and
+deployed are no longer running different code.
+
+`Path2D` is deliberately left unpolyfilled. Every `new Path2D()` in pdf.js is inside a function on
+the rendering path, and reading text never goes there; production agrees, having thrown on
+`DOMMatrix` and never reached a `Path2D`. If that ever changes it will throw by name.
+
+### "No arrangement of local tests would have gone red" was wrong
+
+That sentence is above, and it is the most expensive sentence in this file, because it closed off
+the search. It is true of the tests *as written* and false in principle.
+
+The laptop has the package. It does not have to be allowed to find it. Patch Node's CJS resolver to
+refuse `@napi-rs/canvas` — which is what pdf.js reaches through — and the failure reproduces exactly,
+same line, same stack:
+
+```
+ReferenceError: DOMMatrix is not defined
+  at .../pdfjs-dist/legacy/build/pdf.mjs:16713:22
+  at async pass0 (.../src/pdf.ts:286:17)
+```
+
+[`tests/pdf-without-canvas.test.ts`](../../tests/pdf-without-canvas.test.ts) is that, in a child
+process because pdf.js's module body runs once per process. It allows the deep `geometry.js` path
+while refusing the bare package — not a weakened test, but a faithful copy of the post-fix bundle,
+where the one traced file is present and `index.js` is not. It also asserts the output *matches the
+pdf.js baseline recorded with the binary present* (8 pages, 3,522 words), because a `DOMMatrix` stub
+that merely satisfies `new DOMMatrix()` would get past module evaluation and could still read the
+page wrongly.
+
+**The general lesson is worth more than the fix.** "The environment differs, so we cannot test it"
+was wrong here in the ordinary way: the difference was one resolvable module, and a difference that
+specific can nearly always be manufactured. Before writing that a bug is untestable, name the exact
+thing that differs — if you can name it, you can usually fake it.
+
+### And a correction to the reasoning above
+
+This file rejected `includeFiles` because it "would have kept a PDF engine loading on every cold
+start of every route". That was an objection to the **static import**, not to `includeFiles`. Once
+the import was lazy the two were independent, and the sentence quietly kept a shipping-the-file fix
+looking disqualified when it no longer was. It is still not the fix we chose — a traced deep import
+beats a hand-maintained bundle list — but it should have been rejected for being clumsy rather than
+for a cost it had stopped having.
+
 ## What this class of bug is, and how to not have it again
 
 The class is **a module-scope import with a native or environment-dependent dependency, in a bundle
@@ -130,11 +213,15 @@ Three things would each have caught it, and are worth having:
    before it broke anything.
 
 The deeper architectural point: [`src/pipeline.ts`](../../src/pipeline.ts) is the *ingest* pipeline,
-and the serverless API imports it whole in order to reach a few functions. Ingest does not work in
-production at all yet ([deployment.md](../project/deployment.md)), so the API is currently paying —
-in bundle size, cold start, and now availability — for code it cannot use. Splitting the read path
-from the ingest path would make this whole class of failure structurally impossible rather than
-individually fixable.
+and the serverless API imports it whole in order to reach a few functions, so the API pays — in
+bundle size, cold start, and in 2026-08-27 availability — for code that most requests never touch.
+Splitting the read path from the ingest path would make this whole class of failure structurally
+impossible rather than individually fixable.
+
+> Written when ingest did not work in production at all. It does now, from 2026-08-30
+> ([deployment.md](../project/deployment.md)), so the API is no longer paying for code it *cannot*
+> use — but the argument for splitting the graph is unchanged, and the second act above is the
+> second bug to arrive through exactly this route.
 
 ## See also
 

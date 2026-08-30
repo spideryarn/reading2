@@ -55,11 +55,70 @@ import { isMain } from "./is-main.js";
 type Pdfjs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
 let pdfjsPromise: Promise<Pdfjs> | undefined;
 
+/**
+ * **Give pdf.js its `DOMMatrix` before it goes looking for one.**
+ *
+ * Deferring the import above kept the *API* alive without the canvas package.
+ * It did not make PDFs work, and the postmortem says so. Measured in
+ * production 2026-08-30, on the first PDF ever put through the deployed
+ * pipeline — 83 ms into the `extract` step, before any model call, so it cost
+ * nothing to find out:
+ *
+ *     Warning: Cannot load "@napi-rs/canvas" package: "Error: Cannot find
+ *       module '@napi-rs/canvas' Require stack:
+ *       - /var/task/node_modules/pdfjs-dist/legacy/build/pdf.mjs".
+ *     Warning: Cannot polyfill `DOMMatrix`, rendering may be broken.
+ *     ReferenceError: DOMMatrix is not defined
+ *       at /var/task/node_modules/pdfjs-dist/legacy/build/pdf.mjs:16713:22
+ *
+ * pdf.js's own polyfill is a `require` inside a try/catch (pdf.mjs:15705), and
+ * when it fails it **warns and carries on** — then dies four hundred lines
+ * later on `const SCALE_MATRIX = new DOMMatrix()` at module scope. A soft miss
+ * and a hard use, which is why the build was green.
+ *
+ * The fix is to satisfy the need without the package that could not be traced.
+ * `DOMMatrix` does not come from the 26 MB native binding: it comes from
+ * `geometry.js`, 873 lines of plain JavaScript in the 148 KB wrapper — a
+ * vendored copy of the standard geometry-polyfill. So this imports **that file
+ * by name**, which is a literal specifier Vercel's tracer can read and ship,
+ * and never `@napi-rs/canvas` itself, whose `index.js` pulls in the binary.
+ *
+ * Two properties worth keeping:
+ *
+ *   - it is the *same* `DOMMatrix` class pdf.js would have got on a laptop, so
+ *     local runs and deployed runs are no longer different code;
+ *   - `Path2D` is deliberately not polyfilled. Every `new Path2D()` in pdf.js
+ *     is inside a function on the rendering path, and reading text never goes
+ *     there. Production agrees: it threw on `DOMMatrix` and never reached a
+ *     `Path2D`. If that ever changes it will throw by name, not go quiet.
+ *
+ * tests/pdf-without-canvas.test.ts hides the package from Node's resolver and
+ * reproduces the whole thing on a machine that has it installed.
+ */
+async function ensureDomMatrix(): Promise<void> {
+  if (typeof (globalThis as { DOMMatrix?: unknown }).DOMMatrix !== "undefined") return;
+  const geometry = await import("@napi-rs/canvas/geometry.js");
+  /* CJS through the ESM interop, so the named export may arrive on `default`. */
+  const DOMMatrix = geometry.DOMMatrix ?? geometry.default?.DOMMatrix;
+  if (typeof DOMMatrix !== "function") {
+    throw new Error(
+      "@napi-rs/canvas/geometry.js did not export a DOMMatrix constructor. pdf.js " +
+        "will fail at module scope on `new DOMMatrix()` — see the note above this function.",
+    );
+  }
+  (globalThis as { DOMMatrix?: unknown }).DOMMatrix = DOMMatrix;
+}
+
 /** pdf.js, imported the first time something actually needs it. */
 function loadPdfjs(): Promise<Pdfjs> {
   /* The *promise* is cached rather than the module, so two concurrent callers
-     share one import rather than racing to start a second one. */
-  pdfjsPromise ??= import("pdfjs-dist/legacy/build/pdf.mjs");
+     share one import rather than racing to start a second one. The polyfill is
+     inside the cached promise so it is likewise done once, and always before
+     the import it exists to serve. */
+  pdfjsPromise ??= (async () => {
+    await ensureDomMatrix();
+    return import("pdfjs-dist/legacy/build/pdf.mjs");
+  })();
   return pdfjsPromise;
 }
 

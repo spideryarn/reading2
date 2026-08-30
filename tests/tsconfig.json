@@ -31,10 +31,17 @@
        the three resolvers that doc names. */
     "paths": { "@/*": ["../src/web/*"] }
   },
-  /* The ambient declaration for html-encoding-sniffer lives beside the module
-     that uses it, and this project pulls that module in without owning the
-     directory it sits in — so name it, or `src/fetch.ts` is checked here with
-     an untyped import it does not have anywhere else. */
-  "include": [".", "../src/html-encoding-sniffer.d.ts"],
+  /* The ambient declarations for html-encoding-sniffer and for
+     @napi-rs/canvas/geometry.js live beside the modules that use them, and this
+     project pulls those modules in without owning the directory they sit in —
+     so name each one, or `src/fetch.ts` and `src/pdf.ts` are checked here with
+     untyped imports they do not have anywhere else. Adding a `.d.ts` under
+     `src/` is therefore two edits, and this project is the one that tells you
+     so: it is the only one where the omission shows up. */
+  "include": [
+    ".",
+    "../src/html-encoding-sniffer.d.ts",
+    "../src/napi-canvas-geometry.d.ts"
+  ],
   "exclude": []
 }
