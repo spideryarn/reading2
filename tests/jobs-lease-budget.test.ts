@@ -19,6 +19,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { ASSETS_BUDGET_MS } from "../src/collect-assets.js";
 import { DEADLINE_MARGIN_MS, LEASE_MS } from "../src/jobs.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -47,12 +48,55 @@ describe("the job lease and the platform's kill", () => {
     expect(DEADLINE_MARGIN_MS).toBeLessThan(LEASE_MS);
   });
 
+  /**
+   * **The whole default ingest, not one step — and this is the assertion that
+   * will bind.**
+   *
+   * Today every step gets its own fresh deadline, because each `/advance` takes
+   * its own claim. Under the claim-once coordinator the whole job runs inside
+   * **one** claim, so the budget stops being per-step and becomes per-job, and
+   * the sum below is what has to fit. It is asserted against `maxDuration`
+   * because that bound is true in both worlds: the job has to fit one
+   * invocation either way.
+   *
+   * Requested by the session that owns the coordinator, for the reason that
+   * makes it worth having: without it, **the next person to add a step to
+   * `DEFAULT_INGEST_STEPS` breaks the budget silently**, and it surfaces as a
+   * job aborting near the end of a long article — the most expensive possible
+   * way to find out.
+   *
+   * The costs are measurements, not guesses, and each is the worst observed:
+   * `toc` from the ledger, `assets` from a real run against the 10-image
+   * article (7.1s measured, but its 180s cap is what bounds it), and the three
+   * cheap steps rounded generously upward.
+   */
+  it("leaves room for the whole default ingest inside one invocation", () => {
+    const worstStepMs = {
+      fetch: 10_000,
+      extract: 5_000,
+      blocks: 5_000,
+      toc: 320_400,
+      assets: ASSETS_BUDGET_MS,
+    };
+    const wholeJobMs = Object.values(worstStepMs).reduce((a, b) => a + b, 0);
+    expect(wholeJobMs).toBeLessThan(maxDurationSeconds() * 1000);
+  });
+
   it("covers the longest step this project has actually measured", () => {
-    /* `toc` totalled 324.0s over three calls and `summarise` 240.3s over ten,
-       per-article, from data/_ai-calls.jsonl on 2026-08-29. A deadline under
-       either means that article cannot be ingested through a job on any
-       machine — which is what these constants used to do. */
-    const longestMeasuredStepMs = 324_000;
+    /* **Wall time per step, grouped by `runId`** — which is the unit the
+       deadline actually bounds, and getting that wrong is how this number was
+       first derived. From data/_ai-calls.jsonl on 2026-08-30, the longest step
+       any real run has taken is a `toc` of **320.4s in a single call**.
+
+       Two corrections worth keeping, because both were reported to other
+       sessions before they were checked. `summarise` was cited as 240.3s and
+       does **not** belong here: that is ten calls *summed*, and its wall time
+       is 91.3s, because they overlap. And the earlier `toc` figure of "324.0s
+       over three calls" was three unrelated runs five hours apart, collapsed
+       together by a null slug. Sum a step's calls and you overstate a
+       concurrent step and understate nothing; only wall time answers "did this
+       step fit". */
+    const longestMeasuredStepMs = 320_400;
     expect(LEASE_MS - DEADLINE_MARGIN_MS).toBeGreaterThan(longestMeasuredStepMs);
   });
 });

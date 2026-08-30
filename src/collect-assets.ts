@@ -141,10 +141,27 @@ export const CONCURRENCY = 2;
  * the worst available ending: it takes every other step in the invocation with
  * it and reports nothing about why. GPT Sol, 2026-08-30.
  *
- * **300s, not 400s.** The remaining quarter is for the parts of the step this
- * number cannot govern: `storeRawSource` takes no `AbortSignal` at all, so a
- * slow bucket runs past the deadline no matter what the fetches do, and the
- * unwinding of whatever was on the wire when it bit has to fit somewhere too.
+ * **180s, and it was 300s until the step was actually run.** Every earlier
+ * figure here came from the policy constants — 200 images, 2 concurrent, 2
+ * attempts, 15s each — which is a ceiling nobody approaches. The corpus's worst
+ * article has **10** images, not 200, and **no article in `data/` had an
+ * `assets.json` at all**, so the step had never completed on anything and every
+ * number about it was derived rather than measured.
+ *
+ * Measured on 2026-08-30 against the 10-image article: **7.1 seconds**, 8
+ * stored, 2 blocked, 240 KB. So the normal case is two orders of magnitude
+ * inside this budget, and the budget exists only to bound the pathological one:
+ * a publisher that hangs costs `15s × 2 attempts` per image at 2 concurrent, so
+ * 180s covers a fully-hanging article of our real size and caps a 200-image one
+ * at about a dozen images before it stops.
+ *
+ * Sizing it against the ceiling rather than the corpus was the wrong
+ * denominator, and it cost the whole ingest 120s of budget it did not need.
+ *
+ * The remainder below 400s is for the parts of the step this number cannot
+ * govern: `storeRawSource` takes no `AbortSignal` at all, so a slow bucket runs
+ * past the deadline no matter what the fetches do, and the unwinding of
+ * whatever was on the wire when it bit has to fit somewhere too.
  *
  * `tests/collect-assets.test.ts` pins the *relationship* to the job deadline
  * rather than the number, in the shape `tests/jobs-lease-budget.test.ts` uses
@@ -153,7 +170,7 @@ export const CONCURRENCY = 2;
  * src/jobs.ts: this file is a pipeline stage and the job runner is what calls
  * it, so the dependency would point the wrong way.
  */
-export const ASSETS_BUDGET_MS = 300_000;
+export const ASSETS_BUDGET_MS = 180_000;
 
 /* ------------------------------------------------------------------ *
  * The global queue
@@ -474,7 +491,16 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
    */
   const deadline = new AbortController();
   const signalFor = signal ? AbortSignal.any([signal, deadline.signal]) : deadline.signal;
-  const timer = setTimeout(() => deadline.abort(new Error("assets budget spent")), limits.budgetMs);
+  /**
+   * Our abort reason, kept so it can be recognised **by identity** below.
+   *
+   * `fetch` rejects with the signal's reason, and this object then travels back
+   * as the `cause` of whatever `classifyNetworkError` builds. Identity is the
+   * only reliable way to know the failure was ours: the *code* it arrives under
+   * is not stable — see `reasonFor`.
+   */
+  const budgetSpent = new Error("assets budget spent");
+  const timer = setTimeout(() => deadline.abort(budgetSpent), limits.budgetMs);
   const timeIsUp = new Promise<void>((resolve) => {
     deadline.signal.addEventListener("abort", () => resolve(), { once: true });
   });
@@ -488,7 +514,27 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
    * into `FetchFailure("timeout", …)`, identical to a slow origin. So the
    * question is put to `deadline.signal` instead of to the error.
    *
-   * **Only `timeout` is reinterpreted.** A `not-found` or a `too-large` that
+   * **Recognised by identity, not by code, and that is the whole point.**
+   * Measured against the real `fetchAsset`: `fetch` rejects with the signal's
+   * abort reason, which reaches `classifyNetworkError` rather than
+   * `abortFailure`, so the code depends on what the aborting party passed to
+   * `.abort()` —
+   *
+   *     per-image AbortSignal.timeout -> TimeoutError -> code "timeout"
+   *     our deadline's .abort(Error)  -> plain Error  -> code "connection"
+   *
+   * and `connection` maps to `network`. Reading the code would therefore file
+   * every abandoned image as "the far end was slow, try later" on the only path
+   * that ships, while every fake in the tests — which reject with a tidy
+   * `FetchFailure("timeout")` — went green. So we look for `budgetSpent` in the
+   * cause chain, which cannot be wrong about whose failure it was.
+   *
+   * The code is still consulted as a fallback, because one route loses the
+   * cause: `underSignal` around the DNS phase builds its own `FetchFailure`
+   * with no `cause` at all (src/fetch.ts `abortFailure`), and there the code is
+   * the only evidence there is.
+   *
+   * **Nothing else is reinterpreted.** A `not-found` or a `too-large` that
    * lands after the deadline is still a fact about the image and keeps saying
    * so — relabelling every late failure would destroy the one signal that says
    * re-running will not help. And the *caller's* cancellation is not this: it
@@ -496,11 +542,21 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
    * exactly as before.
    */
   const reasonFor = (err: unknown): AssetFailure | null => {
-    const abandoned =
-      err instanceof FetchFailure
-        ? err.code === "timeout"
-        : (err as Error | undefined)?.name === "AbortError";
-    if (deadline.signal.aborted && abandoned) return "out-of-time";
+    let ours = false;
+    for (let e: unknown = err, hop = 0; e != null && hop < 4; hop++) {
+      if (e === budgetSpent) {
+        ours = true;
+        break;
+      }
+      e = (e as { cause?: unknown }).cause;
+    }
+    if (!ours) {
+      ours =
+        err instanceof FetchFailure
+          ? err.code === "timeout"
+          : (err as Error | undefined)?.name === "AbortError";
+    }
+    if (deadline.signal.aborted && ours) return "out-of-time";
     return err instanceof FetchFailure ? FAILURE_FOR[err.code] : null;
   };
 

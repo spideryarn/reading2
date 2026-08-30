@@ -227,10 +227,21 @@ The account is **Vercel Pro** (`billing.plan = "pro"`, via the API), so `maxDura
 of which only `toc` and `arc` call a model:
 
 ```
-~10s + ~5s + ~5s + 324s + ~30s + 31s  ≈  405s
+fetch ~10s + extract ~5s + blocks ~5s + toc 320.4s + assets ≤300s  ≈  640s worst, 490s realistic
 ```
 
-which fits 800s with headroom. `LEASE_MS` rises to cover the longest single step.
+**Corrected 2026-08-30, twice, and the second correction breaks something.** This line first read
+`… + arc 31s ≈ 405s`, charging a step that had left `DEFAULT_INGEST_STEPS` the same day (`f42a877`),
+and using a `toc` figure of 324s that was three unrelated runs summed. The real numbers are worse in
+the direction that matters: `toc` is 320.4s **measured in a single call**, and `assets` can now spend
+up to its 300s budget, so a worst-case job is ~640s and a realistic worst is ~490s.
+
+That still fits the 800s invocation. **It does not fit a 400s claim**, which is what Stage 3's
+claim-once coordinator gives it — the self-abort bounds the whole claim, not each step, so on today's
+constants a job that would comfortably finish gets killed four fifths of the way through `toc`. Stage
+0's 400s was sized for the current one-step-per-request shape, where every step gets a fresh 400s; it
+is a per-step constraint carried into a per-claim world. Raised with the D1b owner before Stage 3 is
+cut; the likely answer is `LEASE_MS` 760s with a 740s self-abort, still 60s under the platform kill. `LEASE_MS` rises to cover the longest single step.
 
 ## Risks, and the verdicts
 
@@ -262,6 +273,34 @@ the weeks D1b takes.
 
 The discarded part is glue. Everything expensive persists. That is the difference from the blob
 adapter, where the discard would have been the machinery itself.
+
+## Checked against two other workstreams, 2026-08-30
+
+Neither collides, and both were checked rather than assumed.
+
+**Image hosting** ([hosting-the-articles-images.md](hosting-the-articles-images.md)) is further along
+than its own header says — that reads "plan, not built" while five of its eight stages are committed.
+Its `assets` step was already in `DEFAULT_INGEST_STEPS` before this plan started, and is what
+`ASSETS_BUDGET_MS` now bounds. The new `"out-of-time"` reason is a fourth member of an existing union
+and needs nothing from them. Its remaining stages read images from Postgres and the Supabase bucket,
+never through `fsLocations`, so Stage 1's job-scoped root does not reach them.
+
+What the budget *does* cost them is a line in their own argument: on an article with enough images
+the step can finish with some still hot-linked, so *"closing this cannot be something somebody has to
+ask for"* is only partly true on heavy articles. That is a new limitation their plan predates, and it
+is noted in their doc rather than left implicit here.
+
+**Deferring the ToC** ([opening-an-article-before-the-toc.md](../research/opening-an-article-before-the-toc.md))
+is research with nothing built, so there is no code to collide with. The conflict is a roadmap one
+and worth writing down before either side builds: **this plan publishes once the whole job has run;
+that research's entire premise is publishing something readable before it has, and upgrading in
+place.** A provisional early publish is a *second* publish point, and Stage 4's finalizer exists
+precisely to close the "publish succeeds, then the job fails" hole by making publication and terminal
+settlement one transaction. Whoever turns that research into a plan should read Stage 4 first rather
+than rediscover the collision after building the provisional-tree machinery.
+
+**Deferring `arc`** ([defer-arc-and-rename-hierarchy.md](defer-arc-and-rename-hierarchy.md)) is built
+and closed — `0aa30ac`, `837df17`, `f42a877`. Nothing outstanding.
 
 ## Kill-checks
 
