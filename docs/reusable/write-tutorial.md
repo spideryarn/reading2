@@ -113,6 +113,10 @@ the page.
 
 Fix and re-check. Ask it back for the conclusion, not the page dumps.
 
+**And when you are done, always open it for the reader** — `open <path>` on macOS, `xdg-open` on
+Linux — as the last thing you do. A tutorial is a thing to look at, and a file path in a chat
+message is not. Do this whether or not the agent-side check above was possible.
+
 ### 7. Skimmable core, detail hidden
 
 **A reader must never *have* to expand anything to get the point.** Keep the main line short — one
@@ -172,6 +176,7 @@ contents.
    a browser pass on the diagrams (§ 6).
 4. **Record the request** in the HTML comment at the top — the exact prompt, the date, the files you
    read — so the next person knows what was and was not in scope.
+5. **Open it in the browser** — always, as the final step. See § 6.
 
 ## Checklist
 
@@ -182,6 +187,7 @@ contents.
 - [ ] One worked example, reused rather than replaced
 - [ ] Every important concept is available as both prose and a picture
 - [ ] Every diagram has been looked at in a browser
+- [ ] The finished file has been opened in the reader's own browser
 - [ ] Nothing essential is behind a `<details>`
 - [ ] Every internal noun is explained in plain words the first time it appears
 - [ ] Trade-offs, risks and open questions have a section of their own
