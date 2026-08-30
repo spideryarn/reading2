@@ -493,6 +493,41 @@ carry policy, failure history, authorisation meaning and reader projection. Ridi
 `raw`, `blocks` or `tree` would braid unrelated ownership and lifecycles, and hide it somewhere a
 future reader would not know to preserve. The tax is real and it is the cheaper side.
 
+## A note from the Vercel-imports work, 2026-08-30
+
+Added by the session that owns [v1-imports-on-vercel.md](v1-imports-on-vercel.md), after checking
+this plan against what that one has landed. **Nothing here collides**, but three things are worth
+having in your own document.
+
+**This step now has a wall clock, and it was measured rather than derived.**
+`ASSETS_BUDGET_MS = 180_000` in [`src/collect-assets.ts`](../../src/collect-assets.ts), with a new
+`"out-of-time"` member of `AssetFailure`. It drops into the three-state design here without change —
+a timed-out entry is a `failed` entry and stays hot-linked, exactly like `unsupported-format`.
+
+The budget exists because the step had no bound at all: 200 images × 2 attempts × 15s at 2 concurrent
+is a 3,000s worst case, against a 400s per-step deadline, on the default ingest path. **But the first
+number chosen was 300s and that was also wrong**, because it came from the policy ceiling. Measured
+on the corpus's worst article — 10 images, not 200 — the step takes **7.1 seconds**. No article in
+`data/` had an `assets.json` at all, so it had never completed on anything and every figure about it
+was an inference from constants.
+
+**One line for Stage E.** The budget cuts against this plan's own argument, and the argument is the
+reason the step is in the default at all: *"an article whose images are still hot-linked to the
+publisher announces the reader's IP to that publisher on every single read … closing this cannot be
+something somebody has to ask for."* With a cap, a sufficiently image-heavy or slow-serving article
+can finish the step with some images still hot-linked. That is a real, new, partial failure of the
+privacy goal, and it belongs in `security.md` / `fetching.md` next to Q11 rather than being left
+implicit. It is temporary rather than permanent only if something later retries the `out-of-time`
+entries, which nothing does yet.
+
+**And a bug that bears directly on Stage D.** Until 2026-08-30 the step went on fetching *after it
+returned*: the manifest was handed back on time and the ~38 fetches still queued behind the
+concurrency gate carried on draining, each dialling the publisher for a step that had ended. Every
+test passed, and deleting the guard reddened nothing, because nothing that asserts on the manifest
+can see it. So **"the assets step finished" did not previously mean "we have stopped talking to the
+publisher"** — which matters if the reading view ever lifts image suppression on that signal. Fixed,
+and `tests/collect-assets.test.ts` now re-reads the request count 150ms after the step returns.
+
 ## Stages, and where we are
 
 Run as staged work per [engineering-manager.md](../reusable/engineering-manager.md): each stage ends
