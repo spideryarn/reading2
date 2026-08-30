@@ -50,6 +50,13 @@ export interface UseIdeas {
    */
   profileChanged: boolean;
   hasProfile: boolean;
+  /**
+   * The article this band is about — carried alongside `hasProfile` because
+   * the same question needs it. The profile panel shows the *per-article* half
+   * ("why you're reading this one") and links to the page that edits it, and
+   * neither is possible without knowing which article. docs/plans/profile-panel.md.
+   */
+  slug: string;
   error: string | null;
   /** The job writing this article's ideas, if one is. */
   job: Job | null;
@@ -152,6 +159,7 @@ export function useIdeas(slug: string): UseIdeas {
     profiled,
     profileChanged,
     hasProfile,
+    slug,
     error,
     job: queue.job,
     failed: queue.failed,

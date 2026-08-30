@@ -137,6 +137,7 @@ const panel = (deep: number, withApparatus = false) =>
         profiled: false,
         profileChanged: false,
         hasProfile: false,
+        slug: "test-summary-expand",
         error: null,
         job: null,
         failed: null,

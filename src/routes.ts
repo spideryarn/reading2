@@ -15,7 +15,7 @@
  *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
  *   GET    /api/models           which model writes what
  *                                 → { tasks: [{ task, model, id, provider, source, effort? }] }
- *   GET    /api/reader           `?slug=` → { profile: string | null, hasProfile: boolean }
+ *   GET    /api/reader           `?slug=` → { profile, purpose, hasProfile } — purpose is null without a slug
  *   PATCH  /api/reader           { profile: string | null } → the same shape
  *   GET    /api/article/:slug    meta + blocks + tree, one payload
  *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
@@ -142,7 +142,7 @@ import {
 import { errorFields, log, since } from "./log.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { isStepName, type StepName } from "./pipeline.js";
-import { hashProfile, profileIsStale, renderProfile } from "./profile.js";
+import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
 import {
   type ArticleStage,
   NON_TASK_MODELS,
@@ -2809,17 +2809,61 @@ type ModelReport = {
  * Never reads the client's word for it. See `useProfile` above.
  */
 async function resolveProfile(slug: string): Promise<string | null> {
+  return renderProfile(await resolveProfileParts(slug));
+}
+
+/**
+ * The same two halves, **before** they are joined — for the one caller that
+ * needs to show them to the person who wrote them.
+ *
+ * `GET /api/reader?slug=` answers the profile panel, which prints each box
+ * separately with its own way in to edit it (docs/plans/profile-panel.md). It
+ * cannot use `resolveProfile` above, because the joined string is a prompt
+ * fragment: it carries "About the reader:" / "Why they are reading this piece:"
+ * prefixes that are ours rather than the reader's, and there is no honest way
+ * back from it to the two boxes.
+ *
+ * **Split out rather than reshaping `resolveProfile`**, whose six callers all
+ * want the joined string and none of which should have to reach through a
+ * `.rendered`. What matters is that the *gathering* stays in one place, because
+ * the rule below lives in it and a route that read the two stores for itself
+ * would be a second gathering with one clause missing.
+ *
+ * **`purposeFailed` is the difference between the two callers**, and it is the
+ * whole reason this returns an object rather than a tuple. Swallowing a shelf
+ * failure is right for a *prompt*: the global half still counts and a job must
+ * not die over a purpose nobody may have written. It is wrong for a *panel*
+ * that exists to tell the reader what their profile says — there, a shelf read
+ * that fell over and a box that was never filled in are the same `null`, and
+ * the reader is told "you haven't said why you're reading this one" about the
+ * sentence they wrote last week. `resolveProfile` ignores this flag; the route
+ * passes it on. GPT Sol's review of the built code, 2026-08-30.
+ */
+interface ProfileParts {
+  /** "About you", as stored. */
+  profile: string | null;
+  /** "Why you're reading this one", as stored — `null` if never written. */
+  purpose: string | null;
+  /** …or `null` because the shelf could not be read. Never the same thing. */
+  purposeFailed: boolean;
+}
+
+async function resolveProfileParts(slug: string): Promise<ProfileParts> {
   /* **The shelf read is allowed to fail, and the global half still counts.**
      Under `postgres` an article with no row throws not-found here, and under
      `files` a slug that is not an article is simply empty. Neither is a reason
      to answer a question about the *reader* with an error — and a caller that
      got one would fail a whole job over a purpose nobody had written.
      Found by GPT Sol's review of the built code, 2026-08-26. */
+  let purposeFailed = false;
   const [profile, shelf] = await Promise.all([
     readerStore.readProfile(),
-    shelfStore.read(slug).catch((): ShelfState => ({ opens: 0 })),
+    shelfStore.read(slug).catch((): ShelfState => {
+      purposeFailed = true;
+      return { opens: 0 };
+    }),
   ]);
-  return renderProfile({ profile, purpose: shelf.purpose ?? null });
+  return { profile, purpose: shelf.purpose ?? null, purposeFailed };
 }
 
 /**
@@ -3588,12 +3632,43 @@ export async function serveAuthenticatedApi(
          account here", resolved the same way the prompts resolve it. One
          request, right in every state, including the ones with no artefact to
          hang a flag on. GPT Sol's review, 2026-08-26. */
+      /* **`purpose` is here for the profile panel**, which prints each box on
+         its own with its own way in to edit it (docs/plans/profile-panel.md).
+         It is the reader's own words being shown back to the reader, which is a
+         different act from the `useProfile: boolean` a generate request sends —
+         that one is still a boolean, because a client that could supply profile
+         *text* is a way to put an arbitrary string into a prompt.
+
+         **Always present, `null` without a slug** — never absent. A field that
+         appears on some responses and not others is the one that gets dropped
+         at a boundary and then read as "this reader has no purpose" rather than
+         "nobody asked": three states wearing two. `profile` is already spelled
+         that way and this matches it.
+
+         `resolveProfileParts` rather than `resolveProfile`, and that also costs
+         one store read fewer than this used to: the old pair read the global
+         profile directly *and* again inside `resolveProfile`. */
       const at = new URL(url, "http://x").searchParams.get("slug");
-      const [profile, effective] = await Promise.all([
-        readerStore.readProfile(),
-        at && isSlug(at) ? resolveProfile(at) : readerStore.readProfile(),
-      ]);
-      send(res, 200, { profile, hasProfile: effective !== null });
+      const parts: ProfileParts =
+        at && isSlug(at)
+          ? await resolveProfileParts(at)
+          : { profile: await readerStore.readProfile(), purpose: null, purposeFailed: false };
+      /* Asked of the *rendered* pair rather than of `parts.profile`, which is
+         what makes a reader who has written only "why you're reading this one"
+         count — the case this whole `?slug=` exists for. */
+      /* **Normalised on the way out, so the two answers cannot disagree.**
+         `hasProfile` is asked of `renderProfile`, which trims and settles line
+         endings — so a legacy whitespace-only value stored before that rule
+         existed makes `hasProfile` false while the raw string is still truthy,
+         and the panel draws a box containing three spaces instead of saying
+         nothing is written. One normalisation, used for both. GPT Sol,
+         2026-08-30. */
+      send(res, 200, {
+        profile: normaliseProfileText(parts.profile),
+        purpose: normaliseProfileText(parts.purpose),
+        purposeFailed: parts.purposeFailed,
+        hasProfile: renderProfile(parts) !== null,
+      });
       return;
     }
     /* PATCH rather than PUT, for the same reason the shelf's is: the body names

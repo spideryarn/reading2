@@ -231,7 +231,11 @@ export function GlossaryPanel({
         {/* Provenance about the owner's own run, so a visitor sees none of it:
             `profileHash` never leaves the server (src/public-types.ts). */}
         {glossary && owner && (
-          <WrittenForYou written={owner.profiled} changed={owner.profileChanged} />
+          <WrittenForYou
+            written={owner.profiled}
+            changed={owner.profileChanged}
+            slug={owner.slug}
+          />
         )}
       </div>
 
@@ -281,6 +285,7 @@ export function GlossaryPanel({
               checked={withProfile}
               onChange={setWithProfile}
               hasProfile={owner.hasProfile}
+              slug={owner.slug}
               disabled={owner.job !== null}
             />
             <Progress
@@ -327,6 +332,7 @@ export function GlossaryPanel({
                   checked={withProfile}
                   onChange={setWithProfile}
                   hasProfile={owner.hasProfile}
+                  slug={owner.slug}
                   disabled={owner.job !== null}
                 />
                 <Progress
@@ -350,6 +356,7 @@ export function GlossaryPanel({
                   checked={withProfile}
                   onChange={setWithProfile}
                   hasProfile={owner.hasProfile}
+                  slug={owner.slug}
                   disabled={owner.job !== null}
                 />
                 <Progress
@@ -432,6 +439,7 @@ export function GlossaryPanel({
               withProfile={withProfile}
               onWithProfile={setWithProfile}
               hasProfile={owner.hasProfile}
+              slug={owner.slug}
             />
           )}
         </>
@@ -1418,6 +1426,7 @@ function Foot({
   withProfile,
   onWithProfile,
   hasProfile,
+  slug,
   onReset,
   onCancel,
 }: {
@@ -1429,6 +1438,8 @@ function Foot({
   withProfile: boolean;
   onWithProfile(next: boolean): void;
   hasProfile: boolean;
+  /** For the profile panel's per-article half. src/web/ProfilePanel.tsx. */
+  slug: string;
   onReset(): Promise<void>;
   onCancel(id: string): void;
 }) {
@@ -1487,6 +1498,7 @@ function Foot({
             checked={withProfile}
             onChange={onWithProfile}
             hasProfile={hasProfile}
+            slug={slug}
           />
           <button
             type="button"

@@ -385,7 +385,11 @@ function Thread({
         {/* Provenance, beside the counts rather than in a banner: it describes
             what is on screen. src/web/WrittenForYou.tsx. Owner-only, because
             `profileHash` never leaves the server. src/public-types.ts. */}
-        <WrittenForYou written={thread.profileHash != null} changed={profileChanged} />
+        <WrittenForYou
+          written={thread.profileHash != null}
+          changed={profileChanged}
+          slug={thread.slug}
+        />
       </ThreadCounts>
 
       {/* The article has moved and the thread has not. Said plainly, at the
@@ -408,6 +412,7 @@ function Thread({
               checked={withProfile}
               onChange={setWithProfile}
               hasProfile={hasProfile}
+              slug={thread.slug}
               disabled={job !== null}
             />
             <Progress
@@ -444,6 +449,7 @@ function Thread({
               checked={withProfile}
               onChange={setWithProfile}
               hasProfile={hasProfile}
+              slug={thread.slug}
               disabled={job !== null}
             />
             <Rewrite

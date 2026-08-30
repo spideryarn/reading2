@@ -1973,6 +1973,7 @@ export function Composer({
         checked={withProfile}
         onChange={setWithProfile}
         hasProfile={hasProfile}
+        slug={slug}
         disabled={busy}
       />
       <DictationStrip dictation={dictate.dictation} />

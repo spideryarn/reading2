@@ -3985,7 +3985,7 @@ td.text.has-hit[data-hues="8"] {
 .review .chat-talk { order: 1; }
 .review .chat-stance { order: 2; }
 .review .chat-send { order: 3; }
-.review .prof-use { order: 4; }
+.review .prof-row { order: 4; }
 .review .prof-listening { order: 5; }
 
 .chat-talk {
@@ -6680,6 +6680,11 @@ td.text.has-hit[data-hues="8"] {
   align-items: center;
   gap: 0.25rem;
   padding: 0.05rem 0.35rem;
+  /* A `<button>` since 2026-08-30, so the four things a button brings for free
+     and this pill does not want are turned off here: its own background, its
+     UA font, and the pointer that would make it look like the run button. It
+     opens the profile panel — src/web/ProfilePanel.tsx. */
+  background: none;
   border: 1px solid var(--rule);
   border-radius: 999px;
   color: var(--ink-faint);
@@ -6687,7 +6692,12 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.62rem;
   letter-spacing: 0.02em;
   white-space: nowrap;
-  cursor: help;
+  cursor: pointer;
+}
+.prof-badge:hover,
+.prof-badge.open {
+  border-color: var(--rule-strong);
+  color: var(--ink);
 }
 .prof-badge:focus-visible {
   outline: 2px solid var(--highlight);
@@ -6701,9 +6711,125 @@ td.text.has-hit[data-hues="8"] {
   color: var(--highlight-ink);
 }
 
-.tip-profile { max-width: 22rem; }
-.tip-profile p { margin: 0 0 0.4rem; }
-.tip-profile p:last-child { margin-bottom: 0; }
+
+/* The checkbox and its panel button, on one line. The row exists so the button
+   can sit OUTSIDE the `<label>`: a label turns every click inside it into a
+   toggle, and one target doing two things is decided by which pixel. */
+.prof-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* The way in to "what am I being written for". Shown whether or not there is a
+   profile, and never disabled — see src/web/WrittenForYou.tsx for both. */
+.prof-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* A word rides along when the checkbox is absent (WrittenForYou.tsx), so the
+     gap and the type are here rather than only the icon's padding. */
+  gap: 0.3rem;
+  padding: 0.12rem 0.25rem;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.prof-open:hover,
+.prof-open.open {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+.prof-open:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 1px;
+}
+
+/* ------------------------------------------------- profile: the panel --
+   What your profile currently says, and a working link to each of the two
+   places that edit it. src/web/ProfilePanel.tsx.
+
+   **Not a `.tooltip`.** It is a click-popover with links in it, so it must take
+   pointer events — the whole reason it is not a tooltip is that
+   `.tooltip-anchor` is `pointer-events: none` and the link that used to live in
+   one has never been clickable. It borrows the tooltip's *surface* (the same
+   raised background, rule and shadow, because it is the same kind of object)
+   and none of its behaviour. */
+.prof-panel {
+  z-index: 99;
+  width: 20rem;
+  /* **It may overhang the band, and that is fine** — 320px against a band that
+     is 400px at best and 288px at worst. Every floating card here does: the
+     tooltip is 352px in the same 400px. What it must not do is overhang the
+     *window*, where `shift` would pin it to an edge with nowhere to slide, so
+     the cap is the viewport rather than the band. Measured at both widths,
+     2026-08-30. */
+  max-width: calc(100vw - 1.75rem);
+  /* And never taller than the window: a 1,500-character profile is a lot of
+     prose, and it scrolls inside the panel rather than growing off the top of
+     the screen where the close is. */
+  max-height: min(24rem, calc(100vh - 3rem));
+  overflow-y: auto;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.5),
+    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  font-family: var(--font-ui);
+}
+.prof-panel-lede {
+  margin: 0 0 0.5rem;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+.prof-panel-box {
+  border-top: 1px solid var(--rule);
+  padding-top: 0.4rem;
+  margin-top: 0.4rem;
+}
+.prof-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.prof-panel-label {
+  color: var(--ink-faint);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.prof-panel-edit {
+  color: var(--highlight);
+  font-size: 0.66rem;
+  white-space: nowrap;
+}
+.prof-panel-text {
+  margin: 0.2rem 0 0;
+  /* The reader's own prose, in the reading face — it is a paragraph they wrote,
+     not a value the interface is reporting. `--font-reading` rather than
+     Tailwind's `--font-prose` alias, because that alias is for `tw:` utility
+     classes and this file spells it the other way everywhere else. */
+  font-family: var(--font-reading);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+/* Not written yet, or not readable. Quieter, because it is our sentence rather
+   than theirs. */
+.prof-panel-text.quiet {
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  color: var(--ink-faint);
+}
 
 /* The checkbox, wherever a run is about to be paid for. */
 .prof-use {
@@ -6735,7 +6861,7 @@ td.text.has-hit[data-hues="8"] {
    plus a label is more than 400px holds, and the checkbox describes what the
    left-hand button would do rather than being a third thing to press.
    `.gloss-actions` is already `flex-wrap: wrap`, so the basis is all it takes. */
-.gloss-actions .prof-use { flex-basis: 100%; }
+.gloss-actions .prof-row { flex-basis: 100%; }
 
 /* In the chat composer the checkbox sits on its own line under the input. The
    composer is `display: flex` with `align-items: flex-end`, so a third item
@@ -6743,7 +6869,7 @@ td.text.has-hit[data-hues="8"] {
    basis puts it on the next row instead, where it reads as a note about the
    question rather than as part of the input. */
 .chat-composer { flex-wrap: wrap; }
-.chat-composer .prof-use {
+.chat-composer .prof-row {
   flex-basis: 100%;
   margin-top: 0.1rem;
 }

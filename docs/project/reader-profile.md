@@ -249,13 +249,15 @@ the interface.
 So the two jobs are separated ([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)):
 
 ```
-  ┌─ GLOSSARY ─────────────────────────── ✓ written for you ⓘ ─┐   ← a LABEL
-  │  Threshold ▁▂▃▅▇                                            │
-  │  ⚠ You changed your profile since these were written.        │
-  │  ┌────────────────────────────────────────────────────────┐ │
-  │  │  ☑ Use your profile           [ Find them again ]       │ │   ← the CHECKBOX,
-  │  └────────────────────────────────────────────────────────┘ │      beside the spend
-  └──────────────────────────────────────────────────────────────┘
+  ┌─ GLOSSARY ─────────────────────────── ✓ written for you ─┐   ← a LABEL
+  │  Threshold ▁▂▃▅▇                                          │
+  │  ⚠ You changed your profile since these were written.      │
+  │  ┌──────────────────────────────────────────────────────┐ │
+  │  │  ☑ Use your profile 👤      [ Find them again ]       │ │   ← the CHECKBOX,
+  │  └──────────────────────────────────────────────────────┘ │      beside the spend
+  └────────────────────────────────────────────────────────────┘
+                          ↑
+              both of these open THE PANEL — below
 ```
 
 Unticking the box and pressing the button is exactly the "check/uncheck and it
@@ -267,11 +269,17 @@ artefact on screen was written with (`profileHash != null`), so the reader's
 last choice comes back off the file rather than out of a preference that could
 disagree with it. With no artefact yet, it starts ticked.
 
-**With no profile written, both are absent** — not disabled, not unchecked. "Written" means
+**With no profile written, the checkbox is absent** — not disabled, not unchecked. "Written" means
 *either* box, resolved the way the prompts resolve it: a reader with only an article purpose has a
-profile as far as every prompt is concerned, and hiding the controls from them would mean they could
+profile as far as every prompt is concerned, and hiding the control from them would mean they could
 not opt out of something they could not see. `useHasProfile(slug)` asks the server that exact
 question rather than checking the global box alone.
+
+The **panel button beside it stays**, and that is the one thing here that is not symmetrical. Until
+2026-08-30 the whole component vanished for a reader with no profile, so the person who most needed
+to know what "your profile" meant was the one person the app never told. It now reads *Your profile*
+in that state, because a bare icon alone in a row says nothing — measured in a browser rather than
+guessed.
 
 One thing the label does **not** do: it goes on describing an artefact that was written for a profile
 after the reader clears theirs. That is deliberate — it *was* written for you, and the badge is about
@@ -280,13 +288,14 @@ until the artefact is rewritten.
 
 Where each one is:
 
-| Surface | Label | Checkbox |
-|---|---|---|
-| glossary | on the head line | beside Find / Find them again |
-| summaries | on the head line | beside the steer and Rewrite them |
-| tweets | beside the counts | beside Write it again |
-| chat | — | in the composer, per turn |
-| explain | — | — |
+| Surface | Label | Checkbox | Panel |
+|---|---|---|---|
+| glossary | on the head line | beside Find / Find them again | from both |
+| summaries | on the head line | beside the steer and Rewrite them | from both |
+| ideas | on the head line | beside Find them | from both |
+| tweets | beside the counts | beside Write it again | from both |
+| chat | — | in the composer, per turn | from the checkbox |
+| explain | — | — | — |
 
 **Chat gets the checkbox and no label**, and the asymmetry is the point: an
 answer is not an artefact anybody rewrites, so there is nothing for a label to
@@ -299,6 +308,94 @@ a *re-ask*, which is a control that appears after the thing it would have
 governed. And it is the call the profile helps most: a wrong pitch wastes the
 whole answer, where a wrong pitch in a glossary wastes one entry. Explain always
 uses the profile.
+
+### And the third thing, which is where the two boxes are actually shown
+
+Both controls above are also the way in to a **profile panel** — what your
+profile currently says, and a working link to each of the two pages that edit
+it ([`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx), built
+2026-08-30 from [the plan](../plans/profile-panel.md)).
+
+```
+  ☑ Use your profile 👤      [ Find the terms ]
+                      │ click
+                      ▼
+  ┌─────────────────────────────────────────┐
+  │ What the glossary, summaries, chat  [×] │
+  │ and explanations are written for. It    │
+  │ changes what gets explained and how     │
+  │ much — never what the article says.     │
+  │                                         │
+  │ ABOUT YOU                       Edit →  │
+  │ Cognitive scientist, twenty years,      │
+  │ mostly memory and learning.             │
+  │                                         │
+  │ WHY YOU'RE READING THIS ONE     Edit →  │
+  │ I want the evidence, not the history.   │
+  └─────────────────────────────────────────┘
+```
+
+Greg asked for this as a *"rich tooltip"*, and **a tooltip in this app cannot
+hold a link**. `.tooltip-anchor` is `pointer-events: none` and `Tooltip` passes
+`handleClose: null` — every card here is read, never entered. The badge had
+carried an `Edit your profile →` link since it was written and **it had never
+been clickable**: measured in headless Chrome, `document.elementFromPoint` at
+the link's own centre returns the page behind it, while the same test on an
+ordinary in-flow link on the same page returns the link. jsdom has no layout and
+reports both as reachable, which is how it shipped —
+[silent-success.md](../reusable/silent-success.md).
+
+So the panel follows `ColourPicker` in
+[`SearchPanel.tsx`](../../src/web/SearchPanel.tsx), the one click-popover this
+app already had: `useClick`, `useDismiss`, `useRole({role: "dialog"})`, and
+`FloatingFocusManager` at `modal={false}`. **A browser gate, not a unit test,
+proves the links are reachable** — jsdom structurally cannot see it, and that is
+the same shared assumption that let the dead link through.
+
+**It is read-only, and that was decided against the alternative.** The plan's
+second draft put both textareas in the panel, editable. GPT Sol's review found
+that [`useDictation`](../../src/web/useDictation.ts)'s unmount cleanup *aborts
+rather than stops, on purpose* — so a popover dismissed on outside press throws
+away whatever was being dictated into it, and on the browsers where words arrive
+only after stopping, throws away all of them. Save-on-blur has the matching
+hole: the outside `pointerdown` unmounts the textarea, so the blur that would
+have flushed it need never fire. Greg chose read-only knowing that, 2026-08-30.
+
+**It fetches when it is opened**, and `useHasProfile` is untouched — which
+leaves the nine test files that mock it alone. The justification first written
+here was wrong and the correction is the useful part: it claimed the separate
+fetch avoided sending the profile five times a page. It does not. `/api/reader`
+has carried `profile` since it was written, all five hooks fetch it, and
+`purpose` now rides beside it — so the panel's request is a **sixth**, not a
+substitute for five. Folding them into one shared read is real work still worth
+doing, and its price is those nine mocks. Deferred deliberately rather than
+unnoticed (GPT Sol's review of the built code, 2026-08-30).
+
+**And "always fresh" was only true after a one-line fix.** `apiFetch` caches
+`/api/reader` offline, and a `PATCH /api/library/<slug>` — which is how a
+purpose is saved — invalidated only its own prefix. So the panel could serve
+last week's sentence as current, and `hasProfile` could go on saying `false` to
+a reader who had just written their first purpose, hiding every tick from them.
+`resourceOf` maps a URL to *its own* resource and is right to; a write that
+makes a *second* resource wrong has to name it, and now does
+([`lib/api.ts` § `saving`](../../src/web/lib/api.ts)).
+
+**A shelf read that fails is not a box nobody filled in.** `resolveProfileParts`
+swallows a shelf failure — right for a prompt, because a job must not die over a
+purpose nobody may have written — and answers `purpose: null`. For a panel whose
+job is to say what your profile *is*, that renders as "you haven't said why
+you're reading this one" to somebody who has. So the route carries
+`purposeFailed` beside it, and the panel says it could not read that half rather
+than that the half is empty. Same three-states-not-two rule the whole panel is
+built on.
+
+`GET /api/reader?slug=` therefore answers `purpose` as well, **always present
+and `null` without a slug** rather than sometimes absent. This is the one place
+the rule in [`useProfile.ts`](../../src/web/useProfile.ts) — *"the text never
+reaches these panels"* — is reversed, and narrowly: it is the reader's own words
+being shown back to the reader. `useProfile: boolean` on a generate request is
+unchanged, because a client that could *supply* profile text is a way to put an
+arbitrary string into a prompt.
 
 ## What editing your profile costs
 

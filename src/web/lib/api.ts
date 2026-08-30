@@ -420,6 +420,23 @@ function saving(input: string, init: RequestInit, res: Response): Response {
       const user = lastKnownUser();
       const prefix = resourceOf(input);
       if (user && prefix) void invalidate(prefix, user);
+      /* **One write makes two of our copies wrong, and only one of them is
+         named in the URL.**
+
+         `PATCH /api/library/<slug>` carries the reader's "why you're reading
+         this one", which is half of what `GET /api/reader?slug=<slug>` answers
+         — so a purpose saved on the metadata page left a cached reader record
+         still describing the old one. Offline, `apiFetch` then serves that
+         stale body as a synthetic 200 and nothing on screen looks wrong: the
+         profile panel presents last week's sentence as current, and
+         `hasProfile` can go on saying `false` to a reader who has just written
+         their first purpose, hiding every "Use your profile" tick from them.
+
+         Not fixable inside `resourceOf`, which maps a URL to *its own*
+         resource and is right to: this is a second resource the write affects,
+         and it has to be named. GPT Sol's review of the built code,
+         2026-08-30; docs/plans/profile-panel.md. */
+      if (user && prefix.startsWith("/api/library/")) void invalidate("/api/reader", user);
     }
     return res;
   }

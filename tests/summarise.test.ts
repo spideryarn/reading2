@@ -686,6 +686,7 @@ describe("SummaryPanel", () => {
     profiled: false,
     profileChanged: false,
     hasProfile: false,
+    slug: "test-summarise",
     error: null,
     job: null,
     failed: null,

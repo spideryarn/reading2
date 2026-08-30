@@ -139,6 +139,7 @@ export function IdeasPanel({
           checked={withProfile}
           onChange={setWithProfile}
           hasProfile={owner.hasProfile}
+          slug={owner.slug}
           disabled={owner.job !== null}
         />
         <JobProgress
@@ -171,7 +172,11 @@ export function IdeasPanel({
         {/* Provenance about the owner's own run: `profileHash` never leaves the
             server, so a visitor sees none of it. src/public-types.ts. */}
         {ideas && owner && (
-          <WrittenForYou written={owner.profiled} changed={owner.profileChanged} />
+          <WrittenForYou
+            written={owner.profiled}
+            changed={owner.profileChanged}
+            slug={owner.slug}
+          />
         )}
       </div>
 

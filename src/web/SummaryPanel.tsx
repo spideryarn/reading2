@@ -274,7 +274,11 @@ export function SummaryPanel({
         {/* Provenance about the owner's own run: `profileHash` never leaves the
             server, so a visitor sees none of it. src/public-types.ts. */}
         {summaries && owner && (
-          <WrittenForYou written={owner.profiled} changed={owner.profileChanged} />
+          <WrittenForYou
+            written={owner.profiled}
+            changed={owner.profileChanged}
+            slug={owner.slug}
+          />
         )}
       </div>
 
@@ -382,6 +386,7 @@ export function SummaryPanel({
             checked={withProfile}
             onChange={setWithProfile}
             hasProfile={owner.hasProfile}
+            slug={owner.slug}
             disabled={owner.job !== null}
           />
           {/* No `force` needed: the step's own freshness check already knows
@@ -475,6 +480,7 @@ export function SummaryPanel({
                   checked={withProfile}
                   onChange={setWithProfile}
                   hasProfile={owner.hasProfile}
+                  slug={owner.slug}
                   disabled={owner.job !== null}
                 />
                 <Progress
@@ -493,6 +499,7 @@ export function SummaryPanel({
                     checked={withProfile}
                     onChange={setWithProfile}
                     hasProfile={owner.hasProfile}
+                    slug={owner.slug}
                     disabled={owner.job !== null}
                   />
                   <Progress

@@ -8,7 +8,7 @@
  *
  * Writes under `data/<throwaway slug>/`, which is gitignored, and removes it.
  */
-import { cp, rm } from "node:fs/promises";
+import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -368,7 +368,13 @@ describe("the reader routes", () => {
   it("answers null for a reader who has written nothing", async () => {
     const r = await call("GET", "/api/reader");
     expect(r.status).toBe(200);
-    expect(r.body).toEqual({ profile: null, hasProfile: false });
+    /* **`purpose: null` rather than no `purpose` at all**, and this is a
+       whole-body `toEqual` so that stays true: a field that is present on some
+       responses and absent on others is the one a boundary drops silently, and
+       the panel would then read "no purpose written" off a question nobody
+       asked. There is no slug here, so there is no article to have one.
+       docs/plans/profile-panel.md. */
+    expect(r.body).toEqual({ profile: null, purpose: null, purposeFailed: false, hasProfile: false });
   });
 
   it("stores a profile and reads it back", async () => {
@@ -378,6 +384,8 @@ describe("the reader routes", () => {
     expect(w.body).toEqual({ profile: "A physicist." });
     expect((await call("GET", "/api/reader")).body).toEqual({
       profile: "A physicist.",
+      purpose: null,
+      purposeFailed: false,
       hasProfile: true,
     });
   });
@@ -407,11 +415,26 @@ describe("the reader routes", () => {
     await cp(path.resolve(import.meta.dirname, "..", "example"), DIR, { recursive: true });
     try {
       await call("PATCH", `/api/library/${SLUG}`, { purpose: "the evidence" });
-      // No global profile at all…
-      expect((await call("GET", "/api/reader")).body.profile).toBeNull();
-      // …and the article still has one.
+      // No global profile at all, and — with no slug — nothing to say about a
+      // purpose either, however much of one this article has.
+      expect((await call("GET", "/api/reader")).body).toEqual({
+        profile: null,
+        purpose: null,
+        purposeFailed: false,
+        hasProfile: false,
+      });
+      /* …and the article still has one. `purpose` comes back as the reader's
+         own words rather than as a flag, because the panel prints each box
+         separately with its own way in to edit it — the joined string
+         `renderProfile` builds carries our prefixes and there is no honest way
+         back from it to the two boxes. docs/plans/profile-panel.md. */
       const r = await call("GET", `/api/reader?slug=${SLUG}`);
-      expect(r.body).toEqual({ profile: null, hasProfile: true });
+      expect(r.body).toEqual({
+        profile: null,
+        purpose: "the evidence",
+        purposeFailed: false,
+        hasProfile: true,
+      });
     } finally {
       await rm(DIR, { recursive: true, force: true });
     }
@@ -427,8 +450,68 @@ describe("the reader routes", () => {
     expect(r.status).toBe(400);
     expect((await call("GET", "/api/reader")).body).toEqual({
       profile: null,
+      purpose: null,
+      purposeFailed: false,
       hasProfile: false,
     });
+  });
+
+  it("normalises what it hands back, so hasProfile and the text cannot disagree", async () => {
+    /* `hasProfile` is asked of `renderProfile`, which trims — so a value that
+       reaches the route un-normalised comes back truthy beside a
+       `hasProfile: false`, and the profile panel draws a box containing three
+       spaces where it should say nothing is written. GPT Sol, 2026-08-30.
+
+       **It has to be the PURPOSE, and that is the whole fixture.** The global
+       profile cannot reach this state: `loadReaderProfile` normalises on read
+       (src/profile.ts). The shelf normalises on *write* and reads raw
+       (src/shelf.ts § read), so a `shelf.json` written before that rule existed
+       — or edited by hand — is the one way in. Writing it directly rather than
+       through PATCH for exactly that reason: PATCH would clean it on the way
+       past and the fixture would be testing nothing, which is what the first
+       version of this test did. */
+    const SLUG = "test-routes-dirty-purpose";
+    const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
+    await cp(path.resolve(import.meta.dirname, "..", "example"), DIR, { recursive: true });
+    try {
+      await writeFile(
+        path.join(DIR, "shelf.json"),
+        JSON.stringify({ opens: 0, purpose: "   \r\n  " }),
+        "utf8",
+      );
+      expect((await call("GET", `/api/reader?slug=${SLUG}`)).body).toEqual({
+        profile: null,
+        purpose: null,
+        purposeFailed: false,
+        hasProfile: false,
+      });
+    } finally {
+      await rm(DIR, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the two halves apart, rather than the string the model is given", async () => {
+    /* The panel prints each box under its own heading, so it needs the two
+       values as the reader typed them. What it must NOT be handed is
+       `renderProfile`'s output — "About the reader: …\nWhy they are reading
+       this piece: …" — whose prefixes are ours and which cannot be taken back
+       apart into two boxes. This asserts the shape stays split.
+       docs/plans/profile-panel.md. */
+    const SLUG = "test-routes-both-halves";
+    const DIR = path.resolve(import.meta.dirname, "..", "data", SLUG);
+    await cp(path.resolve(import.meta.dirname, "..", "example"), DIR, { recursive: true });
+    try {
+      await call("PATCH", "/api/reader", { profile: "A physicist." });
+      await call("PATCH", `/api/library/${SLUG}`, { purpose: "the evidence" });
+      expect((await call("GET", `/api/reader?slug=${SLUG}`)).body).toEqual({
+        profile: "A physicist.",
+        purpose: "the evidence",
+        purposeFailed: false,
+        hasProfile: true,
+      });
+    } finally {
+      await rm(DIR, { recursive: true, force: true });
+    }
   });
 });
 

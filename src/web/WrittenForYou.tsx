@@ -17,21 +17,34 @@
  *
  *  - **`<WrittenForYou>`** is a *label*. It states a fact about the text on
  *    screen — this was written for you, or for a profile you have since
- *    changed — and it carries the explanation. It is not pressable.
+ *    changed — and it never offers to change that text.
  *  - **`<UseProfile>`** is the *checkbox*, and it sits inside the rewrite
  *    affordance beside the button that spends the money. Unticking it and
  *    pressing the button is exactly the "check/uncheck and it regenerates
  *    without this prompt" Greg described; it just does not pretend to be free.
  *
- * **With no profile written, both are absent** — not disabled, not unchecked. A
- * dead control teaches a reader they have failed at something; absence is
- * honest, because nothing is being taken into account.
+ * **With no profile written, the checkbox is absent** — not disabled, not
+ * unchecked. A dead control teaches a reader they have failed at something;
+ * absence is honest, because nothing is being taken into account.
+ *
+ * ## Both of them now open the same panel, and the label is still not a control
+ *
+ * Each is a trigger for `<ProfilePanel>` — what your profile currently says,
+ * and a working link to each of the two places that edit it
+ * (docs/plans/profile-panel.md). That does not break the split above: the rule
+ * was that a *label* must not offer to regenerate the text it describes, and
+ * opening an explanation is not that. It is the question the badge was always
+ * being pointed at, and until 2026-08-30 it answered it with a link nobody
+ * could click — see ProfilePanel.tsx for the measurement.
+ *
+ * The **button beside the checkbox is shown whether or not there is a profile**,
+ * because that is the state in which a reader most needs to know what any of
+ * this means, and the panel's links are how a first profile gets written.
  *
  * docs/project/reader-profile.md.
  */
 import { UserRound } from "lucide-react";
-import { Link } from "./Link.js";
-import { Tooltip } from "./Tooltip.js";
+import { ProfilePanel } from "./ProfilePanel.js";
 
 /**
  * Whether this reader has a profile at all — the one question both controls
@@ -56,39 +69,21 @@ export interface ProfileState {
  * common case and is not a state worth a line of interface. Absence here means
  * "this is the ordinary thing", exactly as an unbadged glossary entry does.
  */
-export function WrittenForYou({ written, changed }: ProfileState) {
+export function WrittenForYou({ written, changed, slug }: ProfileState & { slug: string }) {
   if (!written) return null;
   return (
-    <Tooltip
-      placement="top"
-      content={
-        <div className="tip-profile">
-          <p>
-            {changed
-              ? "This was written for the profile you had at the time, and yours has changed since."
-              : "This was written for your profile — what you said about your background and what you're after."}
-          </p>
-          {/* The promise, said where the claim is made. It is the thing that
-              makes a personalised summary safe to read, and it is enforced in
-              the prompt rather than here — src/profile.ts § PROFILE_RULES. */}
-          <p>
-            A profile changes what gets explained and how much. It never changes what the article
-            says, and never its proportions.
-          </p>
-          <p>
-            <Link href="/profile">Edit your profile →</Link>
-          </p>
-        </div>
+    <ProfilePanel
+      slug={slug}
+      className={`prof-badge${changed ? " changed" : ""}`}
+      label={
+        changed
+          ? "Written for a profile you have changed since — see what it says now"
+          : "Written for your profile — see what it says"
       }
     >
-      {/* A span, not a button. It records something that happened; there is
-          nothing here to set. `tabIndex` so the tooltip is reachable by
-          keyboard without claiming to be actionable. */}
-      <span className={`prof-badge${changed ? " changed" : ""}`} tabIndex={0}>
-        <UserRound size={11} />
-        {changed ? "older profile" : "written for you"}
-      </span>
-    </Tooltip>
+      <UserRound size={11} />
+      {changed ? "older profile" : "written for you"}
+    </ProfilePanel>
   );
 }
 
@@ -104,22 +99,57 @@ export function UseProfile({
   onChange,
   hasProfile,
   disabled,
+  slug,
 }: {
   checked: boolean;
   onChange(next: boolean): void;
   hasProfile: boolean;
   disabled?: boolean;
+  /** The article, for the half of the profile that is about it. */
+  slug: string;
 }) {
-  if (!hasProfile) return null;
   return (
-    <label className="prof-use">
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span>Use your profile</span>
-    </label>
+    <span className="prof-row">
+      {/* **Only the checkbox is conditional.** It used to be the whole of this
+          component, so a reader with no profile saw nothing at all here — no
+          control, and no way to find out what "your profile" even meant. The
+          button below is how a first profile gets written, so it is exactly the
+          state it must not disappear in. GPT Sol's review of the plan,
+          2026-08-30; docs/plans/profile-panel.md. */}
+      {hasProfile && (
+        <label className="prof-use">
+          <input
+            type="checkbox"
+            checked={checked}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+          <span>Use your profile</span>
+        </label>
+      )}
+      {/* **Outside the `<label>`, and not `disabled`.**
+
+          Outside, because a `<label>` turns every click inside it into a
+          toggle: one target doing two things, decided by which pixel.
+
+          Not disabled while a job runs, though the checkbox rightly is — the
+          profile is frozen onto a job at its start, so the tick can no longer
+          change anything, but *"what am I being written for"* is a question a
+          reader asks most while they are waiting for the answer. A dead control
+          there teaches them they failed at something. */}
+      <ProfilePanel slug={slug} className="prof-open" label="What you're being written for">
+        <UserRound size={11} />
+        {/* **A word, but only when the checkbox is gone.**
+
+            Beside "Use your profile" the icon needs no label: the words next to
+            it say what the subject is, and a second phrase on the same line
+            reads as two controls. Alone it is a bare glyph in an empty row, and
+            a reader with no profile — the one who most needs this — has nothing
+            telling them it is about them. Measured in the browser, 2026-08-30:
+            the no-profile row is an icon and a button with a gap between them.
+            docs/plans/profile-panel.md. */}
+        {!hasProfile && <span>Your profile</span>}
+      </ProfilePanel>
+    </span>
   );
 }

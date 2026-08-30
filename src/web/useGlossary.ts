@@ -393,6 +393,13 @@ export interface UseGlossary {
    * one" has a profile as far as every prompt is concerned. src/web/useProfile.ts.
    */
   hasProfile: boolean;
+  /**
+   * The article this band is about — carried alongside `hasProfile` because
+   * the same question needs it. The profile panel shows the *per-article* half
+   * ("why you're reading this one") and links to the page that edits it, and
+   * neither is possible without knowing which article. docs/plans/profile-panel.md.
+   */
+  slug: string;
   /** A read failure, or the reason the last request could not be started. */
   error: string | null;
   /** The job writing this article's glossary, if one is. Null otherwise. */
@@ -552,6 +559,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     profiled,
     profileChanged,
     hasProfile,
+    slug,
     error: resetFailed ?? error,
     job: queue.job,
     failed: queue.failed,
