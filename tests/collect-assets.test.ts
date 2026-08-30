@@ -688,6 +688,27 @@ describe("the wall-clock budget", () => {
    * one answers instantly, so an unguarded drain reaches all forty within a
    * millisecond or two of the deadline and a guarded one never leaves two.
    */
+  /**
+   * **Do not delete this as redundant — it is the only thing holding the guard
+   * it tests, and that guard was dead when it was written.**
+   *
+   * Deleting the deadline check inside `one` changed **nothing**: every other
+   * test in this file still passed. The race hands the manifest back on time,
+   * so the manifest was right and the timing was right — and the ~38 fetches
+   * still queued behind the concurrency gate went on draining afterwards, each
+   * dialling the publisher for a step that had already ended. An article
+   * quietly sent 200 requests to a CDN after we said we had stopped.
+   *
+   * That is the leak `assets` exists to close, arriving through the moment we
+   * claim to have closed it. Nothing that asserts on the manifest can see it,
+   * because the manifest is correct; only re-reading what the network was asked
+   * for, **after** the step returned, can.
+   *
+   * The session working on opening an article before its ToC depends on this
+   * directly: their suppression lifts when assets reports done, so "done" has
+   * to mean the dialling stopped. Found 2026-08-30 by probing each new guard by
+   * breaking it, which is the only reason it was found at all.
+   */
   it("stops dialling once the clock runs out, not once the step returns", async () => {
     const { blocks, urls } = article(40);
     const net = hangsThenAnswers(2);
@@ -782,6 +803,51 @@ describe("the wall-clock budget", () => {
    * *image-count* overflow, which is a different decision with a different fix.
    * Both of those are silent; this test is the thing that is not.
    */
+  /**
+   * **The classifier, on the shape the real one actually produces.**
+   *
+   * Measured against `fetchAsset` itself (scripts under
+   * `docs/plans/…`; the run is in the report): `undici` rejects a fetch with the
+   * signal's **abort reason**, and that lands in `classifyNetworkError`, not in
+   * `abortFailure`. So the code depends on what the aborting party passed to
+   * `.abort()`:
+   *
+   *     per-image AbortSignal.timeout -> TimeoutError -> code "timeout"
+   *     our deadline's .abort(Error)  -> plain Error  -> code "connection"
+   *
+   * `connection` maps to `network`. Every other test in this block uses a fake
+   * that rejects with `FetchFailure("timeout")`, which is the *other* branch —
+   * so the branch that ships was tested by nothing. This fake rejects with the
+   * real branch's shape, and quickly enough to reach `one`'s catch before the
+   * race hands the manifest back, which is what makes the classifier
+   * observable at all.
+   */
+  it("calls an abandoned image out-of-time on the shape the real classifier emits", async () => {
+    const { blocks, urls } = article(4);
+    const impl: AssetFetch = (url, o) =>
+      new Promise((_, reject) => {
+        const giveUp = (): void =>
+          /* Exactly what `classifyNetworkError` builds for our abort reason:
+             code "connection", not "timeout", carrying the reason as `cause`. */
+          reject(
+            new FetchFailure("connection", url, `Couldn't reach cdn.test`, {
+              cause: o.signal?.reason,
+            }),
+          );
+        if (o.signal?.aborted) giveUp();
+        else o.signal?.addEventListener("abort", giveUp, { once: true });
+      });
+
+    const run = await collectAssets({
+      blocks,
+      fetchImpl: impl,
+      blobs: fakeBlobs(),
+      limits: { budgetMs: 60 },
+    });
+    expect(reasons(run.assets)).toEqual(urls.map(() => "out-of-time"));
+    expect(reasons(run.assets)).not.toContain("network");
+  });
+
   it("does not file a deadline as a network fault, nor a real fault as a deadline", async () => {
     const { blocks, urls } = article(10);
     const gone = new Set([urls[0], urls[1]]);
@@ -1007,6 +1073,49 @@ describe("the real fetchAsset satisfies the seam", () => {
       status: "failed",
       reason: "not-found",
     });
+    expect(run.storageErrors).toEqual([]);
+  });
+
+  /**
+   * **The deadline, across the seam, with the real classifier on the far side.**
+   *
+   * Every other wall-clock test above uses a fake that rejects with
+   * `FetchFailure("timeout", …)`, because that is what a caller's abort *looks
+   * like* from `abortFailure` (src/fetch.ts:415). It is not what the real path
+   * produces. `undici` rejects a fetch with the signal's **abort reason**, and
+   * that reason goes to `classifyNetworkError`, not to `abortFailure` — so the
+   * code depends on what the aborting party passed to `.abort()`. Measured:
+   *
+   *     per-image AbortSignal.timeout  -> TimeoutError -> code "timeout"
+   *     .abort(new Error("…"))         -> plain Error  -> code "connection"
+   *
+   * `connection` maps to `network`, so every image abandoned at the deadline
+   * would be filed as "the far end was slow, try later" — the exact lie this
+   * whole change exists to stop, on the only path that ships. Both sides green,
+   * the value crossing between them never once exercised.
+   * docs/reusable/silent-success.md.
+   *
+   * The fake below rejects with `signal.reason`, which is what undici does.
+   */
+  it("still calls an abandoned image out-of-time when the real classifier sees it", async () => {
+    const underlying: FetchLike = (_url, init) =>
+      new Promise<Response>((_, reject) => {
+        const signal = init?.signal as AbortSignal | undefined;
+        const giveUp = (): void => reject(signal?.reason);
+        if (signal?.aborted) giveUp();
+        else signal?.addEventListener("abort", giveUp, { once: true });
+      });
+
+    const urls = [0, 1, 2, 3].map((i) => `https://cdn.test/hang${i}.png`);
+    const run = await collectAssets({
+      blocks: urls.map((u) => img(u)),
+      fetchImpl: realFetch(underlying),
+      blobs: fakeBlobs(),
+      limits: { budgetMs: 80 },
+    });
+
+    expect(reasons(run.assets)).toEqual(urls.map(() => "out-of-time"));
+    expect(reasons(run.assets)).not.toContain("network");
     expect(run.storageErrors).toEqual([]);
   });
 });

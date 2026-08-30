@@ -308,6 +308,46 @@ awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/a
 adapter; `npm run cost` reads it back. The reasoning, the column list, and the four decisions taken
 in Greg's absence are in [ai-cost-tracking.md](../plans/ai-cost-tracking.md).
 
+### `durationMs` is per **call**, and three different ways of adding it up are wrong
+
+**This has produced a wrong number in three separate workstreams on one day — 2026-08-30 — and in
+two of them the wrong number reached a committed document before anyone noticed.** It is written
+here rather than in any of those documents because the trap is in the ledger, not in what anybody
+was measuring.
+
+The field times **one model call**. Nothing in the row says how long a *step* took, and the three
+obvious ways to reconstruct that are each wrong in a different direction:
+
+| What you do | What it overstates | How it bit |
+|---|---|---|
+| `sum(durationMs)` for a step | a step whose calls run **concurrently** | `summarise` reported as 240.3s; its wall time is 91.3s across ten overlapping calls. Nav labels reported as 65.2s; actually 23.1s |
+| group by `runId` | a **batch** — a CLI or eval walking several articles in one process | a `sketch` "step" of 408.1s was three *different articles* run sequentially by `evals/sketch/run.ts`, each one call of 125–145s |
+| group by `(slug, job)` | unrelated runs, when `slug` is **null** | three `toc` runs *five hours apart* collapsed into one 324s step |
+
+**What actually answers "did this step fit?"** — wall clock, over rows that belong to one step:
+
+```
+max(finishedAt) - min(startedAt)   over rows filtered to one step
+```
+
+and a row belongs to one step only if you have checked **`scopeKind`** as well as `runId`.
+`scopeKind: "eval"` means a harness drawing a batch, where a `runId` spans many articles;
+`withLedger` does not attribute a slug the way a job does, so `articleSlug` is null on those rows and
+cannot separate them either.
+
+**The one case where all four agree is a single-call step**, which is why the number that survived
+every correction is `toc` at **320.4s in one call** — sum, wall, and any grouping give the same
+answer when there is nothing to aggregate. That is the measurement
+[`tests/jobs-lease-budget.test.ts`](../../tests/jobs-lease-budget.test.ts) pins the step deadline
+against, and it is deliberately the only one it cites.
+
+**Why it keeps happening.** `durationMs` sits next to `startedAt` and `finishedAt` in a row that
+looks like a unit of work, and summing it is what any reasonable person does first. The result is
+always *plausible* — it is never wildly out, it is just inflated by however much the calls overlapped
+— so nothing about the number invites a second look. Two of the three cases here were caught by a
+reviewer, not by the person who computed it, and the third was caught by the person whose step had
+been mis-measured.
+
 Three properties of that write are load-bearing and none of them is obvious:
 
 - **The write is awaited, not fired and forgotten.** On Vercel a function can be frozen the moment
