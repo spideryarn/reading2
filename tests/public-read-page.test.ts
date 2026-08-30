@@ -147,6 +147,14 @@ async function serve(
   method: string,
   slug: string,
   read: (slug: string) => Promise<PublicHead>,
+  /**
+   * The address, which the page module reads the mode and the view out of.
+   * Defaults to the plain reading URL for this slug, because that is what every
+   * case here is about; `tests/address-settling.test.ts` is where the query
+   * varies. It became a required argument on 2026-08-30 so that the wiring
+   * cannot be reassembled by a test while production drops half of it.
+   */
+  url = `/read/${slug}`,
 ): Promise<Answer> {
   const headers: Record<string, string> = {};
   let status = 0;
@@ -170,7 +178,7 @@ async function serve(
     },
   } as unknown as ServerResponse;
 
-  await servePublicReadPage({ res, method, slug, shell, read });
+  await servePublicReadPage({ req: { method, url }, res, slug, shell, read });
   return { status, headers, body, wroteBody };
 }
 

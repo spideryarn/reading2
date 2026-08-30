@@ -2299,7 +2299,7 @@ path, misses the read branch, and gets a generic JSON 404 instead of the default
 other malformed slug gets. Anything under `/read/` now goes to the page module — safe because the
 only way such a path reaches this function is the rewrite, which Vercel applies to a single segment.
 
-#### Two recorded rather than fixed, and one for Greg
+#### Two recorded rather than fixed
 
 - **`status === 404` is correct today and not structural.** `scrubbed` passes through any numeric
   status, and `loadHead` reads any 404 as *the reader refused this*. A future fault carrying
@@ -2307,10 +2307,71 @@ only way such a path reaches this function is the rewrite, which Vercel applies 
   A branded refusal type closes it; it is not urgent and it is not free.
 - **`src/web/main.tsx`'s legacy `?slug=` rewrite** hands user-controlled text to `readHref`. Safe,
   because `parseRoute` now rejects it — but it can leave a malformed `/read/…` address in the bar.
-- **The tab title changes when React mounts**, for a title containing a double space, a newline or a
-  bidi control: `documentTitle` normalises through `headText` and the client's `pageTitle` only trims
-  and clamps. Found sideways, by a test that claimed to compare the two character for character and
-  did not. Which of the two is right is a product decision, so the client is untouched.
+#### And one that was for Greg, now settled — four ways the tab changed at mount
+
+**Fixed 2026-08-30.** For a title containing a double space, a newline or a bidi control the tab
+changed the moment React mounted: `documentTitle` normalised through `headText` and the client's
+`pageTitle` only trimmed and clamped. Found sideways, by a test that claimed to compare the two
+character for character and did not. It was pinned rather than fixed because which side is right
+looked like a product decision; Greg had no view and left the call to the implementer.
+
+**The server's normalising won and the client's clamp won**, and they are one function now —
+`documentTitle` in [`src/title-text.ts`](../../src/title-text.ts), imported by both. Normalising is
+not a preference (an RLO reverses display order, and there is no argument for the tab being the one
+place one survives); a word-boundary cut with an `…` is what a reader wants in a bookmark and a
+history entry, and the server only had the hard cut because `headText` also serves `og:title`, which
+keeps it. The reasoning is in that file's header and in
+[page-titles.md](../project/page-titles.md#the-server-writes-the-title-first-now-and-both-sides-use-one-function).
+
+**Auditing for the same shape — two sources answering "what should the tab say" — found four more,
+and every one of them was unreachable from the corpus that existed.** Two of the four were found by
+GPT Sol rather than by me, and the second of those was on an axis I had checked and written off,
+which is the part worth remembering.
+
+1. **The fallback chain.** `loadHead` answered `title ?? headingTitle`; the payload's `metaFrom`
+   answers `title ?? headingTitle ?? slug`. For an article with neither a title nor an `<h1>` the tab
+   said `Untitled` and then changed to the slug. Every fixture had one or the other, so nothing could
+   reach it. Found by GPT Sol; fixed, with a fixture that has neither.
+2. **`Loading…`.** The one the server head *caused* rather than exposed: `ArticlePage` replaced the
+   real title with `Loading…` past `SLOW_AFTER_MS` (600ms — a cold serverless start, routinely) and
+   then put it back. `articleWaitTitle` in [`page-title.ts`](../../src/web/page-title.ts) is the rule
+   — do not replace a title that is already right — with two guards, the second of which is the
+   subtle one: the tab must *still be showing* the composed title, or a reader going a → b → a keeps
+   b's title over a's loading page.
+3. **The legacy metadata addresses.** `?about=1` and `?panel=about` are **one** path segment, so
+   they reach the composer, and `main.tsx` rewrites them to `/read/x/metadata` before React draws.
+   The direct two-segment route is never composed, which is why the view axis looked covered — a
+   legacy address is a second door into the same view and does not look like the thing it becomes.
+   Found by GPT Sol *after* I had checked the direct route and written down that the axis was safe.
+4. **The mode.** `?mode=glossary` survives the rewrite; the transport dropped it. Found by GPT Sol
+   reviewing the other three, and the reason it survived a 20,000-case fuzz is the lesson: every
+   generated case fixed `view` and left `mode` absent, so the corpus was exhaustive along the axis it
+   varied and blind along the one it held still. **The missing dimension was title state, not title
+   characters.** The server reads the mode now, through the same `isMode` the client uses — and
+   `modeParam` was changed to call `isMode` too, because until Sol's second round "one place decides
+   what a mode is" was a claim rather than a fact: the client still had its own `MODES.includes`, and
+   every test compared each side against literals rather than against the other.
+
+**End to end through the compiled bundle**, which is the only evidence that survives the bundler:
+`api-dist/vercel.js` driven against the real local Postgres for a genuinely public article answers
+
+| address | `<title>` | `og:title` |
+|---|---|---|
+| `/read/<slug>` | `The Mythology Of Conscious AI · Spideryarn` | `The Mythology Of Conscious AI` |
+| `?mode=glossary` | `… · Glossary · Spideryarn` | unchanged |
+| `?mode=hierarchy` | `… · Spideryarn` — the default leaves no trace | unchanged |
+| `?mode=toc` (retired 2026-08-29) | `… · Spideryarn` — degrades, as `modeParam` does | unchanged |
+| `?mode=%zz%zz` | `… · Spideryarn` — a malformed escape is not a 500 | unchanged |
+| a slug nobody has | `Spideryarn` | no `og:` tags at all |
+
+`og:url` carries no mode in any row. Nothing in that harness imports `src/`; the point was to test
+what the bundler emitted rather than what the source says.
+
+Two mutations were run against the new test before it was believed: dropping `normaliseText` from the
+shared function (both sides drift together — caught by the spelled-out literals) and putting the
+client back to `clamp(title.trim())` (caught by the labelled client assertion). An equality check
+between two callers of one function proves nothing on its own, which is why the expected strings are
+written out rather than computed from either side.
 
 ## Open questions
 

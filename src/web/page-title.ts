@@ -11,8 +11,9 @@
  * nothing.
  *
  * Not the link preview, though — a pasted address unfurls from `og:` tags a
- * server rendered, which we have not got. See docs/project/page-titles.md
- * § Still open.
+ * server rendered. Since 2026-08-29 there is one, for public articles only:
+ * src/public/page-head.ts. That changes this file's job, and the next section
+ * is where.
  *
  * ## The one rule: what is different about this tab goes first
  *
@@ -25,16 +26,26 @@
  * That is also why the default mode is *absent* rather than spelled out; see
  * `readTitle` below.
  *
- * ## No server rendering, so this is the only place a title is set
+ * ## The server writes a title first now, and this one has to match it
  *
  * The app is one HTML file and a router that never reloads (router.ts), so
- * `document.title` is a thing each page assigns on mount and on change. The
- * `<title>` in `index.html` is what the tab says until some page's effect
- * replaces it — which is longer than it sounds: effects run after paint, and
- * the whole app waits on a session check and then on an article fetch, so a
- * cold load into `/read/<slug>` sits on it for as long as those take. That is
- * why it is deliberately just the app's name. A page-specific title guessed
- * before the fetch would be a wrong one shown for a noticeable while.
+ * `document.title` is a thing each page assigns on mount and on change. What
+ * the tab says until then depends on how you arrived:
+ *
+ *  - **Any page but a shared article**: the `<title>` in `index.html`, which is
+ *    deliberately just the app's name. Effects run after paint and the app waits
+ *    on a session check and then on a fetch, so a cold load sits on it for a
+ *    noticeable while — and a page-specific title guessed before the fetch would
+ *    be a wrong one, shown for exactly that long.
+ *  - **`/read/<slug>` for a public article**: a real title, composed on the
+ *    server before the bundle loads (src/public/page-head.ts), so that a pasted
+ *    link previews as something.
+ *
+ * In the second case this file's assignment **overwrites a title that was
+ * already right**, in front of the reader. So the two have to produce the same
+ * string, and the way that is guaranteed is that both call `documentTitle` in
+ * src/title-text.ts — read its header for the two rules and which side won
+ * each. `readTitle` below is the client's half of it.
  *
  * ## Why the composition is a pure function
  *
@@ -47,74 +58,23 @@
  * docs/project/url-state.md for the state these titles are drawn from.
  */
 import { useEffect } from "react";
+import { APP_NAME, MODE_LABEL, SEP, TAGLINE, VIEW_LABEL, articleTitle, clamp } from "../title-text.js";
 import { DEFAULT_MODE, type Mode } from "./params.js";
 import type { AdminPage, ArticleView } from "./router.js";
 
-/** The product. `spideryarn2` is the working directory; this is the name. */
-export const APP_NAME = "Spideryarn";
-
 /**
- * The strapline. It appears on the two homepages and nowhere else — the shelf
- * with nothing chosen on it, and the landing page a signed-out reader gets
- * instead. See `pageTitle` for why it is on no other.
- */
-export const TAGLINE = "AI-assisted reading";
-
-/**
- * Between segments.
+ * **The rules themselves live in src/title-text.ts**, and are re-exported here
+ * so that every existing caller of this module — nine components and
+ * tests/page-title.test.ts — keeps importing them from the place it always did.
  *
- * A middot rather than an em dash or a pipe: it is already this app's
- * separator (the fact lines on the library card and the metadata page use it),
- * it is the narrowest of the three so it spends the fewest of a tab's very few
- * pixels, and unlike `-` it can never be confused with a hyphen inside a title
- * that has one. No evidence anywhere says one separator is more legible than
- * another; consistency with the rest of the app is the whole argument.
+ * They moved because the server composes the same title before this file's
+ * React ever runs (src/public/page-head.ts), and two copies of one rule is one
+ * place for them to disagree. They did disagree, visibly, in the tab. The whole
+ * argument is in the header of src/title-text.ts.
  */
-export const SEP = " · ";
+export { APP_NAME, CLAMP, SEP, TAGLINE, clamp } from "../title-text.js";
 
-/**
- * How much of a leading title we keep.
- *
- * Nothing forces this. No browser has a character limit, and every place that
- * truncates does it by **pixels** rather than characters — Firefox caps a tab
- * at 225px, Chrome shrinks tabs until only the favicon is left, Google cuts a
- * search result at about 600px. The familiar "50-60 characters" is SEO folklore
- * converged on by blogs, not a vendor number, and it is the wrong *unit*
- * besides. So a clamp cannot make a title fit a tab, and this one does not try.
- *
- * It is for the places that do *not* truncate: the history list, a bookmark,
- * the window switcher, and the text somebody gets when they paste a link into a
- * chat. A 180-character academic paper title there pushes everything after it
- * off the end of the useful world.
- *
- * 64 is therefore a judgment call rather than a measurement, and it is
- * deliberately generous — comfortably more than any tab shows, so clamping
- * never costs a reader something the tab would have shown them.
- */
-export const CLAMP = 64;
 
-/** Which of an article's nine middle-band modes, by the name the Dock uses. */
-const MODE_LABEL: Record<Mode, string> = {
-  hierarchy: "Hierarchy",
-  outline: "Outline",
-  summary: "Summary",
-  glossary: "Glossary",
-  ideas: "Ideas",
-  search: "Search",
-  diagram: "Diagram",
-  chat: "Chat",
-  review: "Review",
-};
-
-/**
- * The two of an article's three views that are pages beside the article rather
- * than the article itself. Named as the Dock names them, so the tab and the
- * button you pressed to get there agree.
- */
-const VIEW_LABEL: Record<Exclude<ArticleView, "article">, string> = {
-  metadata: "Metadata",
-  tweets: "Tweets",
-};
 
 /**
  * Everything a page can tell us about itself.
@@ -125,10 +85,49 @@ const VIEW_LABEL: Record<Exclude<ArticleView, "article">, string> = {
 export type TitleSpec =
   /** The shelf. Both fields are what the reader has narrowed it to, if anything. */
   | { kind: "library"; query?: string | null; unread?: boolean }
-  /** An article, in whichever of its views and — for the reading view — mode. */
-  | { kind: "read"; title: string; view: ArticleView; mode?: Mode }
+  /**
+   * An article, in whichever of its views and — for the reading view — mode.
+   *
+   * **Split by view, so that the reading view cannot forget its mode.** `mode`
+   * was one optional field on a single variant, and GPT Sol named the hole,
+   * 2026-08-30: deleting `mode` from the call in App.tsx compiles, the real tab
+   * silently loses `· Glossary`, and no cross-product test can see it, because
+   * the test passes its own arguments. A required field is a better answer than
+   * a test — the mutation stops existing rather than being caught.
+   *
+   * `mode?: never` on the other variant is not decoration. A union rejects a bad
+   * combination in a fresh object literal by excess-property checking, but a
+   * value assembled in a variable and passed in is structurally fine without it;
+   * naming the field is what makes `{ view: "metadata", mode }` an error
+   * wherever it is built.
+   */
+  | { kind: "read"; title: string; view: "article"; mode: Mode }
+  | {
+      kind: "read";
+      title: string;
+      view: Exclude<ArticleView, "article">;
+      mode?: never;
+    }
   /** An ingest in flight. `source` is the host, or the file, being added. */
   | { kind: "add"; source?: string | null }
+  /**
+   * The page a signed-in reader gets for an article that is not theirs and not
+   * shared — `NotSharedPage` in PublicChrome.tsx. A signed-out reader gets the
+   * landing page instead, which has its own variant below.
+   *
+   * It exists because **every terminal state of `ArticlePage` must have an owner
+   * for the tab**, and this one had none: `articleWaitTitle` hands over on
+   * anything that is not loading-and-slow or an error, and `NotSharedPage` then
+   * set no title at all. So a reader who navigated to an unavailable article
+   * kept the previous article's title, or — if the fetch had already gone slow —
+   * sat on `Loading…` for ever, because `slow` goes false and the hand-over is
+   * to nobody. GPT Sol, 2026-08-30.
+   *
+   * It says what the page's own heading says, and nothing more: a slug you do
+   * not own is a 404 rather than a 403, and the tab must not be the thing that
+   * confirms an article exists.
+   */
+  | { kind: "not-shared" }
   | { kind: "profile" }
   | { kind: "design" }
   /** The administrator's pages. `page` is which one — see router.ts. */
@@ -188,6 +187,9 @@ function segments(spec: TitleSpec): string[] {
        and the title had to add a noun because a window switcher showing "You"
        says nothing; the page's own name now carries that, so the title is the
        name and nothing else. */
+    case "not-shared":
+      return ["Not shared", APP_NAME];
+
     case "profile":
       return ["Profile", APP_NAME];
 
@@ -231,6 +233,93 @@ function segments(spec: TitleSpec): string[] {
 }
 
 /**
+ * **What the server already put in this tab, read once before React can change
+ * it.**
+ *
+ * A shared `/read/<slug>` arrives with a real `<title>` and a full `og:` head,
+ * composed from the database (src/public/page-head.ts). Nothing else in the app
+ * does — an ordinary SPA navigation, a private article, and every other route
+ * get the bare shell — so the presence of an `og:url` naming a slug is exactly
+ * the signal "the server composed a head for *this* article".
+ *
+ * `og:url` rather than a marker of its own: it is already there, already
+ * asserted in tests/page-head.test.ts, and adding a second element that means
+ * the same thing is a second place for the two to disagree. Its value is
+ * `PUBLIC_ORIGIN + "/read/" + encodeURIComponent(slug)`, so the slug is the last
+ * segment, decoded.
+ *
+ * Read at module load and never again. The server writes this once, into the
+ * document that arrived; React never updates it, so a value read later would be
+ * stale in a way that is invisible. `title` is captured alongside it for the
+ * reason `articleWaitTitle` gives.
+ */
+export function serverComposedHead(doc: Document): { slug: string; title: string } | null {
+  const url = doc.querySelector('meta[property="og:url"]')?.getAttribute("content");
+  if (!url) return null;
+  const match = /\/read\/([^/?#]+)$/.exec(url);
+  if (!match?.[1]) return null;
+  try {
+    return { slug: decodeURIComponent(match[1]), title: doc.title };
+  } catch {
+    /* A malformed percent-escape. `decodeURIComponent` throws, and a thrown
+       exception at module load would take the whole bundle down over a tab
+       title. There is simply no composed head as far as we are concerned. */
+    return null;
+  }
+}
+
+/** Captured at module load — see `serverComposedHead` for why not later. */
+const COMPOSED: { slug: string; title: string } | null =
+  typeof document === "undefined" ? null : serverComposedHead(document);
+
+/**
+ * **What `ArticlePage` puts in the tab while it waits**, and the one case where
+ * the answer is to say nothing.
+ *
+ * Before the server composed heads, a cold load of `/read/<slug>` started at the
+ * bare app name, so replacing it with `Loading…` after 600ms was strictly an
+ * improvement. It is not any more. A shared link now arrives with **the article's
+ * real title already in the tab**, and a fetch slower than `SLOW_AFTER_MS` — a
+ * cold serverless start against Postgres, routinely — would replace it with
+ * `Loading…` and then put it back. The reader watches a correct title turn into
+ * a worse one and back again, and a screen reader announces both.
+ *
+ * That is the same fault as the two this file's `documentTitle` fixes: two
+ * sources answering "what should the tab say", disagreeing. So the rule is the
+ * one this component already follows for a *fast* fetch, extended to the case
+ * the server made possible: **do not replace a title that is already right.**
+ *
+ * The two guards are both necessary:
+ *
+ *  - **`slug === COMPOSED.slug`** — the composed head is about one article. Once
+ *    the reader navigates to a different one the server's title is a lie, and
+ *    `Loading…` is the honest thing to say.
+ *  - **`currentTitle === COMPOSED.title`** — the tab must still be showing it.
+ *    A reader who goes `/read/a` → `/read/b` → back to `/read/a` has an `og:url`
+ *    that still names `a`, and suppressing here would leave *b's* title standing
+ *    over a's loading page. Comparing the string self-expires the moment
+ *    anything writes a different one, which is exactly when the guarantee stops
+ *    holding.
+ *
+ * **An error still replaces it**, deliberately. `Loading…` is a claim that the
+ * right title is coming; `Couldn't open` is a claim that it is not, and a broken
+ * page must not go on advertising the article it failed to show.
+ */
+export function articleWaitTitle(
+  state: "loading" | "error" | "ready",
+  slug: string,
+  currentTitle: string,
+  composed: { slug: string; title: string } | null = COMPOSED,
+): string {
+  if (state === "error") return pageTitle({ kind: "error" });
+  /* "" is `useDocumentTitle`'s "not mine to set" — see the hook, and see
+     `ArticlePage`, which uses the same value to hand over to its children. */
+  if (state === "ready") return "";
+  if (composed !== null && composed.slug === slug && composed.title === currentTitle) return "";
+  return pageTitle({ kind: "loading" });
+}
+
+/**
  * The segments before the app name, for one of an article's three views.
  *
  * The article's own title leads in all three, because that is what tells six
@@ -246,7 +335,7 @@ function segments(spec: TitleSpec): string[] {
  * a reader who learns the rule in one place has learned it in both.
  */
 function readTitle(spec: Extract<TitleSpec, { kind: "read" }>): string[] {
-  const title = clamp(spec.title.trim()) || "Untitled";
+  const title = articleTitle(spec.title);
   if (spec.view !== "article") return [title, VIEW_LABEL[spec.view]];
   const mode = spec.mode ?? DEFAULT_MODE;
   return mode === DEFAULT_MODE ? [title] : [title, MODE_LABEL[mode]];
@@ -257,36 +346,6 @@ function join(parts: string[]): string {
   return parts.map((p) => p.trim()).filter(Boolean).join(SEP);
 }
 
-/**
- * Cut at a word boundary, with an ellipsis, or return the text unchanged.
- *
- * Word boundary rather than mid-word because the cut is doing the reader a
- * favour and a truncation that lands inside a word looks like corruption. If
- * there is no space to cut at in the last third of the budget — one very long
- * word, or a language that does not space its words — it cuts where it must,
- * which is still better than not clamping.
- *
- * **Counted in code points, not in UTF-16 units**, which is why the text is
- * split into an array first rather than sliced. `"…".slice(0, 64)` will happily
- * cut an emoji in half and leave a lone surrogate, which renders as `�` — a
- * clamp whose whole job is to look deliberate, producing the one character that
- * looks like corruption. GPT Sol found it, 2026-08-27.
- *
- * Code points, not graphemes: a combining accent or a flag can still be split,
- * and doing better needs `Intl.Segmenter`. Not worth a segmenter for a title
- * that is already being cut with an ellipsis on it — but that is the next step
- * if this ever matters.
- */
-export function clamp(text: string, max = CLAMP): string {
-  const points = [...text];
-  if (points.length <= max) return text;
-  const cut = points.slice(0, max).join("");
-  const space = cut.lastIndexOf(" ");
-  // Only honour a space in the last third; otherwise a title whose first word
-  // is long would be clamped down to that one word.
-  const at = space > cut.length * 0.66 ? cut.slice(0, space) : cut;
-  return `${at.trimEnd()}…`;
-}
 
 /**
  * The host of a URL, without its `www.`, or the text unchanged if it is not a

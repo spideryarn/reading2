@@ -134,7 +134,7 @@ import { useComments } from "./useComments.js";
 import { ChatDialog, type ChatTarget } from "./ChatDialog.js";
 import { anchored, countByBlock, useChatAnchors } from "./useChatAnchors.js";
 import { PILL } from "./pill.js";
-import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { articleWaitTitle, pageTitle, useDocumentTitle } from "./page-title.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { loadPublicArticle } from "./public-api.js";
 import type {
@@ -592,13 +592,22 @@ function ArticlePage({
    * than that here: the title is announced to a screen reader, so a flicker
    * nobody sees is an interruption somebody hears. Until then the previous
    * title stands, which is exactly what a browser does during a real page load.
+   *
+   * **And on a shared link it does not say `Loading…` at all**, because the
+   * server already put the article's real title in the tab and replacing it
+   * would be a step backwards. That decision is `articleWaitTitle` in
+   * page-title.ts, which is where the two guards it needs are explained; this
+   * component's job is to say which of the three states it is in.
    */
   useDocumentTitle(
-    access.kind === "error"
-      ? pageTitle({ kind: "error" })
-      : access.kind === "loading" && slow
-        ? pageTitle({ kind: "loading" })
-        : "",
+    articleWaitTitle(
+      access.kind === "error" ? "error" : access.kind === "loading" && slow ? "loading" : "ready",
+      slug,
+      /* Read at call time rather than captured: the question `articleWaitTitle`
+         asks is whether the tab *still* shows what the server put there, and a
+         value captured earlier could not answer it. */
+      typeof document === "undefined" ? "" : document.title,
+    ),
   );
 
   /* **The one branch with no corner wordmark**, and the reason is that
@@ -3451,21 +3460,25 @@ function useSummaryMode(article: Article, summaries: { entries: SummaryEntry[] }
 }
 
 /**
- * Diagram mode's band — the tree, drawn.
+ * Diagram mode's band — the article, drawn.
  *
  * Same shape as `SummaryBand` above and for the same reasons: `?diagram=` is
  * read here rather than in `Reader`, because it is meaningless outside this mode
  * and a subscription in the parent would cost every render of the reading view.
  *
- * **It takes no `slug` and fetches nothing.** Every number this panel needs is
- * already on the page — stage 4 wrote a gist onto every internal node, and the
- * block ranges give the sizes — so unlike chat, glossary, search and summary
- * there is no artefact to wait for, no job to run, and nothing to pay a model
- * for — and that is what `tree`, the default picture, is drawn from. **The
- * other three all spend a model call**, which is why the default is the free
- * one: opening a mode should not bill you. `useSimilar` and `useProjection`,
- * inside the panel, are what fetch for those three, each gated on its own
- * picture being the one on screen. See docs/project/diagram.md.
+ * **This component fetches nothing**, and that is a statement about this
+ * component rather than about the mode. The shape of the picture comes from
+ * `article.tree` and `article.blocks`, which the page already holds — so unlike
+ * chat, glossary, search and summary there is no artefact to wait for and no
+ * job to run here. The two hooks that do spend money live inside the panel,
+ * each gated on its own picture being the one on screen: `useSimilar` for
+ * Force's dotted lines, `useProjection` for the two scatters' dots. `slug` is
+ * passed for exactly that.
+ *
+ * All three pictures spend a model call since the free one — `tree`, the
+ * outline — was cut on 2026-08-30. Force is the default because it is the only
+ * one that draws something real before its answer lands. See
+ * docs/project/diagram.md.
  */
 function DiagramBand({
   slug,

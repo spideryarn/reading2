@@ -65,7 +65,18 @@ import { useMemo, useSyncExternalStore } from "react";
 import { isSlug } from "../ingest.js";
 
 /** Which of an article's three pages. `article` is the reading view itself. */
-export type ArticleView = "article" | "metadata" | "tweets";
+/* **Moved to src/read-address.ts on 2026-08-30** and re-exported, so nothing
+   that used this name knows. The serverless function that composes a shared
+   article's head has to know which view an address settles on, and it may not
+   import anything under src/web/. */
+import {
+  isLegacyAboutPair,
+  queryPairs,
+  redirectsToMetadata,
+  type ArticleView,
+} from "../read-address.js";
+import { isSpideryarnId } from "../ids.js";
+export type { ArticleView };
 
 /** Which admin page. `home` is `/admin` itself — the index of the others. */
 export type AdminPage = "home" | "users";
@@ -455,10 +466,197 @@ export function canonicalAddHref(pathname: string, search: string, hash: string)
      as ours and replaced it. And since this now runs before every other rewrite
      in main.tsx, nothing downstream could have repaired it. GPT Sol, 2026-08-26. */
   const fromPath = addUrlFrom(pathname, search, hash);
-  const url = fromPath !== "" ? fromPath : addUrlFromQuery(search);
+  /* **`?add=` is read on the root and nowhere else**, which is what
+     docs/project/url-state.md has always described it as: `/?add=<url>`, from
+     the days when everything was a parameter on one page. Unconstrained it also
+     fired on `/read/a?add=…`, and that is a divergence rather than a
+     convenience: `/read/a` with a query is one path segment, so the server
+     composes *article a's* title for it (src/read-address.ts), and the client
+     then navigates to an add page instead. Sixth of these, GPT Sol 2026-08-30.
+     The path form is untouched — `/add/<url>` is canonical wherever it appears. */
+  const url = fromPath !== "" ? fromPath : pathname === "/" ? addUrlFromQuery(search) : "";
   if (url === "") return null;
   const href = addHref(url);
   return href === pathname + search + hash ? null : href;
+}
+
+/**
+ * **Every rewrite the app does before React mounts, as one pure function.**
+ *
+ * `main.tsx` used to do these as four separate `history.replaceState` calls at
+ * module scope — side effects nothing can call, which is why *interactions*
+ * between them were invisible. Each one had tests; the sequence had none. GPT
+ * Sol found the consequence on 2026-08-30, at the fourth time of asking:
+ *
+ *     /read/a?%61bout=1#spya-k3m9qt
+ *
+ * The hash rewrite went through `new URL()` and `searchParams.set()`, which
+ * **reserialises the whole query** — so `%61bout=1` became `about=1`, and the
+ * metadata rewrite two steps later then fired on a parameter that had not been
+ * there when the server read the same address. Server said article, client went
+ * to the metadata page. Neither rewrite is wrong on its own, and no per-rewrite
+ * test could have seen it.
+ *
+ * Two things follow, and both are the point of this function existing:
+ *
+ *  - **The query is edited as text throughout.** That was already this file's
+ *    rule for `?slug=` and `about=` — round-tripping re-encodes as it
+ *    serialises, and `?cols=0,1` comes back as `?cols=0%2C1`, still correct and
+ *    no longer readable. The hash rewrite was the one that broke the rule, and
+ *    it was mangling those commas too.
+ *  - **One guard instead of four.** `/auth/callback` is exempt from all of this
+ *    (see main.tsx), and it used to be exempt four times over, which meant the
+ *    person adding a fifth rewrite had to remember. Now there is one call site
+ *    to guard, and a rewrite added inside here is guarded by construction.
+ *
+ * The order is the order main.tsx had, and it is load-bearing: canonicalising
+ * an `/add/` address first leaves something none of the other three can match.
+ *
+ * @returns the address to `replaceState` to, or `null` if it is already right.
+ */
+export function settleAddress(pathname: string, search: string, hash: string): string | null {
+  const was = `${pathname}${search}${hash}`;
+  let at = { pathname, search, hash };
+
+  const canonical = canonicalAddHref(at.pathname, at.search, at.hash);
+  if (canonical !== null) at = splitHref(canonical);
+
+  at = liftLegacyAnchor(at);
+  at = liftLegacySlug(at);
+  at = liftLegacyAbout(at);
+
+  const href = `${at.pathname}${at.search}${at.hash}`;
+  return href === was ? null : href;
+}
+
+/** An address in the three pieces `location` gives them in, prefixes included. */
+interface Address {
+  pathname: string;
+  search: string;
+  hash: string;
+}
+
+/** `/a/b?c=d#e` back into its three parts, with their prefixes kept. */
+function splitHref(href: string): Address {
+  const hashAt = href.indexOf("#");
+  const hash = hashAt === -1 ? "" : href.slice(hashAt);
+  const rest = hashAt === -1 ? href : href.slice(0, hashAt);
+  const queryAt = rest.indexOf("?");
+  return {
+    pathname: queryAt === -1 ? rest : rest.slice(0, queryAt),
+    search: queryAt === -1 ? "" : rest.slice(queryAt),
+    hash,
+  };
+}
+
+/**
+ * **Does this pair name that parameter, however it is spelled?**
+ *
+ * `?%61t=…` is `?at=…`: `URLSearchParams` percent-decodes keys, so it reads them
+ * as the same parameter — and a textual filter for `at=` does not. Removing only
+ * the literal spelling left both in the query, and the reader got the **stale**
+ * one, because `get("at")` returns the first match. So the fragment lost to a
+ * position it was supposed to override. GPT Sol, 2026-08-30; the ninth address
+ * bug and the second of this exact shape.
+ *
+ * The key is decoded to decide, and the pair is then dropped or kept **whole**,
+ * so everything that stays is byte-for-byte what was written. A malformed escape
+ * cannot be a match for a plain name, and it must not throw here either.
+ */
+function hasKey(pair: string, name: string): boolean {
+  const key = pair.split("=")[0] ?? "";
+  if (key === name) return true;
+  try {
+    return decodeURIComponent(key) === name;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Drop the pairs a rewrite is consuming, and keep every other one **exactly as
+ * it was written**. Text, never `URLSearchParams` — see `settleAddress`.
+ */
+function withoutPairs(search: string, drop: (pair: string) => boolean): string {
+  return search
+    .replace(/^\?/, "")
+    .split("&")
+    .filter((pair) => pair !== "" && !drop(pair))
+    .join("&");
+}
+
+/**
+ * `/#spya-k6fpme` → `?at=spya-k6fpme`. Deep links used to be fragments;
+ * position now lives in `?at=`.
+ *
+ * **The hash beats an `?at=` that came with it.** The article's own internal
+ * links are `#spya-…`, so ⌘-clicking one opens `?at=<where you were>#<where you
+ * asked to go>` — two positions in one address. `?at=` is where the reader
+ * happened to be; a fragment is where they asked to go.
+ *
+ * `decodeURIComponent` throws on a malformed escape like `#%zz`, and a throw at
+ * module scope takes the whole bundle down over a deep link. There is simply no
+ * legacy anchor in that case.
+ */
+function liftLegacyAnchor(at: Address): Address {
+  let anchor: string;
+  try {
+    anchor = decodeURIComponent(at.hash.slice(1));
+  } catch {
+    return at;
+  }
+  if (!isSpideryarnId(anchor)) return at;
+  const rest = withoutPairs(at.search, (pair) => hasKey(pair, "at"));
+  return { pathname: at.pathname, search: `?${rest ? `${rest}&` : ""}at=${anchor}`, hash: "" };
+}
+
+/**
+ * `/?slug=x` → `/read/x`, **on the root and nowhere else**.
+ *
+ * The old address was `/?slug=…`, from when the slug was a parameter on the one
+ * page there was — never `/read/a?slug=b`, which is a contradiction nobody ever
+ * produced. Unconstrained it fired there anyway, and the server had already
+ * composed article *a*'s title for it. GPT Sol, 2026-08-30.
+ *
+ * **The fragment is carried across, which the old inline version did not do.**
+ * It dropped it; the `about=` rewrite beside it kept it. That reads as two
+ * rewrites written at different times rather than as a decision, and keeping it
+ * is the better of the two — a fragment the reader wrote should not vanish
+ * because their link used an old spelling. Only a fragment that is *not* a block
+ * id is affected, because `liftLegacyAnchor` runs first and consumes those.
+ */
+function liftLegacySlug(at: Address): Address {
+  if (at.pathname !== "/") return at;
+  const slug = new URLSearchParams(at.search).get("slug");
+  if (!slug) return at;
+  /* `URLSearchParams.get` above decoded the key to find it, so the removal has
+     to decode too, or `?%73lug=x` is read and then left behind. */
+  const rest = withoutPairs(at.search, (pair) => hasKey(pair, "slug"));
+  return { ...splitHref(readHref(slug, rest)), hash: at.hash };
+}
+
+/**
+ * `?about=1` and `?panel=about` → `/read/<slug>/metadata`. The article's details
+ * were in the masthead, then a drawer, and are now a page.
+ *
+ * `about=0` is stripped but does **not** redirect: it meant the panel was shut,
+ * and a shut panel is not a reason to send anybody to a different page.
+ * `redirectsToMetadata` in src/read-address.ts is the predicate, shared with the
+ * server, which has to predict this to compose the right `<title>`.
+ */
+function liftLegacyAbout(at: Address): Address {
+  /* **Deciding and removing are the same function**, `isLegacyAboutPair`, which
+     the server also reaches through `redirectsToMetadata`. That is the whole
+     lesson of the ninth bug: a decoding decision paired with a literal removal
+     leaves a parameter in the query that one side acts on and the other has
+     never seen. There is now no second spelling of the question. */
+  if (!queryPairs(at.search).some(isLegacyAboutPair)) return at;
+  const rest = withoutPairs(at.search, isLegacyAboutPair);
+  const route = parseRoute(at.pathname);
+  if (redirectsToMetadata(at.search) && route.kind === "read") {
+    return { ...splitHref(readHref(route.slug, rest, "metadata")), hash: at.hash };
+  }
+  return { pathname: at.pathname, search: rest ? `?${rest}` : "", hash: at.hash };
 }
 
 /**

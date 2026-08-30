@@ -145,7 +145,11 @@ export function VisitorPage({
 }: {
   slug: string;
   article: Article;
-  view: ArticleView;
+  /* Never the reading view: this page exists *instead of* an article the link
+     does not carry. Narrower than `ArticleView` on purpose — the wide type let
+     it be built for the reading view, which would have put a mode-less tab on a
+     mode-bearing page. */
+  view: Exclude<ArticleView, "article">;
   gap: VisitorGap;
   /**
    * Which artefacts this piece has, for the bar's marked modes.

@@ -33,8 +33,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { decidePublicPage } from "../src/public/page.js";
-import { originalUrl, readSlug } from "../src/vercel.js";
-import { parseRoute } from "../src/web/router.js";
+import { DEFAULT_MODE, MODES } from "../src/modes.js";
+import { redirectsToMetadata, viewFor } from "../src/read-address.js";
+import { modeParam } from "../src/web/params.js";
+import { originalUrl, readMode, readSlug } from "../src/vercel.js";
+import { canonicalAddHref, parseRoute, settleAddress } from "../src/web/router.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -313,6 +316,230 @@ describe("readSlug, and what a malformed capture is answered with", () => {
   });
 });
 
+/**
+ * **The mode has to survive the rewrite, because the tab carries it.**
+ *
+ * `/read/x?mode=glossary` was served as `x · Spideryarn` and then rewritten by
+ * React to `x · Glossary · Spideryarn` — the same fault as the whitespace one,
+ * on the axis nothing was varying. GPT Sol found it, 2026-08-30.
+ *
+ * The rewrite preserves the original query beside the `__spy_read` capture
+ * (§ *originalUrl and the second capture* above), so the value is here to be
+ * read; `readMode` is what reads it.
+ */
+describe("readMode, and the mode a shared address asked for", () => {
+  it("takes it off the restored URL, for every mode there is", () => {
+    for (const mode of MODES) {
+      expect(readMode(`/read/some-article?mode=${mode}`), mode).toBe(mode);
+    }
+  });
+
+  it("lands an unknown one on the default rather than failing", () => {
+    /* The rule `modeParam` already keeps on the client: a link from a future
+       version, or a pre-2026-08-29 `?mode=toc` link, degrades to the article
+       rather than to an error. `toc` is the real case — it named this very
+       view until the rename. */
+    for (const asked of ["toc", "", "HIERARCHY", "glossary ", "../../etc/passwd", "%zz"]) {
+      expect(readMode(`/read/some-article?mode=${asked}`), asked).toBe("hierarchy");
+    }
+  });
+
+  it("and on the default when the address says nothing about it", () => {
+    expect(readMode("/read/some-article")).toBe("hierarchy");
+    expect(readMode("/read/some-article?at=spya-k3m9qt")).toBe("hierarchy");
+    /* A stranger controls this string, and a throw here would be a 500 on an
+       address that only wanted a tab title. */
+    expect(readMode("/read/some-article?%")).toBe("hierarchy");
+    expect(readMode("")).toBe("hierarchy");
+  });
+
+  /**
+   * **The two predicates, paired on the inputs that are not modes.**
+   *
+   * `readMode` calls `isMode`; `modeParam.parse` used to call `MODES.includes`
+   * separately, so "one place decides what a mode is" was a claim rather than a
+   * fact — and every test compared each side against literals instead of
+   * against the other. They agreed, but nothing would have noticed if they
+   * stopped. GPT Sol, 2026-08-30.
+   *
+   * The corpus is mostly **junk on purpose**: the nine good values are the case
+   * that already passes, and the interesting question is whether two
+   * implementations of "not a mode" reject identically.
+   */
+  it("agrees with the client's own parser about what is not a mode", () => {
+    const asked = [
+      ...MODES,
+      "toc",
+      "TOC",
+      "Hierarchy",
+      "hierarchy ",
+      " hierarchy",
+      "hierarchy,chat",
+      "",
+      "0",
+      "null",
+      "undefined",
+      "__proto__",
+      "constructor",
+      "toString",
+      "hasOwnProperty",
+      "length",
+      "0.5",
+      "-1",
+      "true",
+    ];
+    for (const value of asked) {
+      const client = modeParam.parse(value) ?? DEFAULT_MODE;
+      const server = readMode(`/read/some-article?mode=${encodeURIComponent(value)}`);
+      expect(server, `mode=${JSON.stringify(value)}`).toBe(client);
+    }
+    /* And the control: the corpus really does contain things that are rejected,
+       so "they agree" is not the trivial agreement of two functions that accept
+       everything. */
+    expect(asked.filter((v) => modeParam.parse(v) === null).length).toBeGreaterThan(10);
+  });
+
+  it("survives the round trip through the rewrite, which is the only path it has", () => {
+    /* Not `readMode` on a URL written by hand: the value has to come through
+       `originalUrl`, because that is where a rewrite that dropped the query
+       would show up — and a hand-written URL would pass with the query
+       discarded. */
+    const restored = originalUrl("/api/index?__spy_read=some-article&mode=glossary");
+    expect(restored, "the rewrite must preserve the query").toContain("mode=glossary");
+    expect(readMode(restored ?? "")).toBe("glossary");
+  });
+});
+
+/**
+ * **The legacy metadata spellings, which reach the composer while the real
+ * metadata address never does.**
+ *
+ * `/read/x/metadata` is two path segments, so vercel.json's `/read/:slug` does
+ * not match it and it falls to the SPA catch-all — pinned above. I checked that
+ * and concluded the view axis was safe. It is not: `/read/x?about=1` is **one**
+ * segment, so it matches, the server composed the *article's* title for it, and
+ * `main.tsx` then rewrote the address to `/read/x/metadata` before React drew
+ * anything. The tab went `Article · Spideryarn` → `Article · Metadata ·
+ * Spideryarn`; with `?mode=glossary` on it, `Article · Glossary · Spideryarn` →
+ * `Article · Metadata · Spideryarn`. GPT Sol, 2026-08-30 — the fifth of these,
+ * and the second it found after I had reasoned my way past the axis.
+ */
+describe("viewFor, and the legacy spellings of the metadata page", () => {
+  it("recognises the two that redirect, given a query or a whole URL", () => {
+    /* Both shapes, because the client passes `location.search` and the server
+       passes the restored URL — and the doc-comment claimed only the first while
+       production used the second. GPT Sol, 2026-08-30. */
+    for (const query of [
+      "/read/some-article?about=1",
+      "/read/some-article?panel=about",
+      "/read/some-article?mode=glossary&about=1",
+      "?about=1",
+      "?panel=about",
+      "?mode=glossary&about=1",
+      "?about=1&mode=glossary",
+      "?at=spya-k3m9qt&panel=about&cols=0,1",
+    ]) {
+      expect(viewFor(query), query).toBe("metadata");
+      expect(redirectsToMetadata(query), query).toBe(true);
+    }
+  });
+
+  it("and leaves the article alone for everything else, `about=0` included", () => {
+    /* `about=0` meant the panel was shut. It is stripped from the URL and the
+       reader stays on the article, so the server must go on composing the
+       article's title for it — the one case where "contains about=" and
+       "becomes the metadata page" are different answers. */
+    for (const query of [
+      "/read/some-article",
+      "/read/some-article?about=0",
+      "/read/some-article?mode=glossary",
+      "",
+      "?",
+      "?about=0",
+      "?mode=glossary",
+      "?about=2",
+      "?aboutx=1",
+      "?xabout=1",
+      "?panel=notes",
+      "?panel=aboutish",
+      "?notabout=1",
+    ]) {
+      expect(viewFor(query), query).toBe("article");
+      expect(redirectsToMetadata(query), query).toBe(false);
+    }
+  });
+
+  it("agrees with the rewrite the client actually performs", () => {
+    /* Not a grep for a string any more: `settleAddress` **is** the sequence
+       main.tsx runs, so this compares the server's prediction against the
+       client's real behaviour rather than against a copy of it. */
+    for (const [query, settled] of [
+      ["?about=1", "/read/some-article/metadata"],
+      ["?panel=about", "/read/some-article/metadata"],
+      ["?about=1&mode=glossary", "/read/some-article/metadata?mode=glossary"],
+    ] as const) {
+      expect(settleAddress("/read/some-article", query, ""), query).toBe(settled);
+      expect(viewFor(query), query).toBe("metadata");
+    }
+    /* And the pair that must NOT move, with the server agreeing. */
+    for (const query of ["?about=0", "?mode=glossary", ""]) {
+      const after = settleAddress("/read/some-article", query, "");
+      expect(after === null || !after.includes("/metadata"), query).toBe(true);
+      expect(viewFor(query), query).toBe("article");
+    }
+  });
+});
+
+/**
+ * **The two older legacy entrances, which reach the composer the same way.**
+ *
+ * `/?slug=x` and `/?add=<url>` are addresses from when everything was a
+ * parameter on one page (docs/project/url-state.md). Neither was constrained to
+ * the root, so both fired on `/read/a?…` — which is **one** path segment, so the
+ * server composes article *a*'s title for it and the client then navigates
+ * somewhere else entirely: to a different article, or to an add page.
+ *
+ * Sixth and seventh of these. GPT Sol found both on 2026-08-30, in the third
+ * round, after I had twice said the axis was covered. The lesson is the one from
+ * the metadata case, and it did not take the first time: **a legacy entrance is
+ * a door into a different page that does not look like one**, and enumerating
+ * the routes will not find it because it is not a route.
+ */
+describe("the older legacy entrances, which must not fire under /read/", () => {
+  it("leaves ?slug= alone anywhere but the root, so the client cannot swap the article", () => {
+    /* Behavioural now that the sequence is a function: the address the server
+       titled as article `an-article` must still be that article afterwards. */
+    const after = settleAddress("/read/an-article", "?slug=other", "");
+    expect(after === null || !after.includes("other"), String(after)).toBe(true);
+    /* The control: on the root it still works, so the assertion above is about
+       the pathname rather than about a rewrite that has stopped happening. */
+    expect(settleAddress("/", "?slug=other", "")).toBe("/read/other");
+  });
+
+  it("and reads ?add= on the root only", () => {
+    /* The address the server composes an article title for. */
+    expect(canonicalAddHref("/read/an-article", "?add=https://example.com/x", "")).toBeNull();
+    expect(canonicalAddHref("/read/an-article", "?add=https://example.com/x&at=spya-k3m9qt", "")).toBeNull();
+    /* And the control, or the assertions above would pass against a function
+       that had stopped reading `?add=` at all: on the root it still works, which
+       is the whole feature Greg asked for. */
+    expect(canonicalAddHref("/", "?add=https://example.com/x", "")).toBe(
+      "/add/https%3A%2F%2Fexample.com%2Fx",
+    );
+    /* The path form is untouched — `/add/<url>` is canonical wherever it is. */
+    expect(canonicalAddHref("/add/https://x.test/a", "?utm=1", "")).not.toBeNull();
+  });
+
+  it("while the server goes on composing the article's own title for both", () => {
+    /* The other half of the pair: these addresses stay on the reading view, so
+       the server's title is right and must not become a Metadata one. */
+    for (const query of ["?slug=other", "?add=https://example.com/x"]) {
+      expect(viewFor(query), query).toBe("article");
+      expect(readMode(`/read/an-article${query}`), query).toBe("hierarchy");
+    }
+  });
+});
+
 describe("parseRoute and a malformed slug", () => {
   /**
    * **`/read/Upper` is the shelf, not an error page.**
@@ -349,5 +576,96 @@ describe("parseRoute and a malformed slug", () => {
       slug: "a-slug",
       view: "tweets",
     });
+  });
+});
+
+/**
+ * **public/robots.txt, and the one hole in it.**
+ *
+ * Greg's call, 2026-08-30: name the two preview bots so a shared link draws a
+ * card in Meta's apps, and leave the blanket `Disallow: /` standing for
+ * everybody else.
+ *
+ * **What this describe does not do is model a crawler.** It parses the file into
+ * groups and asserts what is in them; it makes no claim about how any given
+ * robot resolves `Allow` against `Disallow`, because a parser I wrote agreeing
+ * with a parser I wrote is worth nothing. The real check is empirical and comes
+ * after a deploy: paste a link and look at the card. What these cases are for is
+ * the *other* failure — a later edit that drops a line, or adds a bot, without
+ * anybody noticing.
+ *
+ * The one semantic claim here is the one that is easy to get wrong and cheap to
+ * check: **a robot obeys exactly one group**, the most specific one naming it,
+ * and inherits nothing from `*`. So a named group without its own `Disallow: /`
+ * is not a narrow hole, it is an open door — and it would look, in a diff, like
+ * the tidier version of this file.
+ */
+describe("public/robots.txt", () => {
+  type Group = { agents: string[]; rules: { rule: string; path: string }[] };
+
+  const groups: Group[] = [];
+  {
+    const text = readFileSync(path.join(process.cwd(), "public/robots.txt"), "utf8");
+    let open: Group | null = null;
+    for (const raw of text.split("\n")) {
+      const line = raw.replace(/#.*$/, "").trim();
+      if (line === "") continue;
+      const [key = "", ...rest] = line.split(":");
+      const value = rest.join(":").trim();
+      const name = key.trim().toLowerCase();
+      if (name === "user-agent") {
+        /* Consecutive user-agent lines share one group; a rule closes it. */
+        if (open === null || open.rules.length > 0) {
+          open = { agents: [], rules: [] };
+          groups.push(open);
+        }
+        open.agents.push(value);
+      } else if (open !== null) {
+        open.rules.push({ rule: name, path: value });
+      }
+    }
+  }
+
+  const groupFor = (agent: string): Group | undefined =>
+    groups.find((g) => g.agents.some((a) => a.toLowerCase() === agent.toLowerCase()));
+
+  it("still shuts out everybody who is not named", () => {
+    expect(groupFor("*")?.rules).toEqual([{ rule: "disallow", path: "/" }]);
+  });
+
+  /* Mutation: drop either name and this reddens; that is the whole point of it,
+     because losing a card is silent — the link still works, it just looks like
+     nothing. */
+  it("names exactly the two preview bots and no others", () => {
+    const named = groups.flatMap((g) => g.agents).filter((a) => a !== "*");
+    expect(named.sort()).toEqual(["Twitterbot", "facebookexternalhit"]);
+  });
+
+  it.each(["facebookexternalhit", "Twitterbot"])(
+    "lets %s reach /read/ and nothing else",
+    (agent) => {
+      const group = groupFor(agent);
+      expect(group).toBeDefined();
+      /* Both lines, in this order. `Allow` alone would be the open door, and
+         `Disallow` alone would be the hole closed again. */
+      expect(group?.rules).toEqual([
+        { rule: "allow", path: "/read/" },
+        { rule: "disallow", path: "/" },
+      ]);
+    },
+  );
+
+  /**
+   * **The hole is for cards, not for search**, and this is the pair that says
+   * so. Fetching is now permitted for two robots; indexing is refused to all of
+   * them, by a header and a meta tag that neither of those two reads for
+   * anything. If a later slice wants public articles indexed, it has to defeat
+   * both of these deliberately — see docs/project/page-titles.md.
+   */
+  it("does not, on its own, let anything be indexed", () => {
+    const robots = config.headers.flatMap((h) =>
+      h.headers.filter((k) => k.key.toLowerCase() === "x-robots-tag").map((k) => k.value),
+    );
+    expect(robots).toEqual(["noindex, nofollow"]);
   });
 });

@@ -115,7 +115,7 @@ characters at the end of a string that is already being cut. **Front-loading is 
 saying what is different about this tab.**
 
 It also agrees with the URL, which leaves the default mode out for a related reason
-([params.ts § modeParam](../../src/web/params.ts)) — so a reader who learns the rule in one place has
+([params.ts § modeParam](../../src/web/params.ts), over the list in [modes.ts](../../src/modes.ts)) — so a reader who learns the rule in one place has
 learned it in both.
 
 ### What is deliberately *not* in the title
@@ -276,9 +276,281 @@ that here, because the title is announced: a flicker nobody sees is an interrupt
 Until the threshold passes the previous title stands, which is exactly what a browser does during a
 real page load.
 
-The `<title>` still in `index.html` is deliberately the bare app name. It is only what the tab says
-between the first byte and React's first paint, and a page-specific guess made before the fetch would
-be a wrong one.
+The `<title>` in `index.html` is deliberately the bare app name. It is what the tab says between the
+first byte and React's first paint, and a page-specific guess made before the fetch would be a wrong
+one. **One route no longer uses it**: a shared `/read/<slug>` is served with a real title composed
+from the database — the next section.
+
+## The server writes the title first now, and both sides use one function
+
+Since 2026-08-29 a shared `/read/<slug>` is not served as the bare shell. A small function composes
+the `<head>` — `<title>`, `og:`, `twitter:` — from the database before the bundle loads, for public
+articles only, so that a pasted link previews as something. That closed the "no `og:` tags" question
+this page carried for two days. [`src/public/page-head.ts`](../../src/public/page-head.ts), and
+[public-read-only-access.md](../plans/public-read-only-access.md) § Stage 2.
+
+It also created a new way to be quietly wrong. React still mounts and still assigns
+`document.title`, **over the top of a title that was already there and already right**. So whatever
+the two disagree about is a tab that changes in front of the reader, a second after the page arrives.
+
+They did disagree. The server ran the title through `headText`
+([`src/html.ts`](../../src/html.ts)) — internal runs of whitespace collapsed, control characters
+became a space, bidi overrides dropped — and the client only trimmed the ends and cut to length. An
+article titled `Two  spaces` was served as `Two spaces` and then rewritten to `Two  spaces`. GPT Sol
+found it reviewing slice 1; it was pinned as a divergence nobody had chosen, and put to Greg, who
+left the call to the implementer (2026-08-30).
+
+**The call: the server's normalising wins, the client's clamp wins.** Each side kept the rule it had
+the better reason for.
+
+| | The rule that won | Why that side |
+|---|---|---|
+| Normalising | the server's | An RLO reverses display order — `A‮gnp.exe` shows as `A exe.png` — and a newline in a `<title>` renders differently in every consumer of it. There is no argument for the tab being the one place an invisible direction change survives. |
+| Clamping | the client's | A word-boundary cut with an `…` is what a reader wants in a tab, a bookmark and a history entry: the ellipsis says "there was more". The server only had the hard cut because `headText` also serves `og:title`. |
+
+Both now call **`documentTitle`** in [`src/title-text.ts`](../../src/title-text.ts), which is the
+whole of the guarantee: two copies of one rule is one place for it to drift, and the drift is what
+happened. That file sits at `src/` rather than under `src/web/` because
+[`page-title.ts`](../../src/web/page-title.ts) imports React and nothing the public function reaches
+may import anything under `src/web/` — the standing answer here is to move the shared thing into a
+module that imports almost nothing — `src/html.ts` for the normaliser, plus the two vocabularies a
+title is built from, [`src/modes.ts`](../../src/modes.ts) and
+[`src/read-address.ts`](../../src/read-address.ts), which are leaves themselves.
+
+**What still differs, on purpose:** `og:title` and `twitter:title` drop the ` · Spideryarn` suffix
+and clamp hard at 120 with no ellipsis. That is a difference between *a tab* and *a card* — different
+sinks, read by different things — rather than between two copies of one rule. A card already carries
+`og:site_name`, so repeating the app's name spends the visible half of it saying one word twice, and
+an `…` in published metadata is a claim that the title contained one.
+
+`tests/page-head.test.ts` § *the one title rule, applied by both sides* is the check, and its expected
+strings are written out rather than computed from either side — an expectation spelled
+`documentTitle(t)` would agree with every possible behaviour of `documentTitle`, which is how a test
+about two things that must agree quietly becomes a test about nothing.
+
+### The other two ways the two sides disagreed
+
+The whitespace one above was the finding. Auditing for more of the same shape — *two sources
+answering "what should the tab say"* — turned up two others, both of which shipped with the server
+head and neither of which any existing test could reach.
+
+**The fallback chain, fixed 2026-08-30.** `loadHead` answered `title ?? headingTitle`, and the
+article payload's `metaFrom` ([`src/public/dto.ts`](../../src/public/dto.ts)) answers
+`title ?? headingTitle ?? slug`. They agree for every article that has a title or an `<h1>`, which is
+nearly all of them — which is exactly why nothing caught it. For an article with neither, the tab said
+`Untitled · Spideryarn` and then changed to the slug. `loadHead` has the third link now, and there is
+a fixture with neither of the first two, because **the corpus could not previously reach the
+disagreement at all**: `a public article with neither a title nor an <h1>` in
+`tests/public-visibility-pg.test.ts`. GPT Sol found this one in the last minutes of a review that
+then ran out of time.
+
+**`Loading…`, fixed 2026-08-30.** This is the one the server head *caused* rather than exposed.
+`ArticlePage` replaces the tab with `Loading…` once a fetch passes `SLOW_AFTER_MS` (600ms — a cold
+serverless start against Postgres, routinely). Before the server composed heads that was strictly an
+improvement, because the tab started at the bare app name. Afterwards it is a step backwards: a
+shared link arrives with the article's real title, and this would replace it with `Loading…` and then
+put it back, announcing both to a screen reader.
+
+`articleWaitTitle` in [`page-title.ts`](../../src/web/page-title.ts) is the rule, and it is the one
+this component already followed for a fast fetch: **do not replace a title that is already right.**
+Two guards, both necessary and each with a case that fails without it —
+
+- the composed head must be about *this* slug, or a reader who has navigated on would keep a title
+  about the article they left;
+- the tab must *still be showing* it, or a reader who goes `/read/a` → `/read/b` → back to `/read/a`
+  would have b's title left standing over a's loading page. The `og:url` still names `a`, so the slug
+  check alone passes; comparing the string self-expires the moment anything writes a different one.
+
+An **error** still replaces it, deliberately. `Loading…` is a claim that the right title is coming;
+`Couldn't open` is a claim that it is not, and a broken page must not go on advertising the article
+it failed to show.
+
+The signal is the `og:url` the head already carries, read once at module load — not a marker of its
+own, because a second element meaning the same thing is a second place for the two to disagree, which
+is the whole subject of this section.
+
+### And the fourth: the mode
+
+Found by GPT Sol reviewing the three fixes above, 2026-08-30, and it is the one worth understanding
+because of *why* nothing else found it.
+
+`/read/<slug>?mode=glossary` was served as `Article · Spideryarn` and then rewritten by React to
+`Article · Glossary · Spideryarn`. The rewrite in `vercel.json` preserves the query, so the mode was
+there to be read; the transport simply passed the slug on and dropped the rest.
+
+There is a seeded fuzz over 20,000 generated titles guarding the server/client equality, and it could
+not see this. Every case it generates fixes `view: "article"` and leaves `mode` absent — so it varies
+the title's *characters* exhaustively while holding the one axis this bug lives on completely still.
+Sol's sentence is the one to keep:
+
+> The missing dimension is title state, not title characters.
+
+That is a general lesson about corpora, not a fact about this bug: a generator is thorough along the
+axes it varies and blind along every axis it fixes, and the blindness is invisible from inside the
+results. `tests/page-head.test.ts` now loops over `MODES` itself, read from
+[`src/modes.ts`](../../src/modes.ts) rather than listed, so a tenth mode arrives in the check without
+anyone remembering to add it.
+
+The server learns the mode rather than the client dropping it, because the client's rule — the mode
+distinguishes tabs, so it belongs in the title — is the one with the argument behind it (§ *The
+default mode leaves no trace* above). `readMode` in [`src/vercel.ts`](../../src/vercel.ts) reads it,
+and resolves anything unrecognised to the default through the same `isMode` the client's `modeParam`
+uses, so a `?mode=` from a future version degrades to the article on both sides identically. The mode
+reaches the `<title>` only: `og:title` and `og:url` are about the article, not about which panel the
+person who shared it happened to have open.
+
+That move is why `MODES`, `Mode` and `DEFAULT_MODE` now live in `src/modes.ts` instead of
+`src/web/params.ts` — nothing the serverless function reaches may import from `src/web/`. `params.ts`
+re-exports all three, so no component knows it moved.
+
+### And a fifth: the legacy metadata addresses
+
+The article's details have been in three places — `?about=1`, then `?panel=about`, now
+`/read/<slug>/metadata`. [`main.tsx`](../../src/web/main.tsx) rewrites both old spellings on the way
+in, before React draws anything.
+
+`/read/x/metadata` is **two** path segments, so `vercel.json`'s `/read/:slug` never matches it and it
+falls to the SPA catch-all — which is why the view axis looked safe. `/read/x?about=1` is **one**
+segment. It matched, the server composed the *article's* title, and the client then turned the
+address into the metadata page: `Article · Spideryarn` → `Article · Metadata · Spideryarn`, or with a
+mode on it, `Article · Glossary · Spideryarn` → `Article · Metadata · Spideryarn`.
+
+GPT Sol found this one too, 2026-08-30, after I had checked the direct route and written down that
+the axis was covered. **The direct route being safe is not the axis being safe** — a legacy address
+is a second door into the same view, and it does not look like the thing it becomes.
+
+`redirectsToMetadata` in [`src/read-address.ts`](../../src/read-address.ts) is the predicate, and
+`main.tsx` calls it rather than keeping the pattern it used to hold, so there is one answer rather
+than two. The server composes `· Metadata ·` for those addresses and drops the mode, exactly as
+`readTitle` does for a non-article view. `about=0` is the case that separates "contains `about=`"
+from "becomes the metadata page": it meant the panel was shut, it is stripped from the URL, and the
+reader stays on the article — so the server goes on composing the article's title for it.
+
+### Sixth and seventh: the two older legacy entrances
+
+Same shape as the fifth, and I did not learn it the first time. `/?slug=x` and `/?add=<url>` are
+addresses from when everything was a parameter on one page. Neither was constrained to the root, so
+both fired under `/read/` too:
+
+- `/read/a?slug=b` — the server composes article **a**'s title; `main.tsx` rewrites the address to
+  `/read/b`.
+- `/read/a?add=https://example.com/x` — the server composes article **a**'s title; `canonicalAddHref`
+  rewrites the address to `/add/…`, which is not an article page at all.
+
+Both now read only on `/`, which is what [url-state.md](url-state.md) has always described them as.
+The `/add/<url>` **path** form is untouched and canonical wherever it appears.
+
+GPT Sol found these in the third round, after I had twice written that the view axis was covered.
+The lesson, which took three rounds to land: **enumerating the routes will not find a legacy
+entrance, because a legacy entrance is not a route.** It is a query parameter that turns one page
+into another, before the router ever sees it.
+
+There is a second consequence, and it is the one to keep. Constraining `?add=` to the root means the
+auth callback is now safe from being folded into an ingest for *two* independent reasons — the
+`onCallback` guard in `main.tsx`, and the pathname. That is defence in depth, and it is also how a
+control quietly stops testing anything: `tests/router.test.ts` had a case whose whole premise was
+"`?add=` is read from the query wherever it appears". It now proves each guard separately, with a
+positive control on `/` so that a `null` is evidence about the pathname rather than about a function
+that has stopped reading `?add=` at all.
+
+### The one exception: an owner's private rename
+
+Everything above is in service of one guarantee — the tab does not change when React mounts. There is
+exactly one place it still does, and it is a decision.
+
+`articles.title_override` is the owner's private name for a piece. The public head must never carry
+it, because that head is served to strangers ([security-map.md](security-map.md)); the owner's own
+payload deliberately applies it. So an **owner** hard-loading their own renamed public article sees
+the extracted title for a moment and then their own name for it.
+
+Nobody else can see this. A stranger, a signed-in stranger and the owner all get byte-identical
+*public* responses, so the change is visible only to the one person who already knows both strings.
+The alternative — putting the override in the public head so the two agree — is a disclosure, and no
+tab is worth that. Pinned in `tests/public-visibility-pg.test.ts`, with the non-disclosure asserted
+first, because that is the half that must never regress.
+
+### The eighth, which is why the rest of this section is now one test
+
+`/read/a?%61bout=1#spya-k3m9qt`. The server reads the raw query, sees `%61bout`, and says: the
+article. The client lifts the fragment into `?at=` — and did that through `URLSearchParams`, which
+**reserialises the whole query**, so `%61bout=1` became `about=1`, and the metadata rewrite two steps
+later fired on a parameter that had not been there when the server looked.
+
+Neither rewrite is wrong on its own. It is an **interaction**, and it was invisible because
+`main.tsx` performed the four rewrites as four `history.replaceState` calls at module scope — side
+effects nothing can call. Each had tests; the sequence had none.
+
+Two things changed, and the second is the more important:
+
+1. **The query is edited as text throughout.** That was already this file's rule for `?slug=` and
+   `about=` — round-tripping re-encodes as it serialises, and `?cols=0,1` comes back as
+   `?cols=0%2C1`, still correct and no longer readable ([params.ts](../../src/web/params.ts) spells
+   those commas out on purpose). The hash rewrite was the one breaking the rule, and it was mangling
+   those commas too.
+2. **The sequence is one pure function** — `settleAddress` in [`router.ts`](../../src/web/router.ts).
+   `main.tsx` calls it once. That also collapses four `onCallback` guards into one, so a fifth
+   rewrite is exempt from the auth callback *by construction* rather than by the person adding it
+   remembering.
+
+### Eight fixed one at a time is not a fix
+
+**The count, since it keeps moving:** ten findings in all — the eight title divergences listed above,
+plus two address bugs that are not title divergences at all (the ninth, a stale `?at=` when its key
+was percent-encoded; the tenth, below). Six of the ten were found by a reviewer reading the code,
+three of those on axes this document had already claimed were covered.
+
+Each of the eight got a test naming its own case, and that is exactly the shape of testing that let
+the next one through. **A list of the cases somebody thought of is not a statement about the class.**
+
+So the class is now stated as one test:
+[`tests/address-settling.test.ts`](../../tests/address-settling.test.ts) crosses every path shape
+against every query parameter this app has ever recognised against every hash shape.
+
+It compares the *real* functions on both sides — `readSlug`, `readMode`, `viewFor` and `composeShell`
+against `settleAddress`, `parseRoute` and `pageTitle` — so it is the two behaviours, not two models of
+them. That is only possible because the rewrite sequence became a function; it is the reason it did.
+
+### An equality test is only as good as its anchor
+
+The first version of that cross-product asserted one thing:
+
+    what the server puts in <title>  ===  what the client ends up setting
+
+which catches every case where the two *disagree*, and says nothing whatever about a case where they
+agree on the wrong answer. GPT Sol found one on 2026-08-30 — the **tenth**.
+`redirectsToMetadata` matched `(^|[?&])about=1`, so it read a `?` inside another parameter's *value*
+as a parameter boundary:
+
+    /read/x?add=https://x.test/a?about=1
+
+went to the metadata page, both halves concurring. Only the first `?` begins a query; after that only
+`&` separates pairs, and [`queryPairs`](../../src/read-address.ts) is now the one place that knows it.
+
+So every row of the corpus states **which view it should settle on**, and both halves are checked
+against that rather than only against each other. The fix and the lesson are separate: the fix is a
+boundary, the lesson is that two halves of a system can share a bug, and equality between them is
+blind to exactly that by construction.
+
+Restoring any of six faults reddens the file, verified: the transport dropping the mode, the server
+not predicting the metadata rewrite, the hash rewrite reserialising the query, `readSlug` matching a
+two-segment view, the raw-text metadata predicate, and `queryPairs` taking the last `?` rather than
+the first. It carries a control requiring more than forty addresses to actually reach the reading
+view, because a cross-product that compares nothing also reports no disagreement.
+
+### Two of the ten are now compile errors instead
+
+Better than a test that catches a mutation is a mutation that will not compile, and two of these got
+there in the end:
+
+- **`TitleSpec` splits the reading view from the other two.** `mode` was one optional field, so
+  deleting it from the call in `App.tsx` compiled and silently cost the tab its `· Glossary`. The
+  reading-view variant now requires `mode` and the other two forbid it with `mode?: never` — the
+  `never` because a union rejects a bad *literal* by excess-property checking but accepts a value
+  assembled in a variable.
+- **`servePublicReadPage` takes the request, not an address copied out of it.** It went through three
+  shapes in a day: the caller derived mode and view; then it passed `url`; and `url: restored` versus
+  `url: path` both compile while only one carries the query. It reads `req.url` now — the same field
+  `handleApi` routes on — so there is no wiring left to get wrong.
 
 ## What would go wrong quietly
 
@@ -316,9 +588,6 @@ be a wrong one.
   title on a failed form, specifically so a screen reader announces it first. We have one failure
   title (`Couldn’t open`) and no forms that fail this way; if the shelf ever grows one, that is the
   pattern to copy.
-- **No `og:` or `twitter:` tags.** A shared Spideryarn link unfurls as nothing — the tab title is a
-  runtime value and a link preview reads markup a server sent, so none of this work touches that.
-  Separate job, and it needs server rendering we do not have — see [deployment.md](deployment.md).
 - **Nothing here has met a real screen reader.** The tests prove the region holds the right text at
   the right moment; they cannot prove a word was spoken. VoiceOver/Safari and NVDA/Firefox are the
   check, and it has not been run. Until it has, treat the announcement half of this as designed

@@ -46,6 +46,7 @@ import {
   withMonitoringScope,
 } from "./monitoring.js";
 import { UNEXPECTED_FAILURE } from "./messages.js";
+import { readMode } from "./read-address.js";
 import { builtShell, servePublicReadPage } from "./public/page.js";
 import { handleApi } from "./routes.js";
 import { health } from "./vercel-health.js";
@@ -200,6 +201,11 @@ export function originalUrl(raw: string): string | null {
  * reading URL and is left alone; `/read/` is one with an empty slug, which is a
  * 400 like any other malformed one.
  */
+/* Re-exported so the transport's own tests can reach it by the name they always
+   used. It moved to src/read-address.ts, beside `viewFor`, because the two ask
+   the same question of the same string and the server is not the only caller. */
+export { readMode };
+
 export function readSlug(path: string): string | null {
   const read = /^\/read\/(.*)$/.exec(path);
   if (read === null) return null;
@@ -296,12 +302,11 @@ async function serve(req: IncomingMessage, res: ServerResponse): Promise<void> {
        with the reason nowhere a person can reach it, which is the exact failure
        api/index.js exists to have stopped happening. */
     if (slug !== null && shell) {
-      await servePublicReadPage({
-        res,
-        method: req.method ?? "GET",
-        slug,
-        shell,
-      });
+      /* `req.url` is `restored` — set above, and the same field `handleApi`
+         routes on. Nothing about the address is passed separately, because a
+         second copy of it is a second thing to get wrong; see the doc-comment
+         on `servePublicReadPage`. */
+      await servePublicReadPage({ req, res, slug, shell });
       return;
     }
 

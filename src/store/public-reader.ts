@@ -83,7 +83,17 @@ import { publicArticle, publicMetadata } from "../public/dto.js";
  */
 export interface PublicHead {
   slug: string;
-  /** The article's title, or its first `<h1>` when it has no title of its own. */
+  /**
+   * The article's title, its first `<h1>`, or its slug — the same three-step
+   * fallback `metaFrom` uses in src/public/dto.ts, because the client sets
+   * `document.title` from that one a second after this head is served, and any
+   * difference is a tab that changes in front of the reader.
+   *
+   * Still `string | null` rather than `string`: the type is the shape of a head,
+   * and src/public/page-head.ts composes a default one for the 404, 400 and 503
+   * paths where there is no article to have a title. `loadHead` itself now
+   * always has one.
+   */
   title: string | null;
   /** The description, from `root_gist` — already the gist/summary/excerpt fallback. */
   gist: string | null;
@@ -525,12 +535,23 @@ export const pgPublicReader: PublicArticleReader = {
 
       return {
         slug: found.slug,
-        /* `??` and not `||`: an empty-string title is not a title, but neither
+        /* **The slug is the last resort, and it is not optional.** `metaFrom`
+           in src/public/dto.ts is `title ?? headingTitle ?? slug`, and that is
+           the value React assigns to `document.title` a second after this head
+           was served. Without the third link the two chains disagree for an
+           article with neither a title nor an `<h1>`: the tab said
+           `Untitled · Spideryarn` and then changed to the slug in front of the
+           reader. GPT Sol found it, 2026-08-30; the fixture that can reach it is
+           `a public article with neither a title nor an <h1>` in
+           tests/public-visibility-pg.test.ts, and there was none before, which
+           is why nothing caught it.
+
+           `??` and not `||`: an empty-string title is not a title, but neither
            is it the *absence* of one, and the heading fallback is already `null`
            when there is no `<h1>` — so `||` would turn "" into null twice over
            and hide which of the two the row actually has. The composer clamps
            and escapes; deciding what is missing is this file's job. */
-        title: found.revision.title ?? found.revision.headingTitle,
+        title: found.revision.title ?? found.revision.headingTitle ?? found.slug,
         gist: found.revision.rootGist,
         canonical: found.revision.finalUrl,
       };

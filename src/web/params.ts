@@ -238,55 +238,25 @@ export const panelParam = createParser<Panel>({
  * (docs/project/summaries.md). Diagram is the fifth
  * (docs/project/diagram.md), and it cost this list one word as well.
  */
-export const MODES = [
-  /* Renamed from `toc` on 2026-08-29, at Greg's request: the reader sees
-     "Hierarchy" and the code now says the same word. It also ends a collision
-     that had lasted as long as the list — `toc` was simultaneously this mode and
-     the *pipeline step* that builds tree.json (src/pipeline.ts § STEP_ORDER), so
-     one word meant two things in one repo. The step keeps the name; the mode
-     gives it up. docs/plans/defer-arc-and-rename-hierarchy.md § 3. */
-  "hierarchy",
-  "chat",
-  "glossary",
-  "search",
-  "summary",
-  "diagram",
-  "ideas",
-  /* Review is the seventh, 2026-08-27, and the first mode whose content comes
-     from the reader rather than from the article: they say what they took from
-     it and the model helps them find where that comes apart. It cost this list
-     one word, like the five before it. docs/plans/review-mode.md.
-
-     There is deliberately no `?stance=` beside `?thread=` below. The stance
-     governs the next answer and changes nothing on screen, which is the rule
-     this file keeps — the closest existing thing is chat's profile checkbox,
-     which is component state for the same reason. */
-  "review",
-  /* The eighth, 2026-08-28: the whole document as one nested list that never
-     scrolls and expands around where the reader is. It costs this list one
-     word like the six before it, and it is the first mode that is a second
-     answer to a question an existing surface already answers — the gist
-     columns' context panels — rather than a new question. That is deliberate
-     and temporary: Greg asked for it as an eighth mode "for now, so that it
-     doesn't mess with what we have, and so that I can go back and forth to
-     compare". docs/plans/outline-mode.md § Where it sits, and what happens if
-     it wins. */
-  "outline",
-] as const;
-export type Mode = (typeof MODES)[number];
-
-/**
- * The mode a reader lands in, named once.
- *
- * Two places need it — `modeParam`'s fallback below, and `withMode` in
- * src/web/Dock.tsx, which omits the parameter when it is writing this value. A
- * literal in both would be two copies of one decision, and the copy that drifts
- * is the one that puts a redundant `?mode=` back into every URL.
- */
-export const DEFAULT_MODE: Mode = "hierarchy";
+/* **Moved to src/modes.ts on 2026-08-30**, and re-exported here so that every
+   importer of this file is unchanged. The server composes the same titles now
+   and cannot import anything under `src/web/`; the reasoning and the history of
+   the list are in that file's header. */
+import { isMode } from "../modes.js";
+export { isMode };
+/* Imported as well as re-exported: `export … from` creates no local binding, and
+   `modeParam` below uses all three. */
+import { DEFAULT_MODE, MODES, type Mode } from "../modes.js";
+export { DEFAULT_MODE, MODES, type Mode };
 
 export const modeParam = createParser<Mode>({
-  parse: (v) => (MODES.includes(v as Mode) ? (v as Mode) : null),
+  /* `isMode` and not a second `MODES.includes` here. The serverless function
+     that composes a shared article's `<title>` asks the same question of the
+     same query string (`readMode` in src/vercel.ts), and this file used to
+     answer it independently — so "one place decides what a mode is" was a claim
+     rather than a fact, and no test paired the two on an invalid input. GPT Sol,
+     2026-08-30. */
+  parse: (v) => (isMode(v) ? v : null),
   serialize: (v) => v,
 })
   .withDefault(DEFAULT_MODE)
@@ -748,31 +718,36 @@ export const rungParam = createParser<Rung>({
 /**
  * Which picture the Diagram mode is drawing.
  *
- * Four of them, and the toggle is not a skin — see src/web/diagram.ts for what
- * each one is honest about, and for why there were eight until 2026-08-27.
- * Short version: `tree` is the outline, `force` is the relationships an outline
+ * Three of them, and the toggle is not a skin — see src/web/diagram.ts for what
+ * each one is honest about, and for why there were eight until 2026-08-27 and
+ * four until 2026-08-30. Short version: `force` is the relationships an outline
  * cannot hold, and `drift` and `trail` are the article as paragraphs placed by
  * meaning. That is a real choice a reader makes, so it belongs in the URL like
  * every other bit of view state (docs/project/url-state.md).
  *
- * **`tree` is the default because it is the only one that is free.** The other
- * three all spend a model call the moment they are drawn, and a default that
- * bills the reader for opening a mode is not a default — it is a purchase
- * nobody agreed to. (The old default, `strata`, was free too, and was cut.)
+ * **`force` is the default because it is the only one that draws anything
+ * before its answer lands.** All three spend a model call now that the free
+ * picture — `tree`, the outline — has been cut for overlapping the outline and
+ * hierarchy views that already exist. Force's call only adds the dotted lines;
+ * the rest of it is arithmetic over prose the browser is already holding, so
+ * opening the mode still shows the reader something immediately. Drift and
+ * Trail have nothing at all without the projection, and now say so with a
+ * spinner rather than borrowing another picture.
  *
  * `push`, like `?rung=` and `?cols=`. Switching picture is a deliberate act on
  * the view and Back should undo it — and unlike stepping between glossary terms,
  * you do not do it twice in ten seconds.
  *
- * **A cut picture's name degrades to `tree`** rather than throwing, the same
- * rule as every other parser in this file — which is what stops a link somebody
- * pasted in August, saying `?diagram=strata`, from opening a broken page.
+ * **A cut picture's name degrades to the default** rather than throwing, the
+ * same rule as every other parser in this file — which is what stops a link
+ * somebody pasted in August, saying `?diagram=strata` or `?diagram=tree`, from
+ * opening a broken page.
  */
 export const diagramParam = createParser<DiagramKind>({
   parse: (v) => (DIAGRAMS.includes(v as DiagramKind) ? (v as DiagramKind) : null),
   serialize: (v) => v,
 })
-  .withDefault("tree")
+  .withDefault("force")
   .withOptions({ history: "push" });
 
 /**

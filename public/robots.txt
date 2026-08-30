@@ -1,4 +1,5 @@
-# Spideryarn is a private beta. None of it is meant to be listed yet.
+# Spideryarn is a private beta. None of it is meant to be listed yet — with one
+# deliberate hole, at the bottom of this file, for link previews.
 #
 # Why this file exists at all: Vercel puts `x-robots-tag: noindex` on the
 # generated *.vercel.app addresses automatically and does NOT put it on a custom
@@ -14,4 +15,34 @@
 # Disallow so the crawler can get far enough to read the noindex.
 
 User-agent: *
+Disallow: /
+
+# The hole, and it is only wide enough for a card.
+#
+# Pasting a shared /read/<slug> link into a chat should show its title and gist.
+# The services that draw those cards fetch the page like any other crawler, so a
+# blanket Disallow means no card — a bare URL, which is what slice 2 exists to
+# fix. Slack unfurls anyway (Slackbot honours only rules addressed to it by
+# name); Meta's crawler obeys the `*` group above, so before this it showed
+# nothing in WhatsApp, Messenger, Facebook or Instagram.
+#
+# **This is not permission to index.** These two fetch a page to draw a card,
+# and neither puts it in a search result. Every response still carries
+# `X-Robots-Tag: noindex, nofollow` (vercel.json) and every page still carries
+# the matching `<meta name="robots">` (src/public/page-head.ts) — that pair is
+# what actually keeps this out of search, and it is untouched.
+#
+# Nothing new is exposed. A head is composed only for an article whose owner set
+# `visibility = 'public'`, and anybody holding the link can already fetch it.
+# A private slug answers with the plain shell, to these two as to anyone else.
+#
+# A bot obeys exactly one group — the most specific one naming it — so each
+# needs its own Disallow as well; they do not inherit the `*` group above.
+
+User-agent: facebookexternalhit
+Allow: /read/
+Disallow: /
+
+User-agent: Twitterbot
+Allow: /read/
 Disallow: /

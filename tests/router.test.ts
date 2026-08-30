@@ -6,8 +6,12 @@
  * blank page from a stray slash is the sort of failure that looks like the app
  * is broken rather than like the link was.
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 import {
+  settleAddress,
   ADMIN_HREF,
   ADMIN_USERS_HREF,
   addHref,
@@ -548,14 +552,88 @@ describe("the auth callback", () => {
    * idea what `/auth/callback` is — which is exactly why the guard lives above
    * it in main.tsx rather than inside it.
    */
-  it("would be rewritten into an add if it were not exempt — so it must be exempt", () => {
-    /* Not an `/add/` path, so nothing to canonicalise: proves the callback is
-       safe from the path branch on its own. */
+  /**
+   * **Two guards now, and each is checked on its own.**
+   *
+   * This case used to read "`?add=` is read from the query wherever it appears,
+   * so the exemption in main.tsx is the only thing standing between a Google
+   * return and an ingest of the reader's authorisation code". That sentence
+   * stopped being true on 2026-08-30: `?add=` is now read on the **root only**,
+   * because reading it anywhere else made `/read/a?add=…` a page the server
+   * titled as article *a* and the client turned into an add.
+   *
+   * So the callback is safe twice over — and the danger of that is a test that
+   * passes because the function has gone inert rather than because a guard
+   * works. Hence the positive control below: the same query on `/` **is**
+   * folded, and does carry the secret, which is what makes the `null` above
+   * evidence about the pathname rather than about the query.
+   */
+  it("is not folded into an add — by the root constraint, and separately by main.tsx", () => {
+    /* Not an `/add/` path, so nothing to canonicalise: the path branch cannot
+       touch the callback on its own. */
     expect(canonicalAddHref("/auth/callback", "?code=SECRET&state=S", "")).toBeNull();
-    /* But `?add=` is read from the query wherever it appears, and this is the
-       shape that shows the guard is doing work rather than being decorative. */
-    const folded = canonicalAddHref("/auth/callback", "?add=https://x.test/a&code=SECRET", "");
-    expect(folded).not.toBeNull();
-    expect(folded).toContain("SECRET");
+
+    /* Guard one, the root constraint. */
+    expect(canonicalAddHref("/auth/callback", "?add=https://x.test/a&code=SECRET", "")).toBeNull();
+
+    /* **The control.** The identical query on the root is folded and does carry
+       the code, so the two `null`s above are the pathname doing work — not a
+       function that has quietly stopped reading `?add=` at all. */
+    const onRoot = canonicalAddHref("/", "?add=https://x.test/a&code=SECRET", "");
+    expect(onRoot).not.toBeNull();
+    expect(onRoot).toContain("SECRET");
   });
-});
+
+  /**
+   * **Guard two, and it is now a structural property rather than a habit.**
+   *
+   * Every pre-mount rewrite lives inside `settleAddress`, so `main.tsx` has
+   * exactly **one** place that changes the address and one `onCallback` check in
+   * front of it. It used to have four of each, which meant the person adding a
+   * fifth rewrite had to remember — and counting the guards, as an earlier
+   * version of this test did, would not have noticed an unguarded fifth. GPT Sol
+   * made that point on 2026-08-30; the fix is that a fifth rewrite now goes
+   * *inside* the guarded function and is exempt by construction.
+   *
+   * Still partly static, because module-init side effects cannot be called. But
+   * what it asserts is a count of rewrite *sites*, which is the thing that was
+   * actually hard to keep right.
+   */
+  it("carries a fragment across the ?slug= rewrite, which the old version dropped", () => {
+    /* A deliberate change, made while turning the four rewrites into one
+       function: the inline `?slug=` rewrite dropped the fragment and the
+       `about=` one beside it kept it, which reads as two rewrites written at
+       different times rather than a decision. Only a non-id fragment is
+       affected — `liftLegacyAnchor` runs first and turns `#spya-…` into `?at=`. */
+    expect(settleAddress("/", "?slug=a-piece", "#section-2")).toBe("/read/a-piece#section-2");
+    /* And the id case, to show the ordering: the fragment is consumed, not
+       carried, because it means a position rather than a place. */
+    expect(settleAddress("/", "?slug=a-piece", "#spya-k3m9qt")).toBe(
+      "/read/a-piece?at=spya-k3m9qt",
+    );
+  });
+
+  it("and main.tsx has exactly one guarded place where the address changes", () => {
+    const main = readFileSync(
+      path.join(path.resolve(import.meta.dirname, ".."), "src", "web", "main.tsx"),
+      "utf8",
+    );
+    expect(main.match(/history\.replaceState/g) ?? [], "one rewrite site, not four").toHaveLength(1);
+    expect(main).toContain("if (!onCallback) {");
+    expect(main).toContain("settleAddress(location.pathname, location.search, location.hash)");
+
+    /* And the behavioural half, which the old version had none of.
+       `?add=` on the callback is already inert — it is read on the root only —
+       so that shape no longer demonstrates anything: */
+    expect(settleAddress("/auth/callback", "?add=https://x.test/a&code=SECRET", "")).toBeNull();
+
+    /* **This is the shape that shows the guard still has work.** `about=` is
+       stripped on any path, so an unguarded `settleAddress` would rewrite the
+       callback's address — and a Google return carries a one-time `code` on it.
+       Google sends no `about=`, so this is not a live route; the point is that
+       the guard is doing something rather than being a comment, and it must stay
+       whatever the other rewrites are constrained to. */
+    const rewritten = settleAddress("/auth/callback", "?about=0&code=SECRET", "");
+    expect(rewritten, "the guard must have work to do, or it proves nothing").not.toBeNull();
+    expect(rewritten).toContain("code=SECRET");
+  });});

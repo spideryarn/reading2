@@ -21,9 +21,20 @@
  */
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { JSDOM } from "jsdom";
 import { describe, expect, it } from "vitest";
-import { MODES } from "../src/web/params.js";
-import { APP_NAME, CLAMP, SEP, TAGLINE, clamp, host, pageTitle } from "../src/web/page-title.js";
+import { DEFAULT_MODE, MODES } from "../src/web/params.js";
+import {
+  APP_NAME,
+  articleWaitTitle,
+  CLAMP,
+  SEP,
+  serverComposedHead,
+  TAGLINE,
+  clamp,
+  host,
+  pageTitle,
+} from "../src/web/page-title.js";
 
 describe("the shelf", () => {
   it("is the one page that leads with the app's name, and the one with the strapline", () => {
@@ -55,7 +66,9 @@ describe("an article", () => {
   const title = "The Mythology of Conscious AI";
 
   it("leads with the article, not the app", () => {
-    expect(pageTitle({ kind: "read", title, view: "article" })).toBe(`${title}${SEP}${APP_NAME}`);
+    expect(pageTitle({ kind: "read", title, view: "article", mode: DEFAULT_MODE })).toBe(
+      `${title}${SEP}${APP_NAME}`,
+    );
   });
 
   it("says nothing about the default mode — that is the point of it", () => {
@@ -89,8 +102,13 @@ describe("an article", () => {
     }
   });
 
-  it("names the other two views, and ignores any mode that came with them", () => {
-    expect(pageTitle({ kind: "read", title, view: "metadata", mode: "chat" })).toBe(
+  /* This used to pass a mode to the metadata view and assert it was ignored.
+     `TitleSpec` no longer lets that state be built — the reading view requires a
+     mode and the other two forbid one — so the case it was defending is a
+     compile error now, which is the better place for it. What is left is the
+     label itself. */
+  it("names the other two views", () => {
+    expect(pageTitle({ kind: "read", title, view: "metadata" })).toBe(
       `${title}${SEP}Metadata${SEP}${APP_NAME}`,
     );
     expect(pageTitle({ kind: "read", title, view: "tweets" })).toBe(
@@ -99,7 +117,7 @@ describe("an article", () => {
   });
 
   it("has something to say about an article with no title at all", () => {
-    expect(pageTitle({ kind: "read", title: "  ", view: "article" })).toBe(
+    expect(pageTitle({ kind: "read", title: "  ", view: "article", mode: DEFAULT_MODE })).toBe(
       `Untitled${SEP}${APP_NAME}`,
     );
   });
@@ -107,7 +125,7 @@ describe("an article", () => {
   it("clamps a very long title so the app's name survives in a history list", () => {
     const long =
       "Attention Is All You Need But Also A Great Many Other Things Besides Which This Title Will Now List At Length";
-    const t = pageTitle({ kind: "read", title: long, view: "article" });
+    const t = pageTitle({ kind: "read", title: long, view: "article", mode: DEFAULT_MODE });
     expect(t.endsWith(`${SEP}${APP_NAME}`)).toBe(true);
     expect(t).toContain("…");
     expect(t.length).toBeLessThan(long.length);
@@ -145,7 +163,7 @@ describe("every title, whatever the page", () => {
   const every = [
     { kind: "library" },
     { kind: "library", query: "x", unread: true },
-    { kind: "read", title: "T", view: "article" },
+    { kind: "read", title: "T", view: "article", mode: DEFAULT_MODE },
     { kind: "read", title: "T", view: "article", mode: "search" },
     { kind: "read", title: "T", view: "metadata" },
     { kind: "add" },
@@ -239,6 +257,92 @@ describe("host", () => {
 });
 
 /**
+ * **The tab a shared link arrives with, and the rule that stops us wrecking it.**
+ *
+ * Since 2026-08-29 a public `/read/<slug>` is served with the article's real
+ * title already in the tab. `ArticlePage` used to replace that with `Loading…`
+ * whenever the fetch ran past 600ms — a cold serverless start against Postgres,
+ * routinely — and then put it back. A correct title turning into a worse one and
+ * back, announced to a screen reader both times.
+ *
+ * `articleWaitTitle` is the decision. Its two guards are both load-bearing and
+ * each has a case below that fails without it.
+ */
+describe("what the tab says while a shared article loads", () => {
+  const HERE = { slug: "a-shared-piece", title: "A shared piece · Spideryarn" };
+  const LOADING = `Loading…${SEP}${APP_NAME}`;
+  const ERROR = `Couldn’t open${SEP}${APP_NAME}`;
+
+  it("says nothing, leaving the title the server composed", () => {
+    /* The assertion this case is named for and the reason the function exists:
+       "" is `useDocumentTitle`'s "not mine to set". */
+    expect(articleWaitTitle("loading", HERE.slug, HERE.title, HERE)).toBe("");
+  });
+
+  it("but says Loading… once the reader is waiting for a different article", () => {
+    /* Guard one. The composed head describes one article; after a navigation
+       the server's title is about the page the reader has left, and keeping it
+       would be a lie rather than a courtesy. Delete `composed.slug === slug`
+       and this is the case that goes red. */
+    expect(articleWaitTitle("loading", "some-other-piece", HERE.title, HERE)).toBe(LOADING);
+  });
+
+  it("and once something else has already changed the tab", () => {
+    /* Guard two, and the case that is easy to miss: a reader who goes
+       /read/a → /read/b → back to /read/a still has an `og:url` naming a, so
+       the slug check alone passes and b's title would be left standing over a's
+       loading page. Comparing the string self-expires the moment anything
+       writes a different one. */
+    expect(articleWaitTitle("loading", HERE.slug, "Another piece · Spideryarn", HERE)).toBe(LOADING);
+  });
+
+  it("and on every page the server did not compose a head for", () => {
+    /* An ordinary SPA navigation, a private article, a signed-in reader's own
+       shelf — the overwhelming majority of loads, and the behaviour this
+       function must leave exactly as it was. */
+    expect(articleWaitTitle("loading", HERE.slug, "Spideryarn", null)).toBe(LOADING);
+  });
+
+  it("replaces it when the fetch failed, which Loading… deliberately does not", () => {
+    /* `Loading…` is a claim that the right title is coming. `Couldn’t open` is a
+       claim that it is not, and a broken page must not go on advertising the
+       article it could not show. */
+    expect(articleWaitTitle("error", HERE.slug, HERE.title, HERE)).toBe(ERROR);
+  });
+
+  it("and hands over to the view as soon as the article is here", () => {
+    expect(articleWaitTitle("ready", HERE.slug, HERE.title, HERE)).toBe("");
+  });
+});
+
+describe("reading what the server composed out of the document", () => {
+  const docWith = (head: string): Document =>
+    new JSDOM(`<!doctype html><html><head>${head}<title>A shared piece · Spideryarn</title></head><body></body></html>`).window.document;
+
+  it("takes the slug from og:url, which is the only thing that carries it", () => {
+    const d = docWith('<meta property="og:url" content="https://www.spideryarn.com/read/a-shared-piece" />');
+    expect(serverComposedHead(d)).toEqual({
+      slug: "a-shared-piece",
+      title: "A shared piece · Spideryarn",
+    });
+  });
+
+  it("decodes it, because the server percent-encodes what it writes there", () => {
+    const d = docWith('<meta property="og:url" content="https://www.spideryarn.com/read/a%20b" />');
+    expect(serverComposedHead(d)?.slug).toBe("a b");
+  });
+
+  it("and says there is none for every page the server did not compose", () => {
+    /* The bare shell — every route but a shared article. */
+    expect(serverComposedHead(docWith(""))).toBeNull();
+    /* A malformed percent-escape makes `decodeURIComponent` throw, and a throw
+       at module load would take the whole bundle down over a tab title. */
+    const bad = docWith('<meta property="og:url" content="https://www.spideryarn.com/read/a%zz" />');
+    expect(serverComposedHead(bad)).toBeNull();
+  });
+});
+
+/**
  * **A page wired to a route but not to a title is the silent failure here** —
  * it simply inherits whatever the last page set, and a stale title on a new
  * page looks entirely plausible. Nothing in the type system catches it, because
@@ -269,6 +373,27 @@ describe("every kind of page is actually wired up", () => {
     const found = callers();
     const missing = kinds().filter((k) => !found.includes(`kind: "${k}"`));
     expect(missing).toEqual([]);
+  });
+
+  /**
+   * **`articleWaitTitle` is only worth anything if `ArticlePage` calls it.**
+   *
+   * Earlier in this same body of work a guard was written, documented, called by
+   * a build check and referred to in its file's header as being in force — and
+   * never called from the function it was guarding. The rule against a rule that
+   * is documented but not enforced was itself documented and not enforced.
+   *
+   * This is a **static** check and it says so: it proves the call is written, not
+   * that it runs. The dynamic half would mean mounting `ArticlePage`, which
+   * drags the whole app in; the six cases above cover the decision itself, and
+   * this covers the one failure they cannot see.
+   */
+  it("and ArticlePage actually asks articleWaitTitle what to say", () => {
+    const app = readFileSync(path.join(WEB, "App.tsx"), "utf8");
+    expect(app).toContain("articleWaitTitle(");
+    /* And has stopped composing the answer itself, which is the shape the call
+       replaced — leaving both would put the old behaviour back on some path. */
+    expect(app).not.toContain('pageTitle({ kind: "loading" })');
   });
 
   it("can tell — the union really was read, and it is not empty", () => {

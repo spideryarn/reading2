@@ -34,6 +34,9 @@
  * `requireMarkersInHead` below now, and the build check calls the same function.
  */
 import { escapeHtml, headText } from "../html.js";
+import { DEFAULT_MODE, type Mode } from "../modes.js";
+import type { ArticleView } from "../read-address.js";
+import { APP_NAME, documentTitle } from "../title-text.js";
 import { safePublicCanonical } from "../urls.js";
 import type { PublicHead } from "../store/public-reader.js";
 
@@ -56,37 +59,32 @@ import type { PublicHead } from "../store/public-reader.js";
 export const PUBLIC_ORIGIN = "https://www.spideryarn.com";
 
 /**
- * The product name, and the separator between title segments.
+ * **The `<title>` and the `og:title` are two different strings, on purpose.**
  *
- * **Duplicated from src/web/page-title.ts on purpose**, and it is a real
- * duplication rather than an oversight: that module imports React, and this one
- * is reached by `src/public/routes.ts`, whose whole import graph is asserted
- * closed against the client and the writers (tests/public-imports.test.ts). Two
- * three-character constants are the cheaper of the two evils, and
- * tests/page-head.test.ts asserts that the title this file composes is
- * character-for-character the one `pageTitle()` composes, so the copies cannot
- * drift without a test going red.
+ * `documentTitle` — imported, not restated — is the tab: the article's title,
+ * normalised, clamped at a word boundary with an ellipsis, then ` · Spideryarn`.
+ * src/web/page-title.ts assigns that exact string when React mounts a moment
+ * later, so the tab does not change under the reader; src/title-text.ts is where
+ * both halves come from and why each rule went the way it did.
+ *
+ * `og:title` below is composed here instead, with `headText` at a larger limit
+ * and no suffix. A card is a different sink from a tab: it already carries
+ * `og:site_name`, so repeating the app's name spends the visible half of it
+ * saying one word twice, and an `…` in published metadata is a claim that the
+ * title contained one.
  */
-const APP_NAME = "Spideryarn";
-const SEP = " · ";
 
 /**
- * The three clamps, in code points, from the design § 6.
+ * The two clamps this file owns, in code points, from the design § 6.
  *
- * They differ because the sinks differ: a tab and a bookmark show the page
- * title, a link card shows the `og:` pair, and a card's description gets a
- * paragraph's worth. `headText` does the clamping — see src/html.ts for why it
- * is by code point rather than by `.length`.
+ * They differ because the sinks differ: a link card shows the `og:` pair, and a
+ * card's description gets a paragraph's worth. `headText` does the clamping —
+ * see src/html.ts for why it is by code point rather than by `.length`.
  *
- * `PAGE_TITLE` is 64 because that is `CLAMP` in src/web/page-title.ts, so the
- * server's title and the one React sets a moment later agree. **One deliberate
- * difference**: the client's `clamp()` cuts at a word boundary and appends an
- * ellipsis, and `headText` does neither. A title over 64 code points therefore
- * gains an `…` when React mounts. Metadata is the reason — an ellipsis in an
- * `og:title` is a claim that the title contained one — and the tab is the only
- * place the two are ever visible together, for the moment before mount.
+ * The page title's clamp is not here: it is `CLAMP` in src/title-text.ts,
+ * applied by the `documentTitle` this file calls, because the client applies the
+ * same one to the same string.
  */
-const PAGE_TITLE = 64;
 const CARD_TITLE = 120;
 const DESCRIPTION = 240;
 
@@ -120,7 +118,12 @@ export const MANAGED_HEAD_END = "<!-- spideryarn:managed-head:end -->";
  * function cannot understand is a broken build in every case, not only when
  * somebody happens to share a link.
  */
-export function composeShell(shell: string, head: PublicHead | null): string {
+export function composeShell(
+  shell: string,
+  head: PublicHead | null,
+  mode: Mode = DEFAULT_MODE,
+  view: ArticleView = "article",
+): string {
   const start = shell.indexOf(MANAGED_HEAD_START);
   const end = shell.indexOf(MANAGED_HEAD_END);
   requireOnce(shell, MANAGED_HEAD_START, start);
@@ -143,7 +146,9 @@ export function composeShell(shell: string, head: PublicHead | null): string {
   const indent = shell.slice(lineStart, start);
   const gap = /^[ \t]*$/.test(indent) ? `\n${indent}` : "\n";
 
-  return shell.slice(0, start) + tags(head).join(gap) + shell.slice(end + MANAGED_HEAD_END.length);
+  return (
+    shell.slice(0, start) + tags(head, mode, view).join(gap) + shell.slice(end + MANAGED_HEAD_END.length)
+  );
 }
 
 /**
@@ -208,11 +213,13 @@ function requireOnce(shell: string, marker: string, at: number): void {
  * in that order and exactly once each — normalise, then escape at the moment it
  * becomes markup. src/html.ts explains why those are two jobs.
  */
-function tags(head: PublicHead): string[] {
-  /* "Untitled" rather than an empty tag, matching `readTitle()` in
-     src/web/page-title.ts, so a link to an article with no title of its own
-     previews as the app does. `||` and not `??`: a title of `"   "` normalises
-     to `""`, which is as titleless as `null`. */
+function tags(head: PublicHead, mode: Mode, view: ArticleView): string[] {
+  /* "Untitled" rather than an empty tag, matching `articleTitle()` in
+     src/title-text.ts. **Effectively unreachable from `loadHead`**, which falls
+     back to the slug and so always hands over a string — it is the defence for
+     the paths that compose a head without one, and for a title that normalises
+     to nothing. `||` and not `??`: a title of `"   "` normalises to `""`, which
+     is as titleless as `null`. */
   const cardTitle = headText(head.title ?? "", CARD_TITLE) || "Untitled";
   /* `head.gist` is already `root_gist` — itself the gist → summary → excerpt
      fallback from src/library-scalars.ts. When there is none, all three
@@ -221,7 +228,7 @@ function tags(head: PublicHead): string[] {
      wrong thing is worse than none. */
   const description = head.gist === null ? "" : headText(head.gist, DESCRIPTION);
 
-  const out = [MANAGED_HEAD_START, `<title>${escapeHtml(documentTitle(head.title))}</title>`];
+  const out = [MANAGED_HEAD_START, `<title>${escapeHtml(documentTitle(head.title, mode, view))}</title>`];
   if (description) out.push(meta("name", "description", description));
   /* **Unconditional, and it stays that way in this slice.** Composing a head
      changes what a card looks like; it changes crawler exposure not at all. The
@@ -265,18 +272,4 @@ function tags(head: PublicHead): string[] {
  */
 function meta(key: "name" | "property", id: string, content: string): string {
   return `<meta ${key}="${id}" content="${escapeHtml(content)}" />`;
-}
-
-/**
- * **The `<title>` text**, before escaping — the article's own title, clamped,
- * then the app's name.
- *
- * Exported and then called by `tags()` above rather than being a comment about
- * what `tags()` does inline, so that the value tests/page-head.test.ts compares
- * against `pageTitle()` from src/web/page-title.ts is *the same value that
- * reaches the document*. A helper the tests use and the code does not is a
- * helper that can be right while the code is wrong.
- */
-export function documentTitle(title: string | null): string {
-  return `${headText(title ?? "", PAGE_TITLE) || "Untitled"}${SEP}${APP_NAME}`;
 }

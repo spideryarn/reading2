@@ -447,6 +447,28 @@ header. They cover different crawlers rather than the same one twice, and the
 comment at the top of `robots.txt` says what to do if a URL ever needs
 *de-listing* rather than merely not crawling.
 
+### The one hole: two preview bots
+
+Greg, 2026-08-30, on shared reading links: *"let's name those two preview bots"*.
+`facebookexternalhit` and `Twitterbot` now have `Allow: /read/` groups of their
+own. Without them a link pasted into WhatsApp, Messenger, Facebook or Instagram
+shows a bare URL — those services fetch the page like any other crawler and were
+obeying the blanket `Disallow`. Slack was already unfurling, because Slackbot
+honours only rules that name it.
+
+**A bot obeys exactly one group and inherits nothing from `*`**, so each named
+group carries its own `Disallow: /` as well. A named group without one is not a
+narrow hole, it is an open door, and in a diff it looks like the tidier version
+of the file. `tests/public-read-rewrite.test.ts` pins both lines for both bots;
+what it deliberately does not do is model how a crawler resolves them, because
+the only honest check for that is pasting a link after a deploy and looking.
+
+**This is permission to fetch, not permission to index.** `X-Robots-Tag` and the
+`<meta name="robots">` are untouched and still say `noindex, nofollow` on
+everything; neither of those two robots reads them for anything, because a card
+is not a search result. Indexing public articles would be a different change and
+a larger one — see [page-titles.md](page-titles.md).
+
 **Still: do not treat this as private.** `robots.txt` is a request, the gate is
 the enforcement, and the shell of the app is served to anybody who asks.
 

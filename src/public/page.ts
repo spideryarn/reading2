@@ -86,13 +86,14 @@
  * static rule and moves the header here; see the plan.
  */
 
-import type { ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 import { isSlug } from "../ingest.js";
 import { errorFields, log } from "../log.js";
 import { captureFailure } from "../monitoring.js";
 import type { PublicHead } from "../store/public-reader.js";
 import { pgPublicReader } from "../store/public-reader.js";
+import { readMode, viewFor } from "../read-address.js";
 import { composeShell } from "./page-head.js";
 
 /**
@@ -269,21 +270,48 @@ async function loadHead(slug: string, read: (slug: string) => Promise<PublicHead
  * correct in every unit test while the truth lived somewhere no test reached.
  */
 export async function servePublicReadPage(args: {
+  /**
+   * **The request itself, rather than an address copied out of it.**
+   *
+   * This went through three shapes in one day, and the third is the point.
+   * First the caller derived the mode and the view and passed those; a test
+   * could reassemble the same two calls and stay green while `src/vercel.ts`
+   * quietly stopped passing one. Then the caller passed the whole `url`; that
+   * fixed the deriving but not the wiring, because `url: restored` and
+   * `url: path` both compile and only one of them carries the query. GPT Sol
+   * named both, 2026-08-30, the second with the exact mutation: *"Required means
+   * 'some string,' not 'the restored string.'"*
+   *
+   * So there is no address argument left to get wrong. `src/vercel.ts` has
+   * already put the restored URL on `req.url` — the same field `handleApi`
+   * routes on, so the two cannot be given different ideas of the address — and
+   * this reads it from there. The wiring is not a choice any more.
+   *
+   * Mode and view reach the `<title>` and nothing else. `og:title`,
+   * `twitter:title` and the canonical are about the article whichever of its
+   * pages was asked for, and whichever panel the person who shared it had open.
+   */
+  req: Pick<IncomingMessage, "method" | "url">;
   res: ServerResponse;
-  method: string;
   /** Already decoded exactly once, by `originalUrl`. Do not decode it again. */
   slug: string;
   shell: BuiltShell;
   read?: (slug: string) => Promise<PublicHead>;
 }): Promise<void> {
-  const { res, method, slug, shell } = args;
+  const { res, slug, shell } = args;
+  const method = args.req.method ?? "GET";
+  const url = args.req.url ?? "";
+  const mode = readMode(url);
+  /* The address may be a legacy spelling of the metadata page, which the client
+     rewrites before it draws anything — src/read-address.ts. */
+  const view = viewFor(url);
   const read = args.read ?? ((s: string) => pgPublicReader.loadHead(s));
 
   const wanted = READ_METHODS.includes(method) && isSlug(slug);
   const load = wanted ? await loadHead(slug, read) : null;
   const decision = decidePublicPage(method, slug, load, shell.sha256);
 
-  const body = composeShell(shell.html, decision.head);
+  const body = composeShell(shell.html, decision.head, mode, view);
   res.statusCode = decision.status;
   for (const [key, value] of Object.entries(decision.headers)) res.setHeader(key, value);
   res.setHeader("Content-Length", String(Buffer.byteLength(body, "utf8")));

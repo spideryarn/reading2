@@ -40,11 +40,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   composeShell,
-  documentTitle,
   MANAGED_HEAD_END,
   MANAGED_HEAD_START,
   PUBLIC_ORIGIN,
 } from "../src/public/page-head.js";
+/* From the shared leaf rather than from page-head.js, because the leaf is the
+   only definition there now is — see src/title-text.ts. `composeShell` calls
+   this same function, so comparing it against `pageTitle()` below is a
+   statement about what actually reaches the document. */
+import { DEFAULT_MODE, MODES } from "../src/modes.js";
+import { clamp, documentTitle } from "../src/title-text.js";
 import type { PublicHead } from "../src/store/public-reader.js";
 import { pageTitle } from "../src/web/page-title.js";
 
@@ -317,7 +322,13 @@ describe("text from a stranger, on its way into a document head", () => {
        slicing at a UTF-16 offset can cut an astral character in half and leave a
        lone surrogate, which is not valid text. */
     const d = doc(composeShell(SHELL, head({ title: "x".repeat(10_000) })));
-    expect([...d.title]).toHaveLength(64 + " · Spideryarn".length);
+    /* **64 plus one.** The tab's clamp appends an ellipsis rather than counting
+       it, so a title with no space to cut at comes out one code point over
+       budget — see `clamp` in src/title-text.ts, which says so. That is the
+       client's rule, and since 2026-08-30 the tab is composed by the client's
+       rule on both sides. `og:title` keeps `headText`'s hard 120, because
+       metadata is a promise about a length. */
+    expect([...d.title]).toHaveLength(64 + 1 + " · Spideryarn".length);
     expect([...(metaContent(d, 'meta[property="og:title"]') ?? "")]).toHaveLength(120);
 
     const astral = doc(composeShell(SHELL, head({ title: "\u{1D54F}".repeat(200) })));
@@ -340,71 +351,243 @@ describe("text from a stranger, on its way into a document head", () => {
   });
 });
 
-describe("the two copies of the title rule", () => {
-  it("composes character for character what the client composes on mount", () => {
-    /* `src/web/page-title.ts` imports React, so a module reached by
-       `src/public/routes.ts` cannot import it (tests/public-imports.test.ts).
-       `APP_NAME` and the separator are therefore duplicated in
-       src/public/page-head.ts, and this is what stops the copies drifting: the
-       tab a reader sees before React mounts and the one it sets afterwards are
-       the same string.
-
-       `documentTitle` is the function the composer itself calls, not a
-       restatement of it — a helper the tests use and the code does not can be
-       right while the code is wrong. */
-    for (const title of ["The hard problem is a distraction", "A · B", "  spaced  "]) {
-      expect(documentTitle(title), title).toBe(
-        pageTitle({ kind: "read", title: title.trim(), view: "article" }),
-      );
+describe("the one title rule, applied by both sides", () => {
+  /**
+   * **The tab must not change when React mounts**, and until 2026-08-30 it did.
+   *
+   * A shared `/read/<slug>` is served with a `<title>` this file's
+   * `composeShell` composed; React then assigns `document.title` from
+   * `pageTitle()` in src/web/page-title.ts, over the top of it. The server ran
+   * the title through `headText` (src/html.ts) and the client did not, so for
+   * any title with a double space, a newline, a tab or a bidi override in it the
+   * reader watched the title they were given turn into a worse one. GPT Sol
+   * found it reviewing slice 1; it was pinned as a divergence nobody had chosen
+   * and put to Greg, who left the call here.
+   *
+   * **The call: the server's normalising wins and the client's clamp wins**, and
+   * they are one function now — `documentTitle` in src/title-text.ts, which both
+   * sides import. That header has the argument for each half.
+   *
+   * The expected strings below are **spelled out** rather than computed from
+   * either side. An expectation written as `documentTitle(t)` would agree with
+   * every possible behaviour of `documentTitle`, which is the way a test about
+   * two things that must agree quietly becomes a test about nothing.
+   */
+  it("normalises whitespace, controls and bidi identically on both sides", () => {
+    const cases: [string, string][] = [
+      /* [ the article's title, what BOTH sides must put in the tab ] */
+      ["A  B", "A B · Spideryarn"],
+      ["A\nB", "A B · Spideryarn"],
+      ["A\r\nB", "A B · Spideryarn"],
+      ["A\tB", "A B · Spideryarn"],
+      /* U+202E RIGHT-TO-LEFT OVERRIDE: invisible, and it reverses what follows
+         it. The client used to keep it. */
+      ["A\u202eB", "AB · Spideryarn"],
+      ["  spaced  ", "spaced · Spideryarn"],
+      /* The separator inside a title, which must survive being one. */
+      ["A · B", "A · B · Spideryarn"],
+      ["The hard problem is a distraction", "The hard problem is a distraction · Spideryarn"],
+      /* Arabic keeps every character it had — the strip is of invisible
+         instructions, not of right-to-left text. */
+      ["مرحبا بالعالم", "مرحبا بالعالم · Spideryarn"],
+    ];
+    for (const [title, expected] of cases) {
+      const client = pageTitle({ kind: "read", title, view: "article", mode: DEFAULT_MODE });
+      expect(documentTitle(title), `server: ${JSON.stringify(title)}`).toBe(expected);
+      expect(client, `client: ${JSON.stringify(title)}`).toBe(expected);
+      /* Said as a comparison too, so this is about the pair and not about two
+         independent constants that happen to be written on one line. */
+      expect(documentTitle(title), `pair: ${JSON.stringify(title)}`).toBe(client);
     }
-    expect(documentTitle(null)).toBe(pageTitle({ kind: "read", title: "", view: "article" }));
-    /* And the one place they deliberately differ, written down so it is a
-       decision rather than a surprise: over 64 code points the client cuts at a
-       word boundary and adds an ellipsis, and the head does neither, because an
-       `…` in an `og:title` is a claim that the title contained one. */
+  });
+
+  it("says Untitled on both sides for a title that is nothing", () => {
+    for (const title of [null, "", "   ", "\u202e", "\n\t"]) {
+      expect(documentTitle(title), `server: ${JSON.stringify(title)}`).toBe("Untitled · Spideryarn");
+      expect(
+        pageTitle({ kind: "read", title: title ?? "", view: "article", mode: DEFAULT_MODE }),
+        `client: ${JSON.stringify(title)}`,
+      ).toBe("Untitled · Spideryarn");
+    }
+  });
+
+  it("clamps long titles to the same string, ellipsis and all", () => {
+    /* 40 words of five characters. The clamp cuts at the last word boundary
+       inside 64 code points, which is after the twelfth. Written out rather
+       than derived: `clamp(x)` as the expectation would pass for any clamp. */
     const long = "word ".repeat(40);
-    expect(documentTitle(long)).not.toContain("…");
-    expect(pageTitle({ kind: "read", title: long, view: "article" })).toContain("…");
+    const expected = `${Array(12).fill("word").join(" ")}… · Spideryarn`;
+    expect(documentTitle(long)).toBe(expected);
+    expect(pageTitle({ kind: "read", title: long, view: "article", mode: DEFAULT_MODE })).toBe(
+      expected,
+    );
   });
 
   /**
-   * **And the second place they differ, which nobody decided** — pinned here as
-   * it is, not papered over.
+   * **The plumbing, not the rule** — and this is the case that answers "is the
+   * equality guaranteed, or only usually?"
    *
-   * The case above passes `title.trim()` to the client, which hides this: the
-   * server's title goes through `headText` (src/html.ts), so internal runs of
-   * whitespace collapse, control characters become a space, and bidi overrides
-   * are dropped. The client's `clamp()` only trims the ends and cuts to length.
-   * So for a title with a double space, a newline or an RLO in it, **the tab
-   * changes the moment React mounts** — the normalised title is replaced by the
-   * less normalised one. GPT Sol's review of slice 1 found it.
+   * The three cases above are about `documentTitle`, which both sides call. This
+   * one is about everything the *client* wraps around it: `pageTitle` reaches it
+   * through `segments` → `readTitle` → `join`, and `join` trims every part and
+   * drops the empty ones. Reasoning says that is a no-op — `articleTitle`
+   * normalises, so its result cannot begin or end in whitespace, and it falls
+   * back to `Untitled` rather than returning `""`. Reasoning is exactly what was
+   * wrong last time, so this looks instead.
    *
-   * This is a product decision and it is Greg's, so nothing is changed here. The
-   * value of the assertion is that the divergence is now a fact somebody wrote
-   * down: if either side is ever brought into line with the other, this test
-   * goes red and asks whether that was on purpose.
+   * Seeded, so a failure is reproducible from the number rather than from luck,
+   * and the alphabet is built out of the things that broke the two sides apart
+   * before: bidi controls, the C0/C1 range, whitespace the `CONTROLS` class does
+   * **not** cover (NBSP, zero-width space, ideographic space) which only the
+   * `\s` collapse can touch, surrogate pairs either side of the clamp, and the
+   * separator itself inside a title.
    *
-   * **Mutation: make `documentTitle` skip `headText` and only trim.** Red on
-   * every `not.toBe` below — which is the point, because that is precisely the
-   * "fix" that would look like tidying.
+   * **`oldClient` is the control.** A fuzz that finds nothing is worthless until
+   * it has been shown to find something, and "no divergence" is precisely the
+   * output an inert loop produces. So the same loop runs against the client
+   * behaviour as it was before 2026-08-30, and is required to fail.
    */
-  it("but diverges from the client on internal whitespace, controls and bidi — pinned, not fixed", () => {
-    const cases: [string, string, string][] = [
-      /* [ the title, what the server writes, what React writes over it ] */
-      ["A  B", "A B · Spideryarn", "A  B · Spideryarn"],
-      ["A\nB", "A B · Spideryarn", "A\nB · Spideryarn"],
-      ["A\tB", "A B · Spideryarn", "A\tB · Spideryarn"],
-      ["A‮B", "AB · Spideryarn", "A‮B · Spideryarn"],
+  it("finds no divergence the client's own wrapping could introduce — and can find one", () => {
+    /* The client before the fix: trim the ends, clamp, fall back. Nothing calls
+       this; it exists so that the loop below can be seen failing. */
+    const oldClient = (t: string) => `${clamp(t.trim()) || "Untitled"} · Spideryarn`;
+
+    const ALPHABET = [
+      " ", "  ", "\t", "\n", "\r\n", "\v", "\f", "\u0000", "\u001f", "\u007f", "\u009f",
+      "\u202e", "\u202a", "\u2066", "\u2069", "\u061c", // RLO, LRE, LRI, PDI, ALM
+      /* NBSP and the ideographic space are outside the CONTROLS class but are
+         `\s`, so the collapse reaches them. U+200B and U+FEFF are neither, and
+         survive normalising untouched — which is fine, and is why src/html.ts no
+         longer claims to remove "nothing invisible". */
+      "\u00a0", "\u3000", "\u200b", "\ufeff",
+      "a", "word", "the", "·", " · ", "…", "&", "<", "'", '"',
+      "\u{1D54F}", "\u{1F1EC}\u{1F1E7}", "é", "e\u0301", "\u0645\u0631\u062d\u0628\u0627",
     ];
-    for (const [title, server, client] of cases) {
-      expect(documentTitle(title), title).toBe(server);
-      expect(pageTitle({ kind: "read", title, view: "article" }), title).toBe(client);
-      /* Said as a comparison too, so this test is about the pair rather than
-         about two independent constants that happen to be written here. */
-      expect(documentTitle(title), title).not.toBe(
-        pageTitle({ kind: "read", title, view: "article" }),
-      );
+
+    /* A linear congruential generator — deterministic, and no dependency. */
+    let seed = 20260830;
+    const rnd = () => {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      return seed / 0x7fffffff;
+    };
+    const titles: string[] = [];
+    for (let i = 0; i < 20_000; i++) {
+      let t = "";
+      const n = Math.floor(rnd() * 40);
+      for (let j = 0; j < n; j++) t += ALPHABET[Math.floor(rnd() * ALPHABET.length)];
+      titles.push(t);
     }
+
+    const diverged = titles.filter(
+      (t) =>
+        documentTitle(t) !==
+        pageTitle({ kind: "read", title: t, view: "article", mode: DEFAULT_MODE }),
+    );
+    expect(diverged.slice(0, 3).map((t) => JSON.stringify(t))).toEqual([]);
+
+    /* The control. If this ever comes back empty the corpus has stopped
+       exercising anything and the assertion above means nothing. */
+    const wouldHaveDiverged = titles.filter((t) => documentTitle(t) !== oldClient(t));
+    expect(wouldHaveDiverged.length).toBeGreaterThan(1_000);
+  });
+
+  /**
+   * **Every mode, through the served page** — the dimension the fuzz could not
+   * see.
+   *
+   * The fuzz varies the title's *characters* and leaves `mode` absent on both
+   * sides, so it fixes the one axis this case is about. `/read/x?mode=glossary`
+   * was served as `Article · Spideryarn` and then replaced by React with
+   * `Article · Glossary · Spideryarn`: a fourth instance of the same fault, and
+   * invisible to a corpus that only ever asked about the default mode. GPT Sol
+   * found it, 2026-08-30, and the phrase worth keeping is his — **the missing
+   * dimension was title state, not title characters.**
+   *
+   * `MODES` is read from src/modes.ts rather than listed here, so a tenth mode
+   * arrives in this loop without anybody remembering to add it.
+   */
+  it("agrees with the client in every one of the nine modes", () => {
+    expect(MODES.length, "a mode was added or removed; check this still covers them").toBe(9);
+    for (const mode of MODES) {
+      const d = doc(composeShell(SHELL, head({ title: "A shared piece" }), mode));
+      const client = pageTitle({ kind: "read", title: "A shared piece", view: "article", mode });
+      expect(d.title, mode).toBe(client);
+    }
+  });
+
+  it("and spells the two ends of that out, so the loop is not comparing two bugs", () => {
+    /* The default mode is left out of the title entirely — the rule in
+       `readTitle`, and the reason the loop above cannot be satisfied by a
+       function that simply appends every mode. */
+    expect(doc(composeShell(SHELL, head({ title: "A shared piece" }), "hierarchy")).title).toBe(
+      "A shared piece · Spideryarn",
+    );
+    expect(doc(composeShell(SHELL, head({ title: "A shared piece" }), "glossary")).title).toBe(
+      "A shared piece · Glossary · Spideryarn",
+    );
+  });
+
+  it("says Metadata where the client will, and drops the mode as the client does", () => {
+    /* The composed head for `/read/x?about=1&mode=glossary`. `readTitle` gives a
+       non-article view its own label and ignores the mode entirely, so the
+       server must too — otherwise the tab reads `· Glossary ·` for a second and
+       then `· Metadata ·`. Spelled out on both sides. */
+    const d = doc(composeShell(SHELL, head({ title: "A shared piece" }), "glossary", "metadata"));
+    expect(d.title).toBe("A shared piece · Metadata · Spideryarn");
+    expect(d.title).toBe(
+      /* No mode: `TitleSpec` forbids one on this view now, which is the same
+         claim this line was making by hand. */
+      pageTitle({ kind: "read", title: "A shared piece", view: "metadata" }),
+    );
+    /* And the card is still about the article, not about which of its pages the
+       address named. */
+    expect(metaContent(d, 'meta[property="og:title"]')).toBe("A shared piece");
+    expect(metaContent(d, 'meta[property="og:url"]')).toBe(
+      "https://www.spideryarn.com/read/the-hard-problem",
+    );
+  });
+
+  it("but keeps the mode out of the card, which is about the article", () => {
+    /* A shared link is about the article, not about which panel the person who
+       shared it happened to have open — and `og:url` is the mode-free address
+       for the same reason. */
+    const d = doc(composeShell(SHELL, head({ title: "A shared piece" }), "glossary"));
+    expect(metaContent(d, 'meta[property="og:title"]')).toBe("A shared piece");
+    expect(metaContent(d, 'meta[name="twitter:title"]')).toBe("A shared piece");
+    expect(metaContent(d, 'meta[property="og:url"]')).not.toContain("mode");
+  });
+
+  /**
+   * **The difference that remains, which is a decision rather than a drift.**
+   *
+   * `<title>` and `og:title` are different sinks read by different things, so
+   * they are allowed to differ — and the divergence this test is about is
+   * between a tab and a card, not between two copies of one rule.
+   *
+   * The card drops the ` · Spideryarn` suffix, because the card already carries
+   * `og:site_name` and repeating it spends the visible half of the card saying
+   * one word twice. And it clamps hard at 120 with no ellipsis, because an `…`
+   * in published metadata is a claim that the title contained one.
+   */
+  it("but the card title is not the tab title, on purpose", () => {
+    const long = "word ".repeat(40);
+    const d = doc(composeShell(SHELL, head({ title: long })));
+    const card = metaContent(d, 'meta[property="og:title"]');
+
+    expect(card).not.toContain("…");
+    expect(card).not.toContain("Spideryarn");
+    /* 24 words, not 25: `headText` cuts at 120 code points — which lands on the
+       space after the twenty-fourth — and trims the end, because a metadata
+       string ending in a space is one that will not compare equal to the obvious
+       expectation of it. Written out for the reason the case above is. */
+    expect(card).toBe(Array(24).fill("word").join(" "));
+    expect(card).not.toBe(d.title);
+    /* And the tab, from the same document, is the client's string — so this
+       case is also a check that `composeShell` uses `documentTitle` rather than
+       composing a third title of its own. */
+    expect(d.title).toBe(
+      pageTitle({ kind: "read", title: long, view: "article", mode: DEFAULT_MODE }),
+    );
   });
 
   it("puts the composed head between the sentinels and leaves them in place", () => {
