@@ -458,3 +458,102 @@ usually comes with no reason at all. Until they move over: **if you see a skippe
 re-run that file with `--reporter=verbose` before believing anything about it.** A silent skip is
 [silent-success.md](../reusable/silent-success.md) in its quietest form — the count does change, so
 something is visibly not happening, and only the *why* is missing.
+
+## One database, many suites: the three shared resources
+
+Vitest runs test *files* concurrently in separate forks, and there is **one local Postgres**. A peer's
+`npm test` beside yours is another claimant again. Three things in that database are global, and a
+suite that ignores any of them fails in a way that looks like a product bug — which is the expensive
+part, because the failure lands in whichever file lost the race rather than in the one that caused it.
+
+| resource | what enforces it | how a suite cooperates |
+|---|---|---|
+| the single `running` job row | `jobs_only_one_running`, a unique index on `(true)` | [`tests/helpers/run-lock.ts`](../../tests/helpers/run-lock.ts) and [`running-slot.ts`](../../tests/helpers/running-slot.ts) |
+| one job per article in flight | `jobs_active_slug` | `insertWhenSlotFree`, same helper |
+| the real articles in `data/` | nothing — it is a whole-suite window | [`tests/helpers/corpus-lock.ts`](../../tests/helpers/corpus-lock.ts) |
+
+**The lock and the retry are both needed, and they cover different things.** `takeRunLock` is a
+session advisory lock taken at module load and held to teardown, so it serialises whole *files* —
+which is the only thing that helps when two copies of one file share fixed fixture slugs. But a lock
+only excludes the holders that agree to take it, and a dev server mid-ingest never will; that is what
+`insertWhenSlotFree`'s wait-on-the-constraint is for. Removing either brings back a different half of
+the problem.
+
+**Measured 2026-08-30.** Two concurrent `npx vitest run` processes over the seven job-slot files,
+with the key neutralised so the lock excludes nobody: **23 to 50 failures per run** across four runs,
+four to six of the seven files red, where every one of those files is green alone. With the lock
+taken by all of them: **0 failures**, across four concurrent pairs and a wider nine-file set, and 162
+passed / 162 passed on an independent second reading.
+
+The spread is the point. The first version of this paragraph said "39 failures in each" — a
+suspiciously equal pair, taken before a change to the teardown — and it was replaced after
+re-measuring. Contention does not produce tidy numbers, so a tidy one is the reading to distrust.
+
+**The failures do not say "contention".** They arrive as `expected 'busy' to be 'claimed'`, as
+`duplicate key … articles_slug_unique`, and as `23503` foreign-key violations against a revision that
+existed a moment ago — one copy's cleanup deleting the other's rows mid-flight. The other tell is the
+clock: `insertWhenSlotFree`'s budget is 40 × 500ms, so a **~20,500ms** case is that budget running
+out. Do not raise a timeout to make it go away.
+
+Read the clock and the message as answering **different questions**: the clock says why the case was
+slow, the assertion says what failed. On 2026-08-30 six cases failed at 20,468 / 20,438 / 20,589ms and
+the duration was read as though it were the failure. It was not — the assertions were ordinary diffs
+like `expected 'running' to be 'error'`, and the 20 seconds was the wait in front of them.
+
+**The claimant is usually not another suite — it is a wedged row.** That day's holder was a job left
+`running` by an *aborted teardown*: `store-jobs-parity`'s `afterAll` deleted articles before jobs, the
+foreign key refused, the first delete threw, and the rest of the teardown never ran. Waiting cannot
+clear that, which is exactly what `insertWhenSlotFree`'s message says and why it says it. The fix was
+to delete jobs first and key the teardown by slug rather than by minted ids. **A teardown that can
+throw half-way through is a global-resource leak**, so order it so the last thing deleted is the thing
+everything else references.
+
+**Do not filter test output you may need later.** The only record of those six failures came through
+`… | grep -E "FAIL|× |Tests |not to contain|to contain" | head -8`, which does not match
+`AssertionError`, `expected` or `Received`. The timings survived and the assertion text did not, so
+weeks later the transcript could still prove *how slow* the failures were and could no longer say
+*what they claimed* — and two plausible explanations for them could not be told apart. Capture the run
+to a file and grep the file.
+
+**If you add a suite that starts a job**, take the lock: `pgReady` first, then `takeRunLock` only when
+it reports reachable — a suite that is about to skip must not sit holding it. The one exception is a
+suite long enough to dominate the queue; `tests/store-roundtrip.test.ts` runs 63 seconds and is left
+out for exactly that reason, with the reasoning in the helper's header.
+
+**To check the lock is really engaging, hold the key from outside and read the *phases*.** Take it in
+a `psql` session for a fixed number of seconds and run one locked file beside it:
+
+```
+psql "$DATABASE_URL" -c "select pg_advisory_lock(918273645)" -c "select pg_sleep(25)" &
+npx vitest run tests/store-job-draft.test.ts
+```
+
+Measured 2026-08-30 on a quiet machine, the same file at three hold lengths:
+
+| key held for | import | tests |
+|---|---|---|
+| nobody holding it | 1.24s | 1.25s |
+| 10 seconds | 7.41s | 1.28s |
+| 30 seconds | **27.62s** | 2.66s |
+
+Vary the hold rather than taking a single reading. Nothing else on the machine knows how long you
+chose to hold the key, so nothing else can track it — which is what makes this survive a busy tree,
+where a single before-and-after cannot tell a lock wait from a peer's test run.
+
+**Nearly all of the delay lands in `import`.** That is the signature, and it is what separates a lock
+wait from ordinary contention: `takeRunLock` is called at module load under a top-level `await`, which
+vitest counts as import, whereas contention is *database* contention and shows up in the queries in
+the test phase. Import moved by a factor of 22 across the table above; the test phase moved by about a
+second, which is noise of the size this file's test phase varies by anyway — worth stating rather than
+rounding to "flat", because a small movement in the test phase is exactly what a *second* claimant
+would look like, and the honest reading is that this measurement cannot rule one out at that size.
+
+The trap is the other half of the same fact: **vitest's `tests` figure can never show a module-load
+lock wait.** Measure the experiment above with it and you get 1.25s against 1.28s and conclude the
+lock does nothing — while measuring a phase the lock cannot touch. Two readings of one run that
+disagreed this way, 2.5s and 43s, were both correct and neither was wrong to have been taken; one was
+`tests`, the other wall clock including a 35-second import. Say which one you mean.
+
+**A flake proved by re-running is not proved.** Reproduce it the way the numbers above were: two
+concurrent runs of the same files, and count. A fix for a flaky failure needs the flake demonstrated
+first, or you cannot tell serialisation from luck.

@@ -30,9 +30,18 @@
  * ## What the lock covers that the constraint does not
  *
  * Measured on 2026-08-30, two concurrent `npx vitest run` processes over the
- * same seven job-slot files: **39 failures in each**, three of seven files red,
- * where each file alone is green. Two distinct causes, and the lock is the only
- * thing that answers both:
+ * same seven job-slot files, with the key neutralised so the lock excludes
+ * nobody: **23 to 50 failures per run** across four runs, four to six of the
+ * seven files red, where every one of those files is green alone. With the lock
+ * live: **0 failures**, across four concurrent pairs and a wider nine-file set,
+ * confirmed independently on a second reading at 162 passed / 162 passed.
+ *
+ * The spread is the point and the first measurement here did not have it — it
+ * read "39 failures in each", a suspiciously equal pair, and was replaced after
+ * re-measuring on the current tree. Contention does not produce tidy numbers,
+ * so a tidy one is the reading to distrust.
+ *
+ * Two distinct causes, and the lock is the only thing that answers both:
  *
  * 1. **The slot.** `duplicate key … jobs_only_one_running`, `jobs_active_slug`,
  *    and `claim` answering `busy` where the test wanted `claimed`.
