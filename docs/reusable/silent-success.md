@@ -28,6 +28,49 @@ assumption with the code. That is why it agrees with it.
 | A focus ring that fails contrast, drawn over the browser's own | The ring is there, it is the colour it was asked to be, the class is on the element, and the page looks right | The **contrast ratio** of the composited ring against its background — and whether the component suppressed the native indicator in order to draw it |
 | The browser quietly correcting a scroll position you set yourself | The maths is right, the CSS is right, and reading `scrollTop` back gives a plausible number — the browser's *adjusted* one | Where the element actually is on screen, measured after a **content change above it**, not the number you wrote |
 
+## Fourteen more, from the checks rather than the code
+
+The twelve above are mostly the *product* lying to you. These are the *checking apparatus* doing it
+— gates, corpora, guards, reports — which is worse, because that is the thing you were going to
+believe.
+
+| The bug | What the natural check said | What you had to measure instead |
+|---|---|---|
+| A guard whose failure mode is silence | Nothing printed, so nothing is wrong | A backstop computed a different way, that fires on the change having happened rather than on the rule recognising it |
+| A static gate that checks syntax, not execution | The right calls, present, in the right order | The shape outright — polarity, whether the exit is unconditional, whether the call is an awaited *statement*, whether the branch is reachable |
+| An override spent on a different failure | The forced run went through; the thing you diagnosed is shipped | What the gate actually reported on the forcing run, diffed against the failure set you diagnosed — HEAD moved in between |
+| A round-trip test over a corpus missing the field | Every exported file matches `data/` | Which fields of the payload the corpus actually contains — coverage is a property of the fixtures, and nothing reports which fields were exercised |
+| An eval arm the corpus cannot exercise | "0 regressions across 14 pages" | The fixture that would fail *without* the change; if you cannot name it, the arm never ran |
+| A count of rewrites, read as a count of landings | 36/36 retargeted | Where each link actually landed — half were on a bare digit |
+| A summary filter | `grep -E '^✓|^✗'` — all green | The indented lines under each heading, which is where the file names are |
+| A markup check after new markup arrives | The needle stopped matching, so the bug is fixed | Text taken from between `>` and `<`, with attributes and inlined `<script>` stripped first |
+| A negative assertion with too long a needle | `not.toContain("data-chat")` passed for months | The shortest token that would still be wrong — `class="chat"` survived the whole time |
+| One instance of a thing | The page renders one line, as designed | Two instances — with one of anything, "one line per page" and "one line per row" are the same output |
+| An empty list | `items.length === 0` → "Nothing yet" | Which of the three states it is: none, not asked yet, or asked and failed |
+| A claim that a reader can reach the bug | The code demonstrably handles the state | The mount, and what keys it — handling a state and reaching it are two questions |
+| A signal that grows | The count climbed 3 → 58 → 87 over six hours, so something is still doing it | The newest thing the artefact contains — a stale snapshot and an active corruption both grow, and only content separates them |
+| An assertion that reddens above the line you care about | The test fails when the bug is introduced, so it covers it | *Which* assertion fired — a mutation can redden a test without ever reaching the one it is named for |
+
+Three rules generalise out of those, and they are the ones worth carrying:
+
+**Ask what your check prints when it is defeated.** If the answer is "nothing", it cannot be trusted
+alone. Three bugs in a row on one eval had this shape: each fix stayed inside the mechanism that was
+already blind, so the third proved the *design* wrong rather than the code. The backstop that finally
+worked does not consult the rule at all.
+
+**Enumerate both failure directions from the comparison, not from the comments.** Six comments in one
+repo called `import.meta.url.endsWith(basename(argv[1]))` wrong and every one described the false
+positive — a same-named file in another directory. None mentioned the false negatives (a path with a
+space, its `%20` form, a symlinked entry), where the CLI starts, does nothing, exits 0 and prints
+nothing. That was three of the seven real failing cases. The noisy direction is the one somebody got
+bitten by and wrote up; the quiet one produces no bug report, so nobody has the experience that would
+prompt the sentence.
+
+**Never write a "should I emit this?" condition as a second list beside the data.** Derive it —
+`Object.keys(payload).some(…)` — so a field added tomorrow is covered without a second edit. A
+hand-copied list of four keys is how `db:export`, the rollback tool, silently stopped writing
+`shelf.json` for any article whose only shelf state was the reader's purpose.
+
 ## Why the natural check agrees with the bug
 
 Not coincidence, and not carelessness. **The natural check shares an assumption with the code, which

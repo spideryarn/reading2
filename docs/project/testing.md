@@ -323,6 +323,103 @@ Most of the child-process suites here do not do this yet — `tests/db-tls.test.
 machine and are the first things to go red on a busy one, which is exactly when you are least able to
 tell a real failure from a slow one.
 
+## A green run here proves less than it looks like
+
+`npm test` is green on Greg's laptop, and partly because of state that is not in git. Measured
+2026-08-27 in a worktree of HEAD:
+
+- **Clean checkout: 26 test files fail.** The client ones cannot even be *collected* without
+  `VITE_SUPABASE_URL`, because `src/web/lib/supabase.ts` throws at module load. The pipeline and
+  store ones `ENOENT` on `data/`, which is gitignored and holds accumulated fixtures.
+- **With `.env.local` linked and `data/` copied in: 5–6 failures** — the genuine state of HEAD on a
+  busy day.
+- **About a dozen Postgres suites turn themselves into `describe.skip`** when `DATABASE_URL` is
+  unreachable. A run with no local Supabase is green *having run none of them*.
+
+So: check `npm run db:status` is up before trusting a green run, or the Postgres half never ran. And
+when judging whether HEAD itself is broken, reproduce in a worktree with `node_modules` symlinked,
+`.env.local` linked and `data/` **copied** (tests delete under it) — not in the shared working tree,
+which always carries other agents' edits. "26 files fail" from a clean checkout is this, not a
+broken commit.
+
+### `.env.local` is loaded into tests
+
+`vite.config.ts` calls `loadEnvLocal()` at config load and vitest uses that same config, so
+**`.env.local` is in `process.env` while tests run**. Nothing in `tests/` mentions it, so a fixture
+looks complete when it is not, and the failure only shows up somewhere without the file. On
+2026-08-27 a control asserting "with a complete environment there are no warnings" passed while the
+fixture never set `VITE_SUPABASE_URL` — `.env.local` was supplying it.
+
+In any test that reads `process.env`, stub **every** name explicitly with `vi.stubEnv`, including
+the ones you expect to be absent (stub those to `""`), and `vi.unstubAllEnvs()` in `afterEach`.
+Never rely on a variable being unset.
+
+### A failed `beforeAll` reports its tests as *skipped*
+
+A pg fixture whose `beforeAll` threw on a foreign-key violation printed:
+
+```
+ Test Files  1 failed (1)
+      Tests  36 passed | 2 skipped (38)
+```
+
+The cause appears only in a `Failed Suites` block further up, so the habitual filter
+`grep -E "×|Tests "` showed `36 passed | 2 skipped` and a structurally broken fixture read as green.
+A suite that cannot set up has no results to report, so "skipped" means two unrelated things —
+*deliberately excluded* and *its setup exploded* — and the summary line cannot tell them apart.
+
+**Read `Test Files` as well as `Tests`.** `Test Files n failed` with fewer failed tests than failed
+files means a suite died in setup. When a test you just wrote reports as skipped, look for a thrown
+`beforeAll` before looking for a skip marker, and re-run without the grep.
+
+### `localStorage` is undefined under jsdom
+
+In a `// @vitest-environment jsdom` test, `document` and `window` exist and `location` is
+`http://localhost:3000`, but **`typeof localStorage === "undefined"`**: Node's own global shadows
+jsdom's and stays disabled without `--localstorage-file`. The `ExperimentalWarning` it prints is
+easy to lose in vitest output.
+
+Any code reading `localStorage` behind a `typeof` guard therefore takes the "no storage" branch and
+does nothing, in silence. On 2026-08-27 that made the whole offline cache a no-op — every read and
+write declined, nothing was ever saved, and the tests stayed green. In a test, `vi.stubGlobal` a
+Map-backed fake rather than assuming jsdom provides one; in the app, don't let `localStorage` be the
+only home for something the rest of a feature depends on (a Safari private window has it, and
+*throws on write*).
+
+## Mocks and fixtures that manufacture green
+
+A test about a race, an ordering or a count is usually testing its own mock. Four shapes, all hit in
+one change (glossary read latency, 2026-08-27), each found only by removing the mechanism and
+watching the test *not* go red:
+
+1. **Replies that resolve instantly.** A loading flash is real but invisible inside one `act`. Hold
+   every reply until the test releases it, and assert with nothing released.
+2. **A mock that builds its body at reply time, not request time.** A real server reads the database
+   when the request *arrives*; get this wrong and a request issued before a change is answered with
+   the state after it, so "joined a stale request" and "ran a fresh one" are indistinguishable and
+   both pass. Snapshot the body, then hold, then reply.
+3. **Held replies released in issue order.** The newest lands last and wins by luck, with no
+   ordering guard at all. Release **newest first** — that is the order that hurts.
+4. **Fixtures that cannot tell the two states apart.** The same list returned for every slug makes a
+   dropped reply and a landed one look identical. Make each fixture name itself.
+
+The fixture rules that generalise, each of which passed a test against the bug it was written for:
+
+- **Make the fixtures differ in the field the guard arbitrates.** A dedupe test whose two items are
+  identical passes with the dedupe deleted.
+- **A cap needs a fixture that exceeds it.** 62-character profiles hid an 80-character truncation
+  from the tests, the mocks and a 550-call eval.
+- **Spell the expectation out.** `toEqual(THE_CONSTANT.filter(…))` agrees with every value of that
+  constant, including a wrong one.
+- **Build every fake from one builder.** A hand-built flat error object passed against the exact bug
+  it targeted, because it was not shaped like the real thing.
+- **A control that cannot go red is evidence about the test, not the code** — see
+  [silent-success.md](../reusable/silent-success.md).
+
+Also: asserting a column constant or a projection object passes while the real query says
+`.select()`. Assert the generated SQL — Drizzle's `QueryBuilder` from `drizzle-orm/pg-core` builds it
+with no database and no connection.
+
 ## A suite that cannot run, and how to make it say so
 
 A Postgres suite that finds the database behind the code should say so out loud. Getting that to

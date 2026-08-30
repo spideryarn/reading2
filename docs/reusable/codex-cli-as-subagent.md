@@ -401,6 +401,40 @@ into a crash. The compiler is happy, because the *type* claims the union is clos
 So: flag any added `assertNever` or throwing `default` on a union that crosses a runtime boundary,
 and run the actual test suite over a Codex diff rather than trusting a green type-check.
 
+## Four ways the second opinion gets wasted
+
+Every one of these happened here, and none of them looked like a mistake at the time.
+
+**Relay the findings verbatim.** Do not renumber, merge, split or reorder them around what you found
+most interesting. On 2026-08-28 Sol refused a stage with four findings; the implementer's brief was
+written in my own structure, promoting a sub-paragraph of finding 1 into its own item. Four went in
+and four came out, so nothing looked missing — but finding 3, a P1 about a tombstone not migrated
+when the server renames a thread, was gone. The agent never had it, fixed the other three, and the
+next review opened with *"This is the previous blocker unchanged."* **The count matching is what
+makes this hard to catch.**
+
+**Don't pre-empt a delegated check.** When the instruction is "use a subagent to check X, and if so
+do Y", wait for the subagent rather than running the check yourself in parallel and acting on your
+own answer. The second opinion is the point, and it is worth most exactly where the first one is
+confident; overlapping the work leaves you with one opinion wearing two hats. On 2026-08-28 that
+deleted three untracked scratch files, and the subagent's report — arriving afterwards — disagreed
+about one of them, correctly.
+
+**Argument length is not evidence.** In stage 2 of the public-links work I overrode the design's
+"answer 500 when a database read fails" with 200, and argued it in a brief and again in the code's
+own header. The whole case rested on one sentence — *a 5xx replaces our application with Vercel's
+error page* — which is false; the handler writes the shell body whatever status it chose. Sol found
+it in one line. Several paragraphs of real reasoning downstream of one assumed fact **feel** checked,
+and nobody audits the premise of a well-built argument, including its author. Test the load-bearing
+fact first.
+
+**Write down the result you cannot use.** When an experiment refuses to reproduce what you are
+demonstrating, "my harness is broken" is usually right — and noting the anomaly anyway costs one
+line. On 2026-08-29 a failed reproduction of the shared-index corruption *was the control*: plain
+`git add` heals the staleness, so the bug reproduces only with private-index commits. That was the
+fact four sessions had spent six hours needing. A result whose value is to somebody else is the one
+that gets dropped.
+
 ## Picking the model and effort
 
 As of 2026-08-24 the Codex CLI offers:

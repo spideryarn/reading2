@@ -486,6 +486,88 @@ explanation anyone has for how these stale snapshots keep appearing. And a file 
 byte-identical to an older commit is the signature of a stale index at least as often as it is a
 deliberate revert; read it as the former first, and ask.
 
+## Four more ways the recipe goes wrong
+
+Each of these printed nothing at the time.
+
+### `CLAUDE.md` is a symlink, so a pathspec naming it commits nothing
+
+Git tracks the target, not the link. `git commit -F msg -- CLAUDE.md` matches no tracked path and
+commits **nothing** — no error, no warning, and `git status` afterwards still shows the change as
+unstaged. On 2026-08-27 that shipped [ai-gateway.md](ai-gateway.md) without the AGENTS.md signpost
+pointing at it, and [`tests/doc-links.test.ts`](../../tests/doc-links.test.ts), which requires every
+doc to have exactly one owner, failed on a fresh checkout of a commit that was green on this disk.
+
+**Name `AGENTS.md`.** And after committing a new doc, check what git *recorded* rather than what is
+on disk — `git show HEAD:AGENTS.md | grep <doc-name>`. The working tree reads and writes fine
+through the symlink, which is exactly why every local check agreed with you.
+
+### `rm` throws work away too, and the rule above does not name it
+
+The banned list is `git checkout -- …`, `restore`, `stash`, `reset --hard`, `clean`. **`rm` does the
+same damage to anything untracked and is not on it.** On 2026-08-28 a subagent finished with a probe
+copy and ran `rm -f src/web/useChatProbe.ts rename-preview.tsx`. The second path was another
+session's untracked Vite preview page. It is gone: git had never seen it, so there is no blob and
+nothing in `git fsck --lost-found`, and Dropbox's `old_files` cache had no copy either. **An
+untracked file deleted in a shared tree has no second copy anywhere.**
+
+When a subagent makes a scratch file, tell it to delete that file **by the exact path it created and
+nothing else** — one path per `rm`, never a list, for the same reason a commit pathspec is spelled
+out file by file. The probe technique is fine; the tidy-up is where the care has run out.
+
+Read what survived before calling it unrecoverable. `rename-preview.html` remained and named
+`/rename-preview.tsx` as its script, which is the only reason the loss could be described at all.
+
+### zsh does not split `$FILES`
+
+`FILES="a.ts b.ts"; git add $FILES` hands git **one** pathspec — the whole string — and fails with
+*did not match any files*. zsh does not word-split an unquoted parameter the way bash does.
+
+That is loud in a command and silent in a check. On 2026-08-30, verifying that a path-limited
+`git reset` had not touched the working tree, `P="a b c"; before=$(for f in $P; do git hash-object
+"$f"; done)` captured the identical `fatal: could not open …` text before and after, so the
+comparison printed **"disk untouched"** — a check that passed because it had measured nothing.
+
+Write the paths out literally, however long the line gets, on loops as well as on commands, and have
+the check print what it saw rather than only its verdict. (`${=FILES}` is zsh's split operator, if a
+variable is truly unavoidable.)
+
+### Verify the staged diff, not the resulting file
+
+Grep `git diff --cached -- <file>` and read the hunks. Grepping the *file* gives false hits on
+ordinary words: a peer checked their `src/store/export.ts` commit for `role|treatment|noteId`, got a
+hit on `role: row.role` that had been in the file since `518161b`, and concluded they had swept up
+another session's footnote work. They had not — `row.treatment` and `row.noteId` were both absent.
+The false negative is equally available, so a clean grep is no safer than a dirty one.
+
+A complementary check that needs no identifier at all: `git diff --numstat -- <file>` against the
+size of the change you believe you made. `+41 -1` when you wrote four lines is somebody else's hunk,
+whatever the words are.
+
+## Nobody knows who edited an uncommitted file
+
+**Git records no author until commit** — blame, log and the reflog all start there. So every claim
+about who wrote an unstaged hunk is inferred from context, and a shared tree is precisely what
+destroys the context. On 2026-08-29 that produced three wrong attributions in one afternoon, and
+five sessions each honestly disclaiming the same index corruption. Nobody was lying, and nobody
+could tell.
+
+- **State the change as fact and the attribution as a question.** Fix the one-character gate failure
+  in someone else's file rather than blocking on who owns it, then say *"I changed X — tell me if
+  this isn't yours"*, never *"your edit had a bug"*. A wrong accusation costs goodwill you need from
+  the same peers tomorrow, and sends the lesson to somebody who cannot act on it.
+- **Never infer intent from how deliberate a change looks.** Precision reads as intent, and a stale
+  index manufactures a surgical, coherent back-out of one feature for free. The expensive mistake is
+  not getting *who* wrong; it is concluding that anyone meant it.
+- **Content and the edit can have different owners.** Sending a peer your findings and asking them
+  to write it up makes the words yours and the edit theirs, and the file shows only the second.
+- **Canvass rather than deduce.** Asking every session "is this yours?" cost one round of messages
+  and produced six honest disclaimers plus the real mechanism.
+- **Ask the tree, not the diff.** `git log --diff-filter=A -1 -- <path>` says when a file arrived and
+  `git show HEAD:<path>` says what is committed; a bare `git diff` in a tree with a stale index
+  shows a peer's *already-committed* work as though it were their uncommitted edit, and "restoring"
+  it is a silent revert.
+
 ## The thing that fails silently
 
 **A commit can be green here and broken on any other machine**, because the typecheck and the tests
