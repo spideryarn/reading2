@@ -1,6 +1,7 @@
 # A v1 where pasting a URL on spideryarn.com gives you an article
 
-**Status: in progress. Written 2026-08-29, re-cut 2026-08-30 after GPT Sol's second review
+**Status: SHIPPED 2026-08-30. An article pasted on spideryarn.com is readable on spideryarn.com.**
+See [§ What actually happened](#what-actually-happened-2026-08-30). Written 2026-08-29, re-cut after GPT Sol's second review
 ([v1-imports-review-sol.md](v1-imports-review-sol.md)) returned NO-SHIP on the first cut.**
 Stages 0 and 1 are committed (`f3db91e`, `0fdd2fe`). Stages 3 and 4 moved to the D1b owner; stage 5
 is cut. Supersedes
@@ -67,7 +68,8 @@ passes and the import replaces that article and deletes-and-reinserts its reader
 **Re-publishing without hydrating deletes reader state.** `importArticle` reads comments, chat and
 searches through loaders and treats *the files win* as its contract. Re-importing an article whose
 `/tmp` has no `comments.json` deletes the reader's real comments and reinserts nothing. So v1
-publishes **first ingests only**, guarded, and the hydration stage lifts that guard.
+was going to publish **first ingests only**. **That guard was never written, and this document
+claimed it existed** — see [§ The guard that was never written](#the-guard-that-was-never-written).
 
 ## Stages, and who holds each
 
@@ -78,11 +80,11 @@ Re-cut after Sol's second review and agreed with the D1b owner (spideryarn2-84) 
 | 0 | lease, `maxDuration`, Fluid | this session | **done**, `f3db91e` |
 | 1 | job-scoped scratch root | this session | **done**, `0fdd2fe` |
 | 2a | slug checks ask Postgres | this session | **done**, `55e532a` |
-| 2b | global slug reservation (`freeSlug`) | needs `src/jobs.ts` | blocked on D1b landing |
-| 3 | `advanceJobToCompletion` in the coordinator | spideryarn2-84 | after D1b |
-| 4 | transactional job finalizer | spideryarn2-84 | **written** as `pg-session.ts`, tests in flight |
+| 2b | global slug reservation (`freeSlug`) | unclaimed | **not built** — two owners can still race one free slug |
+| 3 | one claim walks the whole job | spideryarn2-84 | **done**, `ceec42f` |
+| 4 | transactional job finalizer | spideryarn2-84 | **built** as `publish-session.ts`; `pg-session.ts` is the D1b end state and cannot run yet |
 | 5 | hydration | — | **cut**, see below |
-| — | the end-to-end test | this session | with stage 2 |
+| — | the end-to-end test | this session | **not written** — v1 was verified by hand on production |
 
 **Stage 0 — the time budget. Done.** `LEASE_MS` 420s, self-abort 400s, `maxDuration` 300 → 800.
 The two must move together: raising the lease alone puts the self-abort past the platform's kill so
@@ -124,6 +126,49 @@ without it each request may land on a different instance and step 2 finds nothin
 the job cannot finish at all. Stage 1 makes this *stricter*, not looser, because it removes the
 accidental cross-job warm cache that is currently the only thing that could rescue a multi-instance
 job.
+
+**Stage 4 is built, 2026-08-30, and it is a decorator rather than a new session.**
+[`src/store/publish-session.ts`](../../src/store/publish-session.ts) wraps the filesystem session:
+on a `done` ending it copies what the stages wrote into a fresh draft with
+[`copyArtefacts`](../../src/store/copy-artefacts.ts) — promoted out of `tests/helpers/` because it is
+production code now — publishes it, and finishes the job, all in one transaction.
+
+`pg-session.ts` could not be it. That file asks `checkProduct` with an **empty** unconverted set, so
+it refuses by name any step returning no `parts`, and all ten steps are still on
+`LEGACY_UNCONVERTED_STEPS` writing their own files inside `run`. It is correct and it becomes the
+publish path when D3–D5 land. So this is the vertical slice Sol asked for and not the artefact
+conversion.
+
+Three things it does that are not obvious, each with a test:
+
+- **The wrapper, rather than a call in `walkClaim`.** A `done` ending reaches the store through
+  `commit` *and* through `settleJob` — the last step ran, or every step skipped — and only one of
+  those is visible from the coordinator. Worse, on the first the job row would already say `done`
+  before a coordinator-level finalizer could run, which is the crash gap Critical 2 is about.
+- **A copy that moved nothing is refused**, because a draft carries the published revision forward
+  and publishing an empty one republishes the old article and reports success.
+- **Gated on `STORE === "postgres"`.** With the filesystem store the session is byte-for-byte what it
+  was, which is what every laptop runs.
+
+**GPT Sol reviewed the built code and returned NO-SHIP; both findings are fixed**
+([v1-publish-finalizer-review-sol.md](v1-publish-finalizer-review-sol.md), 2026-08-30). Neither was
+about the design, and both are worth remembering:
+
+- **A publication failure logged article content.** The compensating `failRevision` interpolated the
+  caught error's message into its `reason`, and that message is very often a raw driver error
+  carrying the failed statement's **bound parameters** — for `finishIn`, the whole `steps` array and
+  the job's title, which is the article's. `guardDbStore` scrubs on the way *out*, which is after the
+  logging. The reason is a fixed sentence now, and a cleanup failure logs the error's class rather
+  than its message.
+- **The all-skipped door left a failed job `running`.** `commit` has `runStep` to catch what it
+  throws; `settleJob` has nothing — `walkClaim` re-raises anything that is not a `StaleAttemptError`,
+  so the job kept its attempt and the **global** running slot until the 760s lease lapsed, telling
+  every Retry `busy`. It now ends the job as `error` through the inner session before letting the
+  failure go.
+
+Sol also confirmed the two things worth confirming: there is no third door a `done` ending reaches
+the store by, and a repeat publication does not delete reader state — it moves a pointer and carries
+the previous revision's artefacts forward, where `importArticle` deleted wholesale.
 
 **Stage 4 — a transactional finalizer, and not a pipeline step.** Sol's Critical 1: `checkProduct`
 refuses `produces: []` by name — a step declaring no artefacts can never be done, because
@@ -302,11 +347,74 @@ than rediscover the collision after building the provisional-tree machinery.
 **Deferring `arc`** ([defer-arc-and-rename-hierarchy.md](defer-arc-and-rename-hierarchy.md)) is built
 and closed — `0aa30ac`, `837df17`, `f42a877`. Nothing outstanding.
 
+## What actually happened, 2026-08-30
+
+**It works.** `https://paulgraham.com/todo.html` pasted at spideryarn.com: fetched, extracted, split
+into 10 blocks with fresh ids, ToC'd, published, and opened in the reading view with its summary
+spine written. Verified through the API rather than from the screen — on the shelf, 10 blocks in both
+the shelf row and the article payload, first block `spya-x9383n`, tree present. This morning the same
+paste failed in 16 milliseconds, and 9 of 9 before it.
+
+Production is `a63a5592`. Migrations `0030` and `0031` applied; `0029` was already there.
+
+| | |
+|---|---|
+| `f3db91e` | lease and `maxDuration` — a step over 220s could not finish through a job on **any** machine |
+| `0fdd2fe` | one writable root, scoped to a job |
+| `55e532a` | slug checks ask Postgres, closing a silent data-loss path |
+| `61109a3` `d8464b2` `3e8c42d` | the `assets` wall clock, measured |
+| `38ea362` `2056066` | 760s lease; the disconnect behaviour pinned |
+| `ceec42f` `a63a559` | **one claim walks the whole job, and a finished job publishes** — spideryarn2-84 |
+
+### The bug it found within a minute
+
+Opening the article starts an `arc` job, and that job fails:
+
+```
+ENOENT: /tmp/spideryarn/<owner>/spya-abehu7/data/todo/blocks.json
+```
+
+The job-scoped scratch working exactly as designed, biting the case § Stage 5 is cut predicted:
+a late-stage job (`{steps:["arc"]}` from `useArc` when an owner opens an article) gets **its own job
+id**, so its own empty scratch, and cannot see what the ingest wrote. The article is fully readable
+without it — `TableView` falls back to the root gist — so this is a missing enrichment rather than a
+broken import. The fix is hydration, which is cut for the reasons below, and the honest position is
+that **re-running any single step against an existing article does not work on Vercel.**
+
+### The guard that was never written
+
+This document said v1 "publishes first ingests only, **guarded**". **No such guard exists anywhere on
+that path**, and a second `done` job over an existing article republishes it. Found by
+spideryarn2-84's agent, which believed the plan and went looking for the code.
+
+The behaviour is safe, which is luck rather than design: `publishRevisionIn` moves a pointer and
+`beginDraftIn` carries the previous revision forward, where `importArticle` deleted reader state
+wholesale — and Sol independently confirmed that repeat publication does not delete reader data,
+though a removed block may stop an annotation resolving. **A plan that admits there is no guard is
+safe; a plan that claims one nobody wrote is how somebody later builds on it.**
+
+### Every number in this document, and which kind it is
+
+Three people were misled today by figures here, and all three were derived from constants rather than
+observed. So, in the shape [`src/jobs.ts`](../../src/jobs.ts)'s `STEP_BUDGET_MS` already uses:
+
+| Number | Kind |
+|---|---|
+| `toc` 320.4s | **MEASURED** 2026-08-30, one call, so no grouping argument applies |
+| `assets` 7.1s | **MEASURED** 2026-08-30, the corpus's worst article, 10 images |
+| `assets` cap 180s | **A CAP**, for a hanging publisher — not a cost |
+| fetch/extract/blocks ~10/5/5s | **GUESSES**, generous, never measured |
+| `summarise` 240.3s | **WRONG, WITHDRAWN.** Ten overlapping calls summed; wall time is 91.3s |
+| `assets` 3,000s worst case | **DERIVED** from a 200-image policy ceiling no article approaches |
+
+The trap that produced three of these is written up in
+[ai-gateway.md](../project/ai-gateway.md#durationms-is-per-call-and-three-different-ways-of-adding-it-up-are-wrong).
+
 ## Kill-checks
 
 | # | Check | Result |
 |---|---|---|
-| 1 | Vercel plan's `maxDuration` ceiling | **Pro**, so up to 800s. But `toc` totals 324s, so Stage 0 is mandatory and moves first |
+| 1 | Vercel plan's `maxDuration` ceiling | **Pro** with Fluid, so up to 800s. `toc` is 320.4s measured, so Stage 0 is mandatory and moves first |
 | 2 | `exportArticle` covers everything `importArticle` reads | in progress — Stage 5 depends on it |
 | 3 | Collision with the D1b owner | Stages 3–4 touch `enqueue`, the advance route and `importArticle`'s guard, all seams D1b re-cuts. Coordinate before Stage 3 |
-| 4 | Is the 228s `toc` a step total or one call? | **Neither** — one *call* was 320s and one step totalled 324s. Worse than the note said |
+| 4 | Is the 228s `toc` a step total or one call? | **One call, 320.4s.** The "324s step" was three unrelated runs summed under a null slug — my error, not the note's |
