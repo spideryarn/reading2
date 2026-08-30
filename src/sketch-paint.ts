@@ -66,6 +66,41 @@ const MARGIN = 8;
 const ARROW_LEN = 10;
 const ARROW_W = 7;
 
+/**
+ * How big the corner mark beside a zoomable region's name is, in canvas units.
+ *
+ * ## What was here before, and why it is gone
+ *
+ * A **stack**: a second copy of the region's own panel, offset five units down
+ * and right, on the argument that a duplicate is a shape you *see* where a
+ * glyph is a symbol you have to *read*, and that it would therefore survive the
+ * band. It did not survive the band. A browser pass on the real drawing at
+ * 288px, 2026-08-30, could not see it at all:
+ *
+ * > I could not see a second panel … Zooming into the exact bottom-right corner
+ * > revealed only a very faint darker line just outside the main border,
+ * > indistinguishable from a soft drop shadow or a rendering artifact.
+ *
+ * And the arithmetic says why, which the design never did: the band scales 760
+ * units into under 400 pixels, so five units of offset is **2.5 CSS pixels**,
+ * drawn as a 5%-opacity fill. The same pass found the corner mark invisible
+ * there too — twelve units is six pixels — and, the finding that matters most,
+ * that it could not tell which of the four regions were pressable at all. Which
+ * is the thing this whole piece of work exists to fix.
+ *
+ * **So the affordance is contrast, not geometry**, and it lives in the
+ * stylesheet: `sk-region-opens` draws a region that opens something with a
+ * brighter edge and a stronger wash than one that does not. Contrast is the one
+ * property that survives being scaled down — a 1.8px stroke held at 1.8px by
+ * `non-scaling-stroke` is the same line at any size, where every *distance*
+ * shrinks with the picture. The mark stays, doing the smaller job it was always
+ * doing: saying *why* those regions are brighter, once there is room to read it.
+ *
+ * GPT Sol raised this twice before the browser did, both times as the finding it
+ * was least confident in, and both times it was right.
+ */
+const MARK = 15;
+
 export type Prim =
   | { t: "rect"; x: number; y: number; w: number; h: number; rx: number; cls: string; tone?: number }
   | { t: "ellipse"; cx: number; cy: number; rx: number; ry: number; cls: string; tone?: number }
@@ -599,7 +634,10 @@ function paintRegion(r: SketchRegion): PaintedRegion {
       w: r.w,
       h: r.h,
       rx: 8,
-      cls: cls("sk-region", `sk-region-${r.style}`),
+      /* **A region that opens something is drawn hotter than one that does
+         not** — see `sk-region-opens` in styles.css for why this and not a
+         second shape. */
+      cls: cls("sk-region", `sk-region-${r.style}`, r.opens && "sk-region-opens"),
       ...(tone !== undefined && { tone }),
     });
   }
@@ -624,13 +662,239 @@ function paintRegion(r: SketchRegion): PaintedRegion {
      estimate is generous rather than tight: a hit box a little wider than the
      words is a press that lands, and one a little narrower is a control that
      misses. Clamped to the region, so it can never reach past its own panel. */
-  const wide = Math.min(r.w - 6, r.label.length * px * CHAR_W * 1.28 + 18);
+  const textW = r.label.length * px * CHAR_W * 1.28;
+  /* **The corner mark**, on the same diagonal as the Enlarge button's icon and
+     for the same reason — two brackets pulling apart is what "there is a bigger
+     version of this" looks like everywhere else in this app.
+
+     **Beside the words, not out at the region's own corner**, and that is the
+     whole of why it is here rather than twelve units from the right edge where
+     it would look tidier. The press target is the label
+     (`SketchRegion.opens` says why it is the name and never the panel), so a
+     mark parked anywhere else is a thing that says "press me" and is not
+     pressable — which is the exact failure this feature exists to fix, rebuilt
+     one layer down. It sits inside the hit box below, because the hit box is
+     measured to include it.
+
+     It rides with the label rather than with the panel for the same reason the
+     label does: the panel goes under the edges, and an edge drawn through the
+     one mark that says a thing is pressable is the bug `front` already exists
+     to prevent. */
+  const markAt = r.x + 10 + textW + 5;
+  if (r.opens && markAt + MARK < r.x + r.w - 4) {
+    const my = r.y + 4;
+    const k = 4.5;
+    label.push({
+      t: "path",
+      d: `M${markAt} ${my + k} L${markAt} ${my} L${markAt + k} ${my} M${markAt + MARK - k} ${my + MARK} L${markAt + MARK} ${my + MARK} L${markAt + MARK} ${my + MARK - k}`,
+      cls: "sk-region-more",
+      ...(tone !== undefined && { tone }),
+    });
+  }
+  const wide = Math.min(r.w - 6, textW + 18 + (r.opens ? MARK + 5 : 0));
   return {
     region: r,
     panel: out,
     label,
     hit: { x: r.x + 4, y: r.y + 2, w: Math.max(24, wide), h: px + 10 },
   };
+}
+
+/* --------------------------------------------------- the peek and the zoom */
+
+/** A rectangle in canvas units. The one currency the zoom and the peek share. */
+export interface Box {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** How much of the peek's own area the ghost keeps clear, in canvas units. */
+const PEEK_PAD = 8;
+
+/**
+ * The strip along the top of a region the peek must not cover — the region's
+ * own name, which is the control that summoned it.
+ */
+export const PEEK_LABEL_STRIP = 18;
+
+/**
+ * How far the peek may grow past the region it belongs to, as a multiple of
+ * what the region itself offers, and in absolute canvas units.
+ *
+ * **Why it grows at all.** A region is landscape — 700 wide by 180 — and the
+ * scene it opens is portrait, 760 by 650. Fitted into the region, the ghost is
+ * limited by height and uses 175 of the 684 units of width available to it: it
+ * comes out a quarter of the size the space could hold, for no reason but the
+ * shape mismatch. A browser pass on the real drawing, 2026-08-31, and its
+ * diagnosis is the reason this exists rather than a stronger scrim:
+ *
+ * > It is not the scrim … and not line thinness … It is the **ghost being too
+ * > small** — the region itself is only a fraction of the band's height, and
+ * > the peek is nested inside that already-small space.
+ *
+ * **Downward only, and capped.** Downward, because the region's name lives
+ * along its top and growing up would cover the very thing being hovered.
+ * Capped, because a peek that expanded to whatever the scene wanted would be a
+ * 600-unit panel dropped over the middle of the picture — a popover, which is a
+ * different feature and a heavier one than a hover deserves.
+ */
+const PEEK_GROW = { times: 2, max: 300 };
+
+/**
+ * **Where a ghost of the scene a region opens goes, inside that region** —
+ * the area to veil, and the viewport to draw into.
+ *
+ * The overview's brighter edge and corner mark say a part opens *something*;
+ * this says *what*. Greg's example for the whole feature was three arguments
+ * that converge, and a converging funnel is recognisable at thumbnail size when
+ * the words in it are not.
+ *
+ * All this decides is two rectangles, and that is the point. **The picture
+ * drawn into `port` is the real `paintScene` output of the real scene**, put in
+ * a nested SVG viewport that scales and clips it — so the shapes are the
+ * model's shapes, the edges are routed the way `edgePath` routes them, the
+ * arrowheads point where they point and the regions inside are still there.
+ * Only the text is dropped, by the stylesheet, because it is the one thing that
+ * cannot survive the scale.
+ *
+ * The first version of this was a second, simplified painter: rounded rects for
+ * every node whatever its shape, straight centre-to-centre hairlines for every
+ * edge. GPT Sol, 2026-08-30, and the objection is the one this whole feature is
+ * built around — *"That is not a literal thumbnail"*. It threw away the diamond
+ * that opens one of the real zoom scenes, the two bands that make another read
+ * as parallel tracks, and the dashes that separate a worked example from the
+ * main convergence; and its straight lines crossed boxes they had nothing to do
+ * with, inventing junctions. A picture that asserts more than the article does
+ * is the failure docs/project/diagram.md § The shapes make claims already
+ * records twice, and a second painter is a second answer to the question this
+ * file exists to be the only answer to.
+ *
+ * `null` when there is no room to draw anything, which is a normal outcome for
+ * a thin region and not a failure.
+ */
+export function peekViewport(
+  box: Box,
+  sceneHeight: number,
+  canvasHeight: number,
+): { scrim: Box; port: Box } | null {
+  const top = box.y + PEEK_LABEL_STRIP;
+  const natural = box.y + box.h - top;
+  const innerW = box.w - PEEK_PAD * 2;
+  if (!(innerW > 0) || !(natural > 0)) return null;
+
+  /* The height at which the ghost would use the whole width it has — which is
+     what the region cannot give it, being the wrong way round. */
+  const wants = sceneHeight > 0 ? (innerW * sceneHeight) / CANVAS_W + PEEK_PAD * 2 : natural;
+  const room = Math.max(0, canvasHeight - 4 - top);
+  const h = clamp(wants, natural, Math.min(natural * PEEK_GROW.times, PEEK_GROW.max, room || natural));
+
+  const scrim = { x: box.x, y: top, w: box.w, h };
+  const port = {
+    x: scrim.x + PEEK_PAD,
+    y: scrim.y + PEEK_PAD,
+    w: scrim.w - PEEK_PAD * 2,
+    h: scrim.h - PEEK_PAD * 2,
+  };
+  return port.w > 0 && port.h > 0 ? { scrim, port } : null;
+}
+
+/**
+ * The transform a zoom runs from, as a scale and where to put it.
+ *
+ * `s` is how big the zoom scene is at the moment it appears — a fraction — and
+ * `tx`/`ty` are where its top-left corner sits then, all in the **overview's**
+ * canvas units. One pair of numbers serves both directions, which is what makes
+ * going out the mirror of going in rather than another animation that happens
+ * to point the other way.
+ */
+export interface ZoomAnchor {
+  tx: number;
+  ty: number;
+  s: number;
+}
+
+/**
+ * **Both scenes are `CANVAS_W` wide** and the SVG is `width: 100%` with
+ * `preserveAspectRatio`, so one canvas unit is the same number of pixels in
+ * every scene of a sketch. That is what lets a box measured in the overview
+ * mean something in the scene it opens, and it is the assumption the whole
+ * animation rests on: give a scene its own width and this becomes decoration
+ * that lies about where things came from.
+ */
+const ZOOM_MIN_S = 0.12;
+const ZOOM_MAX_S = 0.9;
+
+/**
+ * **Where the incoming scene starts, given the box the reader pressed.**
+ *
+ * *Contain, centred on the box* — the whole of the new picture, shrunk to sit
+ * inside the thing that was under the finger, then grown to full size. Not
+ * "the box's footprint exactly": a region is often nearly the canvas's width
+ * and a fifth of its height, so matching its footprint would be a 94% scale in
+ * one axis and no visible zoom at all. Fitting the whole picture into it is a
+ * real zoom, and it is honest in the way that matters — everything you are
+ * about to see appears where you pressed.
+ *
+ * `null` when there is nothing to anchor to, or when the zoom would be too
+ * slight to be worth animating. Both mean *fall back to a plain fade*, which
+ * is a normal outcome and not a failure: pressing a chip in the scene row means
+ * "show me that part", not "zoom into this box".
+ */
+export function zoomAnchor(box: Box, sceneHeight: number): ZoomAnchor | null {
+  if (!(box.w > 0) || !(box.h > 0) || !(sceneHeight > 0)) return null;
+  const s = Math.min(box.w / CANVAS_W, box.h / sceneHeight);
+  /* **Out of range in either direction is a decline, not a clamp**, and the
+     lower end was a clamp until GPT Sol read it, 2026-08-30. `Math.max(0.12, s)`
+     looks like a floor on how dramatic the swoop may be, and it is really a
+     licence to break the one promise this function makes: a 150x60 node opening
+     a 650-unit scene has `s = 0.092`, and rounding that up to 0.12 starts the
+     scene 78 units tall inside a box 60 units tall. It hangs out of the thing
+     the reader pressed, which makes *everything you are about to see appears
+     where you pressed* quietly false. And the test guarding it passed **because
+     of** the bug: it asked only that `s` never go below 0.12.
+
+     So both ends decline: too large is not a zoom worth animating, too small is
+     a zoom this cannot contain. Both mean the plain fade, which is an ordinary
+     outcome and not a failure. */
+  if (!(s >= ZOOM_MIN_S) || s >= ZOOM_MAX_S) return null;
+  return {
+    tx: box.x + box.w / 2 - (CANVAS_W * s) / 2,
+    ty: box.y + box.h / 2 - (sceneHeight * s) / 2,
+    s,
+  };
+}
+
+/**
+ * The CSS transform an entrance animates **from**, in canvas units — `px` on an
+ * SVG child means user units, and a `<g>` resolves its `transform-origin`
+ * against the viewBox, so `0 0` is the canvas's own corner.
+ *
+ * Going **in**, the zoom scene starts inside the box and grows. Going **out**,
+ * the overview starts at the exact inverse — magnified about the same box, so
+ * the part the reader was just in fills the frame — and pulls back to itself.
+ * With `shiftY` at 0 the two compose to the identity, which is the property that
+ * makes one read as the undoing of the other, and `tests/sketch-paint.test.ts`
+ * checks it rather than trusting the algebra.
+ *
+ * ## `shiftY` is a parameter, and it must not be folded into the anchor
+ *
+ * It is the scroll correction — how far the picture's own scroll moved across
+ * the swap, in canvas units, measured by SketchView.tsx. **It applies after the
+ * inverse, not before it**, and folding it into `ty` before the call was a real
+ * bug: for `"out"` that sends it through the magnification and flips its sign,
+ * so a correction of +250 units arrived as -900. On the first real region —
+ * `s = 0.277` — a Back after 100px of scroll gave -1444 where -292 was right,
+ * and the overview entered from far above the region it was meant to be pulling
+ * out of. GPT Sol, 2026-08-30, with the arithmetic; it reproduces exactly. The
+ * two directions genuinely need it on different sides of the scale, which is
+ * why the caller cannot apply it itself.
+ */
+export function anchorTransform(a: ZoomAnchor, dir: "in" | "out", shiftY = 0): string {
+  if (dir === "in") return `translate(${a.tx}px, ${a.ty + shiftY}px) scale(${a.s})`;
+  const k = 1 / a.s;
+  return `translate(${-a.tx * k}px, ${-a.ty * k + shiftY}px) scale(${k})`;
 }
 
 function paintLabel(l: SketchLabel): Prim[] {

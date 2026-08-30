@@ -72,6 +72,38 @@ somebody has looked.
 compound one-liner written for an unrelated purpose, where nothing about the line looks dangerous —
 which is why the rule is a flat ban on the words rather than a judgment to be made per case.
 
+#### And the countermeasure, from one of the sessions it happened to
+
+The prohibition above is not enough on its own, because it only has to be typed past once. What
+follows is `spideryarn2-1f`, who lost four files that night and got them back from a copy it happened
+to have made for something else:
+
+> the sweep was invisible to me for about ten minutes, and nothing in my own loop would ever have
+> told me. I had written three files, run the tests, run the typecheck, and moved on to reviewing.
+> None of that re-reads a file you have already written — the tests I ran were against other code,
+> the typecheck passed because the tree was internally consistent at HEAD, and I had no reason to
+> open Masthead.tsx again. I found out only because a GPT Sol review I had running in the background
+> mentioned, in a closing aside, that the implementation files had disappeared underneath it. The
+> detection was an outside observer, by accident, and the inside view was structurally blind.
+>
+> So the countermeasure I would write down is: **re-grep your own content markers before you trust an
+> earlier edit.** One `grep -c OriginMark src/web/Masthead.tsx` would have caught it in seconds, at
+> any point in those ten minutes.
+>
+> It generalises past this incident … a peer rewriting a shared file can swallow your change just as
+> completely as a stash, and that leaves no reflog entry to find afterwards. … A habit that catches
+> the damage is worth more than a prohibition that can be typed past.
+
+That is the same habit [§ Nobody knows who edited an uncommitted file](#nobody-knows-who-edited-an-uncommitted-file)
+argues for from the other direction, and this is the case that shows why it is not optional.
+
+And the thing that actually did the saving:
+
+> I had a diff of my work in a scratchpad outside the repo, saved minutes earlier for an unrelated
+> reason (feeding a review). That is the only reason my four files came back as current work rather
+> than out of your loop. "If you have substantial uncommitted work in a shared tree, keep a copy
+> outside it" is cheap and would have made this a non-event for everyone.
+
 #### One of them is now enforced, not just written down — 2026-08-30
 
 `git stash` is the one that actually happened, so it is the one that got a guard.

@@ -1379,6 +1379,21 @@ that file protects first. A modal takes it from nothing.
   sometimes scrolled the article would be a control nobody can predict. The jump
   is still there, from the card, where it is labelled — available and never a
   surprise.
+- **A part that opens says so, and shows what is inside it.** A zoomable region
+  is drawn *hotter* than one that is not — a brighter edge, a stronger wash, on
+  its own panel. Contrast rather than a second shape, because the band scales
+  760 units into under 400 pixels and every **distance** halves with it: the
+  first version was a second panel offset five units behind the first, which is
+  two and a half pixels, and a browser pass could not see it at all. Beside the
+  name there is an "expand" corner mark, held at a constant stroke weight so it
+  is the same line in the band as at full screen. Hover or focus the name and
+  the scene it opens is
+  drawn *inside that region*, small, over a scrim — the real scene, painted by
+  `paintScene` into a nested viewport, with only the words dropped. Press it and
+  the new scene grows out of the box you pressed; Back reverses the same motion.
+  All of it is [sketch-zoomable-subsections.md](../plans/sketch-zoomable-subsections.md),
+  including why the ghost is not a simplified redraw and why the swap happens
+  before the animation rather than after it.
 - **Click a region's name** — "WHY WE'RE TEMPTED TO SEE IT" — and the picture
   opens the zoom scene for that part. Greg asked for it by example, and it is the
   most natural handle there is: a region is the overview's own statement that

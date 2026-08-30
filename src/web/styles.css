@@ -8088,6 +8088,84 @@ tr:hover .block-chat,
    extent, and the text's extent is not the target's. */
 .sk-region-open:focus-visible .sk-hit { stroke: var(--highlight); stroke-width: 2; rx: 3; }
 
+/* ---- a part that opens: the mark, and the peek inside it ---- */
+
+
+/* The corner mark, beside the name. Faint until the name is hovered, then it is
+   the same colour as the name — one control, one state.
+   `vector-effect` here and on the stack: the band scales 760 canvas units into
+   under 400 pixels, so a 1.6-unit stroke arrives at three quarters of a pixel
+   and the one mark that says a part opens is a grey suggestion. Held at its
+   painted weight it is the same line in the band and at full screen, which is
+   the whole job. ⟨Sol⟩, 2026-08-30. */
+.sk-region-more {
+  fill: none;
+  stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.55);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.sk-region-open:hover .sk-region-more,
+.sk-region-open:focus-visible .sk-region-more {
+  stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)));
+}
+
+/*
+ * **The peek** — a ghost of the scene a region opens, drawn inside that region.
+ *
+ * `pointer-events: none` on the group is not a nicety: the scrim covers the
+ * boxes whose region summoned it, and a scrim that could be hovered would take
+ * the pointer off the label, unset the peek, hand the pointer back, and do it
+ * again sixty times a second.
+ */
+.sk-peek { pointer-events: none; animation: sk-peek-in 140ms ease-out; }
+@keyframes sk-peek-in { from { opacity: 0; } to { opacity: 1; } }
+/* The colour of the page, not a shade of grey: it has to *remove* what is
+   under it rather than tint it, or the ghost is drawn into a thicket.
+   `fill-opacity` rather than an alpha inside the colour: `--page` is a `var()`
+   chain ending in an `oklch()`, and `rgb(oklch(…) / 0.88)` is invalid at
+   computed-value time and drops the whole declaration without a word — the trap
+   `.diag-card` and the note at the top of this section both carry. */
+.sk-peek-scrim { fill: var(--page); fill-opacity: 0.88; stroke: none; }
+/*
+ * **The only thing the peek drops is the words**, and it is the one thing that
+ * cannot survive the scale: a region is a fifth of the canvas high, so 12-unit
+ * text lands at about one pixel and renders as grey dust over the shapes it is
+ * meant to be inside. Everything else — the shapes the model chose, the routed
+ * edges, the arrowheads, the dashes, the regions within — is the real painting
+ * of the real scene, because the peek is `paintScene`'s own output dropped in a
+ * nested viewport rather than a second, simpler painter. ⟨Sol⟩, 2026-08-30.
+ */
+.sk-peek text { display: none; }
+/* **And the plate the text was sitting on.** An edge label is drawn as a
+   page-coloured rectangle with the words on top, so hiding only the words left
+   a blank hole in the middle of a connector — a shape the model never drew,
+   which is the one thing the ghost is not allowed to invent. ⟨Sol⟩, 2026-08-30. */
+.sk-peek .sk-label-plate { display: none; }
+/* Strokes held at their painted weight rather than scaled down with everything
+   else: a 1.2-unit stroke inside a 4x reduction is a third of a pixel, and the
+   ghost dissolves into its own scrim. **By element, not by class** — the first
+   version listed six classes and missed `.sk-note-fold`, and a list of names is
+   a thing that goes stale every time the painter learns a new one. */
+.sk-peek :is(rect, path, ellipse, polygon) { vector-effect: non-scaling-stroke; }
+.sk-peek .sk-node { opacity: 0.85; }
+
+/*
+ * **The zoom.** Everything drawn hangs off `.sk-stage`, so the entrance has one
+ * element to move — SketchView.tsx runs it with `Element.animate`, in canvas
+ * units, which is why the origin has to be the canvas's own corner rather than
+ * the group's bounding box. `view-box` is already the default for an SVG
+ * element and it is written out because the whole animation's arithmetic
+ * silently becomes wrong if it is ever `fill-box`.
+ */
+.sk-stage { transform-box: view-box; transform-origin: 0 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The panel checks the same query before it animates at all; this is the
+     other half, for the peek, which fades in from the stylesheet. */
+  .sk-peek { animation: none; }
+}
+
 /* ---- full screen ---- */
 
 /*
@@ -8155,6 +8233,43 @@ tr:hover .block-chat,
 
 .sk-region { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.07); stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.24); stroke-width: 1; }
 .sk-region-dashed { fill: none; stroke-dasharray: 5 4; }
+
+/* **Below `.sk-region`, and that is load-bearing.** Both are a single class, so
+   they carry the same specificity and the later one wins. Written above them —
+   where they were, next to the rest of this feature — every declaration here was
+   outvoted by the plain region's own 0.24 and 0.07, and the affordance simply
+   did not exist. Nothing errors and nothing warns; the rule is just quietly
+   overruled. Keep these two together, in this order. */
+/*
+ * **A region that opens something is drawn hotter than one that does not**, and
+ * that is the whole always-on affordance — no second shape, no glyph carrying
+ * the load.
+ *
+ * The first version was geometry: a second panel offset behind the first, a
+ * stack of cards. A browser pass on the real drawing at 288px could not see it,
+ * and could not tell which of the four regions were pressable — which is the
+ * thing this feature exists to fix. `MARK` in src/sketch-paint.ts has the
+ * finding and the arithmetic; the short version is that the band scales 760
+ * units into under 400 pixels, so every *distance* is halved and a five-unit
+ * offset is two and a half pixels.
+ *
+ * **Contrast is the one property that does not shrink.** A stroke held at
+ * 1.8px by `non-scaling-stroke` is the same line in the band as at full screen,
+ * and an alpha is an alpha at any scale. So: a brighter edge and a stronger
+ * wash, against the 0.24/0.07 an ordinary region gets above. What the reader
+ * learns is "the brighter boxes are the ones that open", and the corner mark
+ * beside the name says why, once the picture is big enough to read it.
+ */
+.sk-region-opens {
+  fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.13);
+  stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.62);
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+/* Dashed regions keep `fill: none` from `.sk-region-dashed`, which follows this
+   in the cascade only by accident of ordering — say it, so a region the model
+   asked to be an outline does not quietly acquire a wash. */
+.sk-region-opens.sk-region-dashed { fill: none; }
 .sk-region-label { fill: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.95); font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; }
 .sk-bracket { fill: none; stroke: rgb(var(--cat-rgb, var(--cat-7-rgb)) / 0.5); stroke-width: 1.5; }
 
@@ -8286,6 +8401,30 @@ tr:hover .block-chat,
   border-bottom: 1px solid var(--rule);
 }
 .diag-opt { display: inline-flex; align-items: center; gap: 0.25rem; }
+/* **The scatter's caveat, parked at the end of a row that already exists.**
+   `margin-left: auto` is the whole point of putting it here: the row is drawn
+   whether or not this icon is on it, so the counts and the flattening warning
+   cost the reader **no** vertical space at all — where the strip they replaced
+   ran to four lines of 10.5px prose in a 400px band. See DiagramPanel.tsx
+   § ScatterNote, and note that the sentence itself is still in the DOM as an
+   `.sr-only` live region: this is a change to where it is *shown*, not to
+   whether it is said.
+
+   `cursor: help` rather than `pointer`, because pressing it does nothing —
+   the card is the whole of it. Sized to the row rather than to a thumb: it is
+   chrome beside three chips, and what this panel offers a finger is the step
+   bar. */
+.diag-about {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.15rem;
+  border: 0;
+  background: none;
+  color: var(--ink-faintest, var(--ink-faint));
+  cursor: help;
+}
+.diag-about:hover, .diag-about:focus-visible { color: var(--ink-soft); }
 .diag-opt-set { display: inline-flex; align-items: center; gap: 0.15rem; }
 .diag-opt-label {
   margin-right: 0.15rem;
