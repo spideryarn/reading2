@@ -30,7 +30,14 @@
  * whoever runs the suite next.
  *
  * The number is arbitrary and only has to be unique among whatever else takes
- * advisory locks here, which today is nothing.
+ * advisory locks here. Since 2026-08-30 that is `RUN_LOCK` (918_273_645) in
+ * `./run-lock.ts`, which serialises the suites that hold the single `running`
+ * job slot. **No file takes both**, deliberately: this one is held across a
+ * whole corpus walk — `tests/store-roundtrip.test.ts` runs for 63 seconds — and
+ * a file that held the run lock for that long would starve every other suite
+ * waiting on it. If that ever changes, take the run lock first and this one
+ * second, in every file that takes both; two locks acquired in two orders
+ * deadlock, and `pg_advisory_lock` below waits for ever rather than reporting.
  */
 const CORPUS_LOCK = 823_117_001;
 

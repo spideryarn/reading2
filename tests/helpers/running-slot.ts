@@ -22,13 +22,27 @@
  * this and grown the retry below; this is that code, lifted out so there is one
  * of it rather than one per suite that gets bitten.
  *
- * ## Why retry rather than a lock
+ * ## Why retry as well as a lock
  *
- * `tests/store-jobs-parity.test.ts` takes a session advisory lock, and its own
- * docstring is clear that this "covers copies of this file and nothing else" —
- * a lock only excludes the holders that agree to take it, and a real ingest on
- * the same laptop never will. Waiting on the constraint itself needs no
- * agreement from anybody.
+ * This used to say "why retry *rather than* a lock", on the grounds that the
+ * advisory lock in `tests/store-jobs-parity.test.ts` "covers copies of this file
+ * and nothing else". Both halves are still true — a lock only excludes the
+ * holders that agree to take it, and a real ingest on the same laptop never
+ * will — but the conclusion was wrong, because waiting has a failure mode of its
+ * own: **polling is unfair**, so under enough contention one caller starves and
+ * spends the whole budget below. That is what the 20-second failures on
+ * 2026-08-29 were.
+ *
+ * So the two now divide the work, and `./run-lock.ts` explains the split:
+ *
+ * - the **lock** removes contention *between suites*, which is nearly all of it,
+ *   and is the only thing that can serialise two copies of a file that shares
+ *   fixed fixture slugs with itself;
+ * - this **retry** covers everything that never took the lock — a dev server
+ *   mid-ingest, a real job, a suite nobody has got to yet.
+ *
+ * Keep both. Removing this one leaves the suites defenceless against anything
+ * outside the test run; removing the lock brings the starvation back.
  *
  * ## Why the timeout message says what it says
  *

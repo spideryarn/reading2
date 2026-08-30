@@ -193,7 +193,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -248,6 +248,7 @@ import type {
 } from "../src/types.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
+import { type HeldRunLock, takeRunLock } from "./helpers/run-lock.js";
 
 /* Put back straight away: the modules above have captured the flag, and vitest
    reuses a worker process across files. Leaving it set hands the next file a
@@ -286,15 +287,17 @@ const RUBBLE = `${OWNER_STEM}%`;
 const SLUG_PREFIX = "test-pg-session-";
 const SLUG_RUBBLE = `${SLUG_PREFIX}%`;
 
-/** See the header: the same key as tests/store-jobs-parity.test.ts, on purpose. */
-const RUN_LOCK = 918_273_645;
-const RUN_LOCK_WAIT_MS = 120_000;
 const LEASE_MS = 60_000;
 
 /* ---------------------------------------------------- is there a database -- */
 
-let lockPool: Pool | undefined;
-let lockClient: PoolClient | undefined;
+/**
+ * See the header. The key used to be written out here and in
+ * tests/store-jobs-parity.test.ts, one copy each; it is now
+ * tests/helpers/run-lock.ts, taken by every suite that needs the running slot
+ * rather than by the two files that happened to have met the problem.
+ */
+let runLock: HeldRunLock | undefined;
 
 const { reachable } = await pgReady({
   suite: "tests/store-pg-session.test.ts",
@@ -310,22 +313,10 @@ const { reachable } = await pgReady({
 });
 
 if (reachable) {
-  lockPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-  lockClient = await lockPool.connect();
-  const deadline = Date.now() + RUN_LOCK_WAIT_MS;
-  for (;;) {
-    const got = await lockClient.query<{ got: boolean }>("select pg_try_advisory_lock($1) as got", [
-      RUN_LOCK,
-    ]);
-    if (got.rows[0]?.got === true) break;
-    if (Date.now() > deadline) {
-      throw new Error(
-        `Waited ${RUN_LOCK_WAIT_MS}ms for advisory lock ${RUN_LOCK}: tests/store-jobs-parity.test.ts ` +
-          "or another copy of this file is still running against this database.",
-      );
-    }
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
+  /* After `pgReady`, and only when reachable — a file that is about to skip
+     must not sit holding the lock. See tests/helpers/run-lock.ts. */
+  runLock = await takeRunLock("tests/store-pg-session.test.ts");
+  const lockClient = runLock.client;
 
   /* The lock is held, so no sibling can be using any of this. Jobs first: they
      reference drafts, and a leftover `running` row from a killed run takes the
@@ -891,11 +882,12 @@ when("the transactional session", () => {
       await database.delete(articles).where(eq(articles.id, id));
     }
     await closeDb();
-    if (lockClient) {
-      await lockClient.query("delete from auth.users where id = $1", [OWNER]);
-      lockClient.release();
+    if (runLock) {
+      /* On the lock's own connection, so the person is taken away while this
+         file still owns the slot rather than in the gap after letting go. */
+      await runLock.client.query("delete from auth.users where id = $1", [OWNER]);
+      await runLock.release();
     }
-    await lockPool?.end();
     await rm(path.join(ROOT, "data", `${SLUG_PREFIX}preflight`), { recursive: true, force: true });
   });
 

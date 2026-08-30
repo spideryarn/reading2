@@ -22,7 +22,7 @@
  */
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 import { eq, inArray } from "drizzle-orm";
 
 import { closeDb, getDb } from "../src/db/client.js";
@@ -40,6 +40,7 @@ import {
 } from "../src/store/jobs-fs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import type { Job, JobStep, OwnerId } from "../src/types.js";
+import { type HeldRunLock, takeRunLock } from "./helpers/run-lock.js";
 
 loadEnvLocal();
 
@@ -110,41 +111,22 @@ const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
  *
  * A session-level advisory lock is what serialises them. Postgres drops it when
  * the connection goes, so a killed run releases it without anybody's teardown
- * having to run. The key is arbitrary and this file's; nothing else in the repo
- * takes an advisory lock, and a collision would only serialise more than needed.
+ * having to run.
+ *
+ * **The lock used to live in this file, and the key used to be this file's.**
+ * The comment here said "nothing else in the repo takes an advisory lock, and a
+ * collision would only serialise more than needed", which was true when one file
+ * needed it and stopped being true afterwards. A lock only serialises the
+ * holders that agree to take it, so while this file held the key alone it went
+ * on failing `expected 'busy' to be 'claimed'` against files that had never
+ * heard of it. It is now `tests/helpers/run-lock.ts`, taken by every suite that
+ * needs the slot, and the reasoning lives there.
  */
-const RUN_LOCK = 918_273_645;
-/** Long enough for a whole run of this file (about 12s) several times over. */
-const RUN_LOCK_WAIT_MS = 120_000;
 
 /** Probed at MODULE LOAD so the skip is a real vitest skip rather than a green tick. */
 let reachable = false;
-/** The connection holding `RUN_LOCK`, kept open for the length of the run. */
-let lockPool: Pool | undefined;
-let lockClient: PoolClient | undefined;
-
-/**
- * Wait for the lock, and say so out loud if it never comes.
- *
- * `pg_advisory_lock` would wait for ever, and a run that hangs at module load
- * looks like a hung machine rather than like a sibling that will not let go.
- */
-async function takeTheRunLock(client: PoolClient): Promise<void> {
-  const deadline = Date.now() + RUN_LOCK_WAIT_MS;
-  for (;;) {
-    const got = await client.query<{ got: boolean }>("select pg_try_advisory_lock($1) as got", [
-      RUN_LOCK,
-    ]);
-    if (got.rows[0]?.got === true) return;
-    if (Date.now() > deadline) {
-      throw new Error(
-        `Waited ${RUN_LOCK_WAIT_MS}ms for advisory lock ${RUN_LOCK}: another copy of ` +
-          "tests/store-jobs-parity.test.ts is still running against this database.",
-      );
-    }
-    await new Promise((resolve) => setTimeout(resolve, 200));
-  }
-}
+/** Holds `RUN_LOCK` for the length of the run; released in `afterAll`. */
+let runLock: HeldRunLock | undefined;
 
 if (process.env.DATABASE_URL) {
   const pool = new Pool({
@@ -165,9 +147,7 @@ if (process.env.DATABASE_URL) {
        not-null columns and the zero `instance_id` are `auth.users` being
        Supabase's table rather than ours — see scripts/db-seed-owner.ts. */
     if (reachable) {
-      lockPool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
-      lockClient = await lockPool.connect();
-      await takeTheRunLock(lockClient);
+      runLock = await takeRunLock("tests/store-jobs-parity.test.ts");
 
       /* **Every owner this file has ever minted, jobs first.**
          Not the same thing as the teardown, and not covered by it: teardown
@@ -777,13 +757,11 @@ afterAll(async () => {
     await pool.query("delete from auth.users where id = $1", [OWNER]);
   } finally {
     await pool.end();
-    /* And let the next copy in. Not left to the process exiting: vitest keeps
+    /* And let the next suite in. Not left to the process exiting: vitest keeps
        its worker alive for the next file, so a sibling would go on waiting long
        after this file had finished. If we crash instead, Postgres drops the
        lock with the connection and the sibling is let in anyway. */
-    await lockClient?.query("select pg_advisory_unlock($1)", [RUN_LOCK]);
-    lockClient?.release();
-    await lockPool?.end();
+    await runLock?.release();
   }
 });
 
