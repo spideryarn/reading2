@@ -151,7 +151,33 @@ const aborts = new Map<string, AbortController>();
  * means an expired lease says *definitely over its own deadline*. Only the
  * second is safe to act on, and `noteProgress` deliberately does not touch it.
  */
-export const LEASE_MS = 420_000;
+/**
+ * **760s is a symptom of ephemeral scratch, not a property of the job model.**
+ *
+ * It is this large only because one claim has to cover an entire job, and one
+ * claim has to cover an entire job only because a handoff would land on a cold
+ * instance with an empty `/tmp` and re-run everything. `advanceJobToCompletion`
+ * releases "only on intentional handoff or terminal settlement" — the escape
+ * valve is already in the shape; it is unusable today for that one reason.
+ *
+ * **When D3–D5 put artefacts in Postgres a handoff costs nothing, the claim can
+ * shrink, and this number becomes wrong rather than merely conservative.** The
+ * cost it carries meanwhile is a dead claimant unreclaimable for ~12.5 minutes
+ * instead of ~7. Do not leave that lying around after its cause has gone.
+ *
+ * The arithmetic it has to satisfy, measured rather than assumed —
+ * `tests/jobs-lease-budget.test.ts` pins it:
+ *
+ *     fetch ~10s + extract ~5s + blocks ~5s + toc 320.4s + assets ≤180s ≈ 520s
+ *     520s  <  740s self-abort  <  800s platform kill
+ *
+ * 420s was right for the one-step-per-request shape this replaces, where every
+ * step got a fresh deadline. Under a claim that walks the whole job it is a
+ * per-step constraint in a per-claim world: `toc` alone at 320.4s would have
+ * eaten four fifths of it, and the ordinary article would have aborted four
+ * fifths of the way through the one step nobody can afford to repeat.
+ */
+export const LEASE_MS = 760_000;
 export const DEADLINE_MARGIN_MS = 20_000;
 
 /**

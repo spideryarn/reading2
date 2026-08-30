@@ -71,11 +71,28 @@ describe("the job lease and the platform's kill", () => {
    * cheap steps rounded generously upward.
    */
   it("leaves room for the whole default ingest inside one invocation", () => {
+    /* **Each number says where it came from and when, because this plan has
+       twice been bitten by not being able to tell a measurement from a guess.**
+       `summarise` was quoted at 240.3s for a day before anyone noticed it was
+       ten overlapping calls summed (91.3s), and `assets` carried a 300s budget
+       derived from policy constants until the step was run for the first time
+       and took 7.1s. A reader who cannot tell which of these is observed will
+       reason about the guesses as though they were facts. */
     const worstStepMs = {
+      /* GUESS, generous. Network only, no model call. Never measured. */
       fetch: 10_000,
+      /* GUESS, generous. Readability on HTML; a long PDF is slower and is not
+         covered by this number — see the PDF note below. */
       extract: 5_000,
+      /* GUESS, generous. Deterministic, no model call. */
       blocks: 5_000,
+      /* MEASURED 2026-08-30, worst in data/_ai-calls.jsonl: one call, so sum
+         and wall clock agree and no grouping argument applies. This is the
+         number the whole budget turns on. */
       toc: 320_400,
+      /* A CAP, not a measurement — the step's own wall clock. Measured cost on
+         the corpus's worst article (10 images) is 7.1s; the cap exists for a
+         hanging publisher, where 10 images cost ~151s. */
       assets: ASSETS_BUDGET_MS,
     };
     const wholeJobMs = Object.values(worstStepMs).reduce((a, b) => a + b, 0);
