@@ -288,6 +288,137 @@ Three assertions, all red on `93e1cf8`, from synthetic fixtures shaped like the 
 | `planBatches` asks for no label it can only be refused | `expected [ '[1]', '.' ] to deeply equal []` |
 | `buildTree` emits no unbackable `sourceHeading` | `expected [ 'n0005: its sourceHeading does not match any heading block in its range' ] to deeply equal []` |
 
+The fourth — that a structurally invalid tree must not reach `generateLabels` — is not in this file.
+It went into `tests/toc-write-guard.test.ts` with the fix it belongs to (`835b3f5`) and is green.
+
+### The source, kept here because it has nowhere else to live yet
+
+**This is the reproduction for R2, R3 and R4, and all three are red on purpose** — their fixes are
+deliberately unapplied, so committing it to `tests/` would leave the gate permanently red, and a
+permanently-red test is one everybody learns to ignore. It is written down here instead of left in a
+scratch directory, which is not a place work survives.
+
+**Each assertion lands in `tests/` with the proposal it belongs to**: `1b` when the labellability
+predicate tightens — alongside whichever migration is chosen for the stored trees — `2` when
+`buildTree` starts dropping an unbacked `sourceHeading`, and `1a` with the stage 3 change, where it
+belongs to that stage's owner rather than to stage 4.
+
+Fixtures are synthetic. Nothing here is a line of anybody's article: `SENTENCE` is invented, and the
+markup is the *shape* of an old hand-written HTML page — no `<p>`, `<br><br>` between paragraphs, a
+bolded word where a heading would go, a footnote marker as its own inline element.
+
+```ts
+/**
+ * The red test for job spya-v2f7b3.
+ *
+ * Three assertions, each naming one link in the chain that cost $0.39 and 16
+ * model calls on a 23-block article. All three are red on HEAD (93e1cf8).
+ */
+import { describe, expect, it } from "vitest";
+import { splitIntoBlocks } from "../src/blocks.js";
+import { planBatches } from "../src/labels.js";
+import { buildTree, type ModelNode } from "../src/toc.js";
+import { checkTree } from "../src/tree-invariants.js";
+import type { Block, Tree } from "../src/types.js";
+
+/** A block as stage 3 emits one. */
+function block(i: number, text: string, tag = "p", gistable = true): Block {
+  const id = `spya-${String(i).padStart(6, "0")}`;
+  return {
+    id,
+    tag,
+    kind: tag.startsWith("h") ? "heading" : "text",
+    text,
+    words: text.trim().split(/\s+/).filter(Boolean).length,
+    html: `<${tag} id="${id}">${text}</${tag}>`,
+    gistable,
+  };
+}
+
+const SENTENCE = "This paragraph makes a claim and then supports it with an example.";
+
+describe("an article whose only heading is its title", () => {
+  it("1a. does not turn an inline fragment into a block with prose to describe", () => {
+    // <br>-separated prose with a footnote marker and an emphasised word, which
+    // is the shape of every essay on paulgraham.com.
+    const { blocks } = splitIntoBlocks(
+      `<div>${SENTENCE}<span>[1]</span><br /><br />${SENTENCE}<br /><br />` +
+        `<b>Notes</b><br /><br />[<a name="f1n">1</a>] ${SENTENCE}</div>`,
+    );
+    const fragments = blocks.filter((b) => b.gistable && b.words <= 1);
+    expect(
+      fragments.map((b) => b.text),
+      "a one-word fragment is not a paragraph, and gistable means it has prose of its own",
+    ).toEqual([]);
+  });
+
+  it("1b. does not ask the model for a nav label it can only refuse", () => {
+    // Blocks 3 and 4 are the real ones: a footnote marker and a stranded full
+    // stop, both `gistable: true` out of stage 3 today.
+    const blocks = [
+      block(1, "The Need to Read", "h1"),
+      block(2, SENTENCE),
+      block(3, "[1]", "span"),
+      block(4, "."),
+      block(5, SENTENCE),
+    ];
+    const tree: Tree = {
+      version: 1,
+      generator: "test",
+      slug: "read",
+      rootId: "n1",
+      nodes: {
+        n1: { id: "n1", depth: 0, parent: null, children: ["n2", "n3", "n4", "n5", "n6"],
+              range: [blocks[0]!.id, blocks[4]!.id], title: "Root", gist: "A gist." },
+        ...Object.fromEntries(blocks.map((b, i) => [`n${i + 2}`, {
+          id: `n${i + 2}`, depth: 1, parent: "n1", children: [],
+          range: [b.id, b.id], title: "",
+        }])),
+      },
+    } as unknown as Tree;
+
+    const asked = planBatches(tree, blocks).flatMap((b) => b.blocks);
+    expect(
+      asked.filter((b) => b.words <= 1).map((b) => b.text),
+      "every block in a batch is asked for a 6-20 word nav label; a one-word " +
+        "fragment cannot ground one, so the model omits it and the whole batch is refused",
+    ).toEqual([]);
+  });
+
+  it("2. does not build a tree carrying a sourceHeading the blocks cannot back", () => {
+    // "Notes" is a <b> on the page, so stage 3 gives it kind "text". The
+    // structure model quotes it as a heading anyway — 4 times out of 4 on HEAD.
+    const blocks = [
+      block(1, "The Need to Read", "h1"),
+      block(2, SENTENCE),
+      block(3, "Notes", "p", false),
+      block(4, SENTENCE),
+    ];
+    const root: ModelNode = {
+      title: "The Need to Read",
+      gist: "The piece argues that reading and writing cannot be separated.",
+      range: [blocks[0]!.id, blocks[3]!.id],
+      sourceHeading: "The Need to Read",
+      children: [
+        { title: "The Argument", gist: "It opens with the claim.",
+          range: [blocks[0]!.id, blocks[1]!.id] },
+        { title: "Notes", gist: "The footnotes qualify the argument.",
+          range: [blocks[2]!.id, blocks[3]!.id], sourceHeading: "Notes" },
+      ],
+    };
+
+    const tree = buildTree(root, {}, blocks, "read");
+    expect(
+      checkTree(blocks, tree).problems,
+      "buildTree checks the model's ranges and its tiling at parse time; it does " +
+        "not check the one other claim the model makes about our blocks, so an " +
+        "unbackable sourceHeading survives until assertTreeSound — after a full " +
+        "paid label run — and throws the whole step away",
+    ).toEqual([]);
+  });
+});
+```
+
 ## The fix
 
 **Root cause, one sentence:** stage 3 promotes a contentful inline element to a top-level block and
