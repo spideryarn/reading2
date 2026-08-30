@@ -353,6 +353,29 @@ if it says `hidden`, ask the person to click the window rather than trying to so
 click for them and unsolvable for you. Related: the handshake stall further down, which is the other
 browser problem an agent cannot get itself out of.
 
+**But a real wheel scroll gets through, and that reopens scroll-driven checks.** Found 2026-08-30,
+verifying a reading-position fix in this exact trap. `window.scrollTo()` moves `scrollTop` — 7626.82
+to 7826.82, say — and fires no trusted scroll event, so anything gated behind it never runs: not the
+rAF loop, not the `?at=` tracker riding on it. A clean result after a scripted scroll proves nothing;
+it is what a broken build looks like too. A real mouse-wheel scroll through the `computer` tool is
+different — it moved `scrollTop` by that same 200px and the tracker fired for real, both holding
+`?at=` steady while the scroll stayed inside one section and advancing it correctly once the scroll
+crossed into the next. The tell that a scroll was scripted rather than real, every time: `scrollTop`
+moved and `?at=` did not.
+
+This is a workaround for one class of check, not a fix for the occlusion. **Anything that needs an
+animated jump to *complete* is still unreachable** — a diagram dot click, a `?note=` arrival — and the
+reason is worth stating precisely, because the obvious version of it is wrong. rAF is not simply dead
+in an occluded window: the `?at=` tracker schedules its measurement with `requestAnimationFrame` from
+inside its scroll handler, and that measurement demonstrably ran. **The wheel wakes the frame loop
+for about as long as the input lasts.** What does not survive is a *chain* of frames that nothing
+keeps feeding — and a glide is exactly that, each tick booking the next with no further input behind
+it. So a hand on the wheel gets one frame's work done and an animation gets one tick and stops.
+Hit three times on three separate code paths in one session: a long jump
+in Diagram mode moved `scrollTop` once and then froze there for good, and a `?note=` arrival never
+took a first step at all — `scrollTop` sat at 0 for a full five seconds. For those, the rule above
+still stands: ask the person to click the window.
+
 #### It can also stop a component ever drawing at all
 
 The bullets above are about *stale* values. On 2026-08-27 the same cause produced something worse in
