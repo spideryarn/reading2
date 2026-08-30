@@ -239,12 +239,22 @@ export function publishingSession(
          throw as the step failure it is, and turning a leaked draft into a
          *different* exception would hide why the publication actually failed.
 
-         **Skipped when the claim itself is what went**, because then the fence
-         inside `failRevision` cannot pass and there is nothing to clean up
-         anyway: a job nobody is inside ends through `failExpired` or a queued
-         `requestCancel`, and both of those clear the pointer themselves
-         (src/store/pg-jobs.ts). Trying regardless would put an alarming error
-         line under every lost claim. */
+         **Skipped when the claim itself is what went**, because the fence
+         inside `failRevision` is the same one that just refused us and cannot
+         pass either — so the call can only fail, and failing here would put an
+         alarming error line under every lost claim.
+
+         **That does leave the draft behind, and an earlier version of this
+         comment said there was nothing to clean up, which was wrong.** The
+         revision this claim opened is a committed `draft` row and stays one.
+         What makes it collectable rather than immortal is the *pointer*, not
+         this call: `sweepAbandonedDrafts` spares any revision some job's
+         `draft_revision_id` names, and the paths that end a job nobody is inside
+         — `failExpired` and a queued `requestCancel` — both null that column
+         (src/store/pg-jobs.ts). Once they have, the sweeper reclaims it on age.
+         So the cost of skipping is a draft that lives until the lease lapses,
+         not one that lives for ever. GPT Sol, 2026-08-30,
+         docs/plans/v1-publish-finalizer-review-sol.md design answer 3. */
       if (!(err instanceof NotTheLiveAttempt) && !(err instanceof StaleAttemptError)) {
         await failRevision({
           slug,

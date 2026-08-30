@@ -11,12 +11,42 @@ stages ticking over while you watch. Since 2026-08-26 the watching happens on a 
 > what replaced them is a **claim**: an attempt token, a lease, and every write fenced on
 > `id = $id and attempt_id = $attempt and status = 'running'`.
 >
-> **This does not make an ingest work on Vercel, and the section below saying it nearly does is the
-> mistake worth not repeating.** Every stage still writes `data/<slug>/*.json` and `stepIsDone` reads
-> those files, so invocation A writes `raw.json` to an ephemeral disk and invocation B finds nothing
-> and fetches again. The job is durable; the *pipeline* is not. That is
-> [transactional-stage-runner.md](../plans/transactional-stage-runner.md), which is planned,
-> reviewed and not built.
+> **An ingest works on Vercel as of 2026-08-30, and everything below this line about it not working
+> is kept because each answer was a correct diagnosis of a real obstacle and none of them was the one
+> that mattered.** A real article — `paulgraham.com/todo.html` — was pasted at spideryarn.com and
+> came out the other end: fetched, extracted, ten blocks with fresh ids, a table of contents, and
+> published to the shelf. That morning the same paste had failed in sixteen milliseconds, as nine
+> before it had.
+>
+> Three things had to be true together, and the last was the one nobody was looking at:
+>
+> 1. **A writable disk.** `ROOT` was derived from the module's own location, which is two levels up
+>    from `src/store/` in the repository and `/var` in a bundle — so every ingest died on
+>    `mkdir '/var/data'`. Now an injected, invocation-scoped root.
+> 2. **One invocation for the whole job.** Every `/advance` may land on a different instance, so
+>    step two looked for what step one wrote and found nothing. A claim now walks every step —
+>    `advanceJobToCompletion`, [`src/jobs.ts`](../../src/jobs.ts).
+> 3. **Something that actually publishes.** This is the one that had been marked done and was not.
+>    `publishRevision` was called only from `revisions.ts`, the fixture loader and tests — **never
+>    from the job path**. So a job could run every stage, write every file, go `done`, and leave
+>    `articles.current_revision_id` exactly where it was. A green job, an empty shelf, and every
+>    check reporting success. [`src/store/publish-session.ts`](../../src/store/publish-session.ts)
+>    is the finalizer that closed it.
+>
+> **What still does not work, found within a minute of the first success:** re-running a *single*
+> step against an existing article. Opening an article starts an `arc` job, which gets its own job
+> id and therefore its own empty scratch, and cannot see what the ingest wrote —
+> `ENOENT: /tmp/spideryarn/<owner>/<jobId>/data/<slug>/blocks.json`. The article reads fine, because
+> `TableView` falls back to the root gist, which is exactly why it is worth writing down rather than
+> leaving to be noticed. The same applies to `tweets`, `glossary`, `summary` and `ideas` whenever a
+> reader asks for one. That is the hydration problem, and it is the next piece.
+
+> **Superseded, and kept.** *"This does not make an ingest work on Vercel, and the section below
+> saying it nearly does is the mistake worth not repeating."* Every stage still writes
+> `data/<slug>/*.json` and `stepIsDone` reads those files, so invocation A writes `raw.json` to an
+> ephemeral disk and invocation B finds nothing and fetches again. The job is durable; the *pipeline*
+> is not. **True when written, and it correctly named obstacle 2 above** — what it missed is that
+> fixing it would still have produced a green job and an empty shelf, because nothing published.
 
 > Now let's think about the "Add" functionality that takes a URL as an argument. There should be
 > some kind of queue that processes things (e.g. fetch, Mozilla Readability, sanitiser), and ideally
@@ -896,6 +926,45 @@ The rule that a test can hold on to is **when in doubt, show it**: `earlier` is 
 anything still running, and anything whose `finishedAt` cannot be read, stays on screen.
 [`tests/add-article-history.test.ts`](../../tests/add-article-history.test.ts) pins that, because a
 job hidden by mistake is a failure the reader never learns about and nothing on the page looks wrong.
+
+## A finished job publishes the article, and until 2026-08-30 it did not
+
+`grep -c publishRevision src/jobs.ts` answered **0**. The stages ran, wrote their files, the job went
+`done` — and `articles.current_revision_id` never moved, so the reader's shelf stayed empty after an
+ingest whose every step was green. Publication was a human running `npm run db:import`.
+
+What closes it is [`src/store/publish-session.ts`](../../src/store/publish-session.ts): a decorator
+round the store session that, on a `done` ending, copies what the stages wrote into a fresh draft
+and publishes it — the copy, the publication and the job's own `finish` in **one transaction**.
+
+Four things about it are worth knowing before touching it.
+
+- **It wraps the session rather than sitting in the coordinator.** A `done` ending reaches the store
+  through two doors: `commit`, when the last step ran, and `settleJob`, when every step skipped. A
+  finalizer bolted on after the walk would see only the second — and for the first it would arrive
+  *after* the job row already said `done`, which is the crash gap
+  ([v1-imports-review-sol.md](../plans/v1-imports-review-sol.md) critical 2): a kill between the two
+  leaves the article published and its job failed, with Retry blocked by a guard that now sees an
+  article.
+- **Only `done` publishes.** A job that failed, was cancelled or was interrupted publishes nothing
+  and leaves the reader on the revision they already had. The draft is opened *lazily*, at the moment
+  of publication, so a job that never gets there has no draft to fail or leak.
+- **A copy that moved nothing is refused.** Opening a draft carries the published revision's blocks,
+  tree and step runs forward, so publishing after copying zero steps would republish the old article
+  and report the job done — a silent success in the path built to prevent them
+  ([silent-success.md](../reusable/silent-success.md)).
+- **It only exists under `SPIDERYARN_STORE=postgres`.** On a laptop with the flag unset the session is
+  exactly what it was before: no draft, no publication, nothing new.
+  [`tests/jobs-publish-finalizer-files.test.ts`](../../tests/jobs-publish-finalizer-files.test.ts) is
+  that half of the claim, and it proves it by taking `DATABASE_URL` away.
+
+This is a stepping stone with a known end: it is the vertical slice of D1b that
+[delete-the-importer.md](../plans/delete-the-importer.md) eventually replaces, at the same seam. When
+D3–D5 convert the stages so they return their products instead of writing their own files,
+[`src/store/pg-session.ts`](../../src/store/pg-session.ts) — already written and tested — becomes the
+session and this decorator is deleted. The copy it performs is
+[`copyArtefacts`](../../src/store/copy-artefacts.ts), which the fixture loader drives too, so the
+ingest and the tests move an article across by the same calls.
 
 ## When this becomes Postgres
 

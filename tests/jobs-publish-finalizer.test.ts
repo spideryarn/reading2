@@ -42,7 +42,11 @@
  *   when the job fails* fails on `currentRevisionOf`: the failed job published.
  * - **the recovery settlement in `settleJob` deleted** — the three cases that
  *   reach a failing publication fail on `status`: the job is left `running`,
- *   holding its attempt and the single global running slot.
+ *   holding its attempt and the single global running slot. Re-run on its own
+ *   with `-t`, because a wedged slot makes the *other* cases fail too and a
+ *   five-case red cannot say which assertion belonged to which: *ends the job
+ *   rather than leaving it running* alone gives `expected 'running' to be
+ *   'error'`. Its injection is deliberately not a NUL byte — see that case.
  * - **`err.message` put back on the job card** — *keeps publication and the
  *   job's finish in one transaction* fails on `status`, and the reason is worth
  *   knowing: a driver message carries the failed statement's bound parameters,
@@ -50,6 +54,24 @@
  *   and the job is left `running`. The `SENTINEL` assertions below are the
  *   direct check on the same rule and would catch a leak that is not itself
  *   unwritable.
+ * - **`err.message` interpolated into `failRevision`'s `reason`** — the code
+ *   exactly as it stood before GPT Sol's critical 1. *keeps publication and the
+ *   job's finish in one transaction* fails on
+ *   `expected '{"level":"warn",…' not to contain 'PROSE-THAT-MUST-NOT-BE-LOGGED'`.
+ *   This is the one the job-card assertions above cannot see: `logDraftFailure`
+ *   writes a different string, built by a different statement, and the row is
+ *   clean either way.
+ * - **`process.env.LOG_LEVEL` left at `silent`** — not a mutation of the code
+ *   but the control on the capture, and the one that says whether the three
+ *   absences mean anything. Fails on `expected '' to contain 'draft revision
+ *   failed'`, which is what every broken capture looks like.
+ *
+ * The **second** statement Sol's critical 1 names — the compensating cleanup
+ * failing, and `errorFields(cleanup)` logging a raw driver error — cannot be
+ * reddened from here, because no error a real `failRevision` raises carries
+ * anything sensitive to detect. It has its own file,
+ * tests/publish-session-cleanup-log.test.ts, which fakes both failures and says
+ * so.
  *
  * - **the budget branch of `transitionAfter` finishes the job instead of handing
  *   the claim back** — *publishes nothing when the claim is handed back mid-job*
@@ -112,7 +134,21 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 const HOISTED = vi.hoisted(() => {
   const previousStore = process.env.SPIDERYARN_STORE;
   const previousRoot = process.env.SPIDERYARN_DATA_ROOT;
+  const previousLevel = process.env.LOG_LEVEL;
   process.env.SPIDERYARN_STORE = "postgres";
+
+  /* **The log level, and it is raised for the same reason the store flag is
+     set: `level()` in src/log.ts reads it once, at that module's load.** Vitest
+     sets `NODE_ENV=test`, which makes the logger `silent` — and a silent logger
+     writes nothing, so the leak assertions in *keeps publication and the job's
+     finish in one transaction* would pass against any amount of article content
+     going into a log line. `warn` is the quietest level that still carries both
+     lines that case reads: `logDraftFailure`'s warning and `guardDbStore`'s
+     error. A more verbose LOG_LEVEL from the command line is left alone, so
+     `LOG_LEVEL=debug npx vitest run …` still works. */
+  if (previousLevel === undefined || ["silent", "fatal", "error"].includes(previousLevel)) {
+    process.env.LOG_LEVEL = "warn";
+  }
   /* A path string and nothing more: `vi.hoisted` runs before every import, so
      `node:fs` is not available in here. Nothing needs to exist yet — `dataRoot()`
      is read at the moment a path is wanted, and the filesystem store makes its
@@ -120,7 +156,7 @@ const HOISTED = vi.hoisted(() => {
   const tmp = (process.env.TMPDIR ?? "/tmp").replace(/\/$/, "");
   const root = `${tmp}/spya-finalizer-${process.pid}-${Date.now()}`;
   process.env.SPIDERYARN_DATA_ROOT = root;
-  return { previousStore, previousRoot, root };
+  return { previousStore, previousRoot, previousLevel, root };
 });
 
 import { getDb } from "../src/db/client.js";
@@ -143,7 +179,9 @@ import type { StoreSession } from "../src/store/session.js";
 import type { JobEnding } from "../src/store/jobs.js";
 import type { ArtifactKind, ArtifactStore } from "../src/store/artifacts.js";
 import type { Block, Job, JobStep, StepName, Tree } from "../src/types.js";
+import { logLinesWhile } from "./helpers/log-capture.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { takeRunLock } from "./helpers/run-lock.js";
 
 /* Put the store flag back straight after the imports: vitest reuses a worker
    across files and does not reset `process.env` between them, so leaving it set
@@ -152,6 +190,11 @@ import { pgReady } from "./helpers/pg-ready.js";
    artefact call rather than once. */
 if (HOISTED.previousStore === undefined) delete process.env.SPIDERYARN_STORE;
 else process.env.SPIDERYARN_STORE = HOISTED.previousStore;
+/* The log level goes back for the same reason and at the same moment: src/log.ts
+   has read it by now, and leaving it raised would hand the next file in this
+   worker a logger it did not ask for. */
+if (HOISTED.previousLevel === undefined) delete process.env.LOG_LEVEL;
+else process.env.LOG_LEVEL = HOISTED.previousLevel;
 
 loadEnvLocal();
 
@@ -161,6 +204,20 @@ const { reachable } = await pgReady({
 });
 
 const when = reachable ? describe : describe.skip;
+
+/**
+ * **This file starts a job, so it takes the shared run lock.**
+ *
+ * `jobs_only_one_running` allows one `running` row in the whole table, and this
+ * file's fixtures are named the same on every run, so a second copy — a peer's
+ * `npm test` beside yours — collides on both. Taken after `pgReady` and only
+ * when reachable, because a suite that is about to skip must not sit holding it.
+ * tests/helpers/run-lock.ts has the reasoning and the measurements.
+ */
+const runLock = reachable ? await takeRunLock("tests/jobs-publish-finalizer.test.ts") : undefined;
+afterAll(async () => {
+  await runLock?.release();
+});
 
 /* ------------------------------------------------------------- the article -- */
 
@@ -354,7 +411,6 @@ const INGEST: StepName[] = ["extract", "blocks", "toc"];
 
 /* ----------------------------------------------------------------- the job -- */
 
-const MADE: string[] = [];
 
 /**
  * A `queued` job straight into the Postgres store — **not** `enqueue`, which
@@ -373,7 +429,6 @@ async function queueJob(slug: string, names: StepName[], force = false): Promise
     createdAt: new Date().toISOString(),
   };
   const { job } = await pgJobStore.enqueueOrGet(wanted, `finalizer-${wanted.id}`);
-  MADE.push(job.id);
   return job;
 }
 
@@ -423,9 +478,31 @@ describe("the store this file is talking to", () => {
 });
 
 when("a job that finishes", () => {
+  /**
+   * **Jobs first and by slug, articles second.** Both halves of that were wrong
+   * before 2026-08-30, and the cost was paid by every other suite on this
+   * database rather than by this one.
+   *
+   * *Jobs first*, because a job row carries `draft_revision_id`, and that
+   * foreign key blocks deleting the revision the article delete is trying to
+   * cascade away. With articles first the very first `delete` threw, `afterAll`
+   * stopped there, and every job this file made was left behind — one of them
+   * `running`, holding the **single global running slot** that
+   * `jobs_only_one_running` allows. Every job suite in the repo then waits on it
+   * and reports `busy`, and a wedged row does not time out until its 760-second
+   * lease lapses. A teardown that leaks is worse than one that fails loudly.
+   *
+   * *By slug rather than by the ids this run minted*, because a run that died
+   * part-way — a mutation under test, an agent interrupted, a `--bail` — leaves
+   * rows whose ids this process never saw, and the next run inherits the wedge.
+   * These six slugs are this file's and nothing else's, so claiming all of them
+   * is safe and makes the file self-healing.
+   */
   afterAll(async () => {
     const db = getDb();
-    for (const slug of Object.values(SLUGS)) {
+    const slugs = Object.values(SLUGS);
+    for (const slug of slugs) await db.delete(jobsTable).where(eq(jobsTable.slug, slug));
+    for (const slug of slugs) {
       const rows = await db.select({ id: articles.id }).from(articles).where(eq(articles.slug, slug));
       const id = rows[0]?.id;
       if (!id) continue;
@@ -433,7 +510,6 @@ when("a job that finishes", () => {
       await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, id));
       await db.delete(articles).where(eq(articles.id, id));
     }
-    for (const id of MADE) await db.delete(jobsTable).where(eq(jobsTable.id, id));
     await rm(HOISTED.root, { recursive: true, force: true });
     if (HOISTED.previousRoot === undefined) delete process.env.SPIDERYARN_DATA_ROOT;
     else process.env.SPIDERYARN_DATA_ROOT = HOISTED.previousRoot;
@@ -570,7 +646,7 @@ when("a job that finishes", () => {
      *
      * The injection is a **NUL byte inside the ending's `steps`**. `finishIn`
      * writes that array to a `jsonb` column, and Postgres refuses `\u0000` in a
-     * JSON string outright (22P05) — so the *last* statement of
+     * JSON string outright — so the *last* statement of
      * `publishAndFinish` fails, for a real database reason, with
      * `publishRevisionIn` already done in the same transaction. That is a kill
      * between publication and settlement, made to happen on demand rather than
@@ -599,39 +675,41 @@ when("a job that finishes", () => {
       from: fsArtifacts,
     });
 
-    await expect(
-      session.settleJob({
-        kind: "end",
-        jobId: second.id,
-        attempt,
-        ending: {
-          status: "done",
-          steps: [{ name: "toc", label: "Building the table of contents", status: "done" }],
-          /**
-           * **The injection lives in `error`, and the position is deliberate.**
-           *
-           * A NUL byte survives `JSON.stringify`, reaches the server, and
-           * Postgres refuses it (22P05) — so `finishIn`'s `UPDATE`, the last
-           * statement of the publication's transaction, fails.
-           *
-           * It is in `error` rather than in `steps` because the recovery
-           * settlement carries the *same* `steps` forward — as it should, they
-           * are the progress the reader sees — and would then fail for the same
-           * reason, leaving the job `running` and the test asserting the bug it
-           * was written to catch. `error` is the one field the recovery
-           * replaces, with a fixed sentence.
-           *
-           * It also carries a **sentinel**, and so does the title, because
-           * `finishIn` binds both as parameters: a driver error's message is
-           * `Failed query: update … params: <them>`. A step's `detail` and the
-           * job's title can both be article-derived, which is why interpolating
-           * that message anywhere a person reads was GPT Sol's critical 1.
-           */
-          error: `${SENTINEL}\u0000`,
-          title: SENTINEL_TITLE,
-        },
-      }),
-    ).rejects.toThrow();
+    const logged = await logLinesWhile(async () => {
+      await expect(
+        session.settleJob({
+          kind: "end",
+          jobId: second.id,
+          attempt,
+          ending: {
+            status: "done",
+            steps: [{ name: "toc", label: "Building the table of contents", status: "done" }],
+            /**
+             * **The injection lives in `error`, and the position is deliberate.**
+             *
+             * A NUL byte survives `JSON.stringify`, reaches the server, and
+             * Postgres refuses it — so `finishIn`'s `UPDATE`, the last
+             * statement of the publication's transaction, fails.
+             *
+             * It is in `error` rather than in `steps` because the recovery
+             * settlement carries the *same* `steps` forward — as it should, they
+             * are the progress the reader sees — and would then fail for the same
+             * reason, leaving the job `running` and the test asserting the bug it
+             * was written to catch. `error` is the one field the recovery
+             * replaces, with a fixed sentence.
+             *
+             * It also carries a **sentinel**, and so does the title, because
+             * `finishIn` binds both as parameters: a driver error's message is
+             * `Failed query: update … params: <them>`. A step's `detail` and the
+             * job's title can both be article-derived, which is why interpolating
+             * that message anywhere a person reads was GPT Sol's critical 1.
+             */
+            error: `${SENTINEL}\u0000`,
+            title: SENTINEL_TITLE,
+          },
+        }),
+      ).rejects.toThrow();
+    });
 
     /* **Neither half happened**, and the pointer is the assertion. With
        `finishIn` outside the publication's transaction the pointer would be on
@@ -654,18 +732,44 @@ when("a job that finishes", () => {
      * sentinels are in `jobs.error`, on the reader's card, and in the line
      * `logDraftFailure` writes.
      *
-     * **The log half of this is not covered by a test and that is stated rather
-     * than implied.** `pino.destination({ sync: true })` writes to the file
-     * descriptor, not through `process.stdout.write`, and the root logger is
-     * `silent` under vitest — so a capture here would be a check that cannot
-     * fire, which is worse than none. The rule is the same one line in both
-     * places ("never `err.message`"), and this half of it does fire.
+     * The log half is `logged`, below.
      */
     const card = (await jobRow(second.id))?.error ?? "";
     expect(card).not.toContain(SENTINEL);
     expect(card).not.toContain(SENTINEL_TITLE);
     expect(card).not.toMatch(/Failed query|params:/);
     expect(card.length).toBeGreaterThan(0);
+
+    /**
+     * **And neither does the log**, which is the half the job card cannot speak
+     * for and the half GPT Sol's critical 1 was actually about.
+     *
+     * The route it names is `failRevision` → `logDraftFailure`, which writes the
+     * `reason` it was handed **verbatim** (src/store/pg-revisions.ts). That
+     * reason is built in `publishAndFinish`'s catch, from an error that is a raw
+     * Drizzle one whose message is `Failed query: update … params: <the whole
+     * steps array and the title>`. Interpolating it there put article prose in a
+     * log line, which docs/project/logging.md forbids outright — and no
+     * assertion above can see it, because the job card is written by a different
+     * statement with a different string.
+     *
+     * **The first assertion is the one that makes the other three evidence.**
+     * Everything that could go wrong with an in-process log capture — the level
+     * left at `silent`, a path that never reached `failRevision`, a pino that
+     * writes some other way — produces an *empty* capture, and an empty capture
+     * satisfies every `not.toContain` ever written. So the presence of the line
+     * is asserted first, and only then its contents. See
+     * tests/helpers/log-capture.ts, and docs/reusable/silent-success.md for why
+     * this file keeps doing that.
+     *
+     * `logged` also carries `guardDbStore`'s "database call failed" line for the
+     * same error on its way out, so these four assertions cover both statements
+     * that see the driver's message on this path.
+     */
+    expect(logged).toContain("draft revision failed");
+    expect(logged).not.toContain(SENTINEL);
+    expect(logged).not.toContain(SENTINEL_TITLE);
+    expect(logged).not.toMatch(/Failed query|params:/);
     /* And the draft the rolled-back transaction was going to publish is failed
        and unpointed, rather than left immortal because a job still names it and
        `sweepAbandonedDrafts` spares anything a job points at. */
@@ -755,6 +859,19 @@ when("a job that finishes", () => {
      * `meta.json` is deleted first, which leaves `extract` with one of its two
      * products present, so `copyArtefacts` refuses to move half a step. Nothing
      * re-runs `extract`, because it is not in this job's step list.
+     *
+     * **The failure is deliberately not the atomicity case's NUL byte, and that
+     * is the whole reason this case can prove anything.** The two findings are
+     * entangled: a driver message carries the failed statement's bound
+     * parameters, and for the atomicity case those include the injected NUL — so
+     * writing that message back onto the card fails the *recovery* settlement
+     * too, and the leak shows up as "job left `running`", which is finding 2's
+     * symptom. A test that injected a NUL here could not tell "the settlement
+     * works" from "the poisoning is gone". `copyArtefacts` refusing a half-copied
+     * step throws a plain `Error` built from a step name and two artefact kinds,
+     * with nothing in it Postgres will not store, so the only thing that can
+     * leave this row `running` is the settlement being absent. Raised by the team
+     * lead, 2026-08-30.
      */
     await rm(path.join(HOISTED.root, "data", slug, "meta.json"));
 
@@ -775,6 +892,16 @@ when("a job that finishes", () => {
        actually happened. */
     expect(row?.status).toBe("error");
     expect(row?.attemptId).toBeNull();
+    /**
+     * **And it says the publication failed, which `status` alone does not.**
+     *
+     * A job can reach `error` down several roads — a step threw, the claim
+     * lapsed, `failExpired` recorded a generic interruption — and the point of
+     * the recovery settlement is that the reader is told *this* one. Spelled out
+     * as a literal rather than compared against the constant the code uses, which
+     * would agree with any value of it.
+     */
+    expect(row?.error ?? "").toContain("Nothing was published and your library is unchanged");
     expect(row?.error ?? "").not.toMatch(/Failed query|params:/);
     /* Retry is offered, because re-running the whole job is genuinely the fix
        for a scratch directory that was not all there. */

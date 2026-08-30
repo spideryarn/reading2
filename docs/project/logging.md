@@ -569,6 +569,27 @@ So the rule has a second half: **an error is a value that travels, and where it 
 where it is written down.** Anything interpolated into a message that can reach a catch-all has been
 logged, whatever the file it was thrown from thought it was doing.
 
+### The sixth shape: the seam is on the way out, and logging happens before that
+
+The `db-errors.ts` seam above wraps a store **on its way out**. So it protects everything that reads
+the error *after* the store returns — and nothing that reads it *inside*, before the rethrow. That
+gap is where the sixth instance of this class lived, found by GPT Sol reviewing the publish
+finalizer on 2026-08-30 ([the review](../plans/v1-publish-finalizer-review-sol.md), critical 1).
+
+[`finishIn`](../../src/store/pg-jobs.ts) binds a job's whole `steps` array and its title — a step's
+`detail` may be article prose and the title *is* the article's. When it failed,
+[`publish-session.ts`](../../src/store/publish-session.ts) caught the Drizzle error and put its
+message into the `reason` it handed `failRevision`, which logs `reason` **verbatim**
+(`logDraftFailure` in [`pg-revisions.ts`](../../src/store/pg-revisions.ts)). By the time
+`guardDbStore` scrubbed anything, the line was already on stdout. There was a second copy of it one
+branch along: if the compensating cleanup itself failed, `errorFields(cleanup)` handed a raw driver
+error to `safeError`, which keeps `message` on purpose.
+
+Both are now fixed strings and class names — `nameOf(err)`, never `err.message`. **The general rule
+this leaves is worth more than the fix:** a wrapper that translates on egress cannot cover a callee
+that logs on the way to throwing, so any `log` call inside a guarded store must build its own line
+from values it chose, exactly as if there were no seam at all.
+
 ### Proving redaction, not assuming it
 
 [`tests/log.test.ts`](../../tests/log.test.ts) reads the bytes on file descriptor 1 and asserts the
@@ -609,6 +630,23 @@ behaviour, and it is not proof about volume. An asynchronous destination that ha
 five small writes immediately would pass it while still losing larger writes or writes behind
 back-pressure. What it pins is the regression that is easy to cause — somebody deleting `sync: true`
 because pino flushes on exit anyway — not the whole property.
+
+**A cheaper capture, for the tests that are about a caller rather than about the logger.**
+`log.test.ts` spawns a child process because the thing under test *is* `src/log.ts` — its level, its
+destination, its behaviour on SIGKILL. A test that only wants to know what string some caller handed
+the logger does not need a subprocess, and
+[`tests/helpers/log-capture.ts`](../../tests/helpers/log-capture.ts) is the in-process version:
+`fs.writeSync` is patched on the CommonJS `fs` object `sonic-boom` itself holds, because
+`pino.destination({ sync: true })` writes to **file descriptor 1** and never touches
+`process.stdout.write` — so stubbing the stream captures nothing and passes. Two things a caller
+must do, and the second is the one that matters: raise `LOG_LEVEL` inside `vi.hoisted`, since
+`level()` is read once at module load and vitest's `NODE_ENV=test` otherwise makes it `silent`; and
+**assert that the capture caught a line you expected before asserting that it lacks a sentinel**,
+because every way this can go wrong produces an *empty* capture, and an empty capture satisfies every
+`not.toContain` ever written. Used by
+[`tests/jobs-publish-finalizer.test.ts`](../../tests/jobs-publish-finalizer.test.ts) and
+[`tests/publish-session-cleanup-log.test.ts`](../../tests/publish-session-cleanup-log.test.ts) for
+the sixth shape above.
 
 ### `JSON.parse` quotes the file back at you
 
