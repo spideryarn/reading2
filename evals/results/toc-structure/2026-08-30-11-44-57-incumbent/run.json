@@ -1,0 +1,48 @@
+{
+  "startedAt": "2026-08-30T11:44:57.737Z",
+  "commit": "3db789f86491ac3a5770f9712f29f89f29a66f5d",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "high"
+      },
+      "seed": "none"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "constitution",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "58dd654c87248ce4fc966ad83074b7b6cdaf6569e36ae477e09d28803afdec5f",
+        "manifest": "58dd654c87248ce4fc966ad83074b7b6cdaf6569e36ae477e09d28803afdec5f",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "The table of contents is not a valid tree, so it was not written (1 problem): n0255: its sourceHeading does not match any heading block in its range",
+      "calls": [
+        {
+          "ms": 378085,
+          "inputTokens": 48852,
+          "outputTokens": 40794,
+          "reasoningTokens": 33426,
+          "generationId": "gen-1788090298-drQKVPhYYnDamex0vJoK",
+          "costUsd": 0.505644,
+          "providerCostUsd": 0.505644
+        }
+      ]
+    }
+  ]
+}

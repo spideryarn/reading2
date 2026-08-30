@@ -1,0 +1,1479 @@
+{
+  "version": "toc/2",
+  "generator": "claude-sonnet-5",
+  "slug": "fowler-phrenology",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0016",
+        "n0030",
+        "n0048",
+        "n0061",
+        "n0076",
+        "n0089",
+        "n0110"
+      ],
+      "range": [
+        "spya-es7p7w",
+        "spya-rn6cbv"
+      ],
+      "title": "Utility of Phrenology",
+      "gist": "This digitised pamphlet presents L.N. Fowler's lecture arguing that phrenology yields wide-ranging practical benefits for self-understanding, family life, the professions, law, and personal success, framed by its bibliographic and archival record.",
+      "sourceHeading": "Utility of phrenology : a lecture / by L.N. Fowler."
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0005",
+        "n0008",
+        "n0011",
+        "n0014"
+      ],
+      "range": [
+        "spya-es7p7w",
+        "spya-uq5se0"
+      ],
+      "title": "Bibliographic Details",
+      "gist": "This section records the pamphlet's publication details, contributors, and rights information."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004"
+      ],
+      "range": [
+        "spya-es7p7w",
+        "spya-es7p7w"
+      ],
+      "title": "Document Title",
+      "gist": "The record identifies the work as a lecture on phrenology by L.N. Fowler."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-es7p7w",
+        "spya-es7p7w"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0006",
+        "n0007"
+      ],
+      "range": [
+        "spya-h9frp6",
+        "spya-m3a6ew"
+      ],
+      "title": "Contributors",
+      "gist": "The lecture's author is identified as L.N. Fowler, born 1811, died 1896.",
+      "sourceHeading": "Contributors"
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0005",
+      "children": [],
+      "range": [
+        "spya-h9frp6",
+        "spya-h9frp6"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0005",
+      "children": [],
+      "range": [
+        "spya-m3a6ew",
+        "spya-m3a6ew"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0009",
+        "n0010"
+      ],
+      "range": [
+        "spya-wt8rt7",
+        "spya-dfqq59"
+      ],
+      "title": "Publication/Creation",
+      "gist": "The pamphlet was published in London by W. Tweedie sometime between 1873 and 1879.",
+      "sourceHeading": "Publication/Creation"
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0008",
+      "children": [],
+      "range": [
+        "spya-wt8rt7",
+        "spya-wt8rt7"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0008",
+      "children": [],
+      "range": [
+        "spya-dfqq59",
+        "spya-dfqq59"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0012",
+        "n0013"
+      ],
+      "range": [
+        "spya-zk03kp",
+        "spya-cwcbw8"
+      ],
+      "title": "Persistent URL",
+      "gist": "The record provides a persistent link to the digitised work at Wellcome Collection.",
+      "sourceHeading": "Persistent URL"
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-zk03kp",
+        "spya-zk03kp"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-cwcbw8",
+        "spya-cwcbw8"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0015"
+      ],
+      "range": [
+        "spya-uq5se0",
+        "spya-uq5se0"
+      ],
+      "title": "License and attribution",
+      "gist": "The entry specifies the licensing terms under which the digitised work may be reused.",
+      "sourceHeading": "License and attribution"
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-uq5se0",
+        "spya-uq5se0"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0017",
+        "n0021",
+        "n0024",
+        "n0028"
+      ],
+      "range": [
+        "spya-ntpaad",
+        "spya-mnsz9f"
+      ],
+      "title": "UTILITY OF PHRENOLOGY.",
+      "gist": "Fowler opens by asking what practical good phrenology serves, tracing its foundation in physiology and education before cataloguing twelve concrete benefits.",
+      "sourceHeading": "UTILITY OF PHRENOLOGY."
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0018",
+        "n0019",
+        "n0020"
+      ],
+      "range": [
+        "spya-ntpaad",
+        "spya-x7n46w"
+      ],
+      "title": "Lecture Title and Author",
+      "gist": "The lecture is titled \"Utility of Phrenology\" and delivered by L.N. Fowler of New York."
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-ntpaad",
+        "spya-ntpaad"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-bd6vhe",
+        "spya-bd6vhe"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0017",
+      "children": [],
+      "range": [
+        "spya-x7n46w",
+        "spya-x7n46w"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0022",
+        "n0023"
+      ],
+      "range": [
+        "spya-gefve6",
+        "spya-sgu686"
+      ],
+      "title": "The Practical Question",
+      "gist": "Fowler poses the utilitarian challenge of what practical good phrenology offers and promises to answer it by first grounding his case in physiology."
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-gefve6",
+        "spya-gefve6"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0021",
+      "children": [],
+      "range": [
+        "spya-sgu686",
+        "spya-sgu686"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0025",
+        "n0026",
+        "n0027"
+      ],
+      "range": [
+        "spya-a3vnb6",
+        "spya-eks7rr"
+      ],
+      "title": "Physiology's Foundation",
+      "gist": "Fowler argues that understanding physiological law is essential to health and that defective education leaves children's constitutions poorly formed."
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-a3vnb6",
+        "spya-a3vnb6"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-pjtqgn",
+        "spya-pjtqgn"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0024",
+      "children": [],
+      "range": [
+        "spya-eks7rr",
+        "spya-eks7rr"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 2,
+      "parent": "n0016",
+      "children": [
+        "n0029"
+      ],
+      "range": [
+        "spya-mnsz9f",
+        "spya-mnsz9f"
+      ],
+      "title": "Twelve Advantages of Phrenology",
+      "gist": "Fowler enumerates twelve distinct practical benefits phrenology offers, from self-knowledge to moral perfection."
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-mnsz9f",
+        "spya-mnsz9f"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0031",
+        "n0034",
+        "n0038",
+        "n0041",
+        "n0045"
+      ],
+      "range": [
+        "spya-v36sfm",
+        "spya-qfc8sn"
+      ],
+      "title": "Self-Knowledge and Human Diversity",
+      "gist": "Phrenology reveals each person's distinct mental strengths and weaknesses, explains natural variation among individuals, and shows how understanding one's capabilities enables growth within one's natural sphere."
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 2,
+      "parent": "n0030",
+      "children": [
+        "n0032",
+        "n0033"
+      ],
+      "range": [
+        "spya-v36sfm",
+        "spya-ceaznc"
+      ],
+      "title": "Understanding One's Own Mind",
+      "gist": "Phrenology grants self-knowledge by revealing the mind's discrete faculties and one's own particular strengths and weaknesses."
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-v36sfm",
+        "spya-v36sfm"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-ceaznc",
+        "spya-ceaznc"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 2,
+      "parent": "n0030",
+      "children": [
+        "n0035",
+        "n0036",
+        "n0037"
+      ],
+      "range": [
+        "spya-f0nqp5",
+        "spya-mk80vj"
+      ],
+      "title": "Reading Others' Character",
+      "gist": "Fowler illustrates through a prison inmate's case how phrenology explains others' unbalanced conduct and the advantage held by those who understand mental and physical function."
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-f0nqp5",
+        "spya-f0nqp5"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-g43qyv",
+        "spya-g43qyv"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-mk80vj",
+        "spya-mk80vj"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 2,
+      "parent": "n0030",
+      "children": [
+        "n0039",
+        "n0040"
+      ],
+      "range": [
+        "spya-vkneu2",
+        "spya-g73szb"
+      ],
+      "title": "Diversity Among Men",
+      "gist": "Physiology and phrenology together account for the wide variation in human character despite everyone sharing the same basic bodily structure."
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-vkneu2",
+        "spya-vkneu2"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-g73szb",
+        "spya-g73szb"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 2,
+      "parent": "n0030",
+      "children": [
+        "n0042",
+        "n0043",
+        "n0044"
+      ],
+      "range": [
+        "spya-ggxrg6",
+        "spya-jnn7tj"
+      ],
+      "title": "Capability and Discipline",
+      "gist": "Phrenology shows people their untapped capabilities, and harmonious exercise of all mental faculties produces greater and less fatiguing achievement than lopsided development."
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-ggxrg6",
+        "spya-ggxrg6"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-wqh3m3",
+        "spya-wqh3m3"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0041",
+      "children": [],
+      "range": [
+        "spya-jnn7tj",
+        "spya-jnn7tj"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 2,
+      "parent": "n0030",
+      "children": [
+        "n0046",
+        "n0047"
+      ],
+      "range": [
+        "spya-nrfeqx",
+        "spya-qfc8sn"
+      ],
+      "title": "Finding One's Natural Sphere",
+      "gist": "Fowler contends that people are naturally graded into different spheres and succeed best by working within, rather than beyond, their given organization."
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-nrfeqx",
+        "spya-nrfeqx"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0045",
+      "children": [],
+      "range": [
+        "spya-qfc8sn",
+        "spya-qfc8sn"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0049",
+        "n0051",
+        "n0053",
+        "n0057"
+      ],
+      "range": [
+        "spya-ercubu",
+        "spya-wmqbs9"
+      ],
+      "title": "Family and Domestic Guidance",
+      "gist": "Phrenology offers parents practical guidance for adopting children, hiring servants, and shaping their children's temperament and education."
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [
+        "n0050"
+      ],
+      "range": [
+        "spya-ercubu",
+        "spya-ercubu"
+      ],
+      "title": "Adopting Children",
+      "gist": "Fowler recounts using phrenological examination to help families choose children for adoption who match their household well."
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0049",
+      "children": [],
+      "range": [
+        "spya-ercubu",
+        "spya-ercubu"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [
+        "n0052"
+      ],
+      "range": [
+        "spya-h5sx7z",
+        "spya-h5sx7z"
+      ],
+      "title": "Choosing Servants",
+      "gist": "Fowler explains how specific head features indicate whether a servant will be reliable, tasteful, or naturally suited to childcare."
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 3,
+      "parent": "n0051",
+      "children": [],
+      "range": [
+        "spya-h5sx7z",
+        "spya-h5sx7z"
+      ],
+      "title": ""
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [
+        "n0054",
+        "n0055",
+        "n0056"
+      ],
+      "range": [
+        "spya-xwa8zn",
+        "spya-wrwmn0"
+      ],
+      "title": "Shaping Children's Temperament",
+      "gist": "Fowler argues parents can prevent faculties like Cautiousness or Destructiveness from becoming morbid by recognizing them early and responding with well-judged discipline rather than fear or force."
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-xwa8zn",
+        "spya-xwa8zn"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-gu7qy9",
+        "spya-gu7qy9"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 3,
+      "parent": "n0053",
+      "children": [],
+      "range": [
+        "spya-wrwmn0",
+        "spya-wrwmn0"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [
+        "n0058",
+        "n0059",
+        "n0060"
+      ],
+      "range": [
+        "spya-evqumc",
+        "spya-wmqbs9"
+      ],
+      "title": "Balancing Study and Health",
+      "gist": "Fowler shows through several cases that overtaxing a child's brain at the expense of physical exercise damages health, and that understanding a child's natural balance prevents such harm."
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 3,
+      "parent": "n0057",
+      "children": [],
+      "range": [
+        "spya-evqumc",
+        "spya-evqumc"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0057",
+      "children": [],
+      "range": [
+        "spya-d26tr5",
+        "spya-d26tr5"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0057",
+      "children": [],
+      "range": [
+        "spya-wmqbs9",
+        "spya-wmqbs9"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0062",
+        "n0064",
+        "n0068",
+        "n0073"
+      ],
+      "range": [
+        "spya-y7fuv5",
+        "spya-xytw0n"
+      ],
+      "title": "Professional Applications",
+      "gist": "Phrenology aids artists, physicians, and clergy in their work, a claim Fowler supports with testimonials from respected medical authorities."
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 2,
+      "parent": "n0061",
+      "children": [
+        "n0063"
+      ],
+      "range": [
+        "spya-y7fuv5",
+        "spya-y7fuv5"
+      ],
+      "title": "Artists",
+      "gist": "Fowler contends that painters who understand phrenological form can depict character and expression far more truthfully than those who do not."
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0062",
+      "children": [],
+      "range": [
+        "spya-y7fuv5",
+        "spya-y7fuv5"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 2,
+      "parent": "n0061",
+      "children": [
+        "n0065",
+        "n0066",
+        "n0067"
+      ],
+      "range": [
+        "spya-prrjgx",
+        "spya-hsrhdm"
+      ],
+      "title": "Physicians and Mental Illness",
+      "gist": "Fowler argues physicians would better treat patients by recognizing how a strong or morbid mind can resist or produce physical illness, illustrated by cases of willful resistance to treatment and lovesickness."
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-prrjgx",
+        "spya-prrjgx"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-gy8d5s",
+        "spya-gy8d5s"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0064",
+      "children": [],
+      "range": [
+        "spya-hsrhdm",
+        "spya-hsrhdm"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 2,
+      "parent": "n0061",
+      "children": [
+        "n0069",
+        "n0070",
+        "n0071",
+        "n0072"
+      ],
+      "range": [
+        "spya-gvaz7g",
+        "spya-ft50z5"
+      ],
+      "title": "Medical Testimonials",
+      "gist": "Fowler cites prominent physicians, including Vimont, Gregory, Elliotson, and Ellis, who each affirm phrenology's scientific validity and clinical usefulness."
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0068",
+      "children": [],
+      "range": [
+        "spya-gvaz7g",
+        "spya-gvaz7g"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0068",
+      "children": [],
+      "range": [
+        "spya-pepu00",
+        "spya-pepu00"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 3,
+      "parent": "n0068",
+      "children": [],
+      "range": [
+        "spya-ctuev9",
+        "spya-ctuev9"
+      ],
+      "title": ""
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0068",
+      "children": [],
+      "range": [
+        "spya-ft50z5",
+        "spya-ft50z5"
+      ],
+      "title": ""
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 2,
+      "parent": "n0061",
+      "children": [
+        "n0074",
+        "n0075"
+      ],
+      "range": [
+        "spya-p20xmy",
+        "spya-xytw0n"
+      ],
+      "title": "Clerical Testimonials",
+      "gist": "Fowler argues clergy benefit from phrenology in adapting their preaching, supported by testimonials from Beecher, Whately, and Chalmers."
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 3,
+      "parent": "n0073",
+      "children": [],
+      "range": [
+        "spya-p20xmy",
+        "spya-p20xmy"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0073",
+      "children": [],
+      "range": [
+        "spya-xytw0n",
+        "spya-xytw0n"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0077",
+        "n0079",
+        "n0083",
+        "n0085"
+      ],
+      "range": [
+        "spya-jjfbqh",
+        "spya-y546et"
+      ],
+      "title": "Law, Society and Morality",
+      "gist": "Phrenology clarifies moral responsibility in crime and legislation, and testimonials confirm its value to lawmakers and society at large."
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 2,
+      "parent": "n0076",
+      "children": [
+        "n0078"
+      ],
+      "range": [
+        "spya-jjfbqh",
+        "spya-jjfbqh"
+      ],
+      "title": "Faculties and Their Perversion",
+      "gist": "Fowler explains that every mental faculty is good in itself but becomes harmful when exercised in excess, illustrated by the financier Hudson's unchecked acquisitiveness."
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0077",
+      "children": [],
+      "range": [
+        "spya-jjfbqh",
+        "spya-jjfbqh"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 2,
+      "parent": "n0076",
+      "children": [
+        "n0080",
+        "n0081",
+        "n0082"
+      ],
+      "range": [
+        "spya-w96ma7",
+        "spya-znx7mw"
+      ],
+      "title": "Judging Crime and Character",
+      "gist": "Fowler argues courts should weigh an offender's phrenological organization when assessing guilt, citing cases of a reprieved boy, a controlled convict, and a stubborn juror."
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-w96ma7",
+        "spya-w96ma7"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-n2fmf0",
+        "spya-n2fmf0"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 3,
+      "parent": "n0079",
+      "children": [],
+      "range": [
+        "spya-znx7mw",
+        "spya-znx7mw"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 2,
+      "parent": "n0076",
+      "children": [
+        "n0084"
+      ],
+      "range": [
+        "spya-erz73v",
+        "spya-erz73v"
+      ],
+      "title": "Factory Legislation",
+      "gist": "Fowler credits growing awareness of body-mind relations with prompting Parliament's protective laws for factory children."
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0083",
+      "children": [],
+      "range": [
+        "spya-erz73v",
+        "spya-erz73v"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 2,
+      "parent": "n0076",
+      "children": [
+        "n0086",
+        "n0087",
+        "n0088"
+      ],
+      "range": [
+        "spya-wc3s5z",
+        "spya-y546et"
+      ],
+      "title": "Testimonials on Law and Happiness",
+      "gist": "Educators and scientists testify that phrenology guides better legislation and reveals that genuine happiness requires the harmonious exercise of all faculties."
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-wc3s5z",
+        "spya-wc3s5z"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-kv6zv7",
+        "spya-kv6zv7"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 3,
+      "parent": "n0085",
+      "children": [],
+      "range": [
+        "spya-y546et",
+        "spya-y546et"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0090",
+        "n0092",
+        "n0095",
+        "n0100",
+        "n0103",
+        "n0107"
+      ],
+      "range": [
+        "spya-drpthy",
+        "spya-wjrymt"
+      ],
+      "title": "Character, Vocation and Success",
+      "gist": "Fowler applies phrenology to marriage, personal weakness, business success, and vocational fit, concluding that true perfection requires harmonious development of the whole mind."
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 2,
+      "parent": "n0089",
+      "children": [
+        "n0091"
+      ],
+      "range": [
+        "spya-drpthy",
+        "spya-drpthy"
+      ],
+      "title": "Choosing a Companion",
+      "gist": "Fowler argues phrenological compatibility is essential to marital happiness, illustrated by a cautionary tale of an ill-matched elopement."
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0090",
+      "children": [],
+      "range": [
+        "spya-drpthy",
+        "spya-drpthy"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 2,
+      "parent": "n0089",
+      "children": [
+        "n0093",
+        "n0094"
+      ],
+      "range": [
+        "spya-t8f80r",
+        "spya-ne78jx"
+      ],
+      "title": "Strength and Weakness in Character",
+      "gist": "Fowler observes that even the greatest individuals carry notable flaws, and that true virtue is proven only when tested by temptation."
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-t8f80r",
+        "spya-t8f80r"
+      ],
+      "title": ""
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-ne78jx",
+        "spya-ne78jx"
+      ],
+      "title": ""
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 2,
+      "parent": "n0089",
+      "children": [
+        "n0096",
+        "n0097",
+        "n0098",
+        "n0099"
+      ],
+      "range": [
+        "spya-b5sg0c",
+        "spya-xvrxss"
+      ],
+      "title": "Causes of Business Failure",
+      "gist": "Fowler attributes many business failures to mismatched mental qualifications, feeble minds, or being pushed into unsuitable vocations."
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 3,
+      "parent": "n0095",
+      "children": [],
+      "range": [
+        "spya-b5sg0c",
+        "spya-b5sg0c"
+      ],
+      "title": ""
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 3,
+      "parent": "n0095",
+      "children": [],
+      "range": [
+        "spya-r7gs4x",
+        "spya-r7gs4x"
+      ],
+      "title": ""
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0095",
+      "children": [],
+      "range": [
+        "spya-ryb8q9",
+        "spya-ryb8q9"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 3,
+      "parent": "n0095",
+      "children": [],
+      "range": [
+        "spya-xvrxss",
+        "spya-xvrxss"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 2,
+      "parent": "n0089",
+      "children": [
+        "n0101",
+        "n0102"
+      ],
+      "range": [
+        "spya-dht7a3",
+        "spya-dxzfn8"
+      ],
+      "title": "Vocational Mismatch",
+      "gist": "Fowler recounts a mother's refusal to accept that her son's phrenological gifts suited mechanics rather than the clergy she desired for him."
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 3,
+      "parent": "n0100",
+      "children": [],
+      "range": [
+        "spya-dht7a3",
+        "spya-dht7a3"
+      ],
+      "title": ""
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0100",
+      "children": [],
+      "range": [
+        "spya-dxzfn8",
+        "spya-dxzfn8"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 2,
+      "parent": "n0089",
+      "children": [
+        "n0104",
+        "n0105",
+        "n0106"
+      ],
+      "range": [
+        "spya-ghg5yq",
+        "spya-hq7xcd"
+      ],
+      "title": "Planning, Effort and Timing",
+      "gist": "Fowler contends that success requires not just hard work but sound planning, sustainable effort, and seizing the right moment."
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-ghg5yq",
+        "spya-ghg5yq"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-ynfe46",
+        "spya-ynfe46"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 3,
+      "parent": "n0103",
+      "children": [],
+      "range": [
+        "spya-hq7xcd",
+        "spya-hq7xcd"
+      ],
+      "title": ""
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 2,
+      "parent": "n0089",
+      "children": [
+        "n0108",
+        "n0109"
+      ],
+      "range": [
+        "spya-t44h4r",
+        "spya-wjrymt"
+      ],
+      "title": "Purpose and Perfection",
+      "gist": "Fowler concludes that humans are designed for purposeful development of every faculty, and that persisting in true principles despite opposition leads toward perfection."
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 3,
+      "parent": "n0107",
+      "children": [],
+      "range": [
+        "spya-t44h4r",
+        "spya-t44h4r"
+      ],
+      "title": ""
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 3,
+      "parent": "n0107",
+      "children": [],
+      "range": [
+        "spya-wjrymt",
+        "spya-wjrymt"
+      ],
+      "title": ""
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0111",
+        "n0113"
+      ],
+      "range": [
+        "spya-gd9a45",
+        "spya-rn6cbv"
+      ],
+      "title": "Publisher and Catalogue Data",
+      "gist": "The closing pages record the publisher's imprint and archival cataloguing details."
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 2,
+      "parent": "n0110",
+      "children": [
+        "n0112"
+      ],
+      "range": [
+        "spya-gd9a45",
+        "spya-gd9a45"
+      ],
+      "title": "Publisher Imprint",
+      "gist": "The pamphlet was printed by W. Tweedie at 337 Strand, London."
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 3,
+      "parent": "n0111",
+      "children": [],
+      "range": [
+        "spya-gd9a45",
+        "spya-gd9a45"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 2,
+      "parent": "n0110",
+      "children": [
+        "n0114",
+        "n0115"
+      ],
+      "range": [
+        "spya-e7t74k",
+        "spya-rn6cbv"
+      ],
+      "title": "Catalogue Record",
+      "gist": "A closing image and shelfmark-style code serve as archival cataloguing metadata for the digitised copy."
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-e7t74k",
+        "spya-e7t74k"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 3,
+      "parent": "n0113",
+      "children": [],
+      "range": [
+        "spya-rn6cbv",
+        "spya-rn6cbv"
+      ],
+      "title": ""
+    }
+  }
+}

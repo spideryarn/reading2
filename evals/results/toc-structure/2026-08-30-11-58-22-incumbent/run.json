@@ -1,0 +1,238 @@
+{
+  "startedAt": "2026-08-30T11:58:22.339Z",
+  "commit": "a63a5592ad5228bb41cd9f0478aeb213c11fdc7f",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "high"
+      },
+      "seed": "none"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "writes",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 19
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            37,
+            243,
+            96,
+            114,
+            71
+          ],
+          "balanceCv": 0.6267669663289911
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 2,
+          "max": 5,
+          "within5to9": 0.05555555555555555
+        },
+        "headings": {
+          "boundaries": 11,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.1111111111111111,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 18,
+          "meanWords": 3.2222222222222223,
+          "within2to6": 0.9444444444444444,
+          "copiedHeadings": 3,
+          "retention": 0.45555555555555555
+        },
+        "gists": {
+          "count": 18,
+          "coverage": 1,
+          "meanWords": 20.38888888888889,
+          "multiSentence": 0,
+          "templateRepetition": 0.3333333333333333,
+          "retention": 0.3511413740580407
+        }
+      },
+      "calls": [
+        {
+          "ms": 51664,
+          "inputTokens": 2035,
+          "outputTokens": 5457,
+          "reasoningTokens": 3654,
+          "generationId": "gen-1788091104-YRf6EQxg7yOlDjRTRSW9",
+          "costUsd": 0.05864,
+          "providerCostUsd": 0.05864
+        }
+      ],
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 4,
+        "l1Boundaries": 0.75,
+        "allBoundaries": 1,
+        "boundaryDistance": {
+          "mean": 0,
+          "within1Block": 1
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "writes",
+      "run": 2,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "ok",
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "fragmentBlocks": 0,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 18
+        },
+        "parts": {
+          "count": 5,
+          "words": [
+            37,
+            243,
+            125,
+            85,
+            71
+          ],
+          "balanceCv": 0.6348013797829222
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 2.125,
+          "max": 5,
+          "within5to9": 0.0625
+        },
+        "headings": {
+          "boundaries": 9,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.0625,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 16,
+          "meanWords": 3,
+          "within2to6": 0.9375,
+          "copiedHeadings": 1,
+          "retention": 0.3444444444444444
+        },
+        "gists": {
+          "count": 16,
+          "coverage": 1,
+          "meanWords": 19.9375,
+          "multiSentence": 0,
+          "templateRepetition": 0.1875,
+          "retention": 0.31248959373959373
+        }
+      },
+      "calls": [
+        {
+          "ms": 52145,
+          "inputTokens": 2035,
+          "outputTokens": 5447,
+          "reasoningTokens": 3781,
+          "generationId": "gen-1788091154-DlS6gj9P6DzFiBfdItcI",
+          "costUsd": 0.05854,
+          "providerCostUsd": 0.05854
+        }
+      ],
+      "vsDisk": {
+        "partCountA": 5,
+        "partCountB": 4,
+        "l1Boundaries": 0.75,
+        "allBoundaries": 0.6666666666666666,
+        "boundaryDistance": {
+          "mean": 0.2,
+          "within1Block": 1
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "writes",
+      "run": 3,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "outcome": "threw",
+      "error": "The children of the node at root do not tile it: child 1 leaves a gap of 1 block(s). Children must cover their parent in order, with no gaps and no overlaps — an overlap grows two leaves for one paragraph, and a gap grows none.",
+      "calls": [
+        {
+          "ms": 47417,
+          "inputTokens": 2035,
+          "outputTokens": 5077,
+          "reasoningTokens": 3322,
+          "generationId": "gen-1788091206-N0GXyX9oGKZN6EIqeNW1",
+          "costUsd": 0.05484,
+          "providerCostUsd": 0.05484
+        }
+      ]
+    }
+  ]
+}

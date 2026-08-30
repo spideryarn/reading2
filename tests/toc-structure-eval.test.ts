@@ -758,3 +758,34 @@ describe("buildHeadingTree", () => {
     expect(compareTrees(blocks, a.tree, b.tree).allBoundaries).toBe(1);
   });
 });
+
+describe("throwAnatomy", () => {
+  it("pulls kind, size and depth out of the tiling messages verbatim", async () => {
+    const { throwAnatomy } = await import("../evals/toc-structure/floor.js");
+    expect(
+      throwAnatomy(
+        "The children of the node at root > child 2 do not tile it: child 1 leaves a gap of 1 block(s). Children must cover…",
+      ),
+    ).toEqual({ kind: "gap", size: 1, depth: 1 });
+    expect(
+      throwAnatomy(
+        "The children of the node at root > child 3 > child 4 do not tile it: child 2 overlaps the one before it by 5 block(s).",
+      ),
+    ).toEqual({ kind: "overlap", size: 5, depth: 2 });
+    expect(
+      throwAnatomy("The children of the node at root stop 3 block(s) before it ends. Those paragraphs…"),
+    ).toEqual({ kind: "short-at-end", size: 3, depth: 0 });
+  });
+
+  it("a reworded message becomes unparsed, never zero and never a keyword-fished bin", async () => {
+    // The control: if assertChildrenPartition's wording drifts, the count must
+    // move to `unparsed` rather than to "no tiling failures" - a parser going
+    // quiet is the exact shape this repo keeps writing postmortems about.
+    const { throwAnatomy } = await import("../evals/toc-structure/floor.js");
+    const reworded =
+      "The node at root > child 2 is not tiled by its children: a gap of 1 block was left by child 1.";
+    expect(throwAnatomy(reworded)).toEqual({ kind: "unparsed", size: null, depth: null });
+    // A different failure entirely - also unparsed, not silently binned.
+    expect(throwAnatomy("the model refused the structure request").kind).toBe("unparsed");
+  });
+});

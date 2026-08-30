@@ -1,0 +1,2205 @@
+{
+  "version": "eval/headings-1",
+  "generator": "deterministic-headings",
+  "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0032",
+        "n0048",
+        "n0071",
+        "n0093",
+        "n0122",
+        "n0150",
+        "n0161"
+      ],
+      "range": [
+        "spya-ggddd7",
+        "spya-esw6mn"
+      ],
+      "title": "What If We Had Bigger Brains? Imagining Minds beyond Ours"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008",
+        "n0009",
+        "n0010",
+        "n0011",
+        "n0012",
+        "n0013",
+        "n0014",
+        "n0015",
+        "n0016",
+        "n0017",
+        "n0018",
+        "n0019",
+        "n0020",
+        "n0021",
+        "n0022",
+        "n0023",
+        "n0024",
+        "n0025",
+        "n0026",
+        "n0027",
+        "n0028",
+        "n0029",
+        "n0030",
+        "n0031"
+      ],
+      "range": [
+        "spya-ggddd7",
+        "spya-qxf0ha"
+      ],
+      "title": "What If We Had Bigger Brains? Imagining Minds beyond Ours",
+      "sourceHeading": "What If We Had Bigger Brains? Imagining Minds beyond Ours"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-ggddd7",
+        "spya-ggddd7"
+      ],
+      "title": "",
+      "navLabel": "What If We Had Bigger Brains? Imagining Minds beyond Ours"
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-b0rdgq",
+        "spya-b0rdgq"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-cww0tb",
+        "spya-cww0tb"
+      ],
+      "title": "",
+      "navLabel": "Cats Don’t Talk"
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-pt9mue",
+        "spya-pt9mue"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-wwr52y",
+        "spya-wwr52y"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-trvnzr",
+        "spya-trvnzr"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-nuazy9",
+        "spya-nuazy9"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-jvv6qx",
+        "spya-jvv6qx"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-sfspww",
+        "spya-sfspww"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-xpafp8",
+        "spya-xpafp8"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-m3pw0w",
+        "spya-m3pw0w"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-edp54m",
+        "spya-edp54m"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-ydm67n",
+        "spya-ydm67n"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-hbq563",
+        "spya-hbq563"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-ntn8kj",
+        "spya-ntn8kj"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-swsmvr",
+        "spya-swsmvr"
+      ],
+      "title": ""
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-e4ztb6",
+        "spya-e4ztb6"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-z3e276",
+        "spya-z3e276"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-vr5u25",
+        "spya-vr5u25"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-yemwu2",
+        "spya-yemwu2"
+      ],
+      "title": ""
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-kqzz3f",
+        "spya-kqzz3f"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-e9nsux",
+        "spya-e9nsux"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-whe7d5",
+        "spya-whe7d5"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-zqjcca",
+        "spya-zqjcca"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-zjwygn",
+        "spya-zjwygn"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-ah8e8m",
+        "spya-ah8e8m"
+      ],
+      "title": ""
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-we8btx",
+        "spya-we8btx"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-xwuhuj",
+        "spya-xwuhuj"
+      ],
+      "title": ""
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [],
+      "range": [
+        "spya-qxf0ha",
+        "spya-qxf0ha"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0033",
+        "n0034",
+        "n0035",
+        "n0036",
+        "n0037",
+        "n0038",
+        "n0039",
+        "n0040",
+        "n0041",
+        "n0042",
+        "n0043",
+        "n0044",
+        "n0045",
+        "n0046",
+        "n0047"
+      ],
+      "range": [
+        "spya-jwf0yd",
+        "spya-kv8dbv"
+      ],
+      "title": "How Brains Seem to Work",
+      "sourceHeading": "How Brains Seem to Work"
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-jwf0yd",
+        "spya-jwf0yd"
+      ],
+      "title": "",
+      "navLabel": "How Brains Seem to Work"
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-fjr8vc",
+        "spya-fjr8vc"
+      ],
+      "title": ""
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-s8ynn7",
+        "spya-s8ynn7"
+      ],
+      "title": ""
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-x4u77s",
+        "spya-x4u77s"
+      ],
+      "title": ""
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-h99ryy",
+        "spya-h99ryy"
+      ],
+      "title": ""
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-fgkc28",
+        "spya-fgkc28"
+      ],
+      "title": ""
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-jsbyge",
+        "spya-jsbyge"
+      ],
+      "title": ""
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-r8zz8r",
+        "spya-r8zz8r"
+      ],
+      "title": ""
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-h2qy4w",
+        "spya-h2qy4w"
+      ],
+      "title": ""
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-mt2hsg",
+        "spya-mt2hsg"
+      ],
+      "title": ""
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-q3u8u3",
+        "spya-q3u8u3"
+      ],
+      "title": ""
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-gacfb5",
+        "spya-gacfb5"
+      ],
+      "title": ""
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-fq64gh",
+        "spya-fq64gh"
+      ],
+      "title": ""
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-ctptbg",
+        "spya-ctptbg"
+      ],
+      "title": ""
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 2,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-kv8dbv",
+        "spya-kv8dbv"
+      ],
+      "title": ""
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0049",
+        "n0050",
+        "n0051",
+        "n0052",
+        "n0053",
+        "n0054",
+        "n0055",
+        "n0056",
+        "n0057",
+        "n0058",
+        "n0059",
+        "n0060",
+        "n0061",
+        "n0062",
+        "n0063",
+        "n0064",
+        "n0065",
+        "n0066",
+        "n0067",
+        "n0068",
+        "n0069",
+        "n0070"
+      ],
+      "range": [
+        "spya-s2jq3n",
+        "spya-xes22w"
+      ],
+      "title": "Language and Beyond",
+      "sourceHeading": "Language and Beyond"
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-s2jq3n",
+        "spya-s2jq3n"
+      ],
+      "title": "",
+      "navLabel": "Language and Beyond"
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-tptc5e",
+        "spya-tptc5e"
+      ],
+      "title": ""
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-gusts0",
+        "spya-gusts0"
+      ],
+      "title": ""
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-m9t2fj",
+        "spya-m9t2fj"
+      ],
+      "title": ""
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-z04633",
+        "spya-z04633"
+      ],
+      "title": ""
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-xh7hkb",
+        "spya-xh7hkb"
+      ],
+      "title": ""
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-ndqp7u",
+        "spya-ndqp7u"
+      ],
+      "title": ""
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-rewaa7",
+        "spya-rewaa7"
+      ],
+      "title": ""
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-mkv55b",
+        "spya-mkv55b"
+      ],
+      "title": ""
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-rpgx2n",
+        "spya-rpgx2n"
+      ],
+      "title": ""
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-tc908j",
+        "spya-tc908j"
+      ],
+      "title": ""
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-qmwc7v",
+        "spya-qmwc7v"
+      ],
+      "title": ""
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-km5vw7",
+        "spya-km5vw7"
+      ],
+      "title": ""
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-nva7qn",
+        "spya-nva7qn"
+      ],
+      "title": ""
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-cdfg62",
+        "spya-cdfg62"
+      ],
+      "title": ""
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-xjjg2x",
+        "spya-xjjg2x"
+      ],
+      "title": ""
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-fjsufk",
+        "spya-fjsufk"
+      ],
+      "title": ""
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-qupbyh",
+        "spya-qupbyh"
+      ],
+      "title": ""
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-tuc5hf",
+        "spya-tuc5hf"
+      ],
+      "title": ""
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-jr3d7p",
+        "spya-jr3d7p"
+      ],
+      "title": ""
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-bt5rja",
+        "spya-bt5rja"
+      ],
+      "title": ""
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 2,
+      "parent": "n0048",
+      "children": [],
+      "range": [
+        "spya-xes22w",
+        "spya-xes22w"
+      ],
+      "title": ""
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0072",
+        "n0073",
+        "n0074",
+        "n0075",
+        "n0076",
+        "n0077",
+        "n0078",
+        "n0079",
+        "n0080",
+        "n0081",
+        "n0082",
+        "n0083",
+        "n0084",
+        "n0085",
+        "n0086",
+        "n0087",
+        "n0088",
+        "n0089",
+        "n0090",
+        "n0091",
+        "n0092"
+      ],
+      "range": [
+        "spya-hegt9g",
+        "spya-j58zns"
+      ],
+      "title": "Sensors and Actuators",
+      "sourceHeading": "Sensors and Actuators"
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-hegt9g",
+        "spya-hegt9g"
+      ],
+      "title": "",
+      "navLabel": "Sensors and Actuators"
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-nwtjxr",
+        "spya-nwtjxr"
+      ],
+      "title": ""
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-cd8x4r",
+        "spya-cd8x4r"
+      ],
+      "title": ""
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-qypx5a",
+        "spya-qypx5a"
+      ],
+      "title": ""
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-pmsvnn",
+        "spya-pmsvnn"
+      ],
+      "title": ""
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-w6sx4x",
+        "spya-w6sx4x"
+      ],
+      "title": ""
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-ksdnua",
+        "spya-ksdnua"
+      ],
+      "title": ""
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-ahj4g5",
+        "spya-ahj4g5"
+      ],
+      "title": ""
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-d00qem",
+        "spya-d00qem"
+      ],
+      "title": ""
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-y6q2x0",
+        "spya-y6q2x0"
+      ],
+      "title": ""
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-xzd08g",
+        "spya-xzd08g"
+      ],
+      "title": ""
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-hgcr4e",
+        "spya-hgcr4e"
+      ],
+      "title": ""
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-d22efp",
+        "spya-d22efp"
+      ],
+      "title": ""
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-bn426e",
+        "spya-bn426e"
+      ],
+      "title": ""
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-bpqvb4",
+        "spya-bpqvb4"
+      ],
+      "title": ""
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-yav8zw",
+        "spya-yav8zw"
+      ],
+      "title": ""
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-ujf8m0",
+        "spya-ujf8m0"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-nu9ffa",
+        "spya-nu9ffa"
+      ],
+      "title": ""
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-x94dru",
+        "spya-x94dru"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-cs26gx",
+        "spya-cs26gx"
+      ],
+      "title": ""
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 2,
+      "parent": "n0071",
+      "children": [],
+      "range": [
+        "spya-j58zns",
+        "spya-j58zns"
+      ],
+      "title": ""
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0094",
+        "n0095",
+        "n0096",
+        "n0097",
+        "n0098",
+        "n0099",
+        "n0100",
+        "n0101",
+        "n0102",
+        "n0103",
+        "n0104",
+        "n0105",
+        "n0106",
+        "n0107",
+        "n0108",
+        "n0109",
+        "n0110",
+        "n0111",
+        "n0112",
+        "n0113",
+        "n0114",
+        "n0115",
+        "n0116",
+        "n0117",
+        "n0118",
+        "n0119",
+        "n0120",
+        "n0121"
+      ],
+      "range": [
+        "spya-q89quq",
+        "spya-s5yryh"
+      ],
+      "title": "Abstraction",
+      "sourceHeading": "Abstraction"
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-q89quq",
+        "spya-q89quq"
+      ],
+      "title": "",
+      "navLabel": "Abstraction"
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-bgfqzj",
+        "spya-bgfqzj"
+      ],
+      "title": ""
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-qpq2wm",
+        "spya-qpq2wm"
+      ],
+      "title": ""
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-amyy4p",
+        "spya-amyy4p"
+      ],
+      "title": ""
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-a86xzy",
+        "spya-a86xzy"
+      ],
+      "title": ""
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-ndfzjb",
+        "spya-ndfzjb"
+      ],
+      "title": ""
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-gsvw86",
+        "spya-gsvw86"
+      ],
+      "title": ""
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-u37nta",
+        "spya-u37nta"
+      ],
+      "title": ""
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-u4cc7t",
+        "spya-u4cc7t"
+      ],
+      "title": ""
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-vues0n",
+        "spya-vues0n"
+      ],
+      "title": ""
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-yqw7fs",
+        "spya-yqw7fs"
+      ],
+      "title": ""
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-tvs87q",
+        "spya-tvs87q"
+      ],
+      "title": ""
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-eghgfs",
+        "spya-eghgfs"
+      ],
+      "title": ""
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-jhukrv",
+        "spya-jhukrv"
+      ],
+      "title": ""
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-te50g2",
+        "spya-te50g2"
+      ],
+      "title": ""
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-keh0av",
+        "spya-keh0av"
+      ],
+      "title": ""
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-uexb3v",
+        "spya-uexb3v"
+      ],
+      "title": ""
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-ytnfna",
+        "spya-ytnfna"
+      ],
+      "title": ""
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-e3zvxf",
+        "spya-e3zvxf"
+      ],
+      "title": ""
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-wnw2bs",
+        "spya-wnw2bs"
+      ],
+      "title": ""
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-er4eef",
+        "spya-er4eef"
+      ],
+      "title": ""
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-uxdtzt",
+        "spya-uxdtzt"
+      ],
+      "title": ""
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-nsfztw",
+        "spya-nsfztw"
+      ],
+      "title": ""
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-gwz6e9",
+        "spya-gwz6e9"
+      ],
+      "title": ""
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-r5c9yf",
+        "spya-r5c9yf"
+      ],
+      "title": ""
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-u7wfbb",
+        "spya-u7wfbb"
+      ],
+      "title": ""
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-twp66z",
+        "spya-twp66z"
+      ],
+      "title": ""
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 2,
+      "parent": "n0093",
+      "children": [],
+      "range": [
+        "spya-s5yryh",
+        "spya-s5yryh"
+      ],
+      "title": ""
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0123",
+        "n0124",
+        "n0125",
+        "n0126",
+        "n0127",
+        "n0128",
+        "n0129",
+        "n0130",
+        "n0131",
+        "n0132",
+        "n0133",
+        "n0134",
+        "n0135",
+        "n0136",
+        "n0137",
+        "n0138",
+        "n0139",
+        "n0140",
+        "n0141",
+        "n0142",
+        "n0143",
+        "n0144",
+        "n0145",
+        "n0146",
+        "n0147",
+        "n0148",
+        "n0149"
+      ],
+      "range": [
+        "spya-rgwtt8",
+        "spya-x7tcub"
+      ],
+      "title": "Computational Language",
+      "sourceHeading": "Computational Language"
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-rgwtt8",
+        "spya-rgwtt8"
+      ],
+      "title": "",
+      "navLabel": "Computational Language"
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-ma454e",
+        "spya-ma454e"
+      ],
+      "title": ""
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-hvvjg5",
+        "spya-hvvjg5"
+      ],
+      "title": ""
+    },
+    "n0126": {
+      "id": "n0126",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-jkm3qu",
+        "spya-jkm3qu"
+      ],
+      "title": ""
+    },
+    "n0127": {
+      "id": "n0127",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-j6kvr8",
+        "spya-j6kvr8"
+      ],
+      "title": ""
+    },
+    "n0128": {
+      "id": "n0128",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-hbvhmd",
+        "spya-hbvhmd"
+      ],
+      "title": ""
+    },
+    "n0129": {
+      "id": "n0129",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-z5t6vt",
+        "spya-z5t6vt"
+      ],
+      "title": ""
+    },
+    "n0130": {
+      "id": "n0130",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-pysnkp",
+        "spya-pysnkp"
+      ],
+      "title": ""
+    },
+    "n0131": {
+      "id": "n0131",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-xjq2ht",
+        "spya-xjq2ht"
+      ],
+      "title": ""
+    },
+    "n0132": {
+      "id": "n0132",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-ms3en8",
+        "spya-ms3en8"
+      ],
+      "title": ""
+    },
+    "n0133": {
+      "id": "n0133",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-mp0ew3",
+        "spya-mp0ew3"
+      ],
+      "title": ""
+    },
+    "n0134": {
+      "id": "n0134",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-andswz",
+        "spya-andswz"
+      ],
+      "title": ""
+    },
+    "n0135": {
+      "id": "n0135",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-jyjuwc",
+        "spya-jyjuwc"
+      ],
+      "title": ""
+    },
+    "n0136": {
+      "id": "n0136",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-fjgavc",
+        "spya-fjgavc"
+      ],
+      "title": ""
+    },
+    "n0137": {
+      "id": "n0137",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-g0r7gj",
+        "spya-g0r7gj"
+      ],
+      "title": ""
+    },
+    "n0138": {
+      "id": "n0138",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-ghdas3",
+        "spya-ghdas3"
+      ],
+      "title": ""
+    },
+    "n0139": {
+      "id": "n0139",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-p5e4ag",
+        "spya-p5e4ag"
+      ],
+      "title": ""
+    },
+    "n0140": {
+      "id": "n0140",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-rgw4gs",
+        "spya-rgw4gs"
+      ],
+      "title": ""
+    },
+    "n0141": {
+      "id": "n0141",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-dfecw6",
+        "spya-dfecw6"
+      ],
+      "title": ""
+    },
+    "n0142": {
+      "id": "n0142",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-wewr27",
+        "spya-wewr27"
+      ],
+      "title": ""
+    },
+    "n0143": {
+      "id": "n0143",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-yef2rd",
+        "spya-yef2rd"
+      ],
+      "title": ""
+    },
+    "n0144": {
+      "id": "n0144",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-jfx9d8",
+        "spya-jfx9d8"
+      ],
+      "title": ""
+    },
+    "n0145": {
+      "id": "n0145",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-y002vk",
+        "spya-y002vk"
+      ],
+      "title": ""
+    },
+    "n0146": {
+      "id": "n0146",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-naca80",
+        "spya-naca80"
+      ],
+      "title": ""
+    },
+    "n0147": {
+      "id": "n0147",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-e0jyj9",
+        "spya-e0jyj9"
+      ],
+      "title": ""
+    },
+    "n0148": {
+      "id": "n0148",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-d6tnrq",
+        "spya-d6tnrq"
+      ],
+      "title": ""
+    },
+    "n0149": {
+      "id": "n0149",
+      "depth": 2,
+      "parent": "n0122",
+      "children": [],
+      "range": [
+        "spya-x7tcub",
+        "spya-x7tcub"
+      ],
+      "title": ""
+    },
+    "n0150": {
+      "id": "n0150",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0151",
+        "n0152",
+        "n0153",
+        "n0154",
+        "n0155",
+        "n0156",
+        "n0157",
+        "n0158",
+        "n0159",
+        "n0160"
+      ],
+      "range": [
+        "spya-jqdh5x",
+        "spya-r7dck0"
+      ],
+      "title": "Many Brains Together: The Formation of Society",
+      "sourceHeading": "Many Brains Together: The Formation of Society"
+    },
+    "n0151": {
+      "id": "n0151",
+      "depth": 2,
+      "parent": "n0150",
+      "children": [],
+      "range": [
+        "spya-jqdh5x",
+        "spya-jqdh5x"
+      ],
+      "title": "",
+      "navLabel": "Many Brains Together: The Formation of Society"
+    },
+    "n0152": {
+      "id": "n0152",
+      "depth": 2,
+      "parent": "n0150",
+      "children": [],
+      "range": [
+        "spya-hzfgzn",
+        "spya-hzfgzn"
+      ],
+      "title": ""
+    },
+    "n0153": {
+      "id": "n0153",
+      "depth": 2,
+      "parent": "n0150",
+      "children": [],
+      "range": [
+        "spya-f59wk7",
+        "spya-f59wk7"
+      ],
+      "title": ""
+    },
+    "n0154": {
+      "id": "n0154",
+      "depth": 2,
+      "parent": "n0150",
+      "children": [],
+      "range": [
+        "spya-u8ddj5",
+        "spya-u8ddj5"
+      ],
+      "title": ""
+    },
+    "n0155": {
+      "id": "n0155",
+      "depth": 2,
+      "parent": "n0150",
+      "children": [],
+      "range": [
+        "spya-zkwpe3",
+        "spya-zkwpe3"
+      ],
+      "title": ""
+    },
+    "n0156": {
+      "id": "n0156",
+      "depth": 2,
+      "parent": "n0150",
+      "children": [],
+      "range": [
+        "spya-s0q4kx",
+        "spya-s0q4kx"
+      ],
+      "title": ""
+    },
+    "n0157": {
+      "id": "n0157",
+      "depth": 2,
+      "parent": "n0150",
+      "children": [],
+      "range": [
+        "spya-dvt3xm",
+        "spya-dvt3xm"
+      ],
+      "title": ""
+    },
+    "n0158": {
+      "id": "n0158",
+      "depth": 2,
+      "parent": "n0150",
+      "children": [],
+      "range": [
+        "spya-dv5q20",
+        "spya-dv5q20"
+      ],
+      "title": ""
+    },
+    "n0159": {
+      "id": "n0159",
+      "depth": 2,
+      "parent": "n0150",
+      "children": [],
+      "range": [
+        "spya-rwtere",
+        "spya-rwtere"
+      ],
+      "title": ""
+    },
+    "n0160": {
+      "id": "n0160",
+      "depth": 2,
+      "parent": "n0150",
+      "children": [],
+      "range": [
+        "spya-r7dck0",
+        "spya-r7dck0"
+      ],
+      "title": ""
+    },
+    "n0161": {
+      "id": "n0161",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0162",
+        "n0163",
+        "n0164",
+        "n0165",
+        "n0166",
+        "n0167",
+        "n0168",
+        "n0169",
+        "n0170",
+        "n0171",
+        "n0172",
+        "n0173",
+        "n0174",
+        "n0175",
+        "n0176",
+        "n0177",
+        "n0178",
+        "n0179",
+        "n0180",
+        "n0181"
+      ],
+      "range": [
+        "spya-jsae06",
+        "spya-esw6mn"
+      ],
+      "title": "Minds beyond Ours",
+      "sourceHeading": "Minds beyond Ours"
+    },
+    "n0162": {
+      "id": "n0162",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-jsae06",
+        "spya-jsae06"
+      ],
+      "title": "",
+      "navLabel": "Minds beyond Ours"
+    },
+    "n0163": {
+      "id": "n0163",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-hvf3h0",
+        "spya-hvf3h0"
+      ],
+      "title": ""
+    },
+    "n0164": {
+      "id": "n0164",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-fb2v63",
+        "spya-fb2v63"
+      ],
+      "title": ""
+    },
+    "n0165": {
+      "id": "n0165",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-j60wq4",
+        "spya-j60wq4"
+      ],
+      "title": ""
+    },
+    "n0166": {
+      "id": "n0166",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-m8muav",
+        "spya-m8muav"
+      ],
+      "title": ""
+    },
+    "n0167": {
+      "id": "n0167",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-af0sqw",
+        "spya-af0sqw"
+      ],
+      "title": ""
+    },
+    "n0168": {
+      "id": "n0168",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-y06d0u",
+        "spya-y06d0u"
+      ],
+      "title": ""
+    },
+    "n0169": {
+      "id": "n0169",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-pnmbs9",
+        "spya-pnmbs9"
+      ],
+      "title": ""
+    },
+    "n0170": {
+      "id": "n0170",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-zs8aqa",
+        "spya-zs8aqa"
+      ],
+      "title": ""
+    },
+    "n0171": {
+      "id": "n0171",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-rrbaz6",
+        "spya-rrbaz6"
+      ],
+      "title": ""
+    },
+    "n0172": {
+      "id": "n0172",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-caqnpc",
+        "spya-caqnpc"
+      ],
+      "title": ""
+    },
+    "n0173": {
+      "id": "n0173",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-r5eu3n",
+        "spya-r5eu3n"
+      ],
+      "title": ""
+    },
+    "n0174": {
+      "id": "n0174",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-qz8qj9",
+        "spya-qz8qj9"
+      ],
+      "title": ""
+    },
+    "n0175": {
+      "id": "n0175",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-rqcafp",
+        "spya-rqcafp"
+      ],
+      "title": ""
+    },
+    "n0176": {
+      "id": "n0176",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-tjq4hw",
+        "spya-tjq4hw"
+      ],
+      "title": ""
+    },
+    "n0177": {
+      "id": "n0177",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-d9bhd7",
+        "spya-d9bhd7"
+      ],
+      "title": ""
+    },
+    "n0178": {
+      "id": "n0178",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-y728n9",
+        "spya-y728n9"
+      ],
+      "title": ""
+    },
+    "n0179": {
+      "id": "n0179",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-xs3zcs",
+        "spya-xs3zcs"
+      ],
+      "title": ""
+    },
+    "n0180": {
+      "id": "n0180",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-dfn6x7",
+        "spya-dfn6x7"
+      ],
+      "title": ""
+    },
+    "n0181": {
+      "id": "n0181",
+      "depth": 2,
+      "parent": "n0161",
+      "children": [],
+      "range": [
+        "spya-esw6mn",
+        "spya-esw6mn"
+      ],
+      "title": ""
+    }
+  }
+}

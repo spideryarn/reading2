@@ -1,0 +1,305 @@
+{
+  "startedAt": "2026-08-30T09:09:53.944Z",
+  "commit": "5f1a439f6d35144dbb5a532cf9e9f52fae61045e",
+  "notes": [
+    "longestHeadinglessRun counts BODY blocks only. The phase-2 review quoted 42 for scaling-hypothesis; that figure includes the trailing bibliography (supplement blocks), which never needed navigation bands. The body answer is 29.",
+    "The heading rule's 20-word stub threshold and its >=3-headings level rule were FITTED to the seven dev documents (corpus.ts freezes them as the development set); --sensitivity reports the carving at 0/10/20/40 words.",
+    "l1Boundaries is depth-one cut points only; boundaryDistance is over ALL internal cut points, so 100% L1 agreement beside a ~3-block mean distance is the level below L1 disagreeing, not a contradiction. Corpus means (headings vs disk, the five docs with both): within1Block 0.56 against exact allBoundaries 0.39, so roughly a quarter to a third of the deep disagreement is one-block wobble - which softens, without erasing, 'the model earns its money below L1'."
+  ],
+  "arms": [
+    {
+      "name": "incumbent",
+      "kind": "one-call",
+      "comparison": "baseline",
+      "call": {
+        "model": "anthropic/claude-sonnet-5",
+        "effort": "high"
+      },
+      "seed": "none"
+    }
+  ],
+  "results": [
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "constitution",
+      "run": 1,
+      "callOrder": 1,
+      "blocksSha256": {
+        "measured": "58dd654c87248ce4fc966ad83074b7b6cdaf6569e36ae477e09d28803afdec5f",
+        "manifest": "58dd654c87248ce4fc966ad83074b7b6cdaf6569e36ae477e09d28803afdec5f",
+        "matchesManifest": true
+      },
+      "score": {
+        "slug": "constitution",
+        "blocks": 360,
+        "bodyBlocks": 360,
+        "headingBlocks": 36,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 361
+        },
+        "parts": {
+          "count": 7,
+          "words": [
+            2028,
+            2769,
+            565,
+            8346,
+            3207,
+            4001,
+            1602
+          ],
+          "balanceCv": 0.7259738245997873
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 8.804347826086957,
+          "max": 39,
+          "within5to9": 0.3695652173913043
+        },
+        "headings": {
+          "boundaries": 37,
+          "boundariesOnHeadings": 0.8918918918918919,
+          "headingsCut": 0.9428571428571428,
+          "l1OnHeadings": 1,
+          "sourceHeadingShare": 0.7391304347826086,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 38,
+            "words": 1163
+          }
+        },
+        "titles": {
+          "count": 46,
+          "meanWords": 3.717391304347826,
+          "within2to6": 0.9347826086956522,
+          "copiedHeadings": 34,
+          "retention": 0.5972222222222222
+        },
+        "gists": {
+          "count": 46,
+          "coverage": 1,
+          "meanWords": 19.76086956521739,
+          "multiSentence": 0,
+          "templateRepetition": 0.391304347826087,
+          "retention": 0.7315415363789978
+        }
+      },
+      "calls": [
+        {
+          "ms": 330676,
+          "inputTokens": 48852,
+          "outputTokens": 36442,
+          "reasoningTokens": 31106,
+          "generationId": "gen-1788080996-IO5tziLwrtistSpdgjiJ",
+          "costUsd": 0.462124,
+          "providerCostUsd": 0.462124
+        }
+      ],
+      "vsDisk": {
+        "partCountA": 7,
+        "partCountB": 7,
+        "l1Boundaries": 1,
+        "allBoundaries": 0.72,
+        "boundaryDistance": {
+          "mean": 1.197674418604651,
+          "within1Block": 0.8372093023255814
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "fowler-phrenology",
+      "run": 1,
+      "callOrder": 2,
+      "blocksSha256": {
+        "measured": "b9fa248d7fe9c4f141afe3fed09fc9de2706be8af7f7ebc2aa5f319f36bbcf4b",
+        "manifest": "b9fa248d7fe9c4f141afe3fed09fc9de2706be8af7f7ebc2aa5f319f36bbcf4b",
+        "matchesManifest": true
+      },
+      "score": {
+        "slug": "fowler-phrenology",
+        "blocks": 72,
+        "bodyBlocks": 72,
+        "headingBlocks": 8,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 71
+        },
+        "parts": {
+          "count": 8,
+          "words": [
+            30,
+            626,
+            1313,
+            1936,
+            1599,
+            1797,
+            1400,
+            16
+          ],
+          "balanceCv": 0.6580352594907496
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 2.6511627906976742,
+          "max": 8,
+          "within5to9": 0.09302325581395349
+        },
+        "headings": {
+          "boundaries": 33,
+          "boundariesOnHeadings": 0.15151515151515152,
+          "headingsCut": 0.7142857142857143,
+          "l1OnHeadings": 0.14285714285714285,
+          "sourceHeadingShare": 0.13953488372093023,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 61,
+            "words": 8675
+          }
+        },
+        "titles": {
+          "count": 43,
+          "meanWords": 3,
+          "within2to6": 0.9302325581395349,
+          "copiedHeadings": 5,
+          "retention": 0.44298245614035087
+        },
+        "gists": {
+          "count": 43,
+          "coverage": 1,
+          "meanWords": 19.302325581395348,
+          "multiSentence": 0.13953488372093023,
+          "templateRepetition": 0.3953488372093023,
+          "retention": 0.3218823242421054
+        }
+      },
+      "calls": [
+        {
+          "ms": 158930,
+          "inputTokens": 16834,
+          "outputTokens": 17415,
+          "reasoningTokens": 13296,
+          "generationId": "gen-1788081325-ZY3kKH5r7XF9WhqIcMsh",
+          "costUsd": 0.207818,
+          "providerCostUsd": 0.207818
+        }
+      ],
+      "vsDisk": {
+        "partCountA": 8,
+        "partCountB": 9,
+        "l1Boundaries": 0.5,
+        "allBoundaries": 0.7142857142857143,
+        "boundaryDistance": {
+          "mean": 0.18055555555555555,
+          "within1Block": 0.9861111111111112
+        }
+      }
+    },
+    {
+      "arm": "incumbent",
+      "comparison": "baseline",
+      "slug": "writes",
+      "run": 1,
+      "callOrder": 3,
+      "blocksSha256": {
+        "measured": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "manifest": "b4dfb806c52ba040f839f1364777da3d56546c8a7602e2e5f566f0fc44e47ad7",
+        "matchesManifest": true
+      },
+      "score": {
+        "slug": "writes",
+        "blocks": 19,
+        "bodyBlocks": 19,
+        "headingBlocks": 1,
+        "validity": {
+          "gistProblems": 0,
+          "otherProblems": 0,
+          "advice": 18
+        },
+        "parts": {
+          "count": 3,
+          "words": [
+            280,
+            96,
+            185
+          ],
+          "balanceCv": 0.40177003588337207
+        },
+        "depth": {
+          "maxInternal": 2,
+          "minLeaf": 3,
+          "maxLeaf": 3,
+          "modalLeafDepthShare": 1
+        },
+        "fanout": {
+          "mean": 2.2,
+          "max": 5,
+          "within5to9": 0.06666666666666667
+        },
+        "headings": {
+          "boundaries": 10,
+          "boundariesOnHeadings": 0,
+          "headingsCut": null,
+          "l1OnHeadings": 0,
+          "sourceHeadingShare": 0.06666666666666667,
+          "sourceHeadingValid": 1,
+          "longestHeadinglessRun": {
+            "blocks": 18,
+            "words": 558
+          }
+        },
+        "titles": {
+          "count": 15,
+          "meanWords": 3.066666666666667,
+          "within2to6": 0.9333333333333333,
+          "copiedHeadings": 1,
+          "retention": 0.39285714285714285
+        },
+        "gists": {
+          "count": 15,
+          "coverage": 1,
+          "meanWords": 18.133333333333333,
+          "multiSentence": 0,
+          "templateRepetition": 0,
+          "retention": 0.3622943722943723
+        }
+      },
+      "calls": [
+        {
+          "ms": 49028,
+          "inputTokens": 2035,
+          "outputTokens": 5136,
+          "reasoningTokens": 3796,
+          "generationId": "gen-1788081483-TUkxh0O80NFWPI5GuOsx",
+          "costUsd": 0.05543,
+          "providerCostUsd": 0.05543
+        }
+      ],
+      "vsDisk": {
+        "partCountA": 3,
+        "partCountB": 4,
+        "l1Boundaries": 0.25,
+        "allBoundaries": 0.6153846153846154,
+        "boundaryDistance": {
+          "mean": 0.23809523809523808,
+          "within1Block": 1
+        }
+      }
+    }
+  ]
+}

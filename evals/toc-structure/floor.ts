@@ -52,6 +52,60 @@ const MEASURES: Record<string, (s: StructureScore) => number | null> = {
   gistTemplate: (s) => s.gists.templateRepetition,
 };
 
+/**
+ * The anatomy of a tiling throw, parsed back out of the message
+ * `assertChildrenPartition` (src/toc.ts) wrote — kind, size in blocks, and the
+ * depth of the node whose children failed to tile. **The size distribution is
+ * what decides whether a bounded repair exists** (team lead, 2026-08-30): if
+ * most failures are off by one block, snapping a child's start to the cursor
+ * would recover most of a ~20% failure rate; if they are large, a repair
+ * would mask a badly wrong answer and must not be built. A throw count alone
+ * cannot tell those worlds apart.
+ */
+export interface ThrowAnatomy {
+  kind: "gap" | "overlap" | "short-at-end" | "unparsed";
+  size: number | null;
+  /** Depth of the node whose children failed to tile (root = 0). */
+  depth: number | null;
+}
+
+/**
+ * Refuses on SHAPE: a throw either matches one of the three known message
+ * forms wholly, or it is `unparsed` — counted and shown raw, never dropped
+ * and never fished into a bin by a stray keyword. A reworded message, or a
+ * genuinely new fourth failure mode, must surface as `unparsed` rather than
+ * making "no tiling failures" and "the parser stopped working" the same
+ * report (docs/reusable/silent-success.md, with the parser on our side of
+ * the line). tests/toc-structure-eval.test.ts holds the reworded control.
+ */
+export function throwAnatomy(error: string): ThrowAnatomy {
+  const forms = [
+    {
+      kind: "gap",
+      re: /The children of the node at (root(?: > child \d+)*) do not tile it: child \d+ leaves a gap of (\d+) block\(s\)/,
+    },
+    {
+      kind: "overlap",
+      re: /The children of the node at (root(?: > child \d+)*) do not tile it: child \d+ overlaps the one before it by (\d+) block\(s\)/,
+    },
+    {
+      kind: "short-at-end",
+      re: /The children of the node at (root(?: > child \d+)*) stop (\d+) block\(s\) before it ends/,
+    },
+  ] as const;
+  for (const f of forms) {
+    const m = f.re.exec(error);
+    if (m) {
+      return {
+        kind: f.kind,
+        size: Number(m[2]),
+        depth: m[1]!.match(/child/g)?.length ?? 0,
+      };
+    }
+  }
+  return { kind: "unparsed", size: null, depth: null };
+}
+
 const median = (xs: number[]): number => {
   const sorted = [...xs].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -92,9 +146,19 @@ async function main(): Promise<void> {
       console.log(`\n${slug}  [${arm}] — ${repeats.length} attempts, ${threw} threw`);
       console.log("─".repeat(slug.length + arm.length + 8));
       if (threw > 0) {
+        const kinds = new Map<string, number>();
         for (const r of repeats.filter((x) => x.outcome === "threw")) {
-          console.log(`  r${r.run} THREW: ${(r.error ?? "").slice(0, 90)}`);
+          const a = throwAnatomy(r.error ?? "");
+          kinds.set(a.kind, (kinds.get(a.kind) ?? 0) + 1);
+          console.log(
+            a.kind === "unparsed"
+              ? `  r${r.run} THREW, UNPARSED — raw: ${(r.error ?? "").slice(0, 110)}`
+              : `  r${r.run} THREW — ${a.kind} of ${a.size} block(s), children of a depth-${a.depth} node`,
+          );
         }
+        console.log(
+          `  throw kinds: ${[...kinds.entries()].map(([k, n]) => `${k}×${n}`).join(", ")}`,
+        );
       }
       for (const [name, read] of Object.entries(MEASURES)) {
         const values = scored

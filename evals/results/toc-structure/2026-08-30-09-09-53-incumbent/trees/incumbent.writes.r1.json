@@ -1,0 +1,446 @@
+{
+  "version": "toc/2",
+  "generator": "claude-sonnet-5",
+  "slug": "writes",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0017",
+        "n0022"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-zz20s6"
+      ],
+      "title": "Writes and Write-Nots",
+      "gist": "AI is removing the pressure to write, which will split people permanently into a few who can still think clearly through writing and a majority who cannot.",
+      "sourceHeading": "Writes and Write-Nots"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0008",
+        "n0011",
+        "n0015"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-zzw20p"
+      ],
+      "title": "The Difficulty of Writing",
+      "gist": "Writing pervades prestigious jobs even though it is inherently hard, and before AI, people under pressure to write either learned to do it, paid someone, or plagiarized."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-zpa7s8"
+      ],
+      "title": "Essay Header",
+      "gist": "Presents the essay's title, reading time, and publication date."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-hqt79k",
+        "spya-hqt79k"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-t97070",
+        "spya-t97070"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-hkx6yy",
+        "spya-hkx6yy"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-zpa7s8",
+        "spya-zpa7s8"
+      ],
+      "title": ""
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0009",
+        "n0010"
+      ],
+      "range": [
+        "spya-tphbr6",
+        "spya-vp6ghy"
+      ],
+      "title": "A Hidden Struggle",
+      "gist": "The author predicts writing ability will soon become rare, since many people secretly struggle to write well."
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0008",
+      "children": [],
+      "range": [
+        "spya-tphbr6",
+        "spya-tphbr6"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0008",
+      "children": [],
+      "range": [
+        "spya-vp6ghy",
+        "spya-vp6ghy"
+      ],
+      "title": ""
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0012",
+        "n0013",
+        "n0014"
+      ],
+      "range": [
+        "spya-ts48cj",
+        "spya-xdmpa0"
+      ],
+      "title": "Writing Is Hard Thinking",
+      "gist": "Writing is difficult because it requires clear thinking, yet it is demanded most by the most prestigious jobs."
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-ts48cj",
+        "spya-ts48cj"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-u97r7e",
+        "spya-u97r7e"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-xdmpa0",
+        "spya-xdmpa0"
+      ],
+      "title": ""
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0016"
+      ],
+      "range": [
+        "spya-zzw20p",
+        "spya-zzw20p"
+      ],
+      "title": "Escaping the Pressure",
+      "gist": "Before AI, people under pressure to write either learned to do it themselves, paid someone else, or plagiarized."
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0015",
+      "children": [],
+      "range": [
+        "spya-zzw20p",
+        "spya-zzw20p"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0018",
+        "n0020"
+      ],
+      "range": [
+        "spya-gm3xu0",
+        "spya-hg7u0a"
+      ],
+      "title": "AI Ends the Pressure",
+      "gist": "AI now lets anyone skip writing entirely, permanently splitting people into writers and non-writers."
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 2,
+      "parent": "n0017",
+      "children": [
+        "n0019"
+      ],
+      "range": [
+        "spya-gm3xu0",
+        "spya-gm3xu0"
+      ],
+      "title": "AI Removes the Need",
+      "gist": "AI can now write for people in both school and work, dissolving the old pressure to learn."
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0018",
+      "children": [],
+      "range": [
+        "spya-gm3xu0",
+        "spya-gm3xu0"
+      ],
+      "title": ""
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 2,
+      "parent": "n0017",
+      "children": [
+        "n0021"
+      ],
+      "range": [
+        "spya-hg7u0a",
+        "spya-hg7u0a"
+      ],
+      "title": "A Permanent Divide",
+      "gist": "The middle ground of adequate writers will vanish, leaving only good writers and people who cannot write at all."
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-hg7u0a",
+        "spya-hg7u0a"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0023",
+        "n0026",
+        "n0028",
+        "n0030",
+        "n0033"
+      ],
+      "range": [
+        "spya-z79mew",
+        "spya-zz20s6"
+      ],
+      "title": "Writing Is Thinking",
+      "gist": "Because writing is a unique form of thinking, losing the ability to write means losing the ability to think clearly, though some will still choose to master it."
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0024",
+        "n0025"
+      ],
+      "range": [
+        "spya-z79mew",
+        "spya-z7zzwv"
+      ],
+      "title": "Is This Loss Bad",
+      "gist": "Unlike obsolete skills such as blacksmithing, losing writing matters because writing is itself a form of thinking."
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0023",
+      "children": [],
+      "range": [
+        "spya-z79mew",
+        "spya-z79mew"
+      ],
+      "title": ""
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0023",
+      "children": [],
+      "range": [
+        "spya-z7zzwv",
+        "spya-z7zzwv"
+      ],
+      "title": ""
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0027"
+      ],
+      "range": [
+        "spya-arj7ry",
+        "spya-arj7ry"
+      ],
+      "title": "Lamport's Warning",
+      "gist": "Leslie Lamport's quote captures the idea that thinking without writing is only an illusion of thinking."
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0026",
+      "children": [],
+      "range": [
+        "spya-arj7ry",
+        "spya-arj7ry"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0029"
+      ],
+      "range": [
+        "spya-xk7vyy",
+        "spya-xk7vyy"
+      ],
+      "title": "Thinks and Think-Nots",
+      "gist": "A world without writers becomes a world without thinkers, and the author knows which side he wants to be on."
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-xk7vyy",
+        "spya-xk7vyy"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0031",
+        "n0032"
+      ],
+      "range": [
+        "spya-rqzp97",
+        "spya-smzw4j"
+      ],
+      "title": "A Physical Analogy",
+      "gist": "Just as physical strength became optional after industrialization, mental strength through writing will become optional too."
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-rqzp97",
+        "spya-rqzp97"
+      ],
+      "title": ""
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0030",
+      "children": [],
+      "range": [
+        "spya-smzw4j",
+        "spya-smzw4j"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 2,
+      "parent": "n0022",
+      "children": [
+        "n0034"
+      ],
+      "range": [
+        "spya-zz20s6",
+        "spya-zz20s6"
+      ],
+      "title": "Acknowledgments",
+      "gist": "Thanks the readers who reviewed drafts of the essay."
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0033",
+      "children": [],
+      "range": [
+        "spya-zz20s6",
+        "spya-zz20s6"
+      ],
+      "title": ""
+    }
+  }
+}

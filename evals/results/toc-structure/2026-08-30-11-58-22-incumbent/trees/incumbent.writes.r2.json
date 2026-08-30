@@ -1,0 +1,460 @@
+{
+  "version": "toc/2",
+  "generator": "claude-sonnet-5",
+  "slug": "writes",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0010",
+        "n0018",
+        "n0024",
+        "n0030"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-zz20s6"
+      ],
+      "title": "Writes and Write-Nots",
+      "gist": "The rise of AI writing tools threatens to erase the skill of writing—and the clear thinking it requires—splitting society into those who can write and think and those who cannot.",
+      "sourceHeading": "Writes and Write-Nots"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0007"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-tphbr6"
+      ],
+      "title": "A Bold Prediction",
+      "gist": "The author predicts that within a couple decades few people will still know how to write."
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006"
+      ],
+      "range": [
+        "spya-hqt79k",
+        "spya-hkx6yy"
+      ],
+      "title": "Article Header",
+      "gist": "The essay opens with its title, reading time, and an illustrative image."
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-hqt79k",
+        "spya-hqt79k"
+      ],
+      "title": ""
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-t97070",
+        "spya-t97070"
+      ],
+      "title": ""
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-hkx6yy",
+        "spya-hkx6yy"
+      ],
+      "title": ""
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0008",
+        "n0009"
+      ],
+      "range": [
+        "spya-zpa7s8",
+        "spya-tphbr6"
+      ],
+      "title": "The Core Prediction",
+      "gist": "Dated October 2024, the author confidently predicts that the ability to write will soon become rare."
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-zpa7s8",
+        "spya-zpa7s8"
+      ],
+      "title": ""
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0007",
+      "children": [],
+      "range": [
+        "spya-tphbr6",
+        "spya-tphbr6"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0011",
+        "n0014"
+      ],
+      "range": [
+        "spya-vp6ghy",
+        "spya-zzw20p"
+      ],
+      "title": "The Difficulty of Writing",
+      "gist": "Writing is inherently hard because it requires clear thinking, yet professional life constantly demands it, historically forcing people to either learn to write or find ways around it."
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 2,
+      "parent": "n0010",
+      "children": [
+        "n0012",
+        "n0013"
+      ],
+      "range": [
+        "spya-vp6ghy",
+        "spya-ts48cj"
+      ],
+      "title": "Why Writing Is Hard",
+      "gist": "Many people struggle with writing because it demands clear thinking, a difficulty largely invisible to non-writers."
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-vp6ghy",
+        "spya-vp6ghy"
+      ],
+      "title": ""
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 3,
+      "parent": "n0011",
+      "children": [],
+      "range": [
+        "spya-ts48cj",
+        "spya-ts48cj"
+      ],
+      "title": ""
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 2,
+      "parent": "n0010",
+      "children": [
+        "n0015",
+        "n0016",
+        "n0017"
+      ],
+      "range": [
+        "spya-u97r7e",
+        "spya-zzw20p"
+      ],
+      "title": "Pressure Without Escape",
+      "gist": "Because prestigious jobs require writing yet writing is hard, people historically resorted to hiring ghostwriters or plagiarizing rather than learning to write well themselves."
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-u97r7e",
+        "spya-u97r7e"
+      ],
+      "title": ""
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-xdmpa0",
+        "spya-xdmpa0"
+      ],
+      "title": ""
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0014",
+      "children": [],
+      "range": [
+        "spya-zzw20p",
+        "spya-zzw20p"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0019",
+        "n0022"
+      ],
+      "range": [
+        "spya-gm3xu0",
+        "spya-z79mew"
+      ],
+      "title": "AI Breaks the System",
+      "gist": "AI now lets anyone offload writing entirely, raising the question of whether losing this once-universal skill actually matters."
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 2,
+      "parent": "n0018",
+      "children": [
+        "n0020",
+        "n0021"
+      ],
+      "range": [
+        "spya-gm3xu0",
+        "spya-hg7u0a"
+      ],
+      "title": "AI Removes the Pressure",
+      "gist": "AI can now write on someone's behalf, eliminating the pressure that once forced people to learn to write and splitting people into writes and write-nots."
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 3,
+      "parent": "n0019",
+      "children": [],
+      "range": [
+        "spya-gm3xu0",
+        "spya-gm3xu0"
+      ],
+      "title": ""
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0019",
+      "children": [],
+      "range": [
+        "spya-hg7u0a",
+        "spya-hg7u0a"
+      ],
+      "title": ""
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 2,
+      "parent": "n0018",
+      "children": [
+        "n0023"
+      ],
+      "range": [
+        "spya-z79mew",
+        "spya-z79mew"
+      ],
+      "title": "Questioning the Loss",
+      "gist": "The author raises the objection that skills often become obsolete without real harm, comparing writing's decline to the disappearance of blacksmiths."
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0022",
+      "children": [],
+      "range": [
+        "spya-z79mew",
+        "spya-z79mew"
+      ],
+      "title": ""
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0025",
+        "n0028"
+      ],
+      "range": [
+        "spya-z7zzwv",
+        "spya-xk7vyy"
+      ],
+      "title": "Writing Is Thinking",
+      "gist": "The loss of writing matters because writing is itself a form of thinking, so a world of write-nots becomes a world of think-nots."
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 2,
+      "parent": "n0024",
+      "children": [
+        "n0026",
+        "n0027"
+      ],
+      "range": [
+        "spya-z7zzwv",
+        "spya-arj7ry"
+      ],
+      "title": "Lamport's Insight",
+      "gist": "Quoting Leslie Lamport, the author asserts that without writing you only think you are thinking."
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-z7zzwv",
+        "spya-z7zzwv"
+      ],
+      "title": ""
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 3,
+      "parent": "n0025",
+      "children": [],
+      "range": [
+        "spya-arj7ry",
+        "spya-arj7ry"
+      ],
+      "title": ""
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 2,
+      "parent": "n0024",
+      "children": [
+        "n0029"
+      ],
+      "range": [
+        "spya-xk7vyy",
+        "spya-xk7vyy"
+      ],
+      "title": "Thinks and Think-Nots",
+      "gist": "The divide between writers and non-writers is really a divide between thinkers and non-thinkers."
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0028",
+      "children": [],
+      "range": [
+        "spya-xk7vyy",
+        "spya-xk7vyy"
+      ],
+      "title": ""
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0031",
+        "n0034"
+      ],
+      "range": [
+        "spya-rqzp97",
+        "spya-zz20s6"
+      ],
+      "title": "A Historical Parallel",
+      "gist": "Comparing writing's decline to the disappearance of physical labor, the author concludes that only those who deliberately choose to write will remain skilled thinkers."
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 2,
+      "parent": "n0030",
+      "children": [
+        "n0032",
+        "n0033"
+      ],
+      "range": [
+        "spya-rqzp97",
+        "spya-smzw4j"
+      ],
+      "title": "The Strength Analogy",
+      "gist": "Just as industrialization made physical strength optional rather than automatic, technology will make being a skilled thinker a matter of choice rather than necessity."
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-rqzp97",
+        "spya-rqzp97"
+      ],
+      "title": ""
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0031",
+      "children": [],
+      "range": [
+        "spya-smzw4j",
+        "spya-smzw4j"
+      ],
+      "title": ""
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 2,
+      "parent": "n0030",
+      "children": [
+        "n0035"
+      ],
+      "range": [
+        "spya-zz20s6",
+        "spya-zz20s6"
+      ],
+      "title": "Acknowledgments",
+      "gist": "The author thanks Jessica Livingston, Ben Miller, and Robert Morris for reviewing drafts."
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0034",
+      "children": [],
+      "range": [
+        "spya-zz20s6",
+        "spya-zz20s6"
+      ],
+      "title": ""
+    }
+  }
+}

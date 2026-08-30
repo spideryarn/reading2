@@ -259,6 +259,18 @@ running suites concurrently — because importing src/toc.js took 22 seconds and
 fired en masse. If you see many unrelated suites time out at once, check `uptime` before
 concluding your change broke something.)
 
+**Running a paid panel on a laptop, learned the expensive way (2026-08-30, twice):** the lid can
+kill a run mid-call (a sleep surfaced on wake as the SDK's `APIConnectionTimeoutError` — correctly
+a bench fault, not an arm outcome), and a completed background run's completion notice can arrive
+half an hour late, during which "waiting on the notice" is indistinguishable from "the thing died".
+So: wrap paid panels in `caffeinate -i`, and judge progress from the run directory's `run.json` —
+checkpointed after every cell — never from the orchestration around it. Wall-clock latency is not
+trustworthy across a suspend (one interrupted call recorded 586s that was mostly nap); a cell
+whose latency looks like an outlier should be checked against its neighbours' before it is quoted.
+And a panel interrupted twice ends up spread over several run directories — anything computing a
+floor must read across **all** of them (`floor-combined.mts`) or the floor is silently a subset,
+which is the survivor selection effect in a new outfit.
+
 ### What it measures
 
 Mechanical proxies, per (blocks, tree); none is "is this a good tree". Validity (`checkTree`,
@@ -340,7 +352,24 @@ until it passes.** (The 10% band is a judgement call, not a discovered constant:
 exists for — a zero, a dropped field, a different call's figure — miss by orders of magnitude,
 while legitimate drift (rounding on sub-cent calls, billing lag) stays in single digits; 1% would
 false-alarm on rounding, and a band wide enough to pass a halved cost would defeat the point. If
-the verifier cannot find a record, fix the id, never the threshold.) The reconciliation is its own GET-only file because the spend scan rightly
+the verifier cannot find a record, fix the id, never the threshold.) Both once-flagged wire facts
+were **verified on live calls, 2026-08-30**, not assumed: the in-band cost arrived on every
+calibration call, and the raw-event ids are real `gen-…` OpenRouter generation ids.
+
+**A thrown arm is an outcome; a harness fault is a fault.** Roughly one structure call in five
+returns a tree whose children do not tile (measured on HEAD, 2026-08-30 — and reproduced by this
+eval's own fourth calibration call). The runner records that as `outcome: "threw"` with the error
+and the bill, and continues — never a retry, because a floor computed over the surviving runs
+alone is the variance of the survivors, a selection effect that understates the floor; and the
+wasted call stays on the arm's cost and latency. A harness fault (a config error, a dead network)
+still crashes the run: those are different kinds of fact, and recording a bench fault as an arm
+outcome would blame the recipe for our own bench. `floor.ts` reports attempts-and-throws first,
+per document.
+
+**Fragments do not contaminate arm zero's headline — checked, not assumed** (2026-08-30): with
+every fragment block's words zeroed, `buildHeadingTree` produces an identical carving on all seven
+affected documents, greatwork's 89 fragments included. The pollution inflates leaf counts and
+advice, not structure. The reconciliation is its own GET-only file because the spend scan rightly
 forbids a raw fetch inside a declared-bypass file. All of this exists because the observer seam
 maps Messages-shaped usage into OpenRouter-shaped rows, and the failure mode of that mapping is a
 cost landing as zero, silently — a free-looking arm someone quotes in three months.
