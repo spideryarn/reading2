@@ -9,7 +9,7 @@
  *
  * ## The eight, and what each is for
  *
- * Fifteen cases. Three of them are checks on the other twelve rather than on the
+ * Sixteen cases. Three of them are checks on the other thirteen rather than on the
  * session: the first asks whether `SPIDERYARN_STORE=postgres` actually took and
  * whether the returned object is still guarded, the lock-order one exists
  * because deleting `lockArticleFor` leaves every other case green, and the last
@@ -55,7 +55,9 @@
  * 11 and 12. The two endings that reach a job **nobody is inside** —
  *     `failExpired` and Stop on a *queued* job — clear the draft pointer, and
  *     Stop on a *running* one does not.
- * 13. `settleJob` takes an ending and nothing else. Compile-time; there is no
+ * 13. A commit that **rolled back** leaves the step open, and the failure
+ *     settled one line later has to close it — the ordering case 10 cannot see.
+ * 14. `settleJob` takes an ending and nothing else. Compile-time; there is no
  *     other kind of case a narrowing can have.
  *
  * ## Why it drives the real coordinator for half of them
@@ -159,7 +161,12 @@
  *   `requestCancel`'s `set` → the pointer survives the ending. Both fixtures
  *   start from a **real** pointer; over a job with no draft the same assertions
  *   pass with the fix deleted.
- * - 13: widen `settleJob` back to `JobTransition` → `npm run typecheck` reports
+ * - 13: move `begunStep = undefined` from after the transaction to beside
+ *   `artifacts.finishStep` inside it. A JavaScript assignment is not rolled
+ *   back, so the session forgets a step whose row went back to `running`, and
+ *   the failure settlement walks past it → red on `running` where `error` was
+ *   wanted. Case 10 stays green: there the step was never finished at all.
+ * - 14: widen `settleJob` back to `JobTransition` → `npm run typecheck` reports
  *   `Unused '@ts-expect-error' directive`.
  * - the lock case, rewritten: replace `lockArticleFor` in `commit` with a 1.5s
  *   sleep. The old *"sleep one second, then assert it has not settled"* stayed
@@ -1352,6 +1359,79 @@ when("the transactional session", () => {
       (await articleRow(slug))?.currentRevisionId,
       "a failure never moves the reader",
     ).toBe(fixture.publishedRevisionId);
+  });
+
+  /**
+   * A commit that rolled back leaves the step **open**, and the failure that
+   * follows has to close it.
+   *
+   * The case above proves the step run is marked when the *stage* threw, and it
+   * cannot see this: there the step was never finished at all, so it makes no
+   * difference where the session stops remembering it. This is the other
+   * ordering, and it is the one that is easy to get wrong — `commit` reached
+   * `finishStep`, wrote `done`, and then the transaction failed and took that
+   * back. The row is `running` again, so the session must still know a step is
+   * open when `settleJob` arrives one line later.
+   *
+   * **`begunStep` is therefore cleared after the transaction resolves, never
+   * inside it.** A JavaScript assignment is not rolled back by Postgres: a clear
+   * placed beside `artifacts.finishStep` would survive the rollback perfectly
+   * while the row it was about did not, and the failure settlement would then
+   * walk past a `running` row exactly as it did before finding 2 was fixed.
+   *
+   * The two halves are the shape `src/jobs.ts` really produces: `runStep`'s
+   * catch records the commit's refusal on the step and the job, and `endJob`
+   * settles it through this same session.
+   */
+  mine("closes a step whose commit rolled back, when the failure is settled", async () => {
+    const slug = `${SLUG_PREFIX}rollback-then-fail`;
+    const fixture = await publishArticle(slug, "the carried arc");
+    const claimed = await claimWithSession(slug, ["arc"]);
+    const ctx = contextFor(slug);
+
+    await claimed.session.beginStep(slug, "arc");
+
+    /* The same in-transaction failure case 4 uses: a `not null` the database
+       refuses, landing in `finishIn` — after `write`, after `finishStepRun` has
+       already written `done`, and after the publication. */
+    await expect(
+      claimed.session.commit(
+        ctx,
+        fakeArc(async () => ({ detail: "" })),
+        claimed.attempt,
+        { detail: "one entry", parts: { arc: arcSaying(slug, fixture.blocks, "the lost arc") } },
+        {
+          kind: "end",
+          jobId: claimed.jobId,
+          attempt: claimed.attempt,
+          ending: { status: "done", steps: null as unknown as JobStep[] },
+        },
+      ),
+    ).rejects.toMatchObject({ name: "StoreFailure", code: "23502" });
+
+    /* The state that makes the rest of this test mean something: the row really
+       did go back to `running`, so there really is a step left open. */
+    expect(
+      (await runRow(claimed.revisionId, "arc"))?.status,
+      "the rollback took the step completion back with everything else",
+    ).toBe("running");
+
+    const settled = await claimed.session.settleJob({
+      kind: "end",
+      jobId: claimed.jobId,
+      attempt: claimed.attempt,
+      ending: { status: "error", steps: claimed.steps, error: "the commit was refused" },
+    });
+
+    expect(settled.kind).toBe("ended");
+    expect(
+      (await runRow(claimed.revisionId, "arc"))?.status,
+      "the session has to still know a step is open: its commit rolled back",
+    ).toBe("error");
+    expect((await revisionRow(claimed.revisionId))?.status).toBe("failed");
+    const job = await jobRow(claimed.jobId);
+    expect(job?.status).toBe("error");
+    expect(job?.draftRevisionId).toBeNull();
   });
 
   /* --------------------------------------------------------- the lock order -- */
