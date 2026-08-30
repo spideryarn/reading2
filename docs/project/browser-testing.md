@@ -243,6 +243,43 @@ Two consequences for a run:
   a session on `:5275`. If several agents are running `npm run dev` in this one tree, you may be
   signed in on one port and out on another, which reads as flakiness.
 
+### And a raw `fetch` is not a sign-in check — it 401s while you are signed in
+
+The obvious probe is wrong, and it fails in the expensive direction: it reports **not signed in** on
+a tab that is perfectly signed in.
+
+```js
+await fetch('/api/library', { credentials: 'same-origin' })   // 401, always
+```
+
+The session is a Supabase token in `localStorage`, and it reaches the API as an `Authorization`
+header that **the app's own client code attaches**. A `fetch` you type into the console is not the
+app, so it carries no header, so it is refused — `credentials: 'same-origin'` does not help, because
+there is no cookie to send. The 401 says "this request was unauthenticated", which is true, and says
+nothing whatever about the browser.
+
+Measured 2026-08-30, and it cost two agent runs and a wrong conclusion reported to Greg. One agent
+ran exactly the probe above in three tabs, got 401 in all three, and correctly followed its
+instructions to stop rather than attempt a sign-in. The instructions were the bug: **I had written
+that probe into the task prompt.** Meanwhile the same 401 in the server log led me to conclude a
+different agent had been blocked by its permission classifier — it had not; it never got that far.
+Then navigating one of those "not signed in" tabs to `/add/<url>` created a job immediately, which
+is what settled it.
+
+**What to use instead**, in rough order of preference:
+
+- **Ask the page, not the API.** Load the shelf and look: real article titles and an "Add an
+  article" box mean signed in; a sign-in screen means signed out. `get_page_text` is enough.
+- **Do the thing.** If the point of the run is an import, navigate to `/add/<url>` and watch. A job
+  id appearing is proof; there is no reason to test the precondition separately.
+- **Read the server log** ([vercel-hosting-deployment.md](vercel-hosting-deployment.md)), where a
+  real `POST /api/jobs` and its status are unambiguous.
+
+The general shape is the one [silent-success.md](../reusable/silent-success.md) is about, arriving
+from the other side: a check that returns the *same answer whatever the truth is* is not a check.
+This one always says 401. Before trusting a probe, ask what it would print if the thing you are
+testing were fine — and if the answer is "the same", do not write it into anybody's instructions.
+
 To sign in without a Google round trip, use email and password — the local stack has
 `mailer_autoconfirm` on, so "create an account" lands you straight in the app with no email to
 click. Google needs the port to be on the local redirect allow-list; see
