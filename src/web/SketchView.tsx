@@ -321,14 +321,17 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
           onBlur={() => setHover(null)}
         >
           <title>{scene.caption ?? sketch.caption}</title>
+          {/* biome-ignore lint/suspicious/noArrayIndexKey: a drawing primitive has no identity of its own — `paintScene` is a pure function of the scene, so the whole list is replaced together whenever the scene changes and an index cannot come to mean a different thing. Minting ids would be inventing identity to satisfy a rule about preserving it. */}
           {painted.behind.map((p, i) => (
             <Shape key={`b${i}`} p={p} />
           ))}
+          {/* biome-ignore lint/suspicious/noArrayIndexKey: see above */}
           {painted.links.map((p, i) => (
             <Shape key={`l${i}`} p={p} />
           ))}
           {painted.nodes.map((n, i) => (
             /* biome-ignore lint/a11y/useKeyWithClickEvents: the whole picture is one tab stop with its own key handler above — a handler per node is the tab-stop-per-node mistake DiagramPanel already made once */
+            /* biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: SVG has no element that carries `option` natively, and the roles are written out for the reason scatter.ts's are — the DOM is flat, so nothing in the markup says this is the third of twelve */
             <g
               key={n.node.id}
               className={`sk-node${n.node.opens ? " opens" : ""}${n.node.block ? " links" : ""}${
@@ -344,6 +347,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
               onMouseEnter={() => setHover(n.node.id)}
               onMouseLeave={() => setHover(null)}
             >
+              {/* biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above */}
               {n.prims.map((p, j) => (
                 <Shape key={`p${j}`} p={p} />
               ))}
@@ -353,6 +357,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
               <rect className="sk-hit" x={n.hit.x} y={n.hit.y} width={n.hit.w} height={n.hit.h} />
             </g>
           ))}
+          {/* biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above */}
           {painted.front.map((p, i) => (
             <Shape key={`f${i}`} p={p} />
           ))}
