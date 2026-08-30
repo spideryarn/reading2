@@ -1,0 +1,118 @@
+{
+  "caption": "A funnel of psychological temptations converges on 'pareidolia', a funnel of four technical arguments converges on 'functionalism is shaky', that uncertainty forks into two distinct ethical risks, and the close loops back to the opening question of what makes us us.",
+  "title": "Two Funnels, A Fork, A Loop",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "caption": "The essay funnels psychological biases into 'pareidolia', funnels four technical arguments into 'functionalism looks shaky', forks the resulting uncertainty into two live ethical risks, then loops back to the human question it opened with.",
+      "height": 1150,
+      "items": [
+        {"kind":"node","id":"op1","shape":"ellipse","x":230,"y":40,"w":300,"h":70,"text":"Does AI consciousness matter?","size":"md","block":"spya-e68t9h","detail":"With consciousness comes moral status, rights, and the risk of suffering — for AI and for us."},
+
+        {"kind":"region","x":24,"y":150,"w":712,"h":180,"label":"WHY WE'RE TEMPTED TO SEE IT","style":"band","tone":1},
+        {"kind":"node","id":"bias1","shape":"box","x":40,"y":190,"w":210,"h":80,"text":"Human-centered biases","sub":"anthropocentrism, exceptionalism, anthropomorphism","size":"sm","tone":1,"block":"spya-cvaqgs","detail":"Three overlapping biases make us project mind onto anything humanlike."},
+        {"kind":"node","id":"bias2","shape":"box","x":275,"y":190,"w":210,"h":80,"text":"Fluent language feels human","size":"sm","tone":1,"block":"spya-k6fpme","detail":"Saying chatbots 'hallucinate' quietly implies they experience things."},
+        {"kind":"node","id":"bias3","shape":"box","x":510,"y":190,"w":210,"h":80,"text":"Techno-hype & rapture dreams","size":"sm","tone":1,"block":"spya-cke6sj","detail":"Exponential growth and Promethean ambition make imminent machine minds feel inevitable."},
+
+        {"kind":"node","id":"conv1","shape":"hex","x":230,"y":350,"w":300,"h":70,"text":"Pareidolia, not evidence","size":"md","tone":1,"block":"spya-k850tu","detail":"Seeing consciousness in AI may be like seeing a face in a cinnamon bun."},
+
+        {"kind":"region","x":24,"y":470,"w":712,"h":170,"label":"WHY IT'S PROBABLY NOT THERE","style":"band","tone":2},
+        {"kind":"node","id":"arg1","shape":"box","x":34,"y":510,"w":150,"h":90,"text":"Brains aren't computers","size":"sm","tone":2,"block":"spya-sk4su6","detail":"No clean software/hardware split exists in living neural tissue."},
+        {"kind":"node","id":"arg2","shape":"box","x":214,"y":510,"w":150,"h":90,"text":"More than algorithms","size":"sm","tone":2,"block":"spya-affgsh","detail":"Analogue, continuous, dynamical processes may matter beyond Turing computation."},
+        {"kind":"node","id":"arg3","shape":"box","x":394,"y":510,"w":150,"h":90,"text":"Life may be necessary","size":"sm","tone":2,"block":"spya-e7jqx4","detail":"Consciousness may be tied to self-sustaining, living, metabolic processes."},
+        {"kind":"node","id":"arg4","shape":"box","x":574,"y":510,"w":150,"h":90,"text":"Simulating \u2260 creating","size":"sm","tone":2,"block":"spya-cqh5wq","detail":"A simulated storm doesn't get anything wet; a simulated brain may not feel."},
+
+        {"kind":"node","id":"conv2","shape":"hex","x":230,"y":670,"w":300,"h":70,"text":"Functionalism looks shaky","size":"md","tone":2,"block":"spya-uzr60x","detail":"Four independent arguments converge, though none is a knock-down proof."},
+
+        {"kind":"node","id":"unc","shape":"note","x":230,"y":780,"w":300,"h":70,"text":"Deep uncertainty remains","size":"sm","tone":3,"block":"spya-yverz7","detail":"No one can say for sure what would create, or avoid, real machine consciousness."},
+
+        {"kind":"node","id":"eth1","shape":"box","x":60,"y":890,"w":290,"h":90,"text":"Don't deliberately create conscious AI","size":"sm","tone":3,"block":"spya-e7fdmb","detail":"Doing so risks introducing new moral subjects and new suffering at scale."},
+        {"kind":"node","id":"eth2","shape":"box","x":410,"y":890,"w":290,"h":90,"text":"Conscious-seeming AI is already here","size":"sm","tone":3,"block":"spya-vs0vpj","detail":"Illusory consciousness poses its own distinct, present-day ethical risks."},
+
+        {"kind":"node","id":"close1","shape":"ellipse","x":230,"y":1010,"w":300,"h":80,"text":"Recovering an embodied sense of self","size":"md","block":"spya-zv36xq","detail":"More breath than thought, more meat than machine — a return to what makes us us."},
+
+        {"kind":"edge","from":"bias1","to":"conv1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"bias2","to":"conv1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"bias3","to":"conv1","via":"curve","arrow":"end"},
+
+        {"kind":"edge","from":"conv1","to":"arg2","via":"curve","arrow":"end","line":"dashed","label":"digging deeper"},
+
+        {"kind":"edge","from":"arg1","to":"conv2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"arg2","to":"conv2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"arg3","to":"conv2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"arg4","to":"conv2","via":"curve","arrow":"end"},
+
+        {"kind":"edge","from":"conv2","to":"unc","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"unc","to":"eth1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"unc","to":"eth2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"eth1","to":"close1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"eth2","to":"close1","via":"curve","arrow":"end"},
+
+        {"kind":"edge","from":"close1:right","to":"op1:right","via":"curve","arrow":"end","line":"dashed","label":"returns to human nature"}
+      ]
+    },
+
+    {
+      "id": "inside-the-temptations",
+      "title": "Why We're Tempted",
+      "caption": "One conflation (intelligence with consciousness) opens two parallel tracks — cognitive bias, and hype — that both funnel into the same conclusion: this looks like pattern-seeing, not evidence.",
+      "height": 650,
+      "items": [
+        {"kind":"node","id":"A","shape":"box","x":230,"y":30,"w":300,"h":70,"text":"Intelligence isn't consciousness","size":"md","block":"spya-nh8mt7","detail":"Intelligence is about doing; consciousness is about being — they needn't travel together."},
+
+        {"kind":"region","x":24,"y":140,"w":300,"h":370,"label":"COGNITIVE BIASES","style":"band","tone":1},
+        {"kind":"node","id":"B1","shape":"box","x":40,"y":170,"w":260,"h":70,"text":"Anthropocentrism","size":"sm","tone":1,"block":"spya-h4mwb2","detail":"Taking the human case as definitional rather than as one example among many."},
+        {"kind":"node","id":"B2","shape":"box","x":40,"y":260,"w":260,"h":70,"text":"Exceptionalism & anthropomorphism","size":"sm","tone":1,"block":"spya-her4zk","detail":"Putting humans atop every pile, then projecting our qualities onto lookalikes."},
+        {"kind":"node","id":"B3","shape":"box","x":40,"y":350,"w":260,"h":70,"text":"Language feels most human","size":"sm","tone":1,"block":"spya-k6fpme","detail":"LLMs pull our psychological strings via speech in a way AlphaFold never does."},
+        {"kind":"node","id":"B4","shape":"note","x":40,"y":440,"w":260,"h":70,"text":"'Hallucinate' implies feeling","size":"sm","tone":1,"block":"spya-t29n67","detail":"Better to say AI 'confabulates' — a doing word, not an experiencing one."},
+
+        {"kind":"region","x":420,"y":140,"w":300,"h":200,"label":"HYPE & MYTHOLOGY","style":"band","tone":1},
+        {"kind":"node","id":"C1","shape":"box","x":440,"y":170,"w":260,"h":70,"text":"Exponential growth feels urgent","size":"sm","tone":1,"block":"spya-cke6sj","detail":"On an exponential curve every point feels like an inflection point."},
+        {"kind":"node","id":"C2","shape":"box","x":440,"y":260,"w":260,"h":70,"text":"Techno-rapture: silicon immortality","size":"sm","tone":1,"block":"spya-v4sduf","detail":"The Promethean lure of god-like creation and escape from decaying bodies."},
+
+        {"kind":"node","id":"D","shape":"hex","x":230,"y":530,"w":300,"h":80,"text":"Seeing consciousness like faces in toast","size":"md","tone":1,"block":"spya-k850tu","detail":"Recognizing the pareidolia is only the first step, not the whole answer."},
+
+        {"kind":"edge","from":"A","to":"B1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"A","to":"C1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"B1","to":"B2","arrow":"end"},
+        {"kind":"edge","from":"B2","to":"B3","arrow":"end"},
+        {"kind":"edge","from":"B3","to":"B4","arrow":"end","line":"dashed"},
+        {"kind":"edge","from":"C1","to":"C2","arrow":"end"},
+        {"kind":"edge","from":"B4","to":"D","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"C2","to":"D","via":"curve","arrow":"end"}
+      ]
+    },
+
+    {
+      "id": "inside-the-computation",
+      "title": "Why It's Probably Not There",
+      "caption": "The assumed premise (computation suffices) is challenged by four independent arguments, two of them carrying a specific worked example, all converging on the same verdict.",
+      "height": 520,
+      "items": [
+        {"kind":"node","id":"E","shape":"diamond","x":230,"y":30,"w":300,"h":70,"text":"Assumes computation = consciousness","size":"md","block":"spya-wepmnr","detail":"Computational functionalism is the load-bearing assumption behind conscious AI."},
+
+        {"kind":"node","id":"F1","shape":"box","x":34,"y":140,"w":150,"h":90,"text":"Brains aren't computers","size":"sm","tone":2,"block":"spya-sk4su6","detail":"No clean split between wetware and mindware, unlike hardware and software."},
+        {"kind":"node","id":"F2","shape":"box","x":214,"y":140,"w":150,"h":90,"text":"More than algorithms","size":"sm","tone":2,"block":"spya-affgsh","detail":"Continuous, stochastic, dynamical processes lie outside Turing computation."},
+        {"kind":"node","id":"F3","shape":"box","x":394,"y":140,"w":150,"h":90,"text":"Life may be necessary","size":"sm","tone":2,"block":"spya-e7jqx4","detail":"Predictive self-regulation ties conscious feeling to living, metabolizing bodies."},
+        {"kind":"node","id":"F4","shape":"box","x":574,"y":140,"w":150,"h":90,"text":"Simulating \u2260 creating","size":"sm","tone":2,"block":"spya-cqh5wq","detail":"A simulation of digestion digests nothing; a simulated brain may feel nothing."},
+
+        {"kind":"node","id":"G1","shape":"note","x":34,"y":260,"w":150,"h":90,"text":"Neuron swap fails","sub":"can't replace with silicon","size":"xs","tone":2,"block":"spya-ahtr6e","detail":"Chalmers' replacement thought experiment fails at its first hurdle."},
+        {"kind":"node","id":"G2","shape":"note","x":574,"y":260,"w":150,"h":90,"text":"Needs same assumption","sub":"Bostrom's hidden premise","size":"xs","tone":2,"block":"spya-bcnvp2","detail":"The simulation hypothesis quietly assumes a program can be conscious."},
+
+        {"kind":"node","id":"H","shape":"hex","x":230,"y":400,"w":300,"h":80,"text":"Functionalism looks shaky","size":"md","tone":2,"block":"spya-uzr60x","detail":"Not disproof — but four independent lines all point the same way."},
+
+        {"kind":"edge","from":"E","to":"F1","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"E","to":"F2","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"E","to":"F3","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"E","to":"F4","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"F1","to":"G1","arrow":"end","line":"dashed"},
+        {"kind":"edge","from":"F4","to":"G2","arrow":"end","line":"dashed"},
+        {"kind":"edge","from":"F1","to":"H","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"F2","to":"H","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"F3","to":"H","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"F4","to":"H","via":"curve","arrow":"end"}
+      ]
+    }
+  ]
+}

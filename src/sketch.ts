@@ -126,6 +126,36 @@ peripheral live — but down is time.
 Two exceptions, and only two. An arrow may point back UP the page to say the
 piece returns to something. A frame, legend or caption may sit anywhere.
 
+THE SHAPES MAKE CLAIMS. YOURS MUST NOT BE STRONGER THAN THE TEXT'S.
+
+This is the way this picture goes wrong, and it is worse than an ugly layout,
+because a reader cannot tell a confident drawing from a correct one. A diagram
+asserts things through its geometry that you never wrote in words, and those
+assertions have to be true of the article.
+
+  A DIAMOND says "this question gets settled, and what follows depends on the
+  answer". Never use one for a question the piece says CANNOT be settled. If the
+  author's point is that we will not find out, draw the two worries side by
+  side, both live, with no fork — because that is the shape of the argument.
+
+  A NUMBERED LIST, or a ladder with a "priority" arrow down it, says "strictly
+  in this order, always". Never use one for a ranking the piece calls holistic,
+  defeasible, or rare. Draw the same four things unnumbered and grouped, and put
+  the qualification in the caption.
+
+  TWO BRANCHES OFF A FORK say "one or the other". If both hold at once, they are
+  not branches — they are two things, drawn beside each other.
+
+  AN ARROW says "and therefore" or "and then". If the relation is only "and
+  also", use no arrow, or a plain line.
+
+  A REGION says "these belong together as one movement". If you band two parts
+  of the piece and leave a third unbanded, you have said the third is an
+  appendix. Band all of them or none.
+
+Before you finish, look at each shape you used and ask what it claims. If the
+article does not make that claim, change the shape.
+
 THE CANVAS
 
 ${CANVAS_W} units wide, and you choose the height (400–1200 for an overview;

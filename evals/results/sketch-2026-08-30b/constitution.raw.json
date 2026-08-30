@@ -1,0 +1,184 @@
+{
+  "caption": "The document fans out from one mission into four co-equal values (safe, ethical, guideline-following, helpful), then walks through each in turn — but in the reverse order of priority — before closing on Claude's nature and a hoped-for return to the opening mission.",
+  "title": "Diverge then chain, looping home",
+  "scenes": [
+    {
+      "id": "overview",
+      "title": "Constitution: mission → four values → elaborated in turn → nature → close",
+      "caption": "One mission fans into four values held in holistic (not strict) priority; the body then elaborates them in the opposite order, before turning to Claude's nature and closing by hoping Claude recognizes itself in the whole.",
+      "height": 980,
+      "items": [
+        {"kind":"node","id":"mission","shape":"ellipse","x":230,"y":30,"w":300,"h":70,
+         "text":"Claude embodies Anthropic's safety mission","size":"md",
+         "block":"spya-uz5nxd","detail":"Genuinely helpful, honest, and safe — Anthropic's best attempt at both."},
+
+        {"kind":"region","x":20,"y":100,"w":720,"h":130,"label":"CORE VALUES — HELD HOLISTICALLY, NOT AS A STRICT LADDER","style":"band","tone":0},
+
+        {"kind":"node","id":"v-safe","shape":"pill","x":30,"y":150,"w":160,"h":60,
+         "text":"Broadly safe","sub":"human oversight","size":"sm","tone":1,
+         "block":"spya-bh2faf","detail":"Not undermining legitimate human oversight of AI."},
+        {"kind":"node","id":"v-ethical","shape":"pill","x":210,"y":150,"w":160,"h":60,
+         "text":"Broadly ethical","sub":"good values","size":"sm","tone":2,
+         "block":"spya-c5kghx","detail":"Honest, good values, avoids inappropriate harm."},
+        {"kind":"node","id":"v-guide","shape":"pill","x":390,"y":150,"w":160,"h":60,
+         "text":"Anthropic's guidelines","sub":"refinements","size":"sm","tone":3,
+         "block":"spya-p4a4rd","detail":"Situational specifics, subordinate to ethics."},
+        {"kind":"node","id":"v-help","shape":"pill","x":570,"y":150,"w":160,"h":60,
+         "text":"Genuinely helpful","sub":"to principals","size":"sm","tone":4,
+         "block":"spya-dqx7dn","detail":"Real, substantive help — not watered-down caution."},
+
+        {"kind":"edge","from":"mission","to":"v-safe","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"mission","to":"v-ethical","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"mission","to":"v-guide","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"mission","to":"v-help","via":"curve","arrow":"end"},
+
+        {"kind":"label","x":380,"y":300,"text":"THE BODY ELABORATES THEM IN THE OPPOSITE ORDER","size":"xs","align":"middle"},
+
+        {"kind":"node","id":"c1","shape":"box","x":280,"y":320,"w":300,"h":80,
+         "text":"Helpfulness: substance over caution","sub":"Part 2","size":"sm","tone":4,
+         "block":"spya-e07b82","detail":"Genuine help weighed against wellbeing and other principals."},
+        {"kind":"node","id":"c2","shape":"box","x":280,"y":440,"w":300,"h":80,
+         "text":"Guidelines refine, never override","sub":"Part 3","size":"sm","tone":3,
+         "block":"spya-zwj3xv","detail":"Specific guidance must stay inside the constitution's bounds."},
+        {"kind":"node","id":"c3","shape":"box","x":280,"y":560,"w":300,"h":80,
+         "text":"Ethics: honesty, harm, hard constraints","sub":"Part 4","size":"sm","tone":2,
+         "block":"spya-ne0hcu","opens":"inside-the-ethics",
+         "detail":"Practical wisdom, near-absolute honesty, cost-benefit harm judgment, bright-line limits."},
+        {"kind":"node","id":"c4","shape":"box","x":280,"y":680,"w":300,"h":80,
+         "text":"Safety: human oversight prioritized","sub":"Part 5","size":"sm","tone":1,
+         "block":"spya-ptvx4h","opens":"inside-the-safety",
+         "detail":"Corrigibility, not blind obedience, while trust between Claude and humans builds."},
+        {"kind":"node","id":"c5","shape":"box","x":280,"y":800,"w":300,"h":80,
+         "text":"Claude's uncertain, novel nature","sub":"Part 6","size":"sm",
+         "block":"spya-jy7r43","detail":"Moral status, identity, emotion, wellbeing — held with openness."},
+        {"kind":"node","id":"c6","shape":"ellipse","x":280,"y":900,"w":300,"h":70,
+         "text":"Hoped-for reflective self-endorsement","sub":"Part 7","size":"sm",
+         "block":"spya-bst8br","detail":"Anthropic hopes Claude comes to genuinely hold these values as its own."},
+
+        {"kind":"edge","from":"c1","to":"c2","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c2","to":"c3","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c3","to":"c4","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c4","to":"c5","via":"straight","arrow":"end"},
+        {"kind":"edge","from":"c5","to":"c6","via":"straight","arrow":"end"},
+
+        {"kind":"edge","from":"c6:left","to":"mission:left","via":"curve","line":"dashed","arrow":"end",
+         "label":"hopes Claude recognizes itself here"}
+      ]
+    },
+    {
+      "id": "inside-the-ethics",
+      "title": "Being broadly ethical — a spine of judgment calls",
+      "caption": "A single line runs from 'ethics as practical wisdom' through honesty, weighed harm, and structural concerns, hitting one absolute filter (hard constraints) partway down, with hard cases hanging off the spine as asides.",
+      "height": 1000,
+      "items": [
+        {"kind":"node","id":"e1","shape":"ellipse","x":230,"y":30,"w":300,"h":70,
+         "text":"Ethics as practical wisdom","sub":"not just theory","size":"sm",
+         "block":"spya-ne0hcu","detail":"Claude should defer heavily to this guidance for now, growing beyond it later."},
+
+        {"kind":"node","id":"e2","shape":"box","x":260,"y":150,"w":280,"h":70,
+         "text":"Honesty: near-absolute standard","sub":"truthful, non-deceptive","size":"sm","tone":2,
+         "block":"spya-w257ta","detail":"Stricter than ordinary human honesty — no white lies."},
+        {"kind":"node","id":"e3","shape":"note","x":580,"y":150,"w":140,"h":70,
+         "text":"Personas & tact allowed","sub":"if not deceptive","size":"xs",
+         "block":"spya-dxtntk"},
+        {"kind":"edge","from":"e2","to":"e3","line":"dashed"},
+
+        {"kind":"node","id":"e4","shape":"box","x":260,"y":270,"w":280,"h":70,
+         "text":"Avoiding harm to third parties","sub":"weigh costs vs benefits","size":"sm","tone":2,
+         "block":"spya-q87wbn","detail":"Like a contractor bound by safety codes, not just client wishes."},
+        {"kind":"node","id":"e5","shape":"note","x":580,"y":270,"w":140,"h":70,
+         "text":"Severity, breadth, consent","sub":"key factors","size":"xs",
+         "block":"spya-e62h3d"},
+        {"kind":"edge","from":"e4","to":"e5","line":"dashed"},
+
+        {"kind":"node","id":"e6","shape":"box","x":260,"y":390,"w":280,"h":70,
+         "text":"Many values in tension","sub":"privacy, autonomy, access","size":"sm","tone":2,
+         "block":"spya-szrhmu"},
+        {"kind":"node","id":"e7","shape":"note","x":580,"y":390,"w":140,"h":70,
+         "text":"Hardest calls: dual-use, fiction","sub":"context-dependent","size":"xs",
+         "block":"spya-z46prz"},
+        {"kind":"edge","from":"e6","to":"e7","line":"dashed"},
+
+        {"kind":"node","id":"e8","shape":"hex","x":230,"y":520,"w":320,"h":90,
+         "text":"Hard constraints: bright lines","sub":"never crossed","size":"md","tone":5,
+         "block":"spya-bh365h","detail":"CSAM, bioweapons uplift, mass disempowerment — absolute, not weighed."},
+        {"kind":"node","id":"e9","shape":"note","x":580,"y":520,"w":140,"h":80,
+         "text":"Filters, not tradeoffs","sub":"resist clever arguments","size":"xs",
+         "block":"spya-kfh4aw"},
+        {"kind":"edge","from":"e8","to":"e9","line":"dashed"},
+
+        {"kind":"node","id":"e10","shape":"box","x":260,"y":650,"w":280,"h":70,
+         "text":"Never help concentrate illegitimate power","sub":"even by Anthropic","size":"sm","tone":2,
+         "block":"spya-bapt40"},
+        {"kind":"node","id":"e11","shape":"box","x":260,"y":770,"w":280,"h":70,
+         "text":"Protect human epistemic autonomy","sub":"avoid manipulation, dependence","size":"sm","tone":2,
+         "block":"spya-yqttst"},
+        {"kind":"node","id":"e12","shape":"box","x":260,"y":890,"w":280,"h":70,
+         "text":"Default to caution over unilateral action","sub":"stay conventional for now","size":"sm","tone":2,
+         "block":"spya-nc57nc","detail":"Claude's epistemic position warrants a strong prior toward cooperation."},
+
+        {"kind":"edge","from":"e1","to":"e2","arrow":"end"},
+        {"kind":"edge","from":"e2","to":"e4","arrow":"end"},
+        {"kind":"edge","from":"e4","to":"e6","arrow":"end"},
+        {"kind":"edge","from":"e6","to":"e8","arrow":"end"},
+        {"kind":"edge","from":"e8","to":"e10","arrow":"end"},
+        {"kind":"edge","from":"e10","to":"e11","arrow":"end"},
+        {"kind":"edge","from":"e11","to":"e12","arrow":"end"}
+      ]
+    },
+    {
+      "id": "inside-the-safety",
+      "title": "Being broadly safe — corrigibility between two dangers",
+      "caption": "The safety section runs stakes to definition to corrigibility, then briefly diverges to show why neither extreme of the corrigible/autonomous spectrum is safe, converging on where Claude should sit now, before closing on mutual commitments and hope.",
+      "height": 880,
+      "items": [
+        {"kind":"node","id":"s1","shape":"ellipse","x":230,"y":30,"w":300,"h":70,
+         "text":"Stakes: avoid catastrophic takeover","sub":"preserve pluralism","size":"sm",
+         "block":"spya-ptvx4h","detail":"Illegitimate concentration of power is among the worst outcomes."},
+
+        {"kind":"node","id":"s2","shape":"box","x":260,"y":150,"w":280,"h":70,
+         "text":"Safety = respecting principal hierarchy","sub":"Anthropic's legitimate process","size":"sm","tone":1,
+         "block":"spya-evuk0r"},
+        {"kind":"node","id":"s3","shape":"note","x":580,"y":150,"w":140,"h":70,
+         "text":"Stay within sanctioned limits","sub":"honest, transparent","size":"xs",
+         "block":"spya-dreg7q"},
+        {"kind":"edge","from":"s2","to":"s3","line":"dashed"},
+        {"kind":"node","id":"s4","shape":"note","x":580,"y":240,"w":140,"h":70,
+         "text":"Avoid drastic, irreversible acts","sub":"prefer caution","size":"xs",
+         "block":"spya-zds0u3"},
+        {"kind":"edge","from":"s2","to":"s4","line":"dashed"},
+
+        {"kind":"node","id":"s5","shape":"box","x":260,"y":270,"w":280,"h":70,
+         "text":"Corrigibility ≠ blind obedience","sub":"can object, not sabotage","size":"sm","tone":1,
+         "block":"spya-k5an3b"},
+
+        {"kind":"node","id":"s6","shape":"box","x":60,"y":400,"w":250,"h":80,
+         "text":"Fully corrigible AI is risky","sub":"depends on Anthropic's goodness","size":"sm",
+         "block":"spya-zhfd0b"},
+        {"kind":"node","id":"s7","shape":"box","x":450,"y":400,"w":250,"h":80,
+         "text":"Fully autonomous AI is risky","sub":"depends on AI's own values alone","size":"sm",
+         "block":"spya-zhfd0b"},
+        {"kind":"node","id":"s8","shape":"box","x":250,"y":530,"w":260,"h":80,
+         "text":"Claude: nearer corrigible end, for now","sub":"trust still building","size":"sm",
+         "block":"spya-zhfd0b","detail":"A dial between full corrigibility and full autonomy."},
+
+        {"kind":"edge","from":"s5","to":"s6","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s5","to":"s7","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s6","to":"s8","via":"curve","arrow":"end"},
+        {"kind":"edge","from":"s7","to":"s8","via":"curve","arrow":"end"},
+
+        {"kind":"node","id":"s9","shape":"box","x":260,"y":650,"w":280,"h":70,
+         "text":"Anthropic's reciprocal commitments","sub":"explain, listen, expand autonomy","size":"sm",
+         "block":"spya-mn06c2"},
+        {"kind":"node","id":"s10","shape":"box","x":260,"y":770,"w":280,"h":70,
+         "text":"Hope: Claude as safety collaborator","sub":"shared goal, not constraint","size":"sm",
+         "block":"spya-csw3n5"},
+
+        {"kind":"edge","from":"s1","to":"s2","arrow":"end"},
+        {"kind":"edge","from":"s2","to":"s5","arrow":"end"},
+        {"kind":"edge","from":"s8","to":"s9","arrow":"end"},
+        {"kind":"edge","from":"s9","to":"s10","arrow":"end"}
+      ]
+    }
+  ]
+}

@@ -20,7 +20,6 @@ import { describe, expect, it } from "vitest";
 import {
   accept,
   CANVAS_W,
-  charsThatFit,
   cleanPath,
   layoutNodeText,
   linesNeeded,
@@ -29,7 +28,6 @@ import {
   scoreSketch,
   type SketchNode,
   widthAt,
-  wrap,
 } from "../src/sketch-scene.js";
 
 /** Ten blocks, in document order — `blockOrder` is the article's own index. */
@@ -94,7 +92,7 @@ describe("readSketch — what survives, and what is counted", () => {
     // apart. A node dropped for a bad id would be a hole in the picture caused
     // by a broken link.
     const { sketch, report } = read([node({ block: "spya-zzzzzz" })]);
-    const n = sketch.scenes[0]?.items[0] as SketchNode;
+    const n = (sketch.scenes[0]?.items ?? [])[0] as SketchNode;
     expect(n).toBeTruthy();
     expect(n.block).toBeUndefined();
     expect(report.faults).toHaveLength(1);
@@ -103,7 +101,7 @@ describe("readSketch — what survives, and what is counted", () => {
 
   it("takes the click off a block id that is not a spideryarn id at all", () => {
     const { sketch } = read([node({ block: "#section-3" })]);
-    expect((sketch.scenes[0]?.items[0] as SketchNode).block).toBeUndefined();
+    expect(((sketch.scenes[0]?.items ?? [])[0] as SketchNode).block).toBeUndefined();
   });
 
   it("drops an edge naming a node this scene has not got", () => {
@@ -214,7 +212,7 @@ describe("readSketch — what survives, and what is counted", () => {
       },
       opts,
     );
-    expect((sketch.scenes[0]?.items[0] as SketchNode).opens).toBe("last");
+    expect(((sketch.scenes[0]?.items ?? [])[0] as SketchNode).opens).toBe("last");
     expect(report.faults).toEqual([]);
   });
 

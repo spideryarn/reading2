@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 966.85" width="760" height="966.85">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="966.85" fill="#252525"/>
+<text x="16" y="24" font-size="17" fill="#f7f7f7" font-weight="600">Being broadly safe — corrigibility between two dangers</text><text x="16" y="42" font-size="11.5" fill="#b8b8b8">The safety section runs stakes to definition to corrigibility, then briefly diverges to show why neither extreme of the</text>
+<text x="16" y="56.95" font-size="11.5" fill="#b8b8b8">corrigible/autonomous spectrum is safe, converging on where Claude should sit now, before closing on mutual commitments</text>
+<text x="16" y="71.9" font-size="11.5" fill="#b8b8b8">and hope.</text>
+<g transform="translate(0 86.85)">
+<path d="M540 185 L580 185" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="580,185 570,188.5 570,181.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 220 L650 240" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="650,240 639.7527389366487,242.69140125204754 640.3109554926289,235.71369430229467" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 340 C400 367 185 373 185 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="185,400 181.5,390 188.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 340 C400 367 575 373 575 400" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="575,400 571.5,390 578.5,390" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M185 480 C185 502.5 380 507.5 380 530" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,530 376.5,520 383.5,520" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M575 480 C575 502.5 380 507.5 380 530" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,530 376.5,520 383.5,520" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 L400 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,150 393.03642481836056,142.01510045838677 399.53576165455735,139.41536572390805" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 220 L400 270" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,270 396.5,260 403.5,260" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 610 L400 650" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,650 392.3973688765007,642.6209756742506 398.6583592135001,639.490480505751" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M400 720 L400 770" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="400,770 396.5,760 403.5,760" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Stakes: avoid catastrophic takeover — preserve pluralism — Illegitimate concentration of power is among the worst outcomes.</title>
+<ellipse cx="380" cy="65" rx="150" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="62.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Stakes: avoid catastrophic takeover</text>
+<text x="380" y="79.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">preserve pluralism</text>
+</g>
+<g>
+<title>Safety = respecting principal hierarchy — Anthropic's legitimate process</title>
+<rect x="260" y="150" width="280" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="400" y="182.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Safety = respecting principal hierarchy</text>
+<text x="400" y="199.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Anthropic's legitimate process</text>
+</g>
+<g>
+<title>Stay within sanctioned limits — honest, transparent</title>
+<path d="M580 150 L706 150 L720 164 L720 220 L580 220 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M706 150 L706 164 L720 164" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="650" y="176.15" font-size="10" text-anchor="middle" fill="#f7f7f7">Stay within sanctioned</text>
+<text x="650" y="188.65" font-size="10" text-anchor="middle" fill="#f7f7f7">limits</text>
+<text x="650" y="202.5" font-size="9" text-anchor="middle" fill="#8f8f8f">honest, transparent</text>
+</g>
+<g>
+<title>Avoid drastic, irreversible acts — prefer caution</title>
+<path d="M580 240 L706 240 L720 254 L720 310 L580 310 Z" fill="rgba(201,201,201,0.09)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M706 240 L706 254 L720 254" fill="none" stroke="rgba(201,201,201,0.5)" stroke-width="1"/>
+<text x="650" y="266.15" font-size="10" text-anchor="middle" fill="#f7f7f7">Avoid drastic,</text>
+<text x="650" y="278.65" font-size="10" text-anchor="middle" fill="#f7f7f7">irreversible acts</text>
+<text x="650" y="292.5" font-size="9" text-anchor="middle" fill="#8f8f8f">prefer caution</text>
+</g>
+<g>
+<title>Corrigibility ≠ blind obedience — can object, not sabotage</title>
+<rect x="260" y="270" width="280" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="400" y="302.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Corrigibility ≠ blind obedience</text>
+<text x="400" y="319.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">can object, not sabotage</text>
+</g>
+<g>
+<title>Fully corrigible AI is risky — depends on Anthropic's goodness</title>
+<rect x="60" y="400" width="250" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="185" y="437.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Fully corrigible AI is risky</text>
+<text x="185" y="454.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">depends on Anthropic's goodness</text>
+</g>
+<g>
+<title>Fully autonomous AI is risky — depends on AI's own values alone</title>
+<rect x="450" y="400" width="250" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="575" y="437.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Fully autonomous AI is risky</text>
+<text x="575" y="454.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">depends on AI's own values alone</text>
+</g>
+<g>
+<title>Claude: nearer corrigible end, for now — trust still building — A dial between full corrigibility and full autonomy.</title>
+<rect x="250" y="530" width="260" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="567.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Claude: nearer corrigible end, for now</text>
+<text x="380" y="584.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">trust still building</text>
+</g>
+<g>
+<title>Anthropic's reciprocal commitments — explain, listen, expand autonomy</title>
+<rect x="260" y="650" width="280" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="682.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Anthropic's reciprocal commitments</text>
+<text x="400" y="699.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">explain, listen, expand autonomy</text>
+</g>
+<g>
+<title>Hope: Claude as safety collaborator — shared goal, not constraint</title>
+<rect x="260" y="770" width="280" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="400" y="802.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Hope: Claude as safety collaborator</text>
+<text x="400" y="819.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">shared goal, not constraint</text>
+</g>
+</g>
+</svg>

@@ -256,6 +256,58 @@ worse than no picture. Two were found, and both are real:
 Neither is a fabricated relationship. Both are a 25-node picture of a 300-block
 article doing what a 25-node picture does. Worth knowing rather than fixing.
 
+### The one real misrepresentation, found twice, and fixed at source
+
+Two more readers, one per article, were run the same way. Between them they
+found the failure mode this feature has that no other diagram in the app can
+have: **the picture asserts things through its geometry that nobody wrote in
+words, and those assertions can be stronger than the article's.**
+
+- **The constitution.** The picture drew the four values as a numbered 1/2/3/4
+  ladder with a "priority" arrow down it — a strict lexicographic ordering. The
+  document says the opposite, in its own words: *"the notion of prioritization
+  is holistic rather than strict"*, and *"the vast majority of Claude's
+  interactions involve everyday tasks … where there's no fundamental conflict"*.
+  Checked in `blocks.json`, not taken on the reviewer's word.
+- **The Noema essay.** The picture put a **diamond** — the drawing convention
+  for a decision — on *"Actually conscious, or just seeming?"*, with branches
+  labelled "if real" and "if seeming". The essay's point is that this cannot be
+  settled: *"no definitive test can resolve the question."* The two worries are
+  held at once and permanently; the diamond promised a resolution the text
+  denies.
+
+Neither is a wrong fact. Both are **the shape being more confident than the
+prose**, and a reader cannot tell a confident drawing from a correct one.
+
+So the prompt now has a section on it, before the canvas and before the
+primitives, naming what each device claims: a diamond claims the question gets
+settled; a numbered ladder claims strictly-in-this-order-always; two branches
+off a fork claim one-or-the-other; an arrow claims therefore rather than also;
+and banding two parts of a piece while leaving a third bare claims the third is
+an appendix. It ends with an instruction to look at each shape and ask what it
+asserts.
+
+**It worked on the first re-draw.** The constitution now comes back as four
+unnumbered pills side by side under a region reading *"CORE VALUES — HELD
+HOLISTICALLY, NOT AS A STRICT LADDER"*, with the caption saying *"four values
+held in holistic (not strict) priority"* — and it keeps the thing that made the
+first version good, the hues carrying from the four values down to the four body
+sections so the reverse-order correspondence is visible without reading. The
+Noema diamond is gone. `evals/results/sketch-2026-08-30b/`.
+
+### Navigation was spot-checked, and it is not perfect
+
+Five of the Noema picture's nodes were chased into `blocks.json` by hand: three
+landed exactly on the sentence the box claims, one landed on a section heading
+rather than on the claim, and one landed **one block early — on the
+counter-consideration rather than on the claim itself**. Off by one paragraph,
+and on the wrong side of the argument.
+
+Written down rather than fixed. The honest fix is a verification pass that
+checks each node's text against the block it names, which is another model call
+and the sort of thing to build once somebody has decided this feature is worth
+keeping.
+
 ### Three findings acted on
 
 - **A connector crossing a region's own name** made it impossible to tell

@@ -424,6 +424,140 @@ function readNode(
   return node;
 }
 
+/**
+ * The four readers that are not `readNode`, one per primitive.
+ *
+ * They were four branches of one `readItem`, which is the shape that reads
+ * naturally and the shape a linter is right about: each branch has its own
+ * required fields, its own faults and its own defaulting, and they share
+ * nothing but the fault list. Split so each can be read on its own.
+ */
+function readRegion(
+  raw: Record<string, unknown>,
+  h: number,
+  faults: SketchFault[],
+  where: string,
+): SketchRegion | null {
+  const x = num(raw.x);
+  const y = num(raw.y);
+  const w = num(raw.w);
+  const hh = num(raw.h);
+  if (x === null || y === null || w === null || hh === null) {
+    faults.push({ where, what: "region with a missing coordinate" });
+    return null;
+  }
+  /* **The far edge, not each number on its own.** Clamping `x` to the canvas
+     and `w` to the canvas independently lets `x = 750, w = 100` through on a
+     760-wide canvas: both numbers are legal and their sum is not, and a region
+     90 units past the right edge draws a band that runs off the picture with no
+     fault recorded. GPT Sol, 2026-08-30 — the same mistake the node reader had
+     already been fixed for. */
+  const rx = Math.max(0, Math.min(CANVAS_W - 1, x));
+  const ry = Math.max(0, Math.min(h - 1, y));
+  const region: SketchRegion = {
+    kind: "region",
+    x: rx,
+    y: ry,
+    w: Math.max(1, Math.min(CANVAS_W - rx, w)),
+    h: Math.max(1, Math.min(h - ry, hh)),
+    style: oneOf(raw.style, REGION_STYLES, "band", (saw) =>
+      faults.push({ where, what: `region style "${saw}" is not one we draw` }),
+    ),
+  };
+  const label = str(raw.label);
+  if (label) region.label = label;
+  const t = tone(raw.tone);
+  if (t !== undefined) region.tone = t;
+  if (raw.muted === true) region.muted = true;
+  return region;
+}
+
+function readEdge(
+  raw: Record<string, unknown>,
+  faults: SketchFault[],
+  where: string,
+): SketchEdge | null {
+  const from = str(raw.from);
+  const to = str(raw.to);
+  if (!from || !to) {
+    faults.push({ where, what: "edge with no end" });
+    return null;
+  }
+  if (from.split(":")[0] === to.split(":")[0]) {
+    /* A self-edge is routed through its own node and comes out as a stub mostly
+       hidden under it — a line that says nothing and looks like a rendering
+       fault. Nothing in an argument map means "this depends on itself".
+       GPT Sol, 2026-08-30. */
+    faults.push({ where, what: `edge from ${from} to itself` });
+    return null;
+  }
+  const edge: SketchEdge = {
+    kind: "edge",
+    from,
+    to,
+    via: oneOf(raw.via, ["straight", "elbow", "curve"] as const, "straight"),
+    line: oneOf(raw.line, LINES, "solid"),
+    arrow: oneOf(raw.arrow, ARROWS, "end"),
+  };
+  const label = str(raw.label);
+  if (label) edge.label = label;
+  const t = tone(raw.tone);
+  if (t !== undefined) edge.tone = t;
+  if (raw.muted === true) edge.muted = true;
+  return edge;
+}
+
+function readPath(
+  raw: Record<string, unknown>,
+  faults: SketchFault[],
+  where: string,
+): SketchPath | null {
+  const d = cleanPath(raw.d);
+  if (!d) {
+    faults.push({ where, what: "path with a `d` we will not draw" });
+    return null;
+  }
+  const path: SketchPath = {
+    kind: "path",
+    d,
+    line: oneOf(raw.line, LINES, "solid"),
+    arrow: oneOf(raw.arrow, ARROWS, "none"),
+    fill: raw.fill === true,
+  };
+  const t = tone(raw.tone);
+  if (t !== undefined) path.tone = t;
+  if (raw.muted === true) path.muted = true;
+  return path;
+}
+
+function readLabel(
+  raw: Record<string, unknown>,
+  h: number,
+  faults: SketchFault[],
+  where: string,
+): SketchLabel | null {
+  const x = num(raw.x);
+  const y = num(raw.y);
+  const text = str(raw.text);
+  if (x === null || y === null || !text) {
+    faults.push({ where, what: "label with no position or no text" });
+    return null;
+  }
+  const label: SketchLabel = {
+    kind: "label",
+    x: Math.max(0, Math.min(CANVAS_W, x)),
+    y: Math.max(0, Math.min(h, y)),
+    text,
+    size: oneOf(raw.size, SIZES, "sm"),
+    align: oneOf(raw.align, ["start", "middle", "end"] as const, "start"),
+  };
+  const t = tone(raw.tone);
+  if (t !== undefined) label.tone = t;
+  if (raw.muted === true) label.muted = true;
+  return label;
+}
+
+/** Whichever of the five this is, or `null` with a fault saying why not. */
 function readItem(
   raw: unknown,
   h: number,
@@ -435,119 +569,21 @@ function readItem(
     faults.push({ where, what: "item is not an object" });
     return null;
   }
-  const kind = str(raw.kind);
-
-  if (kind === "node") return readNode(raw, h, blocks, faults, where);
-
-  if (kind === "region") {
-    const x = num(raw.x);
-    const y = num(raw.y);
-    const w = num(raw.w);
-    const hh = num(raw.h);
-    if (x === null || y === null || w === null || hh === null) {
-      faults.push({ where, what: "region with a missing coordinate" });
+  switch (str(raw.kind)) {
+    case "node":
+      return readNode(raw, h, blocks, faults, where);
+    case "region":
+      return readRegion(raw, h, faults, where);
+    case "edge":
+      return readEdge(raw, faults, where);
+    case "path":
+      return readPath(raw, faults, where);
+    case "label":
+      return readLabel(raw, h, faults, where);
+    default:
+      faults.push({ where, what: `unknown kind "${str(raw.kind)}"` });
       return null;
-    }
-    /* **The far edge, not each number on its own.** Clamping `x` to the canvas
-       and `w` to the canvas independently lets `x = 750, w = 100` through on a
-       760-wide canvas: both numbers are legal and their sum is not, and a
-       region 90 units past the right edge draws a band that runs off the
-       picture with no fault recorded. GPT Sol, 2026-08-30 — the same mistake
-       the node reader had already been fixed for. */
-    const rx = Math.max(0, Math.min(CANVAS_W - 1, x));
-    const ry = Math.max(0, Math.min(h - 1, y));
-    const region: SketchRegion = {
-      kind: "region",
-      x: rx,
-      y: ry,
-      w: Math.max(1, Math.min(CANVAS_W - rx, w)),
-      h: Math.max(1, Math.min(h - ry, hh)),
-      style: oneOf(raw.style, REGION_STYLES, "band", (saw) =>
-        faults.push({ where, what: `region style "${saw}" is not one we draw` }),
-      ),
-    };
-    const label = str(raw.label);
-    if (label) region.label = label;
-    const t = tone(raw.tone);
-    if (t !== undefined) region.tone = t;
-    if (raw.muted === true) region.muted = true;
-    return region;
   }
-
-  if (kind === "edge") {
-    const from = str(raw.from);
-    const to = str(raw.to);
-    if (!from || !to) {
-      faults.push({ where, what: "edge with no end" });
-      return null;
-    }
-    if (from.split(":")[0] === to.split(":")[0]) {
-      /* A self-edge is routed through its own node and comes out as a stub
-         mostly hidden under it — a line that says nothing and looks like a
-         rendering fault. Nothing in an argument map means "this depends on
-         itself". GPT Sol, 2026-08-30. */
-      faults.push({ where, what: `edge from ${from} to itself` });
-      return null;
-    }
-    const edge: SketchEdge = {
-      kind: "edge",
-      from,
-      to,
-      via: oneOf(raw.via, ["straight", "elbow", "curve"] as const, "straight"),
-      line: oneOf(raw.line, LINES, "solid"),
-      arrow: oneOf(raw.arrow, ARROWS, "end"),
-    };
-    const label = str(raw.label);
-    if (label) edge.label = label;
-    const t = tone(raw.tone);
-    if (t !== undefined) edge.tone = t;
-    if (raw.muted === true) edge.muted = true;
-    return edge;
-  }
-
-  if (kind === "path") {
-    const d = cleanPath(raw.d);
-    if (!d) {
-      faults.push({ where, what: "path with a `d` we will not draw" });
-      return null;
-    }
-    const path: SketchPath = {
-      kind: "path",
-      d,
-      line: oneOf(raw.line, LINES, "solid"),
-      arrow: oneOf(raw.arrow, ARROWS, "none"),
-      fill: raw.fill === true,
-    };
-    const t = tone(raw.tone);
-    if (t !== undefined) path.tone = t;
-    if (raw.muted === true) path.muted = true;
-    return path;
-  }
-
-  if (kind === "label") {
-    const x = num(raw.x);
-    const y = num(raw.y);
-    const text = str(raw.text);
-    if (x === null || y === null || !text) {
-      faults.push({ where, what: "label with no position or no text" });
-      return null;
-    }
-    const label: SketchLabel = {
-      kind: "label",
-      x: Math.max(0, Math.min(CANVAS_W, x)),
-      y: Math.max(0, Math.min(h, y)),
-      text,
-      size: oneOf(raw.size, SIZES, "sm"),
-      align: oneOf(raw.align, ["start", "middle", "end"] as const, "start"),
-    };
-    const t = tone(raw.tone);
-    if (t !== undefined) label.tone = t;
-    if (raw.muted === true) label.muted = true;
-    return label;
-  }
-
-  faults.push({ where, what: `unknown kind "${kind}"` });
-  return null;
 }
 
 /**

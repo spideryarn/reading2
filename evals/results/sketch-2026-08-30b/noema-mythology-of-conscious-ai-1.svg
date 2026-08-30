@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 721.9" width="760" height="721.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="721.9" fill="#252525"/>
+<text x="16" y="24" font-size="17" fill="#f7f7f7" font-weight="600">Why We're Tempted</text><text x="16" y="42" font-size="11.5" fill="#b8b8b8">One conflation (intelligence with consciousness) opens two parallel tracks — cognitive bias, and hype — that both</text>
+<text x="16" y="56.95" font-size="11.5" fill="#b8b8b8">funnel into the same conclusion: this looks like pattern-seeing, not evidence.</text>
+<g transform="translate(0 71.9)">
+<rect x="24" y="140" width="300" height="370" rx="8" fill="rgba(232,112,58,0.07)" stroke="rgba(232,112,58,0.24)" stroke-width="1"/>
+<rect x="420" y="140" width="300" height="200" rx="8" fill="rgba(232,112,58,0.07)" stroke="rgba(232,112,58,0.24)" stroke-width="1"/>
+<path d="M380 100 C380 131.5 170 138.5 170 170" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="170,170 166.5,160 173.5,160" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 131.5 570 138.5 570 170" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="570,170 566.5,160 573.5,160" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M170 240 L170 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="170,260 166.5,250 173.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M170 330 L170 350" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="170,350 166.5,340 173.5,340" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M170 420 L170 440" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="170,440 166.5,430 173.5,430" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M570 240 L570 260" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="570,260 566.5,250 573.5,250" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M170 510 C170 530 380 510 380 530" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,530 376.5,520 383.5,520" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M570 330 C570 420 380 440 380 530" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="380,530 376.5,520 383.5,520" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Intelligence isn't consciousness — Intelligence is about doing; consciousness is about being — they needn't travel together.</title>
+<rect x="230" y="30" width="300" height="70" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="69.875" font-size="15" text-anchor="middle" fill="#f7f7f7">Intelligence isn't consciousness</text>
+</g>
+<g>
+<title>Anthropocentrism — Taking the human case as definitional rather than as one example among many.</title>
+<rect x="40" y="170" width="260" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="170" y="208.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Anthropocentrism</text>
+</g>
+<g>
+<title>Exceptionalism &amp; anthropomorphism — Putting humans atop every pile, then projecting our qualities onto lookalikes.</title>
+<rect x="40" y="260" width="260" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="170" y="298.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Exceptionalism &amp; anthropomorphism</text>
+</g>
+<g>
+<title>Language feels most human — LLMs pull our psychological strings via speech in a way AlphaFold never does.</title>
+<rect x="40" y="350" width="260" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="170" y="388.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Language feels most human</text>
+</g>
+<g>
+<title>'Hallucinate' implies feeling — Better to say AI 'confabulates' — a doing word, not an experiencing one.</title>
+<path d="M40 440 L286 440 L300 454 L300 510 L40 510 Z" fill="rgba(232,112,58,0.09)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2" stroke-dasharray="3 3"/>
+<path d="M286 440 L286 454 L300 454" fill="none" stroke="rgba(232,112,58,0.5)" stroke-width="1"/>
+<text x="170" y="478.9" font-size="12" text-anchor="middle" fill="#f7f7f7">'Hallucinate' implies feeling</text>
+</g>
+<g>
+<title>Exponential growth feels urgent — On an exponential curve every point feels like an inflection point.</title>
+<rect x="440" y="170" width="260" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="570" y="208.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Exponential growth feels urgent</text>
+</g>
+<g>
+<title>Techno-rapture: silicon immortality — The Promethean lure of god-like creation and escape from decaying bodies.</title>
+<rect x="440" y="260" width="260" height="70" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="570" y="298.9" font-size="12" text-anchor="middle" fill="#f7f7f7">Techno-rapture: silicon immortality</text>
+</g>
+<g>
+<title>Seeing consciousness like faces in toast — Recognizing the pareidolia is only the first step, not the whole answer.</title>
+<polygon points="270,530 490,530 530,570 490,610 270,610 230,570" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="380" y="565.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Seeing consciousness like faces in</text>
+<text x="380" y="584.25" font-size="15" text-anchor="middle" fill="#f7f7f7">toast</text>
+</g>
+<text x="34" y="155" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">COGNITIVE BIASES</text>
+<text x="430" y="155" font-size="11" text-anchor="start" fill="rgba(232,112,58,0.95)" font-weight="500" letter-spacing="0.07em">HYPE &amp; MYTHOLOGY</text>
+</g>
+</svg>

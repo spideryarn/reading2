@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 1051.9" width="760" height="1051.9">
+<style>text { font-family: "Geist", "Helvetica Neue", Arial, sans-serif; }</style>
+<rect x="0" y="0" width="760" height="1051.9" fill="#252525"/>
+<text x="16" y="24" font-size="17" fill="#f7f7f7" font-weight="600">Constitution: mission → four values → elaborated in turn → nature → close</text><text x="16" y="42" font-size="11.5" fill="#b8b8b8">One mission fans into four values held in holistic (not strict) priority; the body then elaborates them in the opposite</text>
+<text x="16" y="56.95" font-size="11.5" fill="#b8b8b8">order, before turning to Claude's nature and closing by hoping Claude recognizes itself in the whole.</text>
+<g transform="translate(0 71.9)">
+<rect x="20" y="100" width="720" height="130" rx="8" fill="rgba(86,180,233,0.07)" stroke="rgba(86,180,233,0.24)" stroke-width="1"/>
+<path d="M380 100 C380 122.5 110 127.5 110 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="110,150 106.5,140 113.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 122.5 290 127.5 290 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="290,150 286.5,140 293.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 122.5 470 127.5 470 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="470,150 466.5,140 473.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M380 100 C380 122.5 650 127.5 650 150" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="650,150 646.5,140 653.5,140" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M430 400 L430 440" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,440 426.5,430 433.5,430" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M430 520 L430 560" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,560 426.5,550 433.5,550" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M430 640 L430 680" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,680 426.5,670 433.5,670" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M430 760 L430 800" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,800 426.5,790 433.5,790" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M430 880 L430 900" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<polygon points="430,900 426.5,890 433.5,890" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<path d="M280 935 C8 935 8 65 230 65" fill="none" stroke="rgba(201,201,201,0.62)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polygon points="230,65 220,68.5 220,61.5" fill="rgba(201,201,201,0.8)" stroke="none"/>
+<g>
+<title>Claude embodies Anthropic's safety mission — Genuinely helpful, honest, and safe — Anthropic's best attempt at both.</title>
+<ellipse cx="380" cy="65" rx="150" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="380" y="60.5" font-size="15" text-anchor="middle" fill="#f7f7f7">Claude embodies Anthropic's safety</text>
+<text x="380" y="79.25" font-size="15" text-anchor="middle" fill="#f7f7f7">mission</text>
+</g>
+<g>
+<title>Broadly safe — human oversight — Not undermining legitimate human oversight of AI.</title>
+<rect x="30" y="150" width="160" height="60" rx="30" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="110" y="177.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Broadly safe</text>
+<text x="110" y="194.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">human oversight</text>
+</g>
+<g>
+<title>Broadly ethical — good values — Honest, good values, avoids inappropriate harm.</title>
+<rect x="210" y="150" width="160" height="60" rx="30" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="290" y="177.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Broadly ethical</text>
+<text x="290" y="194.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">good values</text>
+</g>
+<g>
+<title>Anthropic's guidelines — refinements — Situational specifics, subordinate to ethics.</title>
+<rect x="390" y="150" width="160" height="60" rx="30" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="470" y="177.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Anthropic's guidelines</text>
+<text x="470" y="194.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">refinements</text>
+</g>
+<g>
+<title>Genuinely helpful — to principals — Real, substantive help — not watered-down caution.</title>
+<rect x="570" y="150" width="160" height="60" rx="30" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="650" y="177.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Genuinely helpful</text>
+<text x="650" y="194.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">to principals</text>
+</g>
+<g>
+<title>Helpfulness: substance over caution — Part 2 — Genuine help weighed against wellbeing and other principals.</title>
+<rect x="280" y="320" width="300" height="80" rx="4" fill="rgba(92,143,232,0.16)" stroke="rgba(92,143,232,0.62)" stroke-width="1.2"/>
+<text x="430" y="357.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Helpfulness: substance over caution</text>
+<text x="430" y="374.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Part 2</text>
+</g>
+<g>
+<title>Guidelines refine, never override — Part 3 — Specific guidance must stay inside the constitution's bounds.</title>
+<rect x="280" y="440" width="300" height="80" rx="4" fill="rgba(240,228,66,0.16)" stroke="rgba(240,228,66,0.62)" stroke-width="1.2"/>
+<text x="430" y="477.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Guidelines refine, never override</text>
+<text x="430" y="494.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Part 3</text>
+</g>
+<g>
+<title>Ethics: honesty, harm, hard constraints — Part 4 — Practical wisdom, near-absolute honesty, cost-benefit harm judgment, bright-line limits.</title>
+<rect x="280" y="560" width="300" height="80" rx="4" fill="rgba(47,191,149,0.16)" stroke="rgba(47,191,149,0.62)" stroke-width="1.2"/>
+<text x="430" y="597.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Ethics: honesty, harm, hard constraints</text>
+<text x="430" y="614.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Part 4</text>
+</g>
+<g>
+<title>Safety: human oversight prioritized — Part 5 — Corrigibility, not blind obedience, while trust between Claude and humans builds.</title>
+<rect x="280" y="680" width="300" height="80" rx="4" fill="rgba(232,112,58,0.16)" stroke="rgba(232,112,58,0.62)" stroke-width="1.2"/>
+<text x="430" y="717.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Safety: human oversight prioritized</text>
+<text x="430" y="734.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Part 5</text>
+</g>
+<g>
+<title>Claude's uncertain, novel nature — Part 6 — Moral status, identity, emotion, wellbeing — held with openness.</title>
+<rect x="280" y="800" width="300" height="80" rx="4" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="430" y="837.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Claude's uncertain, novel nature</text>
+<text x="430" y="854.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Part 6</text>
+</g>
+<g>
+<title>Hoped-for reflective self-endorsement — Part 7 — Anthropic hopes Claude comes to genuinely hold these values as its own.</title>
+<ellipse cx="430" cy="935" rx="150" ry="35" fill="rgba(201,201,201,0.16)" stroke="rgba(201,201,201,0.62)" stroke-width="1.2"/>
+<text x="430" y="932.972" font-size="12" text-anchor="middle" fill="#f7f7f7">Hoped-for reflective self-endorsement</text>
+<text x="430" y="949.34" font-size="9.120000000000001" text-anchor="middle" fill="#8f8f8f">Part 7</text>
+</g>
+<text x="30" y="115" font-size="11" text-anchor="start" fill="rgba(86,180,233,0.95)" font-weight="500" letter-spacing="0.07em">CORE VALUES — HELD HOLISTICALLY, NOT AS A STRICT LADDER</text>
+<text x="380" y="300" font-size="10" text-anchor="middle" fill="#8f8f8f" letter-spacing="0.06em">THE BODY ELABORATES THEM IN THE OPPOSITE ORDER</text>
+<rect x="4" y="486" width="193.5" height="14" rx="3" fill="#252525" stroke="none"/>
+<text x="100.75" y="496" font-size="10" text-anchor="middle" fill="#8f8f8f">hopes Claude recognizes itself here</text>
+</g>
+</svg>
