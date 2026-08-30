@@ -186,6 +186,74 @@ The direct test of a label's job needs a person: show a label with its 5–9 sib
 shuffled, and ask which paragraph it points to. Measure correct identification, time, and whether
 distinctive terms survived. `--shuffle` prints those sets ready to hand to someone.
 
+## `toc-structure/` — is the structure pass worth what it costs?
+
+Written for [opening-an-article-before-the-toc.md](../docs/research/opening-an-article-before-the-toc.md).
+`toc-labels.ts` above judges stage 4's *second* pass; this judges the first — the single model call
+in [src/toc.ts](../src/toc.ts) that proposes the nested structure, which is 163–320 seconds and
+~70% of the whole ingest wait. The decisions queued against it (progressive waves, seeding the
+author's headings, changing model or effort) need a number to decide against.
+
+```
+npm run eval:toc-structure -- --arm headings --arm incumbent-disk   # free: no model, no network
+npm run eval:toc-structure -- --list                                # the declared arms
+```
+
+The deterministic scoring (`score.ts`) is unit-tested in
+[`tests/toc-structure-eval.test.ts`](../tests/toc-structure-eval.test.ts) — the same split as
+`extraction/`: the part that is cheap and repeatable is pinned as a test, the part that spends
+money is not one. The arms are declared as data in `arms.ts`; the ones that call a model **refuse
+to run** until their executor lands, loudly, so a results file cannot quietly mean "those arms were
+skipped".
+
+### The denominator is free
+
+**`headings` is arm zero**: the tree the author's own headings give for free, built
+deterministically in `heading-tree.ts`. On this corpus it reproduces the incumbent's depth-one
+carving *exactly* (L1 boundary agreement 100%) on six of nine articles — so an eval that scored
+model arms against nothing would credit the model for work the headings did for free. What the
+model demonstrably adds on those six is the level *below* (all-boundaries agreement 28–48%: the
+model cuts long runs at topic shifts, headings can't), the gists, and the titles where there is no
+heading to copy.
+
+The two hard cases stay hard, which is what they are in the corpus for: `scaling-hypothesis`
+over-segments on its own headings (11 parts against the model's 8, L1 agreement 42%), and
+`fowler-phrenology`'s headings are all catalogue front-matter in the first ten blocks, so the
+heading tree collapses to flat — no heading rule can carve that document, and it is precisely
+where a model arm earns its money.
+
+The section-level rule is two rules, not one — the shallowest level with ≥3 headings (else ≥2,
+else flat), then **a segment with under 20 words of prose merges into the next one** (the last
+merges backwards). The second rule is what the naive "shallowest repeated tag" was missing:
+without it the constitution grows a 6-word title part, and scaling-hypothesis a 1-word "Appendix"
+part and three trailing furniture parts. `heading-tree.ts` has the reasoning and the failure it
+keeps (fowler).
+
+### What it measures
+
+Mechanical proxies, per (blocks, tree); none is "is this a good tree". Validity (`checkTree`,
+with the free arm's structurally-inevitable missing gists counted apart from real damage);
+part-size balance in **words** (cv); leaf-depth uniformity per **block**; fanout against the
+prompt's 5–9; title and gist vocabulary retention via the same `contentWords` the label gate uses,
+with copied headings excluded for the reason the label eval learned; gist template repetition; and
+**heading agreement, which is deliberately two-sided and deliberately not a score** — boundaries
+landing on headings ≈ deferring to the author, headings becoming boundaries ≈ not reorganising,
+and either end can be right.
+
+`compareTrees` reports how differently two trees carve one article (Jaccard over cut points).
+Between an arm and the incumbent it is descriptive; between `incumbent` and `incumbent-repeat` —
+two identical arms, run twice — it is **the noise floor**, the resolution of the whole instrument,
+to be reported before any comparison. Never treat either tree as the reference: the third warning
+in the design was to never derive an expectation from the thing under test.
+
+### The arms that spend money (phase 2, not yet runnable)
+
+`incumbent` (what ships: `anthropic/claude-sonnet-5`, effort high, one call), `incumbent-repeat`
+(the noise floor), `cheap-high`, `smart-low`, `headings-seeded`, `waves`, `cheap-then-revise`.
+An arm is the model **plus how it is asked**: `cheap-high` necessarily changes wire and thinking
+mode too (gpt-5.6-luna does not exist on the Messages wire — src/models.ts), and the spec in
+`arms.ts` says so rather than leaving it to be discovered in the diff.
+
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 
 ```

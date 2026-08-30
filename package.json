@@ -29,6 +29,7 @@
     "toc": "tsx src/toc.ts",
     "labels": "tsx src/labels.ts",
     "eval:toc": "tsx evals/toc-labels.ts",
+    "eval:toc-structure": "tsx evals/toc-structure/run.ts",
     "arc": "tsx src/arc.ts",
     "tweets": "tsx src/tweets.ts",
     "glossary": "tsx src/glossary.ts",
