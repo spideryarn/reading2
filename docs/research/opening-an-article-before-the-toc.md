@@ -647,21 +647,63 @@ versus cheap-with-more; a cheap first pass revised by a capable model; and waves
 wave structure interact** — once L2 is a small call over twenty blocks it may not need `high` at all —
 so they must be evaluated together rather than separately.
 
-## 8. Prioritised — revised after review
+## 8. Prioritised — revised twice
 
-Sol declined to keep A → B → C, and having checked its reasoning I agree. A is a 12% cut, not 31%;
+Sol declined to keep A → B → C, and having checked its reasoning I agreed: A is a 12% cut, not 31%,
 and the tree-replacement seam of § 5 is a prerequisite for all three rather than a detail inside one.
+
+**Then 2026-08-30 happened.** A real ingest, a root-cause investigation and a paid calibration run
+added four candidates the first two versions of this table did not contain — and three of them are
+cheaper than anything that was on it. The pattern is worth naming: **every one of the new entries
+came from looking at what the pipeline actually does, and none from thinking harder about the
+options.**
+
+### The cheap repairs, which are not architecture at all
 
 | # | Change | Effort | Risk | Why here |
 |---|---|---|---|---|
-| **0** | Remove the `example/` fallback for non-fixture slugs; decide what "safe to open" means (incl. `assets`); build **one** article-refetch / tree-replacement seam | small–medium | low | Serving the wrong article is a live bug. The seam is a prerequisite for A, B and C. |
-| **B** | Heading tree at a new publication boundary, upgraded in place | medium | medium | The only option that answers the ask. Evidence: 6/7 documents have usable headings, 4/7 match the model's L1 exactly. |
+| **R1** | `checkTree` on the structure **before** `generateLabels`, keeping the existing check after the merge | tiny | low | **Authorised, in progress.** Three failures in one ingest each threw away a label run that had already succeeded. Not a move — a move would gut the phantom-row check, which only exists post-merge. |
+| **R2** | Repair off-by-one tiling instead of rejecting the call | small | low–medium | **Pending one number.** ~1 structure call in 5 returns a tree whose children miss by a block; the repair is `child[0] = cursor`, which fixes a gap and an overlap identically. Recovers a fifth of all structure calls for ~20 lines. **Only if the failures are small** — see § 6. |
+| **R3** | `buildTree` drops an unbacked `sourceHeading` instead of throwing | small | low | 4 calls in 4 made the same wrong claim on one article, so throwing is a guaranteed failure loop. `sourceHeading` is provenance, not structure: a tree with our title beats no tree. |
+
+**These three do not need the seam, the marker, or any new concept**, and between them they address a
+failure rate and a waste that every option below silently pays. R2 in particular may be worth more
+than the entire latency programme: a fifth of structure calls currently cost their money and produce
+nothing, so **the expected wait is not 163s, it is closer to 204s** — and no option on this page
+attacks that.
+
+### The architecture
+
+| # | Change | Effort | Risk | Why here |
+|---|---|---|---|---|
+| **0** | Remove the `example/` fallback for non-fixture slugs; decide what "safe to open" means (now: blocks + tree + **image suppression**, since waiting for `assets` is dead, § 5); build **one** article-refetch / tree-replacement seam | small–medium | low | Serving the wrong article is a live bug. The seam is a prerequisite for B, A and C. |
+| **B** | Heading tree at a new publication boundary, upgraded in place | medium | medium | The only option that answers the ask. 6/7 documents have usable headings, 4/7 match the model's L1 exactly — **and on a headingless article the expensive path is the unreliable one**, so there is often no good tree worth waiting for. |
 | **A** | Fold the labels into the same upgrade state machine | small | low | Once B's machine exists this is a state in it, not a project. 12%. |
-| **W** | Progressive waves | medium–large | medium | Shares B's machinery. The only answer to book-length depth, and it attacks the 88%. |
+| **W** | Progressive waves | medium–large | medium–**high** | The only answer to book-length depth, and it attacks the 88%. But a per-call failure rate compounds across ~39 calls (§ 6), so per-wave retry is required from the first commit, not as hardening. |
 | **C** | NDJSON + progressive render | medium | medium–high | Needs the browser delivery path that does not exist. Measure first-text timing first. |
 
-**Recommendation: 0, then B, then A folded in, then W — and C last or not at all.** W and C attack
-the same 163 seconds from different ends, and W does it without needing a new streaming channel.
+### Not ours, and the most valuable thing on the page
+
+| # | Change | Effort | Risk | Why here |
+|---|---|---|---|---|
+| **F** | Stage 3 stops promoting sentence fragments to blocks | medium | **high — moves block ids** | 89 fragments in one article, 13 of 15 affected. Fixes the ToC, the labels, reading time, search and zoom at once. **Blocked**: ids re-attach by `(tag, collapsed text)`, so merging a fragment re-identifies its neighbour too. Needs the stage's owner and Greg. |
+| **S** | Stage 3 recognises old-style footnote markup as apparatus | medium | high (same reason) | Higher severity than anything else here: it shipped `data/read/tree.json` with a gist summarising the footnotes, **past every check**, which `footnotes.md` says must never happen. A silent wrong artefact outranks a loud failed ingest. |
+
+F and S are two consequences of one gap — 1990s HTML defeating the block extractor — which is the
+argument for fixing that stage properly rather than patching stages 4 and 5 twice.
+
+### Recommendation
+
+**R1, R3, then 0, then B, with A folded in. R2 as soon as the size distribution lands. W after that,
+and only with per-wave retry. C last or not at all.**
+
+F and S are not ours to schedule, but they are the highest-value items on this page and someone
+should be made to own them.
+
+**The honest summary of the day: the cheap repairs found by watching one real ingest are worth more
+than the architecture found by thinking about the problem.** That is not an argument against the
+architecture — B still answers the original ask and nothing else does — but it is an argument for
+running real ingests continuously, which we were not doing at all.
 
 ## 9. Open questions
 
