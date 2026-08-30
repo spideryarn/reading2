@@ -90,11 +90,12 @@ import { currentOwnerId, type OwnerId } from "../owner.js";
 import { parseJsonFrom } from "../parse-json.js";
 import { dataRoot } from "./data-root.js";
 import { hashBlocks } from "../source-hash.js";
-import { deriveLibraryScalars } from "./pg-revisions.js";
+import { NotTheLiveAttempt, deriveLibraryScalars } from "./pg-revisions.js";
 import type { LabelsFile } from "../labels.js";
 import type { Assets } from "../assets.js";
+import type { Sketch } from "../sketch-scene.js";
 import type { Arc, Block, Glossary, Ideas, Meta, Summaries, Tree, TweetThread } from "../types.js";
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne } from "drizzle-orm";
 
 const logger = log("store");
 
@@ -384,25 +385,199 @@ type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
  * is still possible. The refusal below still catches every job that already
  * exists; serialising that last case needs a lock on something that exists
  * before the article does, which is a bigger change than this guard.
+ *
+ * `exempt` is the job **making** this call — see `verifyImportingJob`.
  */
-async function activeJobHolds(tx: Tx, slug: string, owner: OwnerId): Promise<string | undefined> {
+async function activeJobHolds(
+  tx: Tx,
+  slug: string,
+  owner: OwnerId,
+  exempt?: ImportingJob,
+): Promise<string | undefined> {
+  /* Verified FIRST, and its verified id is what the query below excludes. An
+     id taken straight from the caller would be a claim; this is a fact read
+     out of the same transaction. */
+  const exemptId = exempt ? await verifyImportingJob(tx, slug, owner, exempt) : undefined;
   const [row] = await tx
     .select({ id: jobs.id })
     .from(jobs)
-    .where(and(eq(jobs.ownerId, owner), eq(jobs.slug, slug), inArray(jobs.status, ACTIVE_JOB)))
+    .where(
+      and(
+        eq(jobs.ownerId, owner),
+        eq(jobs.slug, slug),
+        inArray(jobs.status, ACTIVE_JOB),
+        ...(exemptId === undefined ? [] : [ne(jobs.id, exemptId)]),
+      ),
+    )
     .limit(1);
   return row?.id;
 }
 
 /**
- * Import one article's directory.
+ * The job on whose behalf `importArticleIn` is being called.
  *
- * Everything happens in **one transaction**, because publication is the atomic
- * unit: a reader sees either the previous published revision or the complete
- * new one, never a mixture. That is the property today's filesystem store does
- * not have — a failed re-extraction overwrites a good article in place.
+ * Both fields, always. The id alone names a row; the attempt token is what says
+ * *this* worker still owns it — `jobs_running_is_fenced` in src/db/schema.ts
+ * makes the same argument about the same pair, and `fenceJob`
+ * (src/store/pg-revisions.ts) carries both into one `UPDATE` for it.
  */
-export async function importArticle(slug: string, ownerId: OwnerId = currentOwnerId()): Promise<ImportResult> {
+export interface ImportingJob {
+  readonly id: string;
+  readonly attemptId: string;
+}
+
+/**
+ * Confirm the exempt job really is the live attempt for this owner and slug.
+ *
+ * **The exemption exists because the finalizer would otherwise refuse itself.**
+ * A job's last step publishes inside its own transaction, and that job is
+ * `running` for this slug — so `activeJobHolds` would find it and throw. It
+ * therefore names itself, and the question is how much naming yourself is
+ * allowed to buy. GPT Sol, reviewing the D1b design, 2026-08-29:
+ *
+ * > The job-id exemption is safe only if the transaction **positively verifies
+ * > that the exempt job is the currently running job for that owner, slug and
+ * > attempt**. Merely adding `jobs.id != exemptId` lets any internal caller
+ * > suppress the holder it names.
+ *
+ * So this is a positive check with four clauses, and every one of them is load
+ * bearing — each is a distinct thing an exemption could otherwise be used to
+ * suppress, and each has its own case in tests/store-import-in-transaction.test.ts:
+ *
+ * - **`status = 'running'`** — a *queued* job is exactly the holder the guard
+ *   protects: it owns a draft it has not begun. Exempting it is the whole bug.
+ * - **`slug`** — a job running against a different article says nothing about
+ *   this one. This is the clause a lazy `id != exemptId` skips without looking
+ *   wrong.
+ * - **`attempt_id`** — a worker whose lease was rescued and reissued still
+ *   remembers its old token, and is the one thing a stale worker cannot forge.
+ * - **`owner_id`** — `jobs_active_slug` is on (owner, slug), so another
+ *   reader's ingest of the same slug is a legitimate active row, and naming it
+ *   would be one owner reaching across the isolation every other slug-to-article
+ *   query keeps.
+ *
+ * **Refuses rather than silently declining to exempt.** Not exempting would
+ * look safe and is not: a caller naming a job that is not running is a stale
+ * worker, and if no *other* job holds the slug the import would then proceed —
+ * a suppression attempt turning into a successful write. `NotTheLiveAttempt` is
+ * the error `fenceJob` already throws for the identical situation, so a
+ * finalizer handles one outcome rather than two spellings of it.
+ *
+ * **`for update`, so the answer cannot go stale inside the transaction.** Same
+ * reasoning as `activeJobHolds`' own docstring: a check that does not hold what
+ * it checked agrees with whatever raced it. Taken *after* the article lock,
+ * never before — **article lock before job lock, everywhere**
+ * (`lockOrCreateArticle`, src/store/pg-revisions.ts).
+ */
+async function verifyImportingJob(
+  tx: Tx,
+  slug: string,
+  owner: OwnerId,
+  job: ImportingJob,
+): Promise<string> {
+  const [row] = await tx
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.id, job.id),
+        eq(jobs.attemptId, job.attemptId),
+        eq(jobs.status, "running"),
+        eq(jobs.slug, slug),
+        eq(jobs.ownerId, owner),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  if (!row) throw new NotTheLiveAttempt(job.id);
+  return row.id;
+}
+
+/* ------------------------------------------------- the two halves, and why -- */
+
+/**
+ * Everything `data/<slug>/` says, parsed and checked — and nothing else.
+ *
+ * The reading half of the import. It touches no database and takes no
+ * transaction, so a caller can read first and then write inside a transaction
+ * of its own; `importArticleIn` below is that write.
+ *
+ * **Every derived value the write needs is computed here**, not there — the
+ * fingerprint, the article id, the library scalars, `createdAt`. They are pure
+ * functions of the files, and computing them outside the transaction keeps the
+ * transaction as short as the writes themselves.
+ *
+ * `absent` and `unrecoverable` are collected here too, because both are
+ * statements about the FILES rather than about what the database did with them.
+ */
+export interface ArticleFiles {
+  readonly slug: string;
+  /** Derived from the slug, so the same directory always names the same row. */
+  readonly articleId: string;
+  readonly blocks: Block[];
+  readonly tree: Tree;
+  readonly meta: Meta | undefined;
+  readonly arc: Arc | undefined;
+  readonly assets: Assets | undefined;
+  readonly tweets: TweetThread | undefined;
+  readonly glossary: Glossary | undefined;
+  readonly summaries: Summaries | undefined;
+  readonly ideas: Ideas | undefined;
+  readonly sketch: Sketch | undefined;
+  readonly labels: LabelsFile | undefined;
+  /* Reader state, typed from the loaders themselves rather than restated. The
+     whole reason these are read through `loadComments` and friends is that the
+     importer must not have its own opinion about the shape of those files, and
+     a hand-written type here would be exactly that opinion. */
+  readonly storedComments: Awaited<ReturnType<typeof loadComments>>;
+  readonly unanchored: Awaited<ReturnType<typeof loadComments>>;
+  readonly chat: Awaited<ReturnType<typeof loadThreads>>;
+  readonly runs: Awaited<ReturnType<typeof loadRuns>>;
+  readonly lookups: Awaited<ReturnType<typeof loadLookups>>;
+  readonly shelf: Awaited<ReturnType<typeof loadShelf>>;
+  readonly manifest: RawManifest | null;
+  /** The manifest, but only where it still describes these bytes — `provenance`. */
+  readonly recovered: RawManifest | null;
+  readonly rawBytes: Buffer | undefined;
+  readonly stampedHtml: string | undefined;
+  readonly createdAt: Date;
+  readonly fingerprint: string;
+  readonly scalars: ReturnType<typeof deriveLibraryScalars>;
+  readonly absent: readonly string[];
+  readonly unrecoverable: readonly string[];
+}
+
+/** What the write half did. The rest of `ImportResult` comes from the files. */
+export interface ImportedRevision {
+  readonly articleId: string;
+  readonly revisionId: string;
+}
+
+/** The job on whose behalf a write is being made, if there is one. */
+export interface ImportArticleInOptions {
+  readonly files: ArticleFiles;
+  readonly ownerId: OwnerId;
+  /**
+   * The job calling this, so that it does not refuse itself.
+   *
+   * Verified rather than trusted — `verifyImportingJob`. Absent for
+   * `npm run db:import`, which is a person at a terminal and owns no job.
+   */
+  readonly job?: ImportingJob;
+}
+
+/**
+ * Read one article's directory. **No database, no transaction.**
+ *
+ * Split out of `importArticle` on 2026-08-29, for the same reason
+ * `publishRevisionIn` was split out of `publishRevision`: a job's last step has
+ * to write its artefacts, publish the article and end the job in ONE
+ * transaction, and a function that opens its own cannot be part of one. The
+ * files can be read long before that transaction opens, and should be —
+ * `readFile` inside a transaction holds a row lock across a disk.
+ * docs/plans/delete-the-importer.md § D1b.
+ */
+export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
   const dir = path.join(dataRoot(), "data", slug);
   const absent: string[] = [];
   const unrecoverable: string[] = [];
@@ -432,6 +607,8 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
   if (!summaries) absent.push("summary.json");
   const ideas = await readJson<Ideas>(path.join(dir, "ideas.json"));
   if (!ideas) absent.push("ideas.json");
+  const sketch = await readJson<Sketch>(path.join(dir, "sketch.json"));
+  if (!sketch) absent.push("sketch.json");
   const labels = await readJson<LabelsFile>(path.join(dir, "labels.json"));
   if (!labels) absent.push("labels.json");
   /* ## Reader state is read through the app's OWN loaders, never by reopening
@@ -538,576 +715,697 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
      found it, and the fix is one derivation rather than two that agree today. */
   const scalars = deriveLibraryScalars({ blocks, tree, excerpt: meta?.excerpt });
 
-  const db = getDb();
+  return {
+    slug,
+    articleId,
+    blocks,
+    tree,
+    meta,
+    arc,
+    assets,
+    tweets,
+    glossary,
+    summaries,
+    ideas,
+    sketch,
+    labels,
+    storedComments,
+    unanchored,
+    chat,
+    runs,
+    lookups,
+    shelf,
+    manifest,
+    recovered,
+    rawBytes,
+    stampedHtml,
+    createdAt,
+    fingerprint,
+    scalars,
+    absent,
+    unrecoverable,
+  };
+}
+
+/**
+ * Write one article into Postgres, **inside the caller's transaction**.
+ *
+ * The other half of `readArticleFiles`, and the reason the split exists. Every
+ * statement below belongs to `tx`, so a caller that fails afterwards leaves
+ * nothing published — which is the property the pipeline's finalizer needs:
+ * publish the article and set `jobs.status = 'done'` together, or neither.
+ * `tests/store-import-in-transaction.test.ts` is that property, written as a
+ * rollback.
+ *
+ * It is the former body of `importArticle`'s `db.transaction(...)`, moved
+ * unchanged apart from taking its values from `opts.files` and returning the
+ * revision id rather than assigning it to a closure. **Nothing was reordered.**
+ * The article lock comes before the jobs query, the reader-state deletes come
+ * before the reinserts, comments come after chat, and the pointer moves last —
+ * each of those is load bearing and each is argued where it happens.
+ *
+ * It logs nothing. `importArticle` prints its line after **its** commit, by the
+ * same rule `publishRevisionIn` follows: a log line inside a caller's
+ * transaction announces a publication that a later rollback un-does.
+ */
+export async function importArticleIn(
+  tx: Tx,
+  opts: ImportArticleInOptions,
+): Promise<ImportedRevision> {
+  const { ownerId } = opts;
+  const {
+    slug,
+    articleId,
+    blocks,
+    tree,
+    meta,
+    arc,
+    assets,
+    tweets,
+    glossary,
+    summaries,
+    ideas,
+    sketch,
+    labels,
+    storedComments,
+    chat,
+    runs,
+    lookups,
+    shelf,
+    manifest,
+    recovered,
+    rawBytes,
+    stampedHtml,
+    createdAt,
+    fingerprint,
+    scalars,
+  } = opts.files;
   let revisionId = "";
-  await db.transaction(async (tx) => {
-    /* **Refuse to import over somebody else's article.**
-     *
-       `articleId` is derived from the slug, so an import for a slug that is
-       already there resolves to the *existing* row whoever owns it — and the
-       upsert below then updates that row, deletes its comments, chat, searches
-       and lookups by `articleId`, and reinserts them stamped with this
-       importer's owner. One `npm run db:import` with the wrong
-       `SPIDERYARN_OWNER_ID` and another reader's article has quietly changed
-       hands, with every write reporting success.
+  /* **Refuse to import over somebody else's article.**
+   *
+     `articleId` is derived from the slug, so an import for a slug that is
+     already there resolves to the *existing* row whoever owns it — and the
+     upsert below then updates that row, deletes its comments, chat, searches
+     and lookups by `articleId`, and reinserts them stamped with this
+     importer's owner. One `npm run db:import` with the wrong
+     `SPIDERYARN_OWNER_ID` and another reader's article has quietly changed
+     hands, with every write reporting success.
 
-       GPT Sol found it reviewing the ownership work, 2026-08-27, and it is a
-       fair hit: the isolation added that day covered every path from a slug to
-       an article *through the store*, and this is the CLI going round the side.
+     GPT Sol found it reviewing the ownership work, 2026-08-27, and it is a
+     fair hit: the isolation added that day covered every path from a slug to
+     an article *through the store*, and this is the CLI going round the side.
 
-       A read-and-refuse rather than an owner-scoped upsert, deliberately. An
-       upsert that simply did not match would insert a second row and hit the
-       unique constraint on `slug`, which reads as a database error rather than
-       as the answer to a question nobody asked out loud. This says the thing. */
-    const [existing] = await tx
-      .select({ ownerId: articles.ownerId })
-      .from(articles)
-      .where(eq(articles.id, articleId))
-      .limit(1)
-      /* `for update`, and the lock has to be taken HERE rather than after the
-         jobs query below — see `activeJobHolds`. */
-      .for("update");
-    if (existing && existing.ownerId !== ownerId) {
-      throw new Error(
-        `${slug}: that slug already belongs to a different owner in Postgres. ` +
-          "Importing would take their article, and everything anchored to it. " +
-          "Check SPIDERYARN_OWNER_ID. See src/store/import.ts.",
-      );
-    }
+     A read-and-refuse rather than an owner-scoped upsert, deliberately. An
+     upsert that simply did not match would insert a second row and hit the
+     unique constraint on `slug`, which reads as a database error rather than
+     as the answer to a question nobody asked out loud. This says the thing. */
+  const [existing] = await tx
+    .select({ ownerId: articles.ownerId })
+    .from(articles)
+    .where(eq(articles.id, articleId))
+    .limit(1)
+    /* `for update`, and the lock has to be taken HERE rather than after the
+       jobs query below — see `activeJobHolds`. */
+    .for("update");
+  if (existing && existing.ownerId !== ownerId) {
+    throw new Error(
+      `${slug}: that slug already belongs to a different owner in Postgres. ` +
+        "Importing would take their article, and everything anchored to it. " +
+        "Check SPIDERYARN_OWNER_ID. See src/store/import.ts.",
+    );
+  }
 
-    /* **Refuse to import under a job that is still working.**
-     *
-       The article row is locked by the select above; this is the second half of
-       the pair, and both halves are inside this transaction. A queued or
-       running job for this owner and slug owns a draft revision it is about to
-       write into, and the pointer move at the end of this transaction would
-       replace the base that draft was carried forward from — quietly, with
-       every write reporting success and the reader's job finishing onto an
-       article that is no longer the one it started from.
+  /* **Refuse to import under a job that is still working.**
+   *
+     The article row is locked by the select above; this is the second half of
+     the pair, and both halves are inside this transaction. A queued or
+     running job for this owner and slug owns a draft revision it is about to
+     write into, and the pointer move at the end of this transaction would
+     replace the base that draft was carried forward from — quietly, with
+     every write reporting success and the reader's job finishing onto an
+     article that is no longer the one it started from.
 
-       GPT Sol raised it against the D1b design, 2026-08-29: "both operations
-       should lock the article, then refuse any queued/running job for that
-       owner and slug before changing revisions or reader state."
+     GPT Sol raised it against the D1b design, 2026-08-29: "both operations
+     should lock the article, then refuse any queued/running job for that
+     owner and slug before changing revisions or reader state."
 
-       A throw rather than a skip, because this function is handed one slug and
-       has no other answer to give. `pruneOrphans` below does the same check and
-       skips, for the opposite reason. */
-    const holder = await activeJobHolds(tx, slug, ownerId);
-    if (holder) {
-      throw new Error(
-        `${slug}: there is a queued or running job for that slug (${holder}), and importing ` +
-          "would replace the revision it is building on. Wait for it to finish, or stop it. " +
-          "See src/store/import.ts.",
-      );
-    }
+     A throw rather than a skip, because this function is handed one slug and
+     has no other answer to give. `pruneOrphans` below does the same check and
+     skips, for the opposite reason.
 
-    await tx
-      .insert(articles)
-      .values({
-        id: articleId,
-        ownerId,
-        slug,
-        /* The article's own added-time, seeded from the same value as the
-           revision's. The shelf orders on `coalesce(revision.fetched_at,
-           article.created_at)` (`ADDED_AT`, src/store/pg.ts), so leaving this
-           at `now()` would put every article with no `fetchedAt` at the top of
-           the library on the day it was imported. */
+     `opts.job` is the one job this refusal does not apply to — the finalizer
+     calling us, which is itself running for this slug and would otherwise
+     refuse itself. It is checked against the jobs table before it excuses
+     anything: `verifyImportingJob`. */
+  const holder = await activeJobHolds(tx, slug, ownerId, opts.job);
+  if (holder) {
+    throw new Error(
+      `${slug}: there is a queued or running job for that slug (${holder}), and importing ` +
+        "would replace the revision it is building on. Wait for it to finish, or stop it. " +
+        "See src/store/import.ts.",
+    );
+  }
+
+  await tx
+    .insert(articles)
+    .values({
+      id: articleId,
+      ownerId,
+      slug,
+      /* The article's own added-time, seeded from the same value as the
+         revision's. The shelf orders on `coalesce(revision.fetched_at,
+         article.created_at)` (`ADDED_AT`, src/store/pg.ts), so leaving this
+         at `now()` would put every article with no `fetchedAt` at the top of
+         the library on the day it was imported. */
+      createdAt,
+      archivedAt: shelf.archivedAt ? new Date(shelf.archivedAt) : null,
+      titleOverride: shelf.title ?? null,
+      opens: shelf.opens,
+      lastOpenedAt: shelf.lastOpenedAt ? new Date(shelf.lastOpenedAt) : null,
+    })
+    /* Do NOT "update" the id on conflict. `articleId` is derived from the
+       slug, so a slug that is already there already has this id — and an
+       upsert that rewrote a primary key would cascade through every foreign
+       key pointing at it, which is a very expensive way to say "already
+       imported".
+
+       The four shelf columns ARE updated, and that is not an inconsistency:
+       the id is identity and the shelf state is content. Re-running the
+       importer after archiving something on disk must carry the archive over,
+       or the round trip loses it — silently, since both halves succeed. */
+    .onConflictDoUpdate({
+      target: articles.id,
+      set: {
         createdAt,
         archivedAt: shelf.archivedAt ? new Date(shelf.archivedAt) : null,
         titleOverride: shelf.title ?? null,
         opens: shelf.opens,
         lastOpenedAt: shelf.lastOpenedAt ? new Date(shelf.lastOpenedAt) : null,
-      })
-      /* Do NOT "update" the id on conflict. `articleId` is derived from the
-         slug, so a slug that is already there already has this id — and an
-         upsert that rewrote a primary key would cascade through every foreign
-         key pointing at it, which is a very expensive way to say "already
-         imported".
+      },
+    });
 
-         The four shelf columns ARE updated, and that is not an inconsistency:
-         the id is identity and the shelf state is content. Re-running the
-         importer after archiving something on disk must carry the archive over,
-         or the round trip loses it — silently, since both halves succeed. */
-      .onConflictDoUpdate({
-        target: articles.id,
-        set: {
-          createdAt,
-          archivedAt: shelf.archivedAt ? new Date(shelf.archivedAt) : null,
-          titleOverride: shelf.title ?? null,
-          opens: shelf.opens,
-          lastOpenedAt: shelf.lastOpenedAt ? new Date(shelf.lastOpenedAt) : null,
-        },
-      });
+  /* **Which revision this import lands on, and why it is no longer derived
+     from the blocks.**
 
-    /* **Which revision this import lands on, and why it is no longer derived
-       from the blocks.**
+     It used to be `derivedUuid("revision", slug, hashBlocks(blocks))`, which
+     made the id a function of the content — so two extractions that happened
+     to produce identical blocks were the SAME ROW, and the second overwrote
+     the first in place. That is exactly what "immutable in its text" forbids,
+     and once `beginRevision` (src/store/pg-revisions.ts) started minting a
+     fresh uuid the importer was the only thing left deriving one. Two paths
+     disagreeing about what a revision id *means* is worse than either answer,
+     so it was decided in the same change: **a revision id is opaque, minted
+     once, and names nothing about the contents.**
 
-       It used to be `derivedUuid("revision", slug, hashBlocks(blocks))`, which
-       made the id a function of the content — so two extractions that happened
-       to produce identical blocks were the SAME ROW, and the second overwrote
-       the first in place. That is exactly what "immutable in its text" forbids,
-       and once `beginRevision` (src/store/pg-revisions.ts) started minting a
-       fresh uuid the importer was the only thing left deriving one. Two paths
-       disagreeing about what a revision id *means* is worse than either answer,
-       so it was decided in the same change: **a revision id is opaque, minted
-       once, and names nothing about the contents.**
+     What survives is the rule the derivation was standing in for, and it is
+     the same rule the pipeline follows: **a new revision only when the text
+     changes.** So this asks the question directly instead of encoding it in a
+     hash — does the current published revision hold these same blocks?
 
-       What survives is the rule the derivation was standing in for, and it is
-       the same rule the pipeline follows: **a new revision only when the text
-       changes.** So this asks the question directly instead of encoding it in a
-       hash — does the current published revision hold these same blocks?
+     - Yes → update it in place. That keeps the importer's contract, which is
+       that re-running it converges rather than accumulating, and it is what
+       makes a corrected `meta.json` land on the article you are looking at.
+     - No → mint a new revision and move the pointer at the end of this
+       transaction, exactly as the first import does.
 
-       - Yes → update it in place. That keeps the importer's contract, which is
-         that re-running it converges rather than accumulating, and it is what
-         makes a corrected `meta.json` land on the article you are looking at.
-       - No → mint a new revision and move the pointer at the end of this
-         transaction, exactly as the first import does.
+     `derivedUuid("article", slug)` stays, and the asymmetry is deliberate: an
+     article really is identified by its slug, and a stable article id is what
+     lets the importer, the exporter and the tests address the same row twice.
 
-       `derivedUuid("article", slug)` stays, and the asymmetry is deliberate: an
-       article really is identified by its slug, and a stable article id is what
-       lets the importer, the exporter and the tests address the same row twice.
+     **This is still the importer's licence, not the schema's.** Updating a
+     published row in place is a migration tool's privilege — the files win —
+     and it is the same reason cutover is a step rather than a flag flip. */
+  const currentBlocks = await tx
+    /* Four columns, not two — the third of the three narrow fingerprint
+       reads. `hashBlocks` folds in `role` and `treatment`
+       (src/source-hash.ts), so a two-column read here would compare a full
+       new hash against an old narrow one and mint a fresh revision on every
+       single import, for ever. */
+    .select({
+      id: revisionBlocks.blockId,
+      text: revisionBlocks.text,
+      role: revisionBlocks.role,
+      treatment: revisionBlocks.treatment,
+    })
+    .from(revisionBlocks)
+    .innerJoin(articles, eq(articles.currentRevisionId, revisionBlocks.revisionId))
+    .where(eq(articles.id, articleId))
+    .orderBy(asc(revisionBlocks.ordinal));
+  const current = await tx
+    .select({ id: articles.currentRevisionId })
+    .from(articles)
+    .where(eq(articles.id, articleId));
+  const currentRevisionId = current[0]?.id ?? null;
+  const sameText =
+    currentRevisionId !== null &&
+    currentBlocks.length > 0 &&
+    hashBlocks(currentBlocks) === fingerprint;
+  revisionId = sameText && currentRevisionId ? currentRevisionId : randomUUID();
 
-       **This is still the importer's licence, not the schema's.** Updating a
-       published row in place is a migration tool's privilege — the files win —
-       and it is the same reason cutover is a step rather than a flag flip. */
-    const currentBlocks = await tx
-      /* Four columns, not two — the third of the three narrow fingerprint
-         reads. `hashBlocks` folds in `role` and `treatment`
-         (src/source-hash.ts), so a two-column read here would compare a full
-         new hash against an old narrow one and mint a fresh revision on every
-         single import, for ever. */
-      .select({
-        id: revisionBlocks.blockId,
-        text: revisionBlocks.text,
-        role: revisionBlocks.role,
-        treatment: revisionBlocks.treatment,
-      })
-      .from(revisionBlocks)
-      .innerJoin(articles, eq(articles.currentRevisionId, revisionBlocks.revisionId))
-      .where(eq(articles.id, articleId))
-      .orderBy(asc(revisionBlocks.ordinal));
-    const current = await tx
-      .select({ id: articles.currentRevisionId })
-      .from(articles)
-      .where(eq(articles.id, articleId));
-    const currentRevisionId = current[0]?.id ?? null;
-    const sameText =
-      currentRevisionId !== null &&
-      currentBlocks.length > 0 &&
-      hashBlocks(currentBlocks) === fingerprint;
-    revisionId = sameText && currentRevisionId ? currentRevisionId : randomUUID();
+  /* **One object, used for both branches, and that is the whole fix.**
 
-    /* **One object, used for both branches, and that is the whole fix.**
+     `article_revisions` says "immutable once published", and the revision id
+     is `slug + hashBlocks(blocks)` — so a change to `meta.json` alone hashes
+     to the SAME revision and lands in the `on conflict do update` branch. That
+     branch used to list twelve of these columns. A corrected title, a byline
+     that was missing, the URL after a redirect, the raw bytes: all of them
+     kept the first run's value for ever, while the tree sitting beside them
+     updated. Nothing said so, because both halves succeeded. GPT Sol found it
+     in review, 2026-08-26.
 
-       `article_revisions` says "immutable once published", and the revision id
-       is `slug + hashBlocks(blocks)` — so a change to `meta.json` alone hashes
-       to the SAME revision and lands in the `on conflict do update` branch. That
-       branch used to list twelve of these columns. A corrected title, a byline
-       that was missing, the URL after a redirect, the raw bytes: all of them
-       kept the first run's value for ever, while the tree sitting beside them
-       updated. Nothing said so, because both halves succeeded. GPT Sol found it
-       in review, 2026-08-26.
+     Two other fixes were on the table and both were rejected:
 
-       Two other fixes were on the table and both were rejected:
+     - **Fingerprint the whole revision**, so a metadata edit mints a new
+       revision and published rows really are immutable. It is the tidy answer
+       and it is the wrong shape for this schema: `revision_step_runs` is keyed
+       by `revision_id` precisely so that the pipeline can fill a revision in
+       one step at a time. If the id moved whenever `arc.json` or
+       `glossary.json` changed, every completed step would be orphaned by the
+       next one, and each re-run would duplicate the blocks and the raw bytes
+       under a new id. The revision is one EXTRACTION — `slug` plus the blocks
+       is exactly the identity of that.
+     - **Refuse to touch a published revision.** That reads as the safe
+       option and it makes the migration tool useless: re-running the importer
+       after fixing a typo, or after re-running one late stage, is the normal
+       case during a migration, and the honest response to it is to converge,
+       not to error.
 
-       - **Fingerprint the whole revision**, so a metadata edit mints a new
-         revision and published rows really are immutable. It is the tidy answer
-         and it is the wrong shape for this schema: `revision_step_runs` is keyed
-         by `revision_id` precisely so that the pipeline can fill a revision in
-         one step at a time. If the id moved whenever `arc.json` or
-         `glossary.json` changed, every completed step would be orphaned by the
-         next one, and each re-run would duplicate the blocks and the raw bytes
-         under a new id. The revision is one EXTRACTION — `slug` plus the blocks
-         is exactly the identity of that.
-       - **Refuse to touch a published revision.** That reads as the safe
-         option and it makes the migration tool useless: re-running the importer
-         after fixing a typo, or after re-running one late stage, is the normal
-         case during a migration, and the honest response to it is to converge,
-         not to error.
+     So: the revision id stays the extraction's identity, and the row becomes
+     a pure function of the files — written the same way whether it is the
+     first import or the fifth. Sharing one object rather than keeping two
+     lists in step is the point; a column added to the insert alone was how
+     this happened, and now there is no insert alone to add it to.
 
-       So: the revision id stays the extraction's identity, and the row becomes
-       a pure function of the files — written the same way whether it is the
-       first import or the fifth. Sharing one object rather than keeping two
-       lists in step is the point; a column added to the insert alone was how
-       this happened, and now there is no insert alone to add it to.
+     **This is the importer's licence, not the schema's.** Immutability is
+     still what the pipeline must honour once it owns this table; the importer
+     is a migration tool whose contract is that the files win — the same rule
+     the reader-state delete below already follows, and the same reason
+     cutover is a step rather than a flag flip. */
+  const revisionValues = {
+    status: "published",
+    title: meta?.title ?? null,
+    byline: meta?.byline ?? null,
+    siteName: meta?.siteName ?? null,
+    lang: meta?.lang ?? null,
+    excerpt: meta?.excerpt ?? null,
+    note: meta?.note ?? null,
+    /* The manifest is the only thing that ever knew these two apart: `meta`
+       has one `url` and it is the one stage 2 saw, which is the FINAL url.
+       So `finalUrl` prefers `meta` — an exporter rebuilds `meta.json` from
+       it and the round trip has to come back byte-identical — and
+       `requestedUrl` prefers the manifest, which is the only place the
+       pre-redirect url survives at all. */
+    requestedUrl: manifest?.requestedUrl ?? meta?.url ?? null,
+    finalUrl: meta?.url ?? manifest?.url ?? null,
+    fetchedAt: meta?.fetchedAt ? new Date(meta.fetchedAt) : null,
+    // In the update branch too, or a re-import leaves the first run's value
+    // behind and the library's order silently depends on which import ran first.
+    createdAt,
+    rawBytes: rawBytes ?? null,
+    // Null where there is no manifest, and that null is the honest answer —
+    // see the header, and `recovered` above for why a backfilled one does not count.
+    rawContentType: recovered?.contentType ?? null,
+    rawEncoding: recovered?.encoding ?? null,
+    rawSha256: recovered?.sha256 ?? null,
+    /* PDF provenance — all null for a web page, which is most of them.
+       `meta` rather than the manifest: the manifest says what was FETCHED,
+       these say how it was READ, and only stage 2 knows that.
+       docs/plans/pdf-ingestion.md. */
+    source: meta?.source ?? null,
+    extractMethod: meta?.method ?? null,
+    pages: meta?.pages ?? null,
+    unverified: meta?.unverified ?? null,
+    recall: meta?.recall ?? null,
+    pagesChecked: meta?.pagesChecked ?? null,
+    // Genuinely gone: stage 3 overwrites stage 2's file at the same path.
+    extractedHtml: null,
+    stampedHtml: stampedHtml ?? null,
+    tree,
+    arc: arc ?? null,
+    assets: assets ?? null,
+    tweets: tweets ?? null,
+    glossary: glossary ?? null,
+    summary: summaries ?? null,
+    ideas: ideas ?? null,
+    sketch: sketch ?? null,
+    labels: labels ?? null,
+    ...scalars,
+  } as const;
 
-       **This is the importer's licence, not the schema's.** Immutability is
-       still what the pipeline must honour once it owns this table; the importer
-       is a migration tool whose contract is that the files win — the same rule
-       the reader-state delete below already follows, and the same reason
-       cutover is a step rather than a flag flip. */
-    const revisionValues = {
-      status: "published",
-      title: meta?.title ?? null,
-      byline: meta?.byline ?? null,
-      siteName: meta?.siteName ?? null,
-      lang: meta?.lang ?? null,
-      excerpt: meta?.excerpt ?? null,
-      note: meta?.note ?? null,
-      /* The manifest is the only thing that ever knew these two apart: `meta`
-         has one `url` and it is the one stage 2 saw, which is the FINAL url.
-         So `finalUrl` prefers `meta` — an exporter rebuilds `meta.json` from
-         it and the round trip has to come back byte-identical — and
-         `requestedUrl` prefers the manifest, which is the only place the
-         pre-redirect url survives at all. */
-      requestedUrl: manifest?.requestedUrl ?? meta?.url ?? null,
-      finalUrl: meta?.url ?? manifest?.url ?? null,
-      fetchedAt: meta?.fetchedAt ? new Date(meta.fetchedAt) : null,
-      // In the update branch too, or a re-import leaves the first run's value
-      // behind and the library's order silently depends on which import ran first.
-      createdAt,
-      rawBytes: rawBytes ?? null,
-      // Null where there is no manifest, and that null is the honest answer —
-      // see the header, and `recovered` above for why a backfilled one does not count.
-      rawContentType: recovered?.contentType ?? null,
-      rawEncoding: recovered?.encoding ?? null,
-      rawSha256: recovered?.sha256 ?? null,
-      /* PDF provenance — all null for a web page, which is most of them.
-         `meta` rather than the manifest: the manifest says what was FETCHED,
-         these say how it was READ, and only stage 2 knows that.
-         docs/plans/pdf-ingestion.md. */
-      source: meta?.source ?? null,
-      extractMethod: meta?.method ?? null,
-      pages: meta?.pages ?? null,
-      unverified: meta?.unverified ?? null,
-      recall: meta?.recall ?? null,
-      pagesChecked: meta?.pagesChecked ?? null,
-      // Genuinely gone: stage 3 overwrites stage 2's file at the same path.
-      extractedHtml: null,
-      stampedHtml: stampedHtml ?? null,
-      tree,
-      arc: arc ?? null,
-      assets: assets ?? null,
-      tweets: tweets ?? null,
-      glossary: glossary ?? null,
-      summary: summaries ?? null,
-      ideas: ideas ?? null,
-      labels: labels ?? null,
-      ...scalars,
-    } as const;
+  await tx
+    .insert(articleRevisions)
+    .values({ id: revisionId, articleId, ...revisionValues })
+    .onConflictDoUpdate({ target: articleRevisions.id, set: { ...revisionValues } });
 
+  // Identities FIRST, and never deleted. revision_blocks has a foreign key
+  // onto this, so a block whose identity was not minted fails loudly — which
+  // is what we want, because that means stage 3 re-minted instead of carrying
+  // ids forward. See docs/project/block-ids.md.
+  if (blocks.length) {
     await tx
-      .insert(articleRevisions)
-      .values({ id: revisionId, articleId, ...revisionValues })
-      .onConflictDoUpdate({ target: articleRevisions.id, set: { ...revisionValues } });
+      .insert(blockIdentities)
+      .values(blocks.map((b) => ({ articleId, blockId: b.id })))
+      .onConflictDoNothing();
 
-    // Identities FIRST, and never deleted. revision_blocks has a foreign key
-    // onto this, so a block whose identity was not minted fails loudly — which
-    // is what we want, because that means stage 3 re-minted instead of carrying
-    // ids forward. See docs/project/block-ids.md.
-    if (blocks.length) {
+    // Replaced wholesale for this revision: an import is authoritative about
+    // what this extraction contained, and a leftover row from a previous run
+    // with different blocks would be a paragraph nothing points at.
+    await tx.delete(revisionBlocks).where(eq(revisionBlocks.revisionId, revisionId));
+
+    // `ordinal` IS document order, written from the array index. Block ids are
+    // random and carry no position, so if this is wrong there is nothing left
+    // to recover the order from.
+    await tx.insert(revisionBlocks).values(
+      blocks.map((b, index) => ({
+        articleId,
+        revisionId,
+        blockId: b.id,
+        ordinal: index,
+        tag: b.tag,
+        kind: b.kind,
+        level: b.level ?? null,
+        text: b.text,
+        words: b.words,
+        html: b.html,
+        gistable: b.gistable,
+        note: b.note ?? null,
+        role: b.role ?? null,
+        treatment: b.treatment ?? null,
+        noteId: b.noteId ?? null,
+      })),
+    );
+  }
+
+  /* **The files win, so the rows the files no longer have must go.**
+
+     Every reader-state insert below is `on conflict do nothing`, which makes
+     a re-import add and never change. That is right for a row that is already
+     identical and wrong for one the reader has since deleted: `data/` is the
+     source of truth while the pipeline still writes it, so a comment removed
+     from `comments.json` has to leave the database too. Without this the
+     database only ever grows, and it grew — `data/writes/comments.json` held
+     two comments while Postgres held three, and tests/store-parity.test.ts
+     went red for a real reason on 2026-08-26. GPT Sol had named the cause in
+     review that morning: "reader-state rows use ON CONFLICT DO NOTHING, so
+     edits and deletions in files are also ignored".
+
+     **This direction reverses at cutover, and that is the danger.** Once the
+     app writes comments to Postgres rather than to files, running the
+     importer would delete every comment written since the last export — the
+     database would be made to match a file that is no longer being kept up to
+     date. The importer is a migration tool, not a sync; see
+     docs/plans/postgres-storage-implementation.md.
+
+     Deleted inside the same transaction as the inserts, so there is no moment
+     at which a reader sees an article with its questions missing.
+
+     `block_identities` is deliberately NOT cleaned up: identities are never
+     deleted, which is the one rule the comment anchor depends on. */
+  await tx.delete(commentsTable).where(eq(commentsTable.articleId, articleId));
+  await tx.delete(chatMessages).where(eq(chatMessages.articleId, articleId));
+  await tx.delete(chatThreads).where(eq(chatThreads.articleId, articleId));
+  await tx.delete(searchRuns).where(eq(searchRuns.articleId, articleId));
+  await tx.delete(glossaryLookups).where(eq(glossaryLookups.articleId, articleId));
+
+  /* Reader state. All three hang off the ARTICLE, never off the revision:
+     a re-extraction must not delete a conversation, a saved search, or a
+     looked-up term, for the same reason it must not delete a comment. */
+
+  /* **Every block either kind of mark names, minted in one statement.**
+     A comment and an anchored conversation both point at the block IDENTITY,
+     and both foreign keys are just as unforgiving: import an archive whose
+     marked paragraph is no longer in this revision and the insert takes the
+     whole transaction down with it. That is the design — the paragraph can
+     go, the mark stays — so the identity has to exist first, whether or not
+     this revision still contains the block.
+
+     One statement over the union of the two, rather than two lists
+     maintained in parallel: the comments used to mint theirs separately a few
+     lines earlier, which is the shape that lets one of them fall behind. */
+  const anchoredBlocks = [
+    ...new Set([
+      ...storedComments.map((c) => c.blockId),
+      ...chat.flatMap((t) => (t.anchor ? [t.anchor.blockId] : [])),
+    ]),
+  ];
+  if (anchoredBlocks.length) {
+    await tx
+      .insert(blockIdentities)
+      .values(anchoredBlocks.map((blockId) => ({ articleId, blockId })))
+      .onConflictDoNothing();
+  }
+
+  for (const thread of chat) {
+    await tx
+      .insert(chatThreads)
+      .values({
+        articleId,
+        id: thread.id,
+        ownerId,
+        title: thread.title,
+        createdAt: new Date(thread.createdAt),
+        updatedAt: new Date(thread.updatedAt),
+        /* `"quote" in anchor` rather than `anchor.quote`: the union's
+           block-only arm has no such property, so reading one off it is a
+           type error rather than a silent undefined. */
+        anchorBlockId: thread.anchor?.blockId ?? null,
+        anchorQuote: thread.anchor && "quote" in thread.anchor ? thread.anchor.quote : null,
+        anchorStart: thread.anchor && "start" in thread.anchor ? thread.anchor.start : null,
+        /* A `chat.json` written before review mode has no `kind`; the column
+           is `not null`, so it needs one here rather than a null. `"chat"` is
+           the same default `normaliseKind` applies in src/chat.ts and the same
+           one the column declares — three places, all saying chat, because
+           the alternative to a default here is a failed import of every
+           pre-existing file. */
+        kind: thread.kind === "review" ? "review" : "chat",
+      })
+      .onConflictDoNothing();
+
+    // `ordinal` from the array index, exactly as for blocks: `createdAt`
+    // cannot order these because a user turn and the pending assistant turn
+    // answering it are written together and collide within the millisecond.
+    for (const [index, message] of thread.messages.entries()) {
       await tx
-        .insert(blockIdentities)
-        .values(blocks.map((b) => ({ articleId, blockId: b.id })))
-        .onConflictDoNothing();
-
-      // Replaced wholesale for this revision: an import is authoritative about
-      // what this extraction contained, and a leftover row from a previous run
-      // with different blocks would be a paragraph nothing points at.
-      await tx.delete(revisionBlocks).where(eq(revisionBlocks.revisionId, revisionId));
-
-      // `ordinal` IS document order, written from the array index. Block ids are
-      // random and carry no position, so if this is wrong there is nothing left
-      // to recover the order from.
-      await tx.insert(revisionBlocks).values(
-        blocks.map((b, index) => ({
+        .insert(chatMessages)
+        .values({
           articleId,
-          revisionId,
-          blockId: b.id,
+          threadId: thread.id,
+          id: message.id,
           ordinal: index,
-          tag: b.tag,
-          kind: b.kind,
-          level: b.level ?? null,
-          text: b.text,
-          words: b.words,
-          html: b.html,
-          gistable: b.gistable,
-          note: b.note ?? null,
-          role: b.role ?? null,
-          treatment: b.treatment ?? null,
-          noteId: b.noteId ?? null,
-        })),
-      );
-    }
-
-    /* **The files win, so the rows the files no longer have must go.**
-
-       Every reader-state insert below is `on conflict do nothing`, which makes
-       a re-import add and never change. That is right for a row that is already
-       identical and wrong for one the reader has since deleted: `data/` is the
-       source of truth while the pipeline still writes it, so a comment removed
-       from `comments.json` has to leave the database too. Without this the
-       database only ever grows, and it grew — `data/writes/comments.json` held
-       two comments while Postgres held three, and tests/store-parity.test.ts
-       went red for a real reason on 2026-08-26. GPT Sol had named the cause in
-       review that morning: "reader-state rows use ON CONFLICT DO NOTHING, so
-       edits and deletions in files are also ignored".
-
-       **This direction reverses at cutover, and that is the danger.** Once the
-       app writes comments to Postgres rather than to files, running the
-       importer would delete every comment written since the last export — the
-       database would be made to match a file that is no longer being kept up to
-       date. The importer is a migration tool, not a sync; see
-       docs/plans/postgres-storage-implementation.md.
-
-       Deleted inside the same transaction as the inserts, so there is no moment
-       at which a reader sees an article with its questions missing.
-
-       `block_identities` is deliberately NOT cleaned up: identities are never
-       deleted, which is the one rule the comment anchor depends on. */
-    await tx.delete(commentsTable).where(eq(commentsTable.articleId, articleId));
-    await tx.delete(chatMessages).where(eq(chatMessages.articleId, articleId));
-    await tx.delete(chatThreads).where(eq(chatThreads.articleId, articleId));
-    await tx.delete(searchRuns).where(eq(searchRuns.articleId, articleId));
-    await tx.delete(glossaryLookups).where(eq(glossaryLookups.articleId, articleId));
-
-    /* Reader state. All three hang off the ARTICLE, never off the revision:
-       a re-extraction must not delete a conversation, a saved search, or a
-       looked-up term, for the same reason it must not delete a comment. */
-
-    /* **Every block either kind of mark names, minted in one statement.**
-       A comment and an anchored conversation both point at the block IDENTITY,
-       and both foreign keys are just as unforgiving: import an archive whose
-       marked paragraph is no longer in this revision and the insert takes the
-       whole transaction down with it. That is the design — the paragraph can
-       go, the mark stays — so the identity has to exist first, whether or not
-       this revision still contains the block.
-
-       One statement over the union of the two, rather than two lists
-       maintained in parallel: the comments used to mint theirs separately a few
-       lines earlier, which is the shape that lets one of them fall behind. */
-    const anchoredBlocks = [
-      ...new Set([
-        ...storedComments.map((c) => c.blockId),
-        ...chat.flatMap((t) => (t.anchor ? [t.anchor.blockId] : [])),
-      ]),
-    ];
-    if (anchoredBlocks.length) {
-      await tx
-        .insert(blockIdentities)
-        .values(anchoredBlocks.map((blockId) => ({ articleId, blockId })))
-        .onConflictDoNothing();
-    }
-
-    for (const thread of chat) {
-      await tx
-        .insert(chatThreads)
-        .values({
-          articleId,
-          id: thread.id,
-          ownerId,
-          title: thread.title,
-          createdAt: new Date(thread.createdAt),
-          updatedAt: new Date(thread.updatedAt),
-          /* `"quote" in anchor` rather than `anchor.quote`: the union's
-             block-only arm has no such property, so reading one off it is a
-             type error rather than a silent undefined. */
-          anchorBlockId: thread.anchor?.blockId ?? null,
-          anchorQuote: thread.anchor && "quote" in thread.anchor ? thread.anchor.quote : null,
-          anchorStart: thread.anchor && "start" in thread.anchor ? thread.anchor.start : null,
-          /* A `chat.json` written before review mode has no `kind`; the column
-             is `not null`, so it needs one here rather than a null. `"chat"` is
-             the same default `normaliseKind` applies in src/chat.ts and the same
-             one the column declares — three places, all saying chat, because
-             the alternative to a default here is a failed import of every
-             pre-existing file. */
-          kind: thread.kind === "review" ? "review" : "chat",
-        })
-        .onConflictDoNothing();
-
-      // `ordinal` from the array index, exactly as for blocks: `createdAt`
-      // cannot order these because a user turn and the pending assistant turn
-      // answering it are written together and collide within the millisecond.
-      for (const [index, message] of thread.messages.entries()) {
-        await tx
-          .insert(chatMessages)
-          .values({
-            articleId,
-            threadId: thread.id,
-            id: message.id,
-            ordinal: index,
-            role: message.role,
-            text: message.text,
-            status: message.status,
-            citations: message.citations ?? null,
-            searches: message.searches ?? null,
-            tools: message.tools ?? null,
-            model: message.model ?? null,
-            error: message.error ?? null,
-            stopped: message.stopped ?? false,
-            editedAt: message.editedAt ? new Date(message.editedAt) : null,
-            /* See the note beside this field in src/store/export.ts: without
-               it, a restore drops the stance from every review answer and says
-               nothing. */
-            stance: message.stance ?? null,
-            createdAt: new Date(message.createdAt),
-          })
-          .onConflictDoNothing();
-      }
-    }
-
-    /* **Comments last, and that is a rule rather than a tidy-up.**
-       `Comment.threadId` names a conversation, so an archive's comments can
-       only be read against threads that are already in. There is deliberately
-       no foreign key on that column (docs/plans/comments-and-bookmarks.md § no
-       foreign key), so nothing *fails* if this runs first — which is exactly
-       why the order is written down here rather than left to a constraint to
-       enforce. GPT Sol found this block sitting before the chat inserts,
-       2026-08-28.
-
-       The identities these anchor to were minted with the chat anchors' above,
-       in one statement over the union: the paragraph can go, the mark stays. */
-    for (const comment of storedComments) {
-      await tx
-        .insert(commentsTable)
-        .values({
-          articleId,
-          id: comment.id,
-          ownerId,
-          blockId: comment.blockId,
-          quote: comment.quote,
-          start: comment.start,
-          /* The reader's own three. `?? null` on each, because absent in the
-             archive and null in the column are the same fact, and leaving
-             `undefined` would let the column default decide instead. */
-          body: comment.body ?? null,
-          updatedAt: comment.updatedAt === undefined ? null : new Date(comment.updatedAt),
-          threadId: comment.threadId ?? null,
-          status: comment.status,
-          answer: comment.answer ?? null,
-          citations: comment.citations ?? null,
-          searches: comment.searches ?? null,
-          model: comment.model ?? null,
-          error: comment.error ?? null,
-          createdAt: new Date(comment.createdAt),
+          role: message.role,
+          text: message.text,
+          status: message.status,
+          citations: message.citations ?? null,
+          searches: message.searches ?? null,
+          tools: message.tools ?? null,
+          model: message.model ?? null,
+          error: message.error ?? null,
+          stopped: message.stopped ?? false,
+          editedAt: message.editedAt ? new Date(message.editedAt) : null,
+          /* See the note beside this field in src/store/export.ts: without
+             it, a restore drops the stance from every review answer and says
+             nothing. */
+          stance: message.stance ?? null,
+          createdAt: new Date(message.createdAt),
         })
         .onConflictDoNothing();
     }
+  }
 
-    for (const run of runs) {
-      await tx
-        .insert(searchRuns)
-        .values({
-          articleId,
-          id: run.id,
-          ownerId,
-          criterion: run.criterion,
-          status: run.status,
-          hits: run.hits,
-          /* The article this run was answered against. Dropping it on import
-             would not read as "unknown" — `isStale` reads an absent hash as
-             *out of date*, so every saved search on every imported article
-             would carry the "answered against an older version" banner
-             permanently, for no reason. tests/store-roundtrip.test.ts catches
-             it, but only once a real `searches.json` under some article
-             carries the field, which is why this is written now rather than
-             waited for. (That sentence named the glob directly until the `*`
-             and `/` closed this comment three lines early.) */
-          sourceHash: run.sourceHash ?? null,
-          // The reader's own colour choice — the same round-trip rule as the
-          // hash above, and the only field on a run neither the model nor the
-          // pipeline wrote.
-          colour: run.colour ?? null,
-          model: run.model ?? null,
-          error: run.error ?? null,
-          createdAt: new Date(run.createdAt),
-        })
-        .onConflictDoNothing();
-    }
+  /* **Comments last, and that is a rule rather than a tidy-up.**
+     `Comment.threadId` names a conversation, so an archive's comments can
+     only be read against threads that are already in. There is deliberately
+     no foreign key on that column (docs/plans/comments-and-bookmarks.md § no
+     foreign key), so nothing *fails* if this runs first — which is exactly
+     why the order is written down here rather than left to a constraint to
+     enforce. GPT Sol found this block sitting before the chat inserts,
+     2026-08-28.
 
-    for (const [entryId, lookup] of Object.entries(lookups)) {
-      await tx
-        .insert(glossaryLookups)
-        .values({
-          articleId,
-          entryId,
-          ownerId,
-          answer: lookup.answer,
-          citations: lookup.citations,
-          searches: lookup.searches,
-          model: lookup.model,
-          at: new Date(lookup.at),
-        })
-        .onConflictDoNothing();
-    }
-
-    /* Which steps produced output.
-       `revision_step_runs` is what answers "has this stage run", and the
-       metadata page reads it — so without these rows every imported article
-       would report every stage as never having run, which is both wrong and
-       alarming. `implementation_version` says `imported` rather than a real
-       version because that is the truth: these rows are inferred from the
-       artefacts being present, not recorded when the step ran. A step whose
-       artefact is absent gets NO NEW row, which is the honest distinction
-       between "did not run" and "ran and produced nothing".
-
-       **An inferred row is withdrawn when its artefact goes.** These used only
-       ever to be added, so deleting `arc.json` and re-importing left a `done`
-       row behind and the metadata page went on reporting a stage whose output
-       does not exist — the same shape as the reader-state bug above, where
-       `on conflict do nothing` made a re-import unable to notice a deletion.
-       GPT Sol found it in review, 2026-08-26.
-
-       **Scoped to `implementation_version = 'imported'`, which is the importer
-       saying it only clears up after itself.** The reader-state deletes above
-       are unconditional because a file really is the truth about a reader's
-       comment today. This table is different: the pipeline is about to own it
-       for real, and once it does, a `done` row for a step whose FILE is missing
-       is CORRECT — the file stopped being where the output lives. A migration
-       tool must not be able to delete that record, so it deletes only rows
-       carrying its own marker. Nothing else writes `imported`. */
-    const produced: { step: string; present: boolean }[] = [
-      { step: "fetch", present: Boolean(rawBytes) },
-      { step: "extract", present: Boolean(meta) },
-      { step: "blocks", present: blocks.length > 0 },
-      { step: "toc", present: Boolean(tree) },
-      { step: "assets", present: Boolean(assets) },
-      { step: "arc", present: Boolean(arc) },
-      { step: "tweets", present: Boolean(tweets) },
-      { step: "glossary", present: Boolean(glossary) },
-      { step: "summary", present: Boolean(summaries) },
-      { step: "ideas", present: Boolean(ideas) },
-    ];
-    const withdrawn = produced.filter((p) => !p.present).map((p) => p.step);
-    if (withdrawn.length) {
-      await tx
-        .delete(revisionStepRuns)
-        .where(
-          and(
-            eq(revisionStepRuns.revisionId, revisionId),
-            inArray(revisionStepRuns.stepName, withdrawn),
-            eq(revisionStepRuns.implementationVersion, IMPORTED),
-          ),
-        );
-    }
-    for (const { step, present } of produced) {
-      if (!present) continue;
-      await tx
-        .insert(revisionStepRuns)
-        .values({
-          revisionId,
-          stepName: step,
-          inputHash: fingerprint,
-          implementationVersion: IMPORTED,
-          status: "done",
-        })
-        /* Nothing to update: for a given revision the blocks — and so the
-           fingerprint — cannot change, and a row already here under a real
-           implementation version is a pipeline record that outranks this one. */
-        .onConflictDoNothing();
-    }
-
-    // The pointer moves LAST, so nothing observes a half-built revision. Not
-    // deferrable and not needing to be: insert article, insert revision, update
-    // pointer, and no intermediate state violates anything.
+     The identities these anchor to were minted with the chat anchors' above,
+     in one statement over the union: the paragraph can go, the mark stays. */
+  for (const comment of storedComments) {
     await tx
-      .update(articles)
-      .set({ currentRevisionId: revisionId })
-      .where(eq(articles.id, articleId));
-  });
+      .insert(commentsTable)
+      .values({
+        articleId,
+        id: comment.id,
+        ownerId,
+        blockId: comment.blockId,
+        quote: comment.quote,
+        start: comment.start,
+        /* The reader's own three. `?? null` on each, because absent in the
+           archive and null in the column are the same fact, and leaving
+           `undefined` would let the column default decide instead. */
+        body: comment.body ?? null,
+        updatedAt: comment.updatedAt === undefined ? null : new Date(comment.updatedAt),
+        threadId: comment.threadId ?? null,
+        status: comment.status,
+        answer: comment.answer ?? null,
+        citations: comment.citations ?? null,
+        searches: comment.searches ?? null,
+        model: comment.model ?? null,
+        error: comment.error ?? null,
+        createdAt: new Date(comment.createdAt),
+      })
+      .onConflictDoNothing();
+  }
 
+  for (const run of runs) {
+    await tx
+      .insert(searchRuns)
+      .values({
+        articleId,
+        id: run.id,
+        ownerId,
+        criterion: run.criterion,
+        status: run.status,
+        hits: run.hits,
+        /* The article this run was answered against. Dropping it on import
+           would not read as "unknown" — `isStale` reads an absent hash as
+           *out of date*, so every saved search on every imported article
+           would carry the "answered against an older version" banner
+           permanently, for no reason. tests/store-roundtrip.test.ts catches
+           it, but only once a real `searches.json` under some article
+           carries the field, which is why this is written now rather than
+           waited for. (That sentence named the glob directly until the `*`
+           and `/` closed this comment three lines early.) */
+        sourceHash: run.sourceHash ?? null,
+        // The reader's own colour choice — the same round-trip rule as the
+        // hash above, and the only field on a run neither the model nor the
+        // pipeline wrote.
+        colour: run.colour ?? null,
+        model: run.model ?? null,
+        error: run.error ?? null,
+        createdAt: new Date(run.createdAt),
+      })
+      .onConflictDoNothing();
+  }
+
+  for (const [entryId, lookup] of Object.entries(lookups)) {
+    await tx
+      .insert(glossaryLookups)
+      .values({
+        articleId,
+        entryId,
+        ownerId,
+        answer: lookup.answer,
+        citations: lookup.citations,
+        searches: lookup.searches,
+        model: lookup.model,
+        at: new Date(lookup.at),
+      })
+      .onConflictDoNothing();
+  }
+
+  /* Which steps produced output.
+     `revision_step_runs` is what answers "has this stage run", and the
+     metadata page reads it — so without these rows every imported article
+     would report every stage as never having run, which is both wrong and
+     alarming. `implementation_version` says `imported` rather than a real
+     version because that is the truth: these rows are inferred from the
+     artefacts being present, not recorded when the step ran. A step whose
+     artefact is absent gets NO NEW row, which is the honest distinction
+     between "did not run" and "ran and produced nothing".
+
+     **An inferred row is withdrawn when its artefact goes.** These used only
+     ever to be added, so deleting `arc.json` and re-importing left a `done`
+     row behind and the metadata page went on reporting a stage whose output
+     does not exist — the same shape as the reader-state bug above, where
+     `on conflict do nothing` made a re-import unable to notice a deletion.
+     GPT Sol found it in review, 2026-08-26.
+
+     **Scoped to `implementation_version = 'imported'`, which is the importer
+     saying it only clears up after itself.** The reader-state deletes above
+     are unconditional because a file really is the truth about a reader's
+     comment today. This table is different: the pipeline is about to own it
+     for real, and once it does, a `done` row for a step whose FILE is missing
+     is CORRECT — the file stopped being where the output lives. A migration
+     tool must not be able to delete that record, so it deletes only rows
+     carrying its own marker. Nothing else writes `imported`. */
+  const produced: { step: string; present: boolean }[] = [
+    { step: "fetch", present: Boolean(rawBytes) },
+    { step: "extract", present: Boolean(meta) },
+    { step: "blocks", present: blocks.length > 0 },
+    { step: "toc", present: Boolean(tree) },
+    { step: "assets", present: Boolean(assets) },
+    { step: "arc", present: Boolean(arc) },
+    { step: "tweets", present: Boolean(tweets) },
+    { step: "glossary", present: Boolean(glossary) },
+    { step: "summary", present: Boolean(summaries) },
+    { step: "ideas", present: Boolean(ideas) },
+    { step: "sketch", present: Boolean(sketch) },
+  ];
+  const withdrawn = produced.filter((p) => !p.present).map((p) => p.step);
+  if (withdrawn.length) {
+    await tx
+      .delete(revisionStepRuns)
+      .where(
+        and(
+          eq(revisionStepRuns.revisionId, revisionId),
+          inArray(revisionStepRuns.stepName, withdrawn),
+          eq(revisionStepRuns.implementationVersion, IMPORTED),
+        ),
+      );
+  }
+  for (const { step, present } of produced) {
+    if (!present) continue;
+    await tx
+      .insert(revisionStepRuns)
+      .values({
+        revisionId,
+        stepName: step,
+        inputHash: fingerprint,
+        implementationVersion: IMPORTED,
+        status: "done",
+      })
+      /* Nothing to update: for a given revision the blocks — and so the
+         fingerprint — cannot change, and a row already here under a real
+         implementation version is a pipeline record that outranks this one. */
+      .onConflictDoNothing();
+  }
+
+  // The pointer moves LAST, so nothing observes a half-built revision. Not
+  // deferrable and not needing to be: insert article, insert revision, update
+  // pointer, and no intermediate state violates anything.
+  await tx
+    .update(articles)
+    .set({ currentRevisionId: revisionId })
+    .where(eq(articles.id, articleId));
+
+  return { articleId, revisionId };
+}
+
+/**
+ * Import one article's directory.
+ *
+ * Everything happens in **one transaction**, because publication is the atomic
+ * unit: a reader sees either the previous published revision or the complete
+ * new one, never a mixture. That is the property today's filesystem store does
+ * not have — a failed re-extraction overwrites a good article in place.
+ *
+ * Since 2026-08-29 it is `readArticleFiles` and `importArticleIn` composed, and
+ * this function is what keeps `npm run db:import` exactly what it was: read the
+ * directory, open one transaction, write, log after the commit. The two halves
+ * exist so that the pipeline's job finalizer can do the same writes inside a
+ * transaction that also ends the job — see `importArticleIn`.
+ */
+export async function importArticle(
+  slug: string,
+  ownerId: OwnerId = currentOwnerId(),
+): Promise<ImportResult> {
+  const files = await readArticleFiles(slug);
+  const { articleId, revisionId } = await getDb().transaction((tx) =>
+    importArticleIn(tx, { files, ownerId }),
+  );
+
+  // After the commit, never inside it: see `importArticleIn`.
   logger.info(
-    { slug, blocks: blocks.length, comments: storedComments.length, absent: absent.length },
+    {
+      slug,
+      blocks: files.blocks.length,
+      comments: files.storedComments.length,
+      absent: files.absent.length,
+    },
     "article imported",
   );
 
@@ -1115,15 +1413,15 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
     slug,
     articleId,
     revisionId,
-    blocks: blocks.length,
-    comments: storedComments.length,
-    unanchoredComments: unanchored.map((c) => c.id),
-    chatThreads: chat.length,
-    chatMessages: chat.reduce((n, thread) => n + thread.messages.length, 0),
-    searchRuns: runs.length,
-    glossaryLookups: Object.keys(lookups).length,
-    absent,
-    unrecoverable: [...new Set(unrecoverable)],
+    blocks: files.blocks.length,
+    comments: files.storedComments.length,
+    unanchoredComments: files.unanchored.map((c) => c.id),
+    chatThreads: files.chat.length,
+    chatMessages: files.chat.reduce((n, thread) => n + thread.messages.length, 0),
+    searchRuns: files.runs.length,
+    glossaryLookups: Object.keys(files.lookups).length,
+    absent: files.absent,
+    unrecoverable: [...new Set(files.unrecoverable)],
   };
 }
 
