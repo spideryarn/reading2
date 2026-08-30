@@ -55,7 +55,8 @@ listed here; the names under each are files in `docs/project/`.
 - **[code-quality-overview.md](docs/project/code-quality-overview.md)** — the commands that tell you
   whether what you just did works, and which of them are gates.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·
-  `browser-testing.md` · `performance.md` · `counting-lines.md` (how big the repo is)
+  `browser-testing.md` · `claude-in-chrome.md` (nothing connected? start here) · `performance.md` ·
+  `counting-lines.md` (how big the repo is)
 - **[dev-and-deployment-overview.md](docs/project/dev-and-deployment-overview.md)** — running it on
   your laptop, the command for each pipeline stage, and shipping it to Vercel.
   <br>↳ `debugging.md` (start here when something is broken) · `setup-dev.md` (including which model
@@ -111,6 +112,9 @@ the other docs and to the code. Not descriptions of code, which the code already
 - **Every doc has a parent.** New doc under `docs/project/` ⇒ add a line for it to the entry-point
   doc that owns it, and link back up. Only the seven are listed in this file, and
   `tests/doc-links.test.ts` fails if a doc has no owner or two.
+- **Editing a doc whose wording is a rule** — this file above all, the seven entry points,
+  anything in `docs/reusable/` — goes one approved set of changes at a time, with the before and
+  after shown: [edit-important-docs.md](docs/reusable/edit-important-docs.md).
 - **File names are lower-case kebab-case**, everywhere under `docs/`, even when copied in from
   somewhere that shouted. Rename on sight and fix the links.
 - **Quote Greg directly** — his exact wording, in a blockquote, attributed and dated. The phrasing
@@ -175,9 +179,10 @@ Locally the bar is lower, but still ask before you wipe or overwrite data you di
   **If a peer has unfinished work inside a file you are committing**, the pathspec form takes their
   hunks too — check with `git diff HEAD -- <file>`, never bare `git diff`, which is index-relative
   and lies in both directions here. Then either commit it and say in the message whose work rode
-  along, or leave that file out and ship the rest. Both are cheap and nothing is lost. Do **not**
-  reach for the private-index recipe to avoid it: that is what silently staged a revert of other
-  people's work across the whole tree for six hours on 2026-08-29. Ask Greg instead.
+  along, or leave that file out and ship the rest. Both are cheap and nothing is lost. Waiting is
+  fine too. **There is no third option**: the private-index recipe (`GIT_INDEX_FILE`, `commit-tree`,
+  `update-ref`) was removed on 2026-08-30 after it silently staged a revert of other people's work
+  across the whole tree for six hours. Do not reinvent it.
   [version-control.md](docs/project/version-control.md) has the accidents and the reproductions.
 - **Commit when the work is done**, or when you reach a good stopping point, without being asked.
 
