@@ -161,6 +161,37 @@ Until then, a picture with no data got the Tree. `layoutDiagram` now returns
 spinner, or the failure's own words, where the picture would be
 (`Waiting` in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx)).
 
+Two states were still text-only, and Greg came back to them the same day:
+
+> Make sure the diagrams in Diagram mode show loading spinners if they're
+> generating. And/or a button to trigger generation if needed.
+>
+> — Greg, 2026-08-30
+
+- **Force's strip spins too.** Nothing is drawn *over* that picture — it is four
+  fifths there while the call is in flight, and a spinner across it would say
+  the wrong thing about what is missing. But the strip beside it only changed
+  its *words* when the answer landed, and a line of 10.5px grey that does that
+  reads as a caption rather than as work in progress. The spinner is in the
+  strip, at size 11 so it sits on the strip's own line.
+- **A failure now comes with a verb.** Both fetches run once from an effect, so
+  a reader whose request failed had the server's reason on screen and nothing to
+  do about it: the way back was to leave the mode and come in again, which
+  nothing said. `retry` on [`useSimilar`](../../src/web/useSimilar.ts) and
+  [`useProjection`](../../src/web/useProjection.ts) is a **counter in the
+  dependency list that the effect body never reads** — a token whose only job is
+  to be different — and `TryAgain` in the panel is the button. The counter is
+  the one thing here a linter objects to, and removing it as offered would leave
+  a button that sets state and fetches nothing; the ignore comment says so.
+  The accessible name carries *which* picture, because both failures can be on
+  screen at once and two buttons called "Try again" that do different things is
+  what a screen reader would otherwise hear.
+
+Pinned in
+[`tests/diagram-panel-hover.test.tsx`](../../tests/diagram-panel-hover.test.tsx)
+§ *saying it is working, and offering a second try*, which drives the retry
+through the real route and counts the requests rather than trusting the button.
+
 Two reasons, and the second is the bigger one:
 
 - **A mode that answers a question you did not ask** — under small type
@@ -279,6 +310,65 @@ all**. The naive trim returns one pointing *backwards*: a short arrow aimed up
 the article, which is the precise falsehood the arrow was added to prevent.
 `arrowPath` in [`diagram-d3.ts`](../../src/web/diagram-d3.ts) is exported so
 that case can be tested directly rather than hoped for.
+
+### The chain fades outward from the reader, 2026-08-30
+
+> For the diagrams in Diagram mode, we're showing the sequence-arrow
+> connections. That's great. Let's improve things by making the connections
+> directly either side of the current node most prominent. Then a bit fainter
+> for the ones at one remove, then a bit fainter for the ones at two removes,
+> etc etc.
+>
+> — Greg, 2026-08-30
+
+The two lines touching the section the reader is standing in are drawn at full
+strength, and each hop further along the chain is a step quieter, until after
+half a dozen steps the ramp has landed on the weight the chain has anyway. Both
+pictures that draw a chain do it, from one function —
+[`chainNearness`](../../src/web/diagram.ts).
+
+Three decisions in it are worth knowing, because each has an obvious alternative
+that looks the same and is not:
+
+- **The ramp is spent as `opacity`, not as `stroke`, and that is about the
+  arrowheads.** Every chain path shares one `#diag-arrow` marker def, and
+  `opacity` on a path paints through to its `marker-end` while `stroke` does
+  not — so grading with colour would fade the line and leave a full-strength
+  head on it at the far end of every article. Measured rather than reasoned
+  about, 2026-08-30, because that failure is silent: two identical paths at
+  opacity 1 and 0.3 sharing one marker, rasterised to a canvas over an opaque
+  ground and sampled five pixels clear of the stroke. Line 77/255 = 0.302,
+  arrowhead 77/255 = 0.302. The head fades at exactly the rate its line does.
+- **It brightens toward the reader; it does not dim away from them.** Fading the
+  distant chain is the same picture for the first six steps and then puts a
+  visible edge exactly where the ramp stops — which reads as a boundary in the
+  *article*, not as the end of a highlight — and takes the far half of the piece
+  down with it. The ramp's last step is written to equal the unclassed rule, and
+  `tests/diagram-css.test.ts` holds the two together.
+- **It is computed in the panel, not in either layout.** Force's layout is a d3
+  simulation of several hundred ticks; handing it the reader's scroll position
+  would re-run the whole thing on every scroll in order to change a class name.
+  So the layouts say what the chain *is* — each `sequence` link names its two
+  nodes — and the panel says where the reader is on it. Trail's layout still
+  takes `atRow`, for the one reader-dependent thing that is geometry rather than
+  styling: a segment carrying an arrowhead is trimmed further back to make room
+  for it, so that decision cannot wait for the stylesheet.
+- **The hop count is scaled to the chain's length.** A nine-section article and a
+  fifty-section one both get the full eight steps, so the ramp never stops
+  part-way down. The reach itself is capped at a sixth of the chain, which is the
+  rule the plateau this replaced also had and for the same reason: a "you are
+  here" covering three fifths of the picture is not a landmark, it is a wash.
+
+**It centres on where the reader is standing, not on what they are pointing at.**
+Hover moves the footer card and the highlight ring; it deliberately does not move
+the ramp. A chain that re-centred under the mouse would stop being a position
+readout the moment you tried to read anything else with it.
+
+On Trail the ramp also walks the **hue**, from the chain's violet at the far end
+to the marker colour at the reader's feet, and drops out of the additive layer at
+the near end. Opacity alone does not separate a hairline from a tangle that is
+already glowing, and a bright run left in `plus-lighter` blows out wherever it
+crosses the rest of the chain — which is precisely where the reader is looking.
 
 ### Anchor — the one edge somebody meant
 
@@ -853,9 +943,13 @@ work:
 2. an arrowhead every eighth segment, never on one with no room for a head —
    359 heads in this box is a texture, not a direction;
 3. **the segments around wherever the reader is standing are drawn bright and
-   thick**, and the window shrinks on a short article so the bright run stays a
-   landmark rather than becoming most of the picture. This is what makes Trail
-   readable *while* scrolling rather than only studiable;
+   thick**, fading back into the chain over the next few hops, and the window
+   shrinks on a short article so the run stays a landmark rather than becoming
+   most of the picture. This is what makes Trail readable *while* scrolling
+   rather than only studiable. It was a flat run of seventeen segments with a
+   hard edge until 2026-08-30 — see
+   [The chain fades outward from the reader](#the-chain-fades-outward-from-the-reader-2026-08-30),
+   which is now the same code the Force chain uses;
 4. **one scale for both axes, letterboxed.** Scaling x and y independently to
    fill the band would draw a 6% component taller than a 15% one, and every
    distance in the picture would be a different lie depending on its direction.
@@ -894,10 +988,12 @@ Five more things the pass and two design reviews found, all now changed:
   steps, and reported the local run as missing; it is there the moment the
   reader's position exists. Worth knowing rather than fixing — a "you are here"
   before the reader is anywhere would be an invention.
-- **Arrowheads are gone from the global chain** and drawn on every segment of
-  the local run instead. Two design reviews and the browser pass reached that
-  independently: *direction along a path you cannot trace is not information*,
-  and thirty heads through 263 crossings are clutter.
+- **Arrowheads are gone from the global chain** and drawn on the local run
+  instead — on its inner half since 2026-08-30, because the run's outer steps are
+  back at the chain's own weight by then and a head out there is the clutter this
+  rule exists to prevent. Two design reviews and the browser pass reached the
+  original independently: *direction along a path you cannot trace is not
+  information*, and thirty heads through 263 crossings are clutter.
 - **The chain composites additively** (`mix-blend-mode: plus-lighter`), so a
   corridor the article travels repeatedly glows and a single transit stays a
   whisper. It is the one move that turns the crossing count from noise into a
@@ -1066,6 +1162,16 @@ glossary, and three consequences follow from it rather than from taste:
 - **The empty state says the price before the press**, not after it — a reader
   who presses a button and then watches a spinner for two minutes with no idea
   why is owed the sentence.
+- **And a redraw somebody else started still shows.** `useStepJob` reads the
+  queue rather than remembering the click, precisely so a run from the CLI, the
+  shelf or another tab appears — and this panel was the one surface that did
+  nothing with the answer, so a picture already on screen changed under the
+  reader two minutes later with nothing having said it would. `.sk-busy` is one
+  line with the spinner and the step's own label. Deliberately **not**
+  `JobProgress`: that row carries a Stop button and, with no job running, the
+  Draw button — and offering a $0.20 redraw beside a picture that is already
+  there is a product decision, not a loading state.
+  [`tests/sketch-view-drawing.test.tsx`](../../tests/sketch-view-drawing.test.tsx).
 - **It is in `FORCE_ONLY_WHEN_NAMED` for a third reason the others do not have**,
   and it is about the clock rather than the money: every step self-aborts at 400s
   inside an 800s invocation that must also fit a `toc` measured at 320s. A
@@ -1079,17 +1185,37 @@ artefact in a Postgres column. `generateSketch` writes nothing and hands the
 scene back; the step returns it as `parts`, the CLI writes `sketch.json`, the
 harness writes into a results directory.
 
-### 288px is not a size a diagram fits in
+### 288px is not a size a diagram fits in, and zooming inside it does not help
 
 The canvas is 760 units and the band is 288–400px, so scaled to fit, 12-unit text
-lands at about 5px. That is the band being narrow rather than a bug to solve, and
-the two things a reader wants are genuinely different — so there are two sizes
-and one button:
+lands at about 5px. The band shows the **shape**, which is what this picture is
+for and which survives being small; the words do not, so hovering or focusing
+anything puts the full text in the card underneath.
 
-- **Fit** shows the *shape*, which is what this picture is for and which survives
-  being small. The words do not, so hovering or focusing anything puts its full
-  text in the card underneath.
-- **Read** draws it at its own size and lets the band scroll both ways.
+The first answer to the words was a Fit/Read toggle that redrew the picture at its
+natural 760 units *inside the same column*. Greg, 2026-08-30:
+
+> Right now it just zooms in, but the column is narrow.
+
+Which is the whole objection. Reading a diagram through a 288px slot by scrolling
+it in two directions is worse than not reading it: you lose the shape, which was
+the one thing the small version had, and you gain words you have to reassemble
+from four screenfuls.
+
+So **Enlarge**, and it is a real modal — the same `<dialog>` `showModal()`
+[`Lightbox.tsx`](../../src/web/Lightbox.tsx) uses for a figure in the article, for
+the four reasons that file gives: Escape closes it, the background goes `inert`,
+focus is trapped and restored, and it paints in the top layer without joining the
+z-index budget. Inside, the picture is drawn to the window's width rather than to
+760, so the text arrives at 17–20px and the shape is still whole — nothing about
+the layout changed, only its scale.
+
+**Widening the column was the other option Greg offered and it is worse.** The
+band's width is the output of a negotiation in
+[`layout.ts`](../../src/web/layout.ts) between the rail, the band and
+`PROSE_MIN`, and a band that grew to fit a diagram would take that width from the
+article — which is what the reader is here to read, and what every other rule in
+that file protects first. A modal takes it from nothing.
 
 ### Interaction
 
@@ -1099,7 +1225,18 @@ and one button:
   sometimes scrolled the article would be a control nobody can predict. The jump
   is still there, from the card, where it is labelled — available and never a
   surprise.
-- **A breadcrumb** goes back; Escape goes back.
+- **Click a region's name** — "WHY WE'RE TEMPTED TO SEE IT" — and the picture
+  opens the zoom scene for that part. Greg asked for it by example, and it is the
+  most natural handle there is: a region is the overview's own statement that
+  these boxes are one movement of the piece, and the zoom is that movement drawn
+  larger, so a reader pressing the name is pointing at exactly what they want
+  more of. **The name, never the panel**: a region is a large area lying *behind*
+  the nodes, and making all of it pressable would put a second meaning on every
+  pixel between the boxes.
+- **Back** appears whenever a zoom is open, and Escape does the same. The scene
+  row beside it is the other way around the picture — Back is out of where you
+  are, the row is a list of where you could be — and neither depends on the model
+  having wired an `opens`, which on four of the first six drawings it had not.
 - **Hover or focus** → the card below. Fixed height, like `.diag-card` and for
   the same reason: a card that grew with its text would resize the picture above
   it every time the pointer crossed a box.

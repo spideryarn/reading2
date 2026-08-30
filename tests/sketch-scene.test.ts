@@ -248,6 +248,78 @@ describe("readSketch — what survives, and what is counted", () => {
   });
 });
 
+describe("reaching a scene — the pointers that make a zoom visible at all", () => {
+  /* The plainest silent success this feature produced, and it survived six real
+     runs and a cross-family review: the model returns three scenes, the artefact
+     says three scenes and the score says three scenes — and in four of those
+     six, three of them with no `opens` anywhere, the reader could see ONE. Two
+     paid-for pictures each time, drawn and unreachable, with nothing reporting
+     it. Everything in this block exists because of that. */
+  const zoomed = (overview: unknown[]) =>
+    readSketch(
+      {
+        title: "t",
+        caption: "c",
+        scenes: [
+          { id: "overview", title: "s", height: 400, items: overview },
+          { id: "zoom", title: "z", height: 400, items: [node({ id: "z1" })] },
+        ],
+      },
+      opts,
+    );
+
+  it("reports a scene that no node and no region opens", () => {
+    const { sketch, report } = zoomed([node({ id: "a" })]);
+    expect(report.faults.map((f) => f.what).join(" ")).toContain("no node opens this scene");
+    // A fault, NOT a refusal: the overview is usually fine, and the panel lists
+    // the scenes itself rather than depending on the pointer.
+    expect(sketch.scenes).toHaveLength(2);
+    expect(scoreSketch(sketch, report, opts).unreachable).toBe(1);
+  });
+
+  it("counts a scene a node opens as reached", () => {
+    const { sketch, report } = zoomed([node({ id: "a", opens: "zoom" })]);
+    expect(report.faults).toEqual([]);
+    expect(scoreSketch(sketch, report, opts).unreachable).toBe(0);
+  });
+
+  it("counts a scene a REGION's label opens as reached", () => {
+    /* Greg, 2026-08-30: "add a way to click on the subsection (e.g. 'Why we're
+       tempted to see it') that takes to the relevant subdiagram". A region is
+       the overview's own statement that these boxes are one movement of the
+       piece, so it is the natural handle — and a scene reached that way is every
+       bit as reachable as one reached from a box. */
+    const { sketch, report } = zoomed([
+      { kind: "region", x: 10, y: 10, w: 300, h: 200, label: "THE CASE", style: "band", opens: "zoom" },
+      node({ id: "a", y: 40 }),
+    ]);
+    const region = (sketch.scenes[0]?.items ?? []).find((i) => i.kind === "region");
+    expect((region as { opens?: string }).opens).toBe("zoom");
+    expect(report.faults).toEqual([]);
+    expect(scoreSketch(sketch, report, opts).unreachable).toBe(0);
+  });
+
+  it("drops a region's `opens` that names no scene, and keeps the region", () => {
+    const { sketch, report } = read([
+      { kind: "region", x: 10, y: 10, w: 300, h: 200, label: "THE CASE", style: "band", opens: "nowhere" },
+    ]);
+    const region = (sketch.scenes[0]?.items ?? [])[0] as { opens?: string };
+    expect(region).toBeTruthy();
+    expect(region.opens).toBeUndefined();
+    expect(report.faults.map((f) => f.what).join(" ")).toContain("nowhere");
+  });
+
+  it("refuses a region that opens a scene and has no label to press", () => {
+    // The label IS the target, so an unlabelled one is a control with nothing to
+    // press — worse than none, because the scene then looks reachable.
+    const { sketch, report } = read([
+      { kind: "region", x: 10, y: 10, w: 300, h: 200, style: "band", opens: "zoom" },
+    ]);
+    expect(((sketch.scenes[0]?.items ?? [])[0] as { opens?: string }).opens).toBeUndefined();
+    expect(report.faults.map((f) => f.what).join(" ")).toContain("no label to press");
+  });
+});
+
 describe("cleanPath — the one string that reaches the renderer nearly as written", () => {
   it("accepts absolute M/L/C/Q/A/Z and numbers", () => {
     expect(cleanPath("M40 100 L360 100 C400 120 420 160 260 300 Z")).toBeTruthy();

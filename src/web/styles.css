@@ -7017,6 +7017,32 @@ td.text.has-hit[data-hues="8"] {
   text-wrap: balance;
 }
 .diag-wait .cmt-spinner { flex: none; }
+/* The failure that has a button under it. A row is right for a spinner beside
+   six words and wrong for the server's own reason, which runs to three lines in
+   this band — side by side, the sentence and the button squeeze each other. */
+.diag-wait.wide { flex-direction: column; gap: 0.55rem; }
+
+/* **The second try, drawn as a link and sized as a target.** It sits inside a
+   sentence in both places it appears — the wait, and the Force strip above the
+   picture — so a real filled button would change the line height around the
+   words it belongs to. Underlined rather than coloured alone, because at 10.5px
+   on this ground a hue change is not a reliable affordance and
+   docs/project/colour-scales.md is emphatic that colour is never the only
+   carrier. The padding is what makes it hittable on a touch device without
+   taking a line of its own. */
+.diag-again {
+  display: inline;
+  border: 0;
+  margin: 0;
+  padding: 0.15rem 0.1rem;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.diag-again:hover, .diag-again:focus-visible { color: var(--ink); }
 
 .diag-svg { display: block; }
 
@@ -7790,14 +7816,58 @@ tr:hover .block-chat,
    see first. `--diag-seq` is shared with the arrowhead's fill below: one token,
    so the head cannot end up a different colour from its line. */
 .diag-force {
-  --diag-seq: rgb(var(--cat-7-rgb) / 0.5);
+  --diag-seq: rgb(var(--cat-7-rgb) / 0.9);
 }
 .diag-force .diag-link-sequence {
   stroke: var(--diag-seq);
   stroke-width: 2.2;
   stroke-linecap: round;
+  /* **0.56 over an alpha of 0.9 is the 0.5 this line has always been drawn at**,
+     and it is split in two so that the ramp below has something to turn up.
+
+     A colour token at full strength plus an `opacity` the ramp overrides beats
+     seven `stroke` colours, for one reason that is not tidiness: **`opacity`
+     paints through to an element's `marker-end`, and `stroke` does not.** Every
+     path here shares one `#diag-arrow` def, so grading with `stroke` would fade
+     the line and leave the head at full strength — a bright arrowhead on a
+     faint line at the far end of every article.
+
+     Measured rather than read off the spec, 2026-08-30, because the failure is
+     silent and the spec is not what ships: two identical paths at opacity 1 and
+     0.3, both pointing at one shared marker, rasterised to a canvas over an
+     opaque ground and sampled with `getImageData` five pixels clear of the
+     stroke. Line 77/255 = 0.302; arrowhead 77/255 = 0.302. The head fades at
+     exactly the rate its line does. */
+  opacity: 0.56;
 }
 .diag-force .diag-arrowhead { fill: var(--diag-seq); }
+
+/* **The reader's own stretch of the chain, and it fades outward.**
+ *
+ * Greg, 2026-08-30: *"making the connections directly either side of the
+ * current node most prominent. Then a bit fainter for the ones at one remove,
+ * then a bit fainter for the ones at two removes, etc etc."*
+ *
+ * `diag-near-0` is the two lines touching the section the reader is standing
+ * in; the level is a hop count scaled to the chain's length, so the ramp spans
+ * the same eight steps on a nine-section article and a fifty-section one
+ * (`chainNearness`, src/web/diagram.ts).
+ *
+ * **It brightens toward the reader and never dims below the base**, which is
+ * why the last step is 0.56 — exactly the rule above. Dimming the far chain
+ * instead would put a visible edge wherever the ramp stopped and would take the
+ * rest of the article down with it; this way the ramp simply stops mattering.
+ * Width moves with it, a little, because opacity alone on a 2.2px line is a
+ * difference you have to look for.
+ */
+.diag-force .diag-link-sequence.diag-near-0 { opacity: 1; stroke-width: 3.2; }
+.diag-force .diag-link-sequence.diag-near-1 { opacity: 0.94; stroke-width: 3; }
+.diag-force .diag-link-sequence.diag-near-2 { opacity: 0.87; stroke-width: 2.8; }
+.diag-force .diag-link-sequence.diag-near-3 { opacity: 0.8; stroke-width: 2.7; }
+.diag-force .diag-link-sequence.diag-near-4 { opacity: 0.73; stroke-width: 2.5; }
+.diag-force .diag-link-sequence.diag-near-5 { opacity: 0.67; stroke-width: 2.4; }
+.diag-force .diag-link-sequence.diag-near-6 { opacity: 0.61; stroke-width: 2.3; }
+.diag-force .diag-link-sequence.diag-near-7 { opacity: 0.56; stroke-width: 2.2; }
 
 /* Shared distinctive words. Sky blue, medium — the measure the picture has
    always had, unchanged so a reader who knew this picture still recognises it. */
@@ -7846,6 +7916,10 @@ tr:hover .block-chat,
 
 /* The one line of chrome the Force picture grows: whether the embeddings have
    arrived. Beside the picture rather than over it — see DiagramPanel.tsx. */
+/* The strip is a paragraph in normal inline flow, not a flex row, so the
+   spinner has to be told where the baseline is and given its own gap — `flex:
+   none` on `.cmt-spinner` does nothing here. */
+.diag-note .cmt-spinner { vertical-align: -0.15em; margin-right: 0.3rem; }
 .diag-note {
   margin: 0;
   padding: 0.15rem 0.75rem 0.3rem;
@@ -7976,7 +8050,7 @@ tr:hover .block-chat,
 .sk-scene.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); }
 .sk-scene:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 
-.sk-crumb, .sk-zoom {
+.sk-up, .sk-crumb, .sk-zoom {
   display: inline-flex; align-items: center; gap: 0.2rem;
   border: 1px solid var(--rule); border-radius: 4px;
   padding: 0.15rem 0.4rem;
@@ -7984,8 +8058,68 @@ tr:hover .block-chat,
   font-family: inherit; font-size: inherit;
 }
 .sk-zoom { margin-left: auto; }
-.sk-crumb:hover, .sk-zoom:hover { background: var(--surface-raised); color: var(--ink); }
-.sk-crumb:focus-visible, .sk-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+.sk-up:hover, .sk-crumb:hover, .sk-zoom:hover { background: var(--surface-raised); color: var(--ink); }
+.sk-up:focus-visible, .sk-crumb:focus-visible, .sk-zoom:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+/* Up sits before the scene row, not after it: it is the way out of where you
+   are, and the row is a list of where you could be. */
+.sk-up { flex: none; }
+
+/* ---- a region's name, when it opens the part it names ---- */
+
+.sk-region-open { cursor: pointer; }
+.sk-region-open .sk-region-label { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+.sk-region-open:hover .sk-region-label { fill: rgb(var(--cat-rgb, var(--cat-7-rgb))); text-decoration-style: solid; }
+.sk-region-open:focus-visible { outline: none; }
+/* The ring goes on the hit rectangle rather than the group, because a `<g>` has
+   no box of its own for an outline to follow — it is exactly its children's
+   extent, and the text's extent is not the target's. */
+.sk-region-open:focus-visible .sk-hit { stroke: var(--highlight); stroke-width: 2; rx: 3; }
+
+/* ---- full screen ---- */
+
+/*
+ * The same `<dialog>` `showModal()` Lightbox.tsx uses, and for its four reasons:
+ * Escape closes it, the background goes `inert`, focus is trapped and restored,
+ * and it paints in the top layer without joining the z-index budget.
+ *
+ * **Why full screen rather than a wider band.** The band's width is the output
+ * of a negotiation in layout.ts between the rail, the band and `PROSE_MIN`, and
+ * a band that grew to fit a diagram would take that width from the article —
+ * which is what the reader is here to read. A modal takes it from nothing.
+ */
+.sk-full {
+  width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh;
+  margin: 0; padding: 0; border: none; background: transparent;
+  display: none;
+}
+.sk-full[open] { display: flex; align-items: flex-start; justify-content: center; }
+.sk-full::backdrop { background: rgb(0 0 0 / 0.72); }
+.sk-in-full {
+  /* Wide enough that a 760-unit canvas lands near 1.4x — text at 17px — and
+     capped so an ultrawide window does not scale it to something silly. */
+  width: min(94vw, 1120px);
+  height: 100dvh;
+  background: var(--page);
+  border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);
+  display: flex; flex-direction: column;
+}
+/* The picture is the thing with room now, so the card can afford two more
+   lines of the sentence it was clamping. */
+.sk-in-full .sk-card { height: 7.5rem; }
+.sk-in-full .sk-card-detail { -webkit-line-clamp: 3; }
+.sk-in-full .sk-bar { padding: 0.5rem 0.8rem; font-size: 0.78rem; }
+.sk-in-full .sk-scene { max-width: 20rem; }
+/* Stops a trackpad flick inside a tall picture scrolling the article behind it
+   — the case that actually happens. Lightbox.tsx § two things `<dialog>` does
+   not do has the reasoning, including why locking `body` was rejected. */
+.sk-in-full .sk-scroll { overscroll-behavior: contain; }
+
+/* What the band says while the overlay has the picture. */
+.sk.away { justify-content: flex-start; }
+.sk-elsewhere {
+  margin: 0; padding: 0.75rem 0.7rem;
+  font-family: var(--font-ui); font-size: 0.75rem; line-height: 1.45; color: var(--ink-faint);
+}
 
 .sk-note {
   margin: 0 0.6rem 0.3rem;
@@ -7993,12 +8127,12 @@ tr:hover .block-chat,
   color: var(--ink-faint);
 }
 
-/* **`auto` on both axes, and that is what the Read button is for.** At Fit the
-   svg is `width: 100%` and there is nothing to scroll sideways; at Read it is
-   760px in a 288px band and both scrollbars are the point. */
+/* The svg is always `width: 100%`, so there is nothing to scroll sideways and
+   `overflow-y` is what actually does the work — a tall picture in a short band.
+   `auto` on both axes anyway, because a scene may be wider than tall in the
+   overlay and a clipped edge is worse than a scrollbar. */
 .sk-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 0.4rem; }
 .sk-svg { display: block; }
-.sk-scroll.big .sk-svg { max-width: none; }
 
 /* ---- the primitives ---- */
 
@@ -8084,6 +8218,18 @@ tr:hover .block-chat,
 
 .sk-wait, .sk-empty { padding: 0.75rem 0.7rem; font-family: var(--font-ui); font-size: 0.75rem; color: var(--ink-soft); }
 .sk-wait { display: flex; align-items: center; gap: 0.4rem; }
+/* A redraw already under way, over a picture that is still readable. Above the
+   notes rather than below, because it is the one line here about *now*. */
+.sk-busy {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.15rem 0.7rem 0.3rem;
+  font-family: var(--font-ui);
+  font-size: 0.7rem;
+  color: var(--ink-faint);
+}
 .sk-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
 .sk-empty-why { font-size: 0.7rem; color: var(--ink-faint); }
 .sk-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }
@@ -8242,12 +8388,16 @@ tr:hover .block-chat,
 }
 
 /* The chain, on Trail. **`depth` is not a depth here** — scatter.ts writes how
-   strongly to draw the segment into it, 0 to 8, because a link already has that
+   strongly to draw the segment into it, 0 to 6, because a link already has that
    field and inventing a second one would mean touching every picture's
-   stylesheet. Two things are folded into the one number: the chain brightens as
-   the article goes on, and the sixteen segments around wherever the reader is
-   standing jump to the top step. The second is what makes the picture readable
-   while scrolling rather than only studiable. */
+   stylesheet. It says one thing and one only: how far through the article this
+   segment is, so the chain brightens as the piece goes on and the eye can tell
+   which end it started at.
+
+   Where the reader is standing is the *other* ramp, `diag-near-*` below, and it
+   is deliberately not folded into this number: it comes from the panel rather
+   than from the layout, so that Force can have the same ramp without re-running
+   a force simulation on every scroll. */
 .diag-trail {
   --diag-chain: var(--cat-7-rgb);
 }
@@ -8255,6 +8405,9 @@ tr:hover .block-chat,
   stroke: rgb(var(--diag-chain) / 0.5);
   stroke-width: 0.75;
   fill: none;
+  /* The fallback matters: a segment with no `diag-d*` at all must not render at
+     the browser default of 1, which on this additive layer is a white line. */
+  opacity: var(--chain-fade, 0.5);
   /* **Segments add up rather than paint over each other**, so a corridor the
      article travels repeatedly glows and a single transit stays a whisper.
      This is the one move that turns 263 crossings from noise into a reading:
@@ -8269,26 +8422,111 @@ tr:hover .block-chat,
      this picture. */
   mix-blend-mode: plus-lighter;
 }
-/* The bright run is a line to follow rather than texture to accumulate, so it
-   comes out of the additive layer — otherwise it would blow out wherever it
-   crossed the chain, which is the one place the reader is looking. */
-.diag-trail .diag-link.diag-d8 { mix-blend-mode: normal; }
-.diag-trail .diag-link.diag-d0 { opacity: 0.16; }
-.diag-trail .diag-link.diag-d1 { opacity: 0.2; }
-.diag-trail .diag-link.diag-d2 { opacity: 0.25; }
-.diag-trail .diag-link.diag-d3 { opacity: 0.3; }
-.diag-trail .diag-link.diag-d4 { opacity: 0.36; }
-.diag-trail .diag-link.diag-d5 { opacity: 0.42; }
-.diag-trail .diag-link.diag-d6 { opacity: 0.5; }
-/* The reader's own stretch. Brighter, thicker, and the only part of the chain
-   drawn as a line you are meant to follow rather than as texture. */
-.diag-trail .diag-link.diag-d8 {
+/* **The global fade is a custom property, not an `opacity`, and that is what
+   lets the local ramp compose with it instead of replacing it.**
+
+   It was a plain `opacity` until GPT Sol reviewed this on 2026-08-30 and found
+   the cliff it produced: `diag-near-7` — the ramp's last step, which is supposed
+   to be indistinguishable from an unclassed segment — set 0.52, while the
+   unclassed `diag-d0` segment beside it sat at 0.16. Roughly 0.26 against 0.08
+   of effective alpha, a threefold jump, at exactly the boundary the design
+   claims to have no boundary at. Force does not have this problem because its
+   chain has one base weight; Trail's varies from 0.16 to 0.5 along the article,
+   so "land on the base" is only meaningful if the ramp can *see* the base. */
+.diag-trail .diag-link.diag-d0 { --chain-fade: 0.16; }
+.diag-trail .diag-link.diag-d1 { --chain-fade: 0.2; }
+.diag-trail .diag-link.diag-d2 { --chain-fade: 0.25; }
+.diag-trail .diag-link.diag-d3 { --chain-fade: 0.3; }
+.diag-trail .diag-link.diag-d4 { --chain-fade: 0.36; }
+.diag-trail .diag-link.diag-d5 { --chain-fade: 0.42; }
+.diag-trail .diag-link.diag-d6 { --chain-fade: 0.5; }
+
+/* **The reader's own stretch, and it fades outward rather than stopping.**
+ *
+ * Greg, 2026-08-30: *"making the connections directly either side of the
+ * current node most prominent. Then a bit fainter for the ones at one remove,
+ * then a bit fainter for the ones at two removes, etc etc."*
+ *
+ * This used to be one step — `diag-d8`, seventeen segments at full strength and
+ * a hard edge back to the global fade — decided inside `chainStep` in
+ * scatter.ts. It is now eight steps decided by `chainNearness` in diagram.ts,
+ * which is the same code the Force chain uses, so the two pictures cannot drift
+ * apart in what "near the reader" means.
+ *
+ * **Each step is a lerp from full strength to `--chain-fade`, not a number.**
+ * `calc(fade + (1 - fade) * k)` with `k` walking 1 → 0: level 0 is opacity 1
+ * wherever it lands in the article, and level 7 resolves to *exactly* the
+ * global fade that segment would have had unclassed. That is what makes the
+ * ramp end without an edge, and writing it as eight literal opacities is what
+ * put an edge there in the first place — see the note above the `diag-d*` rules.
+ *
+ * Two more things ride the ramp, and neither can be interpolated in CSS, which
+ * is why the steps are still written out. The **hue** walks from the chain's
+ * own violet at the far end to the marker colour at the reader's feet, because
+ * opacity alone on a hairline that is already glowing additively does not
+ * separate the run from the tangle. And **`plus-lighter` comes off** at the
+ * near end: the bright run is a line to follow rather than texture to
+ * accumulate, and left in the additive layer it blows out wherever it crosses
+ * the rest of the chain, which is precisely where the reader is looking.
+ */
+.diag-trail .diag-link.diag-near-0 {
   opacity: 1;
   stroke: rgb(var(--cat-4-rgb) / 0.95);
   stroke-width: 1.6;
   stroke-linecap: round;
+  mix-blend-mode: normal;
 }
-.diag-trail .diag-arrowhead { fill: rgb(var(--diag-chain) / 0.8); }
+.diag-trail .diag-link.diag-near-1 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.88);
+  stroke: rgb(var(--cat-4-rgb) / 0.88);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  mix-blend-mode: normal;
+}
+.diag-trail .diag-link.diag-near-2 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.75);
+  stroke: rgb(var(--cat-4-rgb) / 0.78);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  mix-blend-mode: normal;
+}
+.diag-trail .diag-link.diag-near-3 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.62);
+  stroke: rgb(var(--cat-4-rgb) / 0.66);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  mix-blend-mode: normal;
+}
+/* From here on the segments are back in the additive layer, which is what makes
+   the run dissolve into the chain instead of ending. */
+.diag-trail .diag-link.diag-near-4 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.48);
+  stroke: rgb(var(--cat-4-rgb) / 0.55);
+  stroke-width: 1.1;
+}
+.diag-trail .diag-link.diag-near-5 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.33);
+  stroke: rgb(var(--cat-4-rgb) / 0.44);
+  stroke-width: 1;
+}
+.diag-trail .diag-link.diag-near-6 {
+  opacity: calc(var(--chain-fade, 0.5) + (1 - var(--chain-fade, 0.5)) * 0.17);
+  stroke: rgb(var(--cat-4-rgb) / 0.32);
+  stroke-width: 0.9;
+}
+/* Level 7 is the ramp arriving: every property here is the unclassed rule's,
+   spelled out so the boundary is visible to a reader and to a test. */
+.diag-trail .diag-link.diag-near-7 {
+  opacity: var(--chain-fade, 0.5);
+  stroke: rgb(var(--diag-chain) / 0.5);
+  stroke-width: 0.75;
+}
+
+/* The heads only ever land on the reader's own run (scatter.ts decides that,
+   because a head changes where the line is trimmed to), so they take that run's
+   colour rather than the chain's. `--diag-chain` violet on a `--cat-4` line was
+   a head that did not look like it belonged to the line it was on. */
+.diag-trail .diag-arrowhead { fill: rgb(var(--cat-4-rgb) / 0.9); }
 
 /* **The microphone's one promise, and it is invisible.**
    Where the "unreliable" sticker used to be (removed 2026-08-27, along with the

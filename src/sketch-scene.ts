@@ -141,6 +141,26 @@ export interface SketchRegion extends Toned {
   h: number;
   label?: string;
   style: SketchRegionStyle;
+  /**
+   * A scene this region's **label** opens — validated against `scenes`, exactly
+   * as a node's `opens` is.
+   *
+   * > add a way to click on the subsection (e.g. "Why we're tempted to see it")
+   * > that takes to the relevant subdiagram
+   * >
+   * > — Greg, 2026-08-30
+   *
+   * A region is already the overview's own statement that these boxes are one
+   * movement of the piece, and a zoom scene is that movement drawn larger — so
+   * the region is the most natural handle there is, and the reader is pointing
+   * at exactly the thing they want more of.
+   *
+   * **The label is the target, not the panel.** A region is a large area lying
+   * *behind* the nodes; making the whole of it clickable would put a second
+   * meaning on every pixel between the boxes, and a press that landed a few
+   * pixels off a node would silently do something entirely different.
+   */
+  opens?: string;
 }
 
 export interface SketchEdge extends Toned {
@@ -466,6 +486,15 @@ function readRegion(
   };
   const label = str(raw.label);
   if (label) region.label = label;
+  const opens = str(raw.opens);
+  /* Resolved against the scene list by the caller, like a node's. **A region
+     with an `opens` and no label has nothing to press**, so the pointer goes
+     rather than being left on an invisible target — which would be worse than
+     no pointer at all, because the scene would then count as reachable. */
+  if (opens && label) region.opens = opens;
+  else if (opens) {
+    faults.push({ where, what: "a region opens a scene but has no label to press" });
+  }
   const t = tone(raw.tone);
   if (t !== undefined) region.tone = t;
   if (raw.muted === true) region.muted = true;
@@ -673,12 +702,17 @@ export function readSketch(
   const opened = new Set<string>();
   for (const scene of scenes) {
     for (const item of scene.items) {
-      if (item.kind !== "node" || !item.opens) continue;
+      /* Nodes and regions both, and the same rule for both: a pointer at a
+         scene that is not here is dropped rather than drawn as a control that
+         does nothing. */
+      if (item.kind !== "node" && item.kind !== "region") continue;
+      if (!item.opens) continue;
       if (sceneIds.has(item.opens) && item.opens !== scene.id) {
         opened.add(item.opens);
         continue;
       }
-      faults.push({ where: item.id, what: `opens "${item.opens}", which is not a scene here` });
+      const where = item.kind === "node" ? item.id : (item.label ?? scene.id);
+      faults.push({ where, what: `opens "${item.opens}", which is not a scene here` });
       delete item.opens;
     }
   }
@@ -1026,7 +1060,15 @@ export function scoreSketch(
     if (area > 0) overlap = Math.max(overlap, Math.min(1, over / area));
   }
 
-  const opened = new Set(nodes.map((n) => n.opens).filter(Boolean));
+  /* Regions count as well as nodes: a scene reached by pressing its region's
+     name is every bit as reachable as one reached from a box. */
+  const opened = new Set(
+    sketch.scenes
+      .flatMap((sc) => sc.items)
+      .filter((it): it is SketchNode | SketchRegion => it.kind === "node" || it.kind === "region")
+      .map((it) => it.opens)
+      .filter(Boolean),
+  );
   return {
     scenes: sketch.scenes.length,
     unreachable: sketch.scenes.slice(1).filter((sc) => !opened.has(sc.id)).length,

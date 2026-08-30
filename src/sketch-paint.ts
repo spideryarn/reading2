@@ -90,6 +90,24 @@ export interface PaintedNode {
   hit: { x: number; y: number; w: number; h: number };
 }
 
+/**
+ * One region, split by layer and with its label's own hit box.
+ *
+ * The **panel** goes under the edges, the way a background does; the **label**
+ * goes over them, because a connector drawn across a region's name made it
+ * impossible to tell whether the line terminated there. And the label carries a
+ * rectangle of its own, because a region whose `opens` names a scene is
+ * pressable *by its name* — see `SketchRegion.opens` for why the name and not
+ * the panel.
+ */
+export interface PaintedRegion {
+  region: SketchRegion;
+  panel: Prim[];
+  label: Prim[];
+  /** Around the label's text, or `null` when the region has no label. */
+  hit: { x: number; y: number; w: number; h: number } | null;
+}
+
 export interface Painted {
   width: number;
   height: number;
@@ -98,6 +116,12 @@ export interface Painted {
   /** Edges, free paths. Under the nodes, over the region panels. */
   links: Prim[];
   nodes: PaintedNode[];
+  /**
+   * The regions, whole. `behind` and `front` already carry their primitives —
+   * this is the same paint indexed by region, for the panel that has to hang a
+   * press on one.
+   */
+  regions: PaintedRegion[];
   /**
    * Region labels, edge labels and free labels — everything that is words
    * rather than shape.
@@ -556,7 +580,7 @@ function paintPath(p: SketchPath): Prim[] {
 }
 
 /** A region's panel (under the edges) and its label (over them). */
-function paintRegion(r: SketchRegion): { panel: Prim[]; label: Prim[] } {
+function paintRegion(r: SketchRegion): PaintedRegion {
   const tone = r.tone;
   const out: Prim[] = [];
   if (r.style === "bracket") {
@@ -579,21 +603,34 @@ function paintRegion(r: SketchRegion): { panel: Prim[]; label: Prim[] } {
       ...(tone !== undefined && { tone }),
     });
   }
-  const label: Prim[] = r.label
-    ? [
-        {
-          t: "text",
-          x: r.x + 10,
-          y: r.y + 15,
-          text: r.label,
-          px: 11,
-          anchor: "start",
-          cls: "sk-region-label",
-          ...(tone !== undefined && { tone }),
-        },
-      ]
-    : [];
-  return { panel: out, label };
+  if (!r.label) return { region: r, panel: out, label: [], hit: null };
+
+  const px = 11;
+  const label: Prim[] = [
+    {
+      t: "text",
+      x: r.x + 10,
+      y: r.y + 15,
+      text: r.label,
+      px,
+      anchor: "start",
+      cls: "sk-region-label",
+      ...(tone !== undefined && { tone }),
+    },
+  ];
+  /* **Estimated from the characters, like everything else that measures text
+     here** — SVG will not tell us and `getBBox` needs a DOM this module does
+     not have. The label is uppercased by the stylesheet and tracked out, so the
+     estimate is generous rather than tight: a hit box a little wider than the
+     words is a press that lands, and one a little narrower is a control that
+     misses. Clamped to the region, so it can never reach past its own panel. */
+  const wide = Math.min(r.w - 6, r.label.length * px * CHAR_W * 1.28 + 18);
+  return {
+    region: r,
+    panel: out,
+    label,
+    hit: { x: r.x + 4, y: r.y + 2, w: Math.max(24, wide), h: px + 10 },
+  };
 }
 
 function paintLabel(l: SketchLabel): Prim[] {
@@ -633,12 +670,18 @@ export function paintScene(scene: SketchScene): Painted {
   const behind: Prim[] = [];
   const links: Prim[] = [];
   const front: Prim[] = [];
+  const regions: PaintedRegion[] = [];
 
   for (const item of scene.items) {
     if (item.kind === "region") {
       const painted = paintRegion(item);
+      regions.push(painted);
       behind.push(...painted.panel);
-      front.push(...painted.label);
+      /* The label's primitives are NOT pushed to `front` when the region opens
+         a scene: the panel renders those inside a pressable group of their own,
+         and having them in both places would draw the words twice — once
+         inert, once live, a hair apart. */
+      if (!item.opens) front.push(...painted.label);
     }
     else if (item.kind === "edge") {
       const painted = paintEdge(item, byId, scene.height, nodes);
@@ -654,6 +697,7 @@ export function paintScene(scene: SketchScene): Painted {
     height: scene.height,
     behind,
     links,
+    regions,
     nodes: nodes.map((node) => ({
       node,
       prims: [...shapePrims(node), ...textPrims(node)],

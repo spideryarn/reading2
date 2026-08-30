@@ -13,18 +13,39 @@
  * simple over easy* is about. The chip row, the shell and the heading stay
  * shared; the picture is separate.
  *
- * ## Two sizes, because 288px is not a size a diagram fits in
+ * ## 288px is not a size a diagram fits in, and zooming inside it does not help
  *
  * The canvas is 760 units and the band is 288–400px, so scaled to fit, 12-unit
- * text lands at about 5px. That is not a bug to solve, it is the band being
- * narrow, and the two things a reader wants are genuinely different:
+ * text lands at about 5px. The band shows the **shape**, which is what this
+ * diagram is for and which survives being small; the words do not, so hovering
+ * or focusing anything puts the full text in the card underneath.
  *
- *  - **Fit** shows the *shape* — which is what this whole diagram is for, and
- *    it survives being small. The words do not, so hovering or focusing
- *    anything puts its full text in the card underneath.
- *  - **Read** draws it at its own size and lets the band scroll both ways.
+ * The first version's answer to the words was a Fit/Read toggle that redrew the
+ * picture at its natural 760 units *inside the same column*. Greg, 2026-08-30:
  *
- * One button, two states, and no third thing to learn.
+ * > Right now it just zooms in, but the column is narrow.
+ *
+ * Which is the whole objection. Reading a diagram through a 288px slot by
+ * scrolling it in two directions is worse than not reading it: you lose the
+ * shape, which was the one thing the small version had, and you gain words you
+ * have to reassemble from four screenfuls. A picture of a whole argument wants
+ * the whole window.
+ *
+ * So **Enlarge**, and it is a real modal — the same `<dialog>` `showModal()`
+ * that [`Lightbox.tsx`](./Lightbox.tsx) uses for a figure in the article, for
+ * the four reasons that file sets out at length: Escape closes it, the
+ * background goes `inert`, focus is trapped and restored, and it paints in the
+ * top layer without joining the z-index budget. Inside, the picture is drawn to
+ * the window's width rather than to 760, so the text arrives at 17–20px — and
+ * the shape is still whole, because nothing about the layout changed, only its
+ * scale.
+ *
+ * **Widening the column was the other option Greg offered and it is worse.**
+ * The band's width is the output of a negotiation in `layout.ts` between the
+ * rail, the band and `PROSE_MIN`, and a band that grew to fit a diagram would
+ * take that width from the article — which is the thing the reader is here to
+ * read, and which every other rule in that file protects first. A modal takes
+ * the width from nothing: the article is exactly where it was when you close it.
  *
  * ## What clicking does
  *
@@ -43,7 +64,7 @@
  * per article that nobody could ever see.
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { LoaderCircle, Maximize2, Minimize2, PenLine } from "lucide-react";
+import { ChevronLeft, LoaderCircle, Maximize2, Minimize2, PenLine } from "lucide-react";
 import { paintScene, type Painted, type PaintedNode, type Prim } from "../sketch-paint.js";
 import type { SketchNode } from "../sketch-scene.js";
 import type { Block, BlockId } from "../types.js";
@@ -140,11 +161,88 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
    * the picture no longer depends on the model having wired one.
    */
   const [open, setOpen] = useState<string | null>(null);
-  const [big, setBig] = useState(false);
+  const [full, setFull] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
   const [focused, setFocused] = useState(0);
   const [useProfile, setUseProfile] = useState(true);
   const svg = useRef<SVGSVGElement>(null);
+  const dialog = useRef<HTMLDialogElement | null>(null);
+
+  /**
+   * Whether *we* are the ones closing it.
+   *
+   * `close()` fires the same `close` event Escape does, so without this our own
+   * "shut the overlay" comes straight back as a second close. Lightbox.tsx
+   * carries the same guard and the same reasoning.
+   */
+  const closingOurselves = useRef(false);
+
+  useEffect(() => {
+    const d = dialog.current;
+    if (!d) return;
+    if (full && !d.open) {
+      closingOurselves.current = false;
+      d.showModal();
+    } else if (!full && d.open) {
+      closingOurselves.current = true;
+      d.close();
+    }
+  }, [full]);
+
+  /**
+   * **Escape has to put `full` back, and it is the one path here I could not
+   * verify.**
+   *
+   * The dialog closing without React hearing about it is the worst state this
+   * component can be in: the overlay gone, `full` still true, the band saying
+   * "the picture is full screen" while nothing is, and the only copy of the
+   * picture inside a closed dialog. Invisible, unreachable, no error anywhere,
+   * from the most ordinary gesture there is. So it gets two listeners rather
+   * than one — `cancel`, which Escape fires first, and `close`, which follows.
+   * `setFull(false)` twice is free; missing it once is not.
+   *
+   * **What the browser pass could and could not establish**, because the
+   * distinction matters more than the fix. The Close button and the backdrop
+   * click were both driven and both work. Escape was not: a synthetic Escape
+   * never reached the top-layer dialog at all, and the obvious proxy —
+   * calling `close()` from the console — turned out to be a bad one, because
+   * in that context a bare `<dialog>` with a plain listener does not fire
+   * `close` either. That control is what stopped an hour of "React's `onClose`
+   * is broken", which is what the symptom looked like and is not what the
+   * evidence supports. So: Escape rests on `<dialog>`'s own behaviour plus
+   * these two listeners, and it has not been seen to work.
+   *
+   * **Attached by a callback ref, not by `useEffect(…, [])`**, and that part was
+   * a real bug. This component returns early for `loading`, `none` and `error`,
+   * so on the first render there is no `<dialog>` in the tree — an effect with
+   * empty deps ran once, found `ref.current` null, returned, and never ran
+   * again, because `[]` says never again. A ref rendered behind an early return
+   * is a listener that is never attached. A callback ref fires when the element
+   * mounts, whenever that turns out to be.
+   */
+  const onClosed = useCallback(() => {
+    if (closingOurselves.current) return;
+    setFull(false);
+  }, []);
+
+  const attachDialog = useCallback(
+    (el: HTMLDialogElement | null) => {
+      const was = dialog.current;
+      if (was) {
+        was.removeEventListener("close", onClosed);
+        was.removeEventListener("cancel", onClosed);
+      }
+      dialog.current = el;
+      if (el) {
+        el.addEventListener("close", onClosed);
+        /* Escape's own event, and it fires *before* `close`. Not prevented —
+           the reader means to leave, and the point of listening to both is that
+           either one alone is enough. */
+        el.addEventListener("cancel", onClosed);
+      }
+    },
+    [onClosed],
+  );
 
   /**
    * A prefix for the options' DOM ids, so `aria-activedescendant` has something
@@ -231,13 +329,17 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
         e.preventDefault();
         const target = painted.nodes[focused];
         if (target) activate(target);
-      } else if (e.key === "Escape" && open !== null) {
+      } else if (e.key === "Escape" && open !== null && !full) {
+        /* **Only when the overlay is closed.** Inside a modal, Escape belongs to
+           the dialog — a reader pressing it expects the overlay to go, and
+           swallowing it to pop a scene instead would leave them pressing Escape
+           twice with the first press appearing to do nothing. */
         e.preventDefault();
         setOpen(null);
         setFocused(0);
       }
     },
-    [painted, focused, activate, open],
+    [painted, focused, activate, open, full],
   );
 
   if (view.status === "loading") {
@@ -303,9 +405,37 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
   }
   if (view.profileChanged) notes.push("It was drawn for a reader profile you have since changed.");
 
-  return (
-    <div className="sk">
+  /**
+   * **One body, rendered in whichever container is open.**
+   *
+   * Not two instances: the focused node, the hovered node and the open scene
+   * are one piece of state, and a second copy of the picture would keep a
+   * second copy of all three — so closing the overlay would put the reader back
+   * where they were before they opened it rather than where they got to inside
+   * it.
+   */
+  const body = (
+    <>
       <div className="sk-bar">
+        {open !== null && (
+          /* **Up, and it is not the same control as the scene row.** The row
+             says which parts there are and lets you go to any of them; this
+             says "out of the one I am in", which is what a reader who arrived
+             by pressing a region's name is looking for — they pressed a thing
+             inside the overview and the way out is back, not a list. Escape
+             does the same, when the overlay is not the thing Escape belongs to. */
+          <button
+            type="button"
+            className="sk-up"
+            onClick={() => {
+              setOpen(null);
+              setFocused(0);
+            }}
+            title="Back to the whole picture"
+          >
+            <ChevronLeft size={13} /> Back
+          </button>
+        )}
         {sketch.scenes.length > 1 ? (
           /* **The scenes as a row, not a breadcrumb.** A breadcrumb only tells
              you where you have been, which is no use when the model has drawn
@@ -345,25 +475,50 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
         <button
           type="button"
           className="sk-zoom"
-          onClick={() => setBig((v) => !v)}
-          aria-pressed={big}
-          title={big ? "Fit the whole picture in the band" : "Draw it at full size and scroll"}
+          onClick={() => setFull((v) => !v)}
+          title={full ? "Back to the band" : "Show the whole picture, full screen"}
         >
-          {big ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-          {big ? "Fit" : "Read"}
+          {full ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          {full ? "Close" : "Enlarge"}
         </button>
       </div>
 
+      {/* **A redraw the reader did not start is still a redraw.** `useStepJob`
+          reads the queue rather than remembering a click, precisely so a run
+          started from the CLI, the shelf or another tab shows up — and this was
+          the surface that then did nothing with the answer, so the picture
+          changed under the reader two minutes later with nothing having said it
+          was going to. Greg, 2026-08-30: *"Make sure the diagrams in Diagram
+          mode show loading spinners if they're generating."*
+
+          Not `JobProgress`: that row carries a Stop button and, with no job, the
+          Draw button — and offering a $0.20 redraw beside a picture that is
+          already there is a product decision this is not. This says what is
+          happening and nothing else. The step's own label, off the server, so
+          the words are the words the shelf shows for the same run. */}
+      {view.job && (
+        <p className="sk-busy" role="status">
+          <LoaderCircle className="cmt-spinner" size={12} aria-hidden="true" />
+          {view.job.status === "queued"
+            ? "Waiting for the queue…"
+            : (view.job.steps.find((s) => s.name === "sketch")?.label ?? "Drawing…")}
+        </p>
+      )}
+
       {notes.length > 0 && <p className="sk-note">{notes.join(" ")}</p>}
 
-      <div className={`sk-scroll${big ? " big" : ""}`}>
+      <div className="sk-scroll">
         {/* biome-ignore lint/a11y/useSemanticElements: SVG has no listbox element; the roles are written out for the same reason scatter.ts's are — the DOM is flat and nothing in the markup says this is the third of twelve */}
         <svg
           ref={svg}
           className="sk-svg"
           viewBox={`0 0 ${painted.width} ${painted.height}`}
-          width={big ? painted.width : "100%"}
-          height={big ? painted.height : undefined}
+          /* **Always the container's width.** In the band that is 288–400px and
+             the shape is what survives; in the overlay it is most of the window
+             and the same layout arrives at 17–20px text. Nothing about the
+             picture changes between them except its scale, which is the whole
+             point of a `viewBox`. */
+          width="100%"
           preserveAspectRatio="xMidYMin meet"
           role="listbox"
           /* **The listbox owns one tab stop and moves a roving marker over its
@@ -389,6 +544,50 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
           {painted.links.map((p, i) => (
             <Shape key={`l${i}`} p={p} />
           ))}
+
+          {/* **A region's NAME is a way into the part it names.** The overview
+              has already said these boxes are one movement of the piece, and a
+              zoom scene is that movement drawn larger — so the name is the most
+              natural handle there is, and a reader pressing it is pointing at
+              exactly the thing they want more of. Greg asked for it by example:
+              *"click on the subsection (e.g. 'Why we're tempted to see it')"*.
+
+              Only the words, never the panel: a region is a large area lying
+              behind the nodes, and making all of it pressable would put a second
+              meaning on every pixel between the boxes. */}
+          {painted.regions.map((r) =>
+            r.region.opens && r.hit ? (
+              /* biome-ignore lint/a11y/useKeyWithClickEvents: reached by Tab and activated by Enter as a real `button` role with its own tabIndex — unlike the nodes, which share the picture's single tab stop because there are thirty of them */
+              <g
+                key={`${r.region.label}-${r.region.x}-${r.region.y}`}
+                className="sk-region-open"
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${r.region.label}`}
+                onClick={(e) => {
+                  /* The picture is one tab stop and this is another inside it,
+                     so the press must not also reach the listbox behind. */
+                  e.stopPropagation();
+                  setOpen(r.region.opens as string);
+                  setFocused(0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setOpen(r.region.opens as string);
+                  setFocused(0);
+                }}
+              >
+                {r.label.map((p, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: see the note on `behind` above
+                  <Shape key={`rl${i}`} p={p} />
+                ))}
+                <rect className="sk-hit" x={r.hit.x} y={r.hit.y} width={r.hit.w} height={r.hit.h} />
+              </g>
+            ) : null,
+          )}
+
           {painted.nodes.map((n, i) => (
             /* biome-ignore lint/a11y/useKeyWithClickEvents: the whole picture is one tab stop with its own key handler above — a handler per node is the tab-stop-per-node mistake DiagramPanel already made once */
             /* biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: SVG has no element that carries `option` natively, and the roles are written out for the reason scatter.ts's are — the DOM is flat, so nothing in the markup says this is the third of twelve */
@@ -426,6 +625,38 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
       </div>
 
       <SketchCard node={card} caption={scene.caption ?? sketch.caption} onJump={onJump} />
+    </>
+  );
+
+  return (
+    <div className={`sk${full ? " away" : ""}`}>
+      {full ? (
+        <p className="sk-elsewhere">
+          The picture is full screen.{" "}
+          <button type="button" className="sk-card-jump" onClick={() => setFull(false)}>
+            Bring it back
+          </button>
+        </p>
+      ) : (
+        body
+      )}
+
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: the click handled here is the backdrop, whose keyboard equivalent is Escape — which `<dialog>` implements itself. Lightbox.tsx makes the same call and carries the reasoning. */}
+      <dialog
+        ref={attachDialog}
+        className="sk-full"
+        aria-label={`${sketch.title}, full screen`}
+        /* Light dismiss. The dialog box fills the viewport and the panel sits
+           inside it, so "the target is the dialog itself" means the press landed
+           outside the panel — including on the `::backdrop` underneath. */
+        onClick={(e) => {
+          if (e.target === dialog.current) setFull(false);
+        }}
+      >
+        {/* Mounted only while open, so the picture's state lives in exactly one
+            place and the overlay cannot hold a stale copy of it. */}
+        {full && <div className="sk sk-in-full">{body}</div>}
+      </dialog>
     </div>
   );
 }

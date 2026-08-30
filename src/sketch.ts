@@ -251,8 +251,15 @@ THE FIVE THINGS YOU CAN DRAW
    belong together" or name a phase.
 
    {"kind":"region","x":24,"y":90,"w":320,"h":260,"label":"THE CASE AGAINST",
-    "style":"band","tone":1}
+    "style":"band","tone":1,"opens":"inside-the-case"}
    style: band (a filled panel) | dashed | bracket (just a left-hand rule) | plain
+   opens: OPTIONAL id of a scene, which clicking the region's LABEL zooms into.
+          **This is the main way a reader reaches a zoom scene**, and it is the
+          natural one: the region has already said these boxes are one movement
+          of the piece, and the zoom is that movement drawn larger. If a zoom
+          scene is about the same part as a region, put the scene's id here.
+          A region with an "opens" must have a "label" — the label is what gets
+          pressed.
 
 3. edge — a connector between two nodes, by id.
 
@@ -292,11 +299,16 @@ the parts a reader will want to open.
 So return THREE scenes: the overview, then a zoom into each of the TWO parts
 that carry the most weight and have the most going on inside them.
 
-**Every scene after the first MUST be named in the "opens" of an overview node.**
-This is not a nicety. A scene no node opens is a picture the reader cannot get
-to — you will have drawn it for nothing, and nothing in the answer will look
-wrong. Before you finish: for each zoom scene, find its id in an overview node's
-"opens". If it is not there, either put it there or drop the scene.
+**Every scene after the first MUST be reachable**, and the best way is usually a
+REGION: if the overview groups that part's boxes inside a labelled region, put
+the scene's id in that region's "opens", and the reader gets there by pressing
+the part's own name. Where there is no region — the part is one box, or a
+junction — put the id in that node's "opens" instead.
+
+This is not a nicety. A scene nothing opens is a picture the reader cannot get
+to: you will have drawn it for nothing, and nothing in the answer will look
+wrong. Before you finish, take each zoom scene's id and find it in a region's or
+a node's "opens". If it is not there, either put it there or drop the scene.
 
 A zoom scene follows every rule above. It draws ONE part of the article at the
 granularity the overview had no room for — the individual moves, the specific
