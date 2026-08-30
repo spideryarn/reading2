@@ -613,13 +613,34 @@ function registryWith(step: PipelineStep<"arc">, tweets?: PipelineStep<"tweets">
 }
 
 /** The parts `advanceJobWith` takes — a Postgres session, and that registry. */
-function partsWith(step: PipelineStep<"arc">, tweets?: PipelineStep<"tweets">): AdvanceParts {
+function partsWith(
+  step: PipelineStep<"arc">,
+  tweets?: PipelineStep<"tweets">,
+  leaseMs?: number,
+): AdvanceParts {
   return {
     session: (job, attempt) =>
       openPgStoreSession({ slug: job.slug, job: { id: job.id, attemptId: attempt } }),
     steps: registryWith(step, tweets),
+    ...(leaseMs === undefined ? {} : { leaseMs }),
   };
 }
+
+/**
+ * A claim short enough that one step fits and the next does not.
+ *
+ * `tweets` is budgeted at 90s, and the walk keeps its claim only while
+ * `deadlineAt - now` covers the next step — so a 100s lease, less the 20s
+ * margin, leaves 80s and the walk hands back **after** `arc` rather than before
+ * it. There is no budget check in front of the *first* step, which is what
+ * makes exactly one step run.
+ *
+ * This is how the two-request case survives claim-once at all. Before the walk,
+ * a release between steps was the ordinary path and the test got it for free;
+ * now a deliberate hand-back is the only way a job is left `queued` holding a
+ * draft with work in it, and that is the state this case exists to publish.
+ */
+const ONE_STEP_LEASE_MS = 100_000;
 
 /* ------------------------------------------------------------- the job row -- */
 
@@ -1214,7 +1235,7 @@ when("the transactional session", () => {
 
     expect(settlement.kind, "a release that cancelled is an ending").toBe("ended");
     expect(settlement.kind === "ended" && settlement.ending.status).toBe("cancelled");
-    expect(settlement.job.status).toBe("cancelled");
+    expect(settlement.kind !== "kept" && settlement.job.status).toBe("cancelled");
 
     expect((await revisionRow(claimed.revisionId))?.status, "the draft was failed").toBe("failed");
     expect(
@@ -1624,11 +1645,12 @@ when("the transactional session", () => {
       }),
       seen,
     );
-    const parts = partsWith(step, fakeTweets());
+    const parts = partsWith(step, fakeTweets(), ONE_STEP_LEASE_MS);
 
     const jobId = await queueJob(slug, ["arc", "tweets"]);
 
-    /* Request one: it runs the arc and hands the claim back. */
+    /* Request one: it runs the arc and hands the claim back, because its lease
+       will not cover `tweets`. */
     const first = await advanceWhenSlotFree(jobId, parts);
     expect(first?.ran).toBe("arc");
     expect(first?.done, "tweets is still pending, so the job is not over").toBe(false);
@@ -1745,8 +1767,14 @@ when("the transactional session", () => {
       .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
       .where(eq(jobsTable.id, claimed.jobId));
 
+    /* **Named, not counted.** `failExpired` returns the ids it moved rather
+       than how many (src/store/jobs.ts), and a count could only say that *some*
+       job was swept — on a shared database, with peers' rows lapsing beside
+       this one, `>= 1` was true whether or not this job was in it. */
     const swept = await pgJobStore.failExpired();
-    expect(swept, "this job's lease had expired, so the sweep had to move it").toBeGreaterThanOrEqual(1);
+    expect(swept, "this job's lease had expired, so the sweep had to move it").toContain(
+      claimed.jobId,
+    );
 
     const job = await jobRow(claimed.jobId);
     expect(job?.status).toBe("error");

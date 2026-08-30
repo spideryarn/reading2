@@ -296,6 +296,22 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
      */
     unfinished?: StepName,
   ): Promise<{ settlement: JobSettlement; announce: Announcement }> => {
+    /**
+     * **The step is done and the job goes on, holding its claim.** Case 0, and
+     * it is the one the coordinator takes between the steps of a walk.
+     *
+     * Nothing about the *job row* belongs in this transaction. The step's
+     * artefacts and its `revision_step_runs` row have just been written by the
+     * caller and are what `stepIsDone` reads; the job's `steps` array is a
+     * progress bar, written by `noteProgress` outside this transaction and
+     * deliberately not renewing the lease. Widening the transaction to touch
+     * the job row for a field nothing decides anything on would take the job
+     * lock on every step of a walk for no gain.
+     *
+     * **And the draft stays exactly where it is**, which is the whole point of
+     * keeping the claim: the next step in this same walk writes into it.
+     */
+    if (transition.kind === "keep") return { settlement: { kind: "kept" }, announce: {} };
     if (transition.kind === "release") {
       /* Case 1 and case 4, and which of the two it is cannot be decided here.
          `releaseStepIn`'s `case when cancelling` is the authority on it; asking
@@ -309,7 +325,10 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
         transition.fields,
       );
       const settlement = settlementOf(transition, after);
-      if (settlement.kind === "released") return { settlement, announce: {} };
+      /* Narrowed on `ended` rather than on "not released", because the union
+         now carries `kept` too — and a `keep` never reaches here, so the
+         remaining case would type as `kept | ended` and lose its `ending`. */
+      if (settlement.kind !== "ended") return { settlement, announce: {} };
       return {
         settlement,
         announce: await discardAfterCancel(tx, slug, reasonFor(settlement.ending)),

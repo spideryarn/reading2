@@ -1105,10 +1105,21 @@ describe("advancing a job one step at a time", () => {
     expect(advanced?.done).toBe(true);
   });
 
-  it("runs exactly one step and stops, leaving the next one pending", async () => {
-    /* The other half of the contract. A call that ran two steps would be a call
-       that can exceed a serverless function's time limit, which is the whole
-       thing this design is avoiding. */
+  it("walks the whole job on one call, rather than stopping after the first step", async () => {
+    /**
+     * **This case said the opposite until 2026-08-30, and the reversal is the
+     * point.** It read *"runs exactly one step and stops, leaving the next one
+     * pending"*, on the reasoning that a call running two steps could exceed a
+     * serverless function's time limit.
+     *
+     * That was right about the limit and wrong about where the work goes. Each
+     * `/advance` may land on a **different instance with an empty disk**, so
+     * step two looks for what step one wrote, finds nothing, and runs step one
+     * again — and two tabs alternating make that a loop. One claim now walks the
+     * whole job, inside one invocation, and what bounds it is the claimant's own
+     * deadline (`LEASE_MS`) plus `STEP_BUDGET_MS` before each step.
+     * docs/plans/v1-imports-on-vercel.md § Stage 3.
+     */
     const slug = "test-advance-one-step";
     const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
     await settle(queued.id); // fails at `fetch`: no URL, nothing fetched
@@ -1125,18 +1136,24 @@ describe("advancing a job one step at a time", () => {
 
     const first = await advanceJob(queued.id);
     expect(fetched).toHaveBeenCalledTimes(1);
-    expect(first?.ran).toBe("fetch");
-    expect(first?.done).toBe(false);
+    /* `ran` names the **last** step the call ran, and `extract` is the second of
+       the two — so this one assertion is the whole change: the old shape could
+       not have reached it. */
+    expect(first?.ran).toBe("extract");
+    expect(first?.done).toBe(true);
     expect(first?.job.steps[0]?.status).toBe("done");
-    // Untouched. This is the assertion the whole endpoint is for.
-    expect(first?.job.steps[1]?.status).toBe("pending");
+    /* Not `pending`. `extract` was reached inside the same call, on the same
+       claim, over the artefacts `fetch` had just written. */
+    expect(first?.job.steps[1]?.status).not.toBe("pending");
+    /* Still saying what it said. The walk must not relabel a step it already
+       ran — that would take the first step's own report off the card. */
+    expect(first?.job.steps[0]?.detail).toBe("stubbed");
 
+    /* And the job is over, so asking again does nothing at all rather than
+       running the second step a second time. */
     const second = await advanceJob(queued.id);
-    expect(second?.ran).toBe("extract");
-    // Still `done`, still saying what it said. A second pass that relabelled it
-    // `skipped` would take the first pass's own report off the card.
-    expect(second?.job.steps[0]?.status).toBe("done");
-    expect(second?.job.steps[0]?.detail).toBe("stubbed");
+    expect(second?.ran).toBeNull();
+    expect(second?.done).toBe(true);
     expect(fetched).toHaveBeenCalledTimes(1);
   });
 
@@ -1193,7 +1210,10 @@ describe("advancing a job one step at a time", () => {
     const [winner, loser] = a?.busy === false ? [a, b] : [b, a];
     expect(winner?.busy).toBe(false);
     expect(loser?.busy).toBe(true);
-    expect(winner?.ran).toBe("fetch");
+    /* The **last** step the winner ran, not the first: one claim walks the whole
+       job, so the winner went on to `extract` over the artefact its own `fetch`
+       had just written. What this case is about is unchanged — one runner. */
+    expect(winner?.ran).toBe("extract");
     expect(loser?.ran).toBeNull();
     // And the one that was turned away must not claim the job is over, or its
     // loop would stop on a job that still has a step to run.

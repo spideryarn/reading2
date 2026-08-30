@@ -545,7 +545,7 @@ describe("the job moves on inside the commit", () => {
     expect(jobs.releases).toBe(1);
     expect(jobs.finishes).toBe(0);
     expect(settled.kind).toBe("released");
-    expect(settled.job.status).toBe("queued");
+    expect(settled.kind !== "kept" && settled.job.status).toBe("queued");
   });
 
   it("reports the ending when a Stop turns the release into a cancellation", async () => {

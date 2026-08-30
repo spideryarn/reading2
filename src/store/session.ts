@@ -55,7 +55,31 @@ import type { Job, JobStep, StepName } from "../types.js";
  * docs/plans/delete-the-importer-d1-design-sol.md, finding 1.
  */
 export type JobTransition =
-  /** The step is done and the job goes on. Let the claim go; the next request takes it. */
+  /**
+   * The step is done, the job goes on, and **the claim stays here.**
+   *
+   * The ordinary case, since the coordinator started walking a whole job on one
+   * claim (docs/plans/v1-imports-on-vercel.md § Stage 3). It writes nothing to
+   * the `jobs` row at all: the step's completion is in `revision_step_runs`,
+   * which is the authority for *is this step done*, and the row the card is
+   * rendered from catches up a moment later through `noteProgress` — outside
+   * this transaction, deliberately, because a progress bar is not worth widening
+   * an artefact transaction for.
+   *
+   * **Why it is not simply `release`.** A release hands the claim back, and on a
+   * serverless host the next request lands on a different instance with an empty
+   * `/tmp` and finds nothing the last step wrote. That is the whole reason
+   * imports do not work today, and it is why every non-final step now keeps.
+   */
+  | { kind: "keep" }
+  /**
+   * The step is done and the job goes on, but **let the claim go** — the next
+   * request takes it.
+   *
+   * A deliberate handoff rather than the ordinary path: the claimant is close
+   * enough to its own deadline that starting the next step would mean being
+   * killed inside it. See `budgetFor` in src/jobs.ts.
+   */
   | { kind: "release"; jobId: string; attempt: string; steps: JobStep[]; fields: JobStepFields }
   /** The job is over, however it ended. */
   | { kind: "end"; jobId: string; attempt: string; ending: JobEnding };
@@ -75,6 +99,16 @@ export type JobTransition =
  * Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md finding 4.
  */
 export type JobEndTransition = Extract<JobTransition, { kind: "end" }>;
+
+/**
+ * The two transitions that write the `jobs` row — **the only ones
+ * `settlementOf` can read**.
+ *
+ * A `keep` writes nothing there, so there is no row to read the outcome off and
+ * no settlement to infer. Excluded in the type rather than handled with a throw,
+ * because the alternative is a branch nothing can reach and nothing can test.
+ */
+export type JobSettlingTransition = Exclude<JobTransition, { kind: "keep" }>;
 
 /**
  * The two job writes a session performs, and no others.
@@ -116,6 +150,16 @@ export type JobSettles = Pick<JobStore, "releaseStep" | "finish">;
  * finished.
  */
 export type JobSettlement =
+  /**
+   * The step landed and **this claimant still holds the job**, so there is
+   * nothing to report about the `jobs` row: nothing wrote to it.
+   *
+   * No `job`, deliberately. The only honest one would be a row read back for the
+   * purpose, and the coordinator has the record in memory and is about to write
+   * it through `noteProgress` anyway — a second copy here would be a second
+   * account of the same thing, one statement out of date the moment it is made.
+   */
+  | { readonly kind: "kept" }
   /** The claim went back; the job is `queued` and the next request takes it. */
   | { readonly kind: "released"; readonly job: Job }
   /** The job is over, however it got there. */
@@ -133,7 +177,7 @@ export type JobSettlement =
  * store committed and what the reader will be shown, and asking the same
  * question twice in two places is how the two answers drift.
  */
-export function settlementOf(transition: JobTransition, job: Job): JobSettlement {
+export function settlementOf(transition: JobSettlingTransition, job: Job): JobSettlement {
   if (transition.kind === "end") return { kind: "ended", job, ending: transition.ending };
   if (job.status === "queued") return { kind: "released", job };
   return { kind: "ended", job, ending: endingOf(job) };
@@ -200,6 +244,11 @@ export interface StoreSession {
    * job's are one act rather than two. On the filesystem they are still two
    * writes in a row; what this buys today is that there is exactly one place for
    * D1b to make them one.
+   *
+   * **Or no job write at all.** A `keep` is the ordinary case now that one claim
+   * walks the whole job: the step is finished and nothing about the `jobs` row
+   * changes, so this writes the artefacts, checks them, completes the step and
+   * stops. See `JobTransition`.
    *
    * Throws rather than returning an outcome. Every caller treats a refusal as a
    * step failure, and an outcome that has to be checked is one that can be
@@ -380,7 +429,7 @@ export function fsStoreSession(options: {
      `releaseStep` has the same cancelling branch the Postgres one has — Stop
      arriving mid-step lands on the release — so a filesystem caller that read
      the outcome off its own request would be wrong in exactly the same way. */
-  const settleJob = async (transition: JobTransition): Promise<JobSettlement> =>
+  const settleJob = async (transition: JobSettlingTransition): Promise<JobSettlement> =>
     settlementOf(
       transition,
       transition.kind === "release"
@@ -408,6 +457,11 @@ export function fsStoreSession(options: {
          second when its own writes did not land. */
       await assertProduced(step, ctx, artifacts);
       await artifacts.finishStep(ctx.slug, step.name, attempt);
+      /* **Nothing else on a `keep`.** The step is done and the claim is staying
+         where it is, so there is no job write to make here at all — the
+         coordinator's `noteProgress` catches the row up outside this call, which
+         is where a progress note belongs. See `JobTransition`. */
+      if (transition.kind === "keep") return { kind: "kept" };
       /* **Last, and inside the same call.** Under D1b this is the statement that
          has to share a transaction with the three above it: without that there
          is a window in which `failExpired` invalidates the attempt after the
