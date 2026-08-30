@@ -575,6 +575,35 @@ land — which is the opposite of the complexity Greg was bracing for.
 it); a run can now die half-done, so it needs resuming (`src/labels.ts` already checkpoints, so
 there is a pattern); and input tokens rise unless the article prefix caches well.
 
+**And a cost nobody had named, which may be the decisive one.** On 2026-08-30 the structure call was
+found to have a **baseline per-call failure rate**: two calls in ten returned a tree whose children
+do not partition their parent — a one-block gap, a one-block overlap — and it happened on a
+well-headed article as readily as a headingless one, so it is independent of every other bug found
+that day. `assertChildrenPartition` catches it loudly and nothing dangerous ships; the call simply
+costs its money and produces nothing.
+
+**One big call absorbs that. Waves multiply it.** The arithmetic is unforgiving if the rate holds
+per call and the calls are independent:
+
+```
+today          1 call            P(clean run) = 0.8
+waves, 3 deep  1 + ~8 + ~30      P(clean run) = 0.8^39  ≈  0.02%
+```
+
+Nobody would run it that way — each wave would be retried on its own, which is much cheaper than
+retrying the whole tree and is a genuine argument *for* waves. But it turns "roughly 39 calls" into
+"roughly 49 calls" in expectation, and it means **a wave-based design needs per-wave retry from the
+first commit rather than as a later hardening.**
+
+Two things are unknown and one of them is cheap to learn:
+
+- **The rate itself is n = 10.** The eval's calibration panel — the incumbent four times over three
+  documents — estimates it properly as a free by-product, and was asked to report it.
+- **Whether the rate is per-call or per-difficulty.** A wave asks a smaller question over a smaller
+  range, so it may fail *less* often than one call over the whole article — or the same rate over
+  many more calls, which is worse. **This is the single measurement that decides whether waves are
+  cheap or expensive**, and no one has it. It should be the first thing the waves arm reports.
+
 ### Author headings as model input
 
 > they're rarely granular enough, and we often need shorter and longer versions, and so perhaps we
