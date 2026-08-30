@@ -52,28 +52,45 @@ const PROMPT_VERSION = "toc/2";
 /**
  * How hard the model thinks before it starts writing.
  *
- * **Back to `"high"`, and getting it back is the point of the split.**
+ * **`"medium"`, and this setting has now been wrong in both directions twice.**
  *
- * The history is worth keeping, because this setting has been wrong in both
- * directions. It was `"high"` originally, by default rather than by decision.
- * The max_tokens postmortem forced it down to `"medium"`: the first attempt at
- * fixing the budget raised `max_tokens` from 32,000 to 77,100 and failed again,
- * having spent roughly 64,000 tokens on thinking, because at `"high"` adaptive
- * thinking **expands into whatever room it is given**. `max_tokens` is a
- * ceiling, not a leash; `effort` is the leash.
+ * The history, because it is the argument. It was `"high"` originally, by
+ * default rather than by decision. The max_tokens postmortem forced it down to
+ * `"medium"`: raising `max_tokens` from 32,000 to 77,100 failed again, having
+ * spent roughly 64,000 tokens on thinking, because at `"high"` adaptive thinking
+ * **expands into whatever room it is given**. `max_tokens` is a ceiling, not a
+ * leash; `effort` is the leash. Moving the nav labels out to src/labels.ts then
+ * bought enough room to put it back to `"high"`, and the comment here argued
+ * that case well.
  *
- * That was a real quality concession and it was made under duress — the reasoning
- * this stage needs is finding topic shifts and balancing the levels, which is
- * exactly the part worth thinking about. It was affordable only because the
- * other 73% of the answer was one mechanical label per paragraph, which does not
- * improve for being brooded over.
+ * It went wrong the same way a third time. On 2026-08-30 Stephen Wolfram's
+ * "Towards a theory of bugs" was sized for a 52,225-token budget — 12,225 for
+ * the answer, 40,000 of `THINKING_HEADROOM` — and came back truncated having
+ * spent 2,825 on the answer and 49,400 on reasoning. Those two sum to 52,225
+ * **exactly**. The reasoning did not overrun the reservation; it expanded to
+ * fill the ceiling, which is what it does at `"high"` and what it will do at
+ * any ceiling. So no value of `THINKING_HEADROOM` fixes this, and neither does
+ * a better answer estimate: both make the room bigger and the thinking takes
+ * the room. Greg's call, the same day.
  *
- * Those labels now live in src/labels.ts, generated in batches at `"low"`. What
- * is left here is ~7,000 tokens of structure on a 360-block article, with room
- * to think about it properly. See docs/plans/toc-scaling.md and
- * docs/postmortems/toc-max-tokens.md.
+ * **What this costs, said plainly, because a quality setting is being lowered.**
+ * The reasoning this stage needs — finding topic shifts, balancing the levels —
+ * is exactly the part worth thinking about, and nobody has measured `high`
+ * against `medium` *for this stage*. That comparison exists for arc, thread and
+ * glossary and was never run for the tree. So this is a decision taken on a
+ * failure mode rather than on a quality measurement, and the measurement is
+ * still owed.
+ *
+ * **If you run that comparison, read `repairedBlocks` and `largestRepair`
+ * alongside the score.** Since `0062f74` a tree that does not tile is snapped
+ * shut and repaired rather than thrown away, so an arm can score `ok` having
+ * been repaired into shape — and a boundary one paragraph out and a section
+ * handed forty of its neighbour's blocks would otherwise look identical.
+ * `evals/toc-structure/run.ts` records both.
+ *
+ * See docs/plans/toc-scaling.md and docs/postmortems/toc-max-tokens.md.
  */
-const EFFORT = "high" as const;
+const EFFORT = "medium" as const;
 
 const SYSTEM = `You are building a nested table of contents for an article. It goes all the
 way down to individual paragraphs, and it will be rendered as a navigation sidebar.

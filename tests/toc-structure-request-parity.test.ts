@@ -133,7 +133,11 @@ describe("the structure call's request", () => {
     expect(body.system).toBe(EXPECTED_SYSTEM);
     expect(body.messages).toEqual([{ role: "user", content: EXPECTED_USER }]);
     expect(body.thinking).toEqual({ type: "adaptive" });
-    expect(body.output_config).toEqual({ effort: "high" });
+    /* `medium` since 2026-08-30. Written out rather than read from `EFFORT`,
+       which is the whole point of a pin: importing the constant would make this
+       agree with any value the stage happens to hold. It fired when the value
+       changed, which is it working. See the note on `EFFORT` in src/toc.ts. */
+    expect(body.output_config).toEqual({ effort: "medium" });
     expect(body.max_tokens).toBe(EXPECTED_MAX_TOKENS);
     // Nothing else rides along: the exact key set is part of the request.
     expect(Object.keys(body).sort()).toEqual([
