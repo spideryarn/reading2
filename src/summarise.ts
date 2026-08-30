@@ -95,7 +95,19 @@ import type {
 } from "./types.js";
 import { withLedger } from "./cli-ledger.js";
 
-export const PROMPT_VERSION = "summary/3";
+/**
+ * **`summary/4` since 2026-08-30**, because `SYSTEM` changed.
+ *
+ * The steer section came out and the two clauses worth keeping went back in
+ * scoped to the profile (docs/plans/steer-becomes-the-profile.md). An artefact
+ * written under the old prompt is not *wrong*, but it was written to different
+ * instructions, and `outdated` is the field that says exactly that — *the
+ * article is the same and we would write these differently now*. Leaving the
+ * version alone would have let a summary written to a steer that no longer
+ * exists go on reading as current, with nothing on screen explaining why it
+ * leans the way it does. GPT Sol's review of the built code, 2026-08-30.
+ */
+export const PROMPT_VERSION = "summary/4";
 
 /* ----------------------------------------------------------- the ladder --
    Two generated rungs, and a third the reader gets for free.
@@ -332,7 +344,11 @@ export function batchesOf(tree: Tree, targets: TreeNode[]): Batch[] {
    vision.md forbids as principle 2. Theirs made a good summary; ours has to
    make a door into the passage. */
 
-const SYSTEM = `You are writing the summaries for a reading view that shows an article at
+/* Exported for `tests/summarise.test.ts`, which pins the two clauses that came
+   back here from the deleted steer. They are the faithfulness constraint Greg
+   asked for when he asked for the steer, and a rule that moves between files is
+   the easiest kind to lose — both halves of the move compile. */
+export const SYSTEM = `You are writing the summaries for a reading view that shows an article at
 several levels of compression at once. The reader can already see the article
 itself. Your summaries are a way in to it, never a replacement for it.
 
@@ -395,23 +411,17 @@ brackets at the end of the sentence that makes it.
 - The id goes inside the sentence's punctuation and nowhere else. Do not write
   a list of sources at the end.
 
-IF THE READER ASKS FOR SOMETHING IN PARTICULAR
+IF THE READER HAS DESCRIBED THEMSELVES
 
-The prompt may carry a section headed WHAT THIS READER IS AFTER. That is the
-reader's own note about why they are reading this piece. It changes what you
-choose to put first and what you spend words on. It changes nothing else.
+The prompt may carry a section headed WHO IS READING THIS. It changes what you
+choose to put first and what you spend words on. It changes nothing else, and
+these two are absolute:
 
-- Summarise the section. Do not answer the reader's question, do not address
-  them, and do not write about their interest.
-- Where the section genuinely bears on what they asked for, lead with that and
-  give it more of the room.
-- Where it does not, write exactly the summary you would have written anyway.
-  Never say that the section does not cover it — that spends the reader's line
-  telling them nothing about the section.
-- Never add, sharpen, or bend a claim to fit the request. If the article does
-  not say it, it does not go in.
-- Keep the article's own proportions. A request cannot promote a passing remark
-  into the main point of a section.
+- Never add, sharpen, or bend a claim to fit what they are after. If the article
+  does not say it, it does not go in. You are not answering them; you are
+  summarising the section.
+- Keep the article's own proportions. A description of the reader cannot promote
+  a passing remark into the main point of a section.
 
 OUTPUT
 
@@ -495,33 +505,28 @@ export function textOf(node: TreeNode, blocks: Block[], order: Map<BlockId, numb
 }
 
 /* Exported for the tests, like `textOf` and `assign` beside it. What is worth
-   pinning is that the reader's steer reaches the model at all and that its
-   absence leaves no trace — a prompt that always carries an empty guidance
-   header is a prompt that has taught the model to expect one. */
+   pinning is that the reader's profile reaches the model at all and that its
+   absence leaves no trace — a prompt that always carries an empty "who is
+   reading" header is a prompt that has taught the model to expect one. */
 export function renderPrompt(opts: {
   meta: Meta | null;
   tree: Tree;
   blocks: Block[];
   batch: Batch;
   /**
-   * The reader's own note about what they are reading for.
-   *
-   * In the **user** prompt and never in `SYSTEM`, which is a constant: the
-   * rules for how much weight this may carry are the same on every run and
-   * belong in the cached half, while the note itself changes per run and would
-   * bust the cache for every batch if it lived there.
-   */
-  guidance?: string;
-  /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
-   * **Two boxes about intent, in one prompt, and they are not the same thing.**
-   * The profile is durable and about the reader; `guidance` is a note typed
-   * while looking at the button that rewrites these summaries. So the profile
-   * goes first and the steer second, and `SYSTEM` states the precedence out
-   * loud: where they pull different ways, the steer wins. Leaving that to the
-   * model would be handing it two instructions about emphasis with no ordering
-   * between them, which is how you get an answer that follows neither.
+   * **This is the only note about intent in the prompt, and until 2026-08-30
+   * there were two.** The second was `guidance`, a per-rewrite steer with its
+   * own box in the summary panel, its own cap, its own field on the artefact
+   * and its own section in `SYSTEM` — and its box asked *"What are you reading
+   * this for?"* while the profile's per-article half asked *"Why you're reading
+   * this one"*. One question, asked twice, with a precedence rule between the
+   * answers. Greg deleted the steer rather than the duplication's symptoms:
+   * docs/plans/steer-becomes-the-profile.md.
+   *
+   * The two rules that were holding the steer to emphasis and had no equivalent
+   * here went into `PROFILE_RULES` rather than into the bin — see its docstring.
    */
   profile?: string | null;
   /** Fed back on the one retry, so the second attempt knows what was wrong with the first. */
@@ -566,20 +571,7 @@ export function renderPrompt(opts: {
   return `Summaries for ${title}.
 
 Write ${targets.length} ${targets.length === 1 ? "entry" : "entries"}, one per numbered section below.
-${who ? `\n${who}\n` : ""}${
-  opts.guidance
-    ? `
-=== WHAT THIS READER IS AFTER ===
-
-${opts.guidance}
-
-Lead with this where a section genuinely bears on it. Where a section does not,
-summarise it exactly as you would have anyway, and do not mention the request.
-It changes emphasis only: never what the article says, and never its
-proportions.
-`
-    : ""
-}
+${who ? `\n${who}\n` : ""}
 === SECTIONS TO SUMMARISE ===
 
 ${list}
@@ -695,8 +687,6 @@ export function buildSummaries(
     blocks: Block[];
     sourceHash: string;
     elapsedMs: number;
-    /** The reader's steer, kept so the panel can say these were written to it. */
-    guidance?: string;
     /** The rendered profile these were written from, or null for none. */
     profile?: string | null;
   },
@@ -736,16 +726,13 @@ export function buildSummaries(
        needs to tell those apart to decide whether its checkbox starts ticked.
        src/profile.ts § profileIsStale.
 
-       Note the difference from `guidance` two lines down, which is stored as
-       the text itself and omitted when empty. The steer is stored so a reader
-       can *read it back*; this is stored so the app can *compare* it, and a
-       comparison needs a value for "none" as much as for "this one". */
+       Stored as a *hash* rather than as the text, because this is compared and
+       never read back — and a comparison needs a value for "none" as much as
+       for "this one". The steer that used to sit beside it was stored as its
+       own text, for reading back; it is gone
+       (docs/plans/steer-becomes-the-profile.md). */
     profileHash: opts.profile ? hashProfile(opts.profile) : null,
     entries,
-    /* Stored, because a steered summary that does not say so is a summary the
-       reader cannot weigh. Six months later "why does this one lean so hard on
-       the economics" has an answer on the artefact rather than nowhere. */
-    ...(opts.guidance ? { guidance: opts.guidance } : {}),
     missing: opts.targets.length - entries.length,
     generatedAt: new Date().toISOString(),
     elapsedMs: opts.elapsedMs,
@@ -881,7 +868,6 @@ async function runBatch(opts: {
   tree: Tree;
   blocks: Block[];
   batch: Batch;
-  guidance?: string;
   /** The rendered profile, frozen for the whole run — see `generateSummaries`. */
   profile?: string | null;
   signal?: AbortSignal;
@@ -935,7 +921,6 @@ async function runBatch(opts: {
                 tree: opts.tree,
                 blocks: opts.blocks,
                 batch,
-                ...(opts.guidance !== undefined && { guidance: opts.guidance }),
                 ...(opts.profile !== undefined && { profile: opts.profile }),
                 ...(repair !== undefined && { repair }),
               }),
@@ -1005,17 +990,6 @@ async function runBatch(opts: {
 export async function generateSummaries(opts: {
   dir: string;
   /**
-   * The reader's own note about what they want out of this article.
-   *
-   * Optional, and the ordinary case is that it is absent. What it may and may
-   * not do to the output is set out in `SYSTEM` above — in short, emphasis
-   * only. It is deliberately **not** part of `summariesAreCurrent`: a steer is
-   * a reason to force a rewrite, which is what the button that carries it
-   * already does, not a reason for the next ordinary run to decide the artefact
-   * is stale.
-   */
-  guidance?: string;
-  /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
    * **Frozen by whoever queued the job, and this is the stage that most needs
@@ -1081,7 +1055,6 @@ export async function generateSummaries(opts: {
       tree,
       blocks,
       batch,
-      ...(opts.guidance !== undefined && { guidance: opts.guidance }),
       /* Read off `opts` once per batch rather than captured in a local, which
          is safe here only because nothing in this function can change it —
          `generateSummaries` never writes to its own opts. The freezing that
@@ -1110,7 +1083,6 @@ export async function generateSummaries(opts: {
       sourceHash: hashBlocks(blocks),
       profile: opts.profile ?? null,
       elapsedMs: Date.now() - started,
-      ...(opts.guidance !== undefined && { guidance: opts.guidance }),
     },
   );
 
@@ -1138,14 +1110,9 @@ export async function generateSummaries(opts: {
 async function main(): Promise<void> {
   const dir = process.argv[2];
   if (!dir) {
-    console.error(
-      'Usage: tsx src/summarise.ts <dir with blocks.json + tree.json> ["what you are reading for"]',
-    );
+    console.error("Usage: tsx src/summarise.ts <dir with blocks.json + tree.json>");
     process.exit(1);
   }
-  // The same steer the panel's box sends, so the CLI and the button exercise
-  // one path. Quoted as one argument; anything past it is ignored.
-  const guidance = process.argv[3]?.trim();
   // Before the calls, not after. This is the only thing on screen for the
   // minute or two the model takes, and printing it afterwards made the sibling
   // stages look hung for the whole request.
@@ -1157,7 +1124,6 @@ async function main(): Promise<void> {
   console.log(`Writing the summaries with ${CAPABLE_MODEL}…`);
   const run = await generateSummaries({
     dir,
-    ...(guidance ? { guidance } : {}),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
 

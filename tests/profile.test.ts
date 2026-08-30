@@ -123,10 +123,12 @@ describe("profileIsStale", () => {
 });
 
 describe("the caps", () => {
-  it("gives the per-article box the same cap as the summary steer", () => {
-    /* The two boxes sit next to each other in the reader's head. One refusing
-       at 600 while the other refused at 900 would be a rule about nothing.
-       MAX_GUIDANCE_CHARS in src/routes.ts is the other half of this pair. */
+  it("keeps the per-article box to a sentence or two", () => {
+    /* 600 was originally chosen to match `MAX_GUIDANCE_CHARS` on the summary
+       steer, the two boxes sitting next to each other in the reader's head.
+       That steer is gone (docs/plans/steer-becomes-the-profile.md), so the
+       number now stands on its own reasoning: a paragraph about who you are is
+       a life, a paragraph about why you opened *this* is usually a sentence. */
     expect(MAX_PURPOSE_CHARS).toBe(600);
   });
 

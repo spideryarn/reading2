@@ -709,6 +709,23 @@ describe("the work key", () => {
     }
   });
 
+  /* **An agreement test agrees when both sides are wrong.** The grid above pins
+     `sameWork` and `workKeyFor` to the same answer, which catches one of them
+     reading a field the other ignores — and passes cleanly if *neither* reads
+     it. So the one field this change touched gets a direct assertion too:
+     unticking "use your profile" and pressing the button again is a request for
+     a different artefact, and being handed the running job would refresh the
+     panel with something stamped from the profile the reader just declined.
+     GPT Sol's review of the built code, 2026-08-30. */
+  it("counts two different profiles as two different pieces of work", () => {
+    const physicist = workKeyFor(["summary"], new Set(), "a physicist");
+    const historian = workKeyFor(["summary"], new Set(), "a historian");
+    const none = workKeyFor(["summary"], new Set());
+    expect(physicist).not.toBe(historian);
+    expect(physicist).not.toBe(none);
+    expect(historian).not.toBe(none);
+  });
+
   it("reads two spellings of one address as the same work", () => {
     /* The reason the key hashes `urlKey` rather than the string. Without it,
        adding `http://x.test/piece` when `https://x.test/piece` is already

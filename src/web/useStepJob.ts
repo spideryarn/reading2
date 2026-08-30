@@ -74,19 +74,6 @@ interface StepRun {
    */
   force?: boolean;
   /**
-   * A free-text steer from the reader. Only `summary` takes one
-   * (src/summarise.ts); it is accepted here so the surfaces do not each need
-   * their own `queue.run` call to add one field.
-   *
-   * **Trimmed, and absent when it trims to nothing**, so a box the reader typed
-   * in and then cleared does not become an empty instruction in the prompt.
-   *
-   * `| undefined` explicitly, against `exactOptionalPropertyTypes`: a caller
-   * that forwards its own optional argument holds `string | undefined`, and
-   * here the two really are the same thing — no steer.
-   */
-  guidance?: string | undefined;
-  /**
    * Whether this run uses the reader's profile. Defaults to yes.
    *
    * Sent **only when it is `false`**, so the ordinary request is the same bytes
@@ -186,16 +173,14 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
   }, [queue.jobs, startedId]);
 
   const start = useCallback(
-    async ({ force = false, guidance, useProfile = true }: StepRun = {}) => {
+    async ({ force = false, useProfile = true }: StepRun = {}) => {
       setStartedId(null);
-      const steer = guidance?.trim();
       const started = await queue.run({
         slug,
         steps: [step],
         /* The step named, never a positional force — see `force` on `StepRun`
            for both halves of why. */
         ...(force ? { force: [step] } : {}),
-        ...(steer ? { guidance: steer } : {}),
         ...(useProfile ? {} : { useProfile: false }),
       });
       /* **The reason is taken here, and kept.** See `failed` below: the two

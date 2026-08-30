@@ -6041,63 +6041,6 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.78rem;
 }
 
-/* The steer. Collapsed to one quiet line until it has something to say, so the
-   ordinary case — nobody is steering anything — costs the foot one row.
-   SummaryPanel.tsx § the box you steer a rewrite with. */
-.summ-steer-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  margin-bottom: 0.4rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.72rem;
-  cursor: pointer;
-}
-.summ-steer-open:hover { color: var(--highlight-ink); }
-
-.summ-steer { margin-bottom: 0.5rem; }
-.summ-steer-label {
-  display: block;
-  margin-bottom: 0.25rem;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.7rem;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-.summ-steer-box {
-  display: block;
-  width: 100%;
-  padding: 0.35rem 0.45rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: 5px;
-  background: var(--surface-raised);
-  color: var(--ink);
-  /* The reading face: this is a sentence somebody writes, not a setting. */
-  font-family: var(--font-reading);
-  font-size: 0.8rem;
-  line-height: 1.4;
-  resize: vertical;
-}
-.summ-steer-box:focus-visible {
-  outline: none;
-  border-color: var(--highlight);
-}
-.summ-steer-box:disabled { opacity: 0.5; }
-/* Said where the reader is typing, not in a doc: this is the promise that makes
-   the box safe to use, and the rules that keep it are in the prompt. */
-.summ-steer-note {
-  margin: 0.3rem 0 0;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.68rem;
-  line-height: 1.35;
-}
-
 /* The summary panel's run button, its running row and its spinner used to be
    here — .summ-btn, .summ-running, .summ-detail-live, .summ-spin. They went on
    2026-08-26 with the third copy of the component that used them: the glossary,
@@ -6366,10 +6309,12 @@ td.text.has-hit[data-hues="8"] {
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
-/* Deliberately the same shape as .summ-steer-box: this is the third free-text
-   box in the app about what the reader wants, and the three should not look
-   like three different mechanisms. The reading face, because this is a
-   sentence somebody writes rather than a setting they pick. */
+/* The two free-text boxes in the app about what the reader wants — "about you"
+   and "why you're reading this one" — and they share this so they do not look
+   like two different mechanisms. There were three until 2026-08-30, when the
+   summary steer went (docs/plans/steer-becomes-the-profile.md) and .summ-steer-box
+   with it. The reading face, because this is a sentence somebody writes rather
+   than a setting they pick. */
 .prof-box-input {
   display: block;
   width: 100%;
@@ -7026,12 +6971,15 @@ td.text.has-hit[data-hues="8"] {
   overflow-y: auto;
   overflow-x: hidden;
   /* **Load-bearing.** The picture is laid out against this element's measured
-     `clientWidth`, and `tree` gets TALLER as it gets narrower (labels wrap onto
-     more lines). Without a reserved gutter that is a loop: content just fits →
-     no scrollbar → wider → wraps to fewer lines → still fits… and on the way
-     back, content just overflows → scrollbar → narrower → wraps to more lines →
-     overflows more. On macOS overlay scrollbars take no width and it never
-     happens, which is exactly why this would have shipped. */
+     `clientWidth`, and a picture whose height depends on that width — the cut
+     Tree got taller as it got narrower, because labels wrapped onto more lines
+     — makes a loop of it: content just fits → no scrollbar → wider → wraps to
+     fewer lines → still fits… and on the way back, content just overflows →
+     scrollbar → narrower → wraps to more lines → overflows more. On macOS
+     overlay scrollbars take no width and it never happens, which is exactly why
+     it would have shipped. Nothing drawn today wraps a label, so this is a
+     guard rather than a fix — and the next picture that wraps one must not have
+     to rediscover it. */
   scrollbar-gutter: stable;
   padding: 0 0.5rem;
 }
@@ -7045,6 +6993,30 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.8rem;
   line-height: 1.5;
 }
+/* **The wait, and only ever where the picture is missing.** Drift and Trail
+   have nothing at all to draw until the projection lands; until 2026-08-30 they
+   borrowed the Tree, which is the picture this app no longer has. Centred
+   rather than pinned to the top, because it stands in for the whole band and a
+   line of grey text at the top of an empty column reads as a caption for
+   nothing. `.cmt-spinner` is the app's one spinner — docs/project/icons.md. */
+.diag-wait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  /* Not `height: 100%`: the scroller is a flex child with `min-height: 0`, and
+     a percentage height against it collapses to nothing when the panel is
+     short. `min-height` on the paragraph itself is what makes the box real. */
+  min-height: 8rem;
+  margin: 0.9rem 0.2rem;
+  padding: 0 0.6rem;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: balance;
+}
+.diag-wait .cmt-spinner { flex: none; }
 
 .diag-svg { display: block; }
 
@@ -7073,13 +7045,11 @@ td.text.has-hit[data-hues="8"] {
    "which part", and overloading it would make the you-are-here mark change
    colour as you read, which is exactly the property a position marker must not
    have. Orange, because that is what "here" is everywhere else in this app. */
-.diag-node.here .diag-box,
-.diag-node.here .diag-row {
+.diag-node.here .diag-box {
   stroke: var(--highlight);
   stroke-width: 1.5;
 }
-.diag-node:focus-visible .diag-box,
-.diag-node:focus-visible .diag-row {
+.diag-node:focus-visible .diag-box {
   stroke: var(--highlight);
   stroke-width: 1.5;
   stroke-dasharray: 3 2;
@@ -7093,7 +7063,7 @@ td.text.has-hit[data-hues="8"] {
 .diag-node.diag-d1 .diag-label { fill: var(--ink-soft); }
 .diag-node.diag-d0 .diag-label { font-weight: 600; }
 
-/* **These nine numbers are duplicated in TypeScript and must not drift.**
+/* **These three numbers are duplicated in TypeScript and must not drift.**
    `LABEL_PX` in diagram.ts cuts every label to fit by counting characters at
    these sizes; this is where they are actually painted. Disagree and nothing
    errors — too small wastes the band, too large runs the text out over the
@@ -7103,46 +7073,28 @@ td.text.has-hit[data-hues="8"] {
 
    Written one rule per picture per depth, at one uniform specificity, rather
    than as a base plus overrides — a base rule beaten by a longer selector is
-   exactly how the tree's titles ended up painted at 10px after being budgeted
-   for 12. */
-.diag-tree .diag-node.diag-d0 .diag-label { font-size: 12px; }
-.diag-tree .diag-node.diag-d1 .diag-label { font-size: 12px; }
-.diag-tree .diag-node.diag-d2 .diag-label { font-size: 12px; }
+   exactly how the cut Tree's titles ended up painted at 10px after being
+   budgeted for 12. There were nine of these until Tree went and the two
+   scatters, which write nothing on a dot, are exempt by name (`UNLABELLED` in
+   diagram.ts); one picture left is not a reason to collapse them to a base
+   rule. */
 .diag-force .diag-node.diag-d0 .diag-label { font-size: 10px; }
 .diag-force .diag-node.diag-d1 .diag-label { font-size: 10px; }
 .diag-force .diag-node.diag-d2 .diag-label { font-size: 10px; }
 
-/* The gist, on the one picture that draws one. It is on the <tspan> rather than
-   the <text>, so it beats the sizes above by being on the element itself —
-   inheritance, not specificity. `GIST_PX` in diagram.ts is the pair. */
-.diag-gist { fill: var(--ink-faint); font-size: 10.5px; }
-.diag-count {
-  fill: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 9.5px;
-  pointer-events: none;
-}
-
-/* ---- tree ---- */
-
-.diag-row { fill: transparent; stroke: none; }
-.diag-node:hover .diag-row,
-.diag-node.on .diag-row { fill: var(--surface-raised); }
+/* The mark inside a scatter's hit rectangle — 3px of dot in a target big enough
+   for a finger. The Tree drew one of these on every row too, and its `.closed`
+   variant (a hollow dot for a folded part) went with it. */
 .diag-dot {
   fill: rgb(var(--cat-rgb) / 0.9);
   stroke: var(--panel);
   stroke-width: 1;
 }
-.diag-node.closed .diag-dot { fill: var(--panel); stroke: rgb(var(--cat-rgb) / 0.9); stroke-width: 1.5; }
-.diag-twist { color: var(--ink-faint); cursor: pointer; }
-.diag-twist:hover { color: var(--ink); }
 
 .diag-link {
   stroke: var(--rule-strong);
   stroke-width: 1;
 }
-.diag-tree .diag-link { stroke: rgb(var(--cat-rgb) / 0.4); }
-.diag-tree .diag-link.diag-d1 { stroke: rgb(var(--cat-rgb) / 0.55); }
 
 /* ---- you are here ---- */
 

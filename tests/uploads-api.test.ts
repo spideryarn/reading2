@@ -235,11 +235,24 @@ describe("what an upload request may carry besides the id", () => {
   const ID = "11111111-2222-4333-8444-555555555555";
 
   it("refuses step controls rather than claiming and then failing", () => {
-    for (const extra of [{ steps: [] }, { steps: ["arc"] }, { force: ["fetch"] }, { guidance: "x" }]) {
+    for (const extra of [{ steps: [] }, { steps: ["arc"] }, { force: ["fetch"] }]) {
       expect(() => parseJobRequest({ uploadId: ID, ...extra }), JSON.stringify(extra)).toThrow(
         /default steps/,
       );
     }
+  });
+
+  /* **`guidance` was a fourth thing on that list and is now ignored instead.**
+     The summary steer it named is gone (docs/plans/steer-becomes-the-profile.md),
+     and the two behaviours are not interchangeable: refusing is right for a
+     field that would *change what runs*, because claiming an upload and then
+     400-ing strands the attempt; ignoring is right for a field that now changes
+     nothing, because a tab open since before the deploy should get its upload
+     ingested rather than a 400 about a box it can still see. What must not
+     happen is the third thing — the field surviving into the request. */
+  it("ignores a steer on an upload rather than refusing it", () => {
+    const parsed = parseJobRequest({ uploadId: ID, guidance: "x" }) as Record<string, unknown>;
+    expect(parsed.guidance).toBeUndefined();
   });
 });
 

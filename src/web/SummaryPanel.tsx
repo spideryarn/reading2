@@ -76,7 +76,7 @@
  * complete one (src/summarise.ts § partial salvage).
  */
 import { type MouseEvent, useRef, useState } from "react";
-import { ChevronRight, Compass, Layers, RotateCcw, TriangleAlert } from "lucide-react";
+import { ChevronRight, Layers, RotateCcw, TriangleAlert } from "lucide-react";
 import type { BlockId, Job, SummaryEntry } from "../types.js";
 import { builtButEmpty } from "../messages.js";
 import { BlockRange } from "./BlockRef.js";
@@ -93,7 +93,7 @@ import { useRenderCount } from "./perf.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job writing the
- * two longer rungs, the steer box and the button that spends.
+ * two longer rungs, and the button that spends.
  *
  * Absent for a visitor — see `SummariesAccess` below. Since slice 1b the
  * summaries arrive inside
@@ -104,8 +104,9 @@ import { useRenderCount } from "./perf.js";
  * more than the duplication it saves.
  *
  * **`owner.summaries` is the artefact and `summaries` is the ladder to draw.**
- * The only thing that reads the artefact is `guidance`, the owner's own steer,
- * which the public projection drops on purpose (src/public/dto.ts).
+ * Nothing here reads the artefact any more: the one thing that did was
+ * `guidance`, the owner's own steer, and it is gone with the box
+ * (docs/plans/steer-becomes-the-profile.md).
  */
 export type SummariesOwner = UseSummaries;
 
@@ -241,22 +242,11 @@ export function SummaryPanel({
 
   /**
    * What the reader wants these summaries to lean towards.
-   *
-   * `null` means "the reader has not touched the box", which is a different
-   * state from "the reader emptied it" — so the effective value below can fall
-   * through to whatever the artefact was written with, and a reader who clears
-   * the box still gets an unsteered rewrite. One variable for the two would
-   * make clearing it impossible: the artefact's note would keep reappearing.
-   */
   /* Seeded from what the artefact on screen was written with, so nothing has to
      remember the reader's last choice between visits — the file does. */
   const [withProfile, setWithProfile] = useState(() =>
     summaries ? (owner?.profiled ?? false) : true,
   );
-  const [steer, setSteer] = useState<string | null>(null);
-  /* The owner's own artefact, because the steer is the owner's own sentence and
-     never crosses to a visitor. src/public/dto.ts § publicSummaries. */
-  const guidance = steer ?? owner?.summaries?.guidance ?? "";
 
   /* Whether the two longer rungs exist at all. Not `status === "ready"`: an
      artefact can be present and still have holes in it, and what decides
@@ -372,16 +362,11 @@ export function SummaryPanel({
             <TriangleAlert size={13} />
             These summaries describe an older version of the article.
           </p>
-          {/* The box is here too, and not only in the foot below: the foot is
-              hidden while the summaries are stale, so without this the one
-              article most likely to be rewritten is the one you cannot steer. */}
-          <Steer value={guidance} onChange={setSteer} disabled={owner.job !== null} />
-          {/* Beside the steer and the button, because all three describe the
-              same forthcoming run. Two boxes about intent and one checkbox
-              about whose intent — the profile is durable and about the reader,
-              the steer is about this rewrite, and SYSTEM states that the steer
-              wins where they pull different ways.
-              docs/project/reader-profile.md. */}
+          {/* Beside the button, because both describe the same forthcoming
+              run. It is the only thing here that says what the summaries will
+              be written for: the per-rewrite steer box that used to sit above
+              it asked the same question the profile already asks, and was
+              deleted (docs/plans/steer-becomes-the-profile.md). */}
           <UseProfile
             checked={withProfile}
             onChange={setWithProfile}
@@ -394,7 +379,7 @@ export function SummaryPanel({
           <Progress
             job={owner.job}
             failed={owner.failed}
-            onRun={() => owner.write(false, guidance, withProfile)}
+            onRun={() => owner.write(false, withProfile)}
             onCancel={owner.cancel}
             label="Rewrite them"
           />
@@ -458,10 +443,10 @@ export function SummaryPanel({
               back and fall back to their one-sentence gist.
             </p>
           )}
-          {/* And this half is the owner's: a steer box, a profile tick and a
-              button that spends. A visitor has none of the three, and the band
-              they can open instead is the same band with this part absent
-              rather than a second design for one panel. */}
+          {/* And this half is the owner's: a profile tick and a button that
+              spends. A visitor has neither, and the band they can open instead
+              is the same band with this part absent rather than a second design
+              for one panel. */}
           {owner &&
             (owner.status === "none" ? (
               <>
@@ -469,13 +454,8 @@ export function SummaryPanel({
                   Only the one-sentence gists so far. Writing the longer two rungs is a few model
                   calls over the whole article and takes a minute or two — done once and kept.
                 </p>
-                <Steer value={guidance} onChange={setSteer} disabled={owner.job !== null} />
-                {/* Beside the steer and the button, because all three describe
-                    the same forthcoming run. Two boxes about intent and one
-                    checkbox about whose intent — the profile is durable and
-                    about the reader, the steer is about this rewrite, and
-                    SYSTEM states that the steer wins where they pull different
-                    ways. docs/project/reader-profile.md. */}
+                {/* Beside the button, because both describe the same
+                    forthcoming run. docs/project/reader-profile.md. */}
                 <UseProfile
                   checked={withProfile}
                   onChange={setWithProfile}
@@ -486,7 +466,7 @@ export function SummaryPanel({
                 <Progress
                   job={owner.job}
                   failed={owner.failed}
-                  onRun={() => owner.write(false, guidance, withProfile)}
+                  onRun={() => owner.write(false, withProfile)}
                   onCancel={owner.cancel}
                   label="Write the summaries"
                 />
@@ -494,7 +474,6 @@ export function SummaryPanel({
             ) : (
               hasLadder && (
                 <>
-                  <Steer value={guidance} onChange={setSteer} disabled={owner.job !== null} />
                   <UseProfile
                     checked={withProfile}
                     onChange={setWithProfile}
@@ -505,13 +484,19 @@ export function SummaryPanel({
                   <Progress
                     job={owner.job}
                     failed={owner.failed}
-                    // Forced: the step believes this artefact is current, and it
-                    // is right — the reader is asking for it anyway. Which is
-                    // also why the steer does not go anywhere near
-                    // `summariesAreCurrent`: a note about what you are reading
-                    // for is not a reason for the *next* ordinary run to decide
-                    // the artefact has gone stale.
-                    onRun={() => owner.write(true, guidance)}
+                    /* Forced: the step believes this artefact is current, and
+                       it is right — the reader is asking for it anyway.
+
+                       **`withProfile` is passed, and until 2026-08-30 it was
+                       not.** This call read `write(true, guidance)` and the
+                       third argument defaulted, so the "Use your profile" tick
+                       directly above it did nothing here: unticking it and
+                       pressing "Write them again" wrote a profiled artefact
+                       anyway, stamped with a `profileHash` the reader had just
+                       asked not to use. Found while deleting the steer, which
+                       is what had been sitting in the argument position that
+                       hid it. */
+                    onRun={() => owner.write(true, withProfile)}
                     onCancel={owner.cancel}
                     label="Write them again"
                     icon="redo"
@@ -858,92 +843,6 @@ function withoutId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
   const next = new Set(set);
   next.delete(id);
   return next;
-}
-
-/**
- * The box you steer a rewrite with.
- *
- * Greg, 2026-08-26:
- *
- * > for the "Write them again", add an input-textbox so the user can give
- * > guidance to steer the summary generation - this should be added to the
- * > prompt and tweak the output that gets generated, but make sure the LLM
- * > doesn't overweight this and give a really distorted summary, i.e. we want
- * > to stay faithful to the text.
- *
- * **The second half of that sentence is the whole design problem**, and almost
- * none of the answer is in this file. A note like *"I care about the economics"*
- * asks the model to choose what to put first; the failure it invites is the
- * model quietly reporting an article as being about economics because that is
- * what it was asked about. The rules that hold it to emphasis — never a claim,
- * never the proportions, never a line saying the section does not cover it —
- * live in the constant half of the prompt, in src/summarise.ts § IF THE READER
- * ASKS FOR SOMETHING IN PARTICULAR. They are in `SYSTEM` rather than beside the
- * note itself so that the constraint cannot be edited by the thing it
- * constrains.
- *
- * What this file contributes is the two honest bits:
- *
- *  - **The box shows what the summaries on screen were written with**, because
- *    it is seeded from the artefact. A steered summary that looks like an
- *    ordinary one is one the reader cannot weigh, and the note is the only
- *    thing that explains why a section reads the way it does.
- *  - **Emptying it is a real answer.** Clear the box and the rewrite is
- *    unsteered — see the `steer ?? summaries?.guidance` note above, which is
- *    why that is two variables and not one.
- *
- * Collapsed until it has something to say, so the ordinary case is one line of
- * chrome. `maxLength` matches `MAX_GUIDANCE_CHARS` in src/routes.ts, which
- * refuses rather than truncates — a shortened instruction is one the reader
- * believes they gave and did not.
- */
-const MAX_GUIDANCE = 600;
-
-function Steer({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: string;
-  onChange(next: string): void;
-  disabled: boolean;
-}) {
-  // Open if there is anything to show. `useState` initialiser, not an effect:
-  // this is the state's starting value, and re-opening the box every time the
-  // job poll returns would fight a reader who had just closed it.
-  const [open, setOpen] = useState(() => value !== "");
-
-  if (!open) {
-    return (
-      <button type="button" className="summ-steer-open" onClick={() => setOpen(true)}>
-        <Compass size={12} />
-        Steer these summaries…
-      </button>
-    );
-  }
-
-  return (
-    <div className="summ-steer">
-      <label className="summ-steer-label" htmlFor="summ-steer-box">
-        What are you reading this for?
-      </label>
-      <textarea
-        id="summ-steer-box"
-        className="summ-steer-box"
-        rows={2}
-        maxLength={MAX_GUIDANCE}
-        disabled={disabled}
-        placeholder="e.g. I care about the evidence, not the history"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <p className="summ-steer-note">
-        Changes what each summary puts first. It never changes what the article
-        says — a section that has nothing on this is summarised as it would have
-        been anyway.
-      </p>
-    </div>
-  );
 }
 
 /**

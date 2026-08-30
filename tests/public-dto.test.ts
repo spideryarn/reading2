@@ -664,8 +664,17 @@ describe("the four artefacts a shared link carries", () => {
     ],
   };
 
-  /** Summaries carrying **`guidance`** — the owner's free-text steer. */
-  const SUMMARIES: Summaries = {
+  /**
+   * Summaries carrying **`guidance`** — the owner's free-text steer.
+   *
+   * The steer was deleted on 2026-08-30 and `Summaries` no longer declares the
+   * field (docs/plans/steer-becomes-the-profile.md), hence the cast. It stays in
+   * this fixture because **the state is real, not invented**: every summary
+   * written before that date still has one inside its stored JSON, and the
+   * projection has to go on dropping it. Deleting the fixture would retire a
+   * guard over data that still exists.
+   */
+  const SUMMARIES = {
     version: "summary/1",
     generator: "some-model",
     slug: "noema",
@@ -684,7 +693,7 @@ describe("the four artefacts a shared link carries", () => {
       },
       { range: ["spya-k3m9qt", "spya-k3m9qt"], depth: 1 },
     ],
-  };
+  } as Summaries & { guidance: string };
 
   const IDEAS: Ideas = {
     version: "ideas/1",

@@ -621,18 +621,6 @@ export interface Summaries {
   /** Document order, coarse before fine — the order the panel renders them in. */
   entries: SummaryEntry[];
   /**
-   * What the reader asked these summaries to lean towards, if they asked
-   * anything.
-   *
-   * Kept on the artefact rather than only in the request, so that a summary
-   * written to a steer **says so**. A steered summary that looks like an
-   * ordinary one is a summary the reader cannot weigh, and the whole risk of
-   * the feature is that a request quietly bends what the article is reported
-   * to say (src/summarise.ts § IF THE READER ASKS FOR SOMETHING IN PARTICULAR).
-   * It is also what the panel puts back in the box next time.
-   */
-  guidance?: string;
-  /**
    * Nodes whose batch came back unusable and were written without text.
    *
    * **Counted rather than hidden, because their version discarded eight good
@@ -906,9 +894,12 @@ export const MAX_PROFILE_CHARS = 1_500;
 /**
  * The longest "why you're reading this one".
  *
- * Matches `MAX_GUIDANCE_CHARS` on the summary steer deliberately: the two boxes
- * sit next to each other in the reader's head, and one refusing at 600 while
- * the other refused at 900 would be a rule about nothing.
+ * 600 rather than the global box's 1,500 because it is about one article: a
+ * paragraph on who you are is a life, a paragraph on why you opened *this* is
+ * usually a sentence. It was originally set to match `MAX_GUIDANCE_CHARS` on
+ * the summary steer, the two boxes being adjacent in the reader's head — that
+ * steer is gone (docs/plans/steer-becomes-the-profile.md), so the number now
+ * stands on the reasoning above rather than on the pairing.
  */
 export const MAX_PURPOSE_CHARS = 600;
 
@@ -1785,25 +1776,14 @@ export interface Job {
   /** Stop has been pressed and the abort has not landed yet. */
   cancelling?: boolean;
   /**
-   * A free-text steer for the steps that take one. Only `summary` does today.
-   *
-   * On the job rather than in a step's own options because the queue is what
-   * survives a restart, and a job resumed from disk with its guidance dropped
-   * would run the plain prompt and report success — the reader's steer silently
-   * not applied, with a green tick over it.
-   *
-   * It is part of what makes two jobs different work: see `sameWork` in
-   * src/jobs.ts, where leaving it out would let a second, differently-steered
-   * request be answered with the first one's job.
-   */
-  guidance?: string;
-  /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
-   * On the job, beside `guidance`, and for the same two reasons: the queue is
-   * what survives a restart, and a job resumed from disk with its profile
+   * On the job rather than in a step's own options, for two reasons: the queue
+   * is what survives a restart, and a job resumed from disk with its profile
    * dropped would run the plain prompt, report success, and stamp the artefact
-   * with a `profileHash` describing a profile it did not use.
+   * with a `profileHash` describing a profile it did not use. (A free-text
+   * `guidance` steer used to ride here for the same reasons; it is gone —
+   * docs/plans/steer-becomes-the-profile.md.)
    *
    * And a third that is its own: **it is frozen here.** A summary run is
    * several batches at once; reading the profile inside each step would let a

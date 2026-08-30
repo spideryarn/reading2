@@ -45,7 +45,7 @@
  *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
  *   GET    /api/uploads/:id      what became of one upload
  *   GET    /api/jobs             every ingest job this server knows about
- *   POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force?, guidance? }
+ *   POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }
  *   GET    /api/jobs/:id         one job, for the progress indicator to poll
  *   DELETE /api/jobs/:id         forget a finished job's record
  *   POST   /api/jobs/:id/cancel
@@ -2246,7 +2246,7 @@ async function patchShelf(
  */
 function checkUploadOrigin(
   uploadId: unknown,
-  others: { url: unknown; slug: unknown; steps: unknown; force: unknown; guidance: unknown },
+  others: { url: unknown; slug: unknown; steps: unknown; force: unknown },
 ): asserts uploadId is string {
   if (others.url !== undefined || others.slug !== undefined) {
     throw httpError(400, "Send a url, a slug, or an uploadId — not two of them");
@@ -2262,7 +2262,6 @@ function checkUploadOrigin(
   for (const [name, value] of [
     ["steps", others.steps],
     ["force", others.force],
-    ["guidance", others.guidance],
   ] as const) {
     if (value !== undefined) {
       throw httpError(400, `An upload runs the default steps — ${name} is not accepted with one`);
@@ -2333,7 +2332,6 @@ export function parseJobRequest(body: unknown): {
   url?: string;
   steps?: StepName[];
   force?: StepName[];
-  guidance?: string;
   /**
    * Whether this run should use the reader's profile. Default true.
    *
@@ -2356,7 +2354,7 @@ export function parseJobRequest(body: unknown): {
    */
   uploadId?: string;
 } {
-  const { url, slug, steps, force, guidance, useProfile, uploadId } = (body ?? {}) as Record<
+  const { url, slug, steps, force, useProfile, uploadId } = (body ?? {}) as Record<
     string,
     unknown
   >;
@@ -2370,7 +2368,6 @@ export function parseJobRequest(body: unknown): {
   };
   const parsedSteps = stepList(steps, "steps");
   const parsedForce = stepList(force, "force");
-  const parsedGuidance = readGuidance(guidance);
   /* Absent means yes. Not truthiness on the raw value: `useProfile: "false"` is
      the shape a hand-written client produces, and reading it as true would
      write a profiled artefact for somebody who asked for a plain one — the same
@@ -2380,22 +2377,27 @@ export function parseJobRequest(body: unknown): {
   }
   const parsedUseProfile = useProfile;
 
-  /* The four optional fields, spelled once. They were written out at each of
+  /* The three optional fields, spelled once. They were written out at each of
      the three `return`s, which is three chances for one of them to be quietly
      dropped from a branch — and `exactOptionalPropertyTypes` means the spread
      has to be conditional rather than `steps: parsedSteps`, so each one is four
-     lines rather than one. */
+     lines rather than one.
+
+     **A `guidance` field used to be a fourth, and is now ignored rather than
+     refused.** The summary steer it fed is gone
+     (docs/plans/steer-becomes-the-profile.md), and an old tab still sending one
+     should get its summaries written rather than a 400 about a box it can still
+     see. Nothing reads it. */
   const rest = {
     ...(parsedSteps ? { steps: parsedSteps } : {}),
     ...(parsedForce ? { force: parsedForce } : {}),
-    ...(parsedGuidance ? { guidance: parsedGuidance } : {}),
     ...(parsedUseProfile !== undefined ? { useProfile: parsedUseProfile } : {}),
   };
 
   /* Before the URL branch. `checkUploadOrigin` refuses every combination rather
      than picking a winner — see its own note. */
   if (uploadId !== undefined) {
-    checkUploadOrigin(uploadId, { url, slug, steps, force, guidance });
+    checkUploadOrigin(uploadId, { url, slug, steps, force });
     return {
       /* A placeholder the caller must replace. The real slug comes from the
          upload record's filename and is allocated inside `enqueue`, which is
@@ -2693,7 +2695,6 @@ async function withProfileChanged<R extends { profileChanged: boolean }>(
  * instinct, and a field nothing renders should not be on the wire at all.
  * GPT Sol's review of the built code, 2026-08-26.
  *
- * `guidance` deliberately stays: the summary panel puts it back in the box.
  */
 function publicJob(job: Job): Omit<Job, "profile" | "ownerId"> {
   /* `ownerId` goes too. The client never needs it — it can only ever be looking
@@ -2880,11 +2881,11 @@ async function resolveProfileParts(slug: string): Promise<ProfileParts> {
  * exactly one field, so a request without it is a request that meant something
  * else, and answering 200 to it would report a save that did not happen.
  *
- * The **cap is enforced in the store, not here**, unlike `readGuidance` below.
- * That looks inconsistent and is not: guidance is validated at the boundary
- * because it goes straight into a prompt and never lands anywhere, while this
- * is stored, so the rule has to hold for every writer rather than for this one
- * route. src/profile.ts § saveReaderProfile throws with `status: 400`, which
+ * The **cap is enforced in the store, not here**. That is deliberate: this is
+ * stored, so the rule has to hold for every writer rather than for this one
+ * route. (The summary steer was the counter-example — validated at the boundary
+ * because it went straight into a prompt and never landed anywhere — and it is
+ * gone: docs/plans/steer-becomes-the-profile.md.) src/profile.ts § saveReaderProfile throws with `status: 400`, which
  * `httpErrorFrom` below turns into the same answer this would have given.
  */
 async function patchReader(body: unknown): Promise<{ profile: string | null }> {
@@ -2996,36 +2997,6 @@ async function transcribeDictation(
   }
 }
 
-/**
- * The reader's steer for a step that takes one, checked at the boundary.
- *
- * Three things, and the third is the one that matters. It must be a string;
- * blank is the same as absent, so a box the reader cleared does not become an
- * empty instruction; and it is **capped**, because this string is interpolated
- * into a model prompt. Uncapped, it is a way to spend somebody else's tokens by
- * the megabyte, and a long enough one would push the article itself out of the
- * context the summaries are supposed to be of.
- *
- * Refused rather than truncated. A silently shortened instruction is one the
- * reader believes they gave and did not — see docs/reusable/silent-success.md.
- * The message says the limit, so the fix is obvious from the response alone.
- *
- * The *text* is deliberately not in the error message: `httpError`'s message is
- * logged as `reason` (see `logRequest` below), and this is the reader's own
- * words about what they are reading for.
- */
-export const MAX_GUIDANCE_CHARS = 600;
-
-function readGuidance(value: unknown): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "string") throw httpError(400, "guidance must be a string");
-  const text = value.trim();
-  if (text === "") return undefined;
-  if (text.length > MAX_GUIDANCE_CHARS) {
-    throw httpError(400, `guidance must be ${MAX_GUIDANCE_CHARS} characters or fewer`);
-  }
-  return text;
-}
 
 /**
  * One line per request, on the way out, at a level the status decides.

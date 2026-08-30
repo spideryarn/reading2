@@ -62,21 +62,14 @@ export interface UseSummaries {
   /** Why the job this session started stopped, if it stopped badly. */
   failed: string | null;
   /**
-   * Write them. `force` is for the case where the step thinks it is current.
-   *
-   * `guidance` is the reader's own note about what they are reading for. It
-   * steers what the summaries put first and nothing else — the rules that hold
-   * it to that are in src/summarise.ts, in the constant half of the prompt.
-   * Blank and absent are the same thing.
-   */
-  /**
-   * Write them. `useProfile` defaults to true; pass false for a plain set.
+   * Write them. `force` is for the case where the step thinks it is current,
+   * and `useProfile` defaults to true — pass false for a plain set.
    *
    * On the action rather than in panel state, because the artefact records what
    * it was run with (`profileHash`) — so the next visit reads the reader's
    * choice off the file rather than having to remember it.
    */
-  write(force?: boolean, guidance?: string, useProfile?: boolean): Promise<void>;
+  write(force?: boolean, useProfile?: boolean): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -133,13 +126,12 @@ export function useSummaries(slug: string): UseSummaries {
 
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary and
-     the ideas. It carries the reasoning that used to be copied here, including
-     why `guidance` is trimmed before it is sent. */
+     the ideas. It carries the reasoning that used to be copied here. */
   const queue = useStepJob(slug, "summary", load);
 
   const write = useCallback(
-    async (force = false, guidance?: string, useProfile = true) => {
-      await queue.start({ force, guidance, useProfile });
+    async (force = false, useProfile = true) => {
+      await queue.start({ force, useProfile });
     },
     [queue],
   );

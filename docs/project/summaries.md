@@ -519,10 +519,9 @@ Stated rather than smoothed over:
   hold would buy nothing for the case it names and would make the panel feel dead for four seconds
   after any flick. So the window covers the handoff — the debounce — and nothing more.
 
-## Steering a rewrite
+## Steering a rewrite, and where that box went
 
-**Added 2026-08-26.** A box beside the write button, in
-[`SummaryPanel.tsx`](../../src/web/SummaryPanel.tsx) § `Steer`. Greg:
+**Added 2026-08-26, deleted 2026-08-30.** There was a box beside the write button. Greg:
 
 > for the "Write them again", add an input-textbox so the user can give guidance to steer the summary
 > generation - this should be added to the prompt and tweak the output that gets generated, but make
@@ -531,49 +530,52 @@ Stated rather than smoothed over:
 >
 > — Greg, 2026-08-26
 
-**The second half of that sentence is the whole design problem.** A note like *"I care about the
-evidence, not the history"* asks the model to choose what to put first. The failure it invites is the
-model quietly reporting an article as being *about* evidence because that is what it was asked about
-— and a distorted summary is undetectable from the panel, which is the one failure that would make
-this feature not worth having.
+It asked *"What are you reading this for?"* with the placeholder *"e.g. I care about the evidence,
+not the history"*. The reader profile's per-article half asks *"Why you're reading this one"* with
+*"e.g. I want the evidence, not the history"*. One question, asked twice, in two places, with a
+precedence rule in `SYSTEM` between the two answers. Greg, 2026-08-30:
 
-Almost none of the answer is in the UI. It is four rules in the **constant** half of the prompt
-(`SYSTEM`, [`src/summarise.ts`](../../src/summarise.ts) § IF THE READER ASKS FOR SOMETHING IN
-PARTICULAR):
+> the Summary steer should be derived from the user- and text-prompts combined (if they exist), if
+> ("Use profile") is checked, otherwise not. No need for a Summary-specific steer.
 
-- Summarise the section. Do not answer the reader's question and do not address them.
-- Where the section bears on it, lead with that and give it more room.
-- Where it does not, write the summary you would have written anyway — and **never say the section
-  does not cover it**, which spends the reader's line telling them nothing about the section.
-- Never add, sharpen or bend a claim to fit the request, and keep the article's own proportions. A
-  request cannot promote a passing remark into the main point.
+And that was already the plumbing: the profile reaches this prompt on every run and
+`useProfile: false` withholds it. So the box, `Summaries.guidance`, the 600-character cap, the
+`sameWork` comparison and the whole wire path are gone.
+[steer-becomes-the-profile.md](../plans/steer-becomes-the-profile.md) has the removal.
 
-They are in `SYSTEM` rather than beside the note **so the constraint cannot be edited by the thing it
-constrains**, and because `SYSTEM` is a constant that every batch shares. The note itself goes in the
-user prompt, near the top where it will be read, with a two-line reminder standing next to it — a
-constraint three thousand tokens above the text it constrains is one the model has stopped weighing.
+### What survived it, because the second half of Greg's sentence is the whole design problem
 
-Three smaller decisions worth keeping:
+A note like *"I care about the evidence, not the history"* asks the model to choose what to put
+first. The failure it invites is the model quietly reporting an article as being *about* evidence
+because that is what it was asked about — and a distorted summary is undetectable from the panel,
+which is the one failure that would make personalising a summary not worth having.
 
-- **The note is stored on the artefact** (`Summaries.guidance`) and put back in the box on the next
-  visit. A steered summary that looks like an ordinary one is one the reader cannot weigh, and six
-  months later *"why does this one lean so hard on the economics"* has an answer on the artefact
-  rather than nowhere.
-- **Emptying the box is a real answer.** The panel holds `steer: string | null` where `null` means
-  "not touched", so the effective value falls through to the artefact's — and a reader who clears it
-  gets an unsteered rewrite instead of the old note reappearing.
-- **The steer is capped at 600 characters and refused, not truncated**
-  ([`readGuidance`](../../src/routes.ts)). It is interpolated into a model prompt, which makes the cap
-  a spending check as much as a tidiness one; and a silently shortened instruction is one the reader
-  believes they gave and did not. It is not logged — only its length is — because it is the reader's
-  own note about what they are reading for.
+Almost none of the answer was ever in the UI. It was five rules in the **constant** half of the
+prompt. Read against `PROFILE_RULES`, three already had an equivalent there and **two did not**, so
+those two stayed — rewritten for the profile, in `SYSTEM` in
+[`src/summarise.ts`](../../src/summarise.ts) § IF THE READER HAS DESCRIBED THEMSELVES:
 
-It is **not** part of the `summary` step's freshness stamp (`summariesAreCurrent`, until D0). A steer
-is a reason to force a rewrite, which is what the
-button carrying it already does; it is not a reason for the next ordinary run to decide the artefact
-has gone stale. It *is* part of `sameWork` in [`src/jobs.ts`](../../src/jobs.ts), which is a different
-question — without that, a reader who presses the button, changes their mind, and presses it again
-would be handed the first job and get summaries written to the note they had just replaced.
+- Never add, sharpen or bend a claim to fit what they are after. If the article does not say it, it
+  does not go in. You are not answering them; you are summarising the section.
+- Keep the article's own proportions. A description of the reader cannot promote a passing remark
+  into the main point of a section.
+
+**They are here rather than in `PROFILE_RULES`, and that was a correction.** The shared string is
+appended to *seven* system prompts, and "if the article does not say it, it does not go in" is
+exactly backwards for two of them: [ideas.md](ideas.md)'s more valuable half is what the piece
+*never states*, and a glossary entry's `background` is explicitly not the article's knowledge. A
+profiled ideas run could have obeyed the shared rule by returning none of the half the feature
+exists for, and nothing would have looked broken. GPT Sol caught it before it shipped.
+
+They are in `SYSTEM` rather than beside the profile **so the constraint cannot be edited by the
+thing it constrains**, and because `SYSTEM` is a constant every batch shares. The profile itself goes
+in the user prompt, near the top, with a two-line reminder standing next to it — a constraint three
+thousand tokens above the text it constrains is one the model has stopped weighing.
+
+`PROMPT_VERSION` went to `summary/4` with that edit, so a summary written to the old rules reads as
+**outdated** — *the article is the same and we would write these differently now* — rather than
+silently as current. That matters more than it sounds: it is also what stops a summary written to a
+steer that no longer exists going on displaying with nothing to explain why it leans the way it does.
 
 ## What this deliberately does not have
 
@@ -610,9 +612,9 @@ interpreted. Rendering arbitrary model output as HTML is what [security.md](secu
   mark.
 - **A section whose summary is subtly wrong** is undetectable from here. `missing` catches an absent
   summary; nothing catches a plausible one about the wrong thing, which is the same residual risk the
-  citation counting in [chat-mode.md](../plans/chat-mode.md) leaves behind. A steer makes this risk
-  *larger*, which is why the rules holding it to emphasis are written where they are — and there is
-  still nothing that would catch a summary that quietly followed the note off the text.
+  citation counting in [chat-mode.md](../plans/chat-mode.md) leaves behind. A reader profile makes
+  this risk *larger*, which is why the rules holding it to emphasis are written where they are — and
+  there is still nothing that would catch a summary that quietly followed the profile off the text.
 - **Nothing checks that a cited id is the right paragraph.** `unknownCited` catches an id that does
   not exist; an id that exists and carries a different claim reads exactly like a good one. The
   hover card is the mitigation, and it works only if somebody hovers.

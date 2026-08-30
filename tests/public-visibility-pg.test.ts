@@ -47,6 +47,7 @@ import {
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
+import { documentTitle } from "../src/title-text.js";
 import { safePublicCanonical } from "../src/urls.js";
 import { currentOwnerId, type OwnerId, runInRequest } from "../src/owner.js";
 import type { Glossary, Ideas, Summaries, TweetThread } from "../src/types.js";
@@ -93,6 +94,10 @@ const EXTRACTED_TITLE = "A piece somebody shared";
  * comes across the wire from Postgres whatever the table guard says, and only
  * the projection in src/public/dto.ts drops it.
  */
+/* A steer, on an artefact written before the box was deleted on 2026-08-30
+   (docs/plans/steer-becomes-the-profile.md). Nothing writes one now; every
+   summary stored before then still carries one inside its JSON, so the
+   projection still has to drop it and this still has to prove that. */
 const PRIVATE_GUIDANCE = "I am reading this to argue with a colleague, skip the history";
 const PRIVATE_LOOKUP = "what the owner asked the web and what it said back";
 const PRIVATE_PROFILE_HASH = "profilehash-nobodyelsesbusiness";
@@ -152,7 +157,10 @@ const ARTEFACTS: {
     slug: SLUG,
     sourceHash: "abc",
     profileHash: PRIVATE_PROFILE_HASH,
-    guidance: PRIVATE_GUIDANCE,
+    /* `Summaries` no longer declares this, so it is spread in rather than
+       written as a key — see PRIVATE_GUIDANCE above for why an artefact that
+       cannot be written any more still has to be *read* safely. */
+    ...({ guidance: PRIVATE_GUIDANCE } as Record<string, string>),
     missing: 0,
     generatedAt: "2026-02-02T00:00:00.000Z",
     elapsedMs: 1,
@@ -745,6 +753,49 @@ when("sharing one article", { timeout: 60_000 }, () => {
     expect(owned.text).toContain(PRIVATE_TITLE);
     const anonymous = await call("GET", `/api/public/article/${SLUG}`);
     expect(owned.text).not.toBe(anonymous.text);
+  });
+
+  /**
+   * **The one place the tab is allowed to change at mount, written down as a
+   * decision rather than left as a surprise.**
+   *
+   * Everything else in this body of work exists to stop the server-composed
+   * `<title>` being replaced by a different one when React mounts — five
+   * divergences, docs/project/page-titles.md. This is the sixth, and it is not
+   * a bug: the public head must never carry `articles.title_override`, because
+   * that is the owner's private name for the piece and the head is served to
+   * strangers. The owner's own payload deliberately applies it (`titleFor`), so
+   * an **owner** hard-loading their own renamed public article sees the
+   * extracted title for a moment and then their own name for it.
+   *
+   * Nobody else can see this. A stranger, a signed-in stranger and the owner all
+   * get byte-identical *public* responses (the case above), so the change is
+   * visible only to the one person who already knows both strings.
+   *
+   * GPT Sol raised it, 2026-08-30, as something needing "an explicit accepted
+   * exception and test, or different tab semantics — never disclosure of the
+   * private rename in the public head". This is the exception, accepted: the
+   * disclosure is the thing that must not move, and it is asserted first.
+   */
+  it("changes the owner's tab at mount, which is the accepted cost of hiding the rename", async () => {
+    const head = await pgPublicReader.loadHead(SLUG);
+
+    /* **The property that must never regress, first.** Everything above an
+       assertion is a lid on it, and this is the one worth the whole case. */
+    expect(head.title, "the public head must not carry the private rename").not.toBe(PRIVATE_TITLE);
+    expect(JSON.stringify(head)).not.toContain(PRIVATE_TITLE);
+    expect(documentTitle(head.title)).not.toContain(PRIVATE_TITLE);
+
+    /* What it says instead — the extracted title, spelled out. */
+    expect(head.title).toBe(EXTRACTED_TITLE);
+    expect(documentTitle(head.title)).toBe(`${EXTRACTED_TITLE} · Spideryarn`);
+
+    /* And what the owner's client will put there a moment later, from their own
+       endpoint. The two differ, and that difference is the exception. */
+    const owned = await call("GET", `/api/article/${SLUG}`, { as: OWNER });
+    const ownerTitle = (owned.body as { meta: { title: string | null } }).meta.title;
+    expect(ownerTitle).toBe(PRIVATE_TITLE);
+    expect(documentTitle(ownerTitle)).not.toBe(documentTitle(head.title));
   });
 
   /** And Bob still cannot reach it through the owner's route. */
@@ -1467,6 +1518,312 @@ when("a public article whose revision has no blocks", { timeout: 60_000 }, () =>
     });
   });
 });
+
+/**
+ * **An article with no title of its own, which is where the two sides said
+ * different things.**
+ *
+ * `/read/<slug>` is served with a `<title>` composed from `loadHead`, and React
+ * then sets `document.title` from the article payload's `meta.title`. Those come
+ * from two different fallback chains:
+ *
+ *   loadHead   `title ?? headingTitle`               → then `Untitled`
+ *   metaFrom   `title ?? headingTitle ?? slug`       (src/public/dto.ts)
+ *
+ * They agree for every article that has a title or an `<h1>`, which is nearly
+ * all of them, and that is exactly why nothing caught it: **the corpus could not
+ * reach the disagreement.** For an article with neither, the tab said
+ * `Untitled · Spideryarn` and then changed to the slug a second later. GPT Sol
+ * found it while reviewing the fix for the *other* divergence between these two
+ * (whitespace and bidi normalising, src/title-text.ts), minutes before its
+ * 45-minute budget ran out.
+ *
+ * It needs its own fixture for the reason the boneless one above does: the main
+ * fixture has both a title and an `<h1>`, so the bug is unreachable from it and
+ * every assertion in this file stays green with the fault in place.
+ *
+ * Blocks, so `hasBlocks` passes and the head is served at all — but not one of
+ * them is a level-1 heading, which is what `PUBLIC_HEADING_TITLE` looks for.
+ */
+const TITLELESS_ID = "00000000-0000-4000-8000-0000000b04f0";
+const TITLELESS_REVISION = "00000000-0000-4000-8000-0000000b04f1";
+const TITLELESS_SLUG = "test-public-head-no-title";
+/* The id alphabet excludes i, l, o and 1 (src/ids.ts), and `block_identities`
+   has a check constraint on it — "notitl" is refused for three of those four. */
+const TITLELESS_BLOCK = "spya-ntxhqz";
+
+when("a public article with neither a title nor an <h1>", { timeout: 60_000 }, () => {
+  beforeAll(async () => {
+    const db = getDb();
+    await cleanTitleless();
+    await db.insert(articles).values({
+      id: TITLELESS_ID,
+      ownerId: OWNER,
+      slug: TITLELESS_SLUG,
+      visibility: "public",
+    });
+    await db.insert(articleRevisions).values({
+      id: TITLELESS_REVISION,
+      articleId: TITLELESS_ID,
+      status: "published",
+      /* The whole point of the fixture. */
+      title: null,
+      wordCount: 7,
+      blockCount: 1,
+      tree: {
+        version: "test",
+        generator: "test",
+        slug: TITLELESS_SLUG,
+        rootId: "n0",
+        nodes: {
+          n0: { id: "n0", depth: 0, parent: null, children: [], range: [TITLELESS_BLOCK, TITLELESS_BLOCK], title: "Root", gist: "Prose with no heading above it." },
+        },
+      },
+    });
+    /* `revision_blocks` has a foreign key into `block_identities` — an id is
+       minted once for an article and every later revision points at it
+       (docs/project/block-ids.md). Without this row the insert below fails with
+       `revision_blocks_identity_fk`, and vitest reports the whole suite's tests
+       as **skipped** rather than failed, which is how a broken fixture reads as
+       green in a filtered summary. */
+    await db.insert(blockIdentities).values({ articleId: TITLELESS_ID, blockId: TITLELESS_BLOCK });
+    await db.insert(revisionBlocks).values([
+      {
+        articleId: TITLELESS_ID,
+        revisionId: TITLELESS_REVISION,
+        blockId: TITLELESS_BLOCK,
+        ordinal: 0,
+        /* `p`, not `h1`. A heading here would give the fallback something to
+           find and the fixture would stop being able to show the bug. */
+        tag: "p",
+        kind: "text",
+        text: "Prose with no heading above it.",
+        words: 6,
+        html: "<p>Prose with no heading above it.</p>",
+        gistable: true,
+      },
+    ]);
+    await db
+      .update(articles)
+      .set({ currentRevisionId: TITLELESS_REVISION })
+      .where(eq(articles.id, TITLELESS_ID));
+  });
+
+  afterAll(cleanTitleless);
+
+  it("gives the head the same title the client is about to set", async () => {
+    const head = await pgPublicReader.loadHead(TITLELESS_SLUG);
+    const r = await call("GET", `/api/public/article/${TITLELESS_SLUG}`);
+    /* A precondition rather than a claim: without a payload there is no client
+       title to disagree with, and the failure below would be about the wrong
+       thing. */
+    expect(r.status, "the fixture must be served at all").toBe(200);
+    const client = (r.body as { meta: { title: string | null } }).meta.title;
+
+    /* **The assertion this test is named for, and it goes first.** Everything
+       above an assertion is a lid on it — a failing `expect` ends the case, so a
+       fault caught by a later line proves nothing about this one. */
+    expect(head.title, "loadHead and metaFrom must agree").toBe(client);
+
+    /* And what they agree *on*, spelled out, because two sides agreeing on the
+       wrong answer is the other way this passes while broken. The slug is the
+       fallback the owner's side has always used; `Untitled` was only ever the
+       head's. */
+    expect(head.title).toBe(TITLELESS_SLUG);
+    expect(documentTitle(head.title)).toBe(`${TITLELESS_SLUG} · Spideryarn`);
+    expect(documentTitle(head.title)).not.toContain("Untitled");
+  });
+
+  /**
+   * The control on the fixture: it really does have neither of the two things
+   * the fallback prefers. If a later edit gave it a title or an `<h1>`, the case
+   * above would pass with the bug back in place, and nothing would say so.
+   */
+  it("and the fixture really is titleless — no stored title, no level-1 heading", async () => {
+    const db = getDb();
+    const [rev] = await db
+      .select({ title: articleRevisions.title })
+      .from(articleRevisions)
+      .where(eq(articleRevisions.id, TITLELESS_REVISION));
+    expect(rev?.title).toBeNull();
+
+    const headings = await db
+      .select({ blockId: revisionBlocks.blockId })
+      .from(revisionBlocks)
+      .where(and(eq(revisionBlocks.revisionId, TITLELESS_REVISION), eq(revisionBlocks.kind, "heading")));
+    expect(headings).toEqual([]);
+  });
+});
+
+/**
+ * **The `<h1>` rung of the same fallback, which has two implementations.**
+ *
+ * `loadHead` finds the first level-1 heading **in SQL** (`PUBLIC_HEADING_TITLE`,
+ * src/store/public-reader.ts); the article payload finds it **in TypeScript**
+ * (`headingTitleOf`, src/library-scalars.ts, over the blocks it already has in
+ * memory). Two implementations of one rule, and the tab is composed from the
+ * first and then overwritten from the second.
+ *
+ * The fixture above covers only the last rung, the slug. This one covers the
+ * rung above it, and it is built to be **awkward on the two axes each
+ * implementation could get wrong on its own**:
+ *
+ *  - an `h2` sits before the first `h1`, so anything that takes the first
+ *    *heading* rather than the first level-1 heading picks the wrong one;
+ *  - there are two `h1`s, and the rows are **inserted in the wrong order**, so
+ *    an implementation that leans on insertion order rather than `ordinal`
+ *    picks the second.
+ *
+ * GPT Sol asked for this, 2026-08-30: the two agree today, but nothing paired
+ * them, so a mutation like `level = 2` or a reversed `order by` in the SQL would
+ * have survived every test in the repo.
+ */
+const HEADED_ID = "00000000-0000-4000-8000-0000000b0500";
+const HEADED_REVISION = "00000000-0000-4000-8000-0000000b0501";
+const HEADED_SLUG = "test-public-head-h1-fallback";
+/** What both implementations must find: the first `h1` *by ordinal*. */
+const HEADED_H1 = "The first level-one heading";
+
+when("a public article whose only title is its first <h1>", { timeout: 60_000 }, () => {
+  beforeAll(async () => {
+    const db = getDb();
+    await cleanHeaded();
+    await db.insert(articles).values({
+      id: HEADED_ID,
+      ownerId: OWNER,
+      slug: HEADED_SLUG,
+      visibility: "public",
+    });
+    await db.insert(articleRevisions).values({
+      id: HEADED_REVISION,
+      articleId: HEADED_ID,
+      status: "published",
+      title: null,
+      wordCount: 12,
+      blockCount: 3,
+      tree: {
+        version: "test",
+        generator: "test",
+        slug: HEADED_SLUG,
+        rootId: "n0",
+        nodes: {
+          n0: {
+            id: "n0",
+            depth: 0,
+            parent: null,
+            children: [],
+            range: ["spya-hdgaaa", "spya-hdgccc"],
+            title: "Root",
+            gist: "A piece whose title is its heading.",
+          },
+        },
+      },
+    });
+    for (const id of ["spya-hdgaaa", "spya-hdgbbb", "spya-hdgccc"]) {
+      await db.insert(blockIdentities).values({ articleId: HEADED_ID, blockId: id });
+    }
+    /* **Deliberately not in ordinal order.** An implementation that takes the
+       first row it is handed rather than the lowest `ordinal` gets the second
+       `h1`, and that is the whole point of writing them this way round. */
+    await db.insert(revisionBlocks).values([
+      {
+        articleId: HEADED_ID,
+        revisionId: HEADED_REVISION,
+        blockId: "spya-hdgccc",
+        ordinal: 2,
+        tag: "h1",
+        kind: "heading",
+        level: 1,
+        text: "A second level-one heading, later in the document",
+        words: 8,
+        html: "<h1>A second level-one heading, later in the document</h1>",
+        gistable: true,
+      },
+      {
+        articleId: HEADED_ID,
+        revisionId: HEADED_REVISION,
+        blockId: "spya-hdgaaa",
+        ordinal: 0,
+        /* An `h2` above the first `h1`, so "first heading" and "first level-1
+           heading" are different answers. */
+        tag: "h2",
+        kind: "heading",
+        level: 2,
+        text: "A subheading that comes first",
+        words: 5,
+        html: "<h2>A subheading that comes first</h2>",
+        gistable: true,
+      },
+      {
+        articleId: HEADED_ID,
+        revisionId: HEADED_REVISION,
+        blockId: "spya-hdgbbb",
+        ordinal: 1,
+        tag: "h1",
+        kind: "heading",
+        level: 1,
+        text: HEADED_H1,
+        words: 4,
+        html: `<h1>${HEADED_H1}</h1>`,
+        gistable: true,
+      },
+    ]);
+    await db
+      .update(articles)
+      .set({ currentRevisionId: HEADED_REVISION })
+      .where(eq(articles.id, HEADED_ID));
+  });
+
+  afterAll(cleanHeaded);
+
+  it("finds the same <h1> in SQL that the payload finds in TypeScript", async () => {
+    const head = await pgPublicReader.loadHead(HEADED_SLUG);
+    const r = await call("GET", `/api/public/article/${HEADED_SLUG}`);
+    expect(r.status, "the fixture must be served at all").toBe(200);
+    const client = (r.body as { meta: { title: string | null } }).meta.title;
+
+    /* The assertion this case is named for, first. */
+    expect(head.title, "PUBLIC_HEADING_TITLE and headingTitleOf must agree").toBe(client);
+
+    /* And what they agree on, spelled out — not derived from either, or the
+       pair could agree on the subheading, on the second `h1`, or on the slug
+       and this would still pass. */
+    expect(head.title).toBe(HEADED_H1);
+    expect(head.title).not.toBe(HEADED_SLUG);
+    expect(documentTitle(head.title)).toBe(`${HEADED_H1} · Spideryarn`);
+  });
+
+  it("and the fixture really is awkward — an h2 first, and two h1s out of order", async () => {
+    /* The control on the control. If a later edit tidied these rows into
+       ordinal order or dropped the `h2`, the case above would pass with either
+       implementation broken and nothing would say so. */
+    const rows = await getDb()
+      .select({ ordinal: revisionBlocks.ordinal, level: revisionBlocks.level })
+      .from(revisionBlocks)
+      .where(eq(revisionBlocks.revisionId, HEADED_REVISION));
+    expect(rows.filter((r) => r.level === 1)).toHaveLength(2);
+    const first = rows.find((r) => r.ordinal === 0);
+    expect(first?.level, "an h2 must come before the first h1").toBe(2);
+  });
+});
+
+async function cleanHeaded() {
+  const db = getDb();
+  await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, HEADED_ID));
+  await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, HEADED_ID));
+  await db.delete(blockIdentities).where(eq(blockIdentities.articleId, HEADED_ID));
+  await db.delete(articleRevisions).where(eq(articleRevisions.articleId, HEADED_ID));
+  await db.delete(articles).where(eq(articles.id, HEADED_ID));
+}
+
+async function cleanTitleless() {
+  const db = getDb();
+  await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.id, TITLELESS_ID));
+  await db.delete(revisionBlocks).where(eq(revisionBlocks.articleId, TITLELESS_ID));
+  await db.delete(blockIdentities).where(eq(blockIdentities.articleId, TITLELESS_ID));
+  await db.delete(articleRevisions).where(eq(articleRevisions.articleId, TITLELESS_ID));
+  await db.delete(articles).where(eq(articles.id, TITLELESS_ID));
+}
 
 async function cleanBoneless() {
   const db = getDb();

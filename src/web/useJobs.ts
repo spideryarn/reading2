@@ -277,8 +277,6 @@ export interface UseJobs {
     slug: string;
     steps: StepName[];
     force?: StepName[];
-    /** A free-text steer, for the steps that take one. Only `summary` does. */
-    guidance?: string;
     /**
      * Whether this run should use the reader's profile. Absent means yes.
      *

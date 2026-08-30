@@ -159,6 +159,31 @@ export function renderProfile(opts: {
  * input to **choosing what to spend words on** rather than to *addressing
  * anybody* is what stops a model performing the adaptation instead of making
  * it. Fable's review, 2026-08-26.
+ *
+ * ## Two clauses that nearly landed here, and why they went next door instead
+ *
+ * The **summary steer** — a fourth box about intent, deleted on 2026-08-30
+ * (docs/plans/steer-becomes-the-profile.md) — had its own `SYSTEM` section, and
+ * two of its five rules had no equivalent below: *never bend a claim to fit*,
+ * and *keep the article's own proportions*. Deleting the box while deleting the
+ * rules that held it would have answered Greg's ask — *"make sure the LLM
+ * doesn't overweight this and give a really distorted summary"* — by removing
+ * what satisfied it. So they had to go somewhere.
+ *
+ * **The obvious somewhere was here, and it was wrong.** This string is appended
+ * to SEVEN system prompts — explain, converse twice, glossary, sketch,
+ * summarise, ideas, tweets — and the second clause read *"if the piece does not
+ * say it, it does not go in"*. That is exactly right for a summary and exactly
+ * backwards for two of the others: `ideas` defines its more valuable half as
+ * propositions *"the piece leans on and never states"*, and `glossary`'s
+ * `background` field is explicitly *"your knowledge, not the article's"*. A
+ * profiled ideas run could have obeyed the shared rule by returning none of the
+ * half the feature exists for, and nothing would have looked broken.
+ *
+ * They live in src/summarise.ts § SYSTEM instead, which is where the steer they
+ * came from lived and the one prompt the absolute is true of. GPT Sol's review
+ * of the built code, 2026-08-30 — the reach was seven, and this file and its
+ * doc had both been saying five.
  */
 export const PROFILE_RULES = `IF THE READER HAS DESCRIBED THEMSELVES
 

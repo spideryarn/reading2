@@ -110,15 +110,8 @@ describe("summaries' prompt", () => {
     scope: TREE.nodes.root!,
     targets: [TREE.nodes["part-a"]!, TREE.nodes["part-b"]!],
   };
-  const render = (profile: string | null, guidance?: string) =>
-    summaryPrompt({
-      meta: META,
-      tree: TREE,
-      blocks: BLOCKS,
-      batch,
-      profile,
-      ...(guidance !== undefined && { guidance }),
-    });
+  const render = (profile: string | null) =>
+    summaryPrompt({ meta: META, tree: TREE, blocks: BLOCKS, batch, profile });
 
   it("carries the profile when there is one", () => {
     const out = render(PROFILE);
@@ -130,19 +123,20 @@ describe("summaries' prompt", () => {
     for (const marker of MARKERS) expect(out).not.toContain(marker);
   });
 
-  it("puts the reader before the steer", () => {
-    /* Two boxes about intent in one prompt, and the order is the design: who
-       they are frames what "lead with this" even means. The precedence when the
-       two pull different ways is stated in SYSTEM — see
-       docs/plans/reader-profile.md § The second box. */
-    const out = render(PROFILE, "I care about the evidence, not the history");
-    expect(out.indexOf("WHO IS READING")).toBeLessThan(out.indexOf("WHAT THIS READER IS AFTER"));
-  });
-
-  it("still carries the steer on its own, with no profile", () => {
-    // The steer predates the profile and must not have become conditional on it.
-    const out = render(null, "I care about the evidence");
-    expect(out).toContain("WHAT THIS READER IS AFTER");
-    expect(out).toContain("I care about the evidence");
+  /**
+   * **There used to be a second box about intent in this prompt**, and two
+   * tests here about how the pair sat together: the profile had to come first,
+   * because who they are frames what "lead with this" even means, and the steer
+   * had to work on its own so it did not become conditional on the profile.
+   *
+   * The steer is gone (docs/plans/steer-becomes-the-profile.md) — it asked the
+   * same question the profile's per-article half already asks. What replaces
+   * those two tests is one about the deletion having actually reached the
+   * renderer: a header left behind teaches the model to expect an instruction
+   * that nothing can now supply, and it would look like nothing at all.
+   */
+  it("has no steer left in it, with a profile or without", () => {
+    expect(render(PROFILE)).not.toContain("WHAT THIS READER IS AFTER");
+    expect(render(null)).not.toContain("WHAT THIS READER IS AFTER");
   });
 });

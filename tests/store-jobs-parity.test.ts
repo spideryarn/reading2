@@ -296,11 +296,7 @@ for (const adapter of ADAPTERS) {
     }
 
     it("hands back what it was given, with nothing turned into null", async () => {
-      const job = aJob({
-        url: "https://example.test/a",
-        guidance: "shorter",
-        profile: "a linguist",
-      });
+      const job = aJob({ url: "https://example.test/a", profile: "a linguist" });
       const { job: saved, created } = await store.enqueueOrGet(job, "k1");
       expect(created).toBe(true);
       expect(saved).toEqual(job);

@@ -39,32 +39,60 @@ Why they are reading this piece: I want the evidence, not the history.
 ```
 
 Caps are **1,500 and 600 characters, refused rather than truncated** — a silently shortened profile
-is one the reader believes they gave and did not. The 600 matches `MAX_GUIDANCE_CHARS` on the summary
-steer, because the two boxes sit next to each other in the reader's head. **Never logged, only its
-length**: this one is about the person rather than about the article ([logging.md](logging.md)).
+is one the reader believes they gave and did not. The 600 was chosen to match the summary steer's
+cap, the two boxes sitting next to each other in the reader's head; that steer is gone (below), so
+the number now rests on its own reasoning — a paragraph about who you are is a life, a paragraph
+about why you opened *this* is usually a sentence. **Never logged, only its length**: this one is
+about the person rather than about the article ([logging.md](logging.md)).
 
 **Normalised before rendering, and hashed from the rendering.** Trim, `\r\n` → `\n`, whitespace-only
 is empty. Two spellings of one profile must be one profile, or a trailing newline from a paste marks
 every artefact on the shelf stale and writes a second cache entry for the privilege.
 
-### There is a third box, and the rule that keeps them apart
+### There was a third box, and it was a copy of the second
 
-The summary panel's **steer** predates this and stays. Three free-text boxes about intent, and this
-is the carve-up:
+The summary panel had a **steer** — a free-text note beside the button that rewrites the summaries,
+predating this feature. Three boxes about intent, carved up like this:
 
-- **About you** — durable, about the person, read by all five features.
-- **Why this one** — durable, about this article, read by all five.
-- **Steer** — one rewrite of one artefact, read by summaries only.
+- **About you** — durable, about the person, read by every profiled feature.
+- **Why this one** — durable, about this article, read by the same.
+- **Steer** — ~~one rewrite of one artefact, read by summaries only~~. **Gone, 2026-08-30.**
 
-**Where the steer and the purpose disagree, the steer wins**, and `SYSTEM` says so out loud. It is
-the more recent and more specific act. Leaving it to the model would be two instructions about
-emphasis with no ordering between them, which is how you get an answer that follows neither.
+The carve-up defended a distinction the interface never made. The steer's label was *"What are you
+reading this for?"*, placeholder *"e.g. I care about the evidence, not the history"*; the
+per-article box asks *"Why you're reading this one"*, placeholder *"e.g. I want the evidence, not
+the history"*. Fable's review said so when it was built — *its example sentence and the steer's
+example sentence are, word for word, nearly the same* — and Greg kept both, with the note that **if
+the per-article box goes unused, delete it**.
 
-Fable's review argued for cutting the per-article box entirely — its example sentence and the
-steer's example sentence are, word for word, nearly the same. Greg kept both
-([the plan](../plans/reader-profile.md#the-second-box-was-argued-against-and-kept-anyway) has the
-argument, so nobody has to make it again). **If the per-article box goes unused, delete it** rather
-than leave it as furniture.
+It resolved the other way. Greg, 2026-08-30:
+
+> the Summary steer should be derived from the user- and text-prompts combined (if they exist), if
+> ("Use profile") is checked, otherwise not. No need for a Summary-specific steer.
+
+And the behaviour he describes was already the plumbing: the profile reaches the summary prompt on
+every run, and `useProfile: false` withholds it. What was left was a second box asking the same
+question and a precedence rule between the two answers — *where the steer and the purpose disagree,
+the steer wins* — which existed only because there were two.
+
+**The care was in the prompt, not in the deletion.** `SYSTEM` carried a whole section holding the
+steer to emphasis, and Greg's original ask for the box had been *"make sure the LLM doesn't
+overweight this and give a really distorted summary"*. Read clause by clause against `PROFILE_RULES`,
+three of its five rules already had an equivalent and **two did not**: *never add, sharpen, or bend a
+claim to fit*, and *keep the piece's own proportions* — and there was nothing about proportions in
+`PROFILE_RULES` at all. Those two moved rather than going in the bin — **into
+[`src/summarise.ts`](../../src/summarise.ts)'s own `SYSTEM`, not into `PROFILE_RULES`**, and that
+distinction was a correction rather than a preference. The shared string reaches *seven* prompts, and
+*"if the article does not say it, it does not go in"* is exactly backwards for two of them: `ideas`
+defines its more valuable half as what the piece *never states*, and a glossary entry's `background`
+is explicitly not the article's knowledge. A profiled ideas run could have obeyed the shared rule by
+returning none of the half the feature exists for. GPT Sol caught it before it shipped.
+[steer-becomes-the-profile.md](../plans/steer-becomes-the-profile.md) has the working, and
+`tests/profile.test.ts` pins both clauses where they landed — a moved rule is the easiest kind to
+lose, because both halves of the move compile and nothing anywhere goes red.
+
+A `jobs.guidance` column and a `guidance` inside older stored summaries both survive, unread.
+Dropping the column is a migration against real readers' work, which is Greg's call every time.
 
 ## Where it goes in the prompt
 
@@ -79,11 +107,11 @@ article never changes. [prompt-caching.md](prompt-caching.md) records the same m
 | `converse` | user message 2, breakpoint on it | the final user message, with the question |
 | `glossary` | `system[0]`, breakpoint on it | the user message |
 | `tweets` | `system[0]`, breakpoint on it | the user message |
-| `summarise` | the user prompt — not cached, on purpose | beside the steer, near the top |
+| `summarise` | the user prompt — not cached, on purpose | near the top, with the other framing |
 
 The positioning rule inside the varying part is one rule, not two: **the thing the model must
 actually do goes last.** So chat and explain put the profile before the question; the batch stages
-put it near the top with the other framing, where summaries already puts its steer.
+put it near the top with the other framing.
 
 **Not the structural stages.** The ToC, the arc and the section labels never see it. The tree is
 [the one structure](granularity-zoom.md#the-tree) that the ToC, the zoom, the summaries and the spine
@@ -102,7 +130,8 @@ not more prompt.
 
 ### The rules live in `SYSTEM`, and they are always there
 
-`PROFILE_RULES` in [`src/profile.ts`](../../src/profile.ts) is appended to all five system prompts,
+`PROFILE_RULES` in [`src/profile.ts`](../../src/profile.ts) is appended to all seven profiled system prompts —
+explain, converse (twice), glossary, sketch, summarise, ideas and tweets —
 **whether or not the reader has a profile**. Two reasons, and the second decided it: `SYSTEM` sits
 ahead of the article in explain and converse, so a varying one would split the cache in two and
 re-write the whole article whenever the reader toggled; and a rule that only appears alongside the
@@ -217,8 +246,8 @@ nobody in particular.
 ### One profile per job, frozen at the start
 
 The profile is resolved **once**, by the route (`resolveProfile` in [`src/routes.ts`](../../src/routes.ts)),
-and carried on the job exactly as `guidance` already is — `Job.profile` → `StepContext.profile` →
-the step. A summary run is several batches at once, and a reader who edits their box mid-run would
+and carried on the job — `Job.profile` → `StepContext.profile` → the step. (A `guidance` steer
+travelled the same way and is gone: [steer-becomes-the-profile.md](../plans/steer-becomes-the-profile.md).) A summary run is several batches at once, and a reader who edits their box mid-run would
 otherwise get one artefact written from two profiles and stamped with whichever finished last.
 
 It is also part of `sameWork` in [`src/jobs.ts`](../../src/jobs.ts). Unticking the box and pressing
@@ -291,7 +320,7 @@ Where each one is:
 | Surface | Label | Checkbox | Panel |
 |---|---|---|---|
 | glossary | on the head line | beside Find / Find them again | from both |
-| summaries | on the head line | beside the steer and Rewrite them | from both |
+| summaries | on the head line | beside Write them again | from both |
 | ideas | on the head line | beside Find them | from both |
 | tweets | beside the counts | beside Write it again | from both |
 | chat | — | in the composer, per turn | from the checkbox |

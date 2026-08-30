@@ -404,3 +404,126 @@ describe("the apparatus in summary mode", () => {
     expect(rowFor("First part")!.className).not.toContain("supplement");
   });
 });
+
+/**
+ * **The profile tick has to reach `write`, from the button the reader presses.**
+ *
+ * `tests/step-job-force.test.tsx` calls `useSummaries.write` directly, so it
+ * proves the hook forwards the flag and nothing about whether the panel passes
+ * it. That gap is not hypothetical: `SummaryPanel` called
+ * `owner.write(true, guidance)` with no third argument until 2026-08-30, so
+ * unticking "Use your profile" and pressing "Write them again" wrote a profiled
+ * artefact anyway, stamped with a `profileHash` the reader had just declined.
+ * A hook-level test was green throughout. GPT Sol named this as the weakest of
+ * the new tests, and it was right.
+ *
+ * So this one goes through the rendered panel: untick the real checkbox, press
+ * the real button, and read what `write` was actually called with.
+ * docs/plans/steer-becomes-the-profile.md.
+ */
+describe("the write button and the profile tick", () => {
+  /** Every `write(force, useProfile)` the panel made. */
+  const calls: [boolean | undefined, boolean | undefined][] = [];
+
+  /* A ladder with something in it, which is what `hasLadder` tests and what
+     decides whether the panel draws "Write the summaries" or "Write them
+     again". The second is the branch the shipped bug was in, so a fixture that
+     can only reach the first is a fixture that cannot see it. */
+  const LADDER = {
+    entries: [{ range: ["spya-aaaaaa", "spya-aaaaab"] as [string, string], depth: 0, long: "x" }],
+    missing: 0,
+  };
+
+  const owned = (status: "none" | "ready") =>
+    createElement(SummaryPanel, {
+      access: {
+        kind: "owner",
+        summaries: status === "ready" ? LADDER : null,
+        owner: {
+          status,
+          summaries: null,
+          stale: false,
+          profiled: false,
+          profileChanged: false,
+          /* True, or `UseProfile` renders no checkbox at all and the test
+             below would pass by having nothing to untick. */
+          hasProfile: true,
+          slug: "test-summary-expand",
+          error: null,
+          job: null,
+          failed: null,
+          write: async (force?: boolean, useProfile?: boolean) => {
+            calls.push([force, useProfile]);
+          },
+          cancel: () => {},
+        },
+      },
+      root: tree(false),
+      blocks: new Map(),
+      rung: "gist",
+      onRung: () => {},
+      deep: 1,
+      onDeep: () => {},
+      atRow: null,
+      onJump: () => {},
+    });
+
+  beforeEach(() => {
+    calls.length = 0;
+  });
+
+  it("passes the tick as the reader left it", () => {
+    act(() => root.render(owned("none")));
+    const box = host.querySelector<HTMLInputElement>(".prof-use input");
+    expect(box, "no profile checkbox to untick").toBeTruthy();
+    expect(box?.checked).toBe(true);
+
+    // Untick it, the way a reader does.
+    act(() => {
+      box?.click();
+    });
+    const run = [...host.querySelectorAll("button")].find((b) =>
+      (b.textContent ?? "").includes("Write the summaries"),
+    );
+    expect(run, "no write button").toBeTruthy();
+    act(() => {
+      run?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(calls).toEqual([[false, false]]);
+  });
+
+  /**
+   * **And the same through "Write them again", which is where the bug was.**
+   *
+   * `owner.write(true, guidance)` in that branch never passed a third argument,
+   * so `useProfile` defaulted to true. The empty-state test above would have
+   * stayed green through all of it — a different call site, a different branch.
+   */
+  it("passes the tick through the rewrite button too", () => {
+    act(() => root.render(owned("ready")));
+    const box = host.querySelector<HTMLInputElement>(".prof-use input");
+    expect(box, "no profile checkbox in the ready state").toBeTruthy();
+    act(() => {
+      box?.click();
+    });
+    const again = [...host.querySelectorAll("button")].find((b) =>
+      (b.textContent ?? "").includes("Write them again"),
+    );
+    expect(again, "no rewrite button").toBeTruthy();
+    act(() => {
+      again?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    // Forced, because the step believes the artefact is current — and unprofiled,
+    // because that is what the reader just asked for.
+    expect(calls).toEqual([[true, false]]);
+  });
+
+  /* And no steer box in either branch that used to draw one. */
+  it("draws no steer box, in the empty state or the ready one", () => {
+    for (const status of ["none", "ready"] as const) {
+      act(() => root.render(owned(status)));
+      expect(host.innerHTML, status).not.toContain("summ-steer");
+      expect(host.textContent, status).not.toContain("Steer these summaries");
+    }
+  });
+});

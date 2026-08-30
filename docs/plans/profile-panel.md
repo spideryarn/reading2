@@ -239,7 +239,7 @@ panel before the `pointer-events` fix**, or it is a test that has never been red
 
 **Not a third box.** The summary panel's steer stays out of the panel: it is one rewrite of one
 artefact, read by summaries only, and putting it beside two durable boxes would blur the carve-up
-[reader-profile.md](../project/reader-profile.md#there-is-a-third-box-and-the-rule-that-keeps-them-apart)
+[reader-profile.md](../project/reader-profile.md#there-was-a-third-box-and-it-was-a-copy-of-the-second)
 draws.
 
 **Not a way to see the joined string.** `renderProfile`'s output — the two halves with their

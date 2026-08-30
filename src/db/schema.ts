@@ -544,10 +544,12 @@ export const articleRevisions = spideryarn.table(
     /**
      * The article at whichever length you ask for — `Summaries`, stage 5e.
      *
-     * The WHOLE artefact, like the three above. `guidance` and `missing` are
-     * exactly the provenance that must travel with it: a summary written to a
-     * reader's steer has to *say so* or the reader cannot weigh it, and
-     * `missing` is what stops a half-empty artefact reading as a complete one.
+     * The WHOLE artefact, like the three above. `missing` is exactly the
+     * provenance that must travel with it — it is what stops a half-empty
+     * artefact reading as a complete one. (`guidance` was a second such field,
+     * the reader's steer, kept so a steered summary could *say so*. It is gone
+     * with the box: docs/plans/steer-becomes-the-profile.md. Old rows may still
+     * carry one inside this JSON; nothing reads it.)
      */
     summary: jsonb("summary").$type<Summaries>(),
 
@@ -1004,15 +1006,18 @@ export const jobs = spideryarn.table(
     /** Ordered, and small. The UI renders these directly. */
     steps: jsonb("steps").$type<JobStep[]>().notNull(),
     /**
-     * A free-text steer for the steps that take one. Only `summary` does today.
+     * **Dead since 2026-08-30, and deliberately still here.**
      *
-     * **This column was missing, and its absence was a real defect** — the type
-     * has carried `guidance` all along and its own doc comment says why: a job
-     * resumed from disk with the steer dropped runs the plain prompt and
-     * reports success, with a green tick over a summary the reader did not ask
-     * for. `sameWork` in src/jobs.ts also uses it to tell two jobs apart, so
-     * without it a differently-steered request would be answered with the
-     * first one's job. Found in review, 2026-08-26.
+     * It held the summary steer, a free-text note the reader typed beside the
+     * "write them again" button. That box is gone — it asked the same question
+     * the per-article half of the reader profile already asks, and the profile
+     * reaches the same prompt (docs/plans/steer-becomes-the-profile.md).
+     * Nothing writes this column and nothing reads it.
+     *
+     * **Not dropped, because dropping it is a migration against a database with
+     * real readers' work in it and that is Greg's call, every time** (CLAUDE.md).
+     * It is nullable, on the queue table, whose rows are ephemeral, so leaving
+     * it costs a NULL per job until somebody asks. Ask before you tidy it.
      */
     guidance: text("guidance"),
     status: text("status").notNull(),
@@ -1096,7 +1101,7 @@ export const jobs = spideryarn.table(
      * **What makes two requests the same work**, so that two instances cannot
      * each accept one Add click and pay for it twice.
      *
-     * A hash over the canonical ordered `{step, force}` list plus `guidance` plus
+     * A hash over the canonical ordered `{step, force}` list plus
      * `profile` — the same comparison `sameWork` in src/jobs.ts makes today over
      * an in-memory Map, which is exactly what stops working the moment there is
      * a second instance. Immutable: a job's identity cannot change under a

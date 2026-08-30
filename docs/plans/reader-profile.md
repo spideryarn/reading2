@@ -212,7 +212,7 @@ one optional key; `ReaderStore` is two methods.
 **Caps: 1,500 characters global, 600 per-article, refused rather than truncated.** The 600 matches
 `MAX_GUIDANCE_CHARS`, and the reason there holds here — *"a silently shortened instruction is one
 the reader believes they gave and did not"*
-([summaries.md](../project/summaries.md#steering-a-rewrite)). The global one is larger because it is
+([summaries.md](../project/summaries.md#steering-a-rewrite-and-where-that-box-went)). The global one is larger because it is
 written once and read forever.
 
 **Never logged, only its length.** Same rule as the summary steer, and for a stronger reason: this

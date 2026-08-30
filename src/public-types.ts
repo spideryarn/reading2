@@ -194,9 +194,6 @@ export interface PublicArticle extends PublicArtefactSet {
  * all; the third was put to Greg on 2026-08-28 and deferred — one field and one
  * sentence, addable any time.
  *
- * **No `guidance` on the summaries**, which is the owner's free-text steer and
- * the single most private thing in any of these four artefacts.
- *
  * **No `entry.lookup` on a glossary entry.** A lookup is the owner's requested
  * answer, its citations, its search count, its model and its exact time — and
  * the Postgres read seam attaches them to the glossary deliberately, which is

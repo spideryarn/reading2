@@ -189,14 +189,52 @@ describe("summaries", () => {
     expect(forcedByPipeline(request).has("summary")).toBe(true);
   });
 
-  it("trims the reader's steer, and drops one that trims to nothing", async () => {
+  /**
+   * **`write` lost its middle argument, and this is the test for the hazard
+   * that creates.**
+   *
+   * It was `write(force?, guidance?, useProfile?)` and is now
+   * `write(force?, useProfile?)` — the steer is gone
+   * (docs/plans/steer-becomes-the-profile.md). `guidance` was a `string` and
+   * `useProfile` is a `boolean`, so `tsc` catches a call site left with three
+   * arguments; what it cannot catch is a call site that always passed two and
+   * now means something different by the second, or one inside this hook that
+   * forwards the wrong one.
+   *
+   * `SummaryPanel` had exactly that fault in the other direction and it had
+   * shipped: `write(true, guidance)` never passed `useProfile` at all, so
+   * unticking "Use your profile" and pressing "Write them again" wrote a
+   * profiled artefact anyway. Nothing said so — the artefact came back stamped
+   * with a `profileHash` the reader had just declined.
+   *
+   * So: the boolean has to reach the request, and its absence has to stay
+   * absent (the server reads a missing `useProfile` as yes).
+   */
+  it("carries the profile tick into the request, and omits it when unset", async () => {
     await act(async () => {
-      await summaries?.write(false, "  what it means for schools  ");
+      await summaries?.write();
     });
-    expect(only().guidance).toBe("what it means for schools");
+    expect(only()).not.toHaveProperty("useProfile");
     posted.length = 0;
     await act(async () => {
-      await summaries?.write(false, "   ");
+      await summaries?.write(false, false);
+    });
+    expect(only().useProfile).toBe(false);
+    posted.length = 0;
+    /* And with `force`, which is the call that was wrong. */
+    await act(async () => {
+      await summaries?.write(true, false);
+    });
+    expect(only().useProfile).toBe(false);
+    expect(only().force).toEqual(["summary"]);
+  });
+
+  /* Nothing may carry a steer any more. The box is gone, so a `guidance` on the
+     wire would be a hook still sending a field the server has stopped reading —
+     the quiet half of a removal. */
+  it("sends no steer at all", async () => {
+    await act(async () => {
+      await summaries?.write(true, true);
     });
     expect(only()).not.toHaveProperty("guidance");
   });

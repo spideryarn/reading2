@@ -291,20 +291,6 @@ export interface StepContext {
   report(detail: string): void;
   signal: AbortSignal;
   /**
-   * A free-text steer from the reader, for the steps that take one.
-   *
-   * Only `summary` reads it today. It is on the context rather than passed as
-   * an argument for the same reason `url` is: a step's inputs arrive one way,
-   * and the queue does not need to know which steps care.
-   *
-   * **It is not part of any step's freshness check.** A steer is a reason to
-   * force a rewrite — which is what the button carrying it does — not a reason
-   * for the next ordinary run to believe the artefact has gone stale. See the
-   * `summary` step's `stamp` below, and the note it points at in
-   * src/summarise.ts.
-   */
-  guidance?: string;
-  /**
    * Who is reading, already rendered — `renderProfile` in src/profile.ts.
    *
    * Resolved once by whoever queued the job and carried here, never read from
@@ -312,12 +298,12 @@ export interface StepContext {
    * that matters: a step that resolved it itself would let a profile edited
    * mid-run split one artefact across two profiles.
    *
-   * **Not part of any step's `isDone` either**, and for a different reason from
-   * `guidance` above. A steer is left out because it is a reason to force a
-   * rewrite rather than evidence of staleness. The profile is left out because
-   * staleness against a profile is a separate question with its own answer —
-   * `profileIsStale` in src/profile.ts — which the reader's panel asks and the
-   * pipeline does not.
+   * **Not part of any step's `isDone`.** Staleness against a profile is a
+   * separate question with its own answer — `profileIsStale` in src/profile.ts
+   * — which the reader's panel asks and the pipeline does not. (A `guidance`
+   * steer sat beside this and was left out for a different reason again: it was
+   * a reason to *force* a rewrite rather than evidence of staleness. It is gone
+   * — docs/plans/steer-becomes-the-profile.md.)
    */
   profile?: string;
   /**
@@ -1782,7 +1768,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     async run(ctx) {
       const run = await generateSummaries({
         dir: ctx.dir,
-        ...(ctx.guidance !== undefined && { guidance: ctx.guidance }),
         profile: ctx.profile ?? null,
         onProgress: ctx.report,
         signal: ctx.signal,
@@ -1815,15 +1800,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              a way in. src/summarise.ts § countCitations. */
           cited: run.cited,
           unknownCited: run.unknownCited,
-          /* The steer's LENGTH, never the steer. It is the reader's own words
-             about what they are reading for, which is exactly the kind of thing
-             docs/project/logging.md keeps out of the log. The number is enough
-             to answer "was one sent at all". */
-          guidanceChars: ctx.guidance?.length ?? 0,
-          /* The same rule again, and it matters more here: this one is about
-             the person rather than about the article. A length answers "was one
-             sent", which is the only question the log is entitled to ask.
-             docs/project/logging.md. */
+          /* The profile's LENGTH, never the profile. It is what a person told
+             us about themselves, which is exactly the kind of thing
+             docs/project/logging.md keeps out of the log. A length answers "was
+             one sent at all", which is the only question the log is entitled to
+             ask. */
           profileChars: ctx.profile?.length ?? 0,
         },
         `summary ${ctx.slug}: ${run.targets - missing}/${run.targets} sections in ${run.batches} groups`,

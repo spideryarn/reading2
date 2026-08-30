@@ -41,9 +41,11 @@ import {
   rungsFor,
   targetsOf,
   textOf,
+  SYSTEM,
 } from "../src/summarise.js";
 import { SummaryPanel, type SummariesAccess, type SummariesOwner } from "../src/web/SummaryPanel.js";
 import { buildSummaryTree, currentEntryId, rungText } from "../src/web/tree.js";
+import { PROFILE_RULES } from "../src/profile.js";
 import type { Block, Summaries, SummaryEntry, Tree, TreeNode } from "../src/types.js";
 
 /* ------------------------------------------------------------- fixtures -- */
@@ -545,35 +547,99 @@ describe("textOf", () => {
 });
 
 /**
- * The reader's steer, and the two things that must be true of it.
+ * The reader's profile, and the two things that must be true of it.
  *
  * It has to reach the model — a box that changes nothing is worse than no box,
- * because the reader believes they steered something. And its *absence* has to
+ * because the reader believes they said something. And its *absence* has to
  * leave no trace: a prompt that always carries the header with nothing under it
- * teaches the model to expect an instruction and to look for one in the text.
+ * teaches the model to expect a description and to look for one in the text.
+ *
+ * There used to be a second note about intent here — `guidance`, the summary
+ * steer — with these same two tests over it. It is gone
+ * (docs/plans/steer-becomes-the-profile.md) and the profile is the only one
+ * left, so the pair below is now about that.
  */
+/**
+ * **The two rules that hold a profile to emphasis, in the one prompt where the
+ * absolute is true.**
+ *
+ * They were `SYSTEM`'s rules for the summary steer. When that box was deleted
+ * (docs/plans/steer-becomes-the-profile.md) they were the two of its five with
+ * no equivalent in `PROFILE_RULES`, and Greg's original ask for the steer had
+ * been *"make sure the LLM doesn't overweight this and give a really distorted
+ * summary"* — so deleting them with the box would have answered him by removing
+ * what satisfied him.
+ *
+ * **They were nearly put in `PROFILE_RULES` instead, which would have been a
+ * bug in two other features.** That string is appended to seven system prompts,
+ * and "if the article does not say it, it does not go in" is backwards for
+ * `ideas`, whose more valuable half is what the piece *never states*, and for
+ * `glossary`'s `background`, which is explicitly not the article's knowledge.
+ * GPT Sol caught it before it shipped.
+ *
+ * A moved rule is the easiest kind to lose — both halves of the move compile
+ * and nothing goes red — hence a test on the destination.
+ */
+describe("the summary system prompt", () => {
+  it("forbids bending a claim to fit what the reader is after", () => {
+    expect(SYSTEM).toContain("Never add, sharpen, or bend a claim");
+    expect(SYSTEM).toContain("does not say it, it does not go in");
+  });
+
+  it("protects the article's own proportions", () => {
+    expect(SYSTEM).toContain("Keep the article's own proportions");
+    /* A needle that does not cross the prompt's line wrapping — the obvious
+       longer phrase spans a newline and would fail on the formatting rather
+       than on the rule, which is a red test about nothing. */
+    expect(SYSTEM).toContain("a passing remark into the main point");
+  });
+
+  /* And the absolute must NOT have leaked into the shared rules, where it
+     contradicts two other features outright. This is the guard on the mistake
+     rather than on the fix. */
+  it("keeps the absolute out of the rules every feature shares", () => {
+    expect(PROFILE_RULES).not.toContain("it does not go in");
+    expect(PROFILE_RULES).not.toContain("proportions");
+  });
+});
+
 describe("renderPrompt", () => {
   const targets = targetsOf(TREE, BLOCKS);
   const batch = batchesOf(TREE, targets)[0]!;
   const base = { meta: null, tree: TREE, blocks: BLOCKS, batch };
 
-  it("carries the reader's steer into the prompt", () => {
-    const out = renderPrompt({ ...base, guidance: "I care about the evidence" });
-    expect(out).toContain("WHAT THIS READER IS AFTER");
-    expect(out).toContain("I care about the evidence");
+  it("carries the reader's profile into the prompt", () => {
+    const out = renderPrompt({ ...base, profile: "About the reader: a physicist" });
+    expect(out).toContain("WHO IS READING THIS");
+    expect(out).toContain("a physicist");
   });
 
-  it("says nothing at all about a steer when there is none", () => {
+  it("says nothing at all about a reader when there is none", () => {
+    expect(renderPrompt(base)).not.toContain("WHO IS READING THIS");
+  });
+
+  /* **And no trace of the steer that used to sit beside it.** Its header would
+     be a prompt teaching the model to expect an instruction nothing can now
+     supply — and the deletion has to reach the renderer rather than only the
+     box, which is exactly the half of a removal that gets left behind. */
+  it("has no steer header left in it, with or without a profile", () => {
     expect(renderPrompt(base)).not.toContain("WHAT THIS READER IS AFTER");
+    expect(renderPrompt({ ...base, profile: "About the reader: a physicist" })).not.toContain(
+      "WHAT THIS READER IS AFTER",
+    );
   });
 
-  /* The steer is a note about emphasis, and the prompt has to say so where the
-     note is, not only three thousand tokens above it in SYSTEM. A constraint
-     that far from the thing it constrains is one the model has stopped
-     weighing by the time it reads the article. */
-  it("re-bounds the steer where it stands", () => {
-    const out = renderPrompt({ ...base, guidance: "the economics" });
-    expect(out).toContain("never what the article says");
+  /* The profile is a note about emphasis, and the prompt has to say so where
+     the note is, not only three thousand tokens above it in SYSTEM. A
+     constraint that far from the thing it constrains is one the model has
+     stopped weighing by the time it reads the article. */
+  it("re-bounds the profile where it stands", () => {
+    const out = renderPrompt({ ...base, profile: "About the reader: an economist" });
+    /* The proportions clause specifically, and a needle that does not cross the
+       line wrap — `profileSection` breaks "It changes nothing / about what the
+       article says", so the obvious longer phrase matches nothing and the test
+       fails on the formatting rather than on the promise. */
+    expect(out).toContain("nothing about its proportions");
   });
 
   it("puts the block ids in front of the model", () => {
@@ -826,8 +892,8 @@ describe("SummaryPanel", () => {
    * All three are about the same thing from different sides: a summary is only
    * allowed to exist here if it is a *door* into the passage rather than a
    * substitute for it (vision.md, principle 2). Ids you can press are the door,
-   * a bigger click target is the handle, and the steer is what stops a reader
-   * asking the model to summarise something other than the article.
+   * a bigger click target is the handle, and the citations are what stop a
+   * summary standing in for the passage it points at.
    */
   const cited: Summaries = {
     ...SUMMARIES,
@@ -887,24 +953,14 @@ describe("SummaryPanel", () => {
     expect(out).toContain('class="summ-title"');
   });
 
-  it("offers a steer, closed, when nobody has given one", () => {
-    expect(html()).toContain("Steer these summaries");
-    expect(html()).not.toContain("summ-steer-box");
-  });
-
-  it("shows the steer these summaries were written with", () => {
-    /* Open and filled, which is the honest half of the feature: a steered
-       summary that looks like an ordinary one is one the reader cannot weigh.
-       It is also what explains why a section reads the way it does. */
-    const steered: Summaries = { ...SUMMARIES, guidance: "I care about the evidence" };
-    const out = html({ access: owned({ summaries: steered }, steered) });
-    expect(out).toContain("summ-steer-box");
-    expect(out).toContain("I care about the evidence");
-  });
-
-  it("offers the steer on a stale article too", () => {
-    // The foot is hidden while the summaries are stale, so without this the one
-    // article most likely to be rewritten is the one you cannot steer.
-    expect(html({ access: owned({ stale: true }) })).toContain("Steer these summaries");
+  /* **The steer box is gone**, and its absence is worth a test rather than a
+     deleted one: three of these panel states rendered it, and a removal that
+     leaves one behind leaves a box that still collects text nothing sends.
+     docs/plans/steer-becomes-the-profile.md. */
+  it("offers no steer box, in any of the states that used to draw one", () => {
+    for (const state of [html(), html({ access: owned({ stale: true }) })]) {
+      expect(state).not.toContain("summ-steer");
+      expect(state).not.toContain("Steer these summaries");
+    }
   });
 });
