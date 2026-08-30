@@ -97,6 +97,13 @@ thinking made the model *more* certain these were not paragraphs: five dropped i
 > A retry that gives the model more room to think will not fix a question that has no answer. It
 > will make the model better at declining it.
 
+The two attempts dropped different ordinals — `6, 14, 17, 20` then `6, 10, 11, 14, 16`, overlapping
+on two — and it is tempting to read a moving set as the signature of an answer that got too long,
+against a fixed set as the signature of a few hard questions. That inference does not hold. There
+are **eight** unlabellable blocks here, not four, and nothing requires a model to decline the same
+subset of eight twice. What discriminates is not whether the indices move but what sits at them: the
+drops move around inside the pool of fragments and never once leave it.
+
 ## Symptom 2: a heading that is not a heading block
 
 The article has exactly one `kind: "heading"` block — the `<h1>` title. `Notes` is a `<b>`, so it is
@@ -115,6 +122,70 @@ the log's exact node id, `n0025`.
 [toc-max-tokens.md](toc-max-tokens.md)) and it is the only thing standing between a model that
 invents structure and a sidebar that lies. The bug is not that it fires. The bug is *where* it
 fires.
+
+## This is not one article
+
+The same survey, run over every article in `data/` — gistable blocks of one word or less:
+
+| article | blocks | headings | fragments | what they are |
+|---|---|---|---|---|
+| `greatwork` | 330 | 1 | **89** | `[1]` … `[89]`, the same footnote markers |
+| `consciousness` | 499 | 23 | 24 | mostly `[edit]` — Wikipedia's own section links |
+| `spaced-repetition` | 372 | 27 | 19 | section names that arrived as text |
+| `meditations-on-moloch` | 289 | 1 | 8 | `I.` `II.` … `VIII.` — the section numerals |
+| `read` | 23 | 1 | 8 | the table above |
+| `arxiv-2308` | 669 | 50 | 8 | `Abstract`, `Authors`, `Contents` … |
+| `scaling-hypothesis` | 186 | 25 | 6 | `Appendix`, `Backlinks`, `Bibliography` … |
+| `constitution`, `revistes-ub-30977`, `source`, `source-2`, `what-if…` | | | 1 each | a section name as text |
+| `noema-mythology-of-conscious-ai`, `writes` | | | 0 | clean |
+
+**Thirteen of fifteen carry at least one, and `greatwork` carries 89.** It is another
+`paulgraham.com` essay with the same footnote markup and one heading, so it has both halves of this
+bug at thirteen times the scale, sitting in the corpus undetected because nobody has re-ingested it.
+
+`meditations-on-moloch` is the other instructive one: one heading, and its eight section numerals are
+text blocks. That is `Notes` again — a section header the model can see and `checkTree` cannot.
+
+## A third failure mode, found while testing the headings hypothesis
+
+`writes` is the control that matters: another Paul Graham essay, 19 blocks, one heading, and **zero
+fragments** — it has no footnotes, so stage 3 gives it a clean block list. Running the structure call
+three times on it:
+
+```
+writes  (19 blocks, 1 heading)   run 1: 16 internal nodes    run 2: THREW    run 3: 11 internal nodes
+source  (41 blocks, 5 headings)  run 1: THREW    run 2: 16 internal nodes    run 3: 17 internal nodes
+```
+
+Both throws are `buildTree`'s tiling check — *"child 3 leaves a gap of 1 block"*, *"child 5 overlaps
+the one before it by 1 block"*. **Two of ten structure calls made today returned a tree whose
+children do not partition their parent**, and it happened on the well-headed article too. That is a
+much higher base failure rate for stage 4 than anything here had assumed, it is independent of
+headings and of fragments, and it is its own finding.
+
+## Does the carving move when there are no headings?
+
+It does, and less than the failures do. Measuring the *boundaries* rather than the section count —
+two runs can both produce nine sections and cut in nine different places — as the Jaccard similarity
+between the sets of block indices at which some internal node begins:
+
+| article | headings | fragments | boundary agreement between runs |
+|---|---|---|---|
+| `writes` | 1 | 0 | **0.55** |
+| `source` | 5 | 1 | **0.91** |
+
+So an article with no headings really is carved differently each time, and one with headings is
+carved nearly identically. One pairwise comparison each is a direction, not a measurement, but it
+agrees with `read`, whose four runs produced 32, 34, 34 and 36 nodes.
+
+**It is not, however, the mechanism behind either failure here, and it is worth being exact about
+why.** The four `read` runs carved the article four different ways and *all four* claimed
+`sourceHeading: "Notes"` and were rejected. The failure is invariant to the carving: wherever the
+model chooses to start the Notes section, `Notes` is still a `<b>` and still not a heading block. The
+same goes for the labels — a fragment is unlabellable in whichever batch it lands in.
+
+Unstable carving is a real property of headingless articles and it is worth designing for. It is not
+what cost $0.39 today.
 
 ## Why it cost $0.39 rather than $0.11
 
@@ -228,6 +299,18 @@ And the second half, which is what made it expensive rather than merely wrong:
 > Check a model's claims about our own data at the moment we parse them, not at the moment we would
 > otherwise have to. Everything needed to reject `sourceHeading: "Notes"` was in memory before the
 > call was made.
+
+## What is still open
+
+**Two structure calls in ten returned an untileable tree**, on a well-headed article as readily as on
+a headingless one. `buildTree` catches it and throws, so it is loud rather than dangerous, but it
+means a stage-4 attempt has a substantial per-call chance of costing ~$0.05 and producing nothing —
+before any of the bugs above are involved. It needs its own measurement over more than ten calls, and
+it is not this bug.
+
+**Carving instability on headingless articles** is measured above at 0.55 boundary agreement against
+0.91. It causes none of the failures here, but it means the sidebar for such an article is a
+different sidebar on every regeneration, which matters for anything that stores a node id.
 
 ## See also
 
