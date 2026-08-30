@@ -50,7 +50,7 @@ import { STEPS, STEP_ORDER } from "../src/pipeline.js";
 import { createFsArtifactStore, fsArtifacts } from "../src/store/artifacts-fs.js";
 import type { ArtifactStore } from "../src/store/artifacts.js";
 import type { StepName } from "../src/types.js";
-import { copyArtefacts, readParts } from "./helpers/artefacts.js";
+import { copyArtefacts, readParts } from "../src/store/copy-artefacts.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const SLUG = "writes";

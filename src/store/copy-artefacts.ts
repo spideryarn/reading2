@@ -3,39 +3,42 @@
  *
  * ## Why this exists
  *
- * `db:import` is being deleted (docs/plans/delete-the-importer.md). Three test
- * suites currently use it to get an article into Postgres —
- * `tests/store-parity.test.ts`, `tests/store-roundtrip.test.ts` and
- * `tests/chat-anchor.test.ts` — and they need some other way to do that or they
- * go with it.
+ * Because the ten pipeline stages still write their own files inside `run()`
+ * (`LEGACY_UNCONVERTED_STEPS`, src/pipeline.ts), and a job that has finished
+ * running them has an article on a disk and nothing in Postgres. Something has
+ * to carry it across, and this is that thing: a loop over `produces` between two
+ * `ArtifactStore`s, so every byte of it goes through the interface production
+ * ships on.
  *
- * **The rejected answer was a stripped-down importer kept for tests.** It would
- * be a second implementation of files → Postgres, free to drift from the
- * production write path, and the drift would be invisible because tests would
- * be the only thing exercising it.
+ * **The rejected answer was a stripped-down importer.** It would be a second
+ * implementation of files → Postgres, free to drift from the production write
+ * path — and `db:import` is being deleted precisely because it is that
+ * (docs/plans/delete-the-importer.md).
  *
- * This is the other answer, and it turned out to need no parsing code at all:
- * reading an artefact from a directory is `fsArtifacts.read`, and writing it to
- * Postgres is `pgArtifacts.write`. So the "fixture loader" is a loop over
- * `produces` between two `ArtifactStore`s, and every byte of it goes through
- * the interface production ships on. A test built on this is *more* honest than
- * one built on the importer, not less.
+ * ## It was a test helper until 2026-08-30
+ *
+ * It lived at `tests/helpers/artefacts.ts` and was written to replace `db:import`
+ * as a fixture loader for three suites. `src/store/publish-session.ts` now calls
+ * it on the real ingest path — a finished job's files become the revision a
+ * reader opens through exactly these calls — so it is production code and lives
+ * here. `tests/helpers/load-article.ts` still uses it, and that is the point:
+ * the fixture loader and the ingest run the same copy.
  *
  * ## What it deliberately does not do
  *
  * **It is not `db:import`.** It does not touch the reader's own state —
  * comments, chat, searches, glossary lookups, the shelf — because
  * `ArtifactStore` explicitly excludes all of it (src/store/artifacts.ts). Any
- * suite that needs reader state must put it there through the live reader
- * stores, which is what `tests/store-roundtrip.test.ts` will do.
+ * caller that needs reader state must put it there through the live reader
+ * stores.
  *
  * **It does not publish.** Writing artefacts and making a draft the article a
- * reader sees are two different acts, and `publishRevision` has guards worth
+ * reader sees are two different acts, and `publishRevisionIn` has guards worth
  * running rather than routing around. The caller publishes.
  */
-import { STEPS, STEP_ORDER } from "../../src/pipeline.js";
-import type { ArtifactKind, ArtifactParts, ArtifactStore, StepStamp } from "../../src/store/artifacts.js";
-import type { StepName } from "../../src/types.js";
+import { STEPS, STEP_ORDER } from "../pipeline.js";
+import type { ArtifactKind, ArtifactParts, ArtifactStore, StepStamp } from "./artifacts.js";
+import type { StepName } from "../types.js";
 
 /**
  * Everything `store` holds for one step, as the argument `write` wants.
@@ -76,7 +79,7 @@ async function stampOrEmpty(store: ArtifactStore, slug: string, step: StepName):
  * Returns the steps it actually copied, so a caller can assert on the set. A
  * silent no-op over an article the source store has never heard of is exactly
  * the shape this repo keeps being caught by
- * (docs/reusable/silent-success.md), and an empty array is how a test sees it.
+ * (docs/reusable/silent-success.md), and an empty array is how a caller sees it.
  */
 export async function copyArtefacts(
   from: ArtifactStore,
@@ -91,7 +94,7 @@ export async function copyArtefacts(
        two outputs and then calling `finishStep` would record a step as having
        completed while half of what it declares is missing — and an unstamped
        step's run row is exactly what `articleMetadata` trusts. `has` requires
-       all-of-them for the same reason; a partial source is a broken fixture,
+       all-of-them for the same reason; a partial source is a broken article,
        and a loud refusal beats a copy that looks like it worked.
        GPT Sol, 2026-08-27; docs/plans/c1-c2-code-review-sol.md finding 5. */
     const wanted = STEPS[step].produces;
@@ -111,14 +114,14 @@ export async function copyArtefacts(
        forgiving — carry-forward means a value can be present because the
        previous revision had it, so completion is a `revision_step_runs` row
        with `status = 'done'` and nothing else will do. A copy that skipped this
-       would land artefacts that store reports incomplete, and every suite built
-       on it would fail for a reason that has nothing to do with what it tests.
+       would land artefacts that store reports incomplete, and every reader of
+       it would fail for a reason that has nothing to do with the copy.
 
        GPT Sol found this against the first version of this file, which called
        `write` only; docs/plans/delete-the-importer-review-2-sol.md finding 2.
        Running the same three calls in the same order as the runner is also the
-       point of the helper — a fixture that takes a shortcut through the seam is
-       a fixture that stops proving the seam works. */
+       point of the helper — a copy that takes a shortcut through the seam is a
+       copy that stops proving the seam works. */
     const attempt = await to.beginStep(slug, step);
     await to.write(slug, step, parts, await stampOrEmpty(from, slug, step));
     await to.finishStep(slug, step, attempt);

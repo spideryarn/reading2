@@ -1676,7 +1676,7 @@ when("the store, assembled", () => {
   it("runs a step end to end through the interface alone", async () => {
     /* begin → write → finish, the same three calls in the same order as the
        runner, through `ArtifactStore` and nothing else. This is what
-       `copyArtefacts` drives (tests/helpers/artefacts.ts), and it is what C7's
+       `copyArtefacts` drives (src/store/copy-artefacts.ts), and it is what C7's
        replacement suites will use in place of `db:import`. */
     await withClaim(async (tx, claimed) => {
       const store = pgArtifactsIn(claimed, tx);

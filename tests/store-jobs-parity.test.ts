@@ -95,7 +95,7 @@ const STRANGER = "00000000-0000-4000-8000-0000000000b5" as OwnerId;
  * A private owner is not enough on its own, because the two rules that matter
  * most here are not scoped to an owner at all: `jobs_only_one_running` is a
  * unique index on `(true)` over every running row in the table, and
- * `failExpired` sweeps the whole table and returns a count this file asserts
+ * `failExpired` sweeps the whole table and returns the ids this file asserts
  * exactly. So a second copy holding a claim makes this one's `claimed` come
  * back `busy`, and its expiries are added to this one's total. Measured with
  * the lock taken out and the owner already unique per run: two copies at once,
@@ -473,7 +473,7 @@ for (const adapter of ADAPTERS) {
       expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
 
       await adapter.expire(job.id);
-      expect(await store.failExpired()).toBeGreaterThanOrEqual(1);
+      expect(await store.failExpired()).toContain(job.id);
       await adapter.reattach(job.id, attempt);
 
       // id matches, attempt matches. Only `status = 'running'` refuses this.
@@ -523,7 +523,7 @@ for (const adapter of ADAPTERS) {
 
       // Its lease runs out and the sweep fails it. The claimant does not know.
       await adapter.expire(job.id);
-      expect(await store.failExpired()).toBeGreaterThanOrEqual(1);
+      expect(await store.failExpired()).toContain(job.id);
       expect((await store.get(job.id, OWNER))?.status).toBe("error");
 
       await adapter.reattach(job.id, attempt);
@@ -558,7 +558,11 @@ for (const adapter of ADAPTERS) {
       await store.enqueueOrGet(dead, "k1");
       await store.claim(dead.id, OWNER, mintAttempt(), LEASE);
       await adapter.expire(dead.id);
-      expect(await store.failExpired()).toBe(1);
+      /* **The ids, not a count.** A sweep that returns `1` cannot say *which* job
+         it failed, and this case is precisely about one job being swept while a
+         live one is left alone — so naming the id is the assertion, and the
+         count never was. */
+      expect(await store.failExpired()).toEqual([dead.id]);
       const failed = await store.get(dead.id, OWNER);
       expect(failed?.status).toBe("error");
       /* `retry`, said rather than left to the absent-means-yes rule — both offer
@@ -571,7 +575,7 @@ for (const adapter of ADAPTERS) {
       const alive = aJob();
       await store.enqueueOrGet(alive, "k2");
       await store.claim(alive.id, OWNER, mintAttempt(), LEASE);
-      expect(await store.failExpired()).toBe(0);
+      expect(await store.failExpired()).toEqual([]);
       expect((await store.get(alive.id, OWNER))?.status).toBe("running");
     });
 
@@ -651,7 +655,7 @@ for (const adapter of ADAPTERS) {
       expect((await store.claim(waiting.id, OWNER, mintAttempt(), LEASE)).kind).toBe("busy");
 
       await adapter.expire(dead.id);
-      expect(await store.failExpired()).toBeGreaterThanOrEqual(1);
+      expect(await store.failExpired()).toContain(dead.id);
 
       const after = await store.get(dead.id, OWNER);
       expect(after?.status).toBe("error");

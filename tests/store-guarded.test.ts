@@ -50,6 +50,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 import { ChatConflict } from "../src/chat.js";
+import { ProductRefused } from "../src/store/artifacts.js";
 import { guardDbStore, isGuardedStore } from "../src/store/db-errors.js";
 import { CheckpointRequestError } from "../src/store/checkpoints.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
@@ -340,6 +341,28 @@ describe("the errors the guard must not eat", () => {
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(CheckpointRequestError);
     expect((err as Error).message).toContain("not a usable checkpoint key");
+  });
+
+  /**
+   * The sixth entry, added 2026-08-30 with the transactional store session
+   * (docs/plans/delete-the-importer.md § D1b), and found the same way as the
+   * fifth: by asking a guarded store what message it actually produced.
+   *
+   * `checkProduct` (src/store/session.ts) refuses a step's product **before**
+   * the commit opens a transaction, so none of its four refusals has been near
+   * a database — and the transactional session returns its object through this
+   * wrapper. Scrubbed, *"arc returned a product missing arc, so nothing was
+   * written"* became *"this app asked its database for something it would not
+   * do"*: a false sentence about a real bug, minus the half that says which
+   * artefact is missing. It needs no database, which is the point of it being
+   * here rather than only in tests/store-pg-session.test.ts.
+   */
+  it("lets a refused product through as itself", async () => {
+    const err = await throwing(new ProductRefused("arc returned a product missing arc"))
+      .go()
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ProductRefused);
+    expect((err as Error).message).toContain("missing arc");
   });
 
   /** The one that was already on the list, kept honest. */

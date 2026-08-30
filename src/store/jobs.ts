@@ -187,13 +187,20 @@ export interface JobStore {
   finish(id: string, attempt: string, ending: JobEnding): Promise<Job>;
 
   /**
-   * Fail every job whose lease has run out, and say how many.
+   * Fail every job whose lease has run out, and say **which**.
    *
    * **Not a takeover.** The job is marked `error` with a sentence saying it was
    * interrupted, and Retry is the reader's to press — which costs a click and
    * removes the whole class of two-claimants-one-article. See the header.
+   *
+   * **The ids, not a count.** A sweep is the only account there is of a claimant
+   * that stopped answering — the process that was inside the job is gone and
+   * logged nothing on its way out — and `failed 1 job(s)` cannot be joined to
+   * anything. Both stores already have the ids in hand: the `UPDATE` returns
+   * them, and the filesystem adapter is looping over them. GPT Sol, 2026-08-30,
+   * docs/plans/v1-imports-review-sol.md § Remaining operational points.
    */
-  failExpired(now?: Date): Promise<number>;
+  failExpired(now?: Date): Promise<string[]>;
 
   /**
    * The job queued or running for this slug, if there is one.

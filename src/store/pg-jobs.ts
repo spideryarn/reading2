@@ -271,7 +271,7 @@ const rawPgJobStore: JobStore = {
     return finishIn(getDb(), id, attempt, ending);
   },
 
-  async failExpired(now: Date = new Date()): Promise<number> {
+  async failExpired(now: Date = new Date()): Promise<string[]> {
     const db = getDb();
     const failed = await db
       .update(jobs)
@@ -306,7 +306,9 @@ const rawPgJobStore: JobStore = {
         ),
       )
       .returning({ id: jobs.id });
-    return failed.length;
+    /* The ids the statement already returns. It has selected them since the day
+       it was written — only the count was being kept. */
+    return failed.map((row) => row.id);
   },
 
   async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {

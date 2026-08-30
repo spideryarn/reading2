@@ -77,7 +77,7 @@ import {
   publishRevision,
 } from "../../src/store/pg-revisions.js";
 import type { JobStep, StepName } from "../../src/types.js";
-import { copyArtefacts } from "./artefacts.js";
+import { copyArtefacts } from "../../src/store/copy-artefacts.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 

@@ -351,9 +351,9 @@ export const fsJobStore: JobStore = {
     return structuredClone(job);
   },
 
-  async failExpired(now: Date = new Date()): Promise<number> {
+  async failExpired(now: Date = new Date()): Promise<string[]> {
     await ready();
-    let failed = 0;
+    const failed: string[] = [];
     for (const [id, held] of attempts) {
       if (held.expires > now.getTime()) continue;
       const job = index.get(id);
@@ -365,7 +365,7 @@ export const fsJobStore: JobStore = {
       job.finishedAt = new Date().toISOString();
       delete job.cancelling;
       await persist(job);
-      failed++;
+      failed.push(id);
     }
     return failed;
   },
