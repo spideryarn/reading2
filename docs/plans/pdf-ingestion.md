@@ -1808,11 +1808,14 @@ It matters beyond this article for two reasons, both from the session working on
   outside the repair envelope by design, so the claim that the repairs recover every measured
   structure failure — which was the stated reason a fallback tree was judged unnecessary — has a
   counterexample now.
-- **All four earlier observations came from HTML articles with headings.** A PDF's text is a model
-  transcription with no heading structure at all, which is the half where the recipe was measured
-  disagreeing with itself (8, 7, 8 and 3 parts from byte-identical input). PDF ingest reaching
-  production means the ToC stage started being handed a kind of article it had never been exercised
-  against, and the first thing it did was fail in a new way.
+- **All four earlier observations came from HTML articles with headings** — and "four observations"
+  flatters them. They are **two from one paid calibration eval (2026-08-30) and two from one
+  postmortem** ([the-article-with-one-heading.md](../postmortems/the-article-with-one-heading.md)):
+  two sources, one corpus, every article HTML and headed. A PDF's text is a model transcription with
+  no heading structure at all, which is the half where the recipe was measured disagreeing with
+  itself (8, 7, 8 and 3 parts from byte-identical input). PDF ingest reaching production means the
+  ToC stage started being handed a kind of article it had never been exercised against, and the
+  first thing it did was fail in a new way.
 
 `https://spideryarn.com/add/https://arxiv.org/pdf/1503.02531` reproduces it: everything through
 `blocks` now succeeds reliably, so this is the fixture the headingless case has never had.
