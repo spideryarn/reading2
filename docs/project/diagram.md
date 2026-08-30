@@ -1,7 +1,9 @@
 # Diagram mode
 
-The article as a picture, in the middle band — three of them, one toggle, and
-the reader's position marked on every one.
+The article as a picture, in the middle band — four of them, one toggle, and the
+reader's position marked on every one. Three are geometry over the article's own
+tree; the fourth is [a model's drawing](#sketch), and it is the only one that is
+not the same shape for every article.
 
 - **The geometry** — [`src/web/diagram.ts`](../../src/web/diagram.ts) for the
   shared vocabulary, [`diagram-d3.ts`](../../src/web/diagram-d3.ts) for the
@@ -39,7 +41,11 @@ It is a **mode**, in the sense [url-state.md](url-state.md) and
 and the prose, the article stays exactly where it was, and `?mode=diagram` says
 so. The fifth one, and it cost `MODES` one word.
 
-## The three pictures
+## The three computed pictures
+
+The three below are one family: each answers one question with one algorithm over
+the article's tree, so each draws the same shape whatever the article is.
+[Sketch](#sketch) is the fourth and is not one of them.
 
 ```
           force                    drift / trail
@@ -617,6 +623,50 @@ in place: any *new* branch in the panel could reach for `kind` and be wrong
 again. `layoutDiagram` returning null removes the second value entirely, so
 there is nothing left to disagree with.
 
+#### And then they sprang back, which was not the picture's fault at all
+
+Greg, 2026-08-30:
+
+> the up/down buttons … don't seem to work very reliably. I press them, something changes, and
+> then sometimes it seems to revert back to the active node it was on.
+
+Exactly right, and the cause was one line in a file this panel does not own. `?at=` holds a block id,
+and the scroll spy that writes it is **section-granular**
+([url-state.md § the unit is a section](url-state.md#the-unit-is-a-section-not-a-position)) — it
+compared what it had measured against *the value in the address*. That is
+the same question only while every value in the address is a section — and a rung on Trail or Drift
+is a **paragraph**. So a press put a paragraph there, the spy computed the enclosing section, found
+the two different, and wrote the section's first block back over it when the queued position write
+landed. The mark moved and reverted.
+
+It looked like a scatter bug and mostly was one. On a normal three-deep tree Force's rungs and the
+spy's sections are the same rows, so nothing sprang back there — but only by coincidence: Force is
+capped at depth 2 and the spy uses `leafDepth - 1`, and on a *shallow* depth-2 tree Force's leaves
+are paragraphs inside depth-1 sections and it springs back too. Two numbers that agree on the
+common case and are not the same number. ⟨Sol⟩, correcting the first write-up of this.
+
+The flicker is the half you can see. The half you can measure is worse: the address was now back at
+the top of the section, so the *next* press computed its target from there and landed on the rung it
+had just used. Four presses of ↓ in the reproduction land on the same row four times, and that is
+what "don't work very reliably" was.
+
+Two things follow, and neither of them is in this file:
+
+- The spy now asks **"is the reader still inside the section the address already names?"** — so a
+  finer value a jump put there stands until they leave. `positionToWrite` in
+  [`position.ts`](../../src/web/position.ts).
+- **A jump of ours in flight writes nothing**, because `glide` animates with `window.scrollTo` on
+  every frame and the spy would otherwise name every section the page flew over — which loses the
+  target of a click on a distant dot exactly as the first bug lost the target of a button press.
+  GPT Sol found that one in review of the fix, before it shipped.
+
+The whole write-up, with the commit that made the assumption false and the four removal probes, is
+[the-spy-wrote-a-section-over-the-paragraph.md](../postmortems/the-spy-wrote-a-section-over-the-paragraph.md).
+
+And one that is: `DiagramBand` took `?at=` by reading `location.search` at render time, which the
+other bands can afford and this one cannot. `jumpTo` writes the URL on the next task, so a second
+press inside that window stepped from the stale row. It is a prop now. Same review.
+
 **The picture scrolls to keep up.** `.diag-scroll` nudges the marked node into
 view when it goes out of it — keyed on the target rather than on scroll events,
 so it never has to ask whether a scroll was ours or the reader's, and suppressed
@@ -923,34 +973,157 @@ one worth attacking if this ever becomes a problem, and it is not this feature's
 to fix. What is *not* measured here is React re-rendering 276 `<g>` elements on
 each of those, which is a browser question rather than an arithmetic one.
 
-## A fifth, being built: Sketch
+## The fourth: Sketch
 
 <a id="sketch"></a>
 
-> I've been disappointed by Diagram mode so far. … Let the agent decide the
-> layout completely.
+> I've been disappointed by Diagram mode so far. … the goal is to provide some
+> kind of helpful sense of the whole document's structure. … if the writer says
+> they're going to make 3 arguments for X, that might be represented as 3
+> columns that converge back. … Let the agent decide the layout completely.
 >
 > — Greg, 2026-08-30
 
-**Not in the band yet** — the stage, the schema, the painter and the harness
-exist and three real articles have been drawn; the artefact, the pipeline step
-and the panel have not been wired up. Everything about it, including the review
-that found what would have shipped a blank picture as a success, is in
-[sketch-diagram.md](../plans/sketch-diagram.md).
+The three pictures above each answer one question with one algorithm, so every
+article comes out the same shape. **Sketch has no algorithm**: a model reads the
+piece, decides what shape the argument is — a funnel into a convergence, a
+priority ladder beside its own elaboration, a spine with asides — and lays it out
+itself. On the constitution it drew the four values beside the four body
+sections in matching hues, so the reverse-order correspondence is visible without
+reading a word. Nothing else here could have found that.
 
-The short version, because it bears on the section below. The three pictures
-above each answer one question with one algorithm, so every article comes out
-the same shape. Sketch has no algorithm: a model reads the piece, decides what
-shape the argument is — three supports converging, a ladder, a spine with asides
-— and lays it out itself.
+The whole design, the measurements, the review it survived and what a reader who
+had not read the articles made of the pictures are in
+[sketch-diagram.md](../plans/sketch-diagram.md). What follows is what the reader
+touches.
 
-**It does not emit SVG**, which is what makes it a different answer from the one
-this file rejects below rather than the same one again. The model writes a
-*scene* in five primitives with numbers in them
-([`src/sketch-scene.ts`](../../src/sketch-scene.ts)), and the numbers are checked
-against the article before anything is drawn: every block id has to exist, every
-edge has to name a node that is there, and the picture is measured for whether it
-still runs down the page. A structure you can check is the whole difference.
+### It does not emit SVG, and that is the design
+
+The model writes a **scene** in five primitives with numbers in them —
+[`src/sketch-scene.ts`](../../src/sketch-scene.ts) — and the numbers are checked
+against the article before anything is drawn. Every `block` id has to exist,
+every edge has to name a node this scene has, every path is `M L C Q A Z` with
+the right arity, and the picture is *measured*: whether it still runs down the
+page with the article, how much of the piece nothing points into, how much of it
+is drawn on top of itself, how much text will not fit its shape.
+
+That is what makes it a different answer from the generated image
+[§ What is deliberately not here](#not-doing) rejects, rather than the same one
+again — *an image of a structure cannot be checked against the structure*, and a
+scene can. It is also why this is not the first model-authored markup the app
+renders: there still is none.
+
+**The layout really is entirely the model's.** Every position, shape, grouping
+and line. What it does not get is the vocabulary, the palette or the type scale,
+and a `tone` is a group marker that the stylesheet turns into one of the eight
+positional hues through the same `--cat-rgb` indirection everything else uses.
+
+### Where the pieces are
+
+| | |
+|---|---|
+| the schema, the validator, the score, the acceptance boundary | [`src/sketch-scene.ts`](../../src/sketch-scene.ts) |
+| scene → drawing primitives, no DOM | [`src/sketch-paint.ts`](../../src/sketch-paint.ts) |
+| the prompt and the model call | [`src/sketch.ts`](../../src/sketch.ts) |
+| the panel | [`src/web/SketchView.tsx`](../../src/web/SketchView.tsx), [`useSketch.ts`](../../src/web/useSketch.ts), `§ sketch` in [`styles.css`](../../src/web/styles.css) |
+| the harness that renders one offline | [`evals/sketch/`](../../evals/sketch/) |
+
+**One painter, two sinks.** `sketch-paint.ts` is pure and returns primitives;
+the panel maps each to an element and hangs the handlers off the nodes, and the
+offline harness serialises the same primitives to a standalone `.svg`. A second
+painter in the panel would be two answers to one question, and the one that
+drifts is the one nobody is looking at when a prompt is being judged.
+
+**Its own component, not a fourth branch of `DiagramPanel`.** The other three
+are a `DiagramLayout` and every control under the chips is about it — the roving
+tabstop over `layout.nodes`, the step bar over `stepStops`, the footer card over
+a `SummaryNode`. A scene is none of those and has its own. Splitting once, below
+the chip row, is what keeps the other three unbraided.
+
+### The scene is checked again in the browser
+
+`readSketch` runs on the server before the artefact is written **and** in
+[`useSketch.ts`](../../src/web/useSketch.ts) when it arrives. That is not a
+duplicate. What comes back from `/api/sketch/:slug` is a stored artefact that may
+have been written by an older schema, or against an article that has since been
+re-ingested and has different block ids — so the panel drops what it cannot draw
+before drawing anything, and what it drops is the *unreachable*, never the
+picture. An unknown block id costs a node its click and leaves the node standing.
+The count comes back so the reader can be told the picture is older than the
+article, rather than being quietly handed a diagram whose clicks do nothing.
+
+It is the same rule at both ends of a wire that has a database and a year in the
+middle of it.
+
+### What it costs, and what that decides
+
+**One model call, 121–194 seconds, about $0.20** — measured over seven draws of
+five articles. That is the slowest single thing in the app and four times the
+glossary, and three consequences follow from it rather than from taste:
+
+- **Never the default and never in an ingest.** `sketch` is off
+  `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`, so nothing sweeps it in.
+- **The empty state says the price before the press**, not after it — a reader
+  who presses a button and then watches a spinner for two minutes with no idea
+  why is owed the sentence.
+- **It is in `FORCE_ONLY_WHEN_NAMED` for a third reason the others do not have**,
+  and it is about the clock rather than the money: every step self-aborts at 400s
+  inside an 800s invocation that must also fit a `toc` measured at 320s. A
+  positional cascade that swept this in beside `toc` would not waste a call, it
+  would run the invocation out of time — and that fails as a platform kill that
+  takes the whole job rather than as a recorded failure.
+
+**The first converted step.** Its nine neighbours all write their own file inside
+`run()`, which works on a laptop and cannot work through a store that puts the
+artefact in a Postgres column. `generateSketch` writes nothing and hands the
+scene back; the step returns it as `parts`, the CLI writes `sketch.json`, the
+harness writes into a results directory.
+
+### 288px is not a size a diagram fits in
+
+The canvas is 760 units and the band is 288–400px, so scaled to fit, 12-unit text
+lands at about 5px. That is the band being narrow rather than a bug to solve, and
+the two things a reader wants are genuinely different — so there are two sizes
+and one button:
+
+- **Fit** shows the *shape*, which is what this picture is for and which survives
+  being small. The words do not, so hovering or focusing anything puts its full
+  text in the card underneath.
+- **Read** draws it at its own size and lets the band scroll both ways.
+
+### Interaction
+
+- **Click a node** → if it has an `opens`, the picture zooms into that scene;
+  otherwise the article jumps to its block. **`opens` wins**, because the
+  picture's own gesture is "go deeper" and a click that sometimes zoomed and
+  sometimes scrolled the article would be a control nobody can predict. The jump
+  is still there, from the card, where it is labelled — available and never a
+  surprise.
+- **A breadcrumb** goes back; Escape goes back.
+- **Hover or focus** → the card below. Fixed height, like `.diag-card` and for
+  the same reason: a card that grew with its text would resize the picture above
+  it every time the pointer crossed a box.
+- **Keyboard** → one tab stop, arrows inside it, Enter activates. A `listbox` of
+  `option`s rather than a `tree`, for the reason Drift and Trail are: a scene is
+  not a hierarchy and there is nothing to open.
+- **Where you are** is a ring on the deepest node at or above the reader's row,
+  and only on the overview — marking a position inside a zoom scene when the
+  reader is elsewhere would be a confident lie about where they are.
+
+### The shapes make claims, and the prompt says so
+
+The failure this picture has that none of the other three can: **it asserts
+things through its geometry that nobody wrote in words, and those assertions can
+be stronger than the article's.** Found twice by readers shown only the pictures
+— a numbered priority ladder on a document that says its order is "holistic
+rather than strict", and a decision diamond on a question the essay says cannot
+be settled. Neither was a wrong fact; both were the shape being more confident
+than the prose, and a reader cannot tell a confident drawing from a correct one.
+
+`SYSTEM` in [`src/sketch.ts`](../../src/sketch.ts) now names what each device
+claims, before the canvas and before the primitives, and asks the model to check
+each shape it used against the article. It is the most load-bearing section of
+that prompt.
 
 ## What is deliberately not here
 
