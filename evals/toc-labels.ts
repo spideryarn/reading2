@@ -83,6 +83,28 @@ export interface EvalReport {
    * having dropped nothing.
    */
   dropped: number | null;
+  /**
+   * Gistable blocks with no label that `labels.json` does **not** account for —
+   * the ids, not a count, and that is the whole of this field.
+   *
+   * It was `gistable - labelled - dropped.length`, which asks whether the two
+   * numbers add up and never whether they are about the same blocks. A `dropped`
+   * list of the right length naming the wrong ids — a stale file, a run whose
+   * drops were recorded from the wrong batch, an id that got sorted into the
+   * list twice — reported everything accounted for while the reader was missing
+   * a row somewhere else entirely. The producer's count was being trusted to
+   * measure the producer. GPT Sol's review of stage 1, 2026-08-31, finding 8.
+   */
+  unexplained: string[];
+  /**
+   * Blocks `labels.json` says were dropped which **do** have a label.
+   *
+   * The other half of the same set comparison, and it costs nothing to compute.
+   * A drop that is not a drop means the list and the labels were written from
+   * different states — the subtraction above could not see it either, because
+   * one phantom drop and one genuinely missing block cancel exactly.
+   */
+  phantomDrops: string[];
   batched: boolean;
   batches: number;
   length: { mean: number; min: number; max: number; outsideRange: number };
@@ -217,6 +239,12 @@ export function evaluate(
   const items = collect(tree, blocks, labelsFile);
   const gistable = blocks.filter((b) => b.gistable).length;
 
+  /* Which blocks are missing a label, by id, and which ones the stage says it
+     dropped — compared as sets rather than as two counts. See `unexplained`. */
+  const labelledIds = new Set(items.map((i) => i.blockId));
+  const missingIds = blocks.filter((b) => b.gistable && !labelledIds.has(b.id)).map((b) => b.id);
+  const reportedDrops = new Set(labelsFile?.dropped ?? []);
+
   /* Headings are excluded from length and vocabulary, and this is not tidying —
      it is the difference between a measure and noise. The prompt *requires* a
      heading's label to be its heading copied exactly, which is typically two to
@@ -250,6 +278,9 @@ export function evaluate(
     labelled: items.length,
     coverage: gistable === 0 ? 1 : items.length / gistable,
     dropped: labelsFile?.dropped?.length ?? null,
+    /* The set, both ways round — see `unexplained` and `phantomDrops`. */
+    unexplained: missingIds.filter((id) => !reportedDrops.has(id)),
+    phantomDrops: [...reportedDrops].filter((id) => labelledIds.has(id)),
     batched: labelsFile?.batches != null,
     batches: labelsFile?.batches?.length ?? 0,
     /* The tree is what the reader sees; labels.json is what the stage says it
@@ -297,13 +328,27 @@ function print(report: EvalReport): void {
      partial accept working as designed; or short by more than that, which is
      the fault the INCOMPLETE flag was put there for. Collapsing the middle case
      into the last one would have this eval cry wolf on every article with a
-     stripped code cell in it. */
-  const unexplained = report.gistable - report.labelled - (report.dropped ?? 0);
+     stripped code cell in it.
+     **By id rather than by subtraction** — a `dropped` list of the right length
+     naming the wrong blocks made the arithmetic balance while a row was missing
+     somewhere else. See `EvalReport.unexplained`. */
   console.log(
     `  labels        ${report.labelled} / ${report.gistable} gistable  (${pct(report.coverage)})` +
       (report.dropped ? `   ${report.dropped} dropped by the stage` : "") +
-      (unexplained > 0 ? `   ← INCOMPLETE, ${unexplained} unaccounted for` : ""),
+      (report.unexplained.length > 0
+        ? `   ← INCOMPLETE, ${report.unexplained.length} unaccounted for ` +
+          `(${report.unexplained.slice(0, 3).join(", ")})`
+        : ""),
   );
+  /* Its own line, because it means something different: the stage named a block
+     that does have a label, so its record and its output were written from
+     different states. Silent when there are none, like the repair lines. */
+  if (report.phantomDrops.length > 0) {
+    console.log(
+      `                ← ${report.phantomDrops.length} block(s) labels.json calls dropped are ` +
+        `labelled after all (${report.phantomDrops.slice(0, 3).join(", ")})`,
+    );
+  }
   console.log(
     `  generation    ${report.batched ? `${report.batches} batched calls` : "one whole pass (incumbent)"}`,
   );

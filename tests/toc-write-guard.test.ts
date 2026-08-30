@@ -237,6 +237,51 @@ describe("generateToc refuses to write an invalid tree", () => {
     expect(written.nodes[written.rootId]!.sourceHeading).toBeUndefined();
   });
 
+  /**
+   * **The evidence for revisiting `MAX_REPAIRED_BOUNDARIES`, on the one run
+   * where it is not otherwise collectable.**
+   *
+   * The bound's own comment says what would justify raising it is a measured
+   * distribution, and it used to point at the pipeline log for that. The log
+   * only ever sees a run that returned: when the bound fires, `buildTree`
+   * throws, `generateToc` never returns, and the repair figures for the answer
+   * that was actually refused go nowhere. So the numbers go in the error, and
+   * this is the test that they do — an assertion about the log would have been
+   * green while the interesting case was invisible. GPT Sol, finding 7.
+   *
+   * Two independent slipped boundaries: child 2 starts one late, and so does
+   * child 3. The first is mended, the second is past the bound.
+   */
+  it("says what it had already mended when it refuses a second slipped boundary", async () => {
+    await rm(path.join(DIR, "tree.json"), { force: true });
+    await rm(path.join(DIR, "labels.json"), { force: true });
+    const section = (title: string, from: number, to: number) => ({
+      title,
+      gist: `A stretch of the piece, from ${from} to ${to}.`,
+      range: [blocks[from]!.id, blocks[to]!.id],
+    });
+    modelTree = {
+      root: {
+        title: "The example",
+        gist: "Three parts, two of which start a block late.",
+        range: [blocks[0]!.id, blocks.at(-1)!.id],
+        children: [
+          section("First", 0, 0),
+          // Skips block 1 — the slip that gets mended.
+          section("Second", 2, 3),
+          // Skips block 4 — a second, independent slip, and past the bound.
+          section("Third", 5, blocks.length - 1),
+        ],
+      },
+    };
+    const { threw } = await run();
+    expect(threw).not.toBeNull();
+    expect(threw!.message).toMatch(/mended 1 boundary/);
+    expect(threw!.message).toMatch(/moving 1 block/);
+    expect(threw!.message).toContain("MAX_REPAIRED_BOUNDARIES");
+    expect(await wrote()).toEqual([]);
+  });
+
   /* The thrown message is written to the log by src/jobs.ts with `errorFields`,
      which keeps `message` and `stack`. Until 2026-08-29 the `sourceHeading`
      problem quoted the author's own heading back, so wiring this guard in would

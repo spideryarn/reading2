@@ -435,10 +435,16 @@ function markerFile(at: ArtifactLocations, step: StepName): string {
  * An artefact store over the filesystem.
  *
  * `locate` is how the fixture gets served. Most callers want the default —
- * `data/<slug>/` beside `output/<slug>.html` — but src/api.ts's metadata page
- * falls back to `example/` for an article with no directory of its own, and a
- * store that insisted on the default would report every stage of the fixture
- * unfinished. See `candidateDirs` there.
+ * `data/<slug>/` beside `output/<slug>.html` — but src/api.ts resolves the
+ * fixture's own slug to `example/`, and a store that insisted on the default
+ * would report every stage of the fixture unfinished. See `candidateDirs`
+ * there.
+ *
+ * **Not a fallback for any other slug**, and this comment said it was until
+ * 2026-08-31. `candidateDirs` used to append `example/` to every slug that had
+ * no `blocks.json` + `tree.json` of its own, so an article mid-ingest was
+ * answered with the fixture's prose under the reader's name. It now offers
+ * `example/` for `example` and for nothing else; a missing article is a 404.
  */
 export function createFsArtifactStore(
   locate: (slug: string) => ArtifactLocations = fsLocations,

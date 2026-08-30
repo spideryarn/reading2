@@ -29,7 +29,12 @@
  * `strandedSupplement` already follows, for the same reason.
  */
 import { describe, expect, it } from "vitest";
-import { buildTree, type BuildReport, type ModelNode } from "../src/toc.js";
+import {
+  buildTree,
+  repairedBlockCount,
+  type BuildReport,
+  type ModelNode,
+} from "../src/toc.js";
 import { checkTree } from "../src/tree-invariants.js";
 import type { Block } from "../src/types.js";
 
@@ -146,6 +151,15 @@ describe("an off-by-one partition is repaired, not refused", () => {
        the cascade would eat the whole answer's allowance at the first nested
        node and a repair that works today would start throwing. */
     expect(new Set(r.repairs.map((x) => x.at))).toEqual(new Set([2]));
+    /* **And the number the operator reads has to say one block moved, not two.**
+       `repairedBlocks` was `repairs.reduce((n, r) => n + r.size)`, which counts
+       a cascade once per depth — the same physical movement, reported as many
+       times as the tree is deep at that point. On a real answer that is a
+       boundary a paragraph out arriving in the pipeline log as three blocks
+       moved, or a section handed forty arriving as a hundred and twenty; the
+       one number that exists to say "go and look" reads as an emergency on the
+       ordinary case and nothing distinguishes the two. GPT Sol, finding 6. */
+    expect(repairedBlockCount(r.repairs)).toBe(1);
   });
 
   it("produces a tree the invariants accept, which is the only claim that matters", () => {

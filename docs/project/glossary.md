@@ -680,9 +680,11 @@ modifier:
 The delete exists **because** running the step again appends. Without it there is no way at all to
 say "this list is wrong" — a reader who disliked what the model found could only fix it by changing
 the article underneath it. It is destructive, so the panel asks first, and `deleteGlossary` refuses
-to touch the committed `example/` fixture: `articleDir` falls through to it for any slug with no
-output of its own, including one that does not exist, so without that guard the one committed
-directory in the repo would be one `DELETE` away from an unknown article.
+to touch the committed `example/` fixture. That guard was load-bearing while `articleDir` fell
+through to `example/` for any slug with no output of its own, including one that does not exist —
+the one committed directory in the repo was a `DELETE` away from any unknown article. Since stage 1a
+`candidateDirs` resolves `example/` for the fixture's own slug and no other, so what the guard now
+stops is a `DELETE` addressed to `example` itself, which is nobody's to write to.
 
 **A stale glossary is not appended to.** The article underneath it moved, so the old entries describe
 a piece that no longer exists and folding new ones in would produce a list half-describing each. That

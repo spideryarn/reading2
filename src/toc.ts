@@ -37,7 +37,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { blocksArtefact } from "./blocks.js";
 import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { isSpideryarnId } from "./ids.js";
-import { generateLabels, mergeLabels } from "./labels.js";
+import { COVERAGE_FLOOR, generateLabels, mergeLabels } from "./labels.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
@@ -250,46 +250,19 @@ export function structureRequest(body: Block[]): {
 }
 
 /**
- * How much of the article the labels have to reach. **Almost all of it.**
+ * How much of the article the labels have to reach — **and it lives in
+ * src/labels.ts now.**
  *
- * This has been 0.95, then 1, and is 0.95 again. The number matters less than
- * which argument it is standing on, so here are all three.
- *
- * It was **0.95** when one model call wrote the whole tree, because the model
- * was allowed to skip a trivial transition sentence — an unlabelled gistable
- * leaf is still only a *warning* in [validate-tree.ts](./validate-tree.ts) for
- * that reason (docs/project/table-of-contents.md). The floor told a used escape
- * hatch apart from an answer that had quietly stopped early.
- *
- * It was tightened to **1** when the label pass split out, on the argument that
- * *"there is no longer a path by which a block is legitimately unlabelled"*:
- * every batch is asked for an exact set of numbered paragraphs and refuses any
- * other set, and `planBatches` puts every gistable block in exactly one batch.
- *
- * **That argument is now false, and the failure that falsified it is why this
- * is 0.95 again.** A production ingest died twice on one absent label out of
- * fifty-eight, on a paragraph whose entire text was the word "or" — stage 3 had
- * stripped the code cell the fragment pointed at, leaving the label prompt's
- * "6–20 words, a CLAIM or a MOVE" and its "never introduce a fact that is not in
- * that paragraph" jointly unsatisfiable, so skipping was the compliant move and
- * no retry could change it. src/labels.ts now re-asks for the gap alone and, if
- * that fails too, may accept the batch and leave those leaves bare. So the path
- * exists again, deliberately, and it is bounded rather than open.
- *
- * **This is the backstop, not the bound.** The real bound is `droppedBudget` in
- * src/labels.ts — 2% of a batch, floor of one — and it is per batch, which is
- * the only place a model's behaviour on one call can be judged. What that bound
- * cannot see is the composition of the whole article: twenty small sibling sets
- * each spending their floor of one would stay inside budget every time and still
- * cost a fifth of the article its rows. This floor is what refuses that, and it
- * is the number to move if the drops ever become normal rather than rare.
- *
- * Every real tree came back at 100% under the original rule: 29 of 29, 117 of
- * 117, 18 of 18. That is still what a healthy article looks like, and
- * `LabelRun.dropped` — printed by the CLI, logged by the step, recorded in
- * `labels.json` — is how anybody finds out it has stopped being.
+ * Moved on 2026-08-31, and re-exported here so that nothing which already
+ * imported it from this module had to change. The same move `structureHash` made
+ * out of this file, for the same reason: the check it feeds has to happen on
+ * both ways into stage 4, and a second copy of the number in the other file
+ * could only ever drift. `generateToc` still applies it through `checkCoverage`
+ * below, over the tree's own leaves — a different measurement of the same floor,
+ * and the one that would catch a merge that lost labels rather than a run that
+ * dropped them.
  */
-const COVERAGE_FLOOR = 0.95;
+export { COVERAGE_FLOOR };
 
 /**
  * How to name a value from the model in an error message — and when not to.
@@ -516,7 +489,17 @@ function assertChildrenPartition(
  * climbing, the prompt is drifting and the repairs are hiding it.
  */
 export interface BuildReport {
-  /** Off-by-one partitions snapped rather than refused. */
+  /**
+   * Partitions that missed and were snapped shut rather than refused — **by
+   * however much they missed.**
+   *
+   * This said "off-by-one" until 2026-08-31, and it was left behind when the
+   * one-block bound went (see `repairedChildRanges`, and Greg's ruling that we
+   * should allow gaps). A repair can now move a section's boundary by forty
+   * blocks, and a field description promising off-by-one is the kind of thing a
+   * reader believes instead of reading the code. `size` is the number that says
+   * how far, and `repairedBlockCount` is how to add them up.
+   */
   repairs: PartitionRepair[];
   /**
    * Nodes whose `sourceHeading` claim no heading block in their range backed
@@ -560,6 +543,36 @@ export interface PartitionRepair {
 }
 
 /**
+ * **How many blocks the repairs actually moved** — one entry per boundary, not
+ * one per level.
+ *
+ * A cascade emits a `PartitionRepair` at every depth the same boundary appears
+ * at, deliberately: moving a node's start moves its first child's start too, and
+ * each of those is a real edit to a real range. But they are one physical
+ * movement of one set of blocks, so adding their sizes up counts the same blocks
+ * two, three or four times over. The sum was `repairs.reduce((n, r) => n +
+ * r.size, 0)`, so one 40-block movement through three levels reported 120 — and
+ * this is the number the CLI prints, src/pipeline.ts logs, and the eval scores
+ * arms on. A count that inflates with the tree's depth cannot be compared
+ * between articles at all, which is the whole of what it is for. GPT Sol's
+ * review of stage 1, 2026-08-31, finding 6.
+ *
+ * The maximum per boundary rather than the first or last: a repair that cascades
+ * can widen on the way down (the parent's start moves two, the child's start was
+ * further out still), and what the reader wants to know is how much of the
+ * article ended up somewhere else.
+ *
+ * `largestRepair` needs no such treatment — a maximum over duplicates is the
+ * same maximum — and is deliberately left as it is rather than routed through
+ * here for symmetry.
+ */
+export function repairedBlockCount(repairs: PartitionRepair[]): number {
+  const perBoundary = new Map<number, number>();
+  for (const r of repairs) perBoundary.set(r.at, Math.max(perBoundary.get(r.at) ?? 0, r.size));
+  return [...perBoundary.values()].reduce((n, size) => n + size, 0);
+}
+
+/**
  * **How many distinct boundaries one answer may have wrong and still be mended.**
  *
  * One, and the number is the evidence rather than a round figure. Every
@@ -576,9 +589,21 @@ export interface PartitionRepair {
  * is one mistake — see `at`.
  *
  * **What would justify raising it** is a measured distribution, not an argument:
- * the repair counts now reach the pipeline log, so if answers with two
- * independent slips turn out to be common and their repaired trees turn out to
- * be good, that is the evidence. Thirteen calls is not it.
+ * if answers with two independent slips turn out to be common, that is the
+ * evidence. Thirteen calls is not it.
+ *
+ * **Where that evidence comes from, since it is not the pipeline log.** This
+ * comment used to say the repair counts reach the log and leave it there, which
+ * was true of every run except the ones this bound refuses: when it fires,
+ * `buildTree` throws, `generateToc` never returns, and the success log never
+ * gets a report — the monitoring path went dark precisely when somebody would go
+ * looking. `generateToc` now puts what it had mended into the *error* as well
+ * (search for `MAX_REPAIRED_BOUNDARIES` there), so a refused answer says how
+ * many boundaries it had already spent and how far each moved. What no amount of
+ * logging can supply is the other half of the old claim — whether the repaired
+ * tree would have been *good* — because the answer is refused rather than
+ * repaired. Deciding that needs the eval, evals/toc-structure, with the bound
+ * raised on an arm. GPT Sol's review of stage 1, 2026-08-31, finding 7.
  *
  * **It is now the only bound, and it was one of two.** The per-repair size bound
  * went on 2026-08-30 (`repairedChildRanges`), so this is what is left between a
@@ -1042,7 +1067,13 @@ export interface TocRun {
    * calls after making two. GPT-5.6-sol, 2026-08-26.
    */
   labelBatches: number;
-  /** Batches this run actually asked the model for. */
+  /**
+   * **Requests** this run actually made for labels, which is not the batch count
+   * in either direction: a resumed batch costs none, and a batch that was
+   * repaired or re-drawn costs two. It was the number of records until
+   * 2026-08-31 and so said one after making two — see `LabelRun.calls` in
+   * src/labels.ts for why that number in particular has to be right.
+   */
   labelCalls: number;
   /** Batches taken from a checkpoint left by an earlier, failed run. */
   labelsResumed: number;
@@ -1054,7 +1085,8 @@ export interface TocRun {
    * The count is the only trace, so it is on the run, in the log line
    * (src/pipeline.ts), on the CLI, and in `labels.json`. The blocks themselves
    * are in that file's `dropped`. See `droppedBudget` in src/labels.ts for what
-   * bounds it and `COVERAGE_FLOOR` above for what refuses it.
+   * bounds it per batch and `COVERAGE_FLOOR` — which lives in that file too now
+   * — for what refuses it across the article, on both ways into the stage.
    */
   labelsDropped: number;
   inputTokens: number;
@@ -1213,7 +1245,42 @@ export async function generateToc(opts: {
      `buildTree` — the tiling, the "covers the whole article" guard — is asked
      about the argument the model was actually shown. */
   const built: BuildReport = { repairs: [], droppedHeadings: [] };
-  const structure = appendSupplement(buildTree(root, {}, body, slug, built), groups);
+  let structure: Tree;
+  try {
+    structure = appendSupplement(buildTree(root, {}, body, slug, built), groups);
+  } catch (err) {
+    /**
+     * **The one place the repair figures are unreachable is the place they
+     * decide something**, so they are put in the error instead.
+     *
+     * `MAX_REPAIRED_BOUNDARIES` says out loud that what would justify raising it
+     * is a measured distribution, and that the counts now reach the pipeline
+     * log. Both halves were true only of runs that *succeeded*: when the bound
+     * fires, `buildTree` throws here, `generateToc` never returns, and the
+     * success log at src/pipeline.ts never gets a report — so the evidence for
+     * revisiting the bound could be collected on every run except the ones the
+     * bound refused. That is a monitoring path that goes dark exactly when
+     * somebody would look at it. GPT Sol, finding 7.
+     *
+     * `where`, `kind`, `at` and `size` are all derived from the shape of the
+     * answer rather than from anything in it, so they are safe to put in a
+     * message that will be logged and copied onto the job card — see `nameValue`
+     * above for the rule and why this file has to keep restating it.
+     */
+    if (built.repairs.length === 0) throw err;
+    const spent = [...new Set(built.repairs.map((r) => r.at))].length;
+    throw new Error(
+      `${err instanceof Error ? err.message : String(err)}\n` +
+        `  Before this it mended ${spent} boundary(ies), moving ` +
+        `${repairedBlockCount(built.repairs)} block(s): ` +
+        `${built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`).join("; ")}. ` +
+        `The bound is MAX_REPAIRED_BOUNDARIES in src/toc.ts, and this line is the only place ` +
+        `these numbers are visible on a run that failed.`,
+    );
+    /* No `cause`, for the reason the label stage gives at the same shape:
+       src/log.ts follows cause chains and would write the original message into
+       the log a second time under another key. It is already in the text. */
+  }
 
   /* **Appended before `generateLabels`, not after.** `labels.json` records
      `structureHash(opts.tree)` (src/labels.ts), so a supplement added afterwards
@@ -1326,7 +1393,10 @@ export async function generateToc(opts: {
     supplementBlocks: blocks.length - body.length,
     strandedSupplement: stranded,
     repairedRanges: built.repairs.length,
-    repairedBlocks: built.repairs.reduce((n, r) => n + r.size, 0),
+    /* Deduplicated by boundary — see `repairedBlockCount`. A cascade is one
+       movement recorded at every depth it passes through, so summing the entries
+       counted the same blocks once per level. */
+    repairedBlocks: repairedBlockCount(built.repairs),
     /* `Math.max` of an empty list is -Infinity, which would print and log as
        nonsense on the run where nothing was repaired — the common case. */
     largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),

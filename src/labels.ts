@@ -78,25 +78,76 @@ export interface Shortfall {
   partial: Record<string, string>;
   /** Call-local ordinals with no label, in order. */
   missing: number[];
-  /**
-   * What the call cost — **attached by `runBatch`, not by the parser.**
-   *
-   * A parser has no idea what was spent, so it cannot fill this in, and an
-   * incomplete answer is still a paid one. Optional for that reason and for no
-   * other: absent means a parser threw on its own, which happens in tests and
-   * nowhere else.
-   */
-  record?: LabelBatchRecord;
 }
 
 export class BatchIncomplete extends Error {
   readonly shortfall: Shortfall | undefined;
+  /**
+   * What the call cost — **attached by `runBatch`, not by the parser.**
+   *
+   * On the error rather than on `Shortfall`, and it moved there on 2026-08-30.
+   * A parser has no idea what was spent, so it cannot fill this in; but neither
+   * does a truncation have a shortfall to hang it on, and a truncated call is
+   * the most expensive failure this stage buys — it spent a whole batch's
+   * output before the ceiling stopped it. While the field lived on `Shortfall`
+   * those tokens vanished from `labels.json` on every truncate-then-succeed
+   * batch, so the artefact and the ledger (src/ai-spend.ts records at the wire)
+   * disagreed on exactly the runs somebody was looking at. What it cost is a
+   * fact about the call, so it belongs on the thing thrown by the call.
+   *
+   * Undefined means a parser threw on its own, which happens in tests and
+   * nowhere else.
+   */
+  readonly record: LabelBatchRecord | undefined;
 
-  constructor(message: string, shortfall?: Shortfall) {
+  constructor(message: string, shortfall?: Shortfall, record?: LabelBatchRecord) {
     super(message);
     this.name = "BatchIncomplete";
     this.shortfall = shortfall;
+    this.record = record;
   }
+}
+
+/**
+ * The batch came back whole and **displaced** — a different failure wearing the
+ * same class, and the distinction is load-bearing rather than tidy.
+ *
+ * `detectShift` throws this. Everything a `BatchIncomplete` normally means —
+ * *some of the answer is absent, ask again, and a bounded gap may be forgiven* —
+ * is false of it: the answer is complete, and it is wrong. In particular
+ * `acceptGap` must never be offered one, because the set it would fall back to
+ * is a *subset* of the set that just failed the check, and a subset can be one
+ * label short of the evidence the check needs to speak at all.
+ *
+ * **A subtype like this existed for an hour on 2026-08-26 and was deleted on a
+ * wrong argument** — that no fixture could tell it from the plain case, because
+ * "the sets differ by at most the budget, which cannot move a majority vote".
+ * The vote was never the threshold in question. `MIN_SHIFT_EVIDENCE` is, and one
+ * label is exactly enough to cross it: a merged set of twelve votes detects, and
+ * the partial set of eleven behind it abstains. GPT Sol built that case on one
+ * reading of the code, 2026-08-30; tests/labels-shortfall.test.ts § "does not
+ * turn a shift the repair found back into an accepted gap" is it, at thirteen
+ * blocks, and it was red before this class came back.
+ */
+export class LabelsShifted extends BatchIncomplete {
+  constructor(message: string, record?: LabelBatchRecord) {
+    super(message, undefined, record);
+    this.name = "LabelsShifted";
+  }
+}
+
+/**
+ * A `BatchIncomplete` that carries a partial answer and a named gap.
+ *
+ * The type, and the guard for it, because three places have to ask the same
+ * question — the retry chooses a repair over a re-draw on it, and `acceptGap`
+ * requires it of *both* attempts. A `LabelsShifted` never passes: it has no
+ * shortfall, which is the whole of what tells the two apart at a call site.
+ */
+export type BatchCameBackShort = BatchIncomplete & { readonly shortfall: Shortfall };
+
+export function cameBackShort(err: unknown): err is BatchCameBackShort {
+  return err instanceof BatchIncomplete && err.shortfall !== undefined;
 }
 
 
@@ -161,14 +212,31 @@ export const LABEL_HEADROOM = 16_000;
  * call sees too little of the argument around it; too large and we are back to
  * one unbounded answer with extra steps.
  *
- * **There is no matching minimum, and there was.** The first version closed a
- * batch as soon as it reached 40, which meant the count was always under 40 when
- * the maximum was tested — so the maximum could only ever fire for a single
- * sibling set larger than 40, and every batch came out at about 40. The file
- * documented a 40–80 range the code could not produce. Removing the minimum is
- * what fixes that; a short final batch is left short, because merging it into
- * the one before would either breach this cap or need an exception with no
- * principle behind it, and one small call is cheap.
+ * **There is a matching minimum again, and it is not the one that was removed.**
+ * The first version closed a batch *as soon as* it reached 40, which meant the
+ * count was always under 40 when the maximum was tested — so the maximum could
+ * only ever fire for a single sibling set larger than 40, and every batch came
+ * out at about 40. The file documented a 40–80 range the code could not produce.
+ *
+ * `MIN_BATCH` is the other shape: it never causes a close, it only *prevents*
+ * one. A batch closes when it is full, exactly as it does now, and a batch that
+ * is not yet big enough to be checkable keeps taking sets rather than being
+ * emitted short. Read the condition in `planBatches` rather than the name — the
+ * two look alike and do opposite things, and the old bug is the one this file
+ * has already had once.
+ *
+ * **And that removal's parting argument is now false.** It said a short final
+ * batch is left short because merging it into the one before "would either
+ * breach this cap or need an exception with no principle behind it, and one
+ * small call is cheap". There is a principle behind it now: a batch under
+ * `MIN_BATCH` cannot be shift-checked, so it is not a batch we are able to
+ * stand behind — see `MIN_BATCH`, and `acceptGap`. And the small call is not
+ * cheap: on the corpus here it is where three of fourteen articles put their
+ * tail. So the merge happens and it does breach this cap, by at most
+ * `MIN_BATCH - 1` blocks — 71 on the widest real case measured. That is the same
+ * trade the paragraph above already makes for an oversized sibling set: the cap
+ * is a preference, and the things it gives way to are the sibling rule and now
+ * this.
  */
 const MAX_BATCH = 60;
 
@@ -203,6 +271,44 @@ const MIN_SHIFT_EVIDENCE = 12;
 const SHIFT_MAJORITY = 0.6;
 const SHIFT_OWN_CEILING = 0.3;
 
+/**
+ * **The smallest batch worth sending — derived from the line above, because it
+ * is the same constraint and not a second one.**
+ *
+ * A batch is only allowed to keep a gap if `detectShift` could vote on what it
+ * would keep, and that needs `MIN_SHIFT_EVIDENCE` labels. A batch that spends
+ * its whole `droppedBudget` has that many labels minus the budget left — so a
+ * batch smaller than this cannot both use its allowance and be checked, and
+ * `acceptGap` refuses it. `planBatches` had no minimum at all, which is what
+ * made that reachable: *"planBatches has no minimum batch size, making this
+ * reachable"* — GPT Sol, 2026-08-31, finding 3.
+ *
+ * The two ways to answer that are to refuse the batch at run time or to stop
+ * emitting it. Refusing alone turns a short tail batch with one unlabellable
+ * fragment into a lost article, which is the fatal-failure shape Greg ruled
+ * against on 2026-08-30 (*"better than things failing fatally"*), and it is an
+ * ordinary shape rather than an exotic one: on the fourteen articles on this
+ * machine, 4 of 31 batches came out under this floor. So the batch stops being
+ * emitted, and the refusal stays as the backstop for what merging cannot reach.
+ *
+ * **Computed rather than typed**, so that moving `MIN_SHIFT_EVIDENCE` or
+ * `droppedBudget` moves this with them. Two numbers that have to agree and are
+ * written down separately are two numbers that will disagree. It comes out at
+ * 13 today: a batch of 13 may drop 1 and still offer 12 labels to the check.
+ *
+ * It is a *necessary* condition and not a sufficient one — evidence counts only
+ * labels with some lexical signal, so a batch above this floor can still fail
+ * to reach the threshold on verse or on a table of near-identical rows. That
+ * residue is `acceptGap`'s to refuse, and it is why the refusal is not deleted
+ * now that this exists.
+ */
+const MIN_BATCH = ((): number => {
+  for (let n = 1; n <= MAX_BATCH; n++) {
+    if (n - droppedBudget(n) >= MIN_SHIFT_EVIDENCE) return n;
+  }
+  return MAX_BATCH;
+})();
+
 /** How many batches are in flight at once. Politeness to the rate limiter. */
 const CONCURRENCY = 4;
 
@@ -233,6 +339,26 @@ export interface Batch {
 export interface LabelBatchRecord {
   blocks: string[];
   setStarts: number[];
+  /**
+   * How many **requests** this one batch took — usually one, two when a short
+   * answer was repaired or a truncated one re-drawn.
+   *
+   * **A batch is not a call, and `LabelRun.calls` said it was.** `calls` was the
+   * length of the record list, so a repaired batch reported one request after
+   * making two — and `calls` is what the cache diagnostic is read against: a run
+   * of one call has nothing to read a cache back from, so zero reads is expected
+   * and nothing is wrong. A two-request batch reporting one made a real cache
+   * failure (the re-ask should read the prefix the first attempt wrote) look
+   * exactly like the case where there was nothing to read. That is
+   * docs/reusable/silent-success.md with the diagnostic itself as the casualty.
+   * GPT Sol's review of stage 1b, 2026-08-30.
+   *
+   * **Optional, because every `labels.json` written before 2026-08-30 has no
+   * such field**, and a reader that demanded one would make every older
+   * artefact invalid — every record on disk describes at least one request, so
+   * absent reads as `1`. Always written by this file.
+   */
+  requests?: number;
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
@@ -321,6 +447,14 @@ export function planBatches(
   opts: { max?: number } = {},
 ): Batch[] {
   const max = opts.max ?? MAX_BATCH;
+  /* **The floor gives way to the caller's own cap**, rather than overriding it.
+     A caller that asks for batches of ten — which is the evals and the tests,
+     never the pipeline — is asking for something smaller than `detectShift` can
+     read, and silently handing back batches of thirteen would be answering a
+     different question from the one asked. Those batches are then exactly the
+     ones `acceptGap` refuses to keep a gap in, which is the right answer to
+     "you asked for a batch nothing can check". */
+  const min = max >= MIN_BATCH ? MIN_BATCH : 0;
   const order = new Map(blocks.map((b, i) => [b.id, i]));
 
   /* The sections are the internal nodes whose children are all leaves. Reading
@@ -373,18 +507,56 @@ export function planBatches(
   };
 
   for (const set of sets) {
-    /* Close on `max`, not on `min`. The first version closed as soon as a batch
-       reached `min`, which meant `count` was always under 40 when the line above
-       was evaluated — so `max` could only ever fire for a single set larger than
-       40, and every batch came out at about `min`. The 40–80 range this file
-       documents was a range the code could not produce.
+    /* **Close when it is full, and never while it is too small to be checked.**
+       Two conditions doing two different jobs, and the order they are written in
+       is the whole of the difference from the version this file had first.
+
+       `count + set.blocks.length > max` is the close, exactly as before: a batch
+       is emitted when the next set would take it past the cap. The first version
+       closed as soon as the count reached a *minimum*, which meant `count` was
+       always under 40 when this line was evaluated — so `max` could only ever
+       fire for a single set larger than 40, and every batch came out at about
+       the minimum. The 40–80 range this file documented was a range the code
+       could not produce.
+
+       `count >= min` never causes a close; it withholds one. A batch under
+       `MIN_BATCH` is one `acceptGap` cannot stand behind — `detectShift` has too
+       few labels to vote — so rather than emit it and refuse it later, it keeps
+       taking sets. That can carry a batch past `max`, by less than `MIN_BATCH`,
+       and that is the intended trade rather than an oversight.
+
        A set larger than `max` still gets a call of its own rather than being
        cut: the cap is a preference, the sibling rule is not. */
-    if (count > 0 && count + set.blocks.length > max) close();
+    if (count >= min && count + set.blocks.length > max) close();
     current.push(set);
     count += set.blocks.length;
   }
   close();
+
+  /* **The tail, which is the only batch the loop can leave short.** Every other
+     batch was closed by the condition above, which requires `count >= min`; the
+     last one is whatever was left when the sets ran out, and there was nothing
+     after it to take. So it is merged backwards into the batch before it — the
+     move the removed minimum's comment rejected for want of a principle, and
+     `MIN_BATCH` is the principle. Whole sets move, so the sibling rule is
+     untouched, and `close` recomputes `setStarts` and `span` from the merged
+     list rather than splicing them.
+
+     One pass is enough and a loop would be misleading: after this there is at
+     most one batch under `min`, and it is the single-batch case — a whole
+     article shorter than a checkable batch, which has no neighbour to merge
+     into and is `acceptGap`'s to refuse. Such an article is under twenty
+     structural blocks, so `assertInsideCoverageFloor` already refuses a drop in
+     it: one label of a nineteen-block piece is 5.3% and the floor is 5%. The two
+     refusals therefore do not stack up into a case that could have shipped. */
+  const last = batches.at(-1);
+  if (last && batches.length > 1 && last.blocks.length < min) {
+    batches.pop();
+    const before = batches.pop()!;
+    current = [...before.sets, ...last.sets];
+    count = current.reduce((n, s) => n + s.blocks.length, 0);
+    close();
+  }
 
   assertCoversEveryBlock(batches, blocks);
   return batches;
@@ -985,7 +1157,19 @@ function readPairs(raw: string): Map<number, string> {
   return seen;
 }
 
-/** Ordinals onto block ids — and a heading's label read off the block, never the model. */
+/**
+ * Ordinals onto block ids — and a heading's label read off the block, never the
+ * model.
+ *
+ * **Only for ordinals that came back**, which is what this signature says and
+ * what makes `acceptGap` the second place a heading is labelled: an ordinal the
+ * model never returned never reaches here, so a heading the model skipped twice
+ * would have been dropped even though its label was sitting in `block.text` the
+ * whole time. That is filled in there rather than here, so that a skipped
+ * heading still fails the ordinal-set check and still earns a re-ask — the
+ * signal that the model is reading the right blocks is worth keeping. GPT Sol's
+ * review of stage 1, 2026-08-31, finding 9.
+ */
 function onto(
   seen: Map<number, string>,
   batch: Batch,
@@ -1086,8 +1270,16 @@ function overlap(a: Set<string>, b: Set<string>): number {
  * near-identical rows, a language whose words it fragments — produces too little
  * evidence to vote, and the honest answer there is silence rather than a guess
  * in either direction.
+ *
+ * **It returns how many labels it was able to vote with**, so that a caller can
+ * tell "checked, and clean" from "could not check". Silence is the right answer
+ * for the article and the wrong answer for a caller deciding whether the guard
+ * it promised actually ran — `acceptGap` is that caller, and before 2026-08-30
+ * it could not ask. A `void` return made the two indistinguishable, which is the
+ * shape of docs/reusable/silent-success.md applied to a guard rather than to a
+ * result.
  */
-export function detectShift(labels: Record<string, string>, batch: Batch): void {
+export function detectShift(labels: Record<string, string>, batch: Batch): number {
   /* One vote per label that has any lexical signal at all, for whichever of
      its own paragraph and its two neighbours it matches best. A shift moves
      every vote the same way at once; nothing else does. */
@@ -1119,7 +1311,7 @@ export function detectShift(labels: Record<string, string>, batch: Batch): void 
     votes.set(winner, votes.get(winner)! + 1);
   });
 
-  if (evidence < MIN_SHIFT_EVIDENCE) return;
+  if (evidence < MIN_SHIFT_EVIDENCE) return evidence;
 
   const ahead = votes.get(1)!;
   const behind = votes.get(-1)!;
@@ -1130,15 +1322,15 @@ export function detectShift(labels: Record<string, string>, batch: Batch): void 
      way is what distinguishes a shift from an article whose paragraphs simply
      resemble each other; requiring the correct alignment to have collapsed is
      what stops a batch where most labels are right and a few are odd. */
-  if (displaced / evidence < SHIFT_MAJORITY) return;
-  if (own / evidence > SHIFT_OWN_CEILING) return;
+  if (displaced / evidence < SHIFT_MAJORITY) return evidence;
+  if (own / evidence > SHIFT_OWN_CEILING) return evidence;
 
   const which = ahead > behind ? "the paragraph after it" : "the paragraph before it";
-  throw new BatchIncomplete(
+  throw new LabelsShifted(
     `${displaced} of ${evidence} nav labels in this batch match ${which} better than the one ` +
-      `they were written for, and only ${own} match their own. The model returned the right count ` +
-      `and lost its place inside it, which the paragraph-number check cannot see. ` +
-      `Nothing has been written.`,
+      `they were written for, and only ${own} match their own. The model wrote a label for every ` +
+      `paragraph it was asked about and lost its place inside them, which the paragraph-number ` +
+      `check cannot see. Nothing has been written.`,
   );
 }
 
@@ -1202,15 +1394,58 @@ export function assertEveryBlockLabelled(
 ): void {
   const allowed = new Set(dropped);
   const missing = blocks.filter((b) => isStructural(b) && !labels[b.id] && !allowed.has(b.id));
-  if (missing.length === 0) return;
+  if (missing.length > 0) {
+    const wanted = blocks.filter((b) => isStructural(b)).length;
+    throw new Error(
+      `The nav labels cover ${wanted - missing.length - allowed.size} of ` +
+        `${wanted} paragraphs — ${missing.length} came back ` +
+        `without one (${missing.slice(0, 3).map((b) => b.id).join(", ")}), and no batch reported ` +
+        `dropping ${missing.length === 1 ? "it" : "them"}. Every batch is checked against the ` +
+        `exact set it was asked about, so this is a gap between the batches rather than inside ` +
+        `one. Nothing has been written.`,
+    );
+  }
+
+}
+
+/**
+ * **The drops, taken together, against the article's own floor.**
+ *
+ * `assertEveryBlockLabelled` above is about a gap nobody claimed. This is the
+ * other failure, and it is the one made entirely of legitimate parts:
+ * `droppedBudget` is per batch and cannot see the article, so twenty small
+ * sibling sets each spending their one-label floor stay inside budget twenty
+ * times over and cost a fifth of the piece its rows. `COVERAGE_FLOOR` is the
+ * backstop for exactly that.
+ *
+ * **Here rather than in the caller, because there are two callers.**
+ * `generateToc` applied the floor after its merge and `npm run labels -- <dir>`
+ * did not — it merged and rewrote `tree.json` with nothing between a
+ * heavily-dropped run and the disk. So the advertised backstop depended on which
+ * supported command you typed, which is the same fault `assertCoversEveryBlock`
+ * and `assertEveryBlockLabelled` were both moved in here to fix. `checkCoverage`
+ * in src/toc.ts still runs on the pipeline path and is not redundant with this:
+ * it counts labelled *leaves of the tree*, so it is the one that would notice a
+ * merge losing labels this function never hears about. GPT Sol, finding 4.
+ *
+ * Its own function rather than a second half of the one above, because they
+ * refuse different things and the tests for them should be able to fail
+ * separately.
+ */
+export function assertInsideCoverageFloor(dropped: string[], blocks: Block[]): void {
+  if (dropped.length === 0) return;
   const wanted = blocks.filter((b) => isStructural(b)).length;
+  if (wanted === 0) return;
+  const covered = (wanted - dropped.length) / wanted;
+  if (covered >= COVERAGE_FLOOR) return;
   throw new Error(
-    `The nav labels cover ${wanted - missing.length - allowed.size} of ` +
-      `${wanted} paragraphs — ${missing.length} came back ` +
-      `without one (${missing.slice(0, 3).map((b) => b.id).join(", ")}), and no batch reported ` +
-      `dropping ${missing.length === 1 ? "it" : "them"}. Every batch is checked against the ` +
-      `exact set it was asked about, so this is a gap between the batches rather than inside ` +
-      `one. Nothing has been written.`,
+    `The nav labels cover ${wanted - dropped.length} of ${wanted} paragraphs — ` +
+      `${dropped.length} were dropped by the batches that asked for them ` +
+      `(${dropped.slice(0, 3).join(", ")}). A batch may leave a paragraph or two of itself bare ` +
+      `when the model will not label them (see droppedBudget), and that is what the ` +
+      `${Math.round((1 - COVERAGE_FLOOR) * 100)}% here is for; this is past it. Look at how the ` +
+      `article was cut into batches — a piece in many small sibling sets can spend a floor of ` +
+      `one over and over and stay inside every per-batch budget. Nothing has been written.`,
   );
 }
 
@@ -1244,11 +1479,20 @@ export interface LabelRun {
    */
   resumed: number;
   /**
-   * Calls this run actually made — `batches` minus `resumed`.
+   * **Requests this run actually made**, which is at least `batches` minus
+   * `resumed` and more whenever a batch was repaired or re-drawn.
    *
    * Needed to read the cache figures at all. A run of one fresh call has
    * nothing to read a cache back from, and a fully resumed run made no request
    * to read one with; both report zeros that mean nothing is wrong.
+   *
+   * **It was the batch count until 2026-08-30, under this comment.** A repaired
+   * batch makes two requests and produces one record, so `paid.length` reported
+   * one — and the one thing this number exists for is to say whether a zero in
+   * `cacheReadTokens` is expected. A two-request batch reporting one call made a
+   * cache that had stopped hitting indistinguishable from a run with nothing to
+   * read, which is the failure this field was added to prevent, arriving inside
+   * the field itself. GPT Sol's review of stage 1b, finding 5.
    */
   calls: number;
   /**
@@ -1386,6 +1630,27 @@ async function runBatch(
     .map((b) => b.text)
     .join("");
 
+  /* Built here, above every throw below it, because a call that failed still
+     cost what it cost. Without this the tokens of a truncated attempt, or of a
+     shortfall's first draw, would vanish from `labels.json` and from the run's
+     figures — the ledger would still have them (src/ai-spend.ts records at the
+     wire), so the artefact and the bill would disagree, quietly, on exactly the
+     runs where somebody is looking. It used to sit below the refusal and
+     truncation checks and above the parse, which got the shortfall half of that
+     right and lost the truncation half. */
+  const record: LabelBatchRecord = {
+    blocks: batch.blocks.map((b) => b.id),
+    setStarts: batch.setStarts,
+    /* One request, by definition: this function makes exactly one. `sumRecords`
+       is where two of these become a two-request batch. */
+    requests: 1,
+    inputTokens: message.usage.input_tokens,
+    outputTokens: message.usage.output_tokens,
+    cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
+    ms: Date.now() - started,
+  };
+
   if (wasRefused(message)) {
     /* `stop_details` is deliberately neither thrown nor logged — it is the
        provider's own words about a request that carried the whole article,
@@ -1419,31 +1684,17 @@ async function runBatch(
         outputTokens: message.usage.output_tokens,
         answerChars: raw.length,
       }, headroom),
+      undefined,
+      record,
     );
   }
-
-  /* Built before the parse, because a call that answered about most of the
-     batch still cost what it cost. Without this the tokens of a shortfall's
-     first attempt would vanish from `labels.json` and from the run's figures —
-     the ledger would still have them (src/ai-spend.ts records at the wire), so
-     the artefact and the bill would disagree, quietly, on exactly the runs
-     where somebody is looking. */
-  const record: LabelBatchRecord = {
-    blocks: batch.blocks.map((b) => b.id),
-    setStarts: batch.setStarts,
-    inputTokens: message.usage.input_tokens,
-    outputTokens: message.usage.output_tokens,
-    cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
-    cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
-    ms: Date.now() - started,
-  };
 
   let labels: Record<string, string>;
   try {
     labels = only ? parseShortfall(raw, batch, only) : parseLabels(raw, batch);
   } catch (err) {
-    if (err instanceof BatchIncomplete && err.shortfall) {
-      throw new BatchIncomplete(err.message, { ...err.shortfall, record });
+    if (err instanceof BatchIncomplete) {
+      throw new BatchIncomplete(err.message, err.shortfall, record);
     }
     throw err;
   }
@@ -1451,7 +1702,18 @@ async function runBatch(
      it will vote at all, so a call that answered about one paragraph could only
      ever abstain — and the set worth checking is the merged one, which is where
      `repairShortfall` checks it. */
-  if (!only) detectShift(labels, batch);
+  if (!only) {
+    try {
+      detectShift(labels, batch);
+    } catch (err) {
+      /* Re-thrown carrying the record, for the same reason the two throws above
+         do: this call is paid for whether or not we keep its answer, and a
+         first draw whose cost disappeared would understate a truncation retry's
+         batch by half. `LabelsShifted` is the only thing `detectShift` throws. */
+      if (err instanceof LabelsShifted) throw new LabelsShifted(err.message, record);
+      throw err;
+    }
+  }
 
   return { labels, record };
 }
@@ -1488,12 +1750,22 @@ export function renderShortfall(missing: number[]): string {
  * *not* be true if the re-ask had been given a fresh batch of one paragraph.
  * `renderShortfall` is appended to the original prompt for that reason.
  *
- * `detectShift` runs on the merged set rather than on either half. Neither half
- * alone can reach `MIN_SHIFT_EVIDENCE`, and the set that matters is the one
- * about to be written.
+ * `detectShift` runs on the merged set rather than on either half, because the
+ * merged set is the one about to be written — and because it is the larger of
+ * the two, so it is the one with the best chance of clearing
+ * `MIN_SHIFT_EVIDENCE` at all.
+ *
+ * **What this comment used to claim, and it was wrong.** It said neither half
+ * alone could reach `MIN_SHIFT_EVIDENCE`, offered as the reason the halves are
+ * not worth checking separately. A half is the whole batch minus a handful of
+ * labels; on any batch of a dozen or more it reaches the threshold easily. What
+ * is true, and what the sentence was reaching for, is that the two sets can
+ * fall on *opposite sides* of the threshold — twelve votes and eleven — which is
+ * precisely why a shift found here must never be handed to `acceptGap` to
+ * re-decide on the smaller set. See `LabelsShifted`.
  */
 async function repairShortfall(
-  first: Shortfall,
+  first: BatchCameBackShort,
   batch: Batch,
   blocks: Block[],
   outline: string,
@@ -1504,11 +1776,76 @@ async function repairShortfall(
      doubling it here would be inheriting a number from a failure this one is
      not (see the constant's own comment, and docs/postmortems/toc-max-tokens.md
      on what a roomy reservation does to adaptive thinking). */
-  const again = await runBatch(batch, blocks, outline, signal, LABEL_HEADROOM, first.missing);
-  const labels = { ...first.partial, ...again.labels };
-  detectShift(labels, batch);
-  return { labels, record: sumRecords(batch, [first.record, again.record]) };
+  const again = await runBatch(
+    batch,
+    blocks,
+    outline,
+    signal,
+    LABEL_HEADROOM,
+    first.shortfall.missing,
+  );
+  const labels = { ...first.shortfall.partial, ...again.labels };
+  const record = sumRecords(batch, [first.record, again.record]);
+  try {
+    detectShift(labels, batch);
+  } catch (err) {
+    /* Carrying the cost of *both* requests, so the caller reporting this batch
+       as a failure still reports what it spent. */
+    if (err instanceof LabelsShifted) throw new LabelsShifted(err.message, record);
+    throw err;
+  }
+  return { labels, record };
 }
+
+/**
+ * How much of the article the labels have to reach. **Almost all of it.**
+ *
+ * This has been 0.95, then 1, and is 0.95 again. The number matters less than
+ * which argument it is standing on, so here are all three.
+ *
+ * It was **0.95** when one model call wrote the whole tree, because the model
+ * was allowed to skip a trivial transition sentence — an unlabelled gistable
+ * leaf is still only a *warning* in [validate-tree.ts](./validate-tree.ts) for
+ * that reason (docs/project/table-of-contents.md). The floor told a used escape
+ * hatch apart from an answer that had quietly stopped early.
+ *
+ * It was tightened to **1** when the label pass split out, on the argument that
+ * *"there is no longer a path by which a block is legitimately unlabelled"*:
+ * every batch is asked for an exact set of numbered paragraphs and refuses any
+ * other set, and `planBatches` puts every gistable block in exactly one batch.
+ *
+ * **That argument is now false, and the failure that falsified it is why this
+ * is 0.95 again.** A production ingest died twice on one absent label out of
+ * fifty-eight, on a paragraph whose entire text was the word "or" — stage 3 had
+ * stripped the code cell the fragment pointed at, leaving the label prompt's
+ * "6–20 words, a CLAIM or a MOVE" and its "never introduce a fact that is not in
+ * that paragraph" jointly unsatisfiable, so skipping was the compliant move and
+ * no retry could change it. This file now re-asks for the gap alone and, if
+ * that fails too, may accept the batch and leave those leaves bare. So the path
+ * exists again, deliberately, and it is bounded rather than open.
+ *
+ * **This is the backstop, not the bound.** The real bound is `droppedBudget` below — 2% of a batch, floor of one — and it is per batch, which is
+ * the only place a model's behaviour on one call can be judged. What that bound
+ * cannot see is the composition of the whole article: twenty small sibling sets
+ * each spending their floor of one would stay inside budget every time and still
+ * cost a fifth of the article its rows. This floor is what refuses that, and it
+ * is the number to move if the drops ever become normal rather than rare.
+ *
+ * Every real tree came back at 100% under the original rule: 29 of 29, 117 of
+ * 117, 18 of 18. That is still what a healthy article looks like, and
+ * `LabelRun.dropped` — printed by the CLI, logged by the step, recorded in
+ * `labels.json` — is how anybody finds out it has stopped being.
+ *
+ * **Moved here from src/toc.ts on 2026-08-31, and it is applied here now too.**
+ * `generateToc` checked it after its merge and `npm run labels -- <dir>` did
+ * not, so the advertised backstop depended on which supported entry point ran:
+ * twenty small batches each spending their floor could publish a tree missing a
+ * fifth of its rows through the standalone command and be refused through the
+ * pipeline. `assertEveryBlockLabelled` is where both callers pass, so that is
+ * where the floor is enforced — the same argument `assertCoversEveryBlock` makes
+ * one step earlier. GPT Sol's review of stage 1b, finding 4.
+ */
+export const COVERAGE_FLOOR = 0.95;
 
 /**
  * How many labels one batch may lose before the batch is a failure.
@@ -1518,28 +1855,54 @@ async function repairShortfall(
  * over a whole article lets one pathological section spend everybody else's
  * allowance, and the thing being bounded is a model's behaviour on one call.
  *
- * Two percent, and a floor of one. The floor is what makes it work at all: two
- * percent of a 12-block batch rounds to nothing, so without it a small batch
- * would be held to a stricter rule than a large one for no reason anybody could
- * defend. Above fifty blocks the percentage takes over — 2 on a batch of 58,
- * which is the size the article that prompted this produced.
+ * Two percent, with `Math.max(1, …)` in front of it. Above fifty blocks the
+ * percentage is what decides — 2 on a batch of 58, which is the size the article
+ * that prompted this produced.
  *
- * The article-level backstop is `COVERAGE_FLOOR` in src/toc.ts, and it is not
- * redundant with this: the composition of an article's batches is invisible from
- * here, and a piece cut into twenty tiny sibling sets could spend twenty floors
- * of one and lose a fifth of its labels while every batch stayed inside budget.
+ * **The `max` is belt-and-braces and its old comment argued for something that
+ * cannot happen.** It said two percent of a 12-block batch "rounds to nothing",
+ * which `Math.ceil` never does: `ceil(0.02 × 1)` is already 1, so every batch
+ * with a block in it has a budget of at least one without the `max`. Left in
+ * place rather than deleted — it costs nothing and it states the intent, which
+ * is that no batch is ever held to a rule of zero — but nobody should read it as
+ * load-bearing. Noticed while acting on GPT Sol's stage 1 review, 2026-08-31.
+ *
+ * **What actually bounds a small batch now is `acceptGap`, not this.** Partial
+ * acceptance requires the shift check to have run, and that needs
+ * `MIN_SHIFT_EVIDENCE` labels with lexical signal — so a batch of a dozen or
+ * fewer cannot spend this budget at all: it fails instead. That is deliberate
+ * (a set nothing could check is not a set to publish) and it means the floor of
+ * one is reachable only from about thirteen blocks upwards.
+ *
+ * The article-level backstop is `COVERAGE_FLOOR` above, enforced by
+ * `assertInsideCoverageFloor`, and it is not redundant with this: the
+ * composition of an article's batches is invisible from here, and a piece cut
+ * into small sibling sets could spend a floor of one over and over and lose more
+ * of its labels than the article may lose while every batch stayed inside
+ * budget.
  */
 export function droppedBudget(batchSize: number): number {
   return Math.max(1, Math.ceil(0.02 * batchSize));
 }
 
+/** What `acceptGap` decided, and — when it said no — the sentence saying why. */
+type GapDecision =
+  | {
+      kind: "accept";
+      out: { labels: Record<string, string>; record: LabelBatchRecord };
+      dropped: string[];
+    }
+  | { kind: "refuse"; why: string };
+
 /**
  * Take a batch with a hole in it — or refuse to, which is the important half.
  *
- * Returns `null` unless **both** attempts were shortfalls (so there is a partial
- * answer to keep and a known gap), and the gap is inside `droppedBudget`. Any
- * other failure — a truncation, a refusal, a 429, a malformed shape, a detected
- * shift — has no `shortfall` on it and lands here as `null`, which is the throw.
+ * Accepts only when **both** attempts came back short (so there is a partial
+ * answer to keep and a gap the model named twice), the surviving gap is inside
+ * `droppedBudget`, and `detectShift` had enough labels to actually run. Any
+ * other failure — a truncation, a refusal, a 429, a malformed shape — refuses,
+ * and the refusal says which of those it was, because "it failed twice" on its
+ * own leaves whoever is reading to guess between four different faults.
  *
  * **What this re-opens.** `COVERAGE_FLOOR` was tightened to 1 in 2026-08 on the
  * argument that a block could no longer be legitimately unlabelled; this is the
@@ -1549,19 +1912,58 @@ export function droppedBudget(batchSize: number): number {
  * `labels.json` and logged by the step — docs/reusable/silent-success.md, and
  * the "the eval had to be told" lesson applied before rather than after.
  */
-function acceptGap(
-  first: BatchIncomplete,
-  again: unknown,
-  batch: Batch,
-): { out: { labels: Record<string, string>; record: LabelBatchRecord }; dropped: string[] } | null {
-  if (!first.shortfall) return null;
-  const second = again instanceof BatchIncomplete ? again.shortfall : undefined;
+function acceptGap(first: BatchIncomplete, again: unknown, batch: Batch): GapDecision {
+  if (!cameBackShort(first)) {
+    return { kind: "refuse", why: "" };
+  }
+  /**
+   * **Both, and until 2026-08-31 only the first was required.**
+   *
+   * The warrant for leaving a paragraph bare is *the model would not write this
+   * one* — and the only evidence for that is a second well-formed answer that
+   * skipped it again. A truncation, a refusal, a 429 or a malformed shape says
+   * nothing about the paragraph at all: it is one omission followed by no
+   * usable answer, which is a transient to retry rather than a fragment to
+   * forgive. Accepting on the first error alone also let a *detected shift*
+   * through, because the merged-set check throws without a shortfall — see
+   * `LabelsShifted`. GPT Sol's review of stage 1, 2026-08-31, findings 1 and 2.
+   */
+  if (!cameBackShort(again)) {
+    return {
+      kind: "refuse",
+      why:
+        `The second attempt did not come back short — it failed outright, so nothing says the ` +
+        `model will not write these labels rather than that this attempt fell over.`,
+    };
+  }
   /* The re-ask's own partial answer counts. Two paragraphs missing and one of
      them repaired is one label dropped, not two — and refusing to look would
      throw away the call we just paid for. */
-  const labels = { ...first.shortfall.partial, ...(second?.partial ?? {}) };
-  const missing = first.shortfall.missing.filter((n) => !(batch.blocks[n - 1]!.id in labels));
-  if (missing.length === 0 || missing.length > droppedBudget(batch.blocks.length)) return null;
+  const labels = { ...first.shortfall.partial, ...again.shortfall.partial };
+  const record = sumRecords(batch, [first.record, again.record]);
+
+  /* A heading's label is the heading, and `onto` already takes it off the block
+     rather than from the model — so a heading the model never numbered is not
+     an unlabellable paragraph, it is a label we are holding. Filling it in here
+     costs the budget nothing and stops the outline showing a bare row for a
+     block whose text is right there. GPT Sol, 2026-08-31, finding 9. */
+  const still: number[] = [];
+  for (const n of first.shortfall.missing) {
+    const block = batch.blocks[n - 1]!;
+    if (block.id in labels) continue;
+    if (isHeading(block)) labels[block.id] = block.text;
+    else still.push(n);
+  }
+
+  const budget = droppedBudget(batch.blocks.length);
+  if (still.length > budget) {
+    return {
+      kind: "refuse",
+      why:
+        `${still.length} of the batch's ${batch.blocks.length} paragraphs are still unlabelled, ` +
+        `past the ${budget} a batch this size may lose.`,
+    };
+  }
   /**
    * **And these labels have never been shift-checked.**
    *
@@ -1569,21 +1971,37 @@ function acceptGap(
    * first — so without this line the one wrong answer `parseLabels` cannot see
    * arrives by the one path that skips the check that can. Nineteen confident
    * labels on the wrong nineteen paragraphs, no gap, nothing red: worse than the
-   * failure the accept exists to avoid. It throws rather than returning null,
-   * because "the model lost its place" is a better thing to put in front of
-   * whoever is reading than "it failed twice".
+   * failure the accept exists to avoid. It throws rather than refusing, because
+   * "the model lost its place" is a better thing to put in front of whoever is
+   * reading than "it failed twice".
    *
-   * This is the *only* shift guard on this path, and it was briefly two: a
-   * `LabelsShifted` subclass refused a rescue whenever the re-ask's own merged
-   * check had already found one. It was deleted the same hour, because no
-   * fixture could tell the two apart — the merged set and this one differ by at
-   * most the handful of labels the budget allows, which cannot move a majority
-   * vote — and a clause nothing can redden is a clause nobody can maintain.
+   * **The evidence count is why this returns a number**, and it is the second
+   * half of the same guarantee. `detectShift` abstains below
+   * `MIN_SHIFT_EVIDENCE`, which is 12 — so a batch of twelve with a surviving
+   * gap offers eleven labels and the check cannot fire even on a total shift.
+   * `planBatches` has no minimum batch size, so that is a reachable shape and
+   * not a hypothetical one. Accepting there would be publishing an unchecked set
+   * under a comment claiming it was checked, so it refuses instead: a failed
+   * ingest is loud and a displaced set of labels is not. GPT Sol, finding 3.
    */
-  detectShift(labels, batch);
+  const evidence = detectShift(labels, batch);
+  if (evidence < MIN_SHIFT_EVIDENCE) {
+    return {
+      kind: "refuse",
+      why:
+        `The ${Object.keys(labels).length} labels this batch did produce could not be checked for ` +
+        `a displacement: only ${evidence} of them carry enough lexical signal to vote, against ` +
+        `the ${MIN_SHIFT_EVIDENCE} that check needs. A batch is only kept with a gap in it when we ` +
+        `can still say the rest of it landed on the right paragraphs.`,
+    };
+  }
   return {
-    out: { labels, record: sumRecords(batch, [first.shortfall.record, second?.record]) },
-    dropped: missing.map((n) => batch.blocks[n - 1]!.id),
+    kind: "accept",
+    out: { labels, record },
+    /* Possibly empty, and that is now reachable rather than impossible: every
+       still-missing ordinal may have been a heading, in which case the batch is
+       whole and cost nothing from the budget. */
+    dropped: still.map((n) => batch.blocks[n - 1]!.id),
   };
 }
 
@@ -1603,6 +2021,11 @@ function sumRecords(batch: Batch, parts: (LabelBatchRecord | undefined)[]): Labe
   return {
     blocks: batch.blocks.map((b) => b.id),
     setStarts: batch.setStarts,
+    /* The one field that is a count of *calls* rather than a sum of what they
+       bought, and it is the whole reason this record can be told apart from a
+       one-request batch afterwards. `?? 1` for a record read back out of a
+       `labels.json` written before the field existed. */
+    requests: total((r) => r.requests ?? 1),
     inputTokens: total((r) => r.inputTokens),
     outputTokens: total((r) => r.outputTokens),
     cacheReadTokens: total((r) => r.cacheReadTokens),
@@ -1797,9 +2220,28 @@ export async function generateLabels(opts: {
                `max_tokens` so the retry sends the same bytes. A short answer is
                the only failure that carries a `shortfall`, and that is what this
                branch reads — not the message, and not the error's name. */
-            out = err.shortfall
-              ? await repairShortfall(err.shortfall, batch, opts.blocks, outline, signal)
-              : await runBatch(batch, opts.blocks, outline, signal, LABEL_HEADROOM * 2);
+            if (cameBackShort(err)) {
+              out = await repairShortfall(err, batch, opts.blocks, outline, signal);
+            } else {
+              const redrawn = await runBatch(
+                batch,
+                opts.blocks,
+                outline,
+                signal,
+                LABEL_HEADROOM * 2,
+              );
+              /* Both requests' usage, not just the one that worked. The first
+                 attempt was truncated or displaced, and it was paid for; a
+                 record holding only the re-draw would report a batch that cost
+                 twice as half of what it cost, and `calls` would say one where
+                 two requests went out. src/ai-spend.ts has the real number, and
+                 the artefact quietly disagreeing with the ledger is worse than
+                 either number alone. */
+              out = {
+                labels: redrawn.labels,
+                record: sumRecords(batch, [err.record, redrawn.record]),
+              };
+            }
           } catch (again) {
             /* An abort is not a second model failure and must not be dressed as
                one. If another batch has already ended the run, or the caller
@@ -1807,15 +2249,44 @@ export async function generateLabels(opts: {
                whoever reads the log a truncation story about a call that never
                happened. Rethrown as itself. GPT-5.6-sol, 2026-08-26. */
             if (signal.aborted) throw again;
+            /**
+             * **A displacement the repair found is not a gap, and must not be
+             * offered to `acceptGap` as one.**
+             *
+             * `repairShortfall` merges the two answers and checks the merged
+             * set, which is the right set to check. `acceptGap` would then throw
+             * that verdict away and re-decide on the *first* call's partial set
+             * — one label smaller, and `MIN_SHIFT_EVIDENCE` is exactly the sort
+             * of threshold one label can sit either side of. Twelve votes
+             * detects; eleven abstains; the run publishes twelve displaced
+             * labels and calls the thirteenth a drop.
+             *
+             * `acceptGap` refuses a second error with no shortfall anyway, so
+             * this line is the second of two locks on the same door — but it is
+             * the one that puts the real finding in front of the reader instead
+             * of "the second attempt failed outright". GPT Sol, finding 1;
+             * tests/labels-shortfall.test.ts § "does not turn a shift the repair
+             * found back into an accepted gap".
+             */
+            if (again instanceof LabelsShifted && cameBackShort(err)) {
+              throw new Error(
+                `The nav labels for one section came back short, and the repaired set is ` +
+                  `displaced.\n` +
+                  `  First attempt: ${err.message}\n` +
+                  `  After the re-ask: ${again.message}`,
+              );
+            }
             /* **The bounded partial accept**, and it happens here rather than
                anywhere earlier on purpose: only at this line have both a full
                draw and a re-ask for the gap alone failed to produce a label, so
                only here is "the model will not write this one" a conclusion
-               rather than a guess. `acceptGap` returns null when the gap is
-               bigger than a batch is allowed to lose, and the throw below is
-               then the same one it always was. */
-            const accepted = acceptGap(err, again, batch);
-            if (!accepted) {
+               rather than a guess. `acceptGap` refuses — and says why — when the
+               second attempt was not itself a shortfall, when the gap is bigger
+               than a batch is allowed to lose, or when the batch was too small
+               to shift-check what it would have kept; the throw below is then
+               the same one it always was, with its reason appended. */
+            const decision = acceptGap(err, again, batch);
+            if (decision.kind === "refuse") {
               /* Both attempts, whatever the second one was. They are often
                  different failures — a truncation carries the two budget figures
                  that say which half overran, and losing it because the retry came
@@ -1831,7 +2302,14 @@ export async function generateLabels(opts: {
                 `The nav labels for one section failed twice.\n` +
                   `  First attempt: ${err.message}\n` +
                   `  Second attempt: ` +
-                  `${again instanceof Error ? again.message : String(again)}`,
+                  `${again instanceof Error ? again.message : String(again)}` +
+                  /* Why the gap was not forgiven, when there was a reason worth
+                     a sentence. Without it the four different refusals — no
+                     partial answer at all, a second failure that was not a
+                     shortfall, a gap past the budget, a set too small to
+                     shift-check — arrive as the same two lines above, and the
+                     reader has to go and read `acceptGap` to tell which. */
+                  (decision.why ? `\n  ${decision.why}` : ""),
               );
               /* No `cause`. src/log.ts follows cause chains, and src/parse-json.ts
                  spells out why that matters here: an attached original error puts
@@ -1839,8 +2317,8 @@ export async function generateLabels(opts: {
                  different key. Both messages are already in the text above, which
                  is the part worth keeping. */
             }
-            dropped.push(...accepted.dropped);
-            out = accepted.out;
+            dropped.push(...decision.dropped);
+            out = decision.out;
           }
         }
         done++;
@@ -1900,6 +2378,7 @@ export async function generateLabels(opts: {
   dropped.sort((a, b) => order.get(a)! - order.get(b)!);
 
   assertEveryBlockLabelled(labels, opts.blocks, dropped);
+  assertInsideCoverageFloor(dropped, opts.blocks);
 
   return {
     labels,
@@ -1918,7 +2397,7 @@ export async function generateLabels(opts: {
     batches: batches.length,
     oversized: oversizedSets(batches).length,
     resumed,
-    calls: paid.length,
+    calls: paid.reduce((n, r) => n + (r.requests ?? 1), 0),
     estimatedCacheable,
     inputTokens: paid.reduce((n, r) => n + r.inputTokens, 0),
     outputTokens: paid.reduce((n, r) => n + r.outputTokens, 0),

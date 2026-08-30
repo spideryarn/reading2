@@ -2070,13 +2070,19 @@ function part(m: RegExpExecArray, group: number): string {
  * reading it back through the endpoint: HTTP 200, with the planted text in the
  * body.
  *
- * **The thing that made it survive review is how a shallow attempt fails.**
- * `../../etc` finds no `blocks.json`, so `candidateDirs` falls through to
- * `example/` and serves the fixture — which looks exactly like a refusal. You
- * have to traverse all the way to a directory you control before anything
- * differs, and a test that stops short reports the endpoint safe. Textbook
+ * **The thing that made it survive review is how a shallow attempt failed.**
+ * `../../etc` finds no `blocks.json`, and `candidateDirs` used to fall through
+ * to `example/` and serve the fixture — which looks exactly like a refusal. You
+ * had to traverse all the way to a directory you control before anything
+ * differed, and a test that stopped short reported the endpoint safe. Textbook
  * docs/reusable/silent-success.md, and it is why this is written up in
  * docs/project/security.md rather than filed as a bug fix.
+ *
+ * That fallback is gone as of stage 1a: `candidateDirs` in src/api.ts offers
+ * `example/` for the fixture's own slug and for nothing else, so a slug with no
+ * artefacts now answers 404 whether it is a typo or a traversal. The history
+ * stays here because it is the reason this route validates the slug rather than
+ * trusting the filesystem to refuse.
  *
  * The knowledge was already in this file. `parseJobRequest` validates its slug
  * and says why: *"it is joined onto `data/` and `output/`, so an unchecked one

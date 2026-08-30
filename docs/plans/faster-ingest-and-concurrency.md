@@ -553,6 +553,86 @@ are one argument: *stop discarding work already paid for.*
 current typecheck error is another session's in-flight work (`DiagramPanel.tsx`, the `jobs*`
 five-argument change, `pdf-chunk-concurrency`).
 
+### The review of the code, which stopped it — and the deletion that caused it
+
+**GPT Sol reviewed `0062f74` and opened with "STOP".** Nine findings, one of them a silent-corruption
+path, and **it exists because of a decision this plan praised.**
+[The review](stage1-code-review-sol.md).
+
+**The P0.** `repairShortfall` merges both calls and runs `detectShift` — correctly. But `detectShift`
+threw an error carrying no `shortfall`, so the outer catch handed it to `acceptGap`, which
+**discarded the merged labels and re-tested the smaller first set**. `MIN_SHIFT_EVIDENCE` is 12: a
+merged set of 12 detects, a partial set of 11 abstains. The run then published eleven labels each
+describing the following paragraph, and reported one clean drop.
+
+The reproduction is the clearest statement of what would have shipped: thirteen blocks each carrying
+one distinctive word, every label naming the *next* block's word, and `generateLabels` **resolving**
+with `spya-000000` labelled *"…concerning harpsichord…"* — block 1's word. Green suite, no error, a
+table of contents confidently wrong about every row it has.
+
+**Why it was there.** A `LabelsShifted` guard had been written and then deleted the same hour,
+because no fixture could redden it — the argument being that the two label sets *"differ by at most
+the budget, which cannot move a majority vote"*. Sol broke that in one reading: **it does not need to
+move a vote, it needs to cross the evidence threshold**, and one label is exactly enough. The guard
+is reinstated as a subtype, and its comment now says the removal rested on a wrong argument.
+
+> **The transferable lesson, and it cost the most of anything today.** "Still compiles, still green"
+> has **three** readings, not two: decoration, a shadowing clause, and *a case nobody has thought of
+> yet*. A compiler settles the first two and can say nothing about the third — and neither can a
+> fixture written from the same mental model that wrote the code. For a **runtime** guard, *"I could
+> not make it fire"* is far weaker evidence than *"it cannot fire"*. Before deleting one, write the
+> unreachability argument as one sentence: that sentence is the falsifiable thing. **If it names a
+> threshold, a count or a majority, treat it as unproven** — those are exactly the shapes where a
+> case sits just past the edge of the fixture you happened to write.
+
+Three of us — the author, the orchestrator, and a plan-stage review — agreed with that deletion. A
+different model family broke it in one pass. That is the argument for the cross-family review being a
+gate and not a courtesy, and it is why the code review is weighted above the plan review.
+
+**The other eight**, all fixed: partial acceptance did not actually require *two* shortfalls (and a
+test codified that bug); the shift guard was **necessarily inert** on batches of 12 or fewer;
+`npm run labels` bypassed the coverage floor `generateToc` enforces; `calls` counted batches while
+the cache diagnostic read it as requests; `repairedBlocks` tripled a cascaded repair; the evidence
+promised for revisiting `MAX_REPAIRED_BOUNDARIES` was uncollectable **exactly when the bound fires**;
+the label eval trusted the producer's count rather than its ids; and a heading whose label is
+deterministically known could still spend the drop budget.
+
+### The batch floor, and why the obvious fix was the wrong one
+
+Finding 3 looked like a choice between two bad outcomes: **refuse**, and a short tail batch with one
+unlabellable fragment loses the whole article — the fatal shape Greg ruled against, and a *likely*
+one; or **accept and report "unchecked"**, which publishes labels that were never shift-checked, and
+a shifted label is worse than a dropped one. A dropped label is a blank row; a shifted one is a
+confident sentence about the wrong paragraph. Saying we could not check does not make them less
+wrong.
+
+**Neither. The root cause is that a batch could be smaller than the evidence its own guard needs.**
+So `MIN_BATCH` is **computed**, not typed —
+
+```ts
+const MIN_BATCH = smallest n where n - droppedBudget(n) >= MIN_SHIFT_EVIDENCE
+```
+
+— and a short tail merges into its predecessor. The batch floor and the guard's threshold are one
+constraint; two constants beside each other are two things that drift.
+
+**Measured over every article on the machine before it landed**, rather than argued:
+
+```
+14 articles     31 batches, 4 under the floor   →   28 batches, 1 under the floor
+                11 of 14 unchanged byte-for-byte
+```
+
+Cheap insurance, not a rewrite of batching. The cost is named rather than hidden: a merged batch may
+exceed `MAX_BATCH` — 60 becomes 71 at worst — which is acceptable because **the cap already gives way
+to the sibling rule at any size**, and this second exception is bounded at `MIN_BATCH - 1`.
+
+The one residue — an article too short to have a neighbour to merge with — costs nothing, and the
+argument was checked independently rather than accepted: one dropped label is under a 95% floor for
+every article size from 8 to 19 blocks, crossing over only at 20. So anything at or above the
+13-block floor yields a checkable batch and anything below is refused by coverage anyway. **The two
+refusals do not stack into a case that would otherwise have shipped.**
+
 ### Two ways an article can still be lost, both left open deliberately
 
 Neither is a bug. Both are one small change to close, and both should be closed on evidence rather

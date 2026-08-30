@@ -243,6 +243,53 @@ describe("planBatches", () => {
     expect(batches.length).toBe(5);
   });
 
+  /**
+   * **No batch may be too small for the guard that decides whether to keep it.**
+   *
+   * `acceptGap` only leaves a paragraph bare if `detectShift` could vote on what
+   * it would keep, and that needs `MIN_SHIFT_EVIDENCE` labels. A batch under
+   * `MIN_BATCH` therefore cannot both spend its drop budget and be checked — so
+   * before this, a short tail batch containing one unlabellable fragment failed
+   * the whole article rather than losing one row. Measured on the fourteen
+   * articles on this machine, 4 of 31 batches came out under the floor, on three
+   * of the articles: tails of 11, 4 and 4. Not an exotic shape.
+   *
+   * Sets of 6 under the default cap of 60 give 60 + 60 + 6 — a tail of one
+   * section, which is what a real article's last section looks like.
+   */
+  it("does not emit a batch too small to be shift-checked, and merges the tail instead", () => {
+    const { tree, blocks } = fixture(21, 6);
+    const sizes = planBatches(tree, blocks).map((b) => b.blocks.length);
+    expect(sizes).toEqual([60, 66]);
+    // The cap gives way, and by less than the floor. It already gives way to an
+    // oversized sibling set; this is the second thing it gives way to.
+    expect(sizes.at(-1)! - 60).toBeLessThan(13);
+  });
+
+  it("leaves a whole article shorter than the floor as one small batch", () => {
+    /* The one case merging cannot reach: there is no neighbour. It stays a
+       single short batch rather than being refused here, because refusing an
+       article at the planning stage would be a fatal failure for a piece that
+       will very probably label fine — and if it does drop a label,
+       `assertInsideCoverageFloor` refuses it anyway, since one label of a
+       sub-twenty-block article is already past the 5% the article may lose. */
+    const { tree, blocks } = fixture(2, 4);
+    const sizes = planBatches(tree, blocks).map((b) => b.blocks.length);
+    expect(sizes).toEqual([8]);
+  });
+
+  it("still fills batches to the cap rather than to the floor", () => {
+    /* **The control for the bug this file has already had once.** The removed
+       minimum closed a batch *as soon as* it reached the minimum, so every batch
+       came out at about the minimum and the cap could never fire. `MIN_BATCH`
+       must never cause a close, only withhold one — and the difference between
+       those two is invisible in the name and visible here: sets of 7 must still
+       pack to the high fifties, not to thirteen. */
+    const { tree, blocks } = fixture(30, 7);
+    const sizes = planBatches(tree, blocks).map((b) => b.blocks.length);
+    for (const n of sizes) expect(n).toBeGreaterThan(40);
+  });
+
   it("gives an oversized section a call to itself rather than cutting it", () => {
     // The cap is a preference; the sibling rule is not. A 30-block section under
     // a max of 20 must survive whole.

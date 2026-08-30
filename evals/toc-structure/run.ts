@@ -36,7 +36,7 @@ import { ARMS, armByName, type ArmSpec, type Comparison } from "./arms.js";
 import { defaultCorpus, entryForDir } from "./corpus.js";
 import { buildHeadingTree } from "../../src/heading-tree.js";
 import { ArmFailure, runModelArm, type CallStats } from "./model-arms.js";
-import type { BuildReport } from "../../src/toc.js";
+import { repairedBlockCount, type BuildReport } from "../../src/toc.js";
 import { compareTrees, scoreTree, type StructureScore, type TreeAgreement } from "./score.js";
 
 interface Article {
@@ -491,7 +491,13 @@ async function main(): Promise<void> {
                      living inside the thing under measurement, redefining the
                      measurement, which is the mistake this eval already had to
                      be told about once. */
-                  blocks: chose.built.repairs.reduce((n, r) => n + r.size, 0),
+                  /* Through `repairedBlockCount`, which is the same function
+                     `generateToc` reports with — a cascade is one boundary
+                     recorded once per depth, and summing the entries counted an
+                     arm's 40-block movement as 120 if the tree happened to be
+                     three deep there. An eval that measures a repair differently
+                     from the code under measurement is worse than no measure. */
+                  blocks: repairedBlockCount(chose.built.repairs),
                   largest: chose.built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
                   where: chose.built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`),
                   droppedHeadings: chose.built.droppedHeadings,

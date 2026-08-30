@@ -428,6 +428,16 @@ call. `planBatches` packs whole sibling sets until adding the next one would pas
 never splits one. Batching on a token window instead would break exactly that and nothing else,
 which is why it would be hard to notice.
 
+**There is a floor as well as a cap, and it is derived rather than chosen.** A batch under
+`MIN_BATCH` — 13 today — cannot both spend its drop budget and leave `detectShift` the
+`MIN_SHIFT_EVIDENCE` labels it needs to vote, so it is a batch nothing could stand behind. Rather
+than emit one and refuse it at run time, the packing keeps taking sets, and a short tail is merged
+backwards into the batch before it. That breaches the 60 by at most twelve — 71 on the widest real
+case here — which is the same give the cap already has for an oversized sibling set. Measured before
+it landed: 4 of 31 batches across the fourteen articles on Greg's machine were under the floor, on
+three of them; afterwards, 1 of 28, and that one is a ten-block article which has no neighbour to
+merge into. The residue is `acceptGap`'s to refuse.
+
 **A heading's label is taken from the block, not asked for.** The prompt says to copy the heading
 exactly; the model does not. On the two committed articles, 9 of 36 heading labels and 3 of 9
 differed — curly apostrophes flattened to straight, authored numbering ("2: Other Games In Town")
@@ -464,11 +474,21 @@ So the stage now does three things instead of dying, in rising order of risk:
   already paid for are kept. Re-drawing the whole batch has now failed to help three times on record,
   byte-identically, because `batchFingerprint` excludes `max_tokens` so the retry sends the same
   bytes.
-- **Accepts the batch with the gap, bounded.** `droppedBudget` — 2% of a batch, floor of one — after
-  the re-ask has also failed. `COVERAGE_FLOOR` is the article-level backstop behind that per-batch
-  bound, not a second copy of it: the batching is invisible from `checkCoverage`, so twenty small
-  sections each spending their floor of one would stay inside budget and still cost the article a
-  fifth of its rows.
+- **Accepts the batch with the gap, bounded — and only on all four counts.** `droppedBudget` — 2% of
+  a batch, floor of one — after the re-ask has also failed. Three further conditions, all added
+  2026-08-31 after GPT Sol's review of the stage found each of them missing: the re-ask must itself
+  have come back *short* (a truncation or a 429 says nothing about the paragraph, so it is a
+  transient to retry rather than a fragment to forgive); a displacement found on the merged set is
+  rethrown rather than re-decided on the smaller partial set, which can sit one label under the
+  evidence `detectShift` needs; and a batch too small for that check to run at all is refused rather
+  than published unchecked — which is the backstop behind `MIN_BATCH` above, for the articles
+  merging cannot reach and for a batch whose labels turn out to carry no lexical signal.
+  `COVERAGE_FLOOR` is the article-level backstop behind the per-batch
+  bound, not a second copy of it: the batching is invisible from `checkCoverage`, so small sections
+  each spending their floor of one would stay inside budget and still cost the article a fifth of its
+  rows. It now lives in [`src/labels.ts`](../../src/labels.ts) and is applied at the end of
+  `generateLabels`, so `npm run labels` gets it too — it used to be enforced only by `generateToc`,
+  which made the backstop depend on which command you typed.
 
 **The risk in the third one is silent success.** An unlabelled leaf renders as *nothing* — the
 outline skips the row, the spine draws an empty string, and nothing is red. So every drop is named
