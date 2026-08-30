@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { CORPUS } from "../corpus.mjs";
+import { CORPUS, FIXTURE_UA } from "../corpus.mjs";
 
 /**
  * Fixtures that are committed and hashed here but are **not** part of the
@@ -55,10 +55,9 @@ const EXTRA: { name: string; file: string; url: string }[] = [
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const MANIFEST = path.join(HERE, "hashes.json");
-/** Same string the fixtures were captured with, so a server that varies by UA varies the same way. */
-const UA =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+/** Same string the fixtures were captured with, so a server that varies by UA
+ *  varies the same way. Shared with probe.mts — see FIXTURE_UA in corpus.mts. */
+const UA = FIXTURE_UA;
 
 const sha256 = (b: Buffer | string): string => createHash("sha256").update(b).digest("hex");
 

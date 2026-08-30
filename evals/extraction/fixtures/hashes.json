@@ -89,6 +89,36 @@
     "url": "https://www.anthropic.com/constitution",
     "capturedAt": "2026-08-28"
   },
+  "mkdocs-tabs": {
+    "sha256": "a58b2f645293a7a4bd6c1f1d10448fcbee0b2e128f7fa35c7c278097d9032a88",
+    "bytes": 88023,
+    "url": "https://squidfunk.github.io/mkdocs-material/reference/content-tabs/",
+    "capturedAt": "2026-08-30"
+  },
+  "whitman-leaves": {
+    "sha256": "5be188617bdf46907becc88b751a688bbd2ee567ad1236fdef1bc6f586fff1c3",
+    "bytes": 858748,
+    "url": "https://www.gutenberg.org/files/1322/1322-h/1322-h.htm",
+    "capturedAt": "2026-08-30"
+  },
+  "hacker-howto": {
+    "sha256": "d6c20970118d41fcac2c2d97bea5f6ca42be4d0ee9579403da9d832b22ab8091",
+    "bytes": 84036,
+    "url": "http://www.catb.org/~esr/faqs/hacker-howto.html",
+    "capturedAt": "2026-08-30"
+  },
+  "mactutor-turing": {
+    "sha256": "0fe6be29118ed1c152e751700c29ff2e09f4df71f9a2bf8625f0ef697bd534ae",
+    "bytes": 49133,
+    "url": "https://mathshistory.st-andrews.ac.uk/Biographies/Turing/",
+    "capturedAt": "2026-08-30"
+  },
+  "shakespeare-hamlet": {
+    "sha256": "246a9dde1e37b05b7540669225747f58ee2122e37c125cab3687a5434af24915",
+    "bytes": 25932,
+    "url": "https://www.opensourceshakespeare.org/views/plays/play_view.php?WorkID=hamlet&Act=3&Scene=1&Scope=scene",
+    "capturedAt": "2026-08-30"
+  },
   "acx-footnotes": {
     "sha256": "99dd76489be30c4fd4a8c6ba6a2d41ff90d4db1925fef85cf81b3e84ffd88724",
     "bytes": 215807,

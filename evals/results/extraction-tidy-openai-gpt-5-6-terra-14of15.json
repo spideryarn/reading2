@@ -1,0 +1,4188 @@
+[
+  {
+    "fixture": "man-open",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 28,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-hx4jww",
+        "tag": "p",
+        "chars": 2497,
+        "text": "Pages that refer to this page: pv(1), strace(1), systemd-nspawn(1), accept(2), access(2), chmod(2), chown(2), chroot(2), clone(2), close(2),",
+        "marker": false
+      }
+    ],
+    "prose": [
+      {
+        "id": "spya-hx4jww",
+        "tag": "p",
+        "chars": 2497,
+        "text": "Pages that refer to this page: pv(1), strace(1), systemd-nspawn(1), accept(2), access(2), chmod(2), chown(2), chroot(2), clone(2), close(2),",
+        "marker": false
+      }
+    ],
+    "unknownIds": [],
+    "droppedChars": 2497,
+    "usage": {
+      "input": 1655,
+      "output": 151
+    },
+    "ms": 3932
+  },
+  {
+    "fixture": "rfc9110",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 2415,
+    "markers": 127,
+    "markersCaught": 77,
+    "beyondTheRule": [
+      {
+        "id": "spya-dx0c8b",
+        "tag": "table",
+        "chars": 73,
+        "text": "RFC 9110 HTTP Semantics June 2022 Fielding, et al. Standards Track [Page]",
+        "marker": false
+      },
+      {
+        "id": "spya-j6aa5n",
+        "tag": "h2",
+        "chars": 17,
+        "text": "Table of Contents",
+        "marker": false
+      },
+      {
+        "id": "spya-catwej",
+        "tag": "li",
+        "chars": 15,
+        "text": "1. Introduction",
+        "marker": false
+      },
+      {
+        "id": "spya-vdm4z2",
+        "tag": "li",
+        "chars": 12,
+        "text": "1.1. Purpose",
+        "marker": false
+      },
+      {
+        "id": "spya-p70quw",
+        "tag": "li",
+        "chars": 26,
+        "text": "1.2. History and Evolution",
+        "marker": false
+      },
+      {
+        "id": "spya-f8w4ny",
+        "tag": "li",
+        "chars": 19,
+        "text": "1.3. Core Semantics",
+        "marker": false
+      },
+      {
+        "id": "spya-mfbe4f",
+        "tag": "li",
+        "chars": 46,
+        "text": "1.4. Specifications Obsoleted by This Document",
+        "marker": false
+      },
+      {
+        "id": "spya-fauezn",
+        "tag": "li",
+        "chars": 14,
+        "text": "2. Conformance",
+        "marker": false
+      },
+      {
+        "id": "spya-ksrcb3",
+        "tag": "li",
+        "chars": 20,
+        "text": "2.1. Syntax Notation",
+        "marker": false
+      },
+      {
+        "id": "spya-rquh2a",
+        "tag": "li",
+        "chars": 26,
+        "text": "2.2. Requirements Notation",
+        "marker": false
+      },
+      {
+        "id": "spya-vsdjfe",
+        "tag": "li",
+        "chars": 24,
+        "text": "2.3. Length Requirements",
+        "marker": false
+      },
+      {
+        "id": "spya-hzue3r",
+        "tag": "li",
+        "chars": 19,
+        "text": "2.4. Error Handling",
+        "marker": false
+      },
+      {
+        "id": "spya-fv37wn",
+        "tag": "li",
+        "chars": 21,
+        "text": "2.5. Protocol Version",
+        "marker": false
+      },
+      {
+        "id": "spya-yc7qjk",
+        "tag": "li",
+        "chars": 32,
+        "text": "3. Terminology and Core Concepts",
+        "marker": false
+      },
+      {
+        "id": "spya-wjrv26",
+        "tag": "li",
+        "chars": 14,
+        "text": "3.1. Resources",
+        "marker": false
+      },
+      {
+        "id": "spya-nrj6r4",
+        "tag": "li",
+        "chars": 20,
+        "text": "3.2. Representations",
+        "marker": false
+      },
+      {
+        "id": "spya-dqmupt",
+        "tag": "li",
+        "chars": 38,
+        "text": "3.3. Connections, Clients, and Servers",
+        "marker": false
+      },
+      {
+        "id": "spya-wgkn3e",
+        "tag": "li",
+        "chars": 13,
+        "text": "3.4. Messages",
+        "marker": false
+      },
+      {
+        "id": "spya-r93mcb",
+        "tag": "li",
+        "chars": 16,
+        "text": "3.5. User Agents",
+        "marker": false
+      },
+      {
+        "id": "spya-yvgg4s",
+        "tag": "li",
+        "chars": 18,
+        "text": "3.6. Origin Server",
+        "marker": false
+      },
+      {
+        "id": "spya-jrey94",
+        "tag": "li",
+        "chars": 19,
+        "text": "3.7. Intermediaries",
+        "marker": false
+      },
+      {
+        "id": "spya-r2an5v",
+        "tag": "li",
+        "chars": 11,
+        "text": "3.8. Caches",
+        "marker": false
+      },
+      {
+        "id": "spya-wd9kpa",
+        "tag": "li",
+        "chars": 29,
+        "text": "3.9. Example Message Exchange",
+        "marker": false
+      },
+      {
+        "id": "spya-k2vw08",
+        "tag": "li",
+        "chars": 22,
+        "text": "4. Identifiers in HTTP",
+        "marker": false
+      },
+      {
+        "id": "spya-x3k2px",
+        "tag": "li",
+        "chars": 19,
+        "text": "4.1. URI References",
+        "marker": false
+      },
+      {
+        "id": "spya-u0ujyu",
+        "tag": "li",
+        "chars": 29,
+        "text": "4.2. HTTP-Related URI Schemes",
+        "marker": false
+      },
+      {
+        "id": "spya-knsyxs",
+        "tag": "li",
+        "chars": 22,
+        "text": "4.2.1. http URI Scheme",
+        "marker": false
+      },
+      {
+        "id": "spya-bydhgf",
+        "tag": "li",
+        "chars": 23,
+        "text": "4.2.2. https URI Scheme",
+        "marker": false
+      },
+      {
+        "id": "spya-k9tkuk",
+        "tag": "li",
+        "chars": 43,
+        "text": "4.2.3. http(s) Normalization and Comparison",
+        "marker": false
+      },
+      {
+        "id": "spya-kgcby3",
+        "tag": "li",
+        "chars": 46,
+        "text": "4.2.4. Deprecation of userinfo in http(s) URIs",
+        "marker": false
+      },
+      {
+        "id": "spya-psp4qc",
+        "tag": "li",
+        "chars": 51,
+        "text": "4.2.5. http(s) References with Fragment Identifiers",
+        "marker": false
+      },
+      {
+        "id": "spya-z7rmwg",
+        "tag": "li",
+        "chars": 25,
+        "text": "4.3. Authoritative Access",
+        "marker": false
+      },
+      {
+        "id": "spya-frsdch",
+        "tag": "li",
+        "chars": 17,
+        "text": "4.3.1. URI Origin",
+        "marker": false
+      },
+      {
+        "id": "spya-s4u4h2",
+        "tag": "li",
+        "chars": 19,
+        "text": "4.3.2. http Origins",
+        "marker": false
+      },
+      {
+        "id": "spya-swwzjf",
+        "tag": "li",
+        "chars": 20,
+        "text": "4.3.3. https Origins",
+        "marker": false
+      },
+      {
+        "id": "spya-w2f5yx",
+        "tag": "li",
+        "chars": 37,
+        "text": "4.3.4. https Certificate Verification",
+        "marker": false
+      },
+      {
+        "id": "spya-skhkcn",
+        "tag": "li",
+        "chars": 31,
+        "text": "4.3.5. IP-ID Reference Identity",
+        "marker": false
+      },
+      {
+        "id": "spya-ub0j72",
+        "tag": "li",
+        "chars": 9,
+        "text": "5. Fields",
+        "marker": false
+      },
+      {
+        "id": "spya-k956na",
+        "tag": "li",
+        "chars": 16,
+        "text": "5.1. Field Names",
+        "marker": false
+      },
+      {
+        "id": "spya-pr22hv",
+        "tag": "li",
+        "chars": 41,
+        "text": "5.2. Field Lines and Combined Field Value",
+        "marker": false
+      },
+      {
+        "id": "spya-jqhbyg",
+        "tag": "li",
+        "chars": 16,
+        "text": "5.3. Field Order",
+        "marker": false
+      },
+      {
+        "id": "spya-w366bk",
+        "tag": "li",
+        "chars": 17,
+        "text": "5.4. Field Limits",
+        "marker": false
+      },
+      {
+        "id": "spya-xc5z4w",
+        "tag": "li",
+        "chars": 17,
+        "text": "5.5. Field Values",
+        "marker": false
+      },
+      {
+        "id": "spya-fcwnb7",
+        "tag": "li",
+        "chars": 43,
+        "text": "5.6. Common Rules for Defining Field Values",
+        "marker": false
+      },
+      {
+        "id": "spya-sr7s7p",
+        "tag": "li",
+        "chars": 35,
+        "text": "5.6.1. Lists (#rule ABNF Extension)",
+        "marker": false
+      },
+      {
+        "id": "spya-muyt25",
+        "tag": "li",
+        "chars": 28,
+        "text": "5.6.1.1. Sender Requirements",
+        "marker": false
+      },
+      {
+        "id": "spya-ex35a2",
+        "tag": "li",
+        "chars": 31,
+        "text": "5.6.1.2. Recipient Requirements",
+        "marker": false
+      },
+      {
+        "id": "spya-cpepde",
+        "tag": "li",
+        "chars": 13,
+        "text": "5.6.2. Tokens",
+        "marker": false
+      },
+      {
+        "id": "spya-ac0zq4",
+        "tag": "li",
+        "chars": 17,
+        "text": "5.6.3. Whitespace",
+        "marker": false
+      },
+      {
+        "id": "spya-f707yf",
+        "tag": "li",
+        "chars": 21,
+        "text": "5.6.4. Quoted Strings",
+        "marker": false
+      },
+      {
+        "id": "spya-nza2ap",
+        "tag": "li",
+        "chars": 15,
+        "text": "5.6.5. Comments",
+        "marker": false
+      },
+      {
+        "id": "spya-d6rez9",
+        "tag": "li",
+        "chars": 17,
+        "text": "5.6.6. Parameters",
+        "marker": false
+      },
+      {
+        "id": "spya-y887ej",
+        "tag": "li",
+        "chars": 24,
+        "text": "5.6.7. Date/Time Formats",
+        "marker": false
+      },
+      {
+        "id": "spya-xaay0k",
+        "tag": "li",
+        "chars": 22,
+        "text": "6. Message Abstraction",
+        "marker": false
+      },
+      {
+        "id": "spya-p2vfcd",
+        "tag": "li",
+        "chars": 29,
+        "text": "6.1. Framing and Completeness",
+        "marker": false
+      },
+      {
+        "id": "spya-drmdh3",
+        "tag": "li",
+        "chars": 17,
+        "text": "6.2. Control Data",
+        "marker": false
+      },
+      {
+        "id": "spya-myf3hg",
+        "tag": "li",
+        "chars": 18,
+        "text": "6.3. Header Fields",
+        "marker": false
+      },
+      {
+        "id": "spya-qrxgww",
+        "tag": "li",
+        "chars": 12,
+        "text": "6.4. Content",
+        "marker": false
+      },
+      {
+        "id": "spya-rsfgvn",
+        "tag": "li",
+        "chars": 24,
+        "text": "6.4.1. Content Semantics",
+        "marker": false
+      },
+      {
+        "id": "spya-vjxwk5",
+        "tag": "li",
+        "chars": 26,
+        "text": "6.4.2. Identifying Content",
+        "marker": false
+      },
+      {
+        "id": "spya-k57ec7",
+        "tag": "li",
+        "chars": 19,
+        "text": "6.5. Trailer Fields",
+        "marker": false
+      },
+      {
+        "id": "spya-dh75wa",
+        "tag": "li",
+        "chars": 37,
+        "text": "6.5.1. Limitations on Use of Trailers",
+        "marker": false
+      },
+      {
+        "id": "spya-bumq3y",
+        "tag": "li",
+        "chars": 32,
+        "text": "6.5.2. Processing Trailer Fields",
+        "marker": false
+      },
+      {
+        "id": "spya-mvuknj",
+        "tag": "li",
+        "chars": 21,
+        "text": "6.6. Message Metadata",
+        "marker": false
+      },
+      {
+        "id": "spya-mtfa92",
+        "tag": "li",
+        "chars": 11,
+        "text": "6.6.1. Date",
+        "marker": false
+      },
+      {
+        "id": "spya-nprdq9",
+        "tag": "li",
+        "chars": 14,
+        "text": "6.6.2. Trailer",
+        "marker": false
+      },
+      {
+        "id": "spya-u0awv5",
+        "tag": "li",
+        "chars": 24,
+        "text": "7. Routing HTTP Messages",
+        "marker": false
+      },
+      {
+        "id": "spya-jm0p77",
+        "tag": "li",
+        "chars": 36,
+        "text": "7.1. Determining the Target Resource",
+        "marker": false
+      },
+      {
+        "id": "spya-s2dj3r",
+        "tag": "li",
+        "chars": 24,
+        "text": "7.2. Host and :authority",
+        "marker": false
+      },
+      {
+        "id": "spya-jhdkmj",
+        "tag": "li",
+        "chars": 29,
+        "text": "7.3. Routing Inbound Requests",
+        "marker": false
+      },
+      {
+        "id": "spya-tn3qsb",
+        "tag": "li",
+        "chars": 17,
+        "text": "7.3.1. To a Cache",
+        "marker": false
+      },
+      {
+        "id": "spya-ajpg9g",
+        "tag": "li",
+        "chars": 17,
+        "text": "7.3.2. To a Proxy",
+        "marker": false
+      },
+      {
+        "id": "spya-as2s9f",
+        "tag": "li",
+        "chars": 20,
+        "text": "7.3.3. To the Origin",
+        "marker": false
+      },
+      {
+        "id": "spya-znnzem",
+        "tag": "li",
+        "chars": 35,
+        "text": "7.4. Rejecting Misdirected Requests",
+        "marker": false
+      },
+      {
+        "id": "spya-jahdv7",
+        "tag": "li",
+        "chars": 25,
+        "text": "7.5. Response Correlation",
+        "marker": false
+      },
+      {
+        "id": "spya-tgqcg6",
+        "tag": "li",
+        "chars": 23,
+        "text": "7.6. Message Forwarding",
+        "marker": false
+      },
+      {
+        "id": "spya-jkzj5d",
+        "tag": "li",
+        "chars": 17,
+        "text": "7.6.1. Connection",
+        "marker": false
+      },
+      {
+        "id": "spya-f6j75z",
+        "tag": "li",
+        "chars": 19,
+        "text": "7.6.2. Max-Forwards",
+        "marker": false
+      },
+      {
+        "id": "spya-vg0ksh",
+        "tag": "li",
+        "chars": 10,
+        "text": "7.6.3. Via",
+        "marker": false
+      },
+      {
+        "id": "spya-b2pkrq",
+        "tag": "li",
+        "chars": 28,
+        "text": "7.7. Message Transformations",
+        "marker": false
+      },
+      {
+        "id": "spya-bzm5s4",
+        "tag": "li",
+        "chars": 12,
+        "text": "7.8. Upgrade",
+        "marker": false
+      },
+      {
+        "id": "spya-wpk3cw",
+        "tag": "li",
+        "chars": 35,
+        "text": "8. Representation Data and Metadata",
+        "marker": false
+      },
+      {
+        "id": "spya-q9j4a8",
+        "tag": "li",
+        "chars": 24,
+        "text": "8.1. Representation Data",
+        "marker": false
+      },
+      {
+        "id": "spya-w8agtq",
+        "tag": "li",
+        "chars": 28,
+        "text": "8.2. Representation Metadata",
+        "marker": false
+      },
+      {
+        "id": "spya-pde7ud",
+        "tag": "li",
+        "chars": 17,
+        "text": "8.3. Content-Type",
+        "marker": false
+      },
+      {
+        "id": "spya-ux5jeh",
+        "tag": "li",
+        "chars": 17,
+        "text": "8.3.1. Media Type",
+        "marker": false
+      },
+      {
+        "id": "spya-t9v535",
+        "tag": "li",
+        "chars": 14,
+        "text": "8.3.2. Charset",
+        "marker": false
+      },
+      {
+        "id": "spya-bw3b39",
+        "tag": "li",
+        "chars": 22,
+        "text": "8.3.3. Multipart Types",
+        "marker": false
+      },
+      {
+        "id": "spya-vjq9su",
+        "tag": "li",
+        "chars": 21,
+        "text": "8.4. Content-Encoding",
+        "marker": false
+      },
+      {
+        "id": "spya-zdy3ba",
+        "tag": "li",
+        "chars": 22,
+        "text": "8.4.1. Content Codings",
+        "marker": false
+      },
+      {
+        "id": "spya-wt78c2",
+        "tag": "li",
+        "chars": 24,
+        "text": "8.4.1.1. Compress Coding",
+        "marker": false
+      },
+      {
+        "id": "spya-tzdths",
+        "tag": "li",
+        "chars": 23,
+        "text": "8.4.1.2. Deflate Coding",
+        "marker": false
+      },
+      {
+        "id": "spya-vav0aw",
+        "tag": "li",
+        "chars": 20,
+        "text": "8.4.1.3. Gzip Coding",
+        "marker": false
+      },
+      {
+        "id": "spya-qscm3b",
+        "tag": "li",
+        "chars": 21,
+        "text": "8.5. Content-Language",
+        "marker": false
+      },
+      {
+        "id": "spya-fragbn",
+        "tag": "li",
+        "chars": 20,
+        "text": "8.5.1. Language Tags",
+        "marker": false
+      },
+      {
+        "id": "spya-q55fjh",
+        "tag": "li",
+        "chars": 19,
+        "text": "8.6. Content-Length",
+        "marker": false
+      },
+      {
+        "id": "spya-qhu7dj",
+        "tag": "li",
+        "chars": 21,
+        "text": "8.7. Content-Location",
+        "marker": false
+      },
+      {
+        "id": "spya-aq8q6w",
+        "tag": "li",
+        "chars": 21,
+        "text": "8.8. Validator Fields",
+        "marker": false
+      },
+      {
+        "id": "spya-vjyquk",
+        "tag": "li",
+        "chars": 25,
+        "text": "8.8.1. Weak versus Strong",
+        "marker": false
+      },
+      {
+        "id": "spya-c8xqhc",
+        "tag": "li",
+        "chars": 20,
+        "text": "8.8.2. Last-Modified",
+        "marker": false
+      },
+      {
+        "id": "spya-u4yzwk",
+        "tag": "li",
+        "chars": 19,
+        "text": "8.8.2.1. Generation",
+        "marker": false
+      },
+      {
+        "id": "spya-akwsts",
+        "tag": "li",
+        "chars": 19,
+        "text": "8.8.2.2. Comparison",
+        "marker": false
+      },
+      {
+        "id": "spya-ttq9n2",
+        "tag": "li",
+        "chars": 11,
+        "text": "8.8.3. ETag",
+        "marker": false
+      },
+      {
+        "id": "spya-d78zj2",
+        "tag": "li",
+        "chars": 19,
+        "text": "8.8.3.1. Generation",
+        "marker": false
+      },
+      {
+        "id": "spya-hx3kdt",
+        "tag": "li",
+        "chars": 19,
+        "text": "8.8.3.2. Comparison",
+        "marker": false
+      },
+      {
+        "id": "spya-tfy5bd",
+        "tag": "li",
+        "chars": 69,
+        "text": "8.8.3.3. Example: Entity Tags Varying on Content-Negotiated Resources",
+        "marker": false
+      },
+      {
+        "id": "spya-yews3h",
+        "tag": "li",
+        "chars": 10,
+        "text": "9. Methods",
+        "marker": false
+      },
+      {
+        "id": "spya-nvrzdm",
+        "tag": "li",
+        "chars": 13,
+        "text": "9.1. Overview",
+        "marker": false
+      },
+      {
+        "id": "spya-zd67yh",
+        "tag": "li",
+        "chars": 29,
+        "text": "9.2. Common Method Properties",
+        "marker": false
+      },
+      {
+        "id": "spya-yfgr6v",
+        "tag": "li",
+        "chars": 19,
+        "text": "9.2.1. Safe Methods",
+        "marker": false
+      },
+      {
+        "id": "spya-shfr9y",
+        "tag": "li",
+        "chars": 25,
+        "text": "9.2.2. Idempotent Methods",
+        "marker": false
+      },
+      {
+        "id": "spya-e0t68j",
+        "tag": "li",
+        "chars": 26,
+        "text": "9.2.3. Methods and Caching",
+        "marker": false
+      },
+      {
+        "id": "spya-nvfrsc",
+        "tag": "li",
+        "chars": 23,
+        "text": "9.3. Method Definitions",
+        "marker": false
+      },
+      {
+        "id": "spya-wgembr",
+        "tag": "li",
+        "chars": 10,
+        "text": "9.3.1. GET",
+        "marker": false
+      },
+      {
+        "id": "spya-adtrxq",
+        "tag": "li",
+        "chars": 11,
+        "text": "9.3.2. HEAD",
+        "marker": false
+      },
+      {
+        "id": "spya-bqjr4m",
+        "tag": "li",
+        "chars": 11,
+        "text": "9.3.3. POST",
+        "marker": false
+      },
+      {
+        "id": "spya-trngwb",
+        "tag": "li",
+        "chars": 10,
+        "text": "9.3.4. PUT",
+        "marker": false
+      },
+      {
+        "id": "spya-tdqtm8",
+        "tag": "li",
+        "chars": 13,
+        "text": "9.3.5. DELETE",
+        "marker": false
+      },
+      {
+        "id": "spya-bzyj9g",
+        "tag": "li",
+        "chars": 14,
+        "text": "9.3.6. CONNECT",
+        "marker": false
+      },
+      {
+        "id": "spya-armxf9",
+        "tag": "li",
+        "chars": 14,
+        "text": "9.3.7. OPTIONS",
+        "marker": false
+      },
+      {
+        "id": "spya-xkyw09",
+        "tag": "li",
+        "chars": 12,
+        "text": "9.3.8. TRACE",
+        "marker": false
+      },
+      {
+        "id": "spya-gw30kb",
+        "tag": "li",
+        "chars": 19,
+        "text": "10. Message Context",
+        "marker": false
+      },
+      {
+        "id": "spya-qdcjp0",
+        "tag": "li",
+        "chars": 28,
+        "text": "10.1. Request Context Fields",
+        "marker": false
+      },
+      {
+        "id": "spya-jtc5gg",
+        "tag": "li",
+        "chars": 14,
+        "text": "10.1.1. Expect",
+        "marker": false
+      },
+      {
+        "id": "spya-fe2fve",
+        "tag": "li",
+        "chars": 12,
+        "text": "10.1.2. From",
+        "marker": false
+      },
+      {
+        "id": "spya-ktxw33",
+        "tag": "li",
+        "chars": 15,
+        "text": "10.1.3. Referer",
+        "marker": false
+      },
+      {
+        "id": "spya-snzney",
+        "tag": "li",
+        "chars": 10,
+        "text": "10.1.4. TE",
+        "marker": false
+      },
+      {
+        "id": "spya-vrkv4m",
+        "tag": "li",
+        "chars": 18,
+        "text": "10.1.5. User-Agent",
+        "marker": false
+      },
+      {
+        "id": "spya-bj5sqs",
+        "tag": "li",
+        "chars": 29,
+        "text": "10.2. Response Context Fields",
+        "marker": false
+      },
+      {
+        "id": "spya-g068wq",
+        "tag": "li",
+        "chars": 13,
+        "text": "10.2.1. Allow",
+        "marker": false
+      },
+      {
+        "id": "spya-xbdv0y",
+        "tag": "li",
+        "chars": 16,
+        "text": "10.2.2. Location",
+        "marker": false
+      },
+      {
+        "id": "spya-e0hrs5",
+        "tag": "li",
+        "chars": 19,
+        "text": "10.2.3. Retry-After",
+        "marker": false
+      },
+      {
+        "id": "spya-ctffjn",
+        "tag": "li",
+        "chars": 14,
+        "text": "10.2.4. Server",
+        "marker": false
+      },
+      {
+        "id": "spya-c7hme0",
+        "tag": "li",
+        "chars": 23,
+        "text": "11. HTTP Authentication",
+        "marker": false
+      },
+      {
+        "id": "spya-bjud7n",
+        "tag": "li",
+        "chars": 27,
+        "text": "11.1. Authentication Scheme",
+        "marker": false
+      },
+      {
+        "id": "spya-j9apzj",
+        "tag": "li",
+        "chars": 31,
+        "text": "11.2. Authentication Parameters",
+        "marker": false
+      },
+      {
+        "id": "spya-x4wqzm",
+        "tag": "li",
+        "chars": 28,
+        "text": "11.3. Challenge and Response",
+        "marker": false
+      },
+      {
+        "id": "spya-yfj9t6",
+        "tag": "li",
+        "chars": 17,
+        "text": "11.4. Credentials",
+        "marker": false
+      },
+      {
+        "id": "spya-rfjfmt",
+        "tag": "li",
+        "chars": 45,
+        "text": "11.5. Establishing a Protection Space (Realm)",
+        "marker": false
+      },
+      {
+        "id": "spya-jeneqa",
+        "tag": "li",
+        "chars": 44,
+        "text": "11.6. Authenticating Users to Origin Servers",
+        "marker": false
+      },
+      {
+        "id": "spya-qcju5j",
+        "tag": "li",
+        "chars": 24,
+        "text": "11.6.1. WWW-Authenticate",
+        "marker": false
+      },
+      {
+        "id": "spya-fxx9a5",
+        "tag": "li",
+        "chars": 21,
+        "text": "11.6.2. Authorization",
+        "marker": false
+      },
+      {
+        "id": "spya-uxa5rq",
+        "tag": "li",
+        "chars": 27,
+        "text": "11.6.3. Authentication-Info",
+        "marker": false
+      },
+      {
+        "id": "spya-q3j3wb",
+        "tag": "li",
+        "chars": 39,
+        "text": "11.7. Authenticating Clients to Proxies",
+        "marker": false
+      },
+      {
+        "id": "spya-vtr4hu",
+        "tag": "li",
+        "chars": 26,
+        "text": "11.7.1. Proxy-Authenticate",
+        "marker": false
+      },
+      {
+        "id": "spya-vywvg6",
+        "tag": "li",
+        "chars": 27,
+        "text": "11.7.2. Proxy-Authorization",
+        "marker": false
+      },
+      {
+        "id": "spya-acke3q",
+        "tag": "li",
+        "chars": 33,
+        "text": "11.7.3. Proxy-Authentication-Info",
+        "marker": false
+      },
+      {
+        "id": "spya-a04zkv",
+        "tag": "li",
+        "chars": 23,
+        "text": "12. Content Negotiation",
+        "marker": false
+      },
+      {
+        "id": "spya-c6ypjs",
+        "tag": "li",
+        "chars": 27,
+        "text": "12.1. Proactive Negotiation",
+        "marker": false
+      },
+      {
+        "id": "spya-dbvhqc",
+        "tag": "li",
+        "chars": 26,
+        "text": "12.2. Reactive Negotiation",
+        "marker": false
+      },
+      {
+        "id": "spya-eaxpuk",
+        "tag": "li",
+        "chars": 33,
+        "text": "12.3. Request Content Negotiation",
+        "marker": false
+      },
+      {
+        "id": "spya-mj3zsb",
+        "tag": "li",
+        "chars": 40,
+        "text": "12.4. Content Negotiation Field Features",
+        "marker": false
+      },
+      {
+        "id": "spya-b9mr70",
+        "tag": "li",
+        "chars": 15,
+        "text": "12.4.1. Absence",
+        "marker": false
+      },
+      {
+        "id": "spya-cds9u0",
+        "tag": "li",
+        "chars": 22,
+        "text": "12.4.2. Quality Values",
+        "marker": false
+      },
+      {
+        "id": "spya-cpa5pa",
+        "tag": "li",
+        "chars": 23,
+        "text": "12.4.3. Wildcard Values",
+        "marker": false
+      },
+      {
+        "id": "spya-vgjudx",
+        "tag": "li",
+        "chars": 32,
+        "text": "12.5. Content Negotiation Fields",
+        "marker": false
+      },
+      {
+        "id": "spya-jr6ne4",
+        "tag": "li",
+        "chars": 14,
+        "text": "12.5.1. Accept",
+        "marker": false
+      },
+      {
+        "id": "spya-gfpk5n",
+        "tag": "li",
+        "chars": 22,
+        "text": "12.5.2. Accept-Charset",
+        "marker": false
+      },
+      {
+        "id": "spya-x3pkm2",
+        "tag": "li",
+        "chars": 23,
+        "text": "12.5.3. Accept-Encoding",
+        "marker": false
+      },
+      {
+        "id": "spya-m0mt2w",
+        "tag": "li",
+        "chars": 23,
+        "text": "12.5.4. Accept-Language",
+        "marker": false
+      },
+      {
+        "id": "spya-u4090t",
+        "tag": "li",
+        "chars": 12,
+        "text": "12.5.5. Vary",
+        "marker": false
+      },
+      {
+        "id": "spya-gtf8nx",
+        "tag": "li",
+        "chars": 24,
+        "text": "13. Conditional Requests",
+        "marker": false
+      },
+      {
+        "id": "spya-fmunuq",
+        "tag": "li",
+        "chars": 19,
+        "text": "13.1. Preconditions",
+        "marker": false
+      },
+      {
+        "id": "spya-tqqc63",
+        "tag": "li",
+        "chars": 16,
+        "text": "13.1.1. If-Match",
+        "marker": false
+      },
+      {
+        "id": "spya-emh7wp",
+        "tag": "li",
+        "chars": 21,
+        "text": "13.1.2. If-None-Match",
+        "marker": false
+      },
+      {
+        "id": "spya-xakz2a",
+        "tag": "li",
+        "chars": 25,
+        "text": "13.1.3. If-Modified-Since",
+        "marker": false
+      },
+      {
+        "id": "spya-rb0tdw",
+        "tag": "li",
+        "chars": 27,
+        "text": "13.1.4. If-Unmodified-Since",
+        "marker": false
+      },
+      {
+        "id": "spya-vzytkh",
+        "tag": "li",
+        "chars": 16,
+        "text": "13.1.5. If-Range",
+        "marker": false
+      },
+      {
+        "id": "spya-eppbyd",
+        "tag": "li",
+        "chars": 33,
+        "text": "13.2. Evaluation of Preconditions",
+        "marker": false
+      },
+      {
+        "id": "spya-rmemrw",
+        "tag": "li",
+        "chars": 24,
+        "text": "13.2.1. When to Evaluate",
+        "marker": false
+      },
+      {
+        "id": "spya-v9ctbz",
+        "tag": "li",
+        "chars": 35,
+        "text": "13.2.2. Precedence of Preconditions",
+        "marker": false
+      },
+      {
+        "id": "spya-j5548j",
+        "tag": "li",
+        "chars": 18,
+        "text": "14. Range Requests",
+        "marker": false
+      },
+      {
+        "id": "spya-dm050k",
+        "tag": "li",
+        "chars": 17,
+        "text": "14.1. Range Units",
+        "marker": false
+      },
+      {
+        "id": "spya-dk9v8v",
+        "tag": "li",
+        "chars": 24,
+        "text": "14.1.1. Range Specifiers",
+        "marker": false
+      },
+      {
+        "id": "spya-taye25",
+        "tag": "li",
+        "chars": 19,
+        "text": "14.1.2. Byte Ranges",
+        "marker": false
+      },
+      {
+        "id": "spya-krazs5",
+        "tag": "li",
+        "chars": 11,
+        "text": "14.2. Range",
+        "marker": false
+      },
+      {
+        "id": "spya-czn6tk",
+        "tag": "li",
+        "chars": 19,
+        "text": "14.3. Accept-Ranges",
+        "marker": false
+      },
+      {
+        "id": "spya-m7kg5c",
+        "tag": "li",
+        "chars": 19,
+        "text": "14.4. Content-Range",
+        "marker": false
+      },
+      {
+        "id": "spya-pz53kj",
+        "tag": "li",
+        "chars": 17,
+        "text": "14.5. Partial PUT",
+        "marker": false
+      },
+      {
+        "id": "spya-apz3cp",
+        "tag": "li",
+        "chars": 37,
+        "text": "14.6. Media Type multipart/byteranges",
+        "marker": false
+      },
+      {
+        "id": "spya-yazcvy",
+        "tag": "li",
+        "chars": 16,
+        "text": "15. Status Codes",
+        "marker": false
+      },
+      {
+        "id": "spya-yvv357",
+        "tag": "li",
+        "chars": 30,
+        "text": "15.1. Overview of Status Codes",
+        "marker": false
+      },
+      {
+        "id": "spya-babyu2",
+        "tag": "li",
+        "chars": 23,
+        "text": "15.2. Informational 1xx",
+        "marker": false
+      },
+      {
+        "id": "spya-ahrmad",
+        "tag": "li",
+        "chars": 20,
+        "text": "15.2.1. 100 Continue",
+        "marker": false
+      },
+      {
+        "id": "spya-wanuyd",
+        "tag": "li",
+        "chars": 31,
+        "text": "15.2.2. 101 Switching Protocols",
+        "marker": false
+      },
+      {
+        "id": "spya-ce7cuq",
+        "tag": "li",
+        "chars": 20,
+        "text": "15.3. Successful 2xx",
+        "marker": false
+      },
+      {
+        "id": "spya-tc8z8n",
+        "tag": "li",
+        "chars": 14,
+        "text": "15.3.1. 200 OK",
+        "marker": false
+      },
+      {
+        "id": "spya-vamx24",
+        "tag": "li",
+        "chars": 19,
+        "text": "15.3.2. 201 Created",
+        "marker": false
+      },
+      {
+        "id": "spya-vweaas",
+        "tag": "li",
+        "chars": 20,
+        "text": "15.3.3. 202 Accepted",
+        "marker": false
+      },
+      {
+        "id": "spya-ae6wx4",
+        "tag": "li",
+        "chars": 41,
+        "text": "15.3.4. 203 Non-Authoritative Information",
+        "marker": false
+      },
+      {
+        "id": "spya-kteb2y",
+        "tag": "li",
+        "chars": 22,
+        "text": "15.3.5. 204 No Content",
+        "marker": false
+      },
+      {
+        "id": "spya-pmb0ey",
+        "tag": "li",
+        "chars": 25,
+        "text": "15.3.6. 205 Reset Content",
+        "marker": false
+      },
+      {
+        "id": "spya-hvjrwy",
+        "tag": "li",
+        "chars": 27,
+        "text": "15.3.7. 206 Partial Content",
+        "marker": false
+      },
+      {
+        "id": "spya-zw4h3e",
+        "tag": "li",
+        "chars": 21,
+        "text": "15.3.7.1. Single Part",
+        "marker": false
+      },
+      {
+        "id": "spya-swr4cn",
+        "tag": "li",
+        "chars": 24,
+        "text": "15.3.7.2. Multiple Parts",
+        "marker": false
+      },
+      {
+        "id": "spya-bz77u9",
+        "tag": "li",
+        "chars": 25,
+        "text": "15.3.7.3. Combining Parts",
+        "marker": false
+      },
+      {
+        "id": "spya-h8y7hx",
+        "tag": "li",
+        "chars": 21,
+        "text": "15.4. Redirection 3xx",
+        "marker": false
+      },
+      {
+        "id": "spya-yf9hd6",
+        "tag": "li",
+        "chars": 28,
+        "text": "15.4.1. 300 Multiple Choices",
+        "marker": false
+      },
+      {
+        "id": "spya-hr6536",
+        "tag": "li",
+        "chars": 29,
+        "text": "15.4.2. 301 Moved Permanently",
+        "marker": false
+      },
+      {
+        "id": "spya-ywf8ht",
+        "tag": "li",
+        "chars": 17,
+        "text": "15.4.3. 302 Found",
+        "marker": false
+      },
+      {
+        "id": "spya-z8hhrg",
+        "tag": "li",
+        "chars": 21,
+        "text": "15.4.4. 303 See Other",
+        "marker": false
+      },
+      {
+        "id": "spya-pk5fvx",
+        "tag": "li",
+        "chars": 24,
+        "text": "15.4.5. 304 Not Modified",
+        "marker": false
+      },
+      {
+        "id": "spya-a77p0b",
+        "tag": "li",
+        "chars": 21,
+        "text": "15.4.6. 305 Use Proxy",
+        "marker": false
+      },
+      {
+        "id": "spya-an78va",
+        "tag": "li",
+        "chars": 20,
+        "text": "15.4.7. 306 (Unused)",
+        "marker": false
+      },
+      {
+        "id": "spya-ha9teh",
+        "tag": "li",
+        "chars": 30,
+        "text": "15.4.8. 307 Temporary Redirect",
+        "marker": false
+      },
+      {
+        "id": "spya-k3t6ec",
+        "tag": "li",
+        "chars": 30,
+        "text": "15.4.9. 308 Permanent Redirect",
+        "marker": false
+      },
+      {
+        "id": "spya-sfw0f0",
+        "tag": "li",
+        "chars": 22,
+        "text": "15.5. Client Error 4xx",
+        "marker": false
+      },
+      {
+        "id": "spya-k3kyhm",
+        "tag": "li",
+        "chars": 23,
+        "text": "15.5.1. 400 Bad Request",
+        "marker": false
+      },
+      {
+        "id": "spya-qtd3yj",
+        "tag": "li",
+        "chars": 24,
+        "text": "15.5.2. 401 Unauthorized",
+        "marker": false
+      },
+      {
+        "id": "spya-twpxhm",
+        "tag": "li",
+        "chars": 28,
+        "text": "15.5.3. 402 Payment Required",
+        "marker": false
+      },
+      {
+        "id": "spya-r6mhy5",
+        "tag": "li",
+        "chars": 21,
+        "text": "15.5.4. 403 Forbidden",
+        "marker": false
+      },
+      {
+        "id": "spya-f93fsq",
+        "tag": "li",
+        "chars": 21,
+        "text": "15.5.5. 404 Not Found",
+        "marker": false
+      },
+      {
+        "id": "spya-tbmya8",
+        "tag": "li",
+        "chars": 30,
+        "text": "15.5.6. 405 Method Not Allowed",
+        "marker": false
+      },
+      {
+        "id": "spya-tmsp02",
+        "tag": "li",
+        "chars": 26,
+        "text": "15.5.7. 406 Not Acceptable",
+        "marker": false
+      },
+      {
+        "id": "spya-xjfe30",
+        "tag": "li",
+        "chars": 41,
+        "text": "15.5.8. 407 Proxy Authentication Required",
+        "marker": false
+      },
+      {
+        "id": "spya-sv9umt",
+        "tag": "li",
+        "chars": 27,
+        "text": "15.5.9. 408 Request Timeout",
+        "marker": false
+      },
+      {
+        "id": "spya-y0cctm",
+        "tag": "li",
+        "chars": 21,
+        "text": "15.5.10. 409 Conflict",
+        "marker": false
+      },
+      {
+        "id": "spya-wch75y",
+        "tag": "li",
+        "chars": 17,
+        "text": "15.5.11. 410 Gone",
+        "marker": false
+      },
+      {
+        "id": "spya-c7ue78",
+        "tag": "li",
+        "chars": 28,
+        "text": "15.5.12. 411 Length Required",
+        "marker": false
+      },
+      {
+        "id": "spya-gppb9f",
+        "tag": "li",
+        "chars": 32,
+        "text": "15.5.13. 412 Precondition Failed",
+        "marker": false
+      },
+      {
+        "id": "spya-s95ah4",
+        "tag": "li",
+        "chars": 30,
+        "text": "15.5.14. 413 Content Too Large",
+        "marker": false
+      },
+      {
+        "id": "spya-wbhmnf",
+        "tag": "li",
+        "chars": 25,
+        "text": "15.5.15. 414 URI Too Long",
+        "marker": false
+      },
+      {
+        "id": "spya-rekfb5",
+        "tag": "li",
+        "chars": 35,
+        "text": "15.5.16. 415 Unsupported Media Type",
+        "marker": false
+      },
+      {
+        "id": "spya-s72w9s",
+        "tag": "li",
+        "chars": 34,
+        "text": "15.5.17. 416 Range Not Satisfiable",
+        "marker": false
+      },
+      {
+        "id": "spya-tm606t",
+        "tag": "li",
+        "chars": 31,
+        "text": "15.5.18. 417 Expectation Failed",
+        "marker": false
+      },
+      {
+        "id": "spya-wv3c95",
+        "tag": "li",
+        "chars": 21,
+        "text": "15.5.19. 418 (Unused)",
+        "marker": false
+      },
+      {
+        "id": "spya-jc69tn",
+        "tag": "li",
+        "chars": 32,
+        "text": "15.5.20. 421 Misdirected Request",
+        "marker": false
+      },
+      {
+        "id": "spya-z9k696",
+        "tag": "li",
+        "chars": 34,
+        "text": "15.5.21. 422 Unprocessable Content",
+        "marker": false
+      },
+      {
+        "id": "spya-ph7yhs",
+        "tag": "li",
+        "chars": 29,
+        "text": "15.5.22. 426 Upgrade Required",
+        "marker": false
+      },
+      {
+        "id": "spya-zs0r52",
+        "tag": "li",
+        "chars": 22,
+        "text": "15.6. Server Error 5xx",
+        "marker": false
+      },
+      {
+        "id": "spya-a74zpv",
+        "tag": "li",
+        "chars": 33,
+        "text": "15.6.1. 500 Internal Server Error",
+        "marker": false
+      },
+      {
+        "id": "spya-a9xmsy",
+        "tag": "li",
+        "chars": 27,
+        "text": "15.6.2. 501 Not Implemented",
+        "marker": false
+      },
+      {
+        "id": "spya-e5qa00",
+        "tag": "li",
+        "chars": 23,
+        "text": "15.6.3. 502 Bad Gateway",
+        "marker": false
+      },
+      {
+        "id": "spya-pab7sp",
+        "tag": "li",
+        "chars": 31,
+        "text": "15.6.4. 503 Service Unavailable",
+        "marker": false
+      },
+      {
+        "id": "spya-k34cg7",
+        "tag": "li",
+        "chars": 27,
+        "text": "15.6.5. 504 Gateway Timeout",
+        "marker": false
+      },
+      {
+        "id": "spya-vnjtp5",
+        "tag": "li",
+        "chars": 38,
+        "text": "15.6.6. 505 HTTP Version Not Supported",
+        "marker": false
+      },
+      {
+        "id": "spya-edpw23",
+        "tag": "li",
+        "chars": 18,
+        "text": "16. Extending HTTP",
+        "marker": false
+      },
+      {
+        "id": "spya-edxscw",
+        "tag": "li",
+        "chars": 26,
+        "text": "16.1. Method Extensibility",
+        "marker": false
+      },
+      {
+        "id": "spya-p24j8g",
+        "tag": "li",
+        "chars": 23,
+        "text": "16.1.1. Method Registry",
+        "marker": false
+      },
+      {
+        "id": "spya-vpp2du",
+        "tag": "li",
+        "chars": 38,
+        "text": "16.1.2. Considerations for New Methods",
+        "marker": false
+      },
+      {
+        "id": "spya-u0ehwj",
+        "tag": "li",
+        "chars": 31,
+        "text": "16.2. Status Code Extensibility",
+        "marker": false
+      },
+      {
+        "id": "spya-rb768y",
+        "tag": "li",
+        "chars": 28,
+        "text": "16.2.1. Status Code Registry",
+        "marker": false
+      },
+      {
+        "id": "spya-uwcaxn",
+        "tag": "li",
+        "chars": 43,
+        "text": "16.2.2. Considerations for New Status Codes",
+        "marker": false
+      },
+      {
+        "id": "spya-jtcfhe",
+        "tag": "li",
+        "chars": 25,
+        "text": "16.3. Field Extensibility",
+        "marker": false
+      },
+      {
+        "id": "spya-wedtu6",
+        "tag": "li",
+        "chars": 27,
+        "text": "16.3.1. Field Name Registry",
+        "marker": false
+      },
+      {
+        "id": "spya-zgbesf",
+        "tag": "li",
+        "chars": 37,
+        "text": "16.3.2. Considerations for New Fields",
+        "marker": false
+      },
+      {
+        "id": "spya-z62j79",
+        "tag": "li",
+        "chars": 44,
+        "text": "16.3.2.1. Considerations for New Field Names",
+        "marker": false
+      },
+      {
+        "id": "spya-buf35e",
+        "tag": "li",
+        "chars": 45,
+        "text": "16.3.2.2. Considerations for New Field Values",
+        "marker": false
+      },
+      {
+        "id": "spya-xg6bsp",
+        "tag": "li",
+        "chars": 41,
+        "text": "16.4. Authentication Scheme Extensibility",
+        "marker": false
+      },
+      {
+        "id": "spya-c6zujf",
+        "tag": "li",
+        "chars": 38,
+        "text": "16.4.1. Authentication Scheme Registry",
+        "marker": false
+      },
+      {
+        "id": "spya-r34f9d",
+        "tag": "li",
+        "chars": 53,
+        "text": "16.4.2. Considerations for New Authentication Schemes",
+        "marker": false
+      },
+      {
+        "id": "spya-ph88ea",
+        "tag": "li",
+        "chars": 30,
+        "text": "16.5. Range Unit Extensibility",
+        "marker": false
+      },
+      {
+        "id": "spya-fghk2v",
+        "tag": "li",
+        "chars": 27,
+        "text": "16.5.1. Range Unit Registry",
+        "marker": false
+      },
+      {
+        "id": "spya-v0qgtj",
+        "tag": "li",
+        "chars": 42,
+        "text": "16.5.2. Considerations for New Range Units",
+        "marker": false
+      },
+      {
+        "id": "spya-d5bcrh",
+        "tag": "li",
+        "chars": 34,
+        "text": "16.6. Content Coding Extensibility",
+        "marker": false
+      },
+      {
+        "id": "spya-px23wu",
+        "tag": "li",
+        "chars": 31,
+        "text": "16.6.1. Content Coding Registry",
+        "marker": false
+      },
+      {
+        "id": "spya-q60p6x",
+        "tag": "li",
+        "chars": 46,
+        "text": "16.6.2. Considerations for New Content Codings",
+        "marker": false
+      },
+      {
+        "id": "spya-jnc6dn",
+        "tag": "li",
+        "chars": 28,
+        "text": "16.7. Upgrade Token Registry",
+        "marker": false
+      },
+      {
+        "id": "spya-eae7bw",
+        "tag": "li",
+        "chars": 27,
+        "text": "17. Security Considerations",
+        "marker": false
+      },
+      {
+        "id": "spya-rhfhdj",
+        "tag": "li",
+        "chars": 28,
+        "text": "17.1. Establishing Authority",
+        "marker": false
+      },
+      {
+        "id": "spya-bbqnr5",
+        "tag": "li",
+        "chars": 29,
+        "text": "17.2. Risks of Intermediaries",
+        "marker": false
+      },
+      {
+        "id": "spya-b9wvg0",
+        "tag": "li",
+        "chars": 42,
+        "text": "17.3. Attacks Based on File and Path Names",
+        "marker": false
+      },
+      {
+        "id": "spya-gqrucx",
+        "tag": "li",
+        "chars": 56,
+        "text": "17.4. Attacks Based on Command, Code, or Query Injection",
+        "marker": false
+      },
+      {
+        "id": "spya-sba8jr",
+        "tag": "li",
+        "chars": 41,
+        "text": "17.5. Attacks via Protocol Element Length",
+        "marker": false
+      },
+      {
+        "id": "spya-eabpbv",
+        "tag": "li",
+        "chars": 49,
+        "text": "17.6. Attacks Using Shared-Dictionary Compression",
+        "marker": false
+      },
+      {
+        "id": "spya-uxax8u",
+        "tag": "li",
+        "chars": 40,
+        "text": "17.7. Disclosure of Personal Information",
+        "marker": false
+      },
+      {
+        "id": "spya-tgnvff",
+        "tag": "li",
+        "chars": 39,
+        "text": "17.8. Privacy of Server Log Information",
+        "marker": false
+      },
+      {
+        "id": "spya-sxrvh5",
+        "tag": "li",
+        "chars": 49,
+        "text": "17.9. Disclosure of Sensitive Information in URIs",
+        "marker": false
+      },
+      {
+        "id": "spya-tkbw2f",
+        "tag": "li",
+        "chars": 42,
+        "text": "17.10. Application Handling of Field Names",
+        "marker": false
+      },
+      {
+        "id": "spya-tf7fxx",
+        "tag": "li",
+        "chars": 45,
+        "text": "17.11. Disclosure of Fragment after Redirects",
+        "marker": false
+      },
+      {
+        "id": "spya-zts22z",
+        "tag": "li",
+        "chars": 40,
+        "text": "17.12. Disclosure of Product Information",
+        "marker": false
+      },
+      {
+        "id": "spya-pqwxg3",
+        "tag": "li",
+        "chars": 29,
+        "text": "17.13. Browser Fingerprinting",
+        "marker": false
+      },
+      {
+        "id": "spya-yq7k43",
+        "tag": "li",
+        "chars": 26,
+        "text": "17.14. Validator Retention",
+        "marker": false
+      },
+      {
+        "id": "spya-f5s9e2",
+        "tag": "li",
+        "chars": 44,
+        "text": "17.15. Denial-of-Service Attacks Using Range",
+        "marker": false
+      },
+      {
+        "id": "spya-bm3emh",
+        "tag": "li",
+        "chars": 36,
+        "text": "17.16. Authentication Considerations",
+        "marker": false
+      },
+      {
+        "id": "spya-tkxg7m",
+        "tag": "li",
+        "chars": 39,
+        "text": "17.16.1. Confidentiality of Credentials",
+        "marker": false
+      },
+      {
+        "id": "spya-wjqfah",
+        "tag": "li",
+        "chars": 37,
+        "text": "17.16.2. Credentials and Idle Clients",
+        "marker": false
+      },
+      {
+        "id": "spya-ewedcs",
+        "tag": "li",
+        "chars": 26,
+        "text": "17.16.3. Protection Spaces",
+        "marker": false
+      },
+      {
+        "id": "spya-apcyyn",
+        "tag": "li",
+        "chars": 35,
+        "text": "17.16.4. Additional Response Fields",
+        "marker": false
+      },
+      {
+        "id": "spya-ut8swd",
+        "tag": "li",
+        "chars": 23,
+        "text": "18. IANA Considerations",
+        "marker": false
+      },
+      {
+        "id": "spya-dqdcys",
+        "tag": "li",
+        "chars": 29,
+        "text": "18.1. URI Scheme Registration",
+        "marker": false
+      },
+      {
+        "id": "spya-pyq9xn",
+        "tag": "li",
+        "chars": 25,
+        "text": "18.2. Method Registration",
+        "marker": false
+      },
+      {
+        "id": "spya-psk2zg",
+        "tag": "li",
+        "chars": 30,
+        "text": "18.3. Status Code Registration",
+        "marker": false
+      },
+      {
+        "id": "spya-jyhqmg",
+        "tag": "li",
+        "chars": 29,
+        "text": "18.4. Field Name Registration",
+        "marker": false
+      },
+      {
+        "id": "spya-tpe6ry",
+        "tag": "li",
+        "chars": 40,
+        "text": "18.5. Authentication Scheme Registration",
+        "marker": false
+      },
+      {
+        "id": "spya-xss6hp",
+        "tag": "li",
+        "chars": 33,
+        "text": "18.6. Content Coding Registration",
+        "marker": false
+      },
+      {
+        "id": "spya-fachqz",
+        "tag": "li",
+        "chars": 29,
+        "text": "18.7. Range Unit Registration",
+        "marker": false
+      },
+      {
+        "id": "spya-e3szz4",
+        "tag": "li",
+        "chars": 29,
+        "text": "18.8. Media Type Registration",
+        "marker": false
+      },
+      {
+        "id": "spya-ykyems",
+        "tag": "li",
+        "chars": 23,
+        "text": "18.9. Port Registration",
+        "marker": false
+      },
+      {
+        "id": "spya-q8k9n8",
+        "tag": "li",
+        "chars": 33,
+        "text": "18.10. Upgrade Token Registration",
+        "marker": false
+      },
+      {
+        "id": "spya-rwktn6",
+        "tag": "li",
+        "chars": 14,
+        "text": "19. References",
+        "marker": false
+      },
+      {
+        "id": "spya-guyuxj",
+        "tag": "li",
+        "chars": 26,
+        "text": "19.1. Normative References",
+        "marker": false
+      },
+      {
+        "id": "spya-hyvaxg",
+        "tag": "li",
+        "chars": 28,
+        "text": "19.2. Informative References",
+        "marker": false
+      },
+      {
+        "id": "spya-zg7tk2",
+        "tag": "li",
+        "chars": 26,
+        "text": "Appendix A. Collected ABNF",
+        "marker": false
+      },
+      {
+        "id": "spya-dt8zjf",
+        "tag": "li",
+        "chars": 38,
+        "text": "Appendix B. Changes from Previous RFCs",
+        "marker": false
+      },
+      {
+        "id": "spya-drc3zz",
+        "tag": "li",
+        "chars": 26,
+        "text": "B.1. Changes from RFC 2818",
+        "marker": false
+      },
+      {
+        "id": "spya-muxj55",
+        "tag": "li",
+        "chars": 26,
+        "text": "B.2. Changes from RFC 7230",
+        "marker": false
+      },
+      {
+        "id": "spya-d98gfy",
+        "tag": "li",
+        "chars": 26,
+        "text": "B.3. Changes from RFC 7231",
+        "marker": false
+      },
+      {
+        "id": "spya-ag6jmx",
+        "tag": "li",
+        "chars": 26,
+        "text": "B.4. Changes from RFC 7232",
+        "marker": false
+      },
+      {
+        "id": "spya-xj5h2b",
+        "tag": "li",
+        "chars": 26,
+        "text": "B.5. Changes from RFC 7233",
+        "marker": false
+      },
+      {
+        "id": "spya-q6mzp7",
+        "tag": "li",
+        "chars": 26,
+        "text": "B.6. Changes from RFC 7235",
+        "marker": false
+      },
+      {
+        "id": "spya-khp0gg",
+        "tag": "li",
+        "chars": 26,
+        "text": "B.7. Changes from RFC 7538",
+        "marker": false
+      },
+      {
+        "id": "spya-mzrmp5",
+        "tag": "li",
+        "chars": 26,
+        "text": "B.8. Changes from RFC 7615",
+        "marker": false
+      },
+      {
+        "id": "spya-anb2xg",
+        "tag": "li",
+        "chars": 26,
+        "text": "B.9. Changes from RFC 7694",
+        "marker": false
+      },
+      {
+        "id": "spya-jg92j9",
+        "tag": "li",
+        "chars": 16,
+        "text": "Acknowledgements",
+        "marker": false
+      },
+      {
+        "id": "spya-r6hud5",
+        "tag": "li",
+        "chars": 5,
+        "text": "Index",
+        "marker": false
+      },
+      {
+        "id": "spya-ztu8j7",
+        "tag": "li",
+        "chars": 18,
+        "text": "Authors' Addresses",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 7920,
+    "usage": {
+      "input": 74917,
+      "output": 5991
+    },
+    "ms": 42016
+  },
+  {
+    "fixture": "whatwg-parsing",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 2986,
+    "markers": 4,
+    "markersCaught": 4,
+    "beyondTheRule": [
+      {
+        "id": "spya-us4wb5",
+        "tag": "p",
+        "chars": 45,
+        "text": "Living Standard — Last Updated 27 August 2026",
+        "marker": false
+      },
+      {
+        "id": "spya-dus3a9",
+        "tag": "a",
+        "chars": 20,
+        "text": "← 13 The HTML syntax",
+        "marker": false
+      },
+      {
+        "id": "spya-ktq58k",
+        "tag": "a",
+        "chars": 17,
+        "text": "Table of Contents",
+        "marker": false
+      },
+      {
+        "id": "spya-apvu4e",
+        "tag": "a",
+        "chars": 33,
+        "text": "13.5 Named character references →",
+        "marker": false
+      },
+      {
+        "id": "spya-ygw4h2",
+        "tag": "li",
+        "chars": 27,
+        "text": "13.2 Parsing HTML documents",
+        "marker": false
+      },
+      {
+        "id": "spya-j4extc",
+        "tag": "li",
+        "chars": 36,
+        "text": "13.2.1 Overview of the parsing model",
+        "marker": false
+      },
+      {
+        "id": "spya-ytx84b",
+        "tag": "li",
+        "chars": 19,
+        "text": "13.2.2 Parse errors",
+        "marker": false
+      },
+      {
+        "id": "spya-kx5uct",
+        "tag": "li",
+        "chars": 28,
+        "text": "13.2.3 The input byte stream",
+        "marker": false
+      },
+      {
+        "id": "spya-x9njvc",
+        "tag": "li",
+        "chars": 48,
+        "text": "13.2.3.1 Parsing with a known character encoding",
+        "marker": false
+      },
+      {
+        "id": "spya-yg2vqu",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.3.2 Determining the character encoding",
+        "marker": false
+      },
+      {
+        "id": "spya-f0depq",
+        "tag": "li",
+        "chars": 28,
+        "text": "13.2.3.3 Character encodings",
+        "marker": false
+      },
+      {
+        "id": "spya-rj2tjt",
+        "tag": "li",
+        "chars": 44,
+        "text": "13.2.3.4 Changing the encoding while parsing",
+        "marker": false
+      },
+      {
+        "id": "spya-abp35h",
+        "tag": "li",
+        "chars": 39,
+        "text": "13.2.3.5 Preprocessing the input stream",
+        "marker": false
+      },
+      {
+        "id": "spya-d95vqe",
+        "tag": "li",
+        "chars": 18,
+        "text": "13.2.4 Parse state",
+        "marker": false
+      },
+      {
+        "id": "spya-sc8exj",
+        "tag": "li",
+        "chars": 27,
+        "text": "13.2.4.1 The insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-aqesd5",
+        "tag": "li",
+        "chars": 35,
+        "text": "13.2.4.2 The stack of open elements",
+        "marker": false
+      },
+      {
+        "id": "spya-e3dqwq",
+        "tag": "li",
+        "chars": 47,
+        "text": "13.2.4.3 The list of active formatting elements",
+        "marker": false
+      },
+      {
+        "id": "spya-ngc053",
+        "tag": "li",
+        "chars": 29,
+        "text": "13.2.4.4 The element pointers",
+        "marker": false
+      },
+      {
+        "id": "spya-sc7ph9",
+        "tag": "li",
+        "chars": 34,
+        "text": "13.2.4.5 Other parsing state flags",
+        "marker": false
+      },
+      {
+        "id": "spya-u9hfa0",
+        "tag": "li",
+        "chars": 19,
+        "text": "13.2.5 Tokenization",
+        "marker": false
+      },
+      {
+        "id": "spya-ykgf4j",
+        "tag": "li",
+        "chars": 19,
+        "text": "13.2.5.1 Data state",
+        "marker": false
+      },
+      {
+        "id": "spya-kmgbtu",
+        "tag": "li",
+        "chars": 21,
+        "text": "13.2.5.2 RCDATA state",
+        "marker": false
+      },
+      {
+        "id": "spya-sy3e3m",
+        "tag": "li",
+        "chars": 22,
+        "text": "13.2.5.3 RAWTEXT state",
+        "marker": false
+      },
+      {
+        "id": "spya-z4w0qc",
+        "tag": "li",
+        "chars": 26,
+        "text": "13.2.5.4 Script data state",
+        "marker": false
+      },
+      {
+        "id": "spya-jv6vp7",
+        "tag": "li",
+        "chars": 24,
+        "text": "13.2.5.5 PLAINTEXT state",
+        "marker": false
+      },
+      {
+        "id": "spya-rb447d",
+        "tag": "li",
+        "chars": 23,
+        "text": "13.2.5.6 Tag open state",
+        "marker": false
+      },
+      {
+        "id": "spya-xd29n0",
+        "tag": "li",
+        "chars": 27,
+        "text": "13.2.5.7 End tag open state",
+        "marker": false
+      },
+      {
+        "id": "spya-hcnc76",
+        "tag": "li",
+        "chars": 23,
+        "text": "13.2.5.8 Tag name state",
+        "marker": false
+      },
+      {
+        "id": "spya-d50g24",
+        "tag": "li",
+        "chars": 36,
+        "text": "13.2.5.9 RCDATA less-than sign state",
+        "marker": false
+      },
+      {
+        "id": "spya-hv57f9",
+        "tag": "li",
+        "chars": 35,
+        "text": "13.2.5.10 RCDATA end tag open state",
+        "marker": false
+      },
+      {
+        "id": "spya-chypsb",
+        "tag": "li",
+        "chars": 35,
+        "text": "13.2.5.11 RCDATA end tag name state",
+        "marker": false
+      },
+      {
+        "id": "spya-rfp8nf",
+        "tag": "li",
+        "chars": 38,
+        "text": "13.2.5.12 RAWTEXT less-than sign state",
+        "marker": false
+      },
+      {
+        "id": "spya-s7tcfr",
+        "tag": "li",
+        "chars": 36,
+        "text": "13.2.5.13 RAWTEXT end tag open state",
+        "marker": false
+      },
+      {
+        "id": "spya-qnkptp",
+        "tag": "li",
+        "chars": 36,
+        "text": "13.2.5.14 RAWTEXT end tag name state",
+        "marker": false
+      },
+      {
+        "id": "spya-a3smqy",
+        "tag": "li",
+        "chars": 42,
+        "text": "13.2.5.15 Script data less-than sign state",
+        "marker": false
+      },
+      {
+        "id": "spya-h28gjc",
+        "tag": "li",
+        "chars": 40,
+        "text": "13.2.5.16 Script data end tag open state",
+        "marker": false
+      },
+      {
+        "id": "spya-gwky3d",
+        "tag": "li",
+        "chars": 40,
+        "text": "13.2.5.17 Script data end tag name state",
+        "marker": false
+      },
+      {
+        "id": "spya-bamfkv",
+        "tag": "li",
+        "chars": 40,
+        "text": "13.2.5.18 Script data escape start state",
+        "marker": false
+      },
+      {
+        "id": "spya-dyqsqd",
+        "tag": "li",
+        "chars": 45,
+        "text": "13.2.5.19 Script data escape start dash state",
+        "marker": false
+      },
+      {
+        "id": "spya-vhgmh2",
+        "tag": "li",
+        "chars": 35,
+        "text": "13.2.5.20 Script data escaped state",
+        "marker": false
+      },
+      {
+        "id": "spya-hxpqcy",
+        "tag": "li",
+        "chars": 40,
+        "text": "13.2.5.21 Script data escaped dash state",
+        "marker": false
+      },
+      {
+        "id": "spya-jwtkbf",
+        "tag": "li",
+        "chars": 45,
+        "text": "13.2.5.22 Script data escaped dash dash state",
+        "marker": false
+      },
+      {
+        "id": "spya-uy4nq2",
+        "tag": "li",
+        "chars": 50,
+        "text": "13.2.5.23 Script data escaped less-than sign state",
+        "marker": false
+      },
+      {
+        "id": "spya-h7gvq3",
+        "tag": "li",
+        "chars": 48,
+        "text": "13.2.5.24 Script data escaped end tag open state",
+        "marker": false
+      },
+      {
+        "id": "spya-wu7zbt",
+        "tag": "li",
+        "chars": 48,
+        "text": "13.2.5.25 Script data escaped end tag name state",
+        "marker": false
+      },
+      {
+        "id": "spya-r9kgcx",
+        "tag": "li",
+        "chars": 47,
+        "text": "13.2.5.26 Script data double escape start state",
+        "marker": false
+      },
+      {
+        "id": "spya-kxhvru",
+        "tag": "li",
+        "chars": 42,
+        "text": "13.2.5.27 Script data double escaped state",
+        "marker": false
+      },
+      {
+        "id": "spya-e39s3m",
+        "tag": "li",
+        "chars": 47,
+        "text": "13.2.5.28 Script data double escaped dash state",
+        "marker": false
+      },
+      {
+        "id": "spya-tc9ez4",
+        "tag": "li",
+        "chars": 52,
+        "text": "13.2.5.29 Script data double escaped dash dash state",
+        "marker": false
+      },
+      {
+        "id": "spya-dsawnx",
+        "tag": "li",
+        "chars": 57,
+        "text": "13.2.5.30 Script data double escaped less-than sign state",
+        "marker": false
+      },
+      {
+        "id": "spya-w278y6",
+        "tag": "li",
+        "chars": 45,
+        "text": "13.2.5.31 Script data double escape end state",
+        "marker": false
+      },
+      {
+        "id": "spya-g7vmd8",
+        "tag": "li",
+        "chars": 37,
+        "text": "13.2.5.32 Before attribute name state",
+        "marker": false
+      },
+      {
+        "id": "spya-s5en88",
+        "tag": "li",
+        "chars": 30,
+        "text": "13.2.5.33 Attribute name state",
+        "marker": false
+      },
+      {
+        "id": "spya-ckq23k",
+        "tag": "li",
+        "chars": 36,
+        "text": "13.2.5.34 After attribute name state",
+        "marker": false
+      },
+      {
+        "id": "spya-r9457d",
+        "tag": "li",
+        "chars": 38,
+        "text": "13.2.5.35 Before attribute value state",
+        "marker": false
+      },
+      {
+        "id": "spya-b59wrm",
+        "tag": "li",
+        "chars": 47,
+        "text": "13.2.5.36 Attribute value (double-quoted) state",
+        "marker": false
+      },
+      {
+        "id": "spya-r39ucc",
+        "tag": "li",
+        "chars": 47,
+        "text": "13.2.5.37 Attribute value (single-quoted) state",
+        "marker": false
+      },
+      {
+        "id": "spya-xkybu9",
+        "tag": "li",
+        "chars": 42,
+        "text": "13.2.5.38 Attribute value (unquoted) state",
+        "marker": false
+      },
+      {
+        "id": "spya-y7kfag",
+        "tag": "li",
+        "chars": 46,
+        "text": "13.2.5.39 After attribute value (quoted) state",
+        "marker": false
+      },
+      {
+        "id": "spya-puk0fk",
+        "tag": "li",
+        "chars": 38,
+        "text": "13.2.5.40 Self-closing start tag state",
+        "marker": false
+      },
+      {
+        "id": "spya-atg4u7",
+        "tag": "li",
+        "chars": 29,
+        "text": "13.2.5.41 Bogus comment state",
+        "marker": false
+      },
+      {
+        "id": "spya-y32rzr",
+        "tag": "li",
+        "chars": 39,
+        "text": "13.2.5.42 Markup declaration open state",
+        "marker": false
+      },
+      {
+        "id": "spya-nmprdp",
+        "tag": "li",
+        "chars": 29,
+        "text": "13.2.5.43 Comment start state",
+        "marker": false
+      },
+      {
+        "id": "spya-r8erak",
+        "tag": "li",
+        "chars": 34,
+        "text": "13.2.5.44 Comment start dash state",
+        "marker": false
+      },
+      {
+        "id": "spya-vkfhmh",
+        "tag": "li",
+        "chars": 23,
+        "text": "13.2.5.45 Comment state",
+        "marker": false
+      },
+      {
+        "id": "spya-yez4bn",
+        "tag": "li",
+        "chars": 38,
+        "text": "13.2.5.46 Comment less-than sign state",
+        "marker": false
+      },
+      {
+        "id": "spya-mcxvmr",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.5.47 Comment less-than sign bang state",
+        "marker": false
+      },
+      {
+        "id": "spya-jkypzw",
+        "tag": "li",
+        "chars": 48,
+        "text": "13.2.5.48 Comment less-than sign bang dash state",
+        "marker": false
+      },
+      {
+        "id": "spya-nxnwgj",
+        "tag": "li",
+        "chars": 53,
+        "text": "13.2.5.49 Comment less-than sign bang dash dash state",
+        "marker": false
+      },
+      {
+        "id": "spya-rrnqxc",
+        "tag": "li",
+        "chars": 32,
+        "text": "13.2.5.50 Comment end dash state",
+        "marker": false
+      },
+      {
+        "id": "spya-fe5kjd",
+        "tag": "li",
+        "chars": 27,
+        "text": "13.2.5.51 Comment end state",
+        "marker": false
+      },
+      {
+        "id": "spya-ybq7nh",
+        "tag": "li",
+        "chars": 32,
+        "text": "13.2.5.52 Comment end bang state",
+        "marker": false
+      },
+      {
+        "id": "spya-u0pepk",
+        "tag": "li",
+        "chars": 23,
+        "text": "13.2.5.53 DOCTYPE state",
+        "marker": false
+      },
+      {
+        "id": "spya-h0mcae",
+        "tag": "li",
+        "chars": 35,
+        "text": "13.2.5.54 Before DOCTYPE name state",
+        "marker": false
+      },
+      {
+        "id": "spya-d4wdhr",
+        "tag": "li",
+        "chars": 28,
+        "text": "13.2.5.55 DOCTYPE name state",
+        "marker": false
+      },
+      {
+        "id": "spya-qmpkuw",
+        "tag": "li",
+        "chars": 34,
+        "text": "13.2.5.56 After DOCTYPE name state",
+        "marker": false
+      },
+      {
+        "id": "spya-tcauw3",
+        "tag": "li",
+        "chars": 44,
+        "text": "13.2.5.57 After DOCTYPE public keyword state",
+        "marker": false
+      },
+      {
+        "id": "spya-j492kq",
+        "tag": "li",
+        "chars": 48,
+        "text": "13.2.5.58 Before DOCTYPE public identifier state",
+        "marker": false
+      },
+      {
+        "id": "spya-j7zvkb",
+        "tag": "li",
+        "chars": 57,
+        "text": "13.2.5.59 DOCTYPE public identifier (double-quoted) state",
+        "marker": false
+      },
+      {
+        "id": "spya-wxcnjm",
+        "tag": "li",
+        "chars": 57,
+        "text": "13.2.5.60 DOCTYPE public identifier (single-quoted) state",
+        "marker": false
+      },
+      {
+        "id": "spya-ccj5gf",
+        "tag": "li",
+        "chars": 47,
+        "text": "13.2.5.61 After DOCTYPE public identifier state",
+        "marker": false
+      },
+      {
+        "id": "spya-zp37b7",
+        "tag": "li",
+        "chars": 61,
+        "text": "13.2.5.62 Between DOCTYPE public and system identifiers state",
+        "marker": false
+      },
+      {
+        "id": "spya-mn04d4",
+        "tag": "li",
+        "chars": 44,
+        "text": "13.2.5.63 After DOCTYPE system keyword state",
+        "marker": false
+      },
+      {
+        "id": "spya-bvurs6",
+        "tag": "li",
+        "chars": 48,
+        "text": "13.2.5.64 Before DOCTYPE system identifier state",
+        "marker": false
+      },
+      {
+        "id": "spya-dg9zbu",
+        "tag": "li",
+        "chars": 57,
+        "text": "13.2.5.65 DOCTYPE system identifier (double-quoted) state",
+        "marker": false
+      },
+      {
+        "id": "spya-ayt7xm",
+        "tag": "li",
+        "chars": 57,
+        "text": "13.2.5.66 DOCTYPE system identifier (single-quoted) state",
+        "marker": false
+      },
+      {
+        "id": "spya-fwrqsc",
+        "tag": "li",
+        "chars": 47,
+        "text": "13.2.5.67 After DOCTYPE system identifier state",
+        "marker": false
+      },
+      {
+        "id": "spya-ggk6w9",
+        "tag": "li",
+        "chars": 29,
+        "text": "13.2.5.68 Bogus DOCTYPE state",
+        "marker": false
+      },
+      {
+        "id": "spya-e3qfvz",
+        "tag": "li",
+        "chars": 29,
+        "text": "13.2.5.69 CDATA section state",
+        "marker": false
+      },
+      {
+        "id": "spya-te804m",
+        "tag": "li",
+        "chars": 37,
+        "text": "13.2.5.70 CDATA section bracket state",
+        "marker": false
+      },
+      {
+        "id": "spya-tumy25",
+        "tag": "li",
+        "chars": 33,
+        "text": "13.2.5.71 CDATA section end state",
+        "marker": false
+      },
+      {
+        "id": "spya-s3et7t",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.5.72 Processing instruction open state",
+        "marker": false
+      },
+      {
+        "id": "spya-xtnf0x",
+        "tag": "li",
+        "chars": 45,
+        "text": "13.2.5.73 Processing instruction target state",
+        "marker": false
+      },
+      {
+        "id": "spya-mmftuu",
+        "tag": "li",
+        "chars": 51,
+        "text": "13.2.5.74 After processing instruction target state",
+        "marker": false
+      },
+      {
+        "id": "spya-gtaqp6",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.5.75 Processing instruction data state",
+        "marker": false
+      },
+      {
+        "id": "spya-tp02pc",
+        "tag": "li",
+        "chars": 51,
+        "text": "13.2.5.76 Processing instruction questionable state",
+        "marker": false
+      },
+      {
+        "id": "spya-svt94h",
+        "tag": "li",
+        "chars": 35,
+        "text": "13.2.5.77 Character reference state",
+        "marker": false
+      },
+      {
+        "id": "spya-tamdfr",
+        "tag": "li",
+        "chars": 41,
+        "text": "13.2.5.78 Named character reference state",
+        "marker": false
+      },
+      {
+        "id": "spya-xnbnrs",
+        "tag": "li",
+        "chars": 35,
+        "text": "13.2.5.79 Ambiguous ampersand state",
+        "marker": false
+      },
+      {
+        "id": "spya-q0w3zu",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.5.80 Numeric character reference state",
+        "marker": false
+      },
+      {
+        "id": "spya-s76gmj",
+        "tag": "li",
+        "chars": 53,
+        "text": "13.2.5.81 Hexadecimal character reference start state",
+        "marker": false
+      },
+      {
+        "id": "spya-yqrpdz",
+        "tag": "li",
+        "chars": 47,
+        "text": "13.2.5.82 Hexadecimal character reference state",
+        "marker": false
+      },
+      {
+        "id": "spya-hwn8wq",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.5.83 Decimal character reference state",
+        "marker": false
+      },
+      {
+        "id": "spya-p8es4u",
+        "tag": "li",
+        "chars": 47,
+        "text": "13.2.5.84 Numeric character reference end state",
+        "marker": false
+      },
+      {
+        "id": "spya-s652dz",
+        "tag": "li",
+        "chars": 24,
+        "text": "13.2.6 Tree construction",
+        "marker": false
+      },
+      {
+        "id": "spya-p97e8e",
+        "tag": "li",
+        "chars": 37,
+        "text": "13.2.6.1 Creating and inserting nodes",
+        "marker": false
+      },
+      {
+        "id": "spya-s8qakv",
+        "tag": "li",
+        "chars": 48,
+        "text": "13.2.6.2 Parsing elements that contain only text",
+        "marker": false
+      },
+      {
+        "id": "spya-b2jh9y",
+        "tag": "li",
+        "chars": 52,
+        "text": "13.2.6.3 Closing elements that have implied end tags",
+        "marker": false
+      },
+      {
+        "id": "spya-ezk6t3",
+        "tag": "li",
+        "chars": 53,
+        "text": "13.2.6.4 The rules for parsing tokens in HTML content",
+        "marker": false
+      },
+      {
+        "id": "spya-utreff",
+        "tag": "li",
+        "chars": 39,
+        "text": "13.2.6.4.1 The \"initial\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-hd30n9",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.6.4.2 The \"before html\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-c350ym",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.6.4.3 The \"before head\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-ewjywu",
+        "tag": "li",
+        "chars": 39,
+        "text": "13.2.6.4.4 The \"in head\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-az97sd",
+        "tag": "li",
+        "chars": 48,
+        "text": "13.2.6.4.5 The \"in head noscript\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-ha9dgw",
+        "tag": "li",
+        "chars": 42,
+        "text": "13.2.6.4.6 The \"after head\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-e3jsxk",
+        "tag": "li",
+        "chars": 39,
+        "text": "13.2.6.4.7 The \"in body\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-a02kgv",
+        "tag": "li",
+        "chars": 36,
+        "text": "13.2.6.4.8 The \"text\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-zpdpky",
+        "tag": "li",
+        "chars": 40,
+        "text": "13.2.6.4.9 The \"in table\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-hv8ttv",
+        "tag": "li",
+        "chars": 46,
+        "text": "13.2.6.4.10 The \"in table text\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-unsb9p",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.6.4.11 The \"in caption\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-ktepnx",
+        "tag": "li",
+        "chars": 48,
+        "text": "13.2.6.4.12 The \"in column group\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-j9yyyc",
+        "tag": "li",
+        "chars": 46,
+        "text": "13.2.6.4.13 The \"in table body\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-uddmpz",
+        "tag": "li",
+        "chars": 39,
+        "text": "13.2.6.4.14 The \"in row\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-re7s9j",
+        "tag": "li",
+        "chars": 40,
+        "text": "13.2.6.4.15 The \"in cell\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-nndkkb",
+        "tag": "li",
+        "chars": 44,
+        "text": "13.2.6.4.16 The \"in template\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-cak9cv",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.6.4.17 The \"after body\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-f7pn4n",
+        "tag": "li",
+        "chars": 44,
+        "text": "13.2.6.4.18 The \"in frameset\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-cwct43",
+        "tag": "li",
+        "chars": 47,
+        "text": "13.2.6.4.19 The \"after frameset\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-gmpkxx",
+        "tag": "li",
+        "chars": 49,
+        "text": "13.2.6.4.20 The \"after after body\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-q5g2dr",
+        "tag": "li",
+        "chars": 53,
+        "text": "13.2.6.4.21 The \"after after frameset\" insertion mode",
+        "marker": false
+      },
+      {
+        "id": "spya-mu5p3u",
+        "tag": "li",
+        "chars": 56,
+        "text": "13.2.6.5 The rules for parsing tokens in foreign content",
+        "marker": false
+      },
+      {
+        "id": "spya-fy7r2p",
+        "tag": "li",
+        "chars": 14,
+        "text": "13.2.7 The end",
+        "marker": false
+      },
+      {
+        "id": "spya-xyjkt2",
+        "tag": "li",
+        "chars": 31,
+        "text": "13.2.8 Speculative HTML parsing",
+        "marker": false
+      },
+      {
+        "id": "spya-qvn8fk",
+        "tag": "li",
+        "chars": 43,
+        "text": "13.2.9 Coercing an HTML DOM into an infoset",
+        "marker": false
+      },
+      {
+        "id": "spya-r77qjb",
+        "tag": "li",
+        "chars": 73,
+        "text": "13.2.10 An introduction to error handling and strange cases in the parser",
+        "marker": false
+      },
+      {
+        "id": "spya-jvbtzb",
+        "tag": "li",
+        "chars": 40,
+        "text": "13.2.10.1 Misnested tags: <b><i></b></i>",
+        "marker": false
+      },
+      {
+        "id": "spya-u0je36",
+        "tag": "li",
+        "chars": 40,
+        "text": "13.2.10.2 Misnested tags: <b><p></b></p>",
+        "marker": false
+      },
+      {
+        "id": "spya-f5verq",
+        "tag": "li",
+        "chars": 37,
+        "text": "13.2.10.3 Unexpected markup in tables",
+        "marker": false
+      },
+      {
+        "id": "spya-tfjf6p",
+        "tag": "li",
+        "chars": 60,
+        "text": "13.2.10.4 Scripts that modify the page as it is being parsed",
+        "marker": false
+      },
+      {
+        "id": "spya-ztd6s4",
+        "tag": "li",
+        "chars": 76,
+        "text": "13.2.10.5 The execution of scripts that are moving across multiple documents",
+        "marker": false
+      },
+      {
+        "id": "spya-kekv6m",
+        "tag": "li",
+        "chars": 38,
+        "text": "13.2.10.6 Unclosed formatting elements",
+        "marker": false
+      },
+      {
+        "id": "spya-kftdd8",
+        "tag": "li",
+        "chars": 31,
+        "text": "13.3 Serializing HTML fragments",
+        "marker": false
+      },
+      {
+        "id": "spya-xsauqc",
+        "tag": "li",
+        "chars": 27,
+        "text": "13.4 Parsing HTML fragments",
+        "marker": false
+      },
+      {
+        "id": "spya-wkf4z9",
+        "tag": "p",
+        "chars": 31,
+        "text": "Document/DOMContentLoaded_event",
+        "marker": false
+      },
+      {
+        "id": "spya-fbdr2d",
+        "tag": "p",
+        "chars": 31,
+        "text": "Support in all current engines.",
+        "marker": false
+      },
+      {
+        "id": "spya-fpryuh",
+        "tag": "p",
+        "chars": 27,
+        "text": "Firefox1+Safari3.1+Chrome1+",
+        "marker": false
+      },
+      {
+        "id": "spya-pnb3d2",
+        "tag": "p",
+        "chars": 14,
+        "text": "Opera9+Edge79+",
+        "marker": false
+      },
+      {
+        "id": "spya-axgpyy",
+        "tag": "p",
+        "chars": 35,
+        "text": "Edge (Legacy)12+Internet Explorer9+",
+        "marker": false
+      },
+      {
+        "id": "spya-w5epyu",
+        "tag": "p",
+        "chars": 93,
+        "text": "Firefox Android?Safari iOS?Chrome Android?WebView Android?Samsung Internet?Opera Android10.1+",
+        "marker": false
+      },
+      {
+        "id": "spya-s4yb5n",
+        "tag": "p",
+        "chars": 17,
+        "text": "Window/load_event",
+        "marker": false
+      },
+      {
+        "id": "spya-wnkxuj",
+        "tag": "p",
+        "chars": 31,
+        "text": "Support in all current engines.",
+        "marker": false
+      },
+      {
+        "id": "spya-z9g2ha",
+        "tag": "p",
+        "chars": 27,
+        "text": "Firefox1+Safari1.3+Chrome1+",
+        "marker": false
+      },
+      {
+        "id": "spya-kx4vd3",
+        "tag": "p",
+        "chars": 14,
+        "text": "Opera4+Edge79+",
+        "marker": false
+      },
+      {
+        "id": "spya-rhyvpj",
+        "tag": "p",
+        "chars": 35,
+        "text": "Edge (Legacy)12+Internet Explorer4+",
+        "marker": false
+      },
+      {
+        "id": "spya-s0w59e",
+        "tag": "p",
+        "chars": 93,
+        "text": "Firefox Android?Safari iOS?Chrome Android?WebView Android?Samsung Internet?Opera Android10.1+",
+        "marker": false
+      },
+      {
+        "id": "spya-y4qz2w",
+        "tag": "a",
+        "chars": 20,
+        "text": "← 13 The HTML syntax",
+        "marker": false
+      },
+      {
+        "id": "spya-awv75s",
+        "tag": "a",
+        "chars": 17,
+        "text": "Table of Contents",
+        "marker": false
+      },
+      {
+        "id": "spya-znu02t",
+        "tag": "a",
+        "chars": 33,
+        "text": "13.5 Named character references →",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 6193,
+    "usage": {
+      "input": 77027,
+      "output": 2443
+    },
+    "ms": 16156
+  },
+  {
+    "fixture": "wikipedia-transformer",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 335,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-k2evan",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-jhnb92",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-g2d2w4",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-kspm9e",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-errsxt",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-vdhhvv",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-hucg8b",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-r9j92v",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-epmrwf",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-ra36bs",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-wn85rz",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-jwp6u7",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-kv8yt9",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-ec4qhp",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-rsdtwj",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-evatjq",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-ymczfs",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-mhnuwf",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      },
+      {
+        "id": "spya-ecddbc",
+        "tag": "p",
+        "chars": 6,
+        "text": "[edit]",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 114,
+    "usage": {
+      "input": 14376,
+      "output": 406
+    },
+    "ms": 5001
+  },
+  {
+    "fixture": "ar5iv-attention",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 139,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-am4spm",
+        "tag": "p",
+        "chars": 173,
+        "text": "Provided proper attribution is provided, Google hereby grants permission to reproduce the tables and figures in this paper solely for use in",
+        "marker": false
+      }
+    ],
+    "prose": [
+      {
+        "id": "spya-am4spm",
+        "tag": "p",
+        "chars": 173,
+        "text": "Provided proper attribution is provided, Google hereby grants permission to reproduce the tables and figures in this paper solely for use in",
+        "marker": false
+      }
+    ],
+    "unknownIds": [],
+    "droppedChars": 173,
+    "usage": {
+      "input": 6105,
+      "output": 153
+    },
+    "ms": 3807
+  },
+  {
+    "fixture": "arxiv-abs",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 5,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-dmc7gz",
+        "tag": "p",
+        "chars": 28,
+        "text": "View PDF HTML (experimental)",
+        "marker": false
+      },
+      {
+        "id": "spya-ddjx8g",
+        "tag": "table",
+        "chars": 253,
+        "text": "Comments: 15 pages, 5 figures Subjects: Computation and Language (cs.CL); Machine Learning (cs.LG) Cite as: arXiv:1706.03762 [cs.CL] (or arX",
+        "marker": false
+      },
+      {
+        "id": "spya-b5tfvt",
+        "tag": "h2",
+        "chars": 18,
+        "text": "Submission history",
+        "marker": false
+      },
+      {
+        "id": "spya-t654ve",
+        "tag": "p",
+        "chars": 350,
+        "text": "From: Llion Jones [view email] [v1] Mon, 12 Jun 2017 17:57:34 UTC (1,102 KB) [v2] Mon, 19 Jun 2017 16:49:45 UTC (1,125 KB) [v3] Tue, 20 Jun ",
+        "marker": false
+      }
+    ],
+    "prose": [
+      {
+        "id": "spya-ddjx8g",
+        "tag": "table",
+        "chars": 253,
+        "text": "Comments: 15 pages, 5 figures Subjects: Computation and Language (cs.CL); Machine Learning (cs.LG) Cite as: arXiv:1706.03762 [cs.CL] (or arX",
+        "marker": false
+      },
+      {
+        "id": "spya-t654ve",
+        "tag": "p",
+        "chars": 350,
+        "text": "From: Llion Jones [view email] [v1] Mon, 12 Jun 2017 17:57:34 UTC (1,102 KB) [v2] Mon, 19 Jun 2017 16:49:45 UTC (1,125 KB) [v3] Tue, 20 Jun ",
+        "marker": false
+      }
+    ],
+    "unknownIds": [],
+    "droppedChars": 649,
+    "usage": {
+      "input": 985,
+      "output": 153
+    },
+    "ms": 3183
+  },
+  {
+    "fixture": "aaronson",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 102,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-swbf77",
+        "tag": "p",
+        "chars": 256,
+        "text": "This entry was posted on Monday, February 12th, 2024 at 10:08 am and is filed under Metaphysical Spouting, The Fate of Humanity. You can fol",
+        "marker": false
+      },
+      {
+        "id": "spya-zhp8gy",
+        "tag": "p",
+        "chars": 146,
+        "text": "You can use rich HTML in comments! You can also use basic TeX, by enclosing it within $$ $$ for displayed equations or \\( \\) for inline equa",
+        "marker": false
+      },
+      {
+        "id": "spya-h00k7y",
+        "tag": "p",
+        "chars": 110,
+        "text": "After two decades of mostly-open comments, in July 2024 Shtetl-Optimized transitioned to the following policy:",
+        "marker": false
+      },
+      {
+        "id": "spya-x95yum",
+        "tag": "p",
+        "chars": 169,
+        "text": "All comments are treated, by default, as personal missives to me, Scott Aaronson---with no expectation either that they'll appear on the blo",
+        "marker": false
+      },
+      {
+        "id": "spya-bv9pru",
+        "tag": "p",
+        "chars": 386,
+        "text": "At my leisure and discretion, and in consultation with the Shtetl-Optimized Committee of Guardians, I'll put on the blog a curated selection",
+        "marker": false
+      }
+    ],
+    "prose": [
+      {
+        "id": "spya-swbf77",
+        "tag": "p",
+        "chars": 256,
+        "text": "This entry was posted on Monday, February 12th, 2024 at 10:08 am and is filed under Metaphysical Spouting, The Fate of Humanity. You can fol",
+        "marker": false
+      },
+      {
+        "id": "spya-zhp8gy",
+        "tag": "p",
+        "chars": 146,
+        "text": "You can use rich HTML in comments! You can also use basic TeX, by enclosing it within $$ $$ for displayed equations or \\( \\) for inline equa",
+        "marker": false
+      },
+      {
+        "id": "spya-h00k7y",
+        "tag": "p",
+        "chars": 110,
+        "text": "After two decades of mostly-open comments, in July 2024 Shtetl-Optimized transitioned to the following policy:",
+        "marker": false
+      },
+      {
+        "id": "spya-x95yum",
+        "tag": "p",
+        "chars": 169,
+        "text": "All comments are treated, by default, as personal missives to me, Scott Aaronson---with no expectation either that they'll appear on the blo",
+        "marker": false
+      },
+      {
+        "id": "spya-bv9pru",
+        "tag": "p",
+        "chars": 386,
+        "text": "At my leisure and discretion, and in consultation with the Shtetl-Optimized Committee of Guardians, I'll put on the blog a curated selection",
+        "marker": false
+      }
+    ],
+    "unknownIds": [],
+    "droppedChars": 1067,
+    "usage": {
+      "input": 4576,
+      "output": 186
+    },
+    "ms": 2908
+  },
+  {
+    "fixture": "acx",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 513,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0,
+    "usage": {
+      "input": 19569,
+      "output": 71
+    },
+    "ms": 4620
+  },
+  {
+    "fixture": "gwern-scaling",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 175,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-yfkqk5",
+        "tag": "h2",
+        "chars": 9,
+        "text": "Backlinks",
+        "marker": false
+      },
+      {
+        "id": "spya-xkqp4d",
+        "tag": "a",
+        "chars": 29,
+        "text": "[Backlinks (what links here)]",
+        "marker": false
+      },
+      {
+        "id": "spya-mf2ptm",
+        "tag": "h2",
+        "chars": 13,
+        "text": "Similar Links",
+        "marker": false
+      },
+      {
+        "id": "spya-vjunqu",
+        "tag": "a",
+        "chars": 24,
+        "text": "[Similar links by topic]",
+        "marker": false
+      },
+      {
+        "id": "spya-vkdvcu",
+        "tag": "h2",
+        "chars": 12,
+        "text": "Bibliography",
+        "marker": false
+      },
+      {
+        "id": "spya-yyu5m4",
+        "tag": "a",
+        "chars": 47,
+        "text": "[Bibliography of links/references used in page]",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 134,
+    "usage": {
+      "input": 7158,
+      "output": 143
+    },
+    "ms": 2692
+  },
+  {
+    "fixture": "tufte-css",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 58,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0,
+    "usage": {
+      "input": 2872,
+      "output": 86
+    },
+    "ms": 6234
+  },
+  {
+    "fixture": "mdn-cache-control",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 209,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [
+      {
+        "id": "spya-pvkuq9",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-prckhn",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-ewk4n3",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-n7dqj6",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-jxe8km",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-bkv3zu",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-u4npwk",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-zcb44k",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-gnc8yy",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-p2k3pe",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-x6cg86",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-e6nu8b",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-qqpf5s",
+        "tag": "p",
+        "chars": 4,
+        "text": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-uvd294",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-ygccsd",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-ukmps5",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-sxj6mq",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-kprbhy",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-ytumf9",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-gzcbrr",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-kzheqa",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-v8ag2x",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-c0v46s",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-kf04jc",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-kvgn2e",
+        "tag": "p",
+        "chars": 4,
+        "text": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-uuysec",
+        "tag": "p",
+        "chars": 4,
+        "text": "html",
+        "marker": false
+      },
+      {
+        "id": "spya-zghxr3",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-jjw5px",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-u9w56q",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      },
+      {
+        "id": "spya-k2rpgg",
+        "tag": "p",
+        "chars": 4,
+        "text": "http",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 120,
+    "usage": {
+      "input": 5963,
+      "output": 728
+    },
+    "ms": 7200
+  },
+  {
+    "fixture": "gutenberg-pride",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 2208,
+    "markers": 8,
+    "markersCaught": 8,
+    "beyondTheRule": [
+      {
+        "id": "spya-sgnrzn",
+        "tag": "p",
+        "chars": 3,
+        "text": "{v}",
+        "marker": false
+      },
+      {
+        "id": "spya-rnxxvd",
+        "tag": "h2",
+        "chars": 4,
+        "text": "{ix}",
+        "marker": false
+      },
+      {
+        "id": "spya-zq5rxb",
+        "tag": "h2",
+        "chars": 5,
+        "text": "{xxv}",
+        "marker": false
+      },
+      {
+        "id": "spya-g48vnh",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-ht42kz",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-hrvrm4",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-key4t5",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-cj4eq8",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-c5m9na",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-ctkrwr",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-rwuarc",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-re00x2",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-zzp02s",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-qc478k",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-hn6bhk",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-am45zy",
+        "tag": "p",
+        "chars": 27,
+        "text": "“Accompanied by their aunt”",
+        "marker": false
+      },
+      {
+        "id": "spya-a6kjmx",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-tyew4e",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-rq49bz",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-fwcujk",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-qpqzew",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-u3e2wd",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-zyh8f5",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      },
+      {
+        "id": "spya-h9p4nk",
+        "tag": "p",
+        "chars": 33,
+        "text": "[Copyright 1894 by George Allen.]",
+        "marker": false
+      }
+    ],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 733,
+    "usage": {
+      "input": 82572,
+      "output": 1716
+    },
+    "ms": 35042
+  },
+  {
+    "fixture": "cornell-17-107",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 108,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0,
+    "usage": {
+      "input": 4085,
+      "output": 109
+    },
+    "ms": 5772
+  },
+  {
+    "fixture": "constitution",
+    "model": "openai/gpt-5.6-terra",
+    "blocks": 454,
+    "markers": 0,
+    "markersCaught": 0,
+    "beyondTheRule": [],
+    "prose": [],
+    "unknownIds": [],
+    "droppedChars": 0,
+    "usage": {
+      "input": 15923,
+      "output": 41
+    },
+    "ms": 6917
+  }
+]

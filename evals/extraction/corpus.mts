@@ -55,6 +55,21 @@ import { isMain } from "../../src/is-main.js";
  * Every one was fetched over plain HTTP with no browser spoofing and returned
  * 200 with its article text in the initial bytes.
  */
+/**
+ * **The User-Agent every fixture was captured with**, and the one anything that
+ * re-fetches or probes a page has to send.
+ *
+ * One constant because it was briefly two. `probe.mts` was written with
+ * `Chrome/126` while `fixtures/verify.mts` had captured everything with
+ * `Chrome/128`, and a server that varies its markup by User-Agent — which is
+ * ordinary, and is how mobile templates get served — would then have made the
+ * probe's numbers describe bytes that are not in the fixture. Nothing would have
+ * raised; the two would simply have been measuring different documents.
+ */
+export const FIXTURE_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+  "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+
 export const CORPUS: { name: string; file: string; url: string; slot: string }[] = [
   { name: "pg-greatwork", file: "pg_greatwork.html", slot: "N/S/T",
     url: "https://www.paulgraham.com/greatwork.html" },
@@ -94,6 +109,21 @@ export const CORPUS: { name: string; file: string; url: string; slot: string }[]
      of it lives inside three closed accordions. */
   { name: "constitution", file: "constitution.html", slot: "T",
     url: "https://www.anthropic.com/constitution" },
+  /* **Five added 2026-08-30**, for a failure the first sixteen could not show.
+     The corpus was built to answer "what did Readability throw away"; these are
+     here to answer "what did it keep that is not the article", and the shape of
+     that question is `probe.mts`'s marker/tiny counts rather than droppedChars.
+     docs/plans/readability-tidy-pass.md is the write-up. */
+  { name: "mkdocs-tabs", file: "mkdocs_tabs.html", slot: "D/B",
+    url: "https://squidfunk.github.io/mkdocs-material/reference/content-tabs/" },
+  { name: "whitman-leaves", file: "whitman.html", slot: "S",
+    url: "https://www.gutenberg.org/files/1322/1322-h/1322-h.htm" },
+  { name: "hacker-howto", file: "hacker_howto.html", slot: "S",
+    url: "http://www.catb.org/~esr/faqs/hacker-howto.html" },
+  { name: "mactutor-turing", file: "mactutor_turing.html", slot: "B/S",
+    url: "https://mathshistory.st-andrews.ac.uk/Biographies/Turing/" },
+  { name: "shakespeare-hamlet", file: "shakespeare_hamlet.html", slot: "—",
+    url: "https://www.opensourceshakespeare.org/views/plays/play_view.php?WorkID=hamlet&Act=3&Scene=1&Scope=scene" },
 ];
 
 /**

@@ -1,12 +1,13 @@
-# `evals/extraction/fixtures/` — sixteen pages Readability has to get right
+# `evals/extraction/fixtures/` — twenty-one pages Readability has to get right
 
-Captured **2026-08-28**, hashed, and committed. Run by hand, not by `npm test` — see
+Captured **2026-08-28** and **2026-08-30**, hashed, and committed. Run by hand, not by `npm test` — see
 [evals/README.md](../../README.md) and
 [../../../docs/plans/readability-repair-pass.md](../../../docs/plans/readability-repair-pass.md),
 which is the plan these were chosen for.
 
 ```bash
-npx tsx evals/extraction/corpus.mts            # stock Readability vs what stage 2 ships, all fifteen
+npx tsx evals/extraction/corpus.mts            # stock Readability vs what stage 2 ships, all of them
+npx tsx evals/extraction/probe.mts <url>       # one page: what did it keep, and is any of it junk?
 npx tsx evals/extraction/fixtures/verify.mts   # are these the bytes the numbers came from?
 npx tsx evals/extraction/fixtures/verify.mts --refetch   # and does the web still serve them?
 ```
@@ -99,6 +100,37 @@ footnote) is in the initial bytes. Re-fetched with a bare default `curl` user-ag
 byte-identical output, so it does not depend on pretending to be a browser either. © the author,
 same as `acx.html` and `aaronson.html`.
 
+## The five added 2026-08-30, and the different question they answer
+
+The first sixteen were chosen to answer *"what did Readability throw away?"* These five answer the
+opposite one — *"what did it keep that is not the article, and what did it keep in the wrong
+shape?"* — which is the question
+[../../../docs/plans/readability-tidy-pass.md](../../../docs/plans/readability-tidy-pass.md) is
+about. The measure is `probe.mts`'s marker/tiny/longest-block counts rather than `droppedChars`, and
+**four of these five score perfectly on `droppedChars` while being visibly wrong to a reader.**
+
+| file | slot | source | licence | what it is here to break |
+|---|---|---|---|---|
+| `mkdocs_tabs.html` | D/B | [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/reference/content-tabs/) | MIT | **The case the section below says is missing.** Five tabbed widgets whose inactive panels are hidden by an external CSS sibling selector on a `:checked` radio — no `[hidden]`, no inline `display:none`, no `aria-hidden`. Readability admits every panel, so alternative C and C++ examples run together with no boundary and the two tab labels arrive glued as one block reading `CC++` |
+| `whitman.html` | S | [Project Gutenberg](https://www.gutenberg.org/files/1322/1322-h/1322-h.htm) | public domain | *Leaves of Grass*. Ratio **1.000, nothing dropped**, and the longest block is **67,890 characters** — several distinct poems melted into one node, because the verse lives in `<pre>` and nothing splits it. The live successor to the `<br>` failure |
+| `hacker_howto.html` | S | [catb.org](http://www.catb.org/~esr/faqs/hacker-howto.html) | © 2001 Eric S. Raymond | The same shape by a different route: a DocBook FAQ rendered as an HTML `<table>`, so twenty-one question-and-answer pairs arrive as **one 14,572-character block**. The essay above it extracts perfectly |
+| `mactutor_turing.html` | B/S | [MacTutor](https://mathshistory.st-andrews.ac.uk/Biographies/Turing/) | © Univ. of St Andrews; credit, non-commercial | **18 markers and 15 tiny blocks.** A CMS convention wraps bare years in `<span class="non-italic">` mid-sentence, so `1931`, `in` and `'s` become top-level blocks, next to a `<dt>Born</dt><dt>Died</dt>` facts box and an external-links rail |
+| `shakespeare_hamlet.html` | — | [Open Source Shakespeare](https://www.opensourceshakespeare.org/views/plays/play_view.php?WorkID=hamlet&Act=3&Scene=1&Scope=scene) | public domain (site says so) | **The control, and the most important of the five.** 52 blocks averaging 170 characters, every one a line of verse, and **every one correct**. Any rule that tidies short blocks has to leave this page alone, and a corpus without it would make "drop everything short" look like a good idea |
+
+Two of them were verified by hand against the live page and not only through the probe. `catb.org`
+answered **HTTP 408 with a 110-byte body** on the first capture attempt; had that been committed it
+would have sat in the corpus as a fixture with no article in it, and the runner would have reported a
+page rather than a failure — the [silent-success](../../../docs/reusable/silent-success.md) shape
+again, this time in the act of building the instrument. Every capture is now checked for its own
+article text before it is hashed.
+
+**What was looked for and not found:** the classic `<br><br>`-instead-of-`<p>` page. Readability's
+own `_replaceBrs` reflows those into paragraphs, and `pg_greatwork.html` — twelve thousand words with
+zero `<p>` in the source — comes out with **266 of them**. A search across personal sites, poetry
+archives, mailing-list archives and legacy academic pages turned up no live instance of the failure
+in that form. The reader-facing symptom it used to cause is alive; the mechanism has moved to `<pre>`
+and to layout tables, which is what `whitman.html` and `hacker_howto.html` are for.
+
 ## The case that is missing, and it is the one that would falsify the fix
 
 **A page with surviving hidden furniture.** Stage 2 now strips `aria-hidden="true"` before parsing
@@ -107,8 +139,10 @@ hidden by external CSS only — no `[hidden]`, no inline `display: none` — sit
 container. GPT Sol raised it and it reproduces: thirty items, 1,370 characters admitted. Outside the
 article container link density sinks it either way.
 
-**Not one of the fifteen contains it.** So "thirteen byte-identical" is a true statement about a
-pattern this corpus cannot exhibit, and the un-hide arm has exactly one page it acts on. The
+**Not one of the first fifteen contained it, and `mkdocs_tabs.html` now does** — added 2026-08-30,
+though as tabbed alternative content rather than as the nav drawer this paragraph imagined. So
+"thirteen byte-identical" was a true statement about a pattern the corpus could not then exhibit, and
+the un-hide arm had exactly one page it acted on. The
 behaviour is pinned synthetically in
 [`tests/extract-unhide.test.ts`](../../../tests/extract-unhide.test.ts), which is a record, not a
 sample. **A real page with that pattern is the most valuable thing that could be added here** —

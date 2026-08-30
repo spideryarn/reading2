@@ -115,6 +115,21 @@ The measurements, the five bugs the instrument shipped with, the fifteen committ
 a model pass would and would not buy are all in
 **[../plans/readability-repair-pass.md](../plans/readability-repair-pass.md)**.
 
+**And there is a second failure, opposite in direction, found 2026-08-30.** Everything above measures
+what Readability *threw away*. Nothing measured what it *kept* — and Paul Graham's *How to Do Great
+Work*, which the corpus scores as losing nothing at all (ratio 1.000), reaches the reader as 328
+blocks of which **87 hold six characters or fewer**: `[1]`…`[29]`, a bare `[`, a bare number. They are
+all `gistable`, so the table of contents, the summaries and the zoom tree treat punctuation as
+content. The same shape is on Wikipedia (nineteen `[edit]`), MDN (thirty `http` code-fence labels),
+RFC 9110 (`¶` permalinks) and a MacTutor biography (bare years, and the words `in` and `'s`, split
+mid-sentence).
+
+The instrument for it is [`evals/extraction/probe.mts`](../../evals/extraction/probe.mts), which runs
+this stage **and stage 3's real splitter** and reports what a reader would actually get. What a model
+pass buys, what a four-line regex buys for free, and the two fixtures whose whole article arrives as
+one 67,890-character block are in
+**[../plans/readability-tidy-pass.md](../plans/readability-tidy-pass.md)**.
+
 ## Where this sits
 
 This is **stage 2** of the pipeline — see [architecture.md § Pipeline](architecture.md#pipeline).
