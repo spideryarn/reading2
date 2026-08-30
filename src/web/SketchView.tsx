@@ -69,6 +69,7 @@ import { paintScene, type Painted, type PaintedNode, type Prim } from "../sketch
 import type { SketchNode } from "../sketch-scene.js";
 import type { Block, BlockId } from "../types.js";
 import { JobProgress } from "./JobProgress.js";
+import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useSketch } from "./useSketch.js";
 import { UseProfile } from "./WrittenForYou.js";
 
@@ -424,17 +425,29 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
              by pressing a region's name is looking for — they pressed a thing
              inside the overview and the way out is back, not a list. Escape
              does the same, when the overlay is not the thing Escape belongs to. */
-          <button
-            type="button"
-            className="sk-up"
-            onClick={() => {
-              setOpen(null);
-              setFocused(0);
-            }}
-            title="Back to the whole picture"
+          <Tooltip
+            placement="bottom"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head="Back"
+                what="Out of the part you are inside, to the whole picture."
+                how="Escape does the same, except while the picture is full screen — there Escape belongs to the overlay, and taking it would leave you pressing it twice with the first press seeming to do nothing."
+              />
+            }
           >
-            <ChevronLeft size={13} /> Back
-          </button>
+            <button
+              type="button"
+              className="sk-up"
+              onClick={() => {
+                setOpen(null);
+                setFocused(0);
+              }}
+            >
+              <ChevronLeft size={13} /> Back
+            </button>
+          </Tooltip>
         )}
         {sketch.scenes.length > 1 ? (
           /* **The scenes as a row, not a breadcrumb.** A breadcrumb only tells
@@ -445,42 +458,72 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
              so far. One tab stop and arrows, like every other switcher here. */
           // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern, and the same call DiagramPanel's kind switcher makes
           <div className="sk-scenes" role="radiogroup" aria-label="Which part of the picture">
+            <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
             {sketch.scenes.map((sc, i) => {
               const on = i === 0 ? open === null : open === sc.id;
               return (
-                // biome-ignore lint/a11y/useSemanticElements: see above
-                <button
+                <Tooltip
                   key={sc.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  tabIndex={on ? 0 : -1}
-                  className={`sk-scene${on ? " on" : ""}`}
-                  title={sc.caption ?? sc.title}
-                  onClick={() => {
-                    setOpen(i === 0 ? null : sc.id);
-                    setFocused(0);
-                  }}
+                  placement="bottom"
+                  keepSide
+                  className="tip-soon"
+                  content={
+                    <ControlTip
+                      head={i === 0 ? sketch.title : sc.title}
+                      what={sc.caption ?? sketch.caption}
+                      how={
+                        i === 0
+                          ? "The whole argument at once. The other pictures here are parts of it drawn larger, and this is where the you-are-here ring lives — marking a spot inside a part while you are reading somewhere else would be a confident lie about where you are."
+                          : "One part of the argument, drawn at its own size. Some boxes in the overview open straight into it; this row is the way in that does not depend on the model having wired one."
+                      }
+                    />
+                  }
                 >
-                  {i === 0 ? sketch.title : sc.title}
-                </button>
+                  {/* biome-ignore lint/a11y/useSemanticElements: see above */}
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    tabIndex={on ? 0 : -1}
+                    className={`sk-scene${on ? " on" : ""}`}
+                    onClick={() => {
+                      setOpen(i === 0 ? null : sc.id);
+                      setFocused(0);
+                    }}
+                  >
+                    {i === 0 ? sketch.title : sc.title}
+                  </button>
+                </Tooltip>
               );
             })}
+            </TooltipGroup>
           </div>
         ) : (
           <span className="sk-title" title={sketch.caption}>
             {sketch.title}
           </span>
         )}
-        <button
-          type="button"
-          className="sk-zoom"
-          onClick={() => setFull((v) => !v)}
-          title={full ? "Back to the band" : "Show the whole picture, full screen"}
+        <Tooltip
+          placement="bottom"
+          keepSide
+          className="tip-soon"
+          content={
+            <ControlTip
+              head={full ? "Close" : "Enlarge"}
+              what={
+                full
+                  ? "Put the picture back in the band beside the article."
+                  : "The same picture at its own size, filling the window."
+              }
+              how="The canvas is 760 units wide and the band is under 400 pixels, so in the band the text lands at about five pixels: what survives there is the shape, and the card below is where the words are. Nothing about the picture changes between the two except its scale."
+            />
+          }
         >
-          {full ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-          {full ? "Close" : "Enlarge"}
-        </button>
+          <button type="button" className="sk-zoom" onClick={() => setFull((v) => !v)}>
+            {full ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            {full ? "Close" : "Enlarge"}
+          </button>
+        </Tooltip>
       </div>
 
       {/* **A redraw the reader did not start is still a redraw.** `useStepJob`
@@ -504,6 +547,12 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
             : (view.job.steps.find((s) => s.name === "sketch")?.label ?? "Drawing…")}
         </p>
       )}
+
+      {/* **And the spinner going away is not the same as the work succeeding.**
+          A redraw that came back failed left the picture standing and said
+          nothing, which reads as a completed run that changed nothing — after
+          two minutes and $0.20. The server's own words, per copy.md. ⟨Sol⟩. */}
+      {!view.job && view.failed && <p className="sk-failed">{view.failed}</p>}
 
       {notes.length > 0 && <p className="sk-note">{notes.join(" ")}</p>}
 

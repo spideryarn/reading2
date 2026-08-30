@@ -19,18 +19,19 @@
  * cached, but the bound has to be somewhere and this is it.
  *
  * **It never blocks the picture.** Force draws immediately from the tree and
- * the words; the dotted lines are folded in on a later render. There is no
- * spinner over the diagram, because a spinner over something already four
- * fifths drawn tells the reader the wrong thing about what is missing. The
- * panel says "looking for related passages…" in the header strip instead —
- * beside the picture rather than over it.
+ * the words; the dotted lines are folded in on a later render. Nothing is drawn
+ * *over* the diagram, because a spinner over something already four fifths
+ * drawn tells the reader the wrong thing about what is missing. The wait lives
+ * in the one line of chrome beside the picture instead — a spinner and
+ * "Reading the article for related passages…", because a line that only changes
+ * its words reads as a caption rather than as work in progress.
  *
  * **A failure is not a blank.** If the request fails the picture keeps its other
  * four kinds of line and the strip says so. Silently drawing three kinds where
  * four were promised is the [silent-success](../../docs/reusable/silent-success.md)
  * shape: everything looks fine and one claim has quietly gone missing.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SimilarPair, SimilarResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -44,13 +45,23 @@ export interface UseSimilar {
   /** How many blocks were embedded — fewer than the article has; short ones are skipped. */
   blocks: number;
   error: string | null;
+  /**
+   * Ask again. See `retry` in [useProjection.ts](./useProjection.ts) — same
+   * reason, same shape, and the same sentence of Greg's behind both.
+   */
+  retry(): void;
 }
 
 /** Nothing, shared — a new `[]` each render would rebuild the graph every time. */
 const NONE: SimilarPair[] = [];
 
+/** The data half, with no verb in it — see `state` below. */
+type SimilarState = Omit<UseSimilar, "retry"> & { slug: string };
+
 export function useSimilar(slug: string, enabled: boolean): UseSimilar {
-  const [state, setState] = useState<UseSimilar & { slug: string }>({
+  /* **The state holds the data, never the verb.** `retry` is added on the way
+     out, so no `setState` here has to remember to carry it. */
+  const [state, setState] = useState<SimilarState>({
     slug,
     status: "idle",
     pairs: NONE,
@@ -58,6 +69,10 @@ export function useSimilar(slug: string, enabled: boolean): UseSimilar {
     blocks: 0,
     error: null,
   });
+  /* A counter rather than a boolean: two failures in a row are two presses, and
+     a flag already true on the second would re-run nothing. */
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   /* **Whose answer this is.** The answer is about one article's passages, so
      showing the previous one's dotted lines over the new article would be a
@@ -78,6 +93,12 @@ export function useSimilar(slug: string, enabled: boolean): UseSimilar {
      would think to look here for. */
   const mine = state.slug === slug;
 
+  /* `attempt` is in the dependency list and is read nowhere in the body, which
+     is exactly what makes it work and exactly what the rule objects to: it is a
+     token whose only job is to be different, so that pressing Try again re-runs
+     an effect whose real inputs have not changed. Removing it, as the fix
+     offers, would leave a button that sets state and fetches nothing. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above — `attempt` is the retry token, not a value
   useEffect(() => {
     if (!enabled) return;
     /* **Not reset to `idle` when `enabled` goes false**, and not cleared
@@ -117,21 +138,40 @@ export function useSimilar(slug: string, enabled: boolean): UseSimilar {
         // An abort is this component leaving, not a failure. Reporting it would
         // put an error in the strip every time the reader changed picture.
         if (stop.signal.aborted) return;
-        setState({
-          slug,
-          status: "error",
-          pairs: NONE,
-          model: null,
-          blocks: 0,
-          error: (err as Error).message,
-        });
+        /* **A failed revalidation must not take the dotted lines away.** See
+           the twin of this in `useProjection` for the whole reason: the guard
+           above suppressed the spinner when an answer was already held, and
+           this replaced the answer, so a flaky repeat on a toggle back to Force
+           erased lines that were correctly drawn. ⟨Sol⟩, 2026-08-30. */
+        setState((was) =>
+          was.slug === slug && was.status === "ready"
+            ? was
+            : {
+                slug,
+                status: "error",
+                pairs: NONE,
+                model: null,
+                blocks: 0,
+                error: (err as Error).message,
+              },
+        );
       }
     })();
     return () => stop.abort();
-  }, [slug, enabled]);
+  }, [slug, enabled, attempt]);
 
   /* `NONE` rather than `state.pairs` while an answer belongs to another
      article: a stable empty array, so the graph memo downstream does not
-     rebuild on every render. */
-  return mine ? state : { ...state, status: "idle", pairs: NONE, model: null, blocks: 0, error: null };
+     rebuild on every render.
+
+     Memoised for the reason `useProjection`'s twin is: without it the object is
+     new on every render, and the fields inside it are the same references
+     either way, which is what keeps the graph memo from rebuilding. */
+  return useMemo(
+    () =>
+      mine
+        ? { ...state, retry }
+        : { slug, status: "idle" as const, pairs: NONE, model: null, blocks: 0, error: null, retry },
+    [mine, state, retry, slug],
+  );
 }

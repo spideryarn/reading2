@@ -14,9 +14,15 @@
  * **`enabled` is the whole gate.** This and `useSimilar` are the only fetches
  * in the reading view that spend money without a button saying so. Pressing a
  * diagram toggle is not a purchase decision, so the request happens on exactly
- * the two pictures that draw it and never on the third. The vectors are
- * shared with `useSimilar`'s answer on the server, so a reader who has already
- * opened Force pays only for the arithmetic.
+ * the two pictures that draw it and never on the third.
+ *
+ * **And it is a whole purchase, not a share.** This said that a reader who had
+ * already opened Force paid only for the arithmetic here, which is what
+ * `src/article-vectors.ts` was built for and is not what happens: `similar.ts`
+ * still calls `embedAll` itself, so a cold Force → Drift embeds the article
+ * twice. That is recorded as debt in article-vectors.ts § *today only
+ * projection.ts uses it*; what was wrong was a client comment stating the
+ * intention as a fact. ⟨Sol⟩, 2026-08-30.
  *
  * **It blocks the picture, and the picture says so.** Unlike Force — which is
  * four fifths drawn without any of this — Drift and Trail have *nothing* to
@@ -33,7 +39,7 @@
  * picture would have been. Failing to nothing at all is the
  * [silent-success](../../docs/reusable/silent-success.md) shape.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ProjectionPoint, ProjectionResponse, SkipCounts } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -52,12 +58,26 @@ export interface UseProjection {
   skipped: SkipCounts;
   model: string | null;
   error: string | null;
+  /**
+   * Ask again.
+   *
+   * The fetch runs once from an effect, so before this existed a reader whose
+   * request failed — a quota, a dropped connection, a deploy mid-flight — had
+   * the reason on screen and no verb anywhere: the only way back was to leave
+   * the mode and come in again, which nothing said. Greg, 2026-08-30:
+   * *"And/or a button to trigger generation if needed."*
+   *
+   * Stable, so a panel can hand it to a button without rerendering the picture.
+   */
+  retry(): void;
 }
 
 /** Nothing, shared — a new `[]` each render would relayout the picture every time. */
 const NONE: ProjectionPoint[] = [];
 const NO_SKIPS: SkipCounts = { nonProse: 0, tooShort: 0, capped: 0 };
 const ZERO: [number, number] = [0, 0];
+
+const NO_RETRY = () => {};
 
 const IDLE: UseProjection = {
   status: "idle",
@@ -68,10 +88,21 @@ const IDLE: UseProjection = {
   skipped: NO_SKIPS,
   model: null,
   error: null,
+  retry: NO_RETRY,
 };
 
 export function useProjection(slug: string, enabled: boolean): UseProjection {
-  const [state, setState] = useState<UseProjection & { slug: string }>({ ...IDLE, slug });
+  /* **The state holds the data, never the verb.** `retry` is added on the way
+     out, so no `setState` here has to remember to carry it. */
+  const [state, setState] = useState<Omit<UseProjection, "retry"> & { slug: string }>({
+    ...IDLE,
+    slug,
+  });
+  /* **A counter, not a boolean.** Two failures in a row are two presses, and a
+     flag that was already true on the second one would set state to the value
+     it already held and re-run nothing. */
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   /* **Whose answer this is.** These coordinates are about one article's
      paragraphs, so drawing the previous one's would be a picture confidently
@@ -84,6 +115,12 @@ export function useProjection(slug: string, enabled: boolean): UseProjection {
      longer version there for why both are kept. */
   const mine = state.slug === slug;
 
+  /* `attempt` is in the dependency list and is read nowhere in the body, which
+     is exactly what makes it work and exactly what the rule objects to: it is a
+     token whose only job is to be different, so that pressing Try again re-runs
+     an effect whose real inputs have not changed. Removing it, as the fix
+     offers, would leave a button that sets state and fetches nothing. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see above — `attempt` is the retry token, not a value
   useEffect(() => {
     if (!enabled) return;
     /* Not cleared when `enabled` goes false: stepping from Drift to Trail and
@@ -123,14 +160,39 @@ export function useProjection(slug: string, enabled: boolean): UseProjection {
         // An abort is this component leaving, not a failure. Reporting it would
         // put an error in the strip every time the reader changed picture.
         if (stop.signal.aborted) return;
-        setState({ ...IDLE, slug, status: "error", error: (err as Error).message });
+        /* **A failed revalidation must not take the picture away**, and the
+           guard above was only half of that. It suppressed the *spinner* when
+           an answer was already held, and this line then replaced the answer
+           itself with nothing — so one flaky repeat, on a toggle back to a
+           picture that was complete, emptied the band and reported a failure
+           about a picture the reader already had. It is the rule `useSketch`
+           and `useIdeas` write down, applied to the hook that had not got it.
+           ⟨Sol⟩, 2026-08-30.
+
+           There is nothing to say to the reader here: what is on screen is
+           still the answer, and a sentence about a request they did not make
+           would be reporting our own bookkeeping. `retry` is offered only from
+           `error`, which is now reachable only when there is nothing to lose. */
+        setState((was) =>
+          was.slug === slug && was.status === "ready"
+            ? was
+            : { ...IDLE, slug, status: "error", error: (err as Error).message },
+        );
       }
     })();
     return () => stop.abort();
-  }, [slug, enabled]);
+  }, [slug, enabled, attempt]);
 
   /* `IDLE` rather than the stale state while an answer belongs to another
      article: stable empty values, so the layout memo downstream does not rerun
-     on every render. */
-  return mine ? state : IDLE;
+     on every render.
+
+     Memoised so the spread is not a new object on every render. It buys less
+     than the first version of this comment claimed — `Waiting`, the one thing
+     downstream that takes the whole object, is not memoised, so it rerenders
+     with its parent regardless (⟨Sol⟩, 2026-08-30). What it does buy is that
+     the identity is a fact about the answer rather than about the render, which
+     is what any future `memo` here would need. The fields inside are the same
+     references either way, which is what keeps the layout memos from rerunning. */
+  return useMemo(() => ({ ...(mine ? state : IDLE), retry }), [mine, state, retry]);
 }

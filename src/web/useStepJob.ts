@@ -42,7 +42,7 @@
  * shared place reaches every caller, and a fix that lands in one of four copies
  * reaches one.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Job, StepName } from "../types.js";
 import { useJobs } from "./useJobs.js";
 
@@ -99,7 +99,10 @@ export interface StepJob {
    * one.
    */
   job: Job | null;
-  /** Why the job this session started stopped, if it stopped badly. */
+  /**
+   * Why the run stopped, if it stopped badly — whether this session started it
+   * or merely watched it. See `seenId` below for why the second half matters.
+   */
   failed: string | null;
   /** Ask for a run. Resolves once the POST has been answered, not when the job has. */
   start(run?: StepRun): Promise<void>;
@@ -153,9 +156,11 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
    * the polled list to explain the silence, so the surface has to say it
    * itself. `startedId` is the other one, and it is why that is not the whole
    * story — a job that fails *leaves* the running set, so without it the button
-   * would simply reappear as though nothing had happened. Scoped to the job
-   * **this session started**, so an old failure from another day is not dug up
-   * and presented as news.
+   * would simply reappear as though nothing had happened. `seenId` widens that
+   * to a job this mount watched running without having started it, which is the
+   * only kind a surface with no button of its own can have; both are scoped to
+   * **this mount**, so an old failure from another day is still not dug up and
+   * presented as news.
    *
    * **The failure and its reason are one value**, not a boolean beside a
    * string, so no later edit can set one and forget the other — which is
@@ -164,13 +169,37 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
    */
   const [postFailure, setPostFailure] = useState<{ reason: string | null } | null>(null);
   const [startedId, setStartedId] = useState<string | null>(null);
+  /**
+   * A job this surface has actually **watched running**, whoever started it.
+   *
+   * `startedId` alone was not enough, and the gap was invisible until a surface
+   * showed progress for a run it had not begun. `job` above deliberately reads
+   * the queue rather than a remembered click, so a run from the CLI, the shelf
+   * or another tab appears here as progress — and then, when it *failed*, it
+   * simply left the queued/running set. The progress row vanished, the artefact
+   * on screen was unchanged, and nothing said anything: which reads exactly
+   * like the run having finished and changed nothing. On `sketch` that is two
+   * minutes and $0.20. ⟨Sol⟩, 2026-08-30.
+   *
+   * **Only what this mount saw**, which is what keeps the original promise: an
+   * old failure from another day is still not dug up and presented as news,
+   * because this is never set for a job that was already over when the panel
+   * opened.
+   */
+  const [seenId, setSeenId] = useState<string | null>(null);
+  useEffect(() => {
+    if (job) setSeenId(job.id);
+  }, [job]);
   const stopped = useMemo(() => {
-    const mine = startedId ? queue.jobs.find((j) => j.id === startedId) : undefined;
+    /* `startedId` first: a job that fails between the POST and the next poll is
+       never seen running, so the press is the only record of it. */
+    const id = startedId ?? seenId;
+    const mine = id ? queue.jobs.find((j) => j.id === id) : undefined;
     if (!mine) return null;
     if (mine.status === "error") return mine.error ?? "The job failed.";
     if (mine.status === "cancelled") return "Stopped.";
     return null;
-  }, [queue.jobs, startedId]);
+  }, [queue.jobs, startedId, seenId]);
 
   const start = useCallback(
     async ({ force = false, useProfile = true }: StepRun = {}) => {

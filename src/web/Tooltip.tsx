@@ -257,3 +257,38 @@ export function Tooltip({
     </>
   );
 }
+
+/**
+ * **The card a control carries**: what it is, then how it
+ * works and what it costs.
+ *
+ * One shape rather than five, because the row of chips proved the shape and
+ * everything under it then grew a `title` attribute instead. It lives here
+ * rather than in `DiagramPanel` because `SketchView` wants it too, and
+ * `DiagramPanel` renders `SketchView` — so the panel cannot be the one to
+ * export it. Greg asked for the
+ * chips' cards in 2026-08-27 — *"add tooltips when hovering over each Diagram
+ * button to explain how it works"* — and came back on 2026-08-30 for the rest:
+ * *"add detailed tooltips to the various diagram-buttons etc to explain how
+ * things work."*
+ *
+ * **A `title` is not a small version of this**, and that is the whole argument
+ * for the change. It waits about a second, cannot be styled, truncates at the
+ * OS's idea of a line, and **does not exist at all on a touch device** — which
+ * is the device the step bar below was specifically built for. For a sentence
+ * whose job is to say what a control means, that is close to not being there.
+ *
+ * The second paragraph is always the one a reader cannot work out by pressing:
+ * where the answer comes from, what it costs, or what the control does *not*
+ * promise. The first they could have guessed; the second is why the card is
+ * worth a hover.
+ */
+export function ControlTip({ head, what, how }: { head: string; what: string; how: string }) {
+  return (
+    <>
+      <div className="tip-soon-head">{head}</div>
+      <p>{what}</p>
+      <p className="tip-soon-how">{how}</p>
+    </>
+  );
+}

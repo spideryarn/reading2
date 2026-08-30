@@ -241,6 +241,48 @@ second, cannot be styled, truncates at the OS's own idea of a line, and does not
 exist at all on a touch device — for a sentence whose job is to explain what a
 picture *is*, that is close to not being there.
 
+### And then everything under the chips, 2026-08-30
+
+> add detailed tooltips to the various diagram-buttons etc to explain how things
+> work
+>
+> — Greg, 2026-08-30
+
+The chip row got its cards in August and **every control under it then grew a
+`title` attribute instead** — the axis and colour chips, the lane legend, the
+step bar's readout. So the band had two registers of explanation, and the
+weaker one was on the controls that need it more: *Lanes* and *Spread* are two
+arrangements of the same dots, and pressing one and looking cannot tell you
+which question it answers.
+
+They are all `ControlTip` now — the same head / what / how card, moved into
+[`Tooltip.tsx`](../../src/web/Tooltip.tsx) because `SketchView` wants it too and
+`DiagramPanel` renders `SketchView`, so the panel could not be the one to export
+it. Sketch's own Back, scene row and Enlarge have them as well. The second
+paragraph is always the thing a press cannot teach: where the answer comes from,
+what it costs, or what the control does *not* promise.
+
+**Two of them could not be opened at all**, and both are the same bug in
+different clothes:
+
+- **The step bar's readout is a `<span>`**, so nothing could focus it and a
+  keyboard reader could not open the one card that says what a press moves *by*.
+  It has a tab stop now that it does not need for its own sake.
+- **The step buttons were `disabled`.** A disabled button cannot be focused and
+  fires no mouse events, so at the ends of the article — the exact moment a
+  reader wants to know why the button is dead — the sentence saying so was
+  unreachable by any route. `aria-disabled` now, which keeps the grey and the
+  announcement and loses nothing: `stepTo` already returned early on the same
+  condition `canStep` reports, so the press was never doing anything anyway.
+
+Pinned in
+[`tests/diagram-panel-hover.test.tsx`](../../tests/diagram-panel-hover.test.tsx)
+§ *the controls explain themselves*, which **opens each card and reads it**
+rather than looking for a mark on the trigger — Floating UI leaves nothing
+durable on a trigger, so an attribute check would pass on a control with no card
+at all. Focus is the opener that works in jsdom, measured rather than assumed.
+The copy is not asserted; that a control has a card is.
+
 **And it needed `keepSide`**, which is a browser finding and not one any test
 would have caught. `placement="bottom"` was not what the first version did: the
 card is wider than a chip, and Floating UI's `flip` watches *both* axes, so a
