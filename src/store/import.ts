@@ -49,6 +49,14 @@
  *
  * What is genuinely lost is recorded on the result, so the caller can report it
  * rather than discovering it later as a null column.
+ *
+ * ## Where `data/` is
+ *
+ * `dataRoot()`, called at the point of use. This file used to hold
+ * `const ROOT = path.resolve(import.meta.dirname, "../..")`, which is the
+ * repository root from `src/store/` and `/var` from the bundle — see
+ * src/store/data-root.ts. Nothing about that changes for `npm run db:import`,
+ * which is a local command and gets the same repository root it always did.
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -80,6 +88,7 @@ import { NOTE_ID_PATTERN } from "../notes.js";
 import { log } from "../log.js";
 import { currentOwnerId, type OwnerId } from "../owner.js";
 import { parseJsonFrom } from "../parse-json.js";
+import { dataRoot } from "./data-root.js";
 import { hashBlocks } from "../source-hash.js";
 import { deriveLibraryScalars } from "./pg-revisions.js";
 import type { LabelsFile } from "../labels.js";
@@ -87,7 +96,6 @@ import type { Assets } from "../assets.js";
 import type { Arc, Block, Glossary, Ideas, Meta, Summaries, Tree, TweetThread } from "../types.js";
 import { and, asc, count, eq, inArray } from "drizzle-orm";
 
-const ROOT = path.resolve(import.meta.dirname, "../..");
 const logger = log("store");
 
 /**
@@ -157,7 +165,7 @@ function derivedUuid(...parts: string[]): string {
 /** Read a JSON artefact, or undefined when it simply is not there. */
 async function readJson<T>(file: string): Promise<T | undefined> {
   try {
-    return parseJsonFrom<T>(await readFile(file, "utf8"), path.relative(ROOT, file));
+    return parseJsonFrom<T>(await readFile(file, "utf8"), path.relative(dataRoot(), file));
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw err;
@@ -395,7 +403,7 @@ async function activeJobHolds(tx: Tx, slug: string, owner: OwnerId): Promise<str
  * not have — a failed re-extraction overwrites a good article in place.
  */
 export async function importArticle(slug: string, ownerId: OwnerId = currentOwnerId()): Promise<ImportResult> {
-  const dir = path.join(ROOT, "data", slug);
+  const dir = path.join(dataRoot(), "data", slug);
   const absent: string[] = [];
   const unrecoverable: string[] = [];
 
@@ -500,7 +508,7 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
   if (!rawBytes) absent.push(rawName);
   else if (!recovered?.contentType) unrecoverable.push("raw_content_type", "raw_encoding");
 
-  const stampedHtml = await readMaybe(path.join(ROOT, "output", `${slug}.html`));
+  const stampedHtml = await readMaybe(path.join(dataRoot(), "output", `${slug}.html`));
   if (!stampedHtml) absent.push(`output/${slug}.html`);
   unrecoverable.push("extracted_html");
 
@@ -1122,13 +1130,14 @@ export async function importArticle(slug: string, ownerId: OwnerId = currentOwne
 /** Every directory under `data/` that looks like an article. */
 export async function importableSlugs(): Promise<string[]> {
   const { readdir } = await import("node:fs/promises");
-  const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
+  const root = dataRoot();
+  const entries = await readdir(path.join(root, "data"), { withFileTypes: true });
   const found: string[] = [];
   for (const entry of entries) {
     // `_`-prefixed directories are not articles — `data/_jobs/` is the queue's.
     if (!entry.isDirectory() || entry.name.startsWith("_")) continue;
-    const blocks = await readMaybe(path.join(ROOT, "data", entry.name, "blocks.json"));
-    const tree = await readMaybe(path.join(ROOT, "data", entry.name, "tree.json"));
+    const blocks = await readMaybe(path.join(root, "data", entry.name, "blocks.json"));
+    const tree = await readMaybe(path.join(root, "data", entry.name, "tree.json"));
     if (blocks && tree) found.push(entry.name);
   }
   return found;
@@ -1237,7 +1246,7 @@ export async function findOrphans(ownerId: OwnerId = currentOwnerId()): Promise<
     rows.map((r) => r.slug),
     onDisk,
   )) {
-    const state = await directoryState(path.join(ROOT, "data", slug));
+    const state = await directoryState(path.join(dataRoot(), "data", slug));
     if (state !== "gone") {
       logger.debug({ slug, state }, "not pruning: its directory is still there");
       continue;
@@ -1316,7 +1325,7 @@ export async function pruneOrphans(orphans: readonly Orphan[]): Promise<Orphan[]
        directory that has reappeared, is skipped and said out loud, because the
        thing on the other side of this is an irreversible delete of everything
        the reader wrote about that article. */
-    const state = await directoryState(path.join(ROOT, "data", orphan.slug));
+    const state = await directoryState(path.join(dataRoot(), "data", orphan.slug));
     if (state !== "gone") {
       logger.warn(
         { slug: orphan.slug, state },

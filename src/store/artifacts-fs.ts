@@ -37,6 +37,7 @@ import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import { parseJsonFrom } from "../parse-json.js";
 import type { StepName } from "../types.js";
+import { dataRoot } from "./data-root.js";
 import {
   STAMP_SOURCE,
   assertStampAgrees,
@@ -51,8 +52,6 @@ import type {
   ArtifactParts,
   ArtifactStore,
 } from "./artifacts.js";
-
-const ROOT = path.resolve(import.meta.dirname, "..", "..");
 
 /* `"store"` because that is what this is — src/log.ts keeps the component list
    closed on purpose, and every line here carries `step` and `kind` besides. */
@@ -73,11 +72,20 @@ export interface ArtifactLocations {
  * second copy of it. It lives down here because the store is the layer that is
  * allowed to know about paths at all, and because a pipeline that imports the
  * store must not also be the thing the store imports.
+ *
+ * **`dataRoot()` is called here, on every call, and must not be hoisted into a
+ * module-level `const`.** It used to be one —
+ * `path.resolve(import.meta.dirname, "..", "..")` — which is the repository
+ * root from `src/store/` and `/var` from the bundle this file ends up in, so
+ * every deployed import failed at step 1 with `mkdir '/var/data'`. Deployed,
+ * the answer also depends on which job is running, and that is not knowable at
+ * import. src/store/data-root.ts has the whole argument.
  */
 export function fsLocations(slug: string): ArtifactLocations {
+  const root = dataRoot();
   return {
-    dir: path.join(ROOT, "data", slug),
-    htmlFile: path.join(ROOT, "output", `${slug}.html`),
+    dir: path.join(root, "data", slug),
+    htmlFile: path.join(root, "output", `${slug}.html`),
   };
 }
 
