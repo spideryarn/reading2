@@ -23,11 +23,15 @@ import { throwAnatomy } from "./floor.js";
 interface Cell {
   slug: string;
   outcome: string;
-  error?: string;
-  score?: StructureScore;
+  /* Present-and-undefined, which is what exactOptionalPropertyTypes
+     distinguishes from omittable. The loop below always writes the `error` and
+     `treeFile` keys — undefined for a row that has neither — and the synthetic
+     cell writes `score: undefined` outright. */
+  error?: string | undefined;
+  score?: StructureScore | undefined;
   costUsd: number | null;
   seconds: number | null;
-  treeFile?: string;
+  treeFile?: string | undefined;
 }
 
 const dirs = process.argv.slice(2);

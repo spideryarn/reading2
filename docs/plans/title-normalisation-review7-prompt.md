@@ -127,6 +127,7 @@ whether the composed head can ever be served for a non-public article.
 
 ## The diff
 
+```diff
 diff --git a/docs/project/page-titles.md b/docs/project/page-titles.md
 index 54541d1..5551d54 100644
 --- a/docs/project/page-titles.md
@@ -4065,3 +4066,4 @@ describe("the server's title and the client's, over every address either can see
     expect(settled).toContain("at=spya-k3m9qt");
   });
 });
+```

@@ -60,8 +60,8 @@ loadEnvLocal();
 const OUTSIDER = "00000000-0000-4000-8000-0000000000b3" as OwnerId;
 
 const SLUG = "test-pipeline-slug-claim";
-const ARTICLE_ID = "00000000-0000-4000-8000-0000000000e1";
-const REVISION_ID = "00000000-0000-4000-8000-0000000000e2";
+const ARTICLE_ID = "00000000-0000-4000-8000-0000000000e7";
+const REVISION_ID = "00000000-0000-4000-8000-0000000000e8";
 const URL = "https://example.test/pipeline-slug-claim";
 
 const { reachable } = await pgReady({

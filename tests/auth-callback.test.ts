@@ -41,7 +41,19 @@ const navigate = vi.fn();
 const takeReturn = vi.fn();
 
 vi.mock("../src/web/lib/supabase.js", () => ({
-  supabase: { auth: { initialize, getSession } },
+  /* `onAuthStateChange` is not this file's subject: `src/web/lib/api.ts` calls
+     it at module load, and this test reaches that module transitively through
+     `ShelfEntry` → `TitleEditor`. Without it the file throws on import and all
+     11 tests below stop running — vitest does report that, but as
+     "1 failed | no tests", which reads like an empty file rather than a
+     silenced one. */
+  supabase: {
+    auth: {
+      initialize,
+      getSession,
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    },
+  },
   CALLBACK_PATH: "/auth/callback",
   callbackUrl: () => "https://spideryarn.test/auth/callback",
 }));
