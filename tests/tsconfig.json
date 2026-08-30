@@ -31,17 +31,15 @@
        the three resolvers that doc names. */
     "paths": { "@/*": ["../src/web/*"] }
   },
-  /* The ambient declarations for html-encoding-sniffer and for
-     @napi-rs/canvas/geometry.js live beside the modules that use them, and this
-     project pulls those modules in without owning the directory they sit in —
-     so name each one, or `src/fetch.ts` and `src/pdf.ts` are checked here with
-     untyped imports they do not have anywhere else. Adding a `.d.ts` under
-     `src/` is therefore two edits, and this project is the one that tells you
-     so: it is the only one where the omission shows up. */
-  "include": [
-    ".",
-    "../src/html-encoding-sniffer.d.ts",
-    "../src/napi-canvas-geometry.d.ts"
-  ],
+  /* Ambient declarations for untyped packages live beside the modules that use
+     them, and this project pulls those modules in without owning the directory
+     they sit in — so without naming them, `src/fetch.ts` and `src/pdf.ts` are
+     checked here with untyped imports they do not have anywhere else.
+
+     A glob rather than a list of files. It was a list, and adding a `.d.ts`
+     under `src/` was silently two edits — the second one discovered only by a
+     typecheck failure in this project and nowhere else. Three declarations in,
+     that is a footgun with a pattern, so it is spelled as one. */
+  "include": [".", "../src/*.d.ts"],
   "exclude": []
 }

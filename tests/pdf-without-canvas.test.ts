@@ -44,11 +44,23 @@ const SCRIPT = path.join(ROOT, "tests/helpers/pass0-without-canvas.ts");
  * The measured pdf.js baseline for `evals/pdf/easy/source.pdf`, copied from
  * evals/pdf/README.md where it was recorded *with* the native binary present.
  *
- * Matching it is the half of this test that stops a hollow pass. Handing pdf.js
- * a `DOMMatrix` that merely satisfies `new DOMMatrix()` would let the import
- * through and could still read the page wrongly; a stub with no working
- * arithmetic would too. Identical page and word counts say the polyfill is the
- * real thing rather than a shape that gets past module evaluation.
+ * **This proves the text path, and it does not prove the matrix arithmetic** —
+ * a claim an earlier version of this comment made and GPT Sol falsified by
+ * doing it: install `class {}` as `globalThis.DOMMatrix`, block the package,
+ * and pass 0 still returns exactly `{"pages":8,"words":3522}`. Reproduced here
+ * before believing it.
+ *
+ * The reason is that ordinary text extraction moves glyphs with plain array
+ * transforms and never constructs a matrix. The one text-path route that does
+ * real `DOMMatrix` arithmetic is Type 3 glyph mask compilation
+ * (pdf.worker.mjs:23335, `new DOMMatrix().scaleSelf(...).translateSelf(...)`),
+ * and this fixture has no Type 3 fonts, so nothing here reaches it.
+ *
+ * So the numbers are kept for what they honestly are — evidence the document
+ * still reads identically, which is the regression that matters — and the
+ * arithmetic is asserted directly in its own test below instead of being
+ * inferred from a page count that cannot see it. A Type 3 fixture would close
+ * the last of it; docs/plans/pdf-ingestion.md is where that belongs.
  */
 const BASELINE = { pages: 8, words: 3522 };
 
@@ -80,4 +92,30 @@ describe("pass 0, with @napi-rs/canvas hidden from the resolver", () => {
        count right. */
     expect(result.firstPageStartsWith).toContain("Coolabah");
   }, 70_000);
+
+  it("hands pdf.js a DOMMatrix that can actually do the arithmetic", async () => {
+    /* Direct, because the run above cannot see this: it passes with `class {}`.
+       These are the exact operations pdf.js performs on the text path, when it
+       compiles a Type 3 glyph mask — pdf.worker.mjs:23335 does
+       `new DOMMatrix().scaleSelf(1 / width, -1 / height).translateSelf(0, -height)`
+       and then reads a, b, c, d, e, f straight off the result. */
+    const { DOMMatrix } = await import("@napi-rs/canvas/geometry.js");
+    const m = new DOMMatrix() as unknown as {
+      a: number;
+      d: number;
+      e: number;
+      f: number;
+      scaleSelf(x: number, y: number): typeof m;
+      translateSelf(x: number, y: number): typeof m;
+    };
+    const out = m.scaleSelf(1 / 4, -1 / 8).translateSelf(0, -8);
+
+    expect(out.a).toBe(0.25);
+    expect(out.d).toBe(-0.125);
+    /* The translate happens in the already-scaled space, so f is -8 × -1/8 = 1.
+       An identity-only stub returns 0 here, and a stub with no methods at all
+       throws — either way this test is the one that notices. */
+    expect(out.f).toBe(1);
+    expect(out.e).toBe(0);
+  });
 });

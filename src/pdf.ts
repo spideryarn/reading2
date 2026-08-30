@@ -109,15 +109,63 @@ async function ensureDomMatrix(): Promise<void> {
   (globalThis as { DOMMatrix?: unknown }).DOMMatrix = DOMMatrix;
 }
 
+/**
+ * **Hand pdf.js its worker, for the same reason and by the same trick.**
+ *
+ * `DOMMatrix` was not the only thing pdf.js reaches for through a specifier a
+ * bundler cannot read. Under Node it disables real workers and sets
+ * `GlobalWorkerOptions.workerSrc ||= "./pdf.worker.mjs"` (pdf.mjs:22359), then
+ * loads it with `await import(this.workerSrc)` (pdf.mjs:22545) — a *variable*,
+ * so `@vercel/nft` never sees a name to trace and the worker does not ship. The
+ * relative path would then resolve against pdf.mjs's own directory inside
+ * `/var/task`, where the file is not, and `getDocument()` would fail.
+ *
+ * That was still true after the `DOMMatrix` fix, and it was **found by review
+ * rather than by running anything** — the first bug hid it, because pdf.js died
+ * at module scope on `new DOMMatrix()` before it ever got as far as wanting a
+ * worker. One wall behind another.
+ *
+ * pdf.js documents the way out itself, three lines above the import: if
+ * `globalThis.pdfjsWorker.WorkerMessageHandler` is already there, the loader
+ * returns it and the untraceable `import()` is never reached (pdf.mjs:22532).
+ * So we import the worker **by name**, which nft can read, and put it where
+ * pdf.js looks. Same disease, same cure.
+ *
+ * tests/pdf-bundle-trace.test.ts runs the real tracer over the built bundle and
+ * asserts both files land in it, because nothing else here can see that.
+ */
+async function ensurePdfWorker(): Promise<void> {
+  const holder = globalThis as { pdfjsWorker?: { WorkerMessageHandler?: unknown } };
+  if (holder.pdfjsWorker?.WorkerMessageHandler) return;
+  holder.pdfjsWorker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  /* Assigning the module is what pdf.js asks for, but if a version ever renames
+     the export, the fallback is the untraceable import that fails only when
+     deployed. Refuse here instead, where the message can say why. */
+  if (!holder.pdfjsWorker?.WorkerMessageHandler) {
+    throw new Error(
+      "pdfjs-dist/legacy/build/pdf.worker.mjs exported no WorkerMessageHandler, so " +
+        "pdf.js would fall back to `import(workerSrc)` — which works locally and " +
+        "cannot work in a traced bundle. See the note above this function.",
+    );
+  }
+  /* `GlobalWorkerOptions.workerSrc` is deliberately left alone. Setting it to
+     match looks tidy and does nothing: once the handler above is in place, the
+     loader returns early and never reads it. It was written, and then removed
+     when it broke tests/pdf-page-cap.test.ts's mock of pdf.js — a clause that
+     no test can redden, caught by a test it could only get in the way of. */
+}
+
 /** pdf.js, imported the first time something actually needs it. */
 function loadPdfjs(): Promise<Pdfjs> {
   /* The *promise* is cached rather than the module, so two concurrent callers
-     share one import rather than racing to start a second one. The polyfill is
-     inside the cached promise so it is likewise done once, and always before
-     the import it exists to serve. */
+     share one import rather than racing to start a second one. Both pieces of
+     setup live inside the cached promise, so they happen once, in order, and
+     always before anything can call `getDocument()`. */
   pdfjsPromise ??= (async () => {
     await ensureDomMatrix();
-    return import("pdfjs-dist/legacy/build/pdf.mjs");
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    await ensurePdfWorker();
+    return pdfjs;
   })();
   return pdfjsPromise;
 }

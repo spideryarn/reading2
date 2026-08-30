@@ -182,6 +182,59 @@ was wrong here in the ordinary way: the difference was one resolvable module, an
 specific can nearly always be manufactured. Before writing that a bug is untestable, name the exact
 thing that differs — if you can name it, you can usually fake it.
 
+### The third wall, which the first two were hiding
+
+The `DOMMatrix` fix was deployed and **there was another one directly behind it**, found by GPT Sol's
+review of the fix rather than by running anything.
+
+pdf.js under Node disables real workers and sets `GlobalWorkerOptions.workerSrc ||= "./pdf.worker.mjs"`
+(pdf.mjs:22359), then loads it with `await import(this.workerSrc)` (pdf.mjs:22545). **A variable, not
+a literal** — the same disease as the try/catch `require`, in a different spelling. Sol ran the real
+tracer over the built bundle and got the whole list:
+
+```text
+api-dist/vercel.js
+node_modules/@napi-rs/canvas/geometry.js
+node_modules/@napi-rs/canvas/package.json
+node_modules/pdfjs-dist/legacy/build/pdf.mjs
+```
+
+No `pdf.worker.mjs`. `getDocument()` would have failed on the next deploy, and nothing local could
+have shown it.
+
+It had been invisible because **the first bug was in front of it**: pdf.js threw at module scope on
+`new DOMMatrix()` before it ever got as far as wanting a worker. Fixing one wall is how you find out
+the next one is there. Worth expecting, rather than being surprised by, whenever a failure is at
+*import* time — everything downstream of it is unmeasured by construction.
+
+The cure is the same as for `DOMMatrix`, and again pdf.js documents it three lines above the import:
+if `globalThis.pdfjsWorker.WorkerMessageHandler` is already set, the loader returns it and the
+untraceable `import()` is never reached (pdf.mjs:22532). So `src/pdf.ts` imports the worker **by
+name** and puts it where pdf.js looks.
+
+[`tests/pdf-bundle-trace.test.ts`](../../tests/pdf-bundle-trace.test.ts) now runs `@vercel/nft` over
+the built artefact and asserts what lands in the function: `pdf.mjs`, `pdf.worker.mjs` and
+`geometry.js` present; `index.js`, `js-binding.js` and any `.node` binary absent. That is the check
+this whole file has been asking for since 2026-08-27, and it is three of the postmortem's own four
+recommendations in one test. Watched red by deleting the worker call, which lets the bundler
+tree-shake the import away — exactly how the real regression would arrive.
+
+### And a claim in this file that was measured and turned out false
+
+The section above says the reproduction test pins the *arithmetic* by matching pdf.js's recorded
+baseline of 8 pages and 3,522 words. **It does not.** Sol installed `class {}` as `globalThis.DOMMatrix`,
+blocked the package, and got exactly `{"pages":8,"words":3522}`; reproduced here before believing it.
+
+Ordinary text extraction moves glyphs with plain array transforms and never constructs a matrix. The
+one text-path route that does real arithmetic is Type 3 glyph mask compilation
+(pdf.worker.mjs:23335), and the fixture has no Type 3 fonts. So the numbers are evidence the document
+still reads identically — the regression that matters — and nothing about the matrix. The arithmetic
+is now asserted directly instead, on the operations pdf.js actually performs.
+
+The general form is worth keeping: **an end-to-end number that stays right is weak evidence about a
+component the end-to-end path does not use.** The way to find that out is to break the component on
+purpose and see whether the number moves.
+
 ### And a correction to the reasoning above
 
 This file rejected `includeFiles` because it "would have kept a PDF engine loading on every cold
