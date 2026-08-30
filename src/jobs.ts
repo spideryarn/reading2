@@ -117,10 +117,32 @@ const aborts = new Map<string, AbortController>();
 /**
  * How long a claim is good for, and how long before that the claimant stops.
  *
- * The lease is under Vercel's 300-second kill, so an invocation cannot outlive
- * its own claim — but that is a fact about one host, not a guarantee, and on a
- * laptop a model call can run as long as it likes. So the claimant sets **its
- * own timer** at `LEASE_MS - DEADLINE_MARGIN_MS` and aborts the step itself.
+ * The claimant sets **its own timer** at `LEASE_MS - DEADLINE_MARGIN_MS` and
+ * aborts the step itself, because on a laptop a model call can run as long as
+ * it likes.
+ *
+ * ## The invariant, and why raising one of these alone makes things worse
+ *
+ *     LEASE_MS - DEADLINE_MARGIN_MS  <  the platform's kill (vercel.json maxDuration)
+ *
+ * The self-abort has to fire **before** the host kills the function, or the
+ * lease stops meaning *the process is gone* — which is the one reading
+ * `failExpired` is safe to act on. Raise `LEASE_MS` on its own and the deadline
+ * moves past the kill, so it never fires: instead of a step that ends itself
+ * cleanly as interrupted, the function dies mid-step with a live lease and the
+ * job sits `running` until a later advance sweeps it. That is strictly worse
+ * than what it replaced, and it deploys green — it only shows up on a long
+ * step. `tests/jobs-lease-budget.test.ts` pins the invariant rather than the
+ * numbers, so the next person to raise one cannot forget the other.
+ *
+ * **Why 420s.** Measured per-article step totals from `data/_ai-calls.jsonl`:
+ * `toc` 324.0s over three calls, `summarise` 240.3s over ten. Both exceed the
+ * 220s deadline these constants used to give, so a long step could not complete
+ * through the job path **on any machine** — it only ever succeeded via the CLI,
+ * which takes no lease. The deadline is bounded above too: the route loop must
+ * reserve a whole deadline before starting a step, so too large a value refuses
+ * the last short step of an article that would have fitted. Half the invocation
+ * budget is the ceiling, and 400s is that.
  *
  * That ordering is the whole point and it is why there is no heartbeat. A lease
  * that can be renewed means an expired lease says *probably dead*; a lease
@@ -128,8 +150,8 @@ const aborts = new Map<string, AbortController>();
  * means an expired lease says *definitely over its own deadline*. Only the
  * second is safe to act on, and `noteProgress` deliberately does not touch it.
  */
-const LEASE_MS = 4 * 60_000;
-const DEADLINE_MARGIN_MS = 20_000;
+export const LEASE_MS = 420_000;
+export const DEADLINE_MARGIN_MS = 20_000;
 
 /**
  * The reader stopped it — the same four fields wherever that is decided.

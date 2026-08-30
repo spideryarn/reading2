@@ -8,7 +8,7 @@
 
   "functions": {
     "api/**": {
-      "maxDuration": 300,
+      "maxDuration": 800,
       "includeFiles": "certs/**"
     }
   },
