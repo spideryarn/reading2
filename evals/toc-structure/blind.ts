@@ -37,7 +37,7 @@ import { isMain } from "../../src/is-main.js";
 import { parseJsonFrom } from "../../src/parse-json.js";
 import { supplementIndex } from "../../src/supplement.js";
 import type { Block, Tree, TreeNode } from "../../src/types.js";
-import { buildHeadingTree } from "./heading-tree.js";
+import { buildHeadingTree } from "../../src/heading-tree.js";
 
 interface Lineup {
   label: string;

@@ -223,7 +223,7 @@ the honest denominator is below.)
 ### The denominator is free
 
 **`headings` is arm zero**: the tree the author's own headings give for free, built
-deterministically in `heading-tree.ts`. On this corpus it reproduces the incumbent's depth-one
+deterministically in `src/heading-tree.ts`. On this corpus it reproduces the incumbent's depth-one
 carving *exactly* (L1 boundary agreement 100%) on **four of the seven distinct documents** — so an
 eval that scored model arms against nothing would credit the model for work the headings did for
 free. What the model demonstrably adds on those four is the level *below* (all-boundaries
@@ -245,7 +245,7 @@ The section-level rule is two rules, not one — the shallowest level with ≥3 
 else flat), then **a segment with under 20 words of prose merges into the next one** (the last
 merges backwards). The second rule is what the naive "shallowest repeated tag" was missing:
 without it the constitution grows a 6-word title part, and scaling-hypothesis a 1-word "Appendix"
-part and three trailing furniture parts. `heading-tree.ts` has the reasoning and the failure it
+part and three trailing furniture parts. `src/heading-tree.ts` has the reasoning and the failure it
 keeps (fowler).
 
 **The 20 was fitted to this corpus — and `--sensitivity` shows it sits on a plateau.** Thresholds
@@ -358,7 +358,16 @@ calibration call, and the raw-event ids are real `gen-…` OpenRouter generation
 
 **A thrown arm is an outcome; a harness fault is a fault.** Roughly one structure call in five
 returns a tree whose children do not tile (measured on HEAD, 2026-08-30 — and reproduced by this
-eval's own fourth calibration call). The runner records that as `outcome: "threw"` with the error
+eval's own fourth calibration call).
+
+> **Read the throw rate together with `repaired`, from 2026-08-30 on.** `buildTree` now snaps a
+> one-block partition slip shut and drops an unbacked `sourceHeading`
+> ([table-of-contents.md](../docs/project/table-of-contents.md#two-slips-are-mended-rather-than-refused)),
+> which are the two families that produced every throw measured above. An arm that makes either
+> mistake now scores `outcome: "ok"`, so the throw rate on its own understates how often an answer
+> was wrong as written. Each result carries a `repaired` block saying what was mended, and the
+> runner prints it. `sourceHeadingValid` is the sharpest casualty: it is now necessarily 1 for any
+> tree built by today's code, and says something only beside `repaired`. The runner records that as `outcome: "threw"` with the error
 and the bill, and continues — never a retry, because a floor computed over the surviving runs
 alone is the variance of the survivors, a selection effect that understates the floor; and the
 wasted call stays on the arm's cost and latency. A harness fault (a config error, a dead network)

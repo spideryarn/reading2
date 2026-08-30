@@ -121,6 +121,82 @@ Contiguity is in `blocks.json` **array order**, not in the id string; random ids
 [`src/validate-tree.ts`](../../src/validate-tree.ts) enforces all of it. Run it on every generated
 tree — it is what stops a model quietly inventing a block id that doesn't exist.
 
+### Two slips are mended rather than refused
+
+A paid calibration of this stage on 2026-08-30 threw on **4 of 13** structure calls, and the
+failures were bimodal by kind rather than spread by size: two were partition gaps of **exactly one
+block**, and two were a `sourceHeading` claiming a heading outside its node's range. Every tiling
+failure ever recorded here — those two, plus the two in
+[the-article-with-one-heading.md](../postmortems/the-article-with-one-heading.md) — is off by one
+block. The structure call takes about 163 seconds and is 88% of the stage's wall clock, so a
+refusal costs the reader the whole article.
+
+So [`src/toc.ts`](../../src/toc.ts) mends both, on the model's proposal before anything is built:
+
+- **a boundary that misses by one block is snapped shut** — a gap, an overlap and a last child that
+  stops one short are the three shapes, and they are one fix;
+- **a `sourceHeading` no heading in the node's range backs up is dropped.** It is provenance, not
+  structure: its only consumer is the `§` badge meaning "the author wrote this". An unbacked claim
+  is a badge that would lie; dropping it costs one mark, and throwing costs the article.
+
+**Both bounds are the argument, not the repair.** Two blocks out is not a slip but a different
+reading of the article, and it still throws — as do a backwards range, an invented id, and a root
+that misses the article's ends. And the budget is **one distinct boundary per answer**: several
+independent slips are a different event from the one we measured, and mending each separately would
+walk a misaligned tree past the check one block at a time with every step looking defensible. A
+cascade of the *same* boundary down through nested nodes is free, because it is one mistake seen at
+several depths.
+
+**Both are counted, every run, including at zero** — into `TocRun`, onto the CLI's `Repaired:` line
+and into the queue's log, the way `strandedSupplement` already is. A repair nobody is told about is
+the same shape as the bug it repaired ([silent-success.md](../reusable/silent-success.md)); if these
+numbers start climbing, the prompt has drifted and the repairs are hiding it. `evals/toc-structure`
+records them per result for the same reason: since the repairs landed, an arm that makes either
+mistake scores `ok`, so the throw rate alone stopped meaning what it used to.
+
+## The tree the author's headings give us for free <a id="heading-tree"></a>
+
+[`src/heading-tree.ts`](../../src/heading-tree.ts) carves an article on its own `<h2>`/`<h3>`
+blocks. No model, no network, milliseconds — against ~163 seconds and a real bill for the model's.
+
+Measured on 2026-08-30 over seven development documents and five held out
+([the research](../research/opening-an-article-before-the-toc.md)):
+
+- **6 of 7** have enough headings to carve at all;
+- **4 of 7** reproduce the model's depth-one carving *exactly*;
+- and on a headingless article the model is not merely better but **unstable** — identical input
+  gave 8, 7, 8 and 3 parts across four runs.
+
+So the free tree is weakest exactly where the paid one is least trustworthy, and strongest where the
+paid one agrees with it anyway. That is the finding, and it is why this is a product module rather
+than a curiosity.
+
+**It has no gists**, because there is nowhere free to get one, and an internal node without a gist
+has nothing to render at its own zoom level. That is a rule
+([`src/tree-invariants.ts`](../../src/tree-invariants.ts)), and the exemption for this tree is
+`provisional: "headings"` **on the tree**:
+
+- **Tree-level, not per-node**, because a provisional tree is replaced whole and no node of it
+  becomes final on its own.
+- **Explicit, never inferred from the missing gists.** That is the same decision `treatment`
+  embodies: keyed on absence, a pipeline bug that drops a gist becomes indistinguishable from a
+  deliberate exception, and the dangerous outcome is acceptance.
+- It buys **the gist rule and nothing else**. Every other invariant applies in full, and a
+  *finished* tree missing a gist fails exactly as it always did.
+- It **crosses the public boundary** ([`src/public/dto.ts`](../../src/public/dto.ts)), because a
+  client that cannot tell a provisional tree from a finished one draws empty cells where it should
+  say the structure is still arriving.
+
+**One implementation, two jobs.** This file is also arm zero of the structure eval — the free
+denominator every paid arm is read against. If the eval measured one carving and the product shipped
+another, every number under `evals/results/` would describe something nobody reads.
+
+**What is not built yet.** Nothing in the pipeline produces one of these trees for a reader: the
+builder, the marker, the exemption and the public boundary are in place, and the publication
+boundary, the tree-replacement seam and the gate on paid work generated *against* a provisional tree
+are not. Those are steps 2–4 in
+[the research](../research/opening-an-article-before-the-toc.md).
+
 ## Entry length grows with depth <a id="granularity"></a>
 
 The core editorial rule, and the one most likely to be got wrong:

@@ -43,11 +43,11 @@ import { isStructural } from "../../src/block-policy.js";
 import { MESSAGES_PROVIDER, wasRefused } from "../../src/messages-stream.js";
 import { parseJsonFrom, stripFence } from "../../src/parse-json.js";
 import { appendSupplement, splitBlocks } from "../../src/supplement.js";
-import { buildTree, structureRequest, type ModelNode } from "../../src/toc.js";
+import { buildTree, structureRequest, type BuildReport, type ModelNode } from "../../src/toc.js";
 import { assertTreeSound } from "../../src/tree-invariants.js";
 import type { Block, Tree, TreeNode } from "../../src/types.js";
 import type { ArmSpec, CallSpec } from "./arms.js";
-import { buildHeadingTree } from "./heading-tree.js";
+import { buildHeadingTree } from "../../src/heading-tree.js";
 
 /** What one paid call reports back, for the results file and the noise floor. */
 export interface CallStats {
@@ -125,6 +125,16 @@ export function assertCallAccounted(stats: CallStats, label: string): void {
 export interface ModelArmRun {
   tree: Tree;
   calls: CallStats[];
+  /**
+   * What the pipeline mended in this arm's answer on the way to a tree — a
+   * one-block partition slip snapped shut, a `sourceHeading` claim dropped.
+   * **Recorded rather than merely permitted**: these are the two failure
+   * families this eval was built to count, and since src/toc.ts started
+   * repairing them an arm that makes either mistake comes back `ok`. Without
+   * this field the throw rate would have quietly stopped meaning what
+   * evals/README.md says it means.
+   */
+  built: BuildReport;
 }
 
 /**
@@ -390,9 +400,24 @@ export function renderSeedProposal(blocks: Block[], slug: string): string {
  * `buildTree` is the point — an arm judged on a tree assembled by different
  * code is being judged partly on that code.
  */
-export function assembleTree(root: ModelNode, blocks: Block[], slug: string): Tree {
+export function assembleTree(
+  root: ModelNode,
+  blocks: Block[],
+  slug: string,
+  /**
+   * **Threaded out, because otherwise the eval stops being able to see the
+   * faults it exists to count.** `buildTree` now mends a one-block partition
+   * slip and drops an unbacked `sourceHeading` (src/toc.ts). Those are the
+   * right production outcomes, and they are the two failure families this
+   * eval measured — so an arm that makes either mistake would come back
+   * `outcome: "ok"` with nothing recorded, and `sourceHeadingValid` would read
+   * a necessary 1 for every paid arm. The repairs stay; what changes is that
+   * the run records them. GPT Sol's review, 2026-08-30.
+   */
+  report?: BuildReport,
+): Tree {
   const { body, groups } = splitBlocks(blocks);
-  const tree = appendSupplement(buildTree(root, {}, body, slug), groups);
+  const tree = appendSupplement(buildTree(root, {}, body, slug, report), groups);
   /* The labels pass never runs here, so structural leaves have no navLabel and
      checkTree would advise about every one; that advice is scoreTree's to
      count. What must throw is structural damage, which is what
@@ -403,12 +428,17 @@ export function assembleTree(root: ModelNode, blocks: Block[], slug: string): Tr
 }
 
 /** A raw answer through `assembleTree`: fence stripped, JSON parsed, then the pipeline's rules. */
-export function parseStructureResponse(raw: string, blocks: Block[], slug: string): Tree {
+export function parseStructureResponse(
+  raw: string,
+  blocks: Block[],
+  slug: string,
+  report?: BuildReport,
+): Tree {
   const { root } = parseJsonFrom<{ root: ModelNode }>(
     stripFence(raw),
     "the structure-arm response",
   );
-  return assembleTree(root, blocks, slug);
+  return assembleTree(root, blocks, slug, report);
 }
 
 /**
@@ -492,6 +522,7 @@ async function runWaves(
   };
   const send = senderFor(arm.call.model);
   const calls: CallStats[] = [];
+  const built: BuildReport = { repairs: [], droppedHeadings: [] };
   try {
   // Wave 1: the whole article, chapters only.
   const base = structureRequest(body);
@@ -560,7 +591,7 @@ async function runWaves(
     frontier = await subdivide(frontier);
   }
 
-  return { tree: assembleTree(root, blocks, slug), calls };
+  return { tree: assembleTree(root, blocks, slug, built), calls, built };
   } catch (err) {
     // The bill travels with the failure — see ArmFailure.
     throw err instanceof ArmFailure ? err : new ArmFailure((err as Error).message, calls);
@@ -594,7 +625,8 @@ async function runRevise(
       maxTokens: base.maxTokens,
     });
     calls.push(revised.stats);
-    return { tree: parseStructureResponse(revised.raw, blocks, slug), calls };
+    const built: BuildReport = { repairs: [], droppedHeadings: [] };
+    return { tree: parseStructureResponse(revised.raw, blocks, slug, built), calls, built };
   } catch (err) {
     // The bill travels with the failure — see ArmFailure.
     throw err instanceof ArmFailure ? err : new ArmFailure((err as Error).message, calls);
@@ -625,8 +657,9 @@ export async function runModelArm(
         user: `${user}${seed}`,
         maxTokens,
       });
+      const built: BuildReport = { repairs: [], droppedHeadings: [] };
       try {
-        return { tree: parseStructureResponse(raw, blocks, slug), calls: [stats] };
+        return { tree: parseStructureResponse(raw, blocks, slug, built), calls: [stats], built };
       } catch (err) {
         /* The call succeeded and the answer failed the pipeline's rules — a
            tiling gap, an invented id. The money is spent and the outcome is

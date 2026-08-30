@@ -1,13 +1,24 @@
 /**
- * Arm zero of the ToC structure eval: the tree the author's own headings give
- * us for free. Deterministic, no model, milliseconds.
+ * **The tree the author's own headings give us for free.** Deterministic, no
+ * model, milliseconds — against ~163 seconds and a real bill for the model's.
  *
- * This is the denominator every model arm is read against. On this corpus,
- * 6 of 9 articles get a structure from headings alone that closely matches
- * what the incumbent model built
- * (docs/research/opening-an-article-before-the-toc.md § 2) — so an eval that
+ * It began as arm zero of the ToC structure eval, the denominator every model
+ * arm is read against, and that is still one of its two jobs: an eval that
  * scored model arms against nothing would credit the model for work the
- * headings did for free.
+ * headings did for free. **This file is the one implementation of both jobs**,
+ * deliberately. If the eval measured one carving and the product shipped
+ * another, every number in evals/results/ would describe something nobody
+ * reads.
+ *
+ * What it is worth, measured on 2026-08-30 over seven development documents and
+ * five held out (docs/research/opening-an-article-before-the-toc.md § 2, § 7b):
+ *
+ * - **6 of 7** have enough headings to carve at all;
+ * - **4 of 7** reproduce the model's depth-one carving exactly;
+ * - and on a *headingless* article the model is not merely better, it is
+ *   unstable — identical input gave 8, 7, 8 and 3 parts across four runs. So
+ *   the free tree is weakest exactly where the paid one is least trustworthy,
+ *   and strongest where the paid one agrees with it anyway.
  *
  * What it deliberately cannot do, and where that shows up in the measures:
  * - **No gists.** There is nowhere free to get one, so every internal node
@@ -49,9 +60,9 @@
  * arm earns its money, and why fowler stays in the corpus.
  */
 
-import { isStructural } from "../../src/block-policy.js";
-import { appendSupplement, splitBlocks } from "../../src/supplement.js";
-import type { Block, NodeId, Tree, TreeNode } from "../../src/types.js";
+import { isStructural } from "./block-policy.js";
+import { appendSupplement, splitBlocks } from "./supplement.js";
+import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 
 /** What one build chose, alongside the tree itself. */
 export interface HeadingTreeResult {
@@ -69,8 +80,16 @@ export interface HeadingTreeResult {
   parts: number;
 }
 
-/** Stamped into `tree.version` / `tree.generator` so nothing mistakes this for a model's work. */
-export const HEADING_TREE_VERSION = "eval/headings-1";
+/**
+ * Stamped into `tree.version` / `tree.generator` so nothing mistakes this for a
+ * model's work.
+ *
+ * **Neither field is what tells a consumer this tree is provisional** — nothing
+ * in the app branches on `version` or `generator`, they are shown in the
+ * metadata panel and otherwise inert. `provisional` on the tree is the load-
+ * bearing one; these two are for a human reading `tree.json`.
+ */
+export const HEADING_TREE_VERSION = "headings/1";
 export const HEADING_TREE_GENERATOR = "deterministic-headings";
 
 /** The title a preamble part wears — the one node this arm has no author text for. */
@@ -290,6 +309,15 @@ export function buildHeadingTree(
     slug,
     rootId: root.id,
     nodes,
+    /* **The marker, and it is set here rather than by the caller.** A tree from
+       this file has no gists and can never acquire them, so it fails the gist
+       rule by construction — and the exemption `checkTree` makes for it must be
+       keyed on something a caller cannot forget to set. Tree-level rather than
+       per-node because the whole tree is replaced at once and no node of it
+       becomes final on its own; explicit rather than inferred from the missing
+       gists for the same reason `treatment` exists at all. See
+       src/tree-invariants.ts and docs/research/opening-an-article-before-the-toc.md § 2. */
+    provisional: "headings",
   };
 
   return {

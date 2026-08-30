@@ -1,7 +1,7 @@
 /**
  * The deterministic half of the ToC structure eval — the scoring in
  * evals/toc-structure/score.ts and the free heading-tree arm in
- * evals/toc-structure/heading-tree.ts. Same split as extraction: the part that
+ * src/heading-tree.ts. Same split as extraction: the part that
  * is cheap and deterministic is pinned here; the part that spends money is not
  * a test.
  *
@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ARMS, armByName } from "../evals/toc-structure/arms.js";
 import { CORPUS, defaultCorpus } from "../evals/toc-structure/corpus.js";
-import { buildHeadingTree, PREAMBLE_TITLE } from "../evals/toc-structure/heading-tree.js";
+import { buildHeadingTree, PREAMBLE_TITLE } from "../src/heading-tree.js";
 import {
   assertCallAccounted,
   type CallStats,

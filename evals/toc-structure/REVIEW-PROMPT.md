@@ -14,7 +14,7 @@ findings you read code for and which you inferred.
   test, and that its results are committed so the next change is compared against a number.
 - `evals/toc-structure/score.ts` — the deterministic scorer, `(blocks, tree) -> measures`, plus
   `compareTrees` for cut-point agreement.
-- `evals/toc-structure/heading-tree.ts` — **arm zero**, the free denominator.
+- `src/heading-tree.ts` — **arm zero**, the free denominator.
 - `evals/toc-structure/arms.ts` — all nine arms declared as data.
 - `evals/toc-structure/run.ts` — the runner.
 - `tests/toc-structure-eval.test.ts` — 21 tests over the scorer.
@@ -55,7 +55,7 @@ so every denominator is 7, not 9. That dedupe is being applied now.)
    then be read against, and if not, what is the cheapest design that is?** `evals/toc-labels.ts`
    saw ~4-point run-to-run vocabulary variance, so a non-trivial floor is expected.
 
-3. **The heading rule in `heading-tree.ts`.** It is two rules: section level = shallowest heading
+3. **The heading rule in `src/heading-tree.ts`.** It is two rules: section level = shallowest heading
    level with ≥3 occurrences (else ≥2, else flat); then any segment under 20 words merges into its
    neighbour. The thresholds (3, 20) were chosen to fix specific observed failures — a title-only
    part on the constitution, "Appendix"/"Backlinks"/"Bibliography" furniture parts on

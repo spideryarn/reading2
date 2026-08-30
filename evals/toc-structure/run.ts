@@ -34,8 +34,9 @@ import { parseJsonFrom } from "../../src/parse-json.js";
 import type { Block, Tree } from "../../src/types.js";
 import { ARMS, armByName, type ArmSpec, type Comparison } from "./arms.js";
 import { defaultCorpus, entryForDir } from "./corpus.js";
-import { buildHeadingTree } from "./heading-tree.js";
+import { buildHeadingTree } from "../../src/heading-tree.js";
 import { ArmFailure, runModelArm, type CallStats } from "./model-arms.js";
+import type { BuildReport } from "../../src/toc.js";
 import { compareTrees, scoreTree, type StructureScore, type TreeAgreement } from "./score.js";
 
 interface Article {
@@ -81,6 +82,17 @@ interface ArmResult {
   flat?: boolean;
   /** What the paid calls cost, one entry per call (model arms only). */
   calls?: CallStats[];
+  /**
+   * **What the pipeline mended in this arm's answer**, and why an `outcome` of
+   * `"ok"` is no longer the whole story. Since 2026-08-30 `buildTree` snaps a
+   * one-block partition slip shut and drops a `sourceHeading` claim no block
+   * backs up (src/toc.ts) — which are exactly the two families this eval's
+   * throw rate was measuring. Without this field an arm that made either
+   * mistake would score `ok` with nothing recorded, and `sourceHeadingValid`
+   * would read a necessary 1 for every paid arm. Absent on a free arm, which
+   * builds no tree from a model. GPT Sol's review of the repairs.
+   */
+  repaired?: { ranges: number; where: string[]; droppedHeadings: string[] };
   /** How differently this arm cut the article from the tree on disk. Descriptive, not a verdict. */
   vsDisk?: TreeAgreement;
 }
@@ -171,6 +183,8 @@ async function treeFor(
   sectionLevel?: number | null;
   flat?: boolean;
   calls?: CallStats[];
+  /** What `buildTree` mended on the way to this arm's tree. Model arms only. */
+  built?: BuildReport;
   /** Set when a model arm spent its money and produced nothing. */
   threw?: string;
 }> {
@@ -193,7 +207,7 @@ async function treeFor(
          would blame the arm for the bench. */
       try {
         const run = await runModelArm(arm, article.blocks, article.slug);
-        return { tree: run.tree, calls: run.calls };
+        return { tree: run.tree, calls: run.calls, built: run.built };
       } catch (err) {
         if (err instanceof ArmFailure) {
           return { threw: err.message, calls: err.calls };
@@ -244,6 +258,18 @@ function print(r: ArmResult): void {
           : `INVALID — ${s.validity.gistProblems} internal node(s) missing a gist, from an arm that was asked for them`
         : "valid";
   console.log(`  validity      ${validity}   (${s.validity.advice} advice)`);
+  /* **Printed whenever it happened, because "valid" above may be an outcome the
+     pipeline produced rather than one the model did.** A repaired answer is a
+     success worth having and a fault worth knowing about, and the line that
+     says "valid" cannot say both. */
+  if (r.repaired && (r.repaired.ranges > 0 || r.repaired.droppedHeadings.length > 0)) {
+    console.log(
+      `  repaired      ${r.repaired.ranges} off-by-one range(s)` +
+        `${r.repaired.where.length ? ` [${r.repaired.where.join("; ")}]` : ""}, ` +
+        `${r.repaired.droppedHeadings.length} unbacked heading claim(s) — ` +
+        `this answer was NOT valid as written`,
+    );
+  }
   if (r.sectionLevel !== undefined) {
     const chose = r.flat
       ? r.sectionLevel === null
@@ -445,6 +471,15 @@ async function main(): Promise<void> {
           ...(chose.sectionLevel !== undefined ? { sectionLevel: chose.sectionLevel } : {}),
           ...(chose.flat !== undefined ? { flat: chose.flat } : {}),
           ...(chose.calls ? { calls: chose.calls } : {}),
+          ...(chose.built
+            ? {
+                repaired: {
+                  ranges: chose.built.repairs.length,
+                  where: chose.built.repairs.map((r) => `${r.where} (${r.kind})`),
+                  droppedHeadings: chose.built.droppedHeadings,
+                },
+              }
+            : {}),
         };
         const result: ArmResult = tree
           ? {

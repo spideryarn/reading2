@@ -261,14 +261,25 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
          dangerous outcome here is acceptance (see the header). So: an internal
          node must carry a gist *unless* it is a supplement, **and** a
          supplement must not carry one. Never infer the role from a missing
-         gist. */
+         gist.
+
+         **The third exception, added 2026-08-30, obeys that rule rather than
+         bending it.** A provisional tree — one carved from the author's own
+         headings, with no model call and so nowhere to get a gist
+         (src/heading-tree.ts) — is exempt here. The exemption is keyed on
+         `tree.provisional`, a flag the builder sets and a bug cannot
+         accidentally produce, and it buys exactly one thing: the gist. Every
+         other rule below still applies to it in full, and a *finished* tree
+         missing a gist fails exactly as it always did. If this were instead
+         written as "an internal node with no gist is presumed provisional", it
+         would be the same mistake in a third place. */
       if (isSupplementNode(node)) {
         if (node.gist)
           fail(
             `${node.id}: supplement carries a gist — the apparatus is shown as written, ` +
               `never summarised (docs/plans/footnotes.md § The tree)`,
           );
-      } else if (!node.gist) {
+      } else if (!node.gist && !tree.provisional) {
         fail(`${node.id}: internal node has no gist — nothing to render at its level`);
       }
 

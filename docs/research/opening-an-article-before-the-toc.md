@@ -243,7 +243,7 @@ writes                             19         1          4         flat      no 
 ```
 
 **"Heading L1"** is what a deterministic heading tree produces
-([`evals/toc-structure/heading-tree.ts`](../../evals/toc-structure/heading-tree.ts)). **"Exact L1
+([`src/heading-tree.ts`](../../src/heading-tree.ts)). **"Exact L1
 match"** is 100% Jaccard agreement on depth-one cut points with the tree the model actually shipped.
 
 - **6 of 7 documents have three or more headings.** Only `writes` (19 blocks, about a page) does not.
@@ -732,8 +732,26 @@ options.**
 | # | Change | Effort | Risk | Why here |
 |---|---|---|---|---|
 | **R1** | `checkTree` on the structure **before** `generateLabels`, keeping the existing check after the merge | tiny | low | **Authorised, in progress.** Three failures in one ingest each threw away a label run that had already succeeded. Not a move — a move would gut the phantom-row check, which only exists post-merge. |
-| **R2** | Repair off-by-one tiling instead of rejecting the call | small | low–medium | **Pending one number.** ~1 structure call in 5 returns a tree whose children miss by a block; the repair is `child[0] = cursor`, which fixes a gap and an overlap identically. Recovers a fifth of all structure calls for ~20 lines. **Only if the failures are small** — see § 6. |
-| **R3** | `buildTree` drops an unbacked `sourceHeading` instead of throwing | small | low | 4 calls in 4 made the same wrong claim on one article, so throwing is a guaranteed failure loop. `sourceHeading` is provenance, not structure: a tree with our title beats no tree. |
+| **R2** | Repair off-by-one tiling instead of rejecting the call | small | low–medium | **Built 2026-08-30.** `child[0] = cursor`, which fixes a gap and an overlap identically, plus a last child that stops one short. Bounded at **one distinct boundary per answer** — see below. |
+| **R3** | `buildTree` drops an unbacked `sourceHeading` instead of throwing | small | low | **Built 2026-08-30.** 4 calls in 4 made the same wrong claim on one article, so throwing was a guaranteed failure loop. `sourceHeading` is provenance, not structure: a tree with our title beats no tree. |
+
+**What the build changed against the plan**, all three from GPT Sol's review of the code:
+
+- **The bound moved from per boundary to per answer.** As first written, R2 permitted unlimited
+  independent one-block repairs: a five-deep chain, or four separate slips, each defensible on its
+  own, together walking a misaligned tree past the check. The budget is now one distinct boundary
+  *coordinate* per answer, which leaves a cascade of the same boundary through nested nodes free
+  because it is one mistake seen at several depths. Raising it wants a measured distribution, and
+  thirteen calls is not one.
+- **The eval had to be told.** R2 and R3 mend precisely the two families whose *throw rate* this
+  eval exists to measure, so from the moment they landed an arm making either mistake scored `ok`
+  with nothing recorded, and `sourceHeadingValid` became necessarily 1 for every paid arm. Each
+  result now carries a `repaired` block and the runner prints it. **This is the sharpest lesson
+  here:** a repair in the code under measurement silently re-defines the measurement, and nothing
+  fails when it does.
+- **A malformed claim is counted too.** A `sourceHeading` that is a number, or nothing but spaces,
+  was being discarded without being counted — so the one case that says the model's output has gone
+  strange was the one case nobody was told about.
 
 **These three do not need the seam, the marker, or any new concept**, and between them they address a
 failure rate and a waste that every option below silently pays. R2 in particular may be worth more
@@ -746,6 +764,7 @@ attacks that.
 | # | Change | Effort | Risk | Why here |
 |---|---|---|---|---|
 | **0** | Remove the `example/` fallback for non-fixture slugs; decide what "safe to open" means (now: blocks + tree + **image suppression**, since waiting for `assets` is dead, § 5); build **one** article-refetch / tree-replacement seam | small–medium | low | Serving the wrong article is a live bug. The seam is a prerequisite for B, A and C. |
+| **B1** | The heading tree as a product module: builder, `provisional` marker, invariant exemption, public boundary | small | low | **Built 2026-08-30.** Step 1 of B, and the only step that does not need the seam. `src/heading-tree.ts`, one implementation shared with the eval's arm zero. Nothing yet produces one for a reader. |
 | **B** | Heading tree at a new publication boundary, upgraded in place | medium | medium | The only option that answers the ask. 6/7 documents have usable headings, 4/7 match the model's L1 exactly — **and on a headingless article the expensive path is the unreliable one**, so there is often no good tree worth waiting for. |
 | **A** | Fold the labels into the same upgrade state machine | small | low | Once B's machine exists this is a state in it, not a project. 12%. |
 | **W** | Progressive waves | medium–large | medium–**high** | The only answer to book-length depth, and it attacks the 88%. But a per-call failure rate compounds across ~39 calls (§ 6), so per-wave retry is required from the first commit, not as hardening. |
@@ -765,6 +784,17 @@ argument for fixing that stage properly rather than patching stages 4 and 5 twic
 
 **R1, R3, then 0, then B, with A folded in. R2 as soon as the size distribution lands. W after that,
 and only with per-wave retry. C last or not at all.**
+
+**Revised 2026-08-30, after R1–R3 and B1 landed.** Sol's review made an argument that changes the
+order of what remains: *a fallback-only heading tree is no longer worth building*, because R2 and R3
+recover every structure failure we have measured — so the failure the fallback existed to catch is
+largely gone, while the fallback would still need most of the provisional-state machinery, would
+still wait out the 163-second call before helping anybody, and would leave arc, ideas, sketch and
+similarity permanently unavailable on any article that took it. The remaining sequence is B's own:
+**gate the paid work that a tree triggers, then build the replacement seam, then publish
+provisionally and replace atomically.** Candidate (c) — feeding the author's headings to the
+structure model — should be an eval arm before it is a change, since the headings are already in the
+model's input and it is their *salience* that would be new.
 
 F and S are not ours to schedule, but they are the highest-value items on this page and someone
 should be made to own them.

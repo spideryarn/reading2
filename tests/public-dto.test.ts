@@ -422,6 +422,43 @@ describe("the public article payload", () => {
    * article's own markup rather than from anything the owner did. GPT Sol's
    * fifth review of the footnotes lane.
    */
+  /**
+   * **The other field a client branches on rather than displays.**
+   *
+   * `provisional` says the tree was carved from the author's own headings and
+   * has no gists (src/heading-tree.ts). Dropped at this boundary, a visitor
+   * gets a reading view that draws an empty cell at every coarse zoom level
+   * with no way to tell that from an article whose gists are merely bad — the
+   * same class of silent reversion `treatment` suffered, which is why it is
+   * asserted here rather than trusted to the comment in `publicTree`.
+   *
+   * A separate `publicArticle` call, because the fixture tree above is a
+   * finished one: a marker that is absent from the input proves nothing about
+   * whether the boundary would have carried it.
+   */
+  it("carries a tree's provisional marker, so a visitor is not shown empty gists", () => {
+    const out = publicArticle({
+      slug: "noema",
+      title: "The mythology of conscious AI",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      headingTitle: null,
+      blocks: [HEADING, BLOCK],
+      tree: { ...TREE, provisional: "headings" as const },
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+    });
+    expect(out.tree?.provisional).toBe("headings");
+    expect(keyPaths(out)).toContain("tree.provisional");
+  });
+
+  it("leaves it off a tree that is not provisional, rather than sending a null", () => {
+    expect(keyPaths(built)).not.toContain("tree.provisional");
+  });
+
   it("carries a tree node's treatment, so a visitor can tell apparatus from argument", () => {
     expect(NODE_FIELDS.treatment).toBe("supplement");
     expect(keyPaths(built)).toContain("tree.nodes.n1.treatment");

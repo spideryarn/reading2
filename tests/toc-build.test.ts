@@ -151,15 +151,22 @@ describe("buildTree", () => {
       expect(() => buildTree(overlapping, NAV, BLOCKS, "test")).toThrow(/overlaps the one before/);
     });
 
-    it("refuses children that leave a gap, which would grow no leaf at all", () => {
+    /* **Two blocks, not one.** A gap of exactly one block is now snapped shut
+       rather than refused — every tiling failure ever recorded here was off by
+       one, and a model that put a single boundary a paragraph out was costing
+       the reader the whole article. The repair, its bound and the measurement
+       behind it are in tests/toc-repairs.test.ts. What this case still asserts
+       is the other side of that bound: two blocks out is not a slip, it is a
+       different reading of the article, and it is still a refusal. */
+    it("refuses children that leave a gap wider than the repair, growing no leaf at all", () => {
       const gapped: ModelNode = {
         ...ROOT,
         children: [
           { title: "First", range: ["spya-aaaaaa", "spya-aaaaaa"] },
-          { title: "Second", range: ["spya-cccccc", "spya-dddddd"] },
+          { title: "Second", range: ["spya-dddddd", "spya-dddddd"] },
         ],
       };
-      expect(() => buildTree(gapped, NAV, BLOCKS, "test")).toThrow(/leaves a gap of 1 block/);
+      expect(() => buildTree(gapped, NAV, BLOCKS, "test")).toThrow(/leaves a gap of 2 block/);
     });
 
     it("refuses children that stop before their parent ends", () => {

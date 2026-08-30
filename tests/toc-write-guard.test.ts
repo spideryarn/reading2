@@ -29,6 +29,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { Block } from "../src/types.js";
+import type { TocRun } from "../src/toc.js";
 
 /** The tree the structure model "returns", set per test before the call. */
 let modelTree: unknown = null;
@@ -121,6 +122,7 @@ beforeAll(async () => {
   DIR = await mkdtemp(path.join(tmpdir(), "toc-write-guard-"));
   await cp(path.join(ROOT, "example"), DIR, { recursive: true });
   blocks = JSON.parse(await readFile(path.join(DIR, "blocks.json"), "utf8")).blocks;
+  ({ generateToc } = await import("../src/toc.js"));
   const { isStructural } = await import("../src/block-policy.js");
   labelsFor = Object.fromEntries(
     blocks.filter((b) => isStructural(b)).map((b) => [b.id, `Label for ${b.id}`]),
@@ -145,11 +147,21 @@ const wholeArticle = (over: Record<string, unknown> = {}) => ({
   },
 });
 
-async function run(): Promise<{ threw: Error | null }> {
-  const { generateToc } = await import("../src/toc.js");
+/**
+ * Imported once in `beforeAll`, not per call. `src/toc.ts` is a big module and
+ * vitest transforms it on first import, so importing it *inside* the first
+ * test charged that test the compile — which put it over the 5-second default
+ * whenever the machine was busy running the rest of the suite in parallel. It
+ * failed as a timeout on the **control**, which is the most misleading place
+ * for a flake to land: the control going red reads as "the harness is broken",
+ * and the four tests it is the control for went on passing.
+ */
+let generateToc!: typeof import("../src/toc.js")["generateToc"];
+
+async function run(): Promise<{ threw: Error | null; run?: TocRun }> {
   try {
-    await generateToc({ blocksPath: path.join(DIR, "blocks.json"), outDir: DIR });
-    return { threw: null };
+    const result = await generateToc({ blocksPath: path.join(DIR, "blocks.json"), outDir: DIR });
+    return { threw: null, run: result };
   } catch (err) {
     return { threw: err as Error };
   }
@@ -172,17 +184,52 @@ describe("generateToc refuses to write an invalid tree", () => {
     expect(await wrote()).toEqual(["labels.json", "tree.json"]);
   });
 
-  it("throws and writes nothing when a node claims a heading it does not contain", async () => {
+  /**
+   * **The vehicle changed on 2026-08-30, and the reason is worth keeping.**
+   *
+   * These tests used to make an invalid tree by claiming a `sourceHeading` the
+   * node does not contain. `buildTree` now drops such a claim instead of
+   * letting it through to `checkTree` (src/toc.ts, tests/toc-repairs.test.ts),
+   * so that stopped being a way to build an invalid tree at all — and every
+   * test here went green for the wrong reason: nothing threw, because nothing
+   * was wrong any more.
+   *
+   * A missing gist replaces it. It is buildable — `buildTree` copies back
+   * whatever the model wrote and has no opinion about an absent gist — and
+   * invalid, because an internal node without one has nothing to render at its
+   * own zoom level (src/tree-invariants.ts § the gist rule). That is the pair
+   * this file needs, and unlike `sourceHeading` it is a rule no repair may ever
+   * relax: the gist rule is stated in both directions precisely so a pipeline
+   * bug that drops a gist cannot be read as a deliberate exception.
+   */
+  it("throws and writes nothing when an internal node has no gist", async () => {
     await rm(path.join(DIR, "tree.json"), { force: true });
     await rm(path.join(DIR, "labels.json"), { force: true });
-    /* Buildable and invalid, which is the pair that matters: `buildTree` has no
-       opinion about `sourceHeading`, and `checkTree` requires the claimed
-       heading to be a heading block inside the node's own range. */
-    modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
+    modelTree = wholeArticle({ gist: undefined });
     const { threw } = await run();
     expect(threw).not.toBeNull();
     expect(threw!.message).toContain("is not a valid tree, so it was not written");
     expect(await wrote()).toEqual([]);
+  });
+
+  /* The repair, proved at the stage rather than at the function — which is the
+     same reason everything else in this file is an integration test. A claim no
+     block backs up costs the node its provenance mark and costs the reader
+     nothing; before this, four structure calls in four made the same wrong
+     claim on one article and it was a guaranteed failure loop for that
+     document. docs/research/opening-an-article-before-the-toc.md § 7b. */
+  it("writes the tree, minus the claim, when a node claims a heading it does not contain", async () => {
+    await rm(path.join(DIR, "tree.json"), { force: true });
+    await rm(path.join(DIR, "labels.json"), { force: true });
+    modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
+    const { threw } = await run();
+    expect(threw).toBeNull();
+    expect(await wrote()).toEqual(["labels.json", "tree.json"]);
+    const written = JSON.parse(await readFile(path.join(DIR, "tree.json"), "utf-8")) as {
+      rootId: string;
+      nodes: Record<string, { sourceHeading?: string }>;
+    };
+    expect(written.nodes[written.rootId]!.sourceHeading).toBeUndefined();
   });
 
   /* The thrown message is written to the log by src/jobs.ts with `errorFields`,
@@ -196,10 +243,15 @@ describe("generateToc refuses to write an invalid tree", () => {
     await rm(path.join(DIR, "labels.json"), { force: true });
     const heading = blocks.find((b) => b.kind === "heading");
     expect(heading).toBeDefined(); // the fixture must have one for this to test anything
-    modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
+    modelTree = wholeArticle({ gist: undefined });
     const { threw } = await run();
-    expect(threw!.message).not.toContain("A Heading Nobody Wrote");
-    expect(threw!.message).not.toContain(heading!.text);
+    /* Every block's text, not just the heading's. The original version of this
+       test named the one string the one message was known to quote, which
+       checks the bug that happened rather than the rule — and the rule is that
+       nothing this stage throws may carry a line of the article. */
+    for (const b of blocks) {
+      if (b.text.trim().length > 0) expect(threw!.message).not.toContain(b.text);
+    }
   });
 
   /* **The control, and it has to come first for the same reason as the one at
@@ -227,11 +279,40 @@ describe("generateToc refuses to write an invalid tree", () => {
      (see 38ea362), and this is a whole wasted pass through the second half of
      it on every attempt at an article the structure model keeps getting wrong —
      which is exactly the article this postmortem is about, six times over. */
+  /**
+   * **The counts have to arrive somewhere a person will see them**, and until
+   * this test nothing checked that they did. `buildTree` fills in a report,
+   * `generateToc` counts it into `TocRun`, the CLI prints it every run and
+   * src/pipeline.ts logs it — four links, of which the tests covered the first.
+   * A repair nobody is told about is indistinguishable from the bug it
+   * repaired, so the wiring is the feature and not an extra
+   * (docs/reusable/silent-success.md). GPT Sol's review, 2026-08-30.
+   */
+  it("reports what it repaired all the way out to the run stats", async () => {
+    await rm(path.join(DIR, "tree.json"), { force: true });
+    await rm(path.join(DIR, "labels.json"), { force: true });
+    modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
+    const { threw, run: stats } = await run();
+    expect(threw).toBeNull();
+    expect(stats?.droppedHeadings).toBe(1);
+  });
+
+  it("reports zero on a run where the model got it right, rather than nothing", async () => {
+    // The control. Absent this, the assertion above passes for a field that is
+    // hard-wired to the number 1.
+    await rm(path.join(DIR, "tree.json"), { force: true });
+    await rm(path.join(DIR, "labels.json"), { force: true });
+    modelTree = wholeArticle();
+    const { run: stats } = await run();
+    expect(stats?.droppedHeadings).toBe(0);
+    expect(stats?.repairedRanges).toBe(0);
+  });
+
   it("does not pay for labels when the structure call already produced an invalid tree", async () => {
     await rm(path.join(DIR, "tree.json"), { force: true });
     await rm(path.join(DIR, "labels.json"), { force: true });
     labelCalls = 0;
-    modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
+    modelTree = wholeArticle({ gist: undefined });
     const { threw } = await run();
     expect(threw).not.toBeNull();
     expect(labelCalls).toBe(0);

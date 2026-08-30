@@ -1465,6 +1465,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           supplementNodes: run.supplementNodes,
           supplementBlocks: run.supplementBlocks,
           strandedSupplement: run.strandedSupplement,
+          /* What the stage forgave the model. Both are bounded repairs of a
+             slip (src/toc.ts § `repairedChildRanges`), and both are logged at
+             zero as well as above it — an operator watching these climb is
+             watching the structure prompt drift. */
+          repairedRanges: run.repairedRanges,
+          droppedHeadings: run.droppedHeadings,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
           cacheReadTokens: run.cacheReadTokens,

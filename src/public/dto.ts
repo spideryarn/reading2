@@ -218,6 +218,15 @@ function publicTree(tree: Tree): Tree {
     slug: tree.slug,
     rootId: tree.rootId,
     nodes,
+    /* **`provisional` crosses, for the same reason `treatment` does.** It says
+       the structure is a stand-in carved from the author's headings and has no
+       gists yet (src/heading-tree.ts). A public reader without it gets a
+       reading view that draws empty cells at every coarse zoom level and no way
+       to tell that from an article whose gists are simply bad — the client
+       branches on this to say the structure is still arriving. Nothing about it
+       is private: it is a fact about which of our generators wrote the tree,
+       which is exactly what `version` and `generator` above already say. */
+    ...(tree.provisional ? { provisional: tree.provisional } : {}),
   };
 }
 

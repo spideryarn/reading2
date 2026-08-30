@@ -331,6 +331,13 @@ export function scoreTree(blocks: Block[], tree: Tree): StructureScore {
     }
   }
 
+  /* **`sourceHeadingValid` is necessarily 1 for any tree that came through
+     `buildTree`**, since 2026-08-30: the builder drops a claim no heading in
+     the node's range backs up, so an invalid one can no longer reach a scored
+     tree. It stays measured because a tree read off disk was not necessarily
+     built by today's code, and because a 1 here beside a non-zero `repaired`
+     count in the run file is the pair that tells the story. Read the two
+     together; on their own, this number now says less than it did. GPT Sol. */
   const withSource = internal.filter((n) => n.sourceHeading);
   const sourceValid = withSource.filter((n) => {
     const lo = index.get(n.range[0]);

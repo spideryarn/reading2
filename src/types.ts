@@ -140,6 +140,31 @@ export interface Tree {
   slug: string;
   rootId: NodeId;
   nodes: Record<NodeId, TreeNode>;
+  /**
+   * **A stand-in structure, and how it stands in.** Absent means the real
+   * thing: a tree the structure model wrote, with a gist on every internal
+   * node. `"headings"` means the tree was carved from the author's own heading
+   * blocks, deterministically and for nothing (src/heading-tree.ts) — which
+   * gets the reader real bands with real names, and no gists at all, because
+   * there is nowhere free to get one.
+   *
+   * **Tree-level, not per-node, and explicit rather than inferred.** Both
+   * halves of that are decisions with a history. Tree-level, because a
+   * provisional tree is replaced whole and no node of it becomes final on its
+   * own — a node-level state only earns its place if partially-streamed nodes
+   * ever have to coexist with finished ones. Explicit, because the alternative
+   * is reading "provisional" off the absent gists, and that is exactly the
+   * mistake `treatment` exists to avoid: keyed on absence, a pipeline bug that
+   * drops a gist becomes indistinguishable from a deliberate exception, and the
+   * dangerous outcome is acceptance (src/tree-invariants.ts § the gist rule).
+   *
+   * Two things read it. `checkTree` exempts such a tree from the gist rule and
+   * from **nothing else**. And it crosses the public boundary
+   * (src/public/dto.ts), because a client that cannot tell a provisional tree
+   * from a finished one draws empty cells where it should say the structure is
+   * still arriving.
+   */
+  provisional?: "headings";
 }
 
 /**
@@ -1405,8 +1430,8 @@ export interface ArticleSharing extends VisibilityState {
    * general — which turns a sentence nobody reads into a specific fact about the
    * thing being shared.
    *
-   * Non-null `profileHash` is what decides it, and only four artefacts can carry
-   * one: `tweets`, `glossary`, `summary` and `ideas`. The tree and the arc
+   * Non-null `profileHash` is what decides it, and only five artefacts can carry
+   * one: `tweets`, `glossary`, `summary`, `ideas` and `sketch`. The tree and the arc
    * deliberately do not vary by profile — a reader-specific tree is one that
    * shifts under a reader who edits their box (reader-profile.md) — and
    * `fetch`, `extract` and `blocks` have no model call to personalise.

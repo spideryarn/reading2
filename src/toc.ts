@@ -39,7 +39,7 @@ import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { isSpideryarnId } from "./ids.js";
 import { generateLabels, mergeLabels } from "./labels.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
-import { assertTreeSound } from "./tree-invariants.js";
+import { assertTreeSound, sameHeading } from "./tree-invariants.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Tree, TreeNode, NodeId } from "./types.js";
 import { parseJsonFrom, stripFence } from "./parse-json.js";
@@ -452,11 +452,180 @@ function assertChildrenPartition(
   }
   if (cursor !== parent[1] + 1) {
     const short = parent[1] + 1 - cursor;
+    /* Both directions, because the children can also run *past* the parent —
+       and the single-sentence version of this said they stopped "-1 block(s)
+       before it ends", which is a message that sends whoever reads it looking
+       for the wrong thing. GPT Sol, 2026-08-30. */
     throw new Error(
-      `The children of the node at ${where} stop ${short} block(s) before it ends. Those ` +
-        `paragraphs would appear nowhere in the table of contents.`,
+      short > 0
+        ? `The children of the node at ${where} stop ${short} block(s) before it ends. Those ` +
+            `paragraphs would appear nowhere in the table of contents.`
+        : `The children of the node at ${where} run ${-short} block(s) past its end, so they ` +
+            `cover blocks their parent does not.`,
     );
   }
+}
+
+/**
+ * **What `buildTree` mended on the way past, and what it refused to.**
+ *
+ * Both fields are filled in by `buildTree` when it is given one, and both are
+ * counted into `TocRun`, printed by the CLI every run including when they are
+ * zero, and logged by src/pipeline.ts. That is deliberate and it follows
+ * `strandedSupplement`: a repair nobody is told about is the same shape as the
+ * bug it repaired (docs/reusable/silent-success.md). If these numbers start
+ * climbing, the prompt is drifting and the repairs are hiding it.
+ */
+export interface BuildReport {
+  /** Off-by-one partitions snapped rather than refused. */
+  repairs: PartitionRepair[];
+  /**
+   * Nodes whose `sourceHeading` claim no heading block in their range backed
+   * up, by position in the model's proposal. The node keeps its title; it
+   * loses only the mark saying the author wrote it.
+   */
+  droppedHeadings: string[];
+}
+
+export interface PartitionRepair {
+  /**
+   * The node's position in the model's own proposal — "root > child 2". Derived
+   * from the shape of the answer rather than anything in it, so it is always
+   * safe to log; see `where` in `buildTree`.
+   */
+  where: string;
+  /** Which end was wrong: the child started late, started early, or stopped early. */
+  kind: "gap" | "overlap" | "short";
+  /**
+   * The block index the boundary was moved to. **This is what the budget below
+   * counts**, and it is why a cascade is free: a repaired node and its first
+   * child are the same boundary seen at two depths, so they share a coordinate.
+   */
+  at: number;
+}
+
+/**
+ * **How many distinct boundaries one answer may have wrong and still be mended.**
+ *
+ * One, and the number is the evidence rather than a round figure. Every
+ * recorded tiling failure — the two in the 2026-08-30 calibration and the two
+ * in docs/postmortems/the-article-with-one-heading.md — was a *single* slipped
+ * boundary. An answer with several independent ones is not the same event
+ * observed again; it is a different failure, and mending each of them
+ * separately would let a systematically misaligned tree through one block at a
+ * time while every individual step looked defensible. GPT Sol's review of this
+ * change made the point and I took it: the bound as first written was per
+ * boundary, which is not a bound on the answer at all.
+ *
+ * A cascade of the *same* boundary through nested levels stays free, because it
+ * is one mistake — see `at`.
+ *
+ * **What would justify raising it** is a measured distribution, not an argument:
+ * the repair counts now reach the pipeline log, so if answers with two
+ * independent slips turn out to be common and their repaired trees turn out to
+ * be good, that is the evidence. Thirteen calls is not it.
+ */
+const MAX_REPAIRED_BOUNDARIES = 1;
+
+/**
+ * **Snap a partition that misses by exactly one block, and only by one.**
+ *
+ * The argument for repairing at all is measured rather than assumed. A paid
+ * calibration of this stage threw on 4 of 13 structure calls, and every tiling
+ * failure anyone has recorded — those two, plus the two in
+ * docs/postmortems/the-article-with-one-heading.md — was **off by a single
+ * block**. So the practical choice is not between trusting the model and
+ * checking it; it is whether a two-and-a-half-minute call that put one boundary
+ * one paragraph out should cost the reader the article. It should not, and a
+ * fifth of structure calls were costing exactly that
+ * (docs/research/opening-an-article-before-the-toc.md § 7b).
+ *
+ * **Why here, on the model's proposal, rather than in `assertChildrenPartition`.**
+ * By the time that check runs, `visit` has already walked the children and
+ * grown their leaves, so moving a boundary there would mean growing a leaf to
+ * match and splicing it into the right position — the tree repairing itself
+ * after the fact, which is the shape that produces two leaves for one block.
+ * Repairing the *proposal* means nothing has been built yet: the recursion then
+ * sees the mended range and grows exactly the leaves it implies. It is also
+ * what makes the cascade fall out for free — moving a node's start moves its
+ * first child's start too, and a repair that stopped at one level would trade a
+ * broken partition at depth 1 for a broken one at depth 2.
+ *
+ * **Bounded at one block, deliberately.** A repair that grew with the size of
+ * the mistake would be the model marking its own homework. Two blocks out is
+ * not a slip, it is a different reading of the article, and it still throws —
+ * as do a backwards range, an invented id, and a root that misses the article's
+ * ends. Nothing is repaired that would leave a node covering no blocks at all.
+ *
+ * Returns one entry per child: a mended `[start, end]`, or `undefined` for
+ * "use what the model wrote".
+ */
+function repairedChildRanges(
+  children: ModelNode[],
+  parent: readonly [number, number],
+  index: Map<string, number>,
+  blocks: Block[],
+  where: string,
+  repairs: PartitionRepair[],
+): (readonly [string, string] | undefined)[] {
+  const out: (readonly [string, string] | undefined)[] = children.map(() => undefined);
+
+  /** A child's range as block indices, or null if it is not a resolvable, forward pair. */
+  const spanOf = (mn: ModelNode): [number, number] | null => {
+    const raw: unknown = mn.range;
+    if (!Array.isArray(raw) || raw.length !== 2) return null;
+    const [a, b] = raw as unknown[];
+    if (typeof a !== "string" || typeof b !== "string") return null;
+    const lo = index.get(a);
+    const hi = index.get(b);
+    return lo === undefined || hi === undefined || lo > hi ? null : [lo, hi];
+  };
+
+  /* The budget is over the whole answer, not this node: `repairs` is the array
+     `buildTree` threads through every level, so a cascade and a second
+     independent slip are told apart by coordinate rather than by depth. */
+    const affordable = (at: number): boolean =>
+    repairs.some((r) => r.at === at) ||
+    new Set(repairs.map((r) => r.at)).size < MAX_REPAIRED_BOUNDARIES;
+
+  let cursor = parent[0];
+  for (const [i, child] of children.entries()) {
+    const span = spanOf(child);
+    /* Not repairable, and not this function's to report. An unresolvable or
+       backwards range is a different fault with a message of its own, and
+       guessing at a repair here would replace a precise error with a vague
+       one. Stop, and let `visit` and `assertChildrenPartition` say what is
+       wrong — including about the children after this one, whose offsets are
+       now measured from a cursor that means nothing. */
+    if (!span) return out;
+    const [lo, hi] = span;
+    /* `cursor <= hi` is the guard against repairing a node into nothing: an
+       overlap snap moves the start forward, and a single-block child that its
+       neighbour already ate has no snap that leaves it non-empty. Without this
+       the repair would hand `visit` a range running backwards, and the error
+       two lines later would describe a range we wrote ourselves. */
+    if (lo !== cursor && Math.abs(lo - cursor) === 1 && cursor <= hi && affordable(cursor)) {
+      out[i] = [blocks[cursor]!.id, (child.range as [string, string])[1]] as const;
+      repairs.push({
+        where: `${where} > child ${i + 1}`,
+        kind: lo > cursor ? "gap" : "overlap",
+        at: cursor,
+      });
+    }
+    cursor = hi + 1;
+  }
+
+  /* The same fault at the other end: the last child stops one block before its
+     parent does, and that block would grow no leaf anywhere. `cursor` is one
+     past the last child's end, so `cursor === parent[1]` is exactly one short. */
+  const last = children.length - 1;
+  if (last >= 0 && cursor === parent[1] && affordable(parent[1])) {
+    const start = out[last]?.[0] ?? (children[last]!.range as [string, string])[0];
+    out[last] = [start, blocks[parent[1]]!.id] as const;
+    repairs.push({ where: `${where} > child ${last + 1}`, kind: "short", at: parent[1] });
+  }
+
+  return out;
 }
 
 /**
@@ -469,8 +638,17 @@ export function buildTree(
   navLabels: Record<string, string>,
   blocks: Block[],
   slug: string,
+  /**
+   * Filled in with what was mended on the way past. Optional so that the
+   * callers who only want a tree — the tests, src/validate-tree.ts — stay one
+   * argument long; `generateToc` always passes one, because a repair nobody
+   * counts is a repair nobody can notice going wrong.
+   */
+  report?: BuildReport,
 ): Tree {
   const index = new Map(blocks.map((b, i) => [b.id, i]));
+  const repairs = report?.repairs ?? [];
+  const dropped = report?.droppedHeadings ?? [];
   const nodes: Record<NodeId, TreeNode> = {};
   let counter = 0;
   const nextId = () => `n${String(++counter).padStart(4, "0")}`;
@@ -479,20 +657,75 @@ export function buildTree(
      "root > child 2 > child 4". It is derived from the shape of the answer
      rather than from anything in it, so it is always safe to put in a message,
      and it is what tells you which node to go and look at. */
-  const visit = (mn: ModelNode, parent: NodeId | null, depth: number, where: string): NodeId => {
+  const visit = (
+    mn: ModelNode,
+    parent: NodeId | null,
+    depth: number,
+    where: string,
+    /* The range its parent mended for it, when one was mended. The model's own
+       proposal is never mutated: two callers share the same literal in the
+       tests and in the evals, and a repair written back into it would leak from
+       one build into the next. */
+    override?: readonly [string, string],
+  ): NodeId => {
     const id = nextId();
     /* Shape before anything indexes it. `mn.range` is model output behind a
        cast, so it need not be a pair at all: `"range": "spya-a…spya-b"` used to
        reach the lookup below with `range[0] === "s"`, miss, and then fail
        inside `mn.range.join` with "mn.range.join is not a function" — an error
        that named the bug in our code rather than the fault in the answer. */
-    const raw: unknown = mn.range;
+    const raw: unknown = override ?? mn.range;
     const pair = Array.isArray(raw) && raw.length === 2 ? (raw as unknown[]) : [];
     const [start, end] = pair;
     if (typeof start !== "string" || typeof end !== "string") {
       throw new Error(`The node at ${where} has no [start, end] block range.`);
     }
     const range: [string, string] = [start, end];
+    const lo = index.get(range[0]);
+    const hi = index.get(range[1]);
+
+    /**
+     * **An authored heading the node does not contain is dropped, not thrown on.**
+     *
+     * `sourceHeading` is provenance, not structure. Its only consumer is the
+     * `§` badge that tells the reader the author wrote this heading and we did
+     * not (src/web/TableView.tsx, ContextList.tsx, Spine.tsx) — so an unbacked
+     * claim is a badge that would lie, and the whole cost of dropping it is
+     * that one node stops claiming an authorship it never had. Throwing, by
+     * contrast, costs the reader the article: four structure calls in four made
+     * the same wrong claim on the same document, which makes a refusal not an
+     * occasional loss but a guaranteed failure loop for it
+     * (docs/research/opening-an-article-before-the-toc.md § 7b).
+     *
+     * **Read with `sameHeading`, over the same range, so this is a repair and
+     * not a second opinion.** `checkTree` asks the identical question later,
+     * against the full block array; this one asks it against `body`, which
+     * within a node's range is a subset. So anything kept here is kept there,
+     * and the invariant can no longer fail on a claim this line let past —
+     * which is the property that makes the repair worth having rather than a
+     * disagreement waiting to surface downstream (src/tree-invariants.ts).
+     *
+     * The `typeof` guard is not decoration: `mn` is model output behind a cast,
+     * and a number here would reach `sameHeading` and throw inside a `.replace`
+     * on a string that is not one.
+     */
+    const wrote = mn.sourceHeading !== undefined && mn.sourceHeading !== null;
+    const claim =
+      typeof mn.sourceHeading === "string" && mn.sourceHeading.trim() !== ""
+        ? mn.sourceHeading
+        : undefined;
+    const backed =
+      claim !== undefined &&
+      lo !== undefined &&
+      hi !== undefined &&
+      lo <= hi &&
+      blocks.slice(lo, hi + 1).some((b) => b.kind === "heading" && sameHeading(b.text, claim));
+    /* `wrote`, not `claim`: a number, or a string of spaces, is a claim this
+       stage threw away too, and counting only the well-formed ones would make
+       "nothing is repaired quietly" false in exactly the case that says the
+       model's output has gone strange. GPT Sol's review. */
+    if (wrote && !backed) dropped.push(where);
+
     const node: TreeNode = {
       id,
       depth,
@@ -501,12 +734,9 @@ export function buildTree(
       range,
       title: mn.title,
       ...(mn.gist ? { gist: mn.gist } : {}),
-      ...(mn.sourceHeading ? { sourceHeading: mn.sourceHeading } : {}),
+      ...(backed ? { sourceHeading: claim } : {}),
     };
     nodes[id] = node;
-
-    const lo = index.get(range[0]);
-    const hi = index.get(range[1]);
     if (lo !== undefined && hi !== undefined && lo > hi) {
       /* A range that runs backwards. Both ends are real block ids, so every
          lookup succeeds and nothing below objects — the leaf loop simply runs
@@ -520,7 +750,20 @@ export function buildTree(
     }
 
     if (mn.children?.length) {
-      node.children = mn.children.map((c, i) => visit(c, id, depth + 1, `${where} > child ${i + 1}`));
+      /* Mend before descending, so the recursion grows leaves for the range the
+         children will actually be checked against — and so a moved start
+         cascades into that child's own first child. `repairedChildRanges` says
+         why this cannot be done after the walk. A parent whose own range does
+         not resolve is left alone: `assertChildrenPartition` has a precise
+         message for that, and repairing against a cursor that means nothing
+         would bury it. */
+      const mended =
+        lo !== undefined && hi !== undefined
+          ? repairedChildRanges(mn.children, [lo, hi], index, blocks, where, repairs)
+          : mn.children.map(() => undefined);
+      node.children = mn.children.map((c, i) =>
+        visit(c, id, depth + 1, `${where} > child ${i + 1}`, mended[i]),
+      );
       assertChildrenPartition(node, nodes, index, where);
       return id;
     }
@@ -621,6 +864,17 @@ export interface TocRun {
    * make visible (docs/reusable/silent-success.md).
    */
   strandedSupplement: number;
+  /**
+   * **Off-by-one partitions this run snapped shut rather than refused**, and
+   * `sourceHeading` claims it dropped because no heading in the node's range
+   * backed them up. Both are repairs of a model's slip, both are bounded, and
+   * both are reported for the same reason `strandedSupplement` is: a repair
+   * that nobody counts is indistinguishable from the bug it repaired
+   * (docs/reusable/silent-success.md). A run at zero is the normal case; a
+   * number that climbs means the prompt has drifted and these are hiding it.
+   */
+  repairedRanges: number;
+  droppedHeadings: number;
   labelled: number;
   internal: number;
   /**
@@ -791,7 +1045,8 @@ export async function generateToc(opts: {
   /* `body`, so the root's range ends at the last body block and every check in
      `buildTree` — the tiling, the "covers the whole article" guard — is asked
      about the argument the model was actually shown. */
-  const structure = appendSupplement(buildTree(root, {}, body, slug), groups);
+  const built: BuildReport = { repairs: [], droppedHeadings: [] };
+  const structure = appendSupplement(buildTree(root, {}, body, slug, built), groups);
 
   /* **Appended before `generateLabels`, not after.** `labels.json` records
      `structureHash(opts.tree)` (src/labels.ts), so a supplement added afterwards
@@ -903,6 +1158,8 @@ export async function generateToc(opts: {
     supplementNodes: groups.length,
     supplementBlocks: blocks.length - body.length,
     strandedSupplement: stranded,
+    repairedRanges: built.repairs.length,
+    droppedHeadings: built.droppedHeadings.length,
     labelled: Object.values(tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(tree.nodes).filter((n) => n.children.length > 0).length,
     labelBatches: labelRun.batches,
@@ -958,6 +1215,13 @@ async function main(): Promise<void> {
       ? `Notes:     NOT GROUPED — ${run.strandedSupplement} supplement block(s) are not one ` +
           `trailing run, so no Notes node was built`
       : `Notes:     ${run.supplementNodes} node(s) over ${run.supplementBlocks} block(s)`,
+  );
+  /* Printed every run, including at zero, for the reason the Notes line above
+     is. These are the two places stage 4 now forgives the model, and a number
+     computed and never shown is the same as no number. */
+  console.log(
+    `Repaired:  ${run.repairedRanges} off-by-one range(s), ` +
+      `${run.droppedHeadings} unbacked heading claim(s)`,
   );
   console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);

@@ -28,7 +28,7 @@
  * are different interventions, and the first version conflated them.
  *
  * The two free arms:
- * - **headings** is arm zero, the denominator (heading-tree.ts).
+ * - **headings** is arm zero, the denominator (src/heading-tree.ts).
  * - **incumbent-disk** scores `data/<slug>/tree.json` as it sits — the
  *   incumbent's already-paid-for output. One old run per document, from
  *   different days; fine for orientation, never for the noise floor.
