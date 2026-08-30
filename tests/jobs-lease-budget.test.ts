@@ -24,11 +24,22 @@ import { DEADLINE_MARGIN_MS, LEASE_MS } from "../src/jobs.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
-function maxDurationSeconds(): number {
+interface ApiFunctionConfig {
+  maxDuration?: number;
+  supportsCancellation?: boolean;
+}
+
+function apiFunctionConfig(): ApiFunctionConfig {
   const config = JSON.parse(readFileSync(path.join(ROOT, "vercel.json"), "utf8")) as {
-    functions?: Record<string, { maxDuration?: number }>;
+    functions?: Record<string, ApiFunctionConfig>;
   };
   const entry = config.functions?.["api/**"];
+  if (!entry) throw new Error('vercel.json has no functions["api/**"] block');
+  return entry;
+}
+
+function maxDurationSeconds(): number {
+  const entry = apiFunctionConfig();
   /* Not `?? 300`. A default here would let the key be deleted or renamed and
      still pass, which is the failure this file is about. */
   if (typeof entry?.maxDuration !== "number") {
@@ -97,6 +108,32 @@ describe("the job lease and the platform's kill", () => {
     };
     const wholeJobMs = Object.values(worstStepMs).reduce((a, b) => a + b, 0);
     expect(wholeJobMs).toBeLessThan(maxDurationSeconds() * 1000);
+  });
+
+  /**
+   * **An import survives its reader closing the tab, and that is a property of
+   * something `vercel.json` does *not* say.**
+   *
+   * Vercel aborts a function on client disconnect **only if you opt in**, with
+   * `"supportsCancellation": true` on the function path. We have not, so a
+   * proxy cutting a twelve-minute import — or a reader closing the tab — leaves
+   * the job running server-side with its claim held. `drive()` retries, is told
+   * `busy`, backs off, and the card catches up when the poll sees it finish.
+   * The work lands and the model spend is not thrown away.
+   *
+   * **Turning it on would silently make every disconnect fatal**, mid-`toc`,
+   * with the money already spent — and somebody will one day have an entirely
+   * good reason to add it for an unrelated route. It is a one-line change in a
+   * file that looks like deployment trivia, with nothing local to warn them.
+   * This test is that warning.
+   *
+   * If a route genuinely needs cancellation, give it its own entry rather than
+   * widening `api/**`, or make `/advance` ignore its own abort signal
+   * deliberately — and note that streaming `/advance` would want this signal,
+   * so streaming is a trade rather than an upgrade.
+   */
+  it("does not let the platform kill an import when the reader walks away", () => {
+    expect(apiFunctionConfig().supportsCancellation).toBeUndefined();
   });
 
   it("covers the longest step this project has actually measured", () => {
