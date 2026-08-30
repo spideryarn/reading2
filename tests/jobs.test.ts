@@ -48,7 +48,7 @@ import {
 } from "../src/store/jobs-fs.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { jobWorthRetrying } from "../src/job-failure.js";
-import { MAX_GUIDANCE_CHARS, parseJobRequest } from "../src/routes.js";
+import { parseJobRequest } from "../src/routes.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
 import type { Job, JobStep, StepName } from "../src/types.js";
 
@@ -487,48 +487,37 @@ describe("parseJobRequest", () => {
   });
 
   /**
-   * The reader's steer for the summary step, checked where it arrives.
+   * **The steer is gone, and a stale client must not be able to smuggle one.**
    *
-   * This string is interpolated into a model prompt, which is what makes the
-   * cap a security check rather than a tidiness one: uncapped, it is a way to
-   * spend somebody else's tokens by the megabyte, and a long enough one pushes
-   * the article out of the context the summaries are supposed to be of.
+   * `guidance` was a free-text note interpolated straight into the summary
+   * prompt, with its own cap because uncapped it was a way to spend somebody
+   * else's tokens by the megabyte. The box that fed it was deleted on
+   * 2026-08-30 — it asked the same question the reader profile already asks,
+   * and the profile reaches the same prompt
+   * (docs/plans/steer-becomes-the-profile.md).
+   *
+   * So the field is **ignored, not refused**: a tab open since before the
+   * deploy should get its summaries written rather than a 400 about a box it
+   * can still see. What must not happen is the middle case — the field quietly
+   * surviving into the request and steering a prompt through a door nobody is
+   * watching any more, with no cap in front of it because the cap went with the
+   * parser.
    */
-  it("takes a steer, trimmed", () => {
-    expect(parseJobRequest({ slug: "a", guidance: "  the evidence  " }).guidance).toBe(
-      "the evidence",
-    );
-  });
-
-  it("treats a blank steer as no steer", () => {
-    // A box the reader typed in and then cleared must not become an empty
-    // instruction sitting in the prompt.
-    expect(parseJobRequest({ slug: "a", guidance: "   " }).guidance).toBeUndefined();
-    expect(parseJobRequest({ slug: "a" }).guidance).toBeUndefined();
-  });
-
-  it("refuses a steer that is not a string", () => {
-    expect(() => parseJobRequest({ slug: "a", guidance: { evil: 1 } })).toThrow();
-  });
-
-  it("refuses an over-long steer rather than silently shortening it", () => {
-    /* Refused, not truncated. A shortened instruction is one the reader
-       believes they gave and did not, and they would have no way to find out —
-       docs/reusable/silent-success.md. */
-    const long = "x".repeat(MAX_GUIDANCE_CHARS + 1);
-    expect(() => parseJobRequest({ slug: "a", guidance: long })).toThrow(/600/);
-    expect(parseJobRequest({ slug: "a", guidance: "x".repeat(MAX_GUIDANCE_CHARS) }).guidance)
-      .toHaveLength(MAX_GUIDANCE_CHARS);
-  });
-
-  it("does not repeat the steer back in the refusal", () => {
-    // `httpError`'s message is logged as `reason` (logRequest, src/routes.ts),
-    // and this is the reader's own note about what they are reading for.
-    try {
-      parseJobRequest({ slug: "a", guidance: `${"x".repeat(600)}MY-PRIVATE-NOTE` });
-    } catch (err) {
-      expect((err as Error).message).not.toContain("MY-PRIVATE-NOTE");
-    }
+  it("ignores a steer from a client that still sends one", () => {
+    const parsed = parseJobRequest({ slug: "a", guidance: "the evidence" }) as Record<
+      string,
+      unknown
+    >;
+    expect(parsed.guidance).toBeUndefined();
+    // And an enormous one is dropped rather than carried or thrown over: there
+    // is no cap any more because there is nothing left to cap.
+    expect(() =>
+      parseJobRequest({ slug: "a", guidance: "x".repeat(100_000) }),
+    ).not.toThrow();
+    expect(
+      (parseJobRequest({ slug: "a", guidance: "x".repeat(100_000) }) as Record<string, unknown>)
+        .guidance,
+    ).toBeUndefined();
   });
 
   it("refuses a slug that could climb out of data/", () => {
@@ -660,7 +649,6 @@ describe("the work key", () => {
   const GRID: {
     names: StepName[];
     forced: StepName[];
-    guidance?: string;
     profile?: string;
     upload?: { id: string; filename: string };
     url?: string;
@@ -668,9 +656,13 @@ describe("the work key", () => {
     { names: ["fetch"], forced: [] },
     { names: ["fetch"], forced: ["fetch"] },
     { names: ["fetch", "extract"], forced: [] },
-    { names: ["fetch"], forced: [], guidance: "be brief" },
-    { names: ["fetch"], forced: [], guidance: "be long" },
+    /* Two that differ ONLY in the intent dimension, which is what stops this
+       grid agreeing with itself for the wrong reason. Two rows carrying a steer
+       used to do this job; with the steer gone they would have become copies of
+       row zero and of each other, and a grid of duplicates cannot tell a
+       comparison that reads a field from one that ignores it. */
     { names: ["fetch"], forced: [], profile: "a physicist" },
+    { names: ["fetch"], forced: [], profile: "a historian" },
     { names: ["fetch"], forced: [], upload: { id: "spya-upl001", filename: "a.pdf" } },
     { names: ["fetch"], forced: [], upload: { id: "spya-upl002", filename: "a.pdf" } },
     /* **The dimension that was missing, and the bug it let through.** Two
@@ -697,7 +689,6 @@ describe("the work key", () => {
     })),
     status: "queued",
     createdAt: "2026-08-25T10:00:00.000Z",
-    ...(g.guidance ? { guidance: g.guidance } : {}),
     ...(g.profile ? { profile: g.profile } : {}),
     ...(g.upload ? { upload: g.upload } : {}),
     ...(g.url ? { url: g.url } : {}),
@@ -706,18 +697,10 @@ describe("the work key", () => {
   it("agrees with sameWork on every pair, both ways round", () => {
     for (const a of GRID) {
       for (const b of GRID) {
-        const same = sameWork(
-          asJob(a),
-          b.names,
-          new Set(b.forced),
-          b.guidance,
-          b.profile,
-          b.upload,
-          b.url,
-        );
+        const same = sameWork(asJob(a), b.names, new Set(b.forced), b.profile, b.upload, b.url);
         const keysMatch =
-          workKeyFor(a.names, new Set(a.forced), a.guidance, a.profile, a.upload, a.url) ===
-          workKeyFor(b.names, new Set(b.forced), b.guidance, b.profile, b.upload, b.url);
+          workKeyFor(a.names, new Set(a.forced), a.profile, a.upload, a.url) ===
+          workKeyFor(b.names, new Set(b.forced), b.profile, b.upload, b.url);
         expect(
           { pair: [a, b], sameWork: same, sameKey: keysMatch },
           `sameWork and workKeyFor disagree`,
@@ -731,17 +714,10 @@ describe("the work key", () => {
        adding `http://x.test/piece` when `https://x.test/piece` is already
        running would be a second job for one article — which is the fault
        `urlKey` was written for one layer down, in `freeSlug`. */
-    const a = workKeyFor(["fetch"], new Set(), undefined, undefined, undefined, "http://x.test/p");
-    const b = workKeyFor(["fetch"], new Set(), undefined, undefined, undefined, "https://x.test/p");
+    const a = workKeyFor(["fetch"], new Set(), undefined, undefined, "http://x.test/p");
+    const b = workKeyFor(["fetch"], new Set(), undefined, undefined, "https://x.test/p");
     expect(a).toBe(b);
-    const other = workKeyFor(
-      ["fetch"],
-      new Set(),
-      undefined,
-      undefined,
-      undefined,
-      "https://y.test/p",
-    );
+    const other = workKeyFor(["fetch"], new Set(), undefined, undefined, "https://y.test/p");
     expect(other).not.toBe(a);
   });
 
