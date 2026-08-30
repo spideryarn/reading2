@@ -23,12 +23,15 @@
  * writes the result — the same split as evals/extraction/.
  */
 
-import { access, readdir, readFile, mkdir, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isMain } from "../../src/is-main.js";
 import { parseJsonFrom } from "../../src/parse-json.js";
 import type { Block, Tree } from "../../src/types.js";
-import { ARMS, armByName, type ArmSpec } from "./arms.js";
+import { ARMS, armByName, type ArmSpec, type Comparison } from "./arms.js";
+import { defaultCorpus, entryForDir } from "./corpus.js";
 import { buildHeadingTree } from "./heading-tree.js";
 import { runModelArm, type CallStats } from "./model-arms.js";
 import { compareTrees, scoreTree, type StructureScore, type TreeAgreement } from "./score.js";
@@ -40,11 +43,23 @@ interface Article {
   title?: string;
   /** The incumbent's tree as it sits on disk, when there is one. */
   diskTree: Tree | null;
+  /** sha256 of blocks.json as read for THIS run. */
+  measuredSha256: string;
+  /** The manifest's hash for it, or null for a dir named outside the manifest. */
+  manifestSha256: string | null;
 }
 
 interface ArmResult {
   arm: string;
+  /** What kind of claim this arm's numbers can support — from arms.ts. */
+  comparison: Comparison;
   slug: string;
+  /**
+   * What was actually measured. `data/` is gitignored and regenerates, so a
+   * results file that only named a slug would name bytes nothing can recover;
+   * a mismatch against the manifest is printed at run time and recorded here.
+   */
+  blocksSha256: { measured: string; manifest: string | null; matchesManifest: boolean | null };
   score: StructureScore;
   /** What this arm chose, where that is a fact worth keeping (headings arm). */
   sectionLevel?: number | null;
@@ -53,6 +68,15 @@ interface ArmResult {
   calls?: CallStats[];
   /** How differently this arm cut the article from the tree on disk. Descriptive, not a verdict. */
   vsDisk?: TreeAgreement;
+}
+
+/** The whole run's artefact — rewritten after every result, so a failure after N articles keeps N. */
+interface RunFile {
+  startedAt: string;
+  /** HEAD when the run started, so a March result can name the scorer that made it. */
+  commit: string;
+  arms: ArmSpec[];
+  results: ArmResult[];
 }
 
 async function readJson<T>(file: string): Promise<T> {
@@ -69,36 +93,16 @@ async function readJsonIfPresent<T>(file: string): Promise<T | null> {
 }
 
 /**
- * Two of the three copies of one document. `source`, `source-2` and
- * `revistes-ub-30977` are three extractions of the same 3,106-word article
- * ("Forms of Memory in Post-colonial Australia"); the real slug stays and the
- * other two are dropped from every arm, or one document is triple-weighted in
- * every aggregate and every paid arm buys the same answer three times. Name a
- * dropped dir explicitly on the command line to score it anyway.
+ * Load one article, hashing what was actually read. The corpus itself is a
+ * committed manifest (corpus.ts) rather than a directory listing — a future
+ * `data/` directory must be a decision, not a side effect, and `example`,
+ * `source` and `source-2` are named there as out of every default run. A dir
+ * given explicitly on the command line is loaded whether or not the manifest
+ * knows it, with `manifestSha256: null` saying so in the results.
  */
-const DUPLICATE_DIRS = new Set(["source", "source-2"]);
-
-/** Every dir under data/ with a blocks.json — duplicates excluded — plus the example fixture. */
-async function defaultDirs(): Promise<string[]> {
-  const dirs: string[] = [];
-  for (const entry of (await readdir("data", { withFileTypes: true })).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  )) {
-    if (!entry.isDirectory() || DUPLICATE_DIRS.has(entry.name)) continue;
-    const dir = path.join("data", entry.name);
-    try {
-      await access(path.join(dir, "blocks.json"));
-      dirs.push(dir);
-    } catch {
-      // No blocks.json — not an article directory.
-    }
-  }
-  dirs.push("example");
-  return dirs;
-}
-
 async function loadArticle(dir: string): Promise<Article> {
-  const { blocks } = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const rawBlocks = await readFile(path.join(dir, "blocks.json"), "utf-8");
+  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(rawBlocks, "blocks.json");
   const meta = await readJsonIfPresent<{ title?: string }>(path.join(dir, "meta.json"));
   return {
     slug: path.basename(dir),
@@ -106,6 +110,8 @@ async function loadArticle(dir: string): Promise<Article> {
     blocks,
     ...(meta?.title ? { title: meta.title } : {}),
     diskTree: await readJsonIfPresent<Tree>(path.join(dir, "tree.json")),
+    measuredSha256: createHash("sha256").update(rawBlocks).digest("hex"),
+    manifestSha256: entryForDir(dir)?.sha256 ?? null,
   };
 }
 
@@ -147,8 +153,14 @@ function print(r: ArmResult): void {
      headings arm is structurally unable to write gists; for every other arm a
      missing gist is damage. GPT Sol, 2026-08-30. */
   const gistless = armByName(r.arm).kind === "headings";
-  console.log(`\n${r.slug}  [${r.arm}]`);
+  console.log(`\n${r.slug}  [${r.arm}]  (${r.comparison})`);
   console.log("─".repeat(Math.max(8, r.slug.length + r.arm.length + 4)));
+  if (r.blocksSha256.matchesManifest === false) {
+    console.log(
+      `  STALE INPUT   blocks.json does not match the corpus manifest — the document was ` +
+        `re-extracted since corpus.ts was written; update the manifest deliberately`,
+    );
+  }
   const validity =
     s.validity.otherProblems > 0
       ? `INVALID — ${s.validity.otherProblems} structural problem(s)`
@@ -213,9 +225,11 @@ function print(r: ArmResult): void {
     );
   }
   if (r.vsDisk) {
+    const bd = r.vsDisk.boundaryDistance;
     console.log(
       `  vs disk tree  parts ${r.vsDisk.partCountA} vs ${r.vsDisk.partCountB}, ` +
-        `L1 boundary agreement ${pct(r.vsDisk.l1Boundaries)}, all boundaries ${pct(r.vsDisk.allBoundaries)}`,
+        `L1 boundary agreement ${pct(r.vsDisk.l1Boundaries)}, all boundaries ${pct(r.vsDisk.allBoundaries)}` +
+        (bd ? `, nearest-cut mean ${num(bd.mean, 1)} blocks (${pct(bd.within1Block)} within 1)` : ""),
     );
   }
 }
@@ -230,7 +244,7 @@ async function main(): Promise<void> {
       if (!name) throw new Error("--arm needs a name");
       armNames.push(name);
     } else if (args[i] === "--list") {
-      for (const a of ARMS) console.log(`${a.name}  (${a.kind})`);
+      for (const a of ARMS) console.log(`${a.name}  (${a.kind}, ${a.comparison})`);
       return;
     } else if (args[i]!.startsWith("--")) {
       throw new Error(`Unknown flag ${args[i]}`);
@@ -242,21 +256,61 @@ async function main(): Promise<void> {
     console.error(
       "Usage: npm run eval:toc-structure -- --arm <name> [--arm <name>…] [dir…]\n" +
         `Arms: ${ARMS.map((a) => a.name).join(", ")}   (--list to see kinds)\n` +
-        "With no dirs, every data/<slug> with a blocks.json plus example/ is scored.",
+        "With no dirs, the committed corpus manifest (corpus.ts) decides what is scored.",
     );
     process.exit(1);
   }
   const arms = armNames.map(armByName);
-  const articleDirs = dirs.length > 0 ? dirs : await defaultDirs();
+  const articleDirs = dirs.length > 0 ? dirs : defaultCorpus().map((e) => e.dir);
+  for (const dir of dirs) {
+    const entry = entryForDir(dir);
+    if (entry && (entry.role === "duplicate" || entry.role === "fixture")) {
+      console.error(`note: ${dir} is role "${entry.role}" in the manifest — scored because named, in no aggregate`);
+    }
+    if (!entry) console.error(`note: ${dir} is not in the corpus manifest (corpus.ts)`);
+  }
 
-  const results: ArmResult[] = [];
+  /* One directory per run, written INCREMENTALLY — run.json is rewritten after
+     every article × arm, and each produced tree is saved beside it. A paid run
+     that dies after six calls then leaves six results and six trees, not a
+     spend-ledger entry with nothing to show for it; and the trees are what a
+     later blinded judgment reads, since data/ regenerates under old results
+     (REVIEW-SOL.md, 9). Stamped to the second — the same collision
+     evals/toc-labels.ts documents losing two runs to. */
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const runDir = path.join(
+    import.meta.dirname,
+    "..",
+    "results",
+    "toc-structure",
+    `${stamp}-${armNames.join("+")}`,
+  );
+  await mkdir(path.join(runDir, "trees"), { recursive: true });
+
+  const runFile: RunFile = {
+    startedAt: new Date().toISOString(),
+    commit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf-8" }).trim(),
+    arms: [...arms],
+    results: [],
+  };
+  const checkpoint = async () =>
+    writeFile(path.join(runDir, "run.json"), `${JSON.stringify(runFile, null, 2)}\n`, "utf-8");
+
   for (const dir of articleDirs) {
     const article = await loadArticle(dir);
     for (const arm of arms) {
       const { tree, ...chose } = await treeFor(arm, article);
       const result: ArmResult = {
         arm: arm.name,
+        comparison: arm.comparison,
         slug: article.slug,
+        blocksSha256: {
+          measured: article.measuredSha256,
+          manifest: article.manifestSha256,
+          matchesManifest: article.manifestSha256
+            ? article.manifestSha256 === article.measuredSha256
+            : null,
+        },
         score: scoreTree(article.blocks, tree),
         ...chose,
         /* Only when the tree being scored is not itself the disk tree —
@@ -266,19 +320,21 @@ async function main(): Promise<void> {
           ? { vsDisk: compareTrees(article.blocks, tree, article.diskTree) }
           : {}),
       };
-      results.push(result);
+      /* Every arm's tree is preserved, the disk arm's included — data/ is
+         gitignored and regenerates, so the copy here is the only one a later
+         reader can rely on existing. */
+      await writeFile(
+        path.join(runDir, "trees", `${arm.name}.${article.slug}.json`),
+        `${JSON.stringify(tree, null, 2)}\n`,
+        "utf-8",
+      );
+      runFile.results.push(result);
+      await checkpoint();
       print(result);
     }
   }
 
-  /* Seconds, not just the date — the same collision evals/toc-labels.ts
-     documents losing two runs to. */
-  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-  const outDir = path.join(import.meta.dirname, "..", "results");
-  await mkdir(outDir, { recursive: true });
-  const out = path.join(outDir, `toc-structure-${armNames.join("+")}-${stamp}.json`);
-  await writeFile(out, `${JSON.stringify(results, null, 2)}\n`, "utf-8");
-  console.log(`\nWrote ${path.relative(process.cwd(), out)}`);
+  console.log(`\nWrote ${path.relative(process.cwd(), runDir)}/`);
 }
 
 if (isMain(import.meta.url)) {

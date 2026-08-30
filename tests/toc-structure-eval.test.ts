@@ -11,12 +11,16 @@
  * because a gate nobody has seen go red is not evidence about the gate.
  */
 
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { armByName } from "../evals/toc-structure/arms.js";
+import { ARMS, armByName } from "../evals/toc-structure/arms.js";
+import { CORPUS, defaultCorpus } from "../evals/toc-structure/corpus.js";
 import { buildHeadingTree, PREAMBLE_TITLE } from "../evals/toc-structure/heading-tree.js";
 import {
   parseStructureResponse,
   PendingError,
+  renderHeadingList,
   renderSeedProposal,
   runModelArm,
 } from "../evals/toc-structure/model-arms.js";
@@ -383,6 +387,87 @@ describe("compareTrees", () => {
     expect(compareTrees(blocks, a, b).l1Boundaries).toBeCloseTo(1 / 3, 10);
     expect(compareTrees(blocks, a, b).partCountA).toBe(3);
     expect(compareTrees(blocks, a, b).partCountB).toBe(3);
+  });
+
+  it("boundary distance is tolerant where jaccard is absolute: a one-block move is 1, not 0%", () => {
+    const blocks = Array.from({ length: 10 }, () => block());
+    const a = treeFrom(blocks, withGists({
+      range: [0, 9],
+      children: [{ range: [0, 2] }, { range: [3, 5] }, { range: [6, 9] }],
+    }));
+    // The same carving with each cut moved one block later: {3,6} -> {4,7}.
+    const b = treeFrom(blocks, withGists({
+      range: [0, 9],
+      children: [{ range: [0, 3] }, { range: [4, 6] }, { range: [7, 9] }],
+    }));
+    const agreement = compareTrees(blocks, a, b);
+    expect(agreement.allBoundaries).toBe(0); // exact jaccard reads total disagreement
+    expect(agreement.boundaryDistance).toEqual({ mean: 1, within1Block: 1 });
+  });
+});
+
+describe("the corpus manifest", () => {
+  it("has one entry per slug, hashes shaped like sha256, and duplicates naming a real canonical", () => {
+    const slugs = CORPUS.map((e) => e.slug);
+    expect(new Set(slugs).size).toBe(slugs.length);
+    for (const e of CORPUS) {
+      expect(e.sha256).toMatch(/^[0-9a-f]{64}$/);
+      if (e.role === "duplicate") {
+        const canonical = CORPUS.find((c) => c.slug === e.duplicateOf);
+        expect(canonical?.role).toBe("dev");
+      }
+    }
+  });
+
+  it("keeps duplicates and the fixture out of every default run", () => {
+    const defaults = defaultCorpus();
+    expect(defaults.every((e) => e.role === "dev" || e.role === "heldout")).toBe(true);
+    expect(defaults.map((e) => e.slug)).not.toContain("source");
+    expect(defaults.map((e) => e.slug)).not.toContain("source-2");
+    expect(defaults.map((e) => e.slug)).not.toContain("example");
+  });
+
+  it("pins the fixture's bytes: example/blocks.json still matches its manifest hash", () => {
+    // The one corpus file that is committed, so the hash can be verified in a
+    // test without depending on the gitignored data/ directory.
+    const entry = CORPUS.find((e) => e.slug === "example")!;
+    const measured = createHash("sha256")
+      .update(readFileSync("example/blocks.json"))
+      .digest("hex");
+    expect(measured).toBe(entry.sha256);
+  });
+});
+
+describe("the arms registry", () => {
+  it("labels every arm's claim, and the noise floor is byte-identical to the incumbent", () => {
+    for (const arm of ARMS) expect(arm.comparison).toBeTruthy();
+    const incumbent = armByName("incumbent");
+    const repeat = armByName("incumbent-repeat");
+    if (incumbent.kind === "one-call" && repeat.kind === "one-call") {
+      expect(repeat.call).toEqual(incumbent.call);
+      expect(repeat.seed).toBe(incumbent.seed);
+    } else {
+      throw new Error("incumbent arms changed kind — update this test deliberately");
+    }
+    const waves = armByName("waves");
+    if (waves.kind !== "waves") throw new Error("waves changed kind");
+    expect(waves.levels).toBeGreaterThanOrEqual(3); // the book-length motivation needs L3
+  });
+});
+
+describe("renderHeadingList", () => {
+  it("lists exactly the body headings, with their positions and levels", () => {
+    const blocks = [
+      block(),
+      heading(2, "First"),
+      block(),
+      heading(3, "Deeper"),
+      block({ role: "footnote", treatment: "supplement", text: "a note" }),
+    ];
+    const list = renderHeadingList(blocks);
+    expect(list).toContain("[1] h2: First");
+    expect(list).toContain("[3] h3: Deeper");
+    expect(list).not.toContain("a note");
   });
 });
 

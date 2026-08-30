@@ -2,27 +2,36 @@
  * The arms of the ToC structure eval, as data. An arm is a *recipe for
  * producing a tree* — which model, how hard it thinks, what it is shown, and
  * in how many calls — and adding one is adding an entry here plus, for a
- * genuinely new strategy, an executor case in run.ts. It is deliberately not
- * a string the runner parses.
+ * genuinely new strategy, an executor case in model-arms.ts. It is
+ * deliberately not a string the runner parses.
+ *
+ * **Every arm says what kind of claim its result can support** (`comparison`),
+ * because several cannot support causal ones (REVIEW-SOL.md, 8):
+ *
+ * - `"isolated"` — differs from the incumbent in ONE variable, so a gap is
+ *   attributable to that variable (still subject to run-to-run noise).
+ * - `"bakeoff"` — differs in several at once. It can pick a deployable recipe;
+ *   it can never explain why the recipe won, and no result from it may be
+ *   quoted as a fact about any single variable.
+ * - `"baseline"` / `"noise-floor"` — what ships, and its own repeat.
  *
  * An arm is the model PLUS how it is asked, never just a model id — the lesson
- * evals/embedding-retrieval.ts wrote down. Two of these differ from the
- * incumbent in more than the field their name advertises, and the spec says so
- * rather than leaving it to be discovered:
+ * evals/embedding-retrieval.ts wrote down. `cheap-high` is the standing
+ * example: gpt-5.6-luna cannot speak the Messages wire at all (src/models.ts
+ * § why the quick tier has no Anthropic-SDK spelling), so that arm swaps
+ * model, wire AND thinking semantics together — bakeoff, by construction.
  *
- * - **cheap-high** cannot speak the Messages wire at all (gpt-5.6-luna is
- *   chat/completions only — src/models.ts § why the quick tier has no
- *   Anthropic-SDK spelling), so it also swaps `thinking: adaptive` for
- *   OpenRouter's `reasoning.effort`. Any gap it shows is model+wire+thinking
- *   mode together.
- * - **waves** changes the number of calls and what each one sees, not the
- *   model.
+ * The two seeded arms ask different questions and both exist on purpose:
+ * production already shows the model every heading block and calls headings
+ * hard boundaries, so `headings-listed` (an explicit list, for salience) and
+ * `headings-seeded` (a whole deterministic proposed tree, echo/edit/replace)
+ * are different interventions, and the first version conflated them.
  *
  * The two free arms:
  * - **headings** is arm zero, the denominator (heading-tree.ts).
  * - **incumbent-disk** scores `data/<slug>/tree.json` as it sits — the
- *   incumbent's already-paid-for output. One old run per article, from
- *   different days; fine for orientation, not for the noise floor.
+ *   incumbent's already-paid-for output. One old run per document, from
+ *   different days; fine for orientation, never for the noise floor.
  */
 
 import { CAPABLE_MODEL_OPENROUTER, QUICK_MODEL_OPENROUTER, type Effort } from "../../src/models.js";
@@ -34,54 +43,92 @@ export interface CallSpec {
   effort: Effort;
 }
 
+/** What kind of claim a result from this arm can support. */
+export type Comparison = "baseline" | "noise-floor" | "isolated" | "bakeoff";
+
+/** What extra material, if any, a one-call arm's prompt carries about the author's headings. */
+export type Seed = "none" | "heading-list" | "heading-tree";
+
 export type ArmSpec =
   /** Free: the deterministic author-heading tree. */
-  | { name: string; kind: "headings" }
+  | { name: string; kind: "headings"; comparison: "baseline" }
   /** Free: score the tree already on disk in the article's directory. */
-  | { name: string; kind: "disk" }
+  | { name: string; kind: "disk"; comparison: "baseline" }
   /** One structure call, the shape the pipeline ships today. */
+  | { name: string; kind: "one-call"; comparison: Comparison; call: CallSpec; seed: Seed }
+  /**
+   * L1 in one call, then one call per part for the next level, recursively to
+   * `levels`. Three, not two: the book-length motivation for waves is depth
+   * the single call cannot reach, and an L1→L2 pilot would not test the
+   * process it argues for (REVIEW-SOL.md, 8).
+   */
+  | { name: string; kind: "waves"; comparison: "bakeoff"; call: CallSpec; levels: number }
+  /** A cheap model proposes the whole tree; a capable one revises it. */
   | {
       name: string;
-      kind: "one-call";
-      call: CallSpec;
-      /**
-       * When true, the prompt also carries the deterministic heading tree as a
-       * proposed starting point, with permission to modify or replace it.
-       */
-      seedHeadings: boolean;
-    }
-  /** L1 in one call, then one call per part for L2 (parallelisable). The latency case. */
-  | { name: string; kind: "waves"; call: CallSpec }
-  /** A cheap model proposes the whole tree; a capable one revises it. */
-  | { name: string; kind: "revise"; propose: CallSpec; revise: CallSpec };
+      kind: "revise";
+      comparison: "bakeoff";
+      propose: CallSpec;
+      revise: CallSpec;
+    };
 
 const INCUMBENT: CallSpec = { model: CAPABLE_MODEL_OPENROUTER, effort: "high" };
 
 export const ARMS: readonly ArmSpec[] = [
-  { name: "headings", kind: "headings" },
-  { name: "incumbent-disk", kind: "disk" },
-  { name: "incumbent", kind: "one-call", call: INCUMBENT, seedHeadings: false },
-  /* Identical to `incumbent` on purpose: the difference between the two runs is
-     the noise floor — the resolution of the whole instrument. Any arm-to-arm
-     gap smaller than it is not a result. Report it before any comparison. */
-  { name: "incumbent-repeat", kind: "one-call", call: INCUMBENT, seedHeadings: false },
+  { name: "headings", kind: "headings", comparison: "baseline" },
+  { name: "incumbent-disk", kind: "disk", comparison: "baseline" },
+  {
+    name: "incumbent",
+    kind: "one-call",
+    comparison: "baseline",
+    call: INCUMBENT,
+    seed: "none",
+  },
+  /* Identical to `incumbent` on purpose: repeats of it are the noise floor —
+     the run-to-run disagreement of the shipping recipe, which is the
+     resolution any arm-to-arm gap must clear. Note it measures the
+     incumbent's OWN stochasticity under this configuration; a challenger may
+     be more or less stable, which per-arm repeats at the finalist stage check. */
+  {
+    name: "incumbent-repeat",
+    kind: "one-call",
+    comparison: "noise-floor",
+    call: INCUMBENT,
+    seed: "none",
+  },
   {
     name: "cheap-high",
     kind: "one-call",
+    comparison: "bakeoff", // model + wire + thinking semantics move together
     call: { model: QUICK_MODEL_OPENROUTER, effort: "high" },
-    seedHeadings: false,
+    seed: "none",
   },
   {
     name: "smart-low",
     kind: "one-call",
+    comparison: "isolated", // one variable: effort
     call: { model: CAPABLE_MODEL_OPENROUTER, effort: "low" },
-    seedHeadings: false,
+    seed: "none",
   },
-  { name: "headings-seeded", kind: "one-call", call: INCUMBENT, seedHeadings: true },
-  { name: "waves", kind: "waves", call: INCUMBENT },
+  {
+    name: "headings-listed",
+    kind: "one-call",
+    comparison: "isolated", // one variable: an explicit list of the author's headings
+    call: INCUMBENT,
+    seed: "heading-list",
+  },
+  {
+    name: "headings-seeded",
+    kind: "one-call",
+    comparison: "isolated", // one variable: the whole deterministic proposal
+    call: INCUMBENT,
+    seed: "heading-tree",
+  },
+  { name: "waves", kind: "waves", comparison: "bakeoff", call: INCUMBENT, levels: 3 },
   {
     name: "cheap-then-revise",
     kind: "revise",
+    comparison: "bakeoff",
     propose: { model: QUICK_MODEL_OPENROUTER, effort: "high" },
     revise: INCUMBENT,
   },

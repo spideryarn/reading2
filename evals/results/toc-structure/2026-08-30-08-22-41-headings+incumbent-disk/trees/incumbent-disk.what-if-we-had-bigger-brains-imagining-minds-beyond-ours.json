@@ -1,0 +1,2736 @@
+{
+  "version": "toc/2",
+  "generator": "claude-sonnet-5",
+  "slug": "what-if-we-had-bigger-brains-imagining-minds-beyond-ours",
+  "rootId": "n0001",
+  "nodes": {
+    "n0001": {
+      "id": "n0001",
+      "depth": 0,
+      "parent": null,
+      "children": [
+        "n0002",
+        "n0037",
+        "n0055",
+        "n0081",
+        "n0106",
+        "n0139",
+        "n0171",
+        "n0184"
+      ],
+      "range": [
+        "spya-ggddd7",
+        "spya-esw6mn"
+      ],
+      "title": "What If We Had Bigger Brains?",
+      "gist": "Drawing on computational theory, neuroscience, and AI, the author argues that bigger brains would not simply think more but would navigate deeper networks of computational reducibility, reshaping language, abstraction, and society in ways only partly comprehensible to minds like ours.",
+      "sourceHeading": "What If We Had Bigger Brains? Imagining Minds beyond Ours"
+    },
+    "n0002": {
+      "id": "n0002",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0003",
+        "n0013",
+        "n0020",
+        "n0027",
+        "n0032"
+      ],
+      "range": [
+        "spya-ggddd7",
+        "spya-qxf0ha"
+      ],
+      "title": "Cats Don't Talk",
+      "gist": "Human-scale brains manage to navigate an irreducibly complex world only by exploiting pockets of computational reducibility, and it is this capacity—reflected in concepts, words, and language—that a bigger brain could extend well beyond our current 30,000-word vocabulary.",
+      "sourceHeading": "Cats Don't Talk"
+    },
+    "n0003": {
+      "id": "n0003",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0004",
+        "n0005",
+        "n0006",
+        "n0007",
+        "n0008",
+        "n0009",
+        "n0010",
+        "n0011",
+        "n0012"
+      ],
+      "range": [
+        "spya-ggddd7",
+        "spya-sfspww"
+      ],
+      "title": "Cats Don't Talk",
+      "gist": "Neural networks have crossed a series of capability thresholds as they scale, raising the question of what qualitatively new abilities might emerge in brains far larger than our own.",
+      "sourceHeading": "Cats Don't Talk"
+    },
+    "n0004": {
+      "id": "n0004",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-ggddd7",
+        "spya-ggddd7"
+      ],
+      "title": "",
+      "navLabel": "What If We Had Bigger Brains? Imagining Minds beyond Ours"
+    },
+    "n0005": {
+      "id": "n0005",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-b0rdgq",
+        "spya-b0rdgq"
+      ],
+      "title": "",
+      "navLabel": "~80 min read"
+    },
+    "n0006": {
+      "id": "n0006",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-cww0tb",
+        "spya-cww0tb"
+      ],
+      "title": "",
+      "navLabel": "Cats Don’t Talk"
+    },
+    "n0007": {
+      "id": "n0007",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-pt9mue",
+        "spya-pt9mue"
+      ],
+      "title": "",
+      "navLabel": "100 billion neurons enable compositional language while a cat's 100 million don't, raising what 100 trillion might unlock"
+    },
+    "n0008": {
+      "id": "n0008",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-wwr52y",
+        "spya-wwr52y"
+      ],
+      "title": "",
+      "navLabel": "Recent neural net and LLM findings, plus computation theory and neuroscience, inform this exploration"
+    },
+    "n0009": {
+      "id": "n0009",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-trvnzr",
+        "spya-trvnzr"
+      ],
+      "title": ""
+    },
+    "n0010": {
+      "id": "n0010",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-nuazy9",
+        "spya-nuazy9"
+      ],
+      "title": "",
+      "navLabel": "Artificial neural nets have successively passed a sequence of capability thresholds as they scaled"
+    },
+    "n0011": {
+      "id": "n0011",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-jvv6qx",
+        "spya-jvv6qx"
+      ],
+      "title": ""
+    },
+    "n0012": {
+      "id": "n0012",
+      "depth": 3,
+      "parent": "n0003",
+      "children": [],
+      "range": [
+        "spya-sfspww",
+        "spya-sfspww"
+      ],
+      "title": "",
+      "navLabel": "Beyond our ~10^14 connections, what qualitatively new capabilities might emerge is the open question"
+    },
+    "n0013": {
+      "id": "n0013",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0014",
+        "n0015",
+        "n0016",
+        "n0017",
+        "n0018",
+        "n0019"
+      ],
+      "range": [
+        "spya-xpafp8",
+        "spya-ntn8kj"
+      ],
+      "title": "Pockets of Reducibility",
+      "gist": "Although brains cannot escape the world's underlying computational irreducibility, they succeed by exploiting the infinite pockets of computational reducibility embedded within it."
+    },
+    "n0014": {
+      "id": "n0014",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-xpafp8",
+        "spya-xpafp8"
+      ],
+      "title": "",
+      "navLabel": "Computational Equivalence implies generic systems reach maximal sophistication beyond a low threshold"
+    },
+    "n0015": {
+      "id": "n0015",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-m3pw0w",
+        "spya-m3pw0w"
+      ],
+      "title": "",
+      "navLabel": "Brains specifically compute by turning large sensory input into decisions about what to do next"
+    },
+    "n0016": {
+      "id": "n0016",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-edp54m",
+        "spya-edp54m"
+      ],
+      "title": "",
+      "navLabel": "The world is full of computational irreducibility, where outcomes require step-by-step simulation"
+    },
+    "n0017": {
+      "id": "n0017",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-ydm67n",
+        "spya-ydm67n"
+      ],
+      "title": ""
+    },
+    "n0018": {
+      "id": "n0018",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-hbq563",
+        "spya-hbq563"
+      ],
+      "title": "",
+      "navLabel": "Brains exploit pockets of computational reducibility to jump ahead without simulating every detail"
+    },
+    "n0019": {
+      "id": "n0019",
+      "depth": 3,
+      "parent": "n0013",
+      "children": [],
+      "range": [
+        "spya-ntn8kj",
+        "spya-ntn8kj"
+      ],
+      "title": "",
+      "navLabel": "Progress of science identifies more pockets of reducibility; bigger brains might hold more of them in mind"
+    },
+    "n0020": {
+      "id": "n0020",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0021",
+        "n0022",
+        "n0023",
+        "n0024",
+        "n0025",
+        "n0026"
+      ],
+      "range": [
+        "spya-swsmvr",
+        "spya-kqzz3f"
+      ],
+      "title": "Concepts and Abstraction",
+      "gist": "Concepts and words compress the world's complexity into a manageable, roughly 30,000-item vocabulary, and abstraction lets us generalize across many specific pockets of reducibility into higher-level categories."
+    },
+    "n0021": {
+      "id": "n0021",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-swsmvr",
+        "spya-swsmvr"
+      ],
+      "title": "",
+      "navLabel": "Brains compress world complexity into concepts and language, like symbolizing many images as 'rock'"
+    },
+    "n0022": {
+      "id": "n0022",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-e4ztb6",
+        "spya-e4ztb6"
+      ],
+      "title": "",
+      "navLabel": "Human languages converge on ~30,000 words, raising whether bigger brains could handle millions more"
+    },
+    "n0023": {
+      "id": "n0023",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-z3e276",
+        "spya-z3e276"
+      ],
+      "title": "",
+      "navLabel": "Our 30,000 words suffice only because we chose which features of the world to name"
+    },
+    "n0024": {
+      "id": "n0024",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-vr5u25",
+        "spya-vr5u25"
+      ],
+      "title": "",
+      "navLabel": "Computational irreducibility guarantees we'll eventually meet things our current concepts can't describe"
+    },
+    "n0025": {
+      "id": "n0025",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-yemwu2",
+        "spya-yemwu2"
+      ],
+      "title": "",
+      "navLabel": "Abstraction groups specifics like 'tiger' and 'lion' into general categories like 'big cats' to prevent endless concept growth"
+    },
+    "n0026": {
+      "id": "n0026",
+      "depth": 3,
+      "parent": "n0020",
+      "children": [],
+      "range": [
+        "spya-kqzz3f",
+        "spya-kqzz3f"
+      ],
+      "title": "",
+      "navLabel": "Concepts as pockets of reducibility form networks, and abstraction reflects these networks, which can recurse"
+    },
+    "n0027": {
+      "id": "n0027",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0028",
+        "n0029",
+        "n0030",
+        "n0031"
+      ],
+      "range": [
+        "spya-e9nsux",
+        "spya-zjwygn"
+      ],
+      "title": "Emergent Concepts and Communication",
+      "gist": "Neural networks spontaneously discover millions of emergent concepts, but a concept only becomes a genuinely useful abstraction when it can be packaged into language and reliably transferred between minds."
+    },
+    "n0028": {
+      "id": "n0028",
+      "depth": 3,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-e9nsux",
+        "spya-e9nsux"
+      ],
+      "title": "",
+      "navLabel": "Neural nets spontaneously form millions of emergent concepts as clusters in feature space, mostly unnamed by us"
+    },
+    "n0029": {
+      "id": "n0029",
+      "depth": 3,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-whe7d5",
+        "spya-whe7d5"
+      ],
+      "title": "",
+      "navLabel": "Whether emergent concepts are useful abstractions depends on usefulness independent of their originating layer"
+    },
+    "n0030": {
+      "id": "n0030",
+      "depth": 3,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-zqjcca",
+        "spya-zqjcca"
+      ],
+      "title": "",
+      "navLabel": "Language's core role is transferring thoughts between minds by packaging activity into transportable concepts"
+    },
+    "n0031": {
+      "id": "n0031",
+      "depth": 3,
+      "parent": "n0027",
+      "children": [],
+      "range": [
+        "spya-zjwygn",
+        "spya-zjwygn"
+      ],
+      "title": "",
+      "navLabel": "Translation between minds is imprecise, but saying more generally yields more faithful translation"
+    },
+    "n0032": {
+      "id": "n0032",
+      "depth": 2,
+      "parent": "n0002",
+      "children": [
+        "n0033",
+        "n0034",
+        "n0035",
+        "n0036"
+      ],
+      "range": [
+        "spya-ah8e8m",
+        "spya-qxf0ha"
+      ],
+      "title": "Bigger Brains and Language",
+      "gist": "A bigger brain, harboring more emergent concepts, would need richer language to communicate them precisely, potentially producing minds whose computations look less comprehensible yet still remain describable through abstraction."
+    },
+    "n0033": {
+      "id": "n0033",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-ah8e8m",
+        "spya-ah8e8m"
+      ],
+      "title": "",
+      "navLabel": "Bigger brains with more emergent concepts would need more words or richer compositional language, unlike dogs' isolated words"
+    },
+    "n0034": {
+      "id": "n0034",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-we8btx",
+        "spya-we8btx"
+      ],
+      "title": "",
+      "navLabel": "Language models the world via finite primitives whose network of reducibility pockets can never be complete"
+    },
+    "n0035": {
+      "id": "n0035",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-xwuhuj",
+        "spya-xwuhuj"
+      ],
+      "title": "",
+      "navLabel": "A bigger brain's computation might look more irreducible yet remain describable through brain-like abstraction"
+    },
+    "n0036": {
+      "id": "n0036",
+      "depth": 3,
+      "parent": "n0032",
+      "children": [],
+      "range": [
+        "spya-qxf0ha",
+        "spya-qxf0ha"
+      ],
+      "title": "",
+      "navLabel": "Computation's universality makes discussing bigger-than-human minds more plausible than a cat understanding algebra"
+    },
+    "n0037": {
+      "id": "n0037",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0038",
+        "n0046"
+      ],
+      "range": [
+        "spya-jwf0yd",
+        "spya-kv8dbv"
+      ],
+      "title": "How Brains Seem to Work",
+      "gist": "Brains across species and even artificial neural networks share a common architecture—many sensory inputs collapsed through layered processing into a single stream of decisions—whose core capabilities depend on scale, working memory, and generalization rather than fine biological detail.",
+      "sourceHeading": "How Brains Seem to Work"
+    },
+    "n0038": {
+      "id": "n0038",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [
+        "n0039",
+        "n0040",
+        "n0041",
+        "n0042",
+        "n0043",
+        "n0044",
+        "n0045"
+      ],
+      "range": [
+        "spya-jwf0yd",
+        "spya-jsbyge"
+      ],
+      "title": "Brain Anatomy and Evolution",
+      "gist": "Across animals and even large language models, brains share a basic architecture of massive sensory input funneled through layered neurons into a single decisive output, a structure likely rooted in the evolutionary need to choose one direction of movement at a time."
+    },
+    "n0039": {
+      "id": "n0039",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-jwf0yd",
+        "spya-jwf0yd"
+      ],
+      "title": "",
+      "navLabel": "How Brains Seem to Work"
+    },
+    "n0040": {
+      "id": "n0040",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-fjr8vc",
+        "spya-fjr8vc"
+      ],
+      "title": "",
+      "navLabel": "Brains turn large sensory input into small numbers of action decisions, but how remains to be explained"
+    },
+    "n0041": {
+      "id": "n0041",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-s8ynn7",
+        "spya-s8ynn7"
+      ],
+      "title": "",
+      "navLabel": "Human brains funnel millions of sensors through ~100 billion neurons into a majority-vote decision structure"
+    },
+    "n0042": {
+      "id": "n0042",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-x4u77s",
+        "spya-x4u77s"
+      ],
+      "title": "",
+      "navLabel": "Brain architecture scales with sensor number and folds to reduce connection length across animals"
+    },
+    "n0043": {
+      "id": "n0043",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-h99ryy",
+        "spya-h99ryy"
+      ],
+      "title": "",
+      "navLabel": "Brains likely arose so animals could choose one direction of movement, yielding a single stream of decisions and consciousness"
+    },
+    "n0044": {
+      "id": "n0044",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-fgkc28",
+        "spya-fgkc28"
+      ],
+      "title": "",
+      "navLabel": "LLMs mirror brain operation but separate training from thinking, unlike brains' interspersed learning"
+    },
+    "n0045": {
+      "id": "n0045",
+      "depth": 3,
+      "parent": "n0038",
+      "children": [],
+      "range": [
+        "spya-jsbyge",
+        "spya-jsbyge"
+      ],
+      "title": "",
+      "navLabel": "Core brain-like capabilities depend on many inputs, few outputs, irreducible computation, and relative size, not biological detail"
+    },
+    "n0046": {
+      "id": "n0046",
+      "depth": 2,
+      "parent": "n0037",
+      "children": [
+        "n0047",
+        "n0048",
+        "n0049",
+        "n0050",
+        "n0051",
+        "n0052",
+        "n0053",
+        "n0054"
+      ],
+      "range": [
+        "spya-r8zz8r",
+        "spya-kv8dbv"
+      ],
+      "title": "Memory and Generalization",
+      "gist": "What matters most for brain-like systems is not memorizing training data but generalizing appropriately within the bounds of limited working memory and unconscious processing, always constrained to the pockets of computational reducibility they can access."
+    },
+    "n0047": {
+      "id": "n0047",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-r8zz8r",
+        "spya-r8zz8r"
+      ],
+      "title": "",
+      "navLabel": "Memory in neural nets and brains is encoded in connection weights, with capacity scaling with weight count"
+    },
+    "n0048": {
+      "id": "n0048",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-h2qy4w",
+        "spya-h2qy4w"
+      ],
+      "title": "",
+      "navLabel": "What matters is generalizing appropriately to new inputs, not memorizing training specifics"
+    },
+    "n0049": {
+      "id": "n0049",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-mt2hsg",
+        "spya-mt2hsg"
+      ],
+      "title": "",
+      "navLabel": "Simple neural net architectures generalize in ways aligned with human brains due to shared brain-like universality"
+    },
+    "n0050": {
+      "id": "n0050",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-q3u8u3",
+        "spya-q3u8u3"
+      ],
+      "title": "",
+      "navLabel": "Both brains and neural nets have fixed neuron counts and only limited recycling of output to input"
+    },
+    "n0051": {
+      "id": "n0051",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-gacfb5",
+        "spya-gacfb5"
+      ],
+      "title": "",
+      "navLabel": "Working memory limits, roughly 5-7 chunks in adults, constrain brain-like computation and scale with brain development"
+    },
+    "n0052": {
+      "id": "n0052",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-fq64gh",
+        "spya-fq64gh"
+      ],
+      "title": "",
+      "navLabel": "Conscious thought is a thin thread derived from a vast ocean of unconscious neural activity"
+    },
+    "n0053": {
+      "id": "n0053",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-ctptbg",
+        "spya-ctptbg"
+      ],
+      "title": "",
+      "navLabel": "Neural nets show generic learning ability across input types, and brains likely share this genericity"
+    },
+    "n0054": {
+      "id": "n0054",
+      "depth": 3,
+      "parent": "n0046",
+      "children": [],
+      "range": [
+        "spya-kv8dbv",
+        "spya-kv8dbv"
+      ],
+      "title": "",
+      "navLabel": "How bigger brains might access further pockets of reducibility beyond current ones is the core question"
+    },
+    "n0055": {
+      "id": "n0055",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0056",
+        "n0065",
+        "n0074"
+      ],
+      "range": [
+        "spya-s2jq3n",
+        "spya-xes22w"
+      ],
+      "title": "Language and Beyond",
+      "gist": "Language packages the discrete concepts brains extract from continuous neural activity into a robust, sequential, compositional system, but bigger brains might support richer grammars, multiway threads of thought, or entirely different modalities like direct image communication.",
+      "sourceHeading": "Language and Beyond"
+    },
+    "n0056": {
+      "id": "n0056",
+      "depth": 2,
+      "parent": "n0055",
+      "children": [
+        "n0057",
+        "n0058",
+        "n0059",
+        "n0060",
+        "n0061",
+        "n0062",
+        "n0063",
+        "n0064"
+      ],
+      "range": [
+        "spya-s2jq3n",
+        "spya-rewaa7"
+      ],
+      "title": "Concepts as Language",
+      "gist": "Brains compress the world's complexity into discrete, robust concepts, and only by packaging these into language-like symbols can a single brain reliably preserve and communicate thoughts over time."
+    },
+    "n0057": {
+      "id": "n0057",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [],
+      "range": [
+        "spya-s2jq3n",
+        "spya-s2jq3n"
+      ],
+      "title": "",
+      "navLabel": "Language and Beyond"
+    },
+    "n0058": {
+      "id": "n0058",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [],
+      "range": [
+        "spya-tptc5e",
+        "spya-tptc5e"
+      ],
+      "title": "",
+      "navLabel": "Brains compress world complexity by equivalencing many inputs into one representation, ignoring pixel-level detail"
+    },
+    "n0059": {
+      "id": "n0059",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [],
+      "range": [
+        "spya-gusts0",
+        "spya-gusts0"
+      ],
+      "title": "",
+      "navLabel": "An equivalence class corresponds to a neural attractor that we describe at a higher level as a 'concept'"
+    },
+    "n0060": {
+      "id": "n0060",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [],
+      "range": [
+        "spya-m9t2fj",
+        "spya-m9t2fj"
+      ],
+      "title": "",
+      "navLabel": "Conscious experience extracts discrete concepts as higher-level units from mostly irreducible neural activity"
+    },
+    "n0061": {
+      "id": "n0061",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [],
+      "range": [
+        "spya-z04633",
+        "spya-z04633"
+      ],
+      "title": "",
+      "navLabel": "Robust constructs seem discrete because no computational paradigm supports continuous concept spaces"
+    },
+    "n0062": {
+      "id": "n0062",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [],
+      "range": [
+        "spya-xh7hkb",
+        "spya-xh7hkb"
+      ],
+      "title": "",
+      "navLabel": "Packaging neural activity into concepts, i.e. language, enables both communication and single-brain memory"
+    },
+    "n0063": {
+      "id": "n0063",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [],
+      "range": [
+        "spya-ndqp7u",
+        "spya-ndqp7u"
+      ],
+      "title": "",
+      "navLabel": "Preserving a thought across a continually changing neural environment requires packaging it into robust language-like elements"
+    },
+    "n0064": {
+      "id": "n0064",
+      "depth": 3,
+      "parent": "n0056",
+      "children": [],
+      "range": [
+        "spya-rewaa7",
+        "spya-rewaa7"
+      ],
+      "title": "",
+      "navLabel": "Human language nests phrases context-freely, parseable recursively up to working memory's stack limits"
+    },
+    "n0065": {
+      "id": "n0065",
+      "depth": 2,
+      "parent": "n0055",
+      "children": [
+        "n0066",
+        "n0067",
+        "n0068",
+        "n0069",
+        "n0070",
+        "n0071",
+        "n0072",
+        "n0073"
+      ],
+      "range": [
+        "spya-mkv55b",
+        "spya-xjjg2x"
+      ],
+      "title": "Bigger Brains, Richer Grammar",
+      "gist": "Bigger brains could plausibly manage more concepts and deeper nested grammar thanks to larger working memory, but pushing language into genuinely non-context-free structures would require irreducible computation incompatible with brain-like operation."
+    },
+    "n0066": {
+      "id": "n0066",
+      "depth": 3,
+      "parent": "n0065",
+      "children": [],
+      "range": [
+        "spya-mkv55b",
+        "spya-mkv55b"
+      ],
+      "title": "",
+      "navLabel": "Ordinary language is presented sequentially, connected to the brain's single thread of conscious experience"
+    },
+    "n0067": {
+      "id": "n0067",
+      "depth": 3,
+      "parent": "n0065",
+      "children": [],
+      "range": [
+        "spya-rpgx2n",
+        "spya-rpgx2n"
+      ],
+      "title": "",
+      "navLabel": "Despite surface diversity, human languages share fundamental parts of speech and structural concepts"
+    },
+    "n0068": {
+      "id": "n0068",
+      "depth": 3,
+      "parent": "n0065",
+      "children": [],
+      "range": [
+        "spya-tc908j",
+        "spya-tc908j"
+      ],
+      "title": "",
+      "navLabel": "Whether language commonalities stem from shared history, sensory experience, or brain construction remains unclear"
+    },
+    "n0069": {
+      "id": "n0069",
+      "depth": 3,
+      "parent": "n0065",
+      "children": [],
+      "range": [
+        "spya-qmwc7v",
+        "spya-qmwc7v"
+      ],
+      "title": "",
+      "navLabel": "Bigger brains handling more distinct concepts would yield grammatically shallower but more rigid, faster communication"
+    },
+    "n0070": {
+      "id": "n0070",
+      "depth": 3,
+      "parent": "n0065",
+      "children": [],
+      "range": [
+        "spya-km5vw7",
+        "spya-km5vw7"
+      ],
+      "title": "",
+      "navLabel": "Technical jargon previews having more words: faster but rigid communication requiring longer learning"
+    },
+    "n0071": {
+      "id": "n0071",
+      "depth": 3,
+      "parent": "n0065",
+      "children": [],
+      "range": [
+        "spya-nva7qn",
+        "spya-nva7qn"
+      ],
+      "title": "",
+      "navLabel": "Larger working memory allows deeper nested phrases, but non-context-free grammar risks computational irreducibility"
+    },
+    "n0072": {
+      "id": "n0072",
+      "depth": 3,
+      "parent": "n0065",
+      "children": [],
+      "range": [
+        "spya-cdfg62",
+        "spya-cdfg62"
+      ],
+      "title": "",
+      "navLabel": "Non-context-free language requiring arbitrary computation falls outside brain-like single-thread decision workflows"
+    },
+    "n0073": {
+      "id": "n0073",
+      "depth": 3,
+      "parent": "n0065",
+      "children": [],
+      "range": [
+        "spya-xjjg2x",
+        "spya-xjjg2x"
+      ],
+      "title": "",
+      "navLabel": "Systems handling arbitrary computation exist but aren't brain-like; they resemble typical natural systems instead"
+    },
+    "n0074": {
+      "id": "n0074",
+      "depth": 2,
+      "parent": "n0055",
+      "children": [
+        "n0075",
+        "n0076",
+        "n0077",
+        "n0078",
+        "n0079",
+        "n0080"
+      ],
+      "range": [
+        "spya-fjsufk",
+        "spya-xes22w"
+      ],
+      "title": "Beyond Sequential Language",
+      "gist": "Beyond ordinary sequential language, one can imagine multiway minds with branching threads of thought or brains equipped to communicate directly in images, though such possibilities depend on having fundamentally different cognitive hardware, not just more neurons."
+    },
+    "n0075": {
+      "id": "n0075",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-fjsufk",
+        "spya-fjsufk"
+      ],
+      "title": "",
+      "navLabel": "Multiway systems with branching threads would require different architecture, not just more neurons"
+    },
+    "n0076": {
+      "id": "n0076",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-qupbyh",
+        "spya-qupbyh"
+      ],
+      "title": "",
+      "navLabel": "Language communicated as sequences, though math and diagrams use 2D or graph structures"
+    },
+    "n0077": {
+      "id": "n0077",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-tuc5hf",
+        "spya-tuc5hf"
+      ],
+      "title": "",
+      "navLabel": "Communicating mental images directly might require reducing them to discrete concepts and language anyway"
+    },
+    "n0078": {
+      "id": "n0078",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-jr3d7p",
+        "spya-jr3d7p"
+      ],
+      "title": "",
+      "navLabel": "Cats and dogs may lack compositional language simply because they lack the hardware to talk"
+    },
+    "n0079": {
+      "id": "n0079",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-bt5rja",
+        "spya-bt5rja"
+      ],
+      "title": "",
+      "navLabel": "Gestures and body language are small existing forms of direct image communication, possibly expandable"
+    },
+    "n0080": {
+      "id": "n0080",
+      "depth": 3,
+      "parent": "n0074",
+      "children": [],
+      "range": [
+        "spya-xes22w",
+        "spya-xes22w"
+      ],
+      "title": "",
+      "navLabel": "Cuttlefish communicate in skin patterns but show no pictorial generalization of compositional language"
+    },
+    "n0081": {
+      "id": "n0081",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0082",
+        "n0092",
+        "n0099"
+      ],
+      "range": [
+        "spya-hegt9g",
+        "spya-j58zns"
+      ],
+      "title": "Sensors and Actuators",
+      "gist": "The features and concepts a brain finds useful depend jointly on the kind of sensory data it receives and the actions it can take, so bigger brains would handle more features and actuators, but different senses or timescales could yield entirely different, equally valid conceptual worlds.",
+      "sourceHeading": "Sensors and Actuators"
+    },
+    "n0082": {
+      "id": "n0082",
+      "depth": 2,
+      "parent": "n0081",
+      "children": [
+        "n0083",
+        "n0084",
+        "n0085",
+        "n0086",
+        "n0087",
+        "n0088",
+        "n0089",
+        "n0090",
+        "n0091"
+      ],
+      "range": [
+        "spya-hegt9g",
+        "spya-d00qem"
+      ],
+      "title": "Sensory Features and Concepts",
+      "gist": "Brains distill raw sensory data into a limited set of learned features tied to whatever pockets of computational reducibility are useful, leaving most of the space of possible images or data in an unfamiliar 'interconcept space' that a bigger brain could better navigate."
+    },
+    "n0083": {
+      "id": "n0083",
+      "depth": 3,
+      "parent": "n0082",
+      "children": [],
+      "range": [
+        "spya-hegt9g",
+        "spya-hegt9g"
+      ],
+      "title": "",
+      "navLabel": "Sensors and Actuators"
+    },
+    "n0084": {
+      "id": "n0084",
+      "depth": 3,
+      "parent": "n0082",
+      "children": [],
+      "range": [
+        "spya-nwtjxr",
+        "spya-nwtjxr"
+      ],
+      "title": "",
+      "navLabel": "Human brains distill correlated raw sensor data into a few more independent features quickly"
+    },
+    "n0085": {
+      "id": "n0085",
+      "depth": 3,
+      "parent": "n0082",
+      "children": [],
+      "range": [
+        "spya-cd8x4r",
+        "spya-cd8x4r"
+      ],
+      "title": "",
+      "navLabel": "Features correspond to pockets of computational reducibility learned as useful for deriving decisions"
+    },
+    "n0086": {
+      "id": "n0086",
+      "depth": 3,
+      "parent": "n0082",
+      "children": [],
+      "range": [
+        "spya-qypx5a",
+        "spya-qypx5a"
+      ],
+      "title": "",
+      "navLabel": "What counts as useful features depends on whether experience is indigenous or technology-mediated"
+    },
+    "n0087": {
+      "id": "n0087",
+      "depth": 3,
+      "parent": "n0082",
+      "children": [],
+      "range": [
+        "spya-pmsvnn",
+        "spya-pmsvnn"
+      ],
+      "title": "",
+      "navLabel": "Programs can generate images so unfamiliar that we cannot tell what's going on in them"
+    },
+    "n0088": {
+      "id": "n0088",
+      "depth": 3,
+      "parent": "n0082",
+      "children": [],
+      "range": [
+        "spya-w6sx4x",
+        "spya-w6sx4x"
+      ],
+      "title": ""
+    },
+    "n0089": {
+      "id": "n0089",
+      "depth": 3,
+      "parent": "n0082",
+      "children": [],
+      "range": [
+        "spya-ksdnua",
+        "spya-ksdnua"
+      ],
+      "title": "",
+      "navLabel": "Unrecognized image pieces reflect interconcept space, pockets of reducibility we aren't familiar with"
+    },
+    "n0090": {
+      "id": "n0090",
+      "depth": 3,
+      "parent": "n0082",
+      "children": [],
+      "range": [
+        "spya-ahj4g5",
+        "spya-ahj4g5"
+      ],
+      "title": ""
+    },
+    "n0091": {
+      "id": "n0091",
+      "depth": 3,
+      "parent": "n0082",
+      "children": [],
+      "range": [
+        "spya-d00qem",
+        "spya-d00qem"
+      ],
+      "title": "",
+      "navLabel": "Bigger brains could track more features and concepts, though irreducibility ultimately overpowers them"
+    },
+    "n0092": {
+      "id": "n0092",
+      "depth": 2,
+      "parent": "n0081",
+      "children": [
+        "n0093",
+        "n0094",
+        "n0095",
+        "n0096",
+        "n0097",
+        "n0098"
+      ],
+      "range": [
+        "spya-y6q2x0",
+        "spya-bpqvb4"
+      ],
+      "title": "Actuators and Technology",
+      "gist": "While brains our size suffice for indigenous human experience, technology can overload them, and controlling unfamiliar actuators—like quadcopters with many degrees of freedom—may require brains bigger than ours."
+    },
+    "n0093": {
+      "id": "n0093",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-y6q2x0",
+        "spya-y6q2x0"
+      ],
+      "title": "",
+      "navLabel": "Brains our size suffice for indigenous experience but technology can overload them"
+    },
+    "n0094": {
+      "id": "n0094",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-xzd08g",
+        "spya-xzd08g"
+      ],
+      "title": "",
+      "navLabel": "Different brains using different primitive concepts should still be translatable if sampling similar environments"
+    },
+    "n0095": {
+      "id": "n0095",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-hgcr4e",
+        "spya-hgcr4e"
+      ],
+      "title": "",
+      "navLabel": "Brains sampling different slices of reality via technology may need entirely different useful features"
+    },
+    "n0096": {
+      "id": "n0096",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-d22efp",
+        "spya-d22efp"
+      ],
+      "title": "",
+      "navLabel": "Usefulness of features depends on what actions and capabilities, pure or technologically augmented, allow"
+    },
+    "n0097": {
+      "id": "n0097",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-bn426e",
+        "spya-bn426e"
+      ],
+      "title": "",
+      "navLabel": "Technology gives us actuators beyond muscles that brains like ours may fail to operate"
+    },
+    "n0098": {
+      "id": "n0098",
+      "depth": 3,
+      "parent": "n0092",
+      "children": [],
+      "range": [
+        "spya-bpqvb4",
+        "spya-bpqvb4"
+      ],
+      "title": "",
+      "navLabel": "Humans couldn't control quadcopters unaided, suggesting bigger brains might handle more degrees of freedom"
+    },
+    "n0099": {
+      "id": "n0099",
+      "depth": 2,
+      "parent": "n0081",
+      "children": [
+        "n0100",
+        "n0101",
+        "n0102",
+        "n0103",
+        "n0104",
+        "n0105"
+      ],
+      "range": [
+        "spya-yav8zw",
+        "spya-j58zns"
+      ],
+      "title": "Different Senses, Different Concepts",
+      "gist": "Different sensory modalities, distributed sensor arrays, or altered timescales would each expose different pockets of computational reducibility, meaning that a differently-sensed world might need a differently-sized brain rather than simply a bigger one."
+    },
+    "n0100": {
+      "id": "n0100",
+      "depth": 3,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-yav8zw",
+        "spya-yav8zw"
+      ],
+      "title": "",
+      "navLabel": "Controlling actuators involves both addressing degrees of freedom and finding pockets of reducibility to jump ahead"
+    },
+    "n0101": {
+      "id": "n0101",
+      "depth": 3,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-ujf8m0",
+        "spya-ujf8m0"
+      ],
+      "title": "",
+      "navLabel": "Indigenous experience relies on reducibility from familiar natural laws like motion of objects"
+    },
+    "n0102": {
+      "id": "n0102",
+      "depth": 3,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-nu9ffa",
+        "spya-nu9ffa"
+      ],
+      "title": "",
+      "navLabel": "A smell-based brain like a dog's would build concepts from odor space rather than geometry"
+    },
+    "n0103": {
+      "id": "n0103",
+      "depth": 3,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-x94dru",
+        "spya-x94dru"
+      ],
+      "title": "",
+      "navLabel": "Smell-based animals may succeed with smaller brains than sight-based animals need"
+    },
+    "n0104": {
+      "id": "n0104",
+      "depth": 3,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-cs26gx",
+        "spya-cs26gx"
+      ],
+      "title": "",
+      "navLabel": "Distributed sensor arrays like IoT devices would likely require a bigger brain to track"
+    },
+    "n0105": {
+      "id": "n0105",
+      "depth": 3,
+      "parent": "n0099",
+      "children": [],
+      "range": [
+        "spya-j58zns",
+        "spya-j58zns"
+      ],
+      "title": "",
+      "navLabel": "Faster timescales of sensory input might reveal quantum optics effects beyond ordinary perception"
+    },
+    "n0106": {
+      "id": "n0106",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0107",
+        "n0115",
+        "n0123",
+        "n0131"
+      ],
+      "range": [
+        "spya-q89quq",
+        "spya-s5yryh"
+      ],
+      "title": "Abstraction",
+      "gist": "Abstraction—the historical process of building towers of concepts atop concepts—is itself a network of pockets of computational reducibility, one that bigger brains could navigate further, though ultimately even expanding brains cannot outrun the irreducible growth of knowledge and its rare but inevitable grand analogies.",
+      "sourceHeading": "Abstraction"
+    },
+    "n0107": {
+      "id": "n0107",
+      "depth": 2,
+      "parent": "n0106",
+      "children": [
+        "n0108",
+        "n0109",
+        "n0110",
+        "n0111",
+        "n0112",
+        "n0113",
+        "n0114"
+      ],
+      "range": [
+        "spya-q89quq",
+        "spya-gsvw86"
+      ],
+      "title": "Origins of Abstraction",
+      "gist": "Human abstraction developed slowly, beginning with language and concepts remote from direct experience, and accelerated through logic, mathematics, algebra, and eventually 19th-century formal symbolic systems."
+    },
+    "n0108": {
+      "id": "n0108",
+      "depth": 3,
+      "parent": "n0107",
+      "children": [],
+      "range": [
+        "spya-q89quq",
+        "spya-q89quq"
+      ],
+      "title": "",
+      "navLabel": "Abstraction"
+    },
+    "n0109": {
+      "id": "n0109",
+      "depth": 3,
+      "parent": "n0107",
+      "children": [],
+      "range": [
+        "spya-bgfqzj",
+        "spya-bgfqzj"
+      ],
+      "title": "",
+      "navLabel": "Bigger brains might make abstraction easier or reach fundamentally higher levels of it"
+    },
+    "n0110": {
+      "id": "n0110",
+      "depth": 3,
+      "parent": "n0107",
+      "children": [],
+      "range": [
+        "spya-qpq2wm",
+        "spya-qpq2wm"
+      ],
+      "title": "",
+      "navLabel": "Basic perception already involves abstraction, but asking 'what if?' marks a further level"
+    },
+    "n0111": {
+      "id": "n0111",
+      "depth": 3,
+      "parent": "n0107",
+      "children": [],
+      "range": [
+        "spya-amyy4p",
+        "spya-amyy4p"
+      ],
+      "title": "",
+      "navLabel": "Language's invention marked the greatest early leap in abstraction, seen in numbers, money, future"
+    },
+    "n0112": {
+      "id": "n0112",
+      "depth": 3,
+      "parent": "n0107",
+      "children": [],
+      "range": [
+        "spya-a86xzy",
+        "spya-a86xzy"
+      ],
+      "title": "",
+      "navLabel": "Abstraction develops by packaging observed similarities into concepts, then building towers upon them"
+    },
+    "n0113": {
+      "id": "n0113",
+      "depth": 3,
+      "parent": "n0107",
+      "children": [],
+      "range": [
+        "spya-ndfzjb",
+        "spya-ndfzjb"
+      ],
+      "title": "",
+      "navLabel": "Abstraction moved slowly through theology, syllogistic logic, and mathematics before reaching pure numbers"
+    },
+    "n0114": {
+      "id": "n0114",
+      "depth": 3,
+      "parent": "n0107",
+      "children": [],
+      "range": [
+        "spya-gsvw86",
+        "spya-gsvw86"
+      ],
+      "title": "",
+      "navLabel": "Algebra advanced abstraction, but 19th-century formal symbolic systems accelerated it further"
+    },
+    "n0115": {
+      "id": "n0115",
+      "depth": 2,
+      "parent": "n0106",
+      "children": [
+        "n0116",
+        "n0117",
+        "n0118",
+        "n0119",
+        "n0120",
+        "n0121",
+        "n0122"
+      ],
+      "range": [
+        "spya-u37nta",
+        "spya-jhukrv"
+      ],
+      "title": "Towers of Abstraction",
+      "gist": "Abstraction lets us reason about whole classes of things via pockets of computational reducibility, but the resulting towers rest on scaffolding of analogy and remain shadowed by underlying computational irreducibility, which a bigger brain could push further into, without ever eliminating."
+    },
+    "n0116": {
+      "id": "n0116",
+      "depth": 3,
+      "parent": "n0115",
+      "children": [],
+      "range": [
+        "spya-u37nta",
+        "spya-u37nta"
+      ],
+      "title": "",
+      "navLabel": "Modern computation emerged from this tradition, with mathematics building towers from numbers to category theory"
+    },
+    "n0117": {
+      "id": "n0117",
+      "depth": 3,
+      "parent": "n0115",
+      "children": [],
+      "range": [
+        "spya-u4cc7t",
+        "spya-u4cc7t"
+      ],
+      "title": "",
+      "navLabel": "Abstraction lets us think about classes of things, but often grows remote from raw perception"
+    },
+    "n0118": {
+      "id": "n0118",
+      "depth": 3,
+      "parent": "n0115",
+      "children": [],
+      "range": [
+        "spya-vues0n",
+        "spya-vues0n"
+      ],
+      "title": "",
+      "navLabel": "How high a concept sits on the abstraction tower shows in how much must be explained to reach it"
+    },
+    "n0119": {
+      "id": "n0119",
+      "depth": 3,
+      "parent": "n0115",
+      "children": [],
+      "range": [
+        "spya-yqw7fs",
+        "spya-yqw7fs"
+      ],
+      "title": "",
+      "navLabel": "Highly abstract thinking works through analogies to more familiar things, imperfect scaffolding notwithstanding"
+    },
+    "n0120": {
+      "id": "n0120",
+      "depth": 3,
+      "parent": "n0115",
+      "children": [],
+      "range": [
+        "spya-tvs87q",
+        "spya-tvs87q"
+      ],
+      "title": "",
+      "navLabel": "Abstraction reflects pockets of computational reducibility organized into networks that can be hard to navigate"
+    },
+    "n0121": {
+      "id": "n0121",
+      "depth": 3,
+      "parent": "n0115",
+      "children": [],
+      "range": [
+        "spya-eghgfs",
+        "spya-eghgfs"
+      ],
+      "title": "",
+      "navLabel": "Brains rely on abstraction because, unlike computers, they can't go through all the steps"
+    },
+    "n0122": {
+      "id": "n0122",
+      "depth": 3,
+      "parent": "n0115",
+      "children": [],
+      "range": [
+        "spya-jhukrv",
+        "spya-jhukrv"
+      ],
+      "title": "",
+      "navLabel": "A bigger brain could reach further into the network of abstraction without escaping irreducibility"
+    },
+    "n0123": {
+      "id": "n0123",
+      "depth": 2,
+      "parent": "n0106",
+      "children": [
+        "n0124",
+        "n0125",
+        "n0126",
+        "n0127",
+        "n0128",
+        "n0129",
+        "n0130"
+      ],
+      "range": [
+        "spya-te50g2",
+        "spya-er4eef"
+      ],
+      "title": "Abstraction and the Ruliad",
+      "gist": "The ruliad—the entangled limit of all computation and abstraction—reveals that our perceived laws of physics arise specifically from brains being computationally bounded with a single persistent thread of experience, features that would likely persist even in bigger, still brain-like minds."
+    },
+    "n0124": {
+      "id": "n0124",
+      "depth": 3,
+      "parent": "n0123",
+      "children": [],
+      "range": [
+        "spya-te50g2",
+        "spya-te50g2"
+      ],
+      "title": "",
+      "navLabel": "Discovering computational irreducibility in the computational universe felt like a structural shock to intuition"
+    },
+    "n0125": {
+      "id": "n0125",
+      "depth": 3,
+      "parent": "n0123",
+      "children": [],
+      "range": [
+        "spya-keh0av",
+        "spya-keh0av"
+      ],
+      "title": "",
+      "navLabel": "Metamathematics suggests nested levels of abstraction culminating in the ruliad encompassing them all"
+    },
+    "n0126": {
+      "id": "n0126",
+      "depth": 3,
+      "parent": "n0123",
+      "children": [],
+      "range": [
+        "spya-uexb3v",
+        "spya-uexb3v"
+      ],
+      "title": "",
+      "navLabel": "The ruliad is the entangled limit of all computation and all possible abstractions"
+    },
+    "n0127": {
+      "id": "n0127",
+      "depth": 3,
+      "parent": "n0123",
+      "children": [],
+      "range": [
+        "spya-ytnfna",
+        "spya-ytnfna"
+      ],
+      "title": "",
+      "navLabel": "Brains parse the irreducible ruliad in a way that yields our perceived core laws of physics"
+    },
+    "n0128": {
+      "id": "n0128",
+      "depth": 3,
+      "parent": "n0123",
+      "children": [],
+      "range": [
+        "spya-e3zvxf",
+        "spya-e3zvxf"
+      ],
+      "title": "",
+      "navLabel": "Bigger brains of the same kind would still perceive the same physics if computationally bounded with one thread"
+    },
+    "n0129": {
+      "id": "n0129",
+      "depth": 3,
+      "parent": "n0123",
+      "children": [],
+      "range": [
+        "spya-wnw2bs",
+        "spya-wnw2bs"
+      ],
+      "title": "",
+      "navLabel": "Understanding physics further requires understanding more about what we're like as observers"
+    },
+    "n0130": {
+      "id": "n0130",
+      "depth": 3,
+      "parent": "n0123",
+      "children": [],
+      "range": [
+        "spya-er4eef",
+        "spya-er4eef"
+      ],
+      "title": "",
+      "navLabel": "Bigger brains would still pale against ruliad irreducibility, though each new reducibility pocket yields new law"
+    },
+    "n0131": {
+      "id": "n0131",
+      "depth": 2,
+      "parent": "n0106",
+      "children": [
+        "n0132",
+        "n0133",
+        "n0134",
+        "n0135",
+        "n0136",
+        "n0137",
+        "n0138"
+      ],
+      "range": [
+        "spya-uxdtzt",
+        "spya-s5yryh"
+      ],
+      "title": "Knowledge, Analogies and Limits",
+      "gist": "As knowledge grows irreducibly and diverges across specialties, only bigger brains or AIs could hope to draw the rare 'grand analogies' that connect distant domains, though the ruliad's underlying homogeneity guarantees such connections are always latent, if not always practically discoverable."
+    },
+    "n0132": {
+      "id": "n0132",
+      "depth": 3,
+      "parent": "n0131",
+      "children": [],
+      "range": [
+        "spya-uxdtzt",
+        "spya-uxdtzt"
+      ],
+      "title": "",
+      "navLabel": "New abstractions open new goals for thinking and making, far from indigenous human goals"
+    },
+    "n0133": {
+      "id": "n0133",
+      "depth": 3,
+      "parent": "n0131",
+      "children": [],
+      "range": [
+        "spya-nsfztw",
+        "spya-nsfztw"
+      ],
+      "title": "",
+      "navLabel": "An infinite network of abstraction towers exists, with bigger brains or AIs able to pursue many different paths"
+    },
+    "n0134": {
+      "id": "n0134",
+      "depth": 3,
+      "parent": "n0131",
+      "children": [],
+      "range": [
+        "spya-gwz6e9",
+        "spya-gwz6e9"
+      ],
+      "title": "",
+      "navLabel": "Reaching higher abstraction mixes education's role with brains' intrinsic computational ability"
+    },
+    "n0135": {
+      "id": "n0135",
+      "depth": 3,
+      "parent": "n0131",
+      "children": [],
+      "range": [
+        "spya-r5c9yf",
+        "spya-r5c9yf"
+      ],
+      "title": "",
+      "navLabel": "Growing civilizational knowledge has outpaced what a brain our size can commit to memory"
+    },
+    "n0136": {
+      "id": "n0136",
+      "depth": 3,
+      "parent": "n0131",
+      "children": [],
+      "range": [
+        "spya-u7wfbb",
+        "spya-u7wfbb"
+      ],
+      "title": "",
+      "navLabel": "Grand analogies across siloed knowledge domains are where bigger brains or AIs go beyond us"
+    },
+    "n0137": {
+      "id": "n0137",
+      "depth": 3,
+      "parent": "n0131",
+      "children": [],
+      "range": [
+        "spya-twp66z",
+        "spya-twp66z"
+      ],
+      "title": "",
+      "navLabel": "The ruliad's homogeneity guarantees grand analogies exist, even if only at an atomic, formal level"
+    },
+    "n0138": {
+      "id": "n0138",
+      "depth": 3,
+      "parent": "n0131",
+      "children": [],
+      "range": [
+        "spya-s5yryh",
+        "spya-s5yryh"
+      ],
+      "title": "",
+      "navLabel": "Irreducibility guarantees new knowledge and surprises, even if some knowledge seems too abstruse to matter"
+    },
+    "n0139": {
+      "id": "n0139",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0140",
+        "n0148",
+        "n0156",
+        "n0163"
+      ],
+      "range": [
+        "spya-rgwtt8",
+        "spya-x7tcub"
+      ],
+      "title": "Computational Language",
+      "gist": "Computational language, exemplified by the Wolfram Language, shows what lies beyond ordinary human language—higher-order functions and symbolic uniformity that let one 'go meta'—but pushing further into pure structures like combinators or graph-based expressions quickly exceeds what any brain-like system can process.",
+      "sourceHeading": "Computational Language"
+    },
+    "n0140": {
+      "id": "n0140",
+      "depth": 2,
+      "parent": "n0139",
+      "children": [
+        "n0141",
+        "n0142",
+        "n0143",
+        "n0144",
+        "n0145",
+        "n0146",
+        "n0147"
+      ],
+      "range": [
+        "spya-rgwtt8",
+        "spya-z5t6vt"
+      ],
+      "title": "Beyond Ordinary Language",
+      "gist": "Formally, compositional language could encode any computation, but this is impractical; the real clue to what lies beyond ordinary language is computational language, which brains use not to run programs but to represent thoughts."
+    },
+    "n0141": {
+      "id": "n0141",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-rgwtt8",
+        "spya-rgwtt8"
+      ],
+      "title": "",
+      "navLabel": "Computational Language"
+    },
+    "n0142": {
+      "id": "n0142",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-ma454e",
+        "spya-ma454e"
+      ],
+      "title": "",
+      "navLabel": "Compositional language might not be the top; bigger brains might reach something beyond it"
+    },
+    "n0143": {
+      "id": "n0143",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-hvvjg5",
+        "spya-hvvjg5"
+      ],
+      "title": "",
+      "navLabel": "Compositional language formally encodes universal computation, but not in any practically useful sense"
+    },
+    "n0144": {
+      "id": "n0144",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-jkm3qu",
+        "spya-jkm3qu"
+      ],
+      "title": "",
+      "navLabel": "Computational language, not ordinary language, offers the clue to what lies beyond human language"
+    },
+    "n0145": {
+      "id": "n0145",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-j6kvr8",
+        "spya-j6kvr8"
+      ],
+      "title": "",
+      "navLabel": "Computational language differs for computers and brains, with computers mainly evaluating expressions"
+    },
+    "n0146": {
+      "id": "n0146",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-hbvhmd",
+        "spya-hbvhmd"
+      ],
+      "title": "",
+      "navLabel": "Brains use Wolfram Language expressions as representations of thought, not as programs to run"
+    },
+    "n0147": {
+      "id": "n0147",
+      "depth": 3,
+      "parent": "n0140",
+      "children": [],
+      "range": [
+        "spya-z5t6vt",
+        "spya-z5t6vt"
+      ],
+      "title": "",
+      "navLabel": "Computational language represents thoughts about numbers, real-world entities, and higher-level abstract structures"
+    },
+    "n0148": {
+      "id": "n0148",
+      "depth": 2,
+      "parent": "n0139",
+      "children": [
+        "n0149",
+        "n0150",
+        "n0151",
+        "n0152",
+        "n0153",
+        "n0154",
+        "n0155"
+      ],
+      "range": [
+        "spya-pysnkp",
+        "spya-fjgavc"
+      ],
+      "title": "Higher-Order Functions",
+      "gist": "Computational language's higher-order functions, like NestList, let one operate on functions themselves rather than mere data—a 'meta' capability rare in human language but made natural by representing everything uniformly as symbolic expressions."
+    },
+    "n0149": {
+      "id": "n0149",
+      "depth": 3,
+      "parent": "n0148",
+      "children": [],
+      "range": [
+        "spya-pysnkp",
+        "spya-pysnkp"
+      ],
+      "title": "",
+      "navLabel": "NestList exemplifies nesting an operation f, giving a template for higher-order thinking"
+    },
+    "n0150": {
+      "id": "n0150",
+      "depth": 3,
+      "parent": "n0148",
+      "children": [],
+      "range": [
+        "spya-xjq2ht",
+        "spya-xjq2ht"
+      ],
+      "title": ""
+    },
+    "n0151": {
+      "id": "n0151",
+      "depth": 3,
+      "parent": "n0148",
+      "children": [],
+      "range": [
+        "spya-ms3en8",
+        "spya-ms3en8"
+      ],
+      "title": "",
+      "navLabel": "NestList's usefulness isn't obvious at first, but proves broadly applicable as an abstraction"
+    },
+    "n0152": {
+      "id": "n0152",
+      "depth": 3,
+      "parent": "n0148",
+      "children": [],
+      "range": [
+        "spya-mp0ew3",
+        "spya-mp0ew3"
+      ],
+      "title": "",
+      "navLabel": "Human language words stay concrete, 'working with data', rarely 'going meta' like code operating on code"
+    },
+    "n0153": {
+      "id": "n0153",
+      "depth": 3,
+      "parent": "n0148",
+      "children": [],
+      "range": [
+        "spya-andswz",
+        "spya-andswz"
+      ],
+      "title": "",
+      "navLabel": "Higher-order functions like NestList act as 'metaverbs' operating on functions rather than nouns/verbs"
+    },
+    "n0154": {
+      "id": "n0154",
+      "depth": 3,
+      "parent": "n0148",
+      "children": [],
+      "range": [
+        "spya-jyjuwc",
+        "spya-jyjuwc"
+      ],
+      "title": "",
+      "navLabel": "Higher-order operations become possible because everything is represented uniformly as a symbolic expression"
+    },
+    "n0155": {
+      "id": "n0155",
+      "depth": 3,
+      "parent": "n0148",
+      "children": [],
+      "range": [
+        "spya-fjgavc",
+        "spya-fjgavc"
+      ],
+      "title": "",
+      "navLabel": "Uniform representation enables higher-order manipulation, though names are anchored to ordinary English words"
+    },
+    "n0156": {
+      "id": "n0156",
+      "depth": 2,
+      "parent": "n0139",
+      "children": [
+        "n0157",
+        "n0158",
+        "n0159",
+        "n0160",
+        "n0161",
+        "n0162"
+      ],
+      "range": [
+        "spya-g0r7gj",
+        "spya-wewr27"
+      ],
+      "title": "Combinators and Abstraction Limits",
+      "gist": "Purely structural constructs like combinators are almost impossible for humans to grasp because they lack anchoring to familiar concepts, and mastering any new higher-order abstraction seems to require gradually feeling out its pocket of reducibility one level at a time—a process a bigger brain might accelerate, but perhaps not for combinators, which may lie beyond any brain-like system."
+    },
+    "n0157": {
+      "id": "n0157",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-g0r7gj",
+        "spya-g0r7gj"
+      ],
+      "title": "",
+      "navLabel": "Combinators show that operations like addition can be represented purely structurally, without anchoring"
+    },
+    "n0158": {
+      "id": "n0158",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-ghdas3",
+        "spya-ghdas3"
+      ],
+      "title": ""
+    },
+    "n0159": {
+      "id": "n0159",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-p5e4ag",
+        "spya-p5e4ag"
+      ],
+      "title": "",
+      "navLabel": "Combinators remain nearly impenetrable because they lack anchoring to concepts brains already grasp"
+    },
+    "n0160": {
+      "id": "n0160",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-rgw4gs",
+        "spya-rgw4gs"
+      ],
+      "title": "",
+      "navLabel": "Grokking higher-order constructs takes months or years, progressing one level at a time"
+    },
+    "n0161": {
+      "id": "n0161",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-dfecw6",
+        "spya-dfecw6"
+      ],
+      "title": "",
+      "navLabel": "Learning a new construct means feeling out irreducibility until finding its pocket of reducibility"
+    },
+    "n0162": {
+      "id": "n0162",
+      "depth": 3,
+      "parent": "n0156",
+      "children": [],
+      "range": [
+        "spya-wewr27",
+        "spya-wewr27"
+      ],
+      "title": "",
+      "navLabel": "A bigger brain might speed this feeling-out, but combinators may lie beyond any brain-like system per the Principle of Computational Equivalence"
+    },
+    "n0163": {
+      "id": "n0163",
+      "depth": 2,
+      "parent": "n0139",
+      "children": [
+        "n0164",
+        "n0165",
+        "n0166",
+        "n0167",
+        "n0168",
+        "n0169",
+        "n0170"
+      ],
+      "range": [
+        "spya-yef2rd",
+        "spya-x7tcub"
+      ],
+      "title": "Symbolic Expressions and Brain Limits",
+      "gist": "Symbolic expressions succeed as a bridge between human thought and computation because their tree-like grammar matches how brains process language, but once structures become graphs or hypergraphs requiring multiple simultaneous threads of thought, they exceed what any single brain-like system can handle."
+    },
+    "n0164": {
+      "id": "n0164",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-yef2rd",
+        "spya-yef2rd"
+      ],
+      "title": "",
+      "navLabel": "Humans and LLMs can use Wolfram Language as a tool to observe computational irreducibility indirectly"
+    },
+    "n0165": {
+      "id": "n0165",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-jfx9d8",
+        "spya-jfx9d8"
+      ],
+      "title": "",
+      "navLabel": "Higher-order functions may relate to category theory's morphisms, which assume computational reducibility"
+    },
+    "n0166": {
+      "id": "n0166",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-y002vk",
+        "spya-y002vk"
+      ],
+      "title": "",
+      "navLabel": "Computational language design's core art is casting abstruse structural ideas into accessible, human-friendly form"
+    },
+    "n0167": {
+      "id": "n0167",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-naca80",
+        "spya-naca80"
+      ],
+      "title": "",
+      "navLabel": "Bridging foundations to familiarity is achievable through education, not requiring a bigger brain, as functional programming shows"
+    },
+    "n0168": {
+      "id": "n0168",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-e0jyj9",
+        "spya-e0jyj9"
+      ],
+      "title": "",
+      "navLabel": "Wolfram Language's symbolic expressions are set up to match how brains actually work"
+    },
+    "n0169": {
+      "id": "n0169",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-d6tnrq",
+        "spya-d6tnrq"
+      ],
+      "title": "",
+      "navLabel": "Symbolic expressions' tree-like grammar mirrors human language grammar, letting limited working memory cope with computational language"
+    },
+    "n0170": {
+      "id": "n0170",
+      "depth": 3,
+      "parent": "n0163",
+      "children": [],
+      "range": [
+        "spya-x7tcub",
+        "spya-x7tcub"
+      ],
+      "title": "",
+      "navLabel": "Graph- or hypergraph-structured symbolic expressions require multiple threads of thought that brain-like systems can't manage"
+    },
+    "n0171": {
+      "id": "n0171",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0172",
+        "n0178"
+      ],
+      "range": [
+        "spya-jqdh5x",
+        "spya-r7dck0"
+      ],
+      "title": "Many Brains Together",
+      "gist": "Because individual brains maintain only a single thread of experience, coordinated multi-threaded 'thinking' is achieved instead through standardized communication among many brains, and bigger brains might support far more complex social structures than the graphs that describe human society today.",
+      "sourceHeading": "Many Brains Together: The Formation of Society"
+    },
+    "n0172": {
+      "id": "n0172",
+      "depth": 2,
+      "parent": "n0171",
+      "children": [
+        "n0173",
+        "n0174",
+        "n0175",
+        "n0176",
+        "n0177"
+      ],
+      "range": [
+        "spya-jqdh5x",
+        "spya-zkwpe3"
+      ],
+      "title": "From One Mind to Many",
+      "gist": "Evolution gave individual brains just one thread of experience, so coordinated group behavior in societies must instead arise from communication between many separate single-threaded brains."
+    },
+    "n0173": {
+      "id": "n0173",
+      "depth": 3,
+      "parent": "n0172",
+      "children": [],
+      "range": [
+        "spya-jqdh5x",
+        "spya-jqdh5x"
+      ],
+      "title": "",
+      "navLabel": "Many Brains Together: The Formation of Society"
+    },
+    "n0174": {
+      "id": "n0174",
+      "depth": 3,
+      "parent": "n0172",
+      "children": [],
+      "range": [
+        "spya-hzfgzn",
+        "spya-hzfgzn"
+      ],
+      "title": "",
+      "navLabel": "Brains maintain a single thread of experience, but multiple threads emerge from collections of people or animals"
+    },
+    "n0175": {
+      "id": "n0175",
+      "depth": 3,
+      "parent": "n0172",
+      "children": [],
+      "range": [
+        "spya-f59wk7",
+        "spya-f59wk7"
+      ],
+      "title": "",
+      "navLabel": "Evolution restricted each animal to one thread of experience, achieving multiplicity via multiple animals instead"
+    },
+    "n0176": {
+      "id": "n0176",
+      "depth": 3,
+      "parent": "n0172",
+      "children": [],
+      "range": [
+        "spya-u8ddj5",
+        "spya-u8ddj5"
+      ],
+      "title": "",
+      "navLabel": "Just as neuron firings collapse to one conclusion in a brain, many brains' conclusions must be collected into coordinated outcomes"
+    },
+    "n0177": {
+      "id": "n0177",
+      "depth": 3,
+      "parent": "n0172",
+      "children": [],
+      "range": [
+        "spya-zkwpe3",
+        "spya-zkwpe3"
+      ],
+      "title": "",
+      "navLabel": "Robust coordination requires standardized communication like language rather than unreliable direct 'telepathic' sharing of neuron firings"
+    },
+    "n0178": {
+      "id": "n0178",
+      "depth": 2,
+      "parent": "n0171",
+      "children": [
+        "n0179",
+        "n0180",
+        "n0181",
+        "n0182",
+        "n0183"
+      ],
+      "range": [
+        "spya-s0q4kx",
+        "spya-r7dck0"
+      ],
+      "title": "Language and Social Coordination",
+      "gist": "Standardized communication both requires and sustains social coordination, and while human societies rely on maintaining something like a single 'thread of society', bigger brains might manage far more complex, hypergraph-like social structures."
+    },
+    "n0179": {
+      "id": "n0179",
+      "depth": 3,
+      "parent": "n0178",
+      "children": [],
+      "range": [
+        "spya-s0q4kx",
+        "spya-s0q4kx"
+      ],
+      "title": "",
+      "navLabel": "Standardized communication itself requires prior coordination between brains to remain aligned"
+    },
+    "n0180": {
+      "id": "n0180",
+      "depth": 3,
+      "parent": "n0178",
+      "children": [],
+      "range": [
+        "spya-dvt3xm",
+        "spya-dvt3xm"
+      ],
+      "title": "",
+      "navLabel": "Bigger brains might enable more complex social structures, perhaps requiring hypergraphs rather than ordinary social network graphs"
+    },
+    "n0181": {
+      "id": "n0181",
+      "depth": 3,
+      "parent": "n0178",
+      "children": [],
+      "range": [
+        "spya-dv5q20",
+        "spya-dv5q20"
+      ],
+      "title": "",
+      "navLabel": "Language or standardized communication is deeply tied to the existence of a coherent society"
+    },
+    "n0182": {
+      "id": "n0182",
+      "depth": 3,
+      "parent": "n0178",
+      "children": [],
+      "range": [
+        "spya-rwtere",
+        "spya-rwtere"
+      ],
+      "title": "",
+      "navLabel": "Society's detailed interactions show computational irreducibility, with 'the will of society' as a pocket of reducibility"
+    },
+    "n0183": {
+      "id": "n0183",
+      "depth": 3,
+      "parent": "n0178",
+      "children": [],
+      "range": [
+        "spya-r7dck0",
+        "spya-r7dck0"
+      ],
+      "title": "",
+      "navLabel": "Human society maintains a single 'thread of society'; bigger brains might handle towers of higher-order social abstractions"
+    },
+    "n0184": {
+      "id": "n0184",
+      "depth": 1,
+      "parent": "n0001",
+      "children": [
+        "n0185",
+        "n0193",
+        "n0201"
+      ],
+      "range": [
+        "spya-jsae06",
+        "spya-esw6mn"
+      ],
+      "title": "Minds beyond Ours",
+      "gist": "Bigger, brain-like minds—biological or artificial—would occupy larger regions of the computational 'ruliad' by commanding more concepts and higher-order abstractions, yet would remain only partly comprehensible to us, just as a mind spanning the entire ruliad would cease to have any coherent, individual thread of experience at all.",
+      "sourceHeading": "Minds beyond Ours"
+    },
+    "n0185": {
+      "id": "n0185",
+      "depth": 2,
+      "parent": "n0184",
+      "children": [
+        "n0186",
+        "n0187",
+        "n0188",
+        "n0189",
+        "n0190",
+        "n0191",
+        "n0192"
+      ],
+      "range": [
+        "spya-jsae06",
+        "spya-y06d0u"
+      ],
+      "title": "Scaling Up Brain Architecture",
+      "gist": "Rather than removing the defining limitations of brain-like computation, this exploration conservatively imagines brains simply scaled up in neurons and connections, following capability thresholds already glimpsed in animals and artificial neural networks."
+    },
+    "n0186": {
+      "id": "n0186",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-jsae06",
+        "spya-jsae06"
+      ],
+      "title": "",
+      "navLabel": "Minds beyond Ours"
+    },
+    "n0187": {
+      "id": "n0187",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-hvf3h0",
+        "spya-hvf3h0"
+      ],
+      "title": "",
+      "navLabel": "Our minds aren't 'at the top'; conscious experience seems tied to a limitation in brain computational architecture"
+    },
+    "n0188": {
+      "id": "n0188",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-fb2v63",
+        "spya-fb2v63"
+      ],
+      "title": "",
+      "navLabel": "Removing brain-like limitations yields more computation but not something recognizable as 'a mind like ours'"
+    },
+    "n0189": {
+      "id": "n0189",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-j60wq4",
+        "spya-j60wq4"
+      ],
+      "title": "",
+      "navLabel": "This exploration conservatively imagines brains merely scaled up in neurons while keeping the same structure"
+    },
+    "n0190": {
+      "id": "n0190",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-m8muav",
+        "spya-m8muav"
+      ],
+      "title": "",
+      "navLabel": "Animal brain scales and artificial neural nets reveal a sequence of capability thresholds as brains get larger"
+    },
+    "n0191": {
+      "id": "n0191",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-af0sqw",
+        "spya-af0sqw"
+      ],
+      "title": "",
+      "navLabel": "Bigger brains would handle more sensory input/output, larger working memory, and more distinguishable concepts"
+    },
+    "n0192": {
+      "id": "n0192",
+      "depth": 3,
+      "parent": "n0185",
+      "children": [],
+      "range": [
+        "spya-y06d0u",
+        "spya-y06d0u"
+      ],
+      "title": "",
+      "navLabel": "Maintaining the same architecture keeps a single thread of experience, but allows more raw concepts or nested qualifiers"
+    },
+    "n0193": {
+      "id": "n0193",
+      "depth": 2,
+      "parent": "n0184",
+      "children": [
+        "n0194",
+        "n0195",
+        "n0196",
+        "n0197",
+        "n0198",
+        "n0199",
+        "n0200"
+      ],
+      "range": [
+        "spya-pnmbs9",
+        "spya-rqcafp"
+      ],
+      "title": "Going Meta and Abstraction",
+      "gist": "The most qualitatively distinct capability bigger brains might gain is routinely 'going meta'—operating with higher-order abstractions—though where such abstraction leads remains as much a matter of historical accident as of raw brain capacity."
+    },
+    "n0194": {
+      "id": "n0194",
+      "depth": 3,
+      "parent": "n0193",
+      "children": [],
+      "range": [
+        "spya-pnmbs9",
+        "spya-pnmbs9"
+      ],
+      "title": "",
+      "navLabel": "Wolfram Language's 'going meta' with higher-order constructs hints at a qualitatively different capability bigger brains could unlock"
+    },
+    "n0195": {
+      "id": "n0195",
+      "depth": 3,
+      "parent": "n0193",
+      "children": [],
+      "range": [
+        "spya-zs8aqa",
+        "spya-zs8aqa"
+      ],
+      "title": "",
+      "navLabel": "Going meta is a story of abstraction, navigating towers built from pockets of computational reducibility"
+    },
+    "n0196": {
+      "id": "n0196",
+      "depth": 3,
+      "parent": "n0193",
+      "children": [],
+      "range": [
+        "spya-rrbaz6",
+        "spya-rrbaz6"
+      ],
+      "title": "",
+      "navLabel": "Progress of knowledge and education lets brains reach further levels of abstraction, more so with more capacity"
+    },
+    "n0197": {
+      "id": "n0197",
+      "depth": 3,
+      "parent": "n0193",
+      "children": [],
+      "range": [
+        "spya-caqnpc",
+        "spya-caqnpc"
+      ],
+      "title": "",
+      "navLabel": "Which abstractions a mind pursues is largely a coincidence of particular history, not just capacity"
+    },
+    "n0198": {
+      "id": "n0198",
+      "depth": 3,
+      "parent": "n0193",
+      "children": [],
+      "range": [
+        "spya-r5eu3n",
+        "spya-r5eu3n"
+      ],
+      "title": "",
+      "navLabel": "Our sense of purpose may relate to brains concentrating everything into a single stream of decisions"
+    },
+    "n0199": {
+      "id": "n0199",
+      "depth": 3,
+      "parent": "n0193",
+      "children": [],
+      "range": [
+        "spya-qz8qj9",
+        "spya-qz8qj9"
+      ],
+      "title": "",
+      "navLabel": "Multiway minds with multiple threads of consciousness aren't found in individual humans, but language knits together multiple brains"
+    },
+    "n0200": {
+      "id": "n0200",
+      "depth": 3,
+      "parent": "n0193",
+      "children": [],
+      "range": [
+        "spya-rqcafp",
+        "spya-rqcafp"
+      ],
+      "title": "",
+      "navLabel": "Bigger brains might knit together higher-order social structures alien and incomprehensible to us today"
+    },
+    "n0201": {
+      "id": "n0201",
+      "depth": 2,
+      "parent": "n0184",
+      "children": [
+        "n0202",
+        "n0203",
+        "n0204",
+        "n0205",
+        "n0206",
+        "n0207"
+      ],
+      "range": [
+        "spya-tjq4hw",
+        "spya-esw6mn"
+      ],
+      "title": "Minds in Rulial Space",
+      "gist": "Interacting with a bigger brain would be like a dog overhearing philosophy—we'd grasp only simplified fragments—because such minds, biological or artificial, occupy larger regions of the ruliad than ours, with a mind spanning the whole ruliad ultimately dissolving into no coherent mind at all."
+    },
+    "n0202": {
+      "id": "n0202",
+      "depth": 3,
+      "parent": "n0201",
+      "children": [],
+      "range": [
+        "spya-tjq4hw",
+        "spya-tjq4hw"
+      ],
+      "title": "",
+      "navLabel": "Interacting with a bigger brain would feel like a dog overhearing philosophy, catching only fragments"
+    },
+    "n0203": {
+      "id": "n0203",
+      "depth": 3,
+      "parent": "n0201",
+      "children": [],
+      "range": [
+        "spya-d9bhd7",
+        "spya-d9bhd7"
+      ],
+      "title": "",
+      "navLabel": "Removing brain-like restriction unleashes rampant computational irreducibility; keeping it lets us navigate networks of reducibility via concepts and language"
+    },
+    "n0204": {
+      "id": "n0204",
+      "depth": 3,
+      "parent": "n0201",
+      "children": [],
+      "range": [
+        "spya-y728n9",
+        "spya-y728n9"
+      ],
+      "title": "",
+      "navLabel": "Minds occupy places in the ruliad, exchanging robust concepts as rulial particles; bigger brains occupy larger rulial regions"
+    },
+    "n0205": {
+      "id": "n0205",
+      "depth": 3,
+      "parent": "n0201",
+      "children": [],
+      "range": [
+        "spya-xs3zcs",
+        "spya-xs3zcs"
+      ],
+      "title": "",
+      "navLabel": "Minds beyond ours are characterized by their rulial region's size, with a mind spanning the whole ruliad dissolving into no coherent mind"
+    },
+    "n0206": {
+      "id": "n0206",
+      "depth": 3,
+      "parent": "n0201",
+      "children": [],
+      "range": [
+        "spya-dfn6x7",
+        "spya-dfn6x7"
+      ],
+      "title": "",
+      "navLabel": "The same rulial reasoning applies to AI minds, whose brain-like tasks would navigate pockets of reducibility we may only partly recognize"
+    },
+    "n0207": {
+      "id": "n0207",
+      "depth": 3,
+      "parent": "n0201",
+      "children": [],
+      "range": [
+        "spya-esw6mn",
+        "spya-esw6mn"
+      ],
+      "title": "",
+      "navLabel": "Thanks are given to named collaborators for recent discussions on these topics"
+    }
+  }
+}

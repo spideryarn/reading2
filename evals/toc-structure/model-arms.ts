@@ -95,6 +95,27 @@ export function shippingPrompt(_body: Block[]): { system: string; user: string }
 /* --------------------------------------------------- the deterministic half */
 
 /**
+ * The author's headings as an explicit list — the `headings-listed` arm's
+ * seed. A different intervention from the seeded tree below, on purpose:
+ * production already shows the model every heading block and calls headings
+ * hard boundaries, so what this arm isolates is *salience* — the same facts,
+ * gathered in one place — with no proposal attached (REVIEW-SOL.md, 8).
+ */
+export function renderHeadingList(blocks: Block[]): string {
+  const { body } = splitBlocks(blocks);
+  const lines = body.flatMap((b, i) =>
+    b.kind === "heading" ? [`[${i}] h${b.level ?? "?"}: ${b.text}`] : [],
+  );
+  return [
+    "For reference, the article's own headings, in order, with their block",
+    "numbers and levels. They are already hard boundaries; this list adds",
+    "nothing new — it only gathers them in one place.",
+    "",
+    ...lines,
+  ].join("\n");
+}
+
+/**
  * The heading tree, rendered as the proposal the `headings-seeded` arm hands
  * the model. Nested JSON in the same shape the model is asked to emit, so
  * "modify or replace" needs no second format — the model can echo it, edit it,
@@ -174,12 +195,17 @@ export async function runModelArm(
   switch (arm.kind) {
     case "one-call": {
       const { system, user } = shippingPrompt(body);
-      const seeded = arm.seedHeadings ? `${user}\n\n${renderSeedProposal(blocks, slug)}` : user;
+      const seed =
+        arm.seed === "heading-tree"
+          ? `\n\n${renderSeedProposal(blocks, slug)}`
+          : arm.seed === "heading-list"
+            ? `\n\n${renderHeadingList(blocks)}`
+            : "";
       const send = arm.call.model.startsWith("anthropic/") ? sendMessages : sendChat;
       const { raw, stats } = await send({
         call: arm.call,
         system,
-        user: seeded,
+        user: `${user}${seed}`,
         maxTokens: maxTokensFor(body),
       });
       return { tree: parseStructureResponse(raw, blocks, slug), calls: [stats] };

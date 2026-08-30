@@ -206,12 +206,19 @@ money is not one. The arms are declared as data in `arms.ts`; the ones that call
 to run** until their executor lands, loudly, so a results file cannot quietly mean "those arms were
 skipped".
 
-### The corpus is seven documents, not nine articles
+### The corpus is a committed manifest of seven documents
 
-`source`, `source-2` and `revistes-ub-30977` are **three extractions of one document** — the same
-3,106-word article, three slugs. The runner drops the first two by default and every aggregate
-must, or one document is triple-weighted and every paid arm buys the same answer three times.
-(An earlier statement of the headline result said "6 of 9"; the honest denominator is below.)
+The corpus lives in `toc-structure/corpus.ts` — one entry per document with its role, its
+selection reason, and the sha256 of the `blocks.json` that was measured (data/ is gitignored and
+regenerates, so a results file that only named a slug would name bytes nothing can recover; the
+runner checks the hash and says so when it has drifted). `source`, `source-2` and
+`revistes-ub-30977` are **three extractions of one document** — the manifest marks the first two
+`duplicate` and no default run or aggregate ever counts them, or one document is triple-weighted
+and every paid arm buys the same answer three times. `example/` is marked `fixture` and appears in
+no claim about real documents. The seven `dev` entries are **frozen as the development set** — the
+heading rule's thresholds were fitted on them — and the held-out set Greg is choosing arrives as
+new `heldout` entries, a data change. (An earlier statement of the headline result said "6 of 9";
+the honest denominator is below.)
 
 ### The denominator is free
 
@@ -252,19 +259,35 @@ with copied headings excluded for the reason the label eval learned; gist templa
 landing on headings ≈ deferring to the author, headings becoming boundaries ≈ not reorganising,
 and either end can be right.
 
-`compareTrees` reports how differently two trees carve one article (Jaccard over cut points).
-Between an arm and the incumbent it is descriptive; between `incumbent` and `incumbent-repeat` —
-two identical arms, run twice — it is **the noise floor**, the resolution of the whole instrument,
-to be reported before any comparison. Never treat either tree as the reference: the third warning
-in the design was to never derive an expectation from the thing under test.
+`compareTrees` reports how differently two trees carve one article — exact Jaccard over cut
+points, **plus a tolerant nearest-cut distance**, because under Jaccard alone a boundary that
+moved one block reads as total disagreement and run-to-run wobble would dominate any noise floor
+built on it. Between an arm and the incumbent it is descriptive; between repeats of the incumbent
+it is **the noise floor**, the resolution of the whole instrument, to be reported before any
+comparison. The mechanical measures are diagnostics and guards, not the verdict — every one of
+them can be won by a worse arm (GPT Sol's review has the table), so the primary outcome for
+choosing between close arms is a **blinded human pass over the finalists' trees**, which the
+per-run `trees/` directory exists to feed. Never treat either tree as the reference: the third
+warning in the design was to never derive an expectation from the thing under test.
+
+Each run writes a **directory** under `results/toc-structure/` — `run.json` (scores, arm specs,
+the git commit, and the measured input hashes), rewritten incrementally after every article × arm
+so a run that dies after six paid calls keeps six results, plus every produced tree under
+`trees/`, the disk arm's included, because `data/` regenerates under old results.
 
 ### The arms that spend money (phase 2, not yet runnable)
 
-`incumbent` (what ships: `anthropic/claude-sonnet-5`, effort high, one call), `incumbent-repeat`
-(the noise floor), `cheap-high`, `smart-low`, `headings-seeded`, `waves`, `cheap-then-revise`.
-An arm is the model **plus how it is asked**: `cheap-high` necessarily changes wire and thinking
-mode too (gpt-5.6-luna does not exist on the Messages wire — src/models.ts), and the spec in
-`arms.ts` says so rather than leaving it to be discovered in the diff.
+Every arm is labelled with the **kind of claim its result can support** — `isolated` (one variable
+differs from the incumbent) or `bakeoff` (several move together: it can pick a deployable recipe
+and can never explain the win) — and the label travels into the results file. `incumbent` (what
+ships: `anthropic/claude-sonnet-5`, effort high, one call), `incumbent-repeat` (the noise floor),
+`smart-low` (isolated: effort), `headings-listed` (isolated: the author's headings as an explicit
+list — production already shows them as blocks and calls them hard boundaries, so this isolates
+salience), `headings-seeded` (isolated: the whole deterministic heading tree as a proposal),
+`cheap-high` (bakeoff: gpt-5.6-luna does not exist on the Messages wire — src/models.ts — so
+model, wire and thinking semantics move together), `waves` (bakeoff, and it must exercise **three**
+levels — the book-length motivation is depth the single call cannot reach, so an L1→L2 pilot would
+not test the process it argues for), `cheap-then-revise` (bakeoff).
 
 ## `embedding-retrieval.ts` — which embedding model finds the right passage in *our* articles?
 

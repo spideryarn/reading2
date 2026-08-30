@@ -61,11 +61,20 @@ export interface StructureScore {
 
   /**
    * `checkTree`, split in two — because the free heading arm cannot produce
-   * gists (there is nowhere free to get one), so "internal node has no gist"
-   * is that arm's known, priced-in failure rather than a finding. Everything
-   * else in `problems` means the tree would render a wrong article, whoever
-   * built it. `advice` is checkTree's editorial channel, counted but never
-   * a gate.
+   * gists (there is nowhere free to get one), so a missing gist is that arm's
+   * known, priced-in failure rather than a finding — while for every arm that
+   * was ASKED for gists it is damage, and the runner says so per arm.
+   * Everything in `otherProblems` means the tree would render a wrong article,
+   * whoever built it. `advice` is checkTree's editorial channel, counted but
+   * never a gate.
+   *
+   * The split is made by construction, not by matching message text:
+   * `gistProblems` counts the gistless internal body nodes directly, and
+   * `otherProblems` is what `checkTree` says about the same tree with a
+   * placeholder gist on each of them — so a reworded message cannot silently
+   * move a problem between the two buckets. (Typed issue codes on `checkTree`
+   * itself would be cleaner still; that is a src/ change and held for
+   * approval.)
    */
   validity: {
     gistProblems: number;
@@ -216,8 +225,24 @@ export function scoreTree(blocks: Block[], tree: Tree): StructureScore {
   const internal = internalBodyNodes(tree);
   const root = tree.nodes[tree.rootId];
 
-  const check = checkTree(blocks, tree);
-  const gistProblems = check.problems.filter((p) => p.includes("internal node has no gist")).length;
+  /* The gist/other split, by construction — see the interface comment. The
+     placeholder goes only on internal BODY nodes: a supplement without a gist
+     is correct, and filling one would invent a problem. */
+  const gistless = new Set(internal.filter((n) => !n.gist).map((n) => n.id));
+  const filled: Tree =
+    gistless.size === 0
+      ? tree
+      : {
+          ...tree,
+          nodes: Object.fromEntries(
+            Object.entries(tree.nodes).map(([id, n]) => [
+              id,
+              gistless.has(id) ? { ...n, gist: "(placeholder for validity split)" } : n,
+            ]),
+          ),
+        };
+  const check = checkTree(blocks, filled);
+  const gistProblems = gistless.size;
 
   const bodyBlocks = blocks.filter((b) => isBody(b));
   const headingIdx = new Set(
@@ -342,7 +367,7 @@ export function scoreTree(blocks: Block[], tree: Tree): StructureScore {
     headingBlocks: headingIdx.size,
     validity: {
       gistProblems,
-      otherProblems: check.problems.length - gistProblems,
+      otherProblems: check.problems.length,
       advice: check.advice.length,
     },
     parts: {
@@ -412,6 +437,16 @@ export interface TreeAgreement {
   l1Boundaries: number;
   /** Jaccard over ALL internal body cut points, index 0 excluded. */
   allBoundaries: number;
+  /**
+   * The tolerant companion to the Jaccards, which are exact: under them a
+   * boundary that moved one block reads as total disagreement, so run-to-run
+   * wobble would dominate any noise floor built on them (REVIEW-SOL.md, 6).
+   * Over all cut points, both directions symmetrised: for each cut in one
+   * tree, the distance in blocks to the nearest cut in the other.
+   * `within1Block` is the share of cuts with a counterpart at most one block
+   * away. Null when either tree chose no cuts at all.
+   */
+  boundaryDistance: { mean: number; within1Block: number } | null;
 }
 
 export function compareTrees(blocks: Block[], a: Tree, b: Tree): TreeAgreement {
@@ -437,10 +472,25 @@ export function compareTrees(blocks: Block[], a: Tree, b: Tree): TreeAgreement {
       (id) => (tree.nodes[id]?.children.length ?? 0) > 0 && !supplement.has(id),
     ).length;
   };
+
+  const allA = [...cuts(a, false)];
+  const allB = [...cuts(b, false)];
+  let boundaryDistance: TreeAgreement["boundaryDistance"] = null;
+  if (allA.length > 0 && allB.length > 0) {
+    const nearest = (from: number[], to: number[]): number[] =>
+      from.map((x) => Math.min(...to.map((y) => Math.abs(x - y))));
+    const distances = [...nearest(allA, allB), ...nearest(allB, allA)];
+    boundaryDistance = {
+      mean: mean(distances),
+      within1Block: distances.filter((d) => d <= 1).length / distances.length,
+    };
+  }
+
   return {
     partCountA: partCount(a),
     partCountB: partCount(b),
     l1Boundaries: jaccard(cuts(a, true), cuts(b, true)),
     allBoundaries: jaccard(cuts(a, false), cuts(b, false)),
+    boundaryDistance,
   };
 }
