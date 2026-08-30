@@ -353,9 +353,22 @@ describe("parseStructureResponse", () => {
   });
 
   it("refuses an answer whose children do not tile - the arm is judged on the pipeline's rules", () => {
+    /* **Two independent slips, not one wide one**, and the difference is the
+       point of the test. A single misaligned boundary of any size is now snapped
+       shut rather than refused (src/toc.ts § `repairedChildRanges`, 2026-08-30),
+       so the old fixture — one overlap of two blocks — stopped being refused by
+       the pipeline and therefore stopped being refused here, which is the eval
+       agreeing with the pipeline exactly as it should.
+       What still throws is an answer with slips at two different boundaries:
+       `MAX_REPAIRED_BOUNDARIES` spends its one repair on the first and the
+       second reaches `assertChildrenPartition`. Keeping a refusal in this file
+       matters because the claim under test is that the arm is judged on the
+       pipeline's rules, and a test that could no longer fail would stop making
+       it. */
     const blocks = Array.from({ length: 6 }, () => block());
-    expect(() => parseStructureResponse(answer(blocks, [[0, 3], [2, 5]]), blocks, "overlap"))
-      .toThrow(/tile/);
+    expect(() =>
+      parseStructureResponse(answer(blocks, [[0, 0], [2, 3], [5, 5]]), blocks, "two-slips"),
+    ).toThrow(/tile/);
   });
 });
 

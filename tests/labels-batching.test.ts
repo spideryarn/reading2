@@ -437,14 +437,40 @@ describe("parseLabels", () => {
 
   it("names which paragraphs are missing, so the gap is findable", () => {
     const short = JSON.stringify({ labels: [[1, "One"], [3, "Three"]] });
-    expect(() => parseLabels(short, batch)).toThrow(/missing 2, 4/);
+    expect(() => parseLabels(short, batch)).toThrow(/missing paragraphs 2, 4/);
+  });
+
+  it("says 'paragraph', singular, so one absent label cannot read as four", () => {
+    /* The wording that cost a day. A production ingest failed with "this call
+       asked for 58 labels and got 57, missing 4", which reads as an
+       inconsistency — 58 minus 57 is one, not four — and sent an investigation
+       after arithmetic that was correct all along. "4" was the paragraph
+       number. docs/plans/faster-ingest-and-concurrency.md § Stage 1b. */
+    const { tree: t, blocks: b } = fixture(1, 6);
+    const one = planBatches(t, b)[0]!;
+    const short = JSON.stringify({
+      labels: one.blocks.map((_, i) => [i + 1, "A label"]).filter(([n]) => n !== 4),
+    });
+    expect(() => parseLabels(short, one)).toThrow(/asked for 6 labels and got 5, missing paragraph 4\./);
+    expect(() => parseLabels(short, one)).not.toThrow(/missing paragraphs/);
+  });
+
+  it("says how many were missing when the list is truncated", () => {
+    // Five names and a count, rather than five names and no idea whether that
+    // is all of them — the same ambiguity in its other form.
+    const { tree: t, blocks: b } = fixture(2, 6);
+    const one = planBatches(t, b, { max: 12 })[0]!;
+    const short = JSON.stringify({ labels: [[1, "One"], [2, "Two"]] });
+    expect(() => parseLabels(short, one)).toThrow(
+      /missing paragraphs 3, 4, 5, 6, 7 and 5 others \(10 in all\)/,
+    );
   });
 
   it("refuses a label for a paragraph it did not ask about", () => {
     const extra = JSON.stringify({
       labels: [...batch.blocks.map((_, i) => [i + 1, "x"]), [99, "From nowhere"]],
     });
-    expect(() => parseLabels(extra, batch)).toThrow(/were not asked for/);
+    expect(() => parseLabels(extra, batch)).toThrow(/paragraph 99 was not asked for/);
   });
 
   it("refuses a duplicate paragraph number rather than keeping the last", () => {
@@ -491,7 +517,7 @@ describe("parseLabels", () => {
     const missingHeading = JSON.stringify({
       labels: b.blocks.slice(1).map((_, i) => [i + 2, "A label here"]),
     });
-    expect(() => parseLabels(missingHeading, b)).toThrow(/missing 1/);
+    expect(() => parseLabels(missingHeading, b)).toThrow(/missing paragraph 1/);
   });
 
   it("refuses a shape that is not pairs", () => {
@@ -784,6 +810,25 @@ describe("assertEveryBlockLabelled", () => {
       Object.entries(complete).filter(([id]) => noted.slice(0, 8).some((b) => b.id === id)),
     );
     expect(() => assertEveryBlockLabelled(bodyOnly, noted)).not.toThrow();
+  });
+
+  it("allows a gap the label pass reported dropping", () => {
+    /* The bounded partial accept (src/labels.ts § `acceptGap`) leaves a leaf
+       bare on purpose, so this gate has to let exactly those through — and
+       nothing else. */
+    const { [blocks[0]!.id]: _gone, ...short } = complete;
+    expect(() => assertEveryBlockLabelled(short, blocks, [blocks[0]!.id])).not.toThrow();
+  });
+
+  it("still refuses a gap when the drop was somewhere else entirely", () => {
+    /* The control, and the reason the list is passed rather than a count. One
+       block dropped and a *different* block missing is a gap between the
+       batches wearing a drop's clothes — the failure this function exists for,
+       and the one no per-batch check can see. */
+    const { [blocks[0]!.id]: _gone, ...short } = complete;
+    expect(() => assertEveryBlockLabelled(short, blocks, [blocks[1]!.id])).toThrow(
+      /no batch reported dropping it/,
+    );
   });
 
   it("still refuses a gap in the body when the notes are unlabelled", () => {

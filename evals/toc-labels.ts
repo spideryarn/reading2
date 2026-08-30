@@ -63,8 +63,26 @@ export interface EvalReport {
   blocks: number;
   gistable: number;
   labelled: number;
-  /** labelled / gistable. Anything below 1 is a bug, not a quality signal. */
+  /**
+   * labelled / gistable. Below 1 is a bug **unless `dropped` accounts for it**.
+   *
+   * It used to be a bug full stop, and that stopped being true on 2026-08-30
+   * when src/labels.ts gained a bounded partial accept. A repair inside the code
+   * under measurement silently redefines the measurement, so the measurement was
+   * told: the stage records which blocks it gave up on, and this eval reads
+   * them rather than inferring a fault from a number it can no longer interpret
+   * on its own. See `LabelRun.dropped` and
+   * docs/plans/faster-ingest-and-concurrency.md § Stage 1b.
+   */
   coverage: number;
+  /**
+   * Blocks the label pass gave up on, as `labels.json` records them.
+   *
+   * `null` for a file written before the field existed — which is not the same
+   * as zero, and the print below says so rather than reporting an old article as
+   * having dropped nothing.
+   */
+  dropped: number | null;
   batched: boolean;
   batches: number;
   length: { mean: number; min: number; max: number; outsideRange: number };
@@ -231,6 +249,7 @@ export function evaluate(
     gistable,
     labelled: items.length,
     coverage: gistable === 0 ? 1 : items.length / gistable,
+    dropped: labelsFile?.dropped?.length ?? null,
     batched: labelsFile?.batches != null,
     batches: labelsFile?.batches?.length ?? 0,
     /* The tree is what the reader sees; labels.json is what the stage says it
@@ -273,9 +292,17 @@ const pct = (x: number): string => `${(x * 100).toFixed(1)}%`;
 function print(report: EvalReport): void {
   console.log(`\n${report.slug}`);
   console.log("─".repeat(Math.max(8, report.slug.length)));
+  /* Three readings of one number, and they need different responses. Complete;
+     short by exactly what the stage says it dropped, which is the bounded
+     partial accept working as designed; or short by more than that, which is
+     the fault the INCOMPLETE flag was put there for. Collapsing the middle case
+     into the last one would have this eval cry wolf on every article with a
+     stripped code cell in it. */
+  const unexplained = report.gistable - report.labelled - (report.dropped ?? 0);
   console.log(
     `  labels        ${report.labelled} / ${report.gistable} gistable  (${pct(report.coverage)})` +
-      `${report.coverage < 1 ? "   ← INCOMPLETE" : ""}`,
+      (report.dropped ? `   ${report.dropped} dropped by the stage` : "") +
+      (unexplained > 0 ? `   ← INCOMPLETE, ${unexplained} unaccounted for` : ""),
   );
   console.log(
     `  generation    ${report.batched ? `${report.batches} batched calls` : "one whole pass (incumbent)"}`,

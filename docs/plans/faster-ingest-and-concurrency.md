@@ -113,12 +113,16 @@ The audit found no correctness hazard that survives the guards already in place 
 article), and the `id + attempt_id + status` fence. What it found instead is a set of constants each
 measured with only one job running:
 
+Each is named here and **not restated** — read the value at the file, per
+[CLAUDE.md § One source of truth](../../CLAUDE.md). What matters is that every one of them was
+measured or chosen with exactly one job running.
+
 | Constant | Where | What N does to it |
 |---|---|---|
-| `STEP_BUDGET_MS.toc = 320_400` "MEASURED 2026-08-30" | [`src/jobs.ts:222`](../../src/jobs.ts) | Under contention a 320s step takes longer, the pre-flight check at `:1256` says it fits, and **the claim's own deadline fires mid-step** — the exact failure the table exists to prevent, arriving by a route the table cannot see |
-| `GATE = new Gate(2)` for asset fetches | [`src/collect-assets.ts:226`](../../src/collect-assets.ts) | Process-wide, so N `assets` steps serialise on 2 permits while each believes it has a 185s budget |
-| `CONCURRENCY = 4` in the label fan-out | [`src/labels.ts:180`](../../src/labels.ts) | 4N concurrent model calls, with no global throttle and **no spend cap anywhere in the repo** |
-| `poolMax() = 5` | [`src/db/client.ts:65`](../../src/db/client.ts) | Deliberately small because Supabase's pooler limit is shared across instances |
+| `STEP_BUDGET_MS.toc`, marked "MEASURED" | [`src/jobs.ts`](../../src/jobs.ts) § `STEP_BUDGET_MS` | Under contention the step takes longer than it was measured taking, the pre-flight check says it fits, and **the claim's own deadline fires mid-step** — the exact failure the table exists to prevent, arriving by a route the table cannot see |
+| `GATE`, the asset-fetch limiter | [`src/collect-assets.ts`](../../src/collect-assets.ts) | Process-wide, so N `assets` steps share one small pool of permits while each believes it has its own budget. Its own comment says why: *"job concurrency has been 1 and that was the entire story"* |
+| `CONCURRENCY`, the label fan-out | [`src/labels.ts`](../../src/labels.ts) | Multiplies by N, with no global throttle and **no spend cap anywhere in the repo** |
+| `poolMax()` | [`src/db/client.ts`](../../src/db/client.ts) | Deliberately small because Supabase's pooler limit is shared across instances, so exhaustion surfaces as *other* instances being refused connections |
 
 **So the concurrency stage is mostly about these four numbers and a scheduler**, and only
 incidentally about the index. That is the opposite of how it looks from the outside, and it is why
@@ -222,9 +226,27 @@ is why the old stages 2 and 3 are now one deliverable.
 **2. There is no way to publish a tree without claiming the `toc` step ran.** `reasonsNotToPublish`
 looks up a `toc` step-run and checks its input hash against the blocks
 ([`src/store/pg-revisions.ts:1142`](../../src/store/pg-revisions.ts)), while the `toc` step considers
-itself done from the *presence* of its three outputs with no freshness check. So recording the
-preview as a successful `toc` makes the real 320-second ToC skip entirely, and not recording it makes
-publication refuse. `copyArtefacts` closes the third door: it demands **all** of a step's declared
+itself done from the *presence* of its three outputs with no freshness check. So not recording the
+preview as a `toc` makes publication refuse.
+
+> **Half of this was recorded as verified when only half had been checked, and the correction is
+> mine to own.** The plan asserted that recording the preview as a successful `toc` *"makes the real
+> 320-second ToC skip entirely"*. **That is not true today.** `stepIsDone`
+> ([`src/pipeline.ts:681`](../../src/pipeline.ts)) asks `store.has`, and the session's store is the
+> **filesystem** — `claimSession` builds `fsStoreSession({ artifacts: pipelineStore })` and
+> `pipelineStore` is `fsArtifacts` ([`src/jobs.ts:57`](../../src/jobs.ts)). A Postgres run row cannot
+> make a stage skip while the stages read files.
+>
+> It becomes true under `pgArtifacts`, where `has` means outputs *plus* a done run row — which is
+> **stage 5**. So the rule stays absolute, and the reason changes from "this would break now" to
+> "this is a mine laid for the stage that finishes the database move". Stated correctly it is a
+> better argument, because a hazard that only appears once another plan lands is exactly the kind
+> nobody re-derives.
+>
+> The mistake is the one this repo now has a page about
+> ([written-down-is-not-checked.md](../reusable/written-down-is-not-checked.md)): I verified the
+> publication half, wrote both halves down, and the sentence read as checked because the paragraph
+> around it was. `copyArtefacts` closes the third door: it demands **all** of a step's declared
 products or none ([`src/store/copy-artefacts.ts:93`](../../src/store/copy-artefacts.ts)), so
 "just write the tree" fails, and `labels.json` — which the plan never mentioned — is one of them.
 **A distinct preview step and publication gate is required. The preview must never impersonate a
@@ -275,6 +297,97 @@ Two more worth carrying:
   taking: **the preview publisher recomputes `buildHeadingTree` from the stored blocks and requires
   the candidate to equal it.** The builder is deterministic and costs milliseconds, so the flag stops
   being trusted at exactly the boundary where trusting it would be expensive.
+
+### A finding from production that changes what stage 2 is worth
+
+**2026-08-30, late.** While this plan was being built, the PDF session hit a ToC failure on a
+9-page arXiv paper (`arxiv-1503`, 78 blocks) that matters here:
+
+```
+step failed: toc — arxiv-1503, ms 123399, aiCalls 1, aiCost $0.1617
+Error: The children of the node at root do not tile it: child 7 leaves a gap of 3 block(s).
+```
+
+One call, completed, and the tree it returned is structurally invalid. Three things follow.
+
+**1. It falsifies a claim this morning's work rested on.** The research doc says of tiling failures:
+*"Every tiling failure anyone has observed … is off by one block. That is decisively the
+repair-sized world."* Four observations, all off by one, **all on HTML articles with headings**. R2
+was sized to exactly that — [`src/toc.ts:604`](../../src/toc.ts) is `Math.abs(lo - cursor) === 1`,
+and the comment is explicit that the bound is a judgement: *"Two blocks out is not a slip, it is a
+different reading of the article, and it still throws."* This gap is **three**. So it is outside the
+repair by design, and the conclusion that followed — *R2 and R3 recover every structure failure we
+have measured*, which is **the stated reason the fallback tree was judged not worth building** — no
+longer holds.
+
+**2. It lands exactly where § 7b predicted.** A PDF's text is a model transcription with no heading
+structure, so it sits in the headingless half where the recipe was measured disagreeing with itself
+(8, 7, 8 and 3 parts from identical input). Every prior tiling observation came from the well-headed
+half. **PDF ingest reached production for the first time that same day**, so the ToC stage began
+being handed a kind of article it had never been exercised against, and failed in a new way
+immediately.
+
+**3. And it exposes an honest limit in stage 2.** A PDF has no headings, so `buildHeadingTree`
+returns `flat: true`, so the "not flat" rule below refuses it a preview. **Stage 2 as designed does
+nothing for the articles this failure is about — which are also the slowest to ingest**, at 98s and
+272s of `extract`. The 20-second figure must not be allowed to imply otherwise.
+
+**Greg's two decisions, 2026-08-30, and they close this.**
+
+> I think for now, we should allow gaps. It's not ideal, but it's not the end of the world, and
+> better than things failing fatally. Perhaps in future, it should trigger a re-run of the LLM, where
+> we feed in the previous output, with information about the gaps and ask it to adjust. But that's
+> for later.
+>
+> — Greg, 2026-08-30
+
+And, on what happens when the structure call fails outright: **fall back to a flat tree, flagged**,
+so the article exists and is readable with Retry offered, rather than the ingest being lost.
+
+**One interpretation was needed and it is recorded here rather than left implicit.** "Allow gaps"
+has two possible mechanisms and they are not equivalent:
+
+| | What it means | Consequence |
+|---|---|---|
+| **Literally** — leave paragraphs covered by no node | `checkTree`'s coverage rule fails, and those paragraphs become **unreachable in granularity zoom**: no node means no row at any level | The prose is on the page and nothing can address it |
+| **Snap the gap shut, unbounded** | The orphaned paragraphs join the preceding sibling | A slightly wrong contents list instead of no article. Every invariant survives |
+
+**Greg overruled this the same evening, having been told the consequence — and it is his call:**
+
+> Above, I think I was arguing that maybe it's ok if there are some blocks that are uncovered, i.e.
+> can't be reached directly from the Hierarchy representations. At least in the short-term — in the
+> long-term we'll try and make all this stuff bulletproof.
+>
+> — Greg, 2026-08-30
+
+So **uncovered blocks are acceptable for v1**, knowing they get no row at any level of the Hierarchy
+views. Two conditions this plan holds onto, neither of them a hedge on his decision:
+
+- **Counted and reported, never silent.** An uncovered block is invisible by construction, which is
+  the [silent-success](../reusable/silent-success.md) shape exactly.
+- **The prose must still render.** A block that loses its ToC row is the agreed trade. A block whose
+  *text* disappears is not, and the difference has to be checked rather than assumed.
+
+Both mechanisms are therefore on the table, and the snap is no longer the only route. So R2's `Math.abs(lo - cursor) === 1` bound comes off, and what replaces
+it is not a bigger number but **a count that is reported**: `PartitionRepair` already carries `where`,
+`kind` and `at`, and the pipeline log already prints the repair counts precisely so *"a repair nobody
+is told about is the same shape as the bug it repaired"*
+([`src/toc.ts:475`](../../src/toc.ts)). The size of each repair joins them.
+
+**The argument being overridden is worth preserving, because it is a good one.** The comment above
+the bound says *"Two blocks out is not a slip, it is a different reading of the article"*, and that
+is true — a three-paragraph snap may well attribute prose to a section the model did not intend.
+Greg has weighed that against losing the article and chosen the article. The mitigation is the count,
+and **the proper fix is his: hand the model back its own output with the gaps marked and ask it to
+adjust.** That is a re-ask over a completed answer rather than a fresh draw, which is the one form of
+retry this stage has not tried and the only one with a reason to behave differently.
+
+**What it reopens, and this is Greg's to decide, not ours.** Two propositions were being treated as
+one: *a flat tree as the thing you open on while a better one is coming* (bad — every paragraph
+becomes a section, and Sol is right about it) and *a flat tree as the last resort when the structure
+call has failed outright* (a poor read, but better than an article that does not exist). The research
+doc rejected the fallback on the strength of the claim this specimen just broke. **It should be
+re-asked, with this evidence.**
 
 ### One refinement of our own, from finding 9
 
@@ -381,9 +494,11 @@ legitimately unlabelled."* **This failure is that path, and it exists** — so t
 floor with a new justification rather than inventing one.
 
 The fix is three pieces of rising risk: **fix the message** (it is a list, say so); **retry only the
-shortfall** rather than re-buying 58 labels, since a second full draw has now failed to help three
-times on record; and **partial-accept with a bounded budget**, `k = max(1, ceil(2% of batch))`, with
-the dropped count surfaced in `LabelRun`. The client already tolerates a bare leaf — `rowText`
+shortfall** rather than re-buying the whole batch, since a second full draw has now failed to help
+three times on record; and **partial-accept with a bounded budget** — `droppedBudget` in
+[`src/labels.ts`](../../src/labels.ts), read the formula there — with the dropped count surfaced in
+`LabelRun`. (An earlier draft of this plan restated that budget and got the arithmetic wrong, which
+is the argument for naming it rather than copying it.) The client already tolerates a bare leaf — `rowText`
 ([`src/web/outline.ts:120`](../../src/web/outline.ts)) falls through to null and skips the row — so
 the visible cost is one blank row for a paragraph whose text is "or".
 
@@ -401,16 +516,77 @@ to empty paragraphs — and that belongs in the research doc's F entry whatever 
 article ingests to completion; no non-fixture slug can be served `example/`, with a test; a
 postmortem under `docs/postmortems/`.
 
+### Stage 1 — DONE, 2026-08-30
+
+**1a** removed the fixture fallback (committed earlier, `af1d2d5`). **1b** landed three changes that
+are one argument: *stop discarding work already paid for.*
+
+| | What it does |
+|---|---|
+| The message | `missing` renders as ordinals — `missing paragraph 4`, and a truncated list says how many there were in all. The `extra` half too, since *"and 99 were not asked for"* reads as a count |
+| Shortfall re-ask | On a short batch, re-ask **for the missing ordinals only**, keeping the prompt prefix byte-identical so the cache still hits. The saving is the answer, not the question |
+| Bounded partial accept | After both attempts, keep a batch whose gap is inside `droppedBudget`, and record the dropped block ids in `labels.json`, `LabelRun`, `TocRun`, both CLIs and the pipeline log — **at zero as well as above it** |
+| `COVERAGE_FLOOR` | 1 → 0.95, with all three versions of its argument written down, and named as the **article-level backstop, not the bound** |
+| Tiling | The one-block bound is gone from **both** places it lived. `PartitionRepair.size` reaches `TocRun.repairedBlocks` and `largestRepair` |
+
+**Five things that were better than the brief**, all found by going to look:
+
+1. **`detectShift` runs after the parse, so a short answer skipped it entirely.** Partial-accept
+   would have made that the *one* path where a short answer survives — and the one with no shift
+   check on it. It resolved with nineteen labels each describing the following paragraph. Nothing
+   red. **This was a hole the repair would have opened, not a bug that has been shipping**, and the
+   distinction belongs in the postmortem: no reader's article has been affected.
+2. **The tail had its own copy of the bound** (`cursor === parent[1]`). Fixing only the loop would
+   have produced a rule that mends a gap of forty mid-article and refuses a gap of two at the end.
+3. **`largestRepair`, not just a count.** Six one-block snaps and one six-block snap sum the same,
+   and only one of them means "go and look".
+4. **The eval had to be told, again.** `evals/toc-structure/run.ts` recorded repair *counts* and no
+   size, so an arm putting a boundary one paragraph out and an arm handing a section forty of its
+   neighbour's blocks both scored `ok`. Same failure as the labels eval, the same evening, a
+   different file — **a repair inside the thing under measurement silently redefines the
+   measurement**, and it will keep happening until that is a checklist item.
+5. **Three tests asserted refusals that are now repairs.** Rewritten to assert the invariant they
+   were actually protecting — every block gets exactly one leaf, none gets two — which is a stronger
+   claim than "it threw" and survives the next change to how it is achieved.
+
+*Verification:* 206 tests pass across the six files touched; typecheck clean in all of them. Every
+current typecheck error is another session's in-flight work (`DiagramPanel.tsx`, the `jobs*`
+five-argument change, `pdf-chunk-concurrency`).
+
+### Two ways an article can still be lost, both left open deliberately
+
+Neither is a bug. Both are one small change to close, and both should be closed on evidence rather
+than on the next specimen — which is how the bound they replace came to be fitted in the first place.
+
+1. **Two independent slipped boundaries in one answer** still throws
+   (`MAX_REPAIRED_BOUNDARIES`). It was one of two bounds and is now the only one, and it is fitted
+   to the same four HTML-with-headings observations. **A headingless article with two slips loses
+   its whole ToC** — the fatal outcome Greg ruled against, arriving by the other door.
+2. **A child its neighbour has entirely swallowed** still throws. Snapping it would leave a node
+   covering no blocks; the alternative is to *drop* the node, which changes the tree's **shape**
+   rather than its boundaries — a larger claim than a snap, and not one to make silently.
+
+### One loose end, left deliberately
+
+`showingFixture` in [`src/web/Metadata.tsx:409`](../../src/web/Metadata.tsx) is now **dead** — it
+asks whether this page is showing `example/`'s files under somebody else's slug, and after 1a that
+cannot happen. It is threaded through a dozen sites (a chip, Delete, the rename pencil, the
+visibility switch) in a file other sessions were editing the same day, so pulling it out is a
+refactor rather than a deletion and it is not worth doing under them.
+
+What *was* done is the cheap half: the comment above it now says it is dead and why. The paragraph
+there argued for a hazard that no longer exists, and **a comment arguing for a state the code cannot
+reach is how the next person learns something untrue** — which is the failure mode, not the dead
+`const`.
+
 ## Stage 2 — A first-class preview publication (server side)
 
-**Wait for the peer holding `publish-session.ts`.** As this plan was written, another session had
-`docs/plans/v1-publish-finalizer-review-sol.md` open on that exact file with a **NO-SHIP** verdict
-and two unfixed failure-boundary bugs — a publication failure that can log article content through
-raw SQL bound parameters, and an all-skipped publication failure that leaves the job `running`.
-Stage 2 adds a second publication to that finalizer. Starting before their fixes land would mean
-building on a file that is about to move and merging two people's changes to the riskiest
-transaction in the app. Stage 1 touches none of their files, which is the other reason it goes
-first.
+**~~Wait for the peer holding `publish-session.ts`.~~ Unblocked, 2026-08-30 evening.** Both NO-SHIP
+criticals are fixed at HEAD: the failure path now logs a fixed sentence and an error *class name*
+rather than a driver message carrying bound parameters, and `settleJob` ends the job through the
+inner session before rethrowing, so an all-skipped publication failure no longer leaves the job
+`running`. The line reference this plan gave for the publication/settlement coupling is stale; it now
+lives in `publishAndFinish`.
 
 
 Everything the server needs, with nothing in the reading view yet. **This stage is safe to deploy and
@@ -434,7 +610,19 @@ the point: the review's first finding was a stage that looked like a feature and
   blocks-only freshness key must not be allowed to call a preview-bought summary current for ever:
   either it learns about the tree, or it is refused, and refusing is the smaller change.
 - **Failure semantics, decided and written down:** what the shelf shows for "readable, upgrade
-  failed", what Retry upgrades, and whether a public visitor may see a preview.
+  failed", what Retry upgrades, and whether a public visitor may see a preview. Greg's answers:
+  **keep the preview and flag it on the shelf** (Retry re-runs the upgrade); **first ingests only**,
+  so a finished article is never downgraded; **owners only**, so a public visitor waits for the real
+  tree.
+- **The flat-tree fallback**, which belongs here because it is the same machinery pointed at a
+  different moment. When the structure call fails outright — not a preview, a *failure* — publish the
+  flat tree so the article exists, flagged as having no real contents list, with Retry offered. It
+  shares the deterministic builder, the `provisional` marker and the "readable but unfinished" shelf
+  state with the preview, so building it separately would mean building all three twice.
+
+  **It is what rescues PDFs**, which get no preview because they are headingless, and which are both
+  the slowest to ingest and the ones now failing. Without it, the article that most needs help is the
+  one this plan does nothing for.
 
 *Done looks like:* an ingest that publishes a readable preview revision and then replaces it, proven
 by the database rather than by the UI; the real `toc` still runs and is not skipped; a test that the
@@ -467,37 +655,71 @@ embedding call made against a preview.
 
 ---
 
-## Stage 4 — N concurrent ingests, default 2
+## Stages 4 and 5 — handed to other sessions, 2026-08-30 evening
 
-Greg: *"N configurable, let's set the default to 2."*
+**Both of the other two asks left this plan the same evening, and that is the right outcome rather
+than a loss of scope.** Two sessions had reached each of them independently, from a live bug rather
+than from a plan, and each arrived with more than this plan had: a red reproduction and a review in
+flight.
 
-The index is the small half. The work is: replace `jobs_only_one_running` with a claim that counts
-running rows under the `queue_state` lock (`SELECT … FOR UPDATE SKIP LOCKED` gives per-worker
-concurrency, **not** a global N — [ingest-queue.md](../project/ingest-queue.md) is explicit); mirror
-it in [`src/store/jobs-fs.ts:235`](../../src/store/jobs-fs.ts); make something pick up jobs nobody is
-driving, or accept that N only helps tabs that stay open and say so; and revisit the four constants
-in the table above, `STEP_BUDGET_MS` first, because its failure mode is a mid-step kill that costs a
-paid call. `tests/helpers/running-slot.ts` and several suites wait on the global slot and change
-premise here.
+| Was | Now owned by | Why theirs |
+|---|---|---|
+| **Stage 4** — N concurrent ingests | [several-articles-at-once.md](several-articles-at-once.md) | Greg hit `That article already has a job running` while asking for Tweets on an article he was reading, and handed it to the session in front of him. Their framing is better than this plan's: *"if you think it'll involve a lot of work to allow parallelism within an article, then just keep appending to the per-article queue"* — a per-article queue behind a global N, which this plan had not separated |
+| **Stage 5** — the last of the filesystem | [late-steps-read-the-store.md](late-steps-read-the-store.md) | Three production failures today: a single-step job on an already-published article dies with ENOENT reading `blocks.json` from a job-scoped `/tmp`. Same root cause this plan's audit found — `src/jobs.ts` imports `fsArtifacts` directly, so the pipeline's reads never join the store selection — but they have the repro |
 
-## Stage 5 — The last of the filesystem
+**What this plan keeps** is stages 1–3: the ToC off the critical path. That was Greg's stated first
+priority and it is the part nobody else is holding.
 
-Resume [delete-the-importer.md](delete-the-importer.md) at **D2**, in its own order: checkpoints,
-then the six late stages, then `toc`, then `fetch`/`extract`/`blocks` and the source route, then the
-runner switch (`src/jobs.ts:57`, `fsArtifacts` → `pgArtifacts`), then the demolition. Close
-`htmlCarriesItsIds` before any stage moves. Fix
-[architecture.md § Storage](../project/architecture.md) in the same stage.
+**One thing must not be lost in the handover.** Stage 5's owner is fixing the *read* half of
+`fsArtifacts`, and the same defect has a second consumer with a much worse consequence:
+`previousBlocksFrom` ([`src/blocks.ts`](../../src/blocks.ts)) reads its **block-id baseline** through
+that same filesystem store. That is the hazard in the section below, and a fix scoped to the six late
+stages will leave it open. Told to them directly; recorded here because a handover that lives only in
+a chat message is a handover that did not happen.
 
-This is more than one sitting and will be re-cut into stages of its own when it is reached; the
-value of writing it here is that stages 1–4 must not make it harder, and stage 2's preview
-publication boundary is the one place where they could — it adds a second writer to the path D2–D5
-are trying to move.
+---
 
-Two things from the audit belong to whoever picks this up: **`artifacts-pg.ts` and `pg-session.ts`
-are written, reviewed and unreachable** — *"every call to `write` in this repo is in a test"* — so the
-file listing looks finished and the write half has never run in anger; and **`htmlCarriesItsIds`
-inverts silently under Postgres**, which is a [block-ids.md](../project/block-ids.md) hazard and must
-close before any stage moves.
+## The hazard that could stop stage 2, and may be a live bug
+
+**Found while designing stage 2, 2026-08-30. Not yet confirmed reachable; being established.**
+
+`blocks` carries block ids forward by matching text against the previous run's `blocks.json`. It
+reads that baseline through `previousBlocksFrom` ([`src/blocks.ts`](../../src/blocks.ts)), which goes
+via `session.reads` — the **filesystem** store. If that root holds no earlier `blocks.json`,
+`previousBlocksFrom` returns nothing, `assertIdsCarried` takes its first-ingest branch and asserts
+nothing, and stage 3 **mints a fresh set of ids for prose that already has them**.
+
+On Vercel, [`src/store/data-root.ts`](../../src/store/data-root.ts) scopes that root **by job id** —
+deliberately, so one job never finds another's files. Its own header accepts the price: *"a retry
+gets a new job id and repays for the work already done."* Repaying for the work is not the whole
+price. **A retry also gets an empty root**, and an empty root is indistinguishable from a first
+ingest.
+
+**Why this is the one contract.** Every feature addresses text by block id —
+[block-ids.md](../project/block-ids.md). Comments, highlights, notes and the reader's saved position
+are all block ids. Re-minting them leaves those rows valid in `block_identities` and pointing at
+nothing in the revision.
+
+**Why stage 2 cannot be built over it.** Today the blast radius is limited by a rule that happens to
+protect us: *a job that fails publishes nothing*, so a re-minting retry mostly affects articles
+nobody has read. **A preview publication removes exactly that protection** — the reader is in the
+article, and may have commented, while the upgrade runs. And **the flat-tree fallback sharpens it
+further**, because that feature's whole purpose is an article whose next action is Retry.
+
+**What is being established, before anything is built:** which sequences re-mint (same job, resumed
+claim, retry, re-ingest); what the reader actually loses and whether it is only comments; how big
+"read the baseline from Postgres" is, given `beginDraftIn` already copies published blocks into a
+draft for this exact reason; and whether there is a cheap containment short of the full fix.
+
+**The decision rule for this plan: no written risk acceptance on block ids.** If the fix needs stage
+5, stage 2 gets narrowed — preview only where re-minting cannot reach the reader — rather than
+shipped over a contract violation. Ship a smaller feature, not a broken invariant.
+
+**And one thing already noticed and passed over.** The progress panel on the failing Wolfram ingest
+read *"244 blocks, 244 new ids (0 kept)"*. That line is the id-carrying outcome, printed in the UI,
+on every ingest. It reads as unremarkable for a first ingest and is the whole story for anything
+else — so **the instrument for this bug already exists and is already on screen**, which is worth
+more than any test written later.
 
 ---
 
@@ -555,8 +777,23 @@ tests/store-artefact-manifest.test.ts  article.html has no home in Postgres
 tests/store-shelf-reads.test.ts        stored scalars vs the blocks and tree actually there
 ```
 
-Two of these are worth noticing rather than filing as noise. `store-artefact-manifest` is
-**stage 5's own failure arriving early** — it is the test that fails when an artefact has no Postgres
-column, which is exactly the gap that plan closes. And `auth-callback` failed on one run and passed
-on the other, so it is a flake in a tree several agents are editing; if it is still intermittent when
-stage 1 ends, it needs its own look rather than being carried forward as "known".
+**Corrected an hour later, and the correction is the useful part.** The list above was recorded as
+"none of the failures are this work's". One of them was. `store-artefact-manifest`'s *"`article.html`
+sits beside an article and has no home in Postgres"* fires because of
+`data/wolfram-bugs/article.html`, written at 16:46 by **my own investigation subagent** re-running
+stages 1–3 to reproduce the label bug — five minutes before the baseline run at 16:51 that then
+recorded it as somebody else's. A baseline taken after your own agents have been working is not a
+baseline, and the tell was available the whole time: the test names the file, and one `stat` says who
+wrote it and when.
+
+The manifest test is right on its own terms — `article.html` genuinely has no Postgres column, which
+is **stage 5's failure arriving early** — but the reason it fires *today* is a directory this work
+created. Re-baseline after removing it.
+
+The rest of the picture, over three full runs, is that this suite has a **moving** failure set rather
+than a growing one: `auth-callback`, `doc-links`, `fixture-ids`, `run-lock` and `store-parity` each
+appeared in one run and not the next, **and every one of them passes when run alone**. Several suites
+share one local database while several agents drive it, which is the documented hazard. So the rule
+for the stages below is: *a failure is not yours until it survives being run in isolation* — and that
+check costs seconds, where reasoning about it from the failure text costs an hour and is usually
+wrong.

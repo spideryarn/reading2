@@ -100,6 +100,11 @@ vi.mock("../src/labels.js", async (importOriginal) => {
         batches: 0,
         oversized: 0,
         resumed: 0,
+        /* Nothing dropped, which is what a healthy run reports. This stub is not
+           typed as a `LabelRun` — nothing here is — so a field added to that
+           interface reaches this object as a runtime `undefined` and not as a
+           red typecheck. It cost five failures in this file the first time. */
+        dropped: [],
         calls: 0,
         estimatedCacheable: false,
         inputTokens: 0,

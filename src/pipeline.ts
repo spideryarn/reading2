@@ -1465,12 +1465,29 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           supplementNodes: run.supplementNodes,
           supplementBlocks: run.supplementBlocks,
           strandedSupplement: run.strandedSupplement,
-          /* What the stage forgave the model. Both are bounded repairs of a
-             slip (src/toc.ts § `repairedChildRanges`), and both are logged at
-             zero as well as above it — an operator watching these climb is
-             watching the structure prompt drift. */
+          /* What the stage forgave the model, logged at zero as well as above
+             it — an operator watching these climb is watching the structure
+             prompt drift.
+
+             **`repairedBlocks` and `largestRepair` are new since the tiling
+             repair stopped being bounded at one block** (src/toc.ts §
+             `repairedChildRanges`). The count alone used to say everything,
+             because every repair was the same size; it now covers both a
+             boundary a paragraph out and a section handed forty blocks that
+             belonged to its neighbour. The largest is the one that says "go and
+             look", and it is not recoverable from the sum. */
           repairedRanges: run.repairedRanges,
+          repairedBlocks: run.repairedBlocks,
+          largestRepair: run.largestRepair,
           droppedHeadings: run.droppedHeadings,
+          /* The third thing this stage forgives, and the only one with no trace
+             in the product: a paragraph the model would not label twice running
+             is a leaf with no row, which renders as nothing rather than as an
+             error. Logged at zero like the two above, so that an article
+             quietly losing ten labels is a line somebody can see rather than an
+             absence nobody can. src/labels.ts § `droppedBudget`,
+             docs/reusable/silent-success.md. */
+          labelsDropped: run.labelsDropped,
           inputTokens: run.inputTokens,
           outputTokens: run.outputTokens,
           cacheReadTokens: run.cacheReadTokens,
@@ -1481,7 +1498,17 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         },
         `toc ${ctx.slug}: ${run.internal} sections over ${run.blocks} blocks`,
       );
-      return { detail: `${run.internal} sections over ${run.blocks} blocks` };
+      /* The drop is said on the progress card too, and only when there is one.
+         The log line above is where an operator would look afterwards; this is
+         the one moment somebody is already watching, and a paragraph with no
+         nav label leaves no other mark on the article. */
+      return {
+        detail:
+          `${run.internal} sections over ${run.blocks} blocks` +
+          (run.labelsDropped > 0
+            ? ` (${run.labelsDropped} paragraph${run.labelsDropped === 1 ? "" : "s"} unlabelled)`
+            : ""),
+      };
     },
   },
 

@@ -780,6 +780,13 @@ attacks that.
 F and S are two consequences of one gap — 1990s HTML defeating the block extractor — which is the
 argument for fixing that stage properly rather than patching stages 4 and 5 twice.
 
+**A second, independent witness for F, 2026-08-30.** Wolfram's *Towards a Theory of Bugs* (244
+blocks): stage 3 strips its 80 Wolfram Language code cells to empty non-gistable `<p>`s, leaving 15
+bare lead-in fragments pointing at nothing — one of them the single word "or". That killed a
+production ingest twice in stage 4b, because the label prompt cannot both write 6–20 words about a
+fragment and introduce no fact that is not in it. Stage 4b now works around it
+([table-of-contents.md](../project/table-of-contents.md)); F is still the fix.
+
 ### Recommendation
 
 **R1, R3, then 0, then B, with A folded in. R2 as soon as the size distribution lands. W after that,

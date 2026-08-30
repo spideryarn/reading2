@@ -233,27 +233,46 @@ export function structureRequest(body: Block[]): {
 }
 
 /**
- * How much of the article the labels have to reach. **All of it.**
+ * How much of the article the labels have to reach. **Almost all of it.**
  *
- * This was 0.95 when one model call wrote the whole tree, and the missing 5%
- * was an escape hatch: the model was allowed to skip a trivial transition
- * sentence, and an unlabelled gistable leaf is still only a *warning* in
- * [validate-tree.ts](./validate-tree.ts) for that reason
- * (docs/project/table-of-contents.md). The floor existed to tell a used escape
+ * This has been 0.95, then 1, and is 0.95 again. The number matters less than
+ * which argument it is standing on, so here are all three.
+ *
+ * It was **0.95** when one model call wrote the whole tree, because the model
+ * was allowed to skip a trivial transition sentence — an unlabelled gistable
+ * leaf is still only a *warning* in [validate-tree.ts](./validate-tree.ts) for
+ * that reason (docs/project/table-of-contents.md). The floor told a used escape
  * hatch apart from an answer that had quietly stopped early.
  *
- * The split removes the ambiguity. src/labels.ts asks for an exact set of
- * numbered paragraphs per call and refuses a response returning any other set,
- * so a batch is complete or it throws; and `planBatches` puts every gistable
- * block in exactly one batch. There is no longer a path by which a block is
- * legitimately unlabelled, so anything under 100% is a bug in the batching
- * rather than a judgement by the model — and a floor that tolerated it would be
- * hiding the one failure this design can have.
+ * It was tightened to **1** when the label pass split out, on the argument that
+ * *"there is no longer a path by which a block is legitimately unlabelled"*:
+ * every batch is asked for an exact set of numbered paragraphs and refuses any
+ * other set, and `planBatches` puts every gistable block in exactly one batch.
  *
- * Every real tree came back at 100% under the old rule anyway: 29 of 29, 117 of
- * 117, 18 of 18. The escape hatch was never once used.
+ * **That argument is now false, and the failure that falsified it is why this
+ * is 0.95 again.** A production ingest died twice on one absent label out of
+ * fifty-eight, on a paragraph whose entire text was the word "or" — stage 3 had
+ * stripped the code cell the fragment pointed at, leaving the label prompt's
+ * "6–20 words, a CLAIM or a MOVE" and its "never introduce a fact that is not in
+ * that paragraph" jointly unsatisfiable, so skipping was the compliant move and
+ * no retry could change it. src/labels.ts now re-asks for the gap alone and, if
+ * that fails too, may accept the batch and leave those leaves bare. So the path
+ * exists again, deliberately, and it is bounded rather than open.
+ *
+ * **This is the backstop, not the bound.** The real bound is `droppedBudget` in
+ * src/labels.ts — 2% of a batch, floor of one — and it is per batch, which is
+ * the only place a model's behaviour on one call can be judged. What that bound
+ * cannot see is the composition of the whole article: twenty small sibling sets
+ * each spending their floor of one would stay inside budget every time and still
+ * cost a fifth of the article its rows. This floor is what refuses that, and it
+ * is the number to move if the drops ever become normal rather than rare.
+ *
+ * Every real tree came back at 100% under the original rule: 29 of 29, 117 of
+ * 117, 18 of 18. That is still what a healthy article looks like, and
+ * `LabelRun.dropped` — printed by the CLI, logged by the step, recorded in
+ * `labels.json` — is how anybody finds out it has stopped being.
  */
-const COVERAGE_FLOOR = 1;
+const COVERAGE_FLOOR = 0.95;
 
 /**
  * How to name a value from the model in an error message — and when not to.
@@ -361,9 +380,12 @@ export function checkCoverage(
     throw new Error(
       `The table of contents covers ${structural.length - missing.length} of ${structural.length} ` +
         `paragraphs — ${missing.length} have no row (${missing.slice(0, 3).map((b) => b.id).join(", ")}). ` +
-        `Every nav label is asked for by number and every batch is checked against the exact set ` +
-        `it was given, so this is not a model that stopped early. Look at planBatches in ` +
-        `src/labels.ts, and at whether the tree tiles the article. Nothing has been written.`,
+        `A batch may leave a paragraph or two of itself bare when the model will not label them ` +
+        `(src/labels.ts, droppedBudget), and that is what the ${Math.round(
+          (1 - COVERAGE_FLOOR) * 100,
+        )}% here is for; this is past it. ` +
+        `Look at the run's dropped count, at planBatches in src/labels.ts, and at whether the ` +
+        `tree tiles the article. Nothing has been written.`,
     );
   }
 }
@@ -502,6 +524,22 @@ export interface PartitionRepair {
    * child are the same boundary seen at two depths, so they share a coordinate.
    */
   at: number;
+  /**
+   * How many blocks the boundary moved — **the number that used to be the
+   * bound, and is now the whole of what replaced it.**
+   *
+   * While a repair could only ever be one block, its size was not worth
+   * recording: every repair was the same size and the count said everything.
+   * Since the bound was lifted (see `repairedChildRanges`) the count no longer
+   * distinguishes a boundary a paragraph out from a section handed forty blocks
+   * that belonged to its neighbour, and those are not the same event. A repair
+   * nobody is told the size of is now the shape of the bug it repaired, which is
+   * the argument this file already made about the count.
+   *
+   * A cascade reports the same size at each depth, because it is one boundary
+   * moving the same distance; `at` is what tells the two apart.
+   */
+  size: number;
 }
 
 /**
@@ -524,15 +562,31 @@ export interface PartitionRepair {
  * the repair counts now reach the pipeline log, so if answers with two
  * independent slips turn out to be common and their repaired trees turn out to
  * be good, that is the evidence. Thirteen calls is not it.
+ *
+ * **It is now the only bound, and it was one of two.** The per-repair size bound
+ * went on 2026-08-30 (`repairedChildRanges`), so this is what is left between a
+ * slipped boundary and an answer that is misaligned throughout. It still asks
+ * the right question — *how many separate places did the model get wrong*, which
+ * is what distinguishes a slip from a different reading of the article, and
+ * unlike size that does not vary with how long the article is.
+ *
+ * But it is carrying more than it was fitted for, and it is fitted to the same
+ * four HTML-with-headings observations the size bound was. **A headingless PDF
+ * with two independent slips still loses its whole ToC** — which is the fatal
+ * failure Greg's ruling was about, arriving by the other door. That is a known
+ * gap, left open deliberately: one observation is not enough to move two bounds
+ * at once, and the honest fix for both is the re-ask he describes rather than a
+ * larger number here. **It is one character to change when the evidence arrives**
+ * — which is the reason to leave it rather than to guess now.
  */
 const MAX_REPAIRED_BOUNDARIES = 1;
 
 /**
- * **Snap a partition that misses by exactly one block, and only by one.**
+ * **Snap a partition that misses, by however much it misses.**
  *
  * The argument for repairing at all is measured rather than assumed. A paid
  * calibration of this stage threw on 4 of 13 structure calls, and every tiling
- * failure anyone has recorded — those two, plus the two in
+ * failure recorded up to 2026-08-30 — those two, plus the two in
  * docs/postmortems/the-article-with-one-heading.md — was **off by a single
  * block**. So the practical choice is not between trusting the model and
  * checking it; it is whether a two-and-a-half-minute call that put one boundary
@@ -551,11 +605,46 @@ const MAX_REPAIRED_BOUNDARIES = 1;
  * first child's start too, and a repair that stopped at one level would trade a
  * broken partition at depth 1 for a broken one at depth 2.
  *
- * **Bounded at one block, deliberately.** A repair that grew with the size of
- * the mistake would be the model marking its own homework. Two blocks out is
- * not a slip, it is a different reading of the article, and it still throws —
- * as do a backwards range, an invented id, and a root that misses the article's
- * ends. Nothing is repaired that would leave a node covering no blocks at all.
+ * **This was bounded at one block until 2026-08-30, and the bound was overridden
+ * rather than refuted.** The argument for it was: a repair that grows with the
+ * size of the mistake is the model marking its own homework, and two blocks out
+ * is not a slip, it is a different reading of the article. That is still true,
+ * and it is still the reason to be uncomfortable with this function. What
+ * changed is the price of acting on it.
+ *
+ * The bound was fitted to four observations, and they were **all off by one and
+ * all from HTML articles with headings** — the half of the corpus where the
+ * model has the author's own structure to agree with. PDFs are headingless, they
+ * are the half where the model is measured disagreeing with *itself* between
+ * runs (docs/research/opening-an-article-before-the-toc.md § 7b), and PDF ingest
+ * reached production on the day this changed. The first thing it did was fail a
+ * 9-page arXiv paper on a gap of **three**: one completed call, $0.1617 spent,
+ * article lost, and nothing the reader could do about it. Greg, 2026-08-30:
+ *
+ * > I think for now, we should allow gaps. It's not ideal, but it's not the end
+ * > of the world, and better than things failing fatally. Perhaps in future, it
+ * > should trigger a re-run of the LLM, where we feed in the previous output,
+ * > with information about the gaps and ask it to adjust. But that's for later.
+ *
+ * **That re-ask is the proper fix and this is not it.** Snapping puts the
+ * orphaned blocks in the section beside them, which is a guess — the reader gets
+ * a paragraph filed under a heading that may not describe it. The re-ask would
+ * get the model to redraw the boundary it actually meant. What snapping buys in
+ * the meantime is that every block is reachable, which is the invariant that
+ * cannot be traded (a block in no node cannot be addressed by granularity zoom
+ * at all), and an article that opens rather than one that does not.
+ *
+ * **So the size of every repair is reported** — `PartitionRepair.size`, summed
+ * and maxed into `TocRun`, printed by the CLI and logged by src/pipeline.ts.
+ * That is the whole of what stands where the bound used to: if these numbers
+ * start showing sections handed forty blocks that belonged to their neighbour,
+ * the prompt has drifted or the model cannot read this kind of document, and
+ * either way somebody has to be able to see it.
+ *
+ * What still throws, unchanged: an answer with two *independent* slipped
+ * boundaries (`MAX_REPAIRED_BOUNDARIES`), a backwards range, an invented id, a
+ * root that misses the article's ends, and children that run past their parent.
+ * Nothing is repaired that would leave a node covering no blocks at all.
  *
  * Returns one entry per child: a mended `[start, end]`, or `undefined` for
  * "use what the model wrote".
@@ -600,29 +689,62 @@ function repairedChildRanges(
     if (!span) return out;
     const [lo, hi] = span;
     /* `cursor <= hi` is the guard against repairing a node into nothing: an
-       overlap snap moves the start forward, and a single-block child that its
-       neighbour already ate has no snap that leaves it non-empty. Without this
+       overlap snap moves the start forward, and a child its neighbour has
+       already eaten whole has no snap that leaves it non-empty. Without this
        the repair would hand `visit` a range running backwards, and the error
-       two lines later would describe a range we wrote ourselves. */
-    if (lo !== cursor && Math.abs(lo - cursor) === 1 && cursor <= hi && affordable(cursor)) {
+       two lines later would describe a range we wrote ourselves.
+
+       **This one clause still refuses, and it refuses more often now that an
+       overlap of any size is snapped.** A large overlap can swallow the next
+       child entirely, and that is where the repair stops being the same kind of
+       act: moving a boundary keeps every section the model asked for and
+       changes where one ends, while emptying a child *deletes a section* — the
+       model said this article has eight parts and we would be storing seven.
+       Nothing here knows whether the right answer is to drop that section or to
+       give it back a block from either side, and guessing wrong writes a
+       structure nobody proposed. The size bound went because refusing cost the
+       reader an article that was nearly right; this refusal is not that, and it
+       is the one place `repairedChildRanges` still says no to a slip it can see.
+       tests/toc-repairs.test.ts § "does not repair an overlap that would leave
+       the node covering nothing". */
+    if (lo !== cursor && cursor <= hi && affordable(cursor)) {
       out[i] = [blocks[cursor]!.id, (child.range as [string, string])[1]] as const;
       repairs.push({
         where: `${where} > child ${i + 1}`,
         kind: lo > cursor ? "gap" : "overlap",
         at: cursor,
+        size: Math.abs(lo - cursor),
       });
     }
     cursor = hi + 1;
   }
 
-  /* The same fault at the other end: the last child stops one block before its
-     parent does, and that block would grow no leaf anywhere. `cursor` is one
-     past the last child's end, so `cursor === parent[1]` is exactly one short. */
+  /* The same fault at the other end: the children stop before their parent does,
+     and every block after them would grow no leaf anywhere. `cursor` is one past
+     the last child's end, so `cursor <= parent[1]` is short by `parent[1] + 1 -
+     cursor` blocks.
+
+     **`<=`, not `===`, since the size bound went.** It was `=== 1` for the same
+     reason the loop above was, and leaving it behind would have left the repair
+     mending a gap of forty in the middle of an article and refusing a gap of two
+     at the end of it — one rule, applied at both ends, or the next person has to
+     discover which end they are at before they can predict what happens.
+
+     The overrun (`cursor > parent[1] + 1`) is deliberately not repaired here and
+     never was: children claiming blocks their parent does not have is a
+     different fault, and its two honest repairs — shrink the child, or grow the
+     parent — are two different readings of the answer with nothing to choose
+     between them. `assertChildrenPartition` still refuses it. */
   const last = children.length - 1;
-  if (last >= 0 && cursor === parent[1] && affordable(parent[1])) {
+  if (last >= 0 && cursor <= parent[1] && affordable(parent[1])) {
     const start = out[last]?.[0] ?? (children[last]!.range as [string, string])[0];
     out[last] = [start, blocks[parent[1]]!.id] as const;
-    repairs.push({ where: `${where} > child ${last + 1}`, kind: "short", at: parent[1] });
+    repairs.push({
+      where: `${where} > child ${last + 1}`,
+      kind: "short",
+      at: parent[1],
+      size: parent[1] + 1 - cursor,
+    });
   }
 
   return out;
@@ -865,7 +987,7 @@ export interface TocRun {
    */
   strandedSupplement: number;
   /**
-   * **Off-by-one partitions this run snapped shut rather than refused**, and
+   * **Misaligned partitions this run snapped shut rather than refused**, and
    * `sourceHeading` claims it dropped because no heading in the node's range
    * backed them up. Both are repairs of a model's slip, both are bounded, and
    * both are reported for the same reason `strandedSupplement` is: a repair
@@ -874,6 +996,23 @@ export interface TocRun {
    * number that climbs means the prompt has drifted and these are hiding it.
    */
   repairedRanges: number;
+  /**
+   * How far those repairs moved a boundary: blocks moved in total, and the
+   * worst single one.
+   *
+   * **Two numbers because the count stopped being enough** when the size bound
+   * was lifted (src/toc.ts § `repairedChildRanges`). "One repair" now covers
+   * both a boundary a paragraph out and a section handed forty blocks that
+   * belonged to its neighbour, and those need opposite responses: the first is
+   * the slip this stage was built to forgive, the second means the model could
+   * not read the document and the reader is getting prose filed under a heading
+   * that does not describe it.
+   *
+   * `largestRepair` is the one to watch, and it is not derivable from the sum —
+   * six one-block snaps and one six-block snap add up the same.
+   */
+  repairedBlocks: number;
+  largestRepair: number;
   droppedHeadings: number;
   labelled: number;
   internal: number;
@@ -890,6 +1029,17 @@ export interface TocRun {
   labelCalls: number;
   /** Batches taken from a checkpoint left by an earlier, failed run. */
   labelsResumed: number;
+  /**
+   * Paragraphs left with no nav label — **normally 0, and it is reported at 0
+   * as well as above it.**
+   *
+   * A dropped label is invisible in the product: the leaf simply has no row.
+   * The count is the only trace, so it is on the run, in the log line
+   * (src/pipeline.ts), on the CLI, and in `labels.json`. The blocks themselves
+   * are in that file's `dropped`. See `droppedBudget` in src/labels.ts for what
+   * bounds it and `COVERAGE_FLOOR` above for what refuses it.
+   */
+  labelsDropped: number;
   inputTokens: number;
   outputTokens: number;
   /* From the label pass only — the structure call is one call per article and
@@ -1159,12 +1309,17 @@ export async function generateToc(opts: {
     supplementBlocks: blocks.length - body.length,
     strandedSupplement: stranded,
     repairedRanges: built.repairs.length,
+    repairedBlocks: built.repairs.reduce((n, r) => n + r.size, 0),
+    /* `Math.max` of an empty list is -Infinity, which would print and log as
+       nonsense on the run where nothing was repaired — the common case. */
+    largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
     droppedHeadings: built.droppedHeadings.length,
     labelled: Object.values(tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(tree.nodes).filter((n) => n.children.length > 0).length,
     labelBatches: labelRun.batches,
     labelCalls: labelRun.calls,
     labelsResumed: labelRun.resumed,
+    labelsDropped: labelRun.dropped.length,
     /* Both passes together. What this number answers is "what did a tree cost",
        and a structure figure alone would now understate it by most of the bill. */
     inputTokens: message.usage.input_tokens + labelRun.inputTokens,
@@ -1204,6 +1359,16 @@ async function main(): Promise<void> {
         ? ` (${run.labelsResumed} of ${run.labelBatches} batches resumed from a checkpoint)`
         : ""),
   );
+  /* Only when it happened, unlike the two lines below — the ratio above already
+     says it every run, and this line is the *reason* for a ratio under one. A
+     dropped label is a leaf that renders as nothing at all, so the run that
+     produced it is the last moment anybody is looking. */
+  if (run.labelsDropped > 0) {
+    console.log(
+      `Dropped:   ${run.labelsDropped} paragraph(s) came back unlabelled twice and were left ` +
+        `bare — see "dropped" in labels.json`,
+    );
+  }
   /* **Said out loud, every run, including when it is zero.** `strandedSupplement`
      is the count of apparatus blocks the split refused to place — non-zero means
      no supplement node was built and the tree is exactly what it would have been
@@ -1219,9 +1384,16 @@ async function main(): Promise<void> {
   /* Printed every run, including at zero, for the reason the Notes line above
      is. These are the two places stage 4 now forgives the model, and a number
      computed and never shown is the same as no number. */
+  /* The size goes on the same line as the count, because the count on its own
+     stopped meaning anything the day the size bound was lifted: one repair can
+     be a paragraph or it can be a section handed forty blocks that belonged to
+     its neighbour. src/toc.ts § `repairedChildRanges`. */
   console.log(
-    `Repaired:  ${run.repairedRanges} off-by-one range(s), ` +
-      `${run.droppedHeadings} unbacked heading claim(s)`,
+    `Repaired:  ${run.repairedRanges} misaligned range(s)` +
+      (run.repairedRanges > 0
+        ? ` moving ${run.repairedBlocks} block(s), largest ${run.largestRepair}`
+        : "") +
+      `, ${run.droppedHeadings} unbacked heading claim(s)`,
   );
   console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);

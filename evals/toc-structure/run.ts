@@ -92,7 +92,14 @@ interface ArmResult {
    * would read a necessary 1 for every paid arm. Absent on a free arm, which
    * builds no tree from a model. GPT Sol's review of the repairs.
    */
-  repaired?: { ranges: number; where: string[]; droppedHeadings: string[] };
+  repaired?: {
+    ranges: number;
+    /** Blocks moved in total, and the worst single boundary — see the write site. */
+    blocks: number;
+    largest: number;
+    where: string[];
+    droppedHeadings: string[];
+  };
   /** How differently this arm cut the article from the tree on disk. Descriptive, not a verdict. */
   vsDisk?: TreeAgreement;
 }
@@ -264,7 +271,8 @@ function print(r: ArmResult): void {
      says "valid" cannot say both. */
   if (r.repaired && (r.repaired.ranges > 0 || r.repaired.droppedHeadings.length > 0)) {
     console.log(
-      `  repaired      ${r.repaired.ranges} off-by-one range(s)` +
+      `  repaired      ${r.repaired.ranges} misaligned range(s) moving ` +
+        `${r.repaired.blocks} block(s), largest ${r.repaired.largest}` +
         `${r.repaired.where.length ? ` [${r.repaired.where.join("; ")}]` : ""}, ` +
         `${r.repaired.droppedHeadings.length} unbacked heading claim(s) — ` +
         `this answer was NOT valid as written`,
@@ -475,7 +483,17 @@ async function main(): Promise<void> {
             ? {
                 repaired: {
                   ranges: chose.built.repairs.length,
-                  where: chose.built.repairs.map((r) => `${r.where} (${r.kind})`),
+                  /* The size, since the repair stopped being bounded at one
+                     block (src/toc.ts § `repairedChildRanges`). Without it an
+                     arm that put a boundary a paragraph out and an arm that
+                     handed a section forty of its neighbour's blocks both
+                     record "1 range repaired" and both score `ok` — the repair
+                     living inside the thing under measurement, redefining the
+                     measurement, which is the mistake this eval already had to
+                     be told about once. */
+                  blocks: chose.built.repairs.reduce((n, r) => n + r.size, 0),
+                  largest: chose.built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
+                  where: chose.built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`),
                   droppedHeadings: chose.built.droppedHeadings,
                 },
               }
