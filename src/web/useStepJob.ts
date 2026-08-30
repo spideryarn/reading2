@@ -101,7 +101,8 @@ export interface StepJob {
   job: Job | null;
   /**
    * Why the run stopped, if it stopped badly — whether this session started it
-   * or merely watched it. See `seenId` below for why the second half matters.
+   * or merely watched it. See `watchedId` below for why the second half
+   * matters, and for the two ways it was got wrong first.
    */
   failed: string | null;
   /** Ask for a run. Resolves once the POST has been answered, not when the job has. */
@@ -154,13 +155,9 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
    *
    * `postFailure` is the request never producing a job: nothing will arrive in
    * the polled list to explain the silence, so the surface has to say it
-   * itself. `startedId` is the other one, and it is why that is not the whole
+   * itself. `watchedId` is the other one, and it is why that is not the whole
    * story — a job that fails *leaves* the running set, so without it the button
-   * would simply reappear as though nothing had happened. `seenId` widens that
-   * to a job this mount watched running without having started it, which is the
-   * only kind a surface with no button of its own can have; both are scoped to
-   * **this mount**, so an old failure from another day is still not dug up and
-   * presented as news.
+   * would simply reappear as though nothing had happened.
    *
    * **The failure and its reason are one value**, not a boolean beside a
    * string, so no later edit can set one and forget the other — which is
@@ -168,42 +165,55 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
    * means the last press produced a job.
    */
   const [postFailure, setPostFailure] = useState<{ reason: string | null } | null>(null);
-  const [startedId, setStartedId] = useState<string | null>(null);
   /**
-   * A job this surface has actually **watched running**, whoever started it.
+   * **The last run this mount has anything to say about**, whoever started it.
    *
-   * `startedId` alone was not enough, and the gap was invisible until a surface
-   * showed progress for a run it had not begun. `job` above deliberately reads
+   * Two rounds of getting this wrong, and they are worth keeping because they
+   * are opposite errors:
+   *
+   * **It was only the job this hook started.** `job` above deliberately reads
    * the queue rather than a remembered click, so a run from the CLI, the shelf
-   * or another tab appears here as progress — and then, when it *failed*, it
-   * simply left the queued/running set. The progress row vanished, the artefact
-   * on screen was unchanged, and nothing said anything: which reads exactly
-   * like the run having finished and changed nothing. On `sketch` that is two
-   * minutes and $0.20. ⟨Sol⟩, 2026-08-30.
+   * or another tab shows up as progress — and then, when it *failed*, it simply
+   * left the queued/running set. The row vanished, the artefact on screen was
+   * unchanged, and nothing was said: which reads exactly like the run having
+   * finished and changed nothing. On `sketch` that is two minutes and $0.20.
    *
-   * **Only what this mount saw**, which is what keeps the original promise: an
-   * old failure from another day is still not dug up and presented as news,
-   * because this is never set for a job that was already over when the panel
-   * opened.
+   * **Then it was `startedId ?? seenId`**, which is the same bug with the sign
+   * flipped. Once this mount had started anything, that id won for good: a
+   * later run from elsewhere could fail and be ignored, and — worse, because it
+   * invents rather than loses — an *old* failure of ours came back out from
+   * behind a newer run's spinner, about a job that had since succeeded.
+   *
+   * So it is **one id, and always the latest**. `start` writes it because a job
+   * that fails between the POST and the next poll is never seen running and the
+   * press is the only record of it; the effect then overwrites it with whatever
+   * is running now. Both ⟨Sol⟩, 2026-08-30, the second one reviewing the fix to
+   * the first — which is the argument for a second round rather than one.
+   *
+   * **Only what this mount saw**, which keeps the original promise: an old
+   * failure from another day is not dug up and presented as news, because this
+   * is never set for a job that was already over when the panel opened.
    */
-  const [seenId, setSeenId] = useState<string | null>(null);
+  const [watchedId, setWatchedId] = useState<string | null>(null);
   useEffect(() => {
-    if (job) setSeenId(job.id);
+    if (!job) return;
+    setWatchedId(job.id);
+    /* Something is running, so "the request never landed" is no longer a true
+       account of anything on screen. Without this it would sit under a live
+       spinner until the next press. */
+    setPostFailure(null);
   }, [job]);
   const stopped = useMemo(() => {
-    /* `startedId` first: a job that fails between the POST and the next poll is
-       never seen running, so the press is the only record of it. */
-    const id = startedId ?? seenId;
-    const mine = id ? queue.jobs.find((j) => j.id === id) : undefined;
+    const mine = watchedId ? queue.jobs.find((j) => j.id === watchedId) : undefined;
     if (!mine) return null;
     if (mine.status === "error") return mine.error ?? "The job failed.";
     if (mine.status === "cancelled") return "Stopped.";
     return null;
-  }, [queue.jobs, startedId, seenId]);
+  }, [queue.jobs, watchedId]);
 
   const start = useCallback(
     async ({ force = false, useProfile = true }: StepRun = {}) => {
-      setStartedId(null);
+      setWatchedId(null);
       const started = await queue.run({
         slug,
         steps: [step],
@@ -216,7 +226,7 @@ export function useStepJob(slug: string, step: StepName, onFinished: () => void)
          obvious places to read it from are both wrong, and this is the one
          instant at which the right value is available. */
       setPostFailure(started === null ? { reason: queue.lastFailure() } : null);
-      if (started) setStartedId(started.id);
+      if (started) setWatchedId(started.id);
     },
     [queue, slug, step],
   );

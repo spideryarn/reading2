@@ -39,7 +39,7 @@
  * picture would have been. Failing to nothing at all is the
  * [silent-success](../../docs/reusable/silent-success.md) shape.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectionPoint, ProjectionResponse, SkipCounts } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -103,6 +103,27 @@ export function useProjection(slug: string, enabled: boolean): UseProjection {
      it already held and re-run nothing. */
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  /**
+   * **What this hook has already spent an attempt on**, so a chip press cannot
+   * spend another.
+   *
+   * The effect used to re-run its POST every time this picture came back on
+   * screen, on the reasoning that the server caches. It does — *in process*,
+   * and `similar.ts` records that a cold process is the normal case on Vercel
+   * and re-embeds the article for about $0.002. So a reader stepping between
+   * the chips was paying to be told what this hook was already holding, and
+   * nothing about a chip press says the article changed. ⟨Sol⟩, 2026-08-30.
+   *
+   * **One request per attempt per article**, and `retry` is what buys another —
+   * which is the whole reason `attempt` is a counter. Recorded when the request
+   * *settles*, success or failure, so a picture that failed does not re-buy
+   * itself on every toggle either; not recorded on an abort, because that
+   * request never happened and the reader is owed it when they come back.
+   *
+   * A ref rather than state: writing it must not itself cause a render, and it
+   * is read at the top of the effect that writes it.
+   */
+  const bought = useRef<string | null>(null);
 
   /* **Whose answer this is.** These coordinates are about one article's
      paragraphs, so drawing the previous one's would be a picture confidently
@@ -115,14 +136,15 @@ export function useProjection(slug: string, enabled: boolean): UseProjection {
      longer version there for why both are kept. */
   const mine = state.slug === slug;
 
-  /* `attempt` is in the dependency list and is read nowhere in the body, which
-     is exactly what makes it work and exactly what the rule objects to: it is a
-     token whose only job is to be different, so that pressing Try again re-runs
-     an effect whose real inputs have not changed. Removing it, as the fix
-     offers, would leave a button that sets state and fetches nothing. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see above — `attempt` is the retry token, not a value
+  /* `attempt` is a token whose only job is to be different, so that pressing
+     Try again re-runs an effect whose real inputs have not changed. It needed a
+     lint suppression while nothing read it; `bought` reads it now, which is the
+     better answer to the same objection — the dependency is a value the body
+     uses rather than a nudge the body ignores. */
   useEffect(() => {
     if (!enabled) return;
+    const token = `${slug}#${attempt}`;
+    if (bought.current === token) return;
     /* Not cleared when `enabled` goes false: stepping from Drift to Trail and
        back must not throw away an answer already paid for. The server caches
        too, so a second request would be cheap — but it would still be a round
@@ -178,6 +200,12 @@ export function useProjection(slug: string, enabled: boolean): UseProjection {
             ? was
             : { ...IDLE, slug, status: "error", error: (err as Error).message },
         );
+      } finally {
+        /* **On settle, not on success**, so a picture that failed does not
+           re-buy itself on every toggle back — the reader has `retry` for that,
+           and it bumps `attempt`. Not on an abort: that request never happened,
+           so they are still owed it. */
+        if (!stop.signal.aborted) bought.current = token;
       }
     })();
     return () => stop.abort();

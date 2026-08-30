@@ -273,6 +273,24 @@ The saving grace is that Biome **tells you** when a suppression does nothing
 (`suppressions/unused`), which is the opposite of how it treats a comment in `biome.json`. A dead
 suppression is loud; a dead config is silent.
 
+## A copy outside the repo is checked against a different config
+
+Comparing a file against its committed version by writing it to `/tmp` and
+linting that **does not compare the same thing**. Biome resolves `biome.jsonc`
+by walking up from the file, so a copy outside the tree gets the defaults, and
+whole classes of diagnostic appear or vanish for that reason alone.
+
+It cost a wrong conclusion on 2026-08-30: nine `suppressions/unused` in
+`SketchView.tsx` were read as newly introduced, because `git show HEAD:… > /tmp/…`
+came back clean. Linted **in place** — same content, written to a throwaway path
+inside `src/web/` and deleted straight after — HEAD reports the same nine. They
+were pre-existing, and the "fix" would have been an edit to a file somebody else
+was working in for no reason at all.
+
+The same applies to `tsc`: a worktree without `node_modules` is not the project.
+`git worktree add` and lint or typecheck there if a real before-and-after is
+wanted.
+
 ## The baseline is not green yet
 
 `npm run lint` still reports a handful, and the count moves as other agents land work. What remains

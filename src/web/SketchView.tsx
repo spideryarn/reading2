@@ -455,7 +455,14 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
              two pictures and wired nothing to reach them. This says how many
              there are and gets you to any of them, and it keeps working when
              `opens` is missing — which it is, on four of the six real drawings
-             so far. One tab stop and arrows, like every other switcher here. */
+             so far. One tab stop and arrows, like every other switcher here —
+             and that last clause was **false for three days**: the roving
+             `tabIndex` was here from the start and the arrow handler was never
+             written, so a keyboard reader could reach the selected scene and
+             not one of the others. A comment describing a widget the code has
+             not implemented is the same mistake `DiagramPanel` made with its
+             tree role, and it is worse here because the roving tabstop makes it
+             look deliberate. ⟨Sol⟩, 2026-08-30. */
           // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern, and the same call DiagramPanel's kind switcher makes
           <div className="sk-scenes" role="radiogroup" aria-label="Which part of the picture">
             <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
@@ -486,9 +493,42 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
                     aria-checked={on}
                     tabIndex={on ? 0 : -1}
                     className={`sk-scene${on ? " on" : ""}`}
+                    data-sk-scene={sc.id}
                     onClick={() => {
                       setOpen(i === 0 ? null : sc.id);
                       setFocused(0);
+                    }}
+                    onKeyDown={(e) => {
+                      const d =
+                        e.key === "ArrowRight" || e.key === "ArrowDown"
+                          ? 1
+                          : e.key === "ArrowLeft" || e.key === "ArrowUp"
+                            ? -1
+                            : 0;
+                      if (d === 0) return;
+                      /* The picture below is its own tab stop with its own
+                         arrow handling, and `keynav.ts` steps the article on
+                         these keys too — so saying "this press was mine" is
+                         what stops one arrow moving three things. */
+                      e.preventDefault();
+                      e.stopPropagation();
+                      // Wraps, as the radio pattern specifies.
+                      const at = (i + d + sketch.scenes.length) % sketch.scenes.length;
+                      const next = sketch.scenes[at];
+                      if (!next) return;
+                      setOpen(at === 0 ? null : next.id);
+                      setFocused(0);
+                      /* **And focus follows**, or the newly-checked radio is
+                         the tab stop while the old one still has focus, and the
+                         next press steps from the same place — you reach the
+                         neighbour and never anything past it. `Choice` in
+                         DiagramPanel.tsx carries the longer version. Scoped
+                         with `closest`, not the document, because the overlay
+                         mounts a second copy of this row. */
+                      e.currentTarget
+                        .closest(".sk-scenes")
+                        ?.querySelector<HTMLElement>(`[data-sk-scene="${next.id}"]`)
+                        ?.focus();
                     }}
                   >
                     {i === 0 ? sketch.title : sc.title}

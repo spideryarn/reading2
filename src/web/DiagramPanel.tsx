@@ -174,7 +174,13 @@ const KIND_UI: Record<DiagramKind, { label: string; icon: typeof Network; blurb:
     icon: PenLine,
     blurb:
       "A model reads the article, works out what shape the argument is — three supports converging, a ladder, a spine with asides — and draws that. The only picture here that is not the same shape for every article.",
-    how: "Costs one model call and about two minutes, and is never drawn until you ask. Down the page is still reading order; nothing is to scale. Click a box to jump there, or to open the part inside it.",
+    /* **Both promises here were stronger than the artefact.** The picture is
+       *checked* for running down the page with the article and for how much of
+       it is reachable, but the bar it has to clear is `MIN_FLOW` 0.3 and
+       `MIN_LINKED_SHARE` 0.5 (src/sketch-scene.ts) — so "down the page is
+       reading order" and "click a box to jump there" were describing the good
+       case as the guarantee. ⟨Sol⟩, 2026-08-30. */
+    how: "Costs one model call and about two minutes, and is never drawn until you ask. It mostly runs down the page with the article, and nothing is to scale. Boxes that point at a passage jump there when clicked; not all of them do.",
   },
 };
 
@@ -1014,7 +1020,16 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                   label: "Lanes",
                   blurb:
                     "One column per topic the model found, left to right by where the article gets to each. A subject the piece returns to is a second stack of dots in the same column, a long way further down.",
-                  how: "Within a lane, sideways is how central that paragraph is to its own topic — the core is a tight column, marginal members lean out. The number of lanes is worked out from the article's length and capped at eight, which is a fact about a 300px band rather than about the article.",
+                  /* **Not “how central it is to its topic”**, which is what this
+                     card said first and is a sentence `laneX` was rewritten to
+                     stop being true: sideways inside a lane is the paragraph's
+                     own first component, on the same scale Spread shows across
+                     the whole band, so the two modes are two readings of one
+                     number. ⟨Sol⟩ caught the falsehood coming back, having
+                     caught it once in scatter.ts in August — the geometry looks
+                     identical either way, which is exactly why a card about it
+                     has to be checked against the code rather than the picture. */
+                  how: "Inside a lane, sideways is the same number Spread uses, scaled to that lane — so the two are two readings of one measurement rather than two different pictures. The number of lanes comes from the article's length and is capped at eight, which is a fact about a 300px band rather than about the article.",
                 },
                 {
                   value: "spread",
@@ -1042,12 +1057,12 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                 value: "progress",
                 label: "Progress",
                 blurb: "Dark at the start of the article, bright at the end.",
-                how: "The one setting that answers \u201cdoes this piece travel through its subject or circle back over it?\u201d without following the chain — which on a long article is a web you cannot trace.",
+                how: "The one setting that answers “does this piece travel through its subject or circle back over it?” without following the chain — which on a long article is a web you cannot trace.",
               },
               {
                 value: "topic",
                 label: "Topic",
-                blurb: "The model\u2019s own grouping — one hue per topic, the same one the Lanes columns use.",
+                blurb: "The model’s own grouping — one hue per topic, the same one the Lanes columns use.",
                 how: "The way to see the grouping on Trail, which has no lanes to show it in. The words each topic was named after are in the legend under Drift.",
               },
             ]}
@@ -1091,11 +1106,24 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                       ? `The paragraphs in this column are the ones about: ${words.join(", ")}.`
                       : "Nothing distinguishes this column's paragraphs from the rest — it is a group the arithmetic found and cannot name."
                   }
-                  how="The words are the ones most distinctive to this column rather than commonest in it, so a word that is everywhere in the article scores zero and drops out. Columns run left to right by where the article gets to each topic."
+                  /* **“Unless nothing is left” is load-bearing.** A word in every
+                     column scores zero and drops out — and when *every* word in
+                     a column does, `laneTerms` falls back to raw frequency
+                     rather than showing an empty chip, so the commonest word
+                     really can appear. A card that promised otherwise would be
+                     wrong on exactly the short single-subject article where the
+                     legend is least useful. ⟨Sol⟩, 2026-08-30. */
+                  how="The words are the ones most distinctive to this column rather than commonest in it, so a word that is everywhere in the article scores zero and drops out — unless nothing is left, in which case the commonest word stands rather than an empty chip. Columns run left to right by where the article gets to each topic."
                 />
               }
             >
-              <li className="diag-lane" style={hue === "topic" ? slotStyle(i) : undefined}>
+              {/* **A tab stop, for the same reason the step readout has one.**
+                  `Tooltip`'s keyboard route is focus, and a plain `<li>` cannot
+                  take it — so the two words the chip is too narrow to show were
+                  reachable by pointer only, which is the failure the `title`
+                  attribute already had here. ⟨Sol⟩, 2026-08-30. */}
+              {/* biome-ignore lint/a11y/noNoninteractiveTabindex: see above — the tab stop exists so the card naming this column is reachable by keyboard */}
+              <li className="diag-lane" tabIndex={0} style={hue === "topic" ? slotStyle(i) : undefined}>
                 {words[0] ?? "—"}
               </li>
             </Tooltip>

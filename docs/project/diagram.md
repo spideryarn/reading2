@@ -192,6 +192,35 @@ Pinned in
 § *saying it is working, and offering a second try*, which drives the retry
 through the real route and counts the requests rather than trusting the button.
 
+#### Two things the review found underneath, and they are opposite mistakes
+
+**A failed repeat used to blank a picture that was already good.** Both hooks
+re-fetch when their picture comes back on screen, and the guard beside them has
+always promised that toggling away and back "must not throw away an answer
+already paid for". Only half was true: the *spinner* was suppressed while an
+answer was held, and the `catch` then replaced the answer itself. One flaky
+repeat emptied a complete picture and reported a failure about a picture the
+reader already had. It is the rule [`useSketch`](../../src/web/useSketch.ts) and
+`useIdeas` already write down, applied to the two hooks that had not got it.
+
+**And the repeat should not have happened at all.** The re-fetch was excused by
+"the server caches" — it does, *in process*, and `similar.ts` records that a
+cold process is the normal case on Vercel and re-embeds the article for about
+$0.002. So a reader stepping between the chips was paying to be told what the
+panel was already holding, and nothing about a chip press says the article
+changed. `bought` makes it **one request per attempt per article**, recorded
+when the request settles rather than when it succeeds — so a picture that failed
+does not re-buy itself on every toggle either. `retry` is what buys another,
+which is what `attempt` being a counter is for.
+
+The two together mean the blanking path is now reachable only through `retry`,
+so it is tested against the hooks rather than the panel —
+[`tests/diagram-answer-survives.test.tsx`](../../tests/diagram-answer-survives.test.tsx),
+and the panel tests that used to cover it began failing on their own "the second
+visit did not re-ask, so this proves nothing" line, which is that assertion
+doing its job. Both ⟨Sol⟩, 2026-08-30, the second finding in review of the fix
+to the first.
+
 Two reasons, and the second is the bigger one:
 
 - **A mode that answers a question you did not ask** — under small type
@@ -274,6 +303,36 @@ different clothes:
   unreachable by any route. `aria-disabled` now, which keeps the grey and the
   announcement and loses nothing: `stepTo` already returned early on the same
   condition `canStep` reports, so the press was never doing anything anyway.
+- **And the lane legend's chips are `<li>`s**, which cannot take focus either —
+  so the two words a chip is too narrow to show were reachable by pointer only,
+  which is the failure the `title` attribute already had there. ⟨Sol⟩ found this
+  one and the scene row below in review, 2026-08-30.
+
+**Three of the cards said things the code contradicts**, and that is the risk a
+detailed card carries that a one-line `title` did not:
+
+- *Lanes* said sideways inside a lane is how central a paragraph is to its
+  topic. It is the paragraph's own first component, on the same scale Spread
+  uses — and `laneX` in [`scatter.ts`](../../src/web/scatter.ts) was **rewritten
+  in August to stop the centrality version being true**, after ⟨Sol⟩ caught it
+  the first time. Writing it back into a card is the same claim returning by a
+  different door, and the geometry looks identical either way, which is exactly
+  why a card has to be checked against the code rather than against the picture.
+- The legend said a word common to every column drops out. It does — *unless
+  every word in a column does*, when `laneTerms` falls back to raw frequency
+  rather than showing an empty chip, so the commonest word really can appear.
+- *Sketch* promised that down the page is reading order and that clicking a box
+  jumps there. The picture is **checked** for both, but the bar is `MIN_FLOW`
+  0.3 and `MIN_LINKED_SHARE` 0.5 ([`sketch-scene.ts`](../../src/sketch-scene.ts))
+  — so both sentences were describing the good case as the guarantee.
+
+**Sketch's scene row was a radiogroup with no arrow keys**, and its comment said
+"one tab stop and arrows, like every other switcher here". The roving `tabIndex`
+was there from the start and the handler was never written, so a keyboard reader
+could reach the scene they were on and none of the others — a picture with more
+parts and no way to get to them. It reads as deliberate *because* the roving
+tabstop is there, which is the same mistake this panel made once with its tree
+role.
 
 Pinned in
 [`tests/diagram-panel-hover.test.tsx`](../../tests/diagram-panel-hover.test.tsx)

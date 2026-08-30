@@ -165,6 +165,10 @@ function mount(
   kind: DiagramKind = "force",
   from: () => { root: SummaryNode; blocks: Block[] } = article,
   atRow = 0,
+  /* Only the lane legend cares, and only on Drift — everything else here draws
+     the same either way, so it stays defaulted rather than threaded through
+     every call. */
+  axis: "spread" | "lanes" = "spread",
 ) {
   const { root: tree, blocks } = from();
   act(() => {
@@ -179,7 +183,7 @@ function mount(
         blocks={blocks}
         /* The two scatter pictures' controls. Passed because the panel requires
            them, and fixed rather than exercised: nothing here draws a scatter. */
-        axis="spread"
+        axis={axis}
         onAxis={() => {}}
         hue="section"
         onHue={() => {}}
@@ -611,81 +615,44 @@ describe("a second request that fails, over an answer that already landed", () =
   };
   const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
 
-  it("keeps Force's dotted lines when the repeat request is refused", async () => {
+  it("does not buy the same answer twice for one article", async () => {
+    /* **Toggling is not invalidation.** Both hooks re-ran their POST every time
+       their picture came back on screen, on the reasoning that the server
+       caches — but `similar.ts` says a cold process is the normal case on
+       Vercel and re-embeds the article for about $0.002, so a reader stepping
+       between the chips was spending money to be told what the panel was
+       already holding. Nothing about a chip press says the article changed.
+       ⟨Sol⟩, 2026-08-30. */
     let asked = 0;
     vi.stubGlobal("fetch", async (url: RequestInfo | URL) => {
-      /* **A body per route.** The detour below is through Drift, which reads
-         `points.length` off whatever comes back — an empty object takes the
-         whole render down, and a stub that answers the wrong shape tests the
-         code against a server that does not exist. */
-      if (!String(url).includes("/api/similar/")) return new Response(JSON.stringify(EMPTY_PROJECTION), { status: 200 });
-      asked += 1;
-      return asked === 1
-        ? new Response(JSON.stringify({ model: "m", blocks: 7, eligible: 7, omitted: 0, pairs: [] }), { status: 200 })
-        : new Response(JSON.stringify({ error: "no credit [E_QUOTA]" }), { status: 402 });
+      if (String(url).includes("/api/similar/")) asked += 1;
+      return String(url).includes("/api/projection/")
+        ? new Response(JSON.stringify(EMPTY_PROJECTION), { status: 200 })
+        : new Response(JSON.stringify({ model: "m", blocks: 7, eligible: 7, omitted: 0, pairs: [] }), { status: 200 });
     });
 
     mount("force");
     await settle();
-    const before = host.querySelector(".diag-note")?.textContent ?? "";
-    expect(before, "the first answer never landed").toContain("7 passages");
+    expect(asked, "it never asked at all").toBe(1);
 
-    /* Away and back, which is what a reader does with a chip row. The panel
-       stays mounted — `root.render` on the same root with the same component —
-       so the hook's state is the same state, which is the whole point. */
     mount("drift");
     await settle();
     mount("force");
     await settle();
-    expect(asked, "the second visit did not re-ask, so this proves nothing").toBeGreaterThan(1);
-
-    const after = host.querySelector(".diag-note")?.textContent ?? "";
-    expect(after, "a failed repeat blanked an answer the reader already had").toContain("7 passages");
-    expect(after, "a failed repeat reported a failure about a picture that is fine").not.toContain("E_QUOTA");
-  });
-
-  it("keeps Drift's dots when the repeat request is refused", async () => {
-    /* `id`, `x`, `y`, `c` — the real `ProjectionPoint`. Two ids the fixture
-       article actually has, because `scatter.ts` drops any point whose block the
-       article no longer holds, and a fixture that lied here would draw nothing
-       and read as the bug this test is about. */
-    const points = [
-      { id: "spya-b0", x: -0.4, y: 0.1, c: 0 },
-      { id: "spya-b2", x: 0.4, y: -0.1, c: 1 },
-    ];
-    let asked = 0;
-    vi.stubGlobal("fetch", async (url: RequestInfo | URL) => {
-      if (!String(url).includes("/api/projection/")) {
-        return new Response(JSON.stringify({ model: "m", blocks: 0, eligible: 0, omitted: 0, pairs: [] }), { status: 200 });
-      }
-      asked += 1;
-      return asked === 1
-        ? new Response(
-            JSON.stringify({
-              model: "m", blocks: 2, k: 2, variance: [0.2, 0.1],
-              skipped: { tooShort: 0, nonProse: 0, capped: 0 }, points,
-            }),
-            { status: 200 },
-          )
-        : new Response(JSON.stringify({ error: "no credit [E_QUOTA]" }), { status: 402 });
-    });
-
     mount("drift");
     await settle();
-    expect(host.querySelectorAll("svg .diag-node").length, "the first answer never drew").toBeGreaterThan(0);
-
     mount("force");
     await settle();
-    mount("drift");
-    await settle();
-    expect(asked, "the second visit did not re-ask, so this proves nothing").toBeGreaterThan(1);
-
-    expect(
-      host.querySelectorAll("svg .diag-node").length,
-      "a failed repeat emptied a picture that was already drawn",
-    ).toBeGreaterThan(0);
-    expect(host.querySelector(".diag-wait"), "a drawn picture was replaced by a failure").toBeNull();
+    expect(asked, "each visit back to Force bought the embeddings again").toBe(1);
   });
+
+  /* **The two tests that used to sit here have moved**, to
+     tests/diagram-answer-survives.test.tsx. They drove a failed *repeat*
+     through the panel — toggle away, toggle back, second request refused — and
+     the guard above has made that path unreachable: a chip press no longer buys
+     anything, so there is no second request to fail. The rule they pin is the
+     hook's own and still matters, so it is now tested against the hook, through
+     the one caller that can still reach it: `retry` while an answer is held. */
 });
 
 /**
@@ -701,13 +668,14 @@ describe("a second request that fails, over an answer that already landed", () =
  * smaller version of a card: it waits about a second, cannot be styled,
  * truncates at the OS's idea of a line, and **does not exist at all on a touch
  * device** — which is the device the step bar was specifically built for. So
- * what this pins is the absence: a `title` creeping back onto a control here is
- * the regression, and it is invisible on a laptop because it still shows
+ * what this pins is the absence too: a `title` creeping back onto a control
+ * here is a regression, and it is invisible on a laptop because it still shows
  * *something*.
  *
- * The cards' contents are not asserted. They are copy, they will be edited, and
- * a test that spelled them out would be a second copy of the words to keep in
- * step. What has to hold is that a control has one at all.
+ * The cards' wording is not asserted. It is copy, it will be edited, and a test
+ * that spelled it out would be a second copy of the words to keep in step. What
+ * has to hold is that each control has a card, that the card is *that*
+ * control's, and that it says more than the control's own label already does.
  */
 describe("the controls explain themselves", () => {
   const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 0)); });
@@ -716,60 +684,95 @@ describe("the controls explain themselves", () => {
    * **Open the card and read it**, rather than looking for a mark on the
    * trigger.
    *
-   * Floating UI puts nothing durable on the trigger — `aria-describedby`
-   * appears only while the card is open — so an attribute check is a check that
-   * passes on a control with no card at all. Focus is the opener that works
-   * here: `Tooltip` includes `useFocus`, and a hover in jsdom does not reach
-   * it (measured, not assumed — `mouseover` leaves nothing on screen and
-   * `focus()` renders the panel). It is also the interaction that matters most
-   * for the ask, because a keyboard reader is the one a `title` serves worst
-   * after a touch reader.
+   * Floating UI puts nothing durable on a trigger — `aria-describedby` appears
+   * only while the card is open — so an attribute check is a check that passes
+   * on a control with no card at all. Focus is the opener that works here:
+   * `Tooltip` includes `useFocus`, and a hover in jsdom does not reach it
+   * (measured, not assumed: `mouseover` leaves nothing on screen and `focus()`
+   * renders the panel). It is also the interaction that matters most for the
+   * ask, because after a touch reader the keyboard reader is who a `title`
+   * serves worst.
    *
    * The card is portalled to the end of `<body>`, so it is looked for in the
-   * document rather than in the host.
+   * document — and that is a hole on its own: a neighbour's card left open
+   * would be read as this control's, which is exactly how a test like this
+   * passes with a card attached to the wrong thing. ⟨Sol⟩ named it. Two things
+   * plug it: the surface is cleared before each control, and **exactly one**
+   * card must be open after focusing it — then the caller checks the card's
+   * head against the control it focused.
    */
-  const cardFor = async (el: Element): Promise<string> => {
+  const cardFor = async (el: Element): Promise<{ head: string; body: string }> => {
+    /* Close whatever is open first. A previous control's card outliving its
+       blur is what would let the query below read a neighbour's words as this
+       control's, and it does outlive it across a remount — the card is
+       portalled to `<body>`, so it is not inside the host this file replaces.
+       Blurred and waited out rather than removed from the DOM: the card is
+       React's, and tearing its node out from under it took the *next* mount's
+       panel down with it — five seconds of timeout and an undrawn band. */
+    (document.activeElement as HTMLElement | null)?.blur();
+    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
     (el as HTMLElement).focus();
     await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
-    const card = document.querySelector('[role="tooltip"]');
-    const text = card?.textContent ?? "";
+    const cards = document.querySelectorAll('[role="tooltip"]');
+    expect(cards, "focusing this control opened no card, or more than one").toHaveLength(1);
+    const card = cards[0];
+    const head = card?.querySelector(".tip-soon-head")?.textContent ?? "";
+    const body = (card?.textContent ?? "").slice(head.length);
     (el as HTMLElement).blur();
     await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
-    return text;
+    return { head, body };
   };
 
-  /** A card worth having: a name, a sentence, and the sentence a press cannot teach. */
-  const isDetailed = (text: string) => text.length > 80;
+  /** More than the label the reader can already see, which is the whole point. */
+  const isDetailed = (body: string) => body.length > 80;
 
-  it("puts a card on every chip in the picture row", async () => {
+  /* Two 400ms waits per control — the delay group's open plus its transition —
+     so four chips is already close to vitest's 5s default, and the first run of
+     this timed out at 5007ms. Shortening the wait trades a slow test for a
+     flaky one. */
+  it("puts a card on every chip in the picture row", { timeout: 20000 }, async () => {
     mount("force");
     await settle();
     const chips = [...host.querySelectorAll(".diag-kind")];
     expect(chips.length, "the chip row is not drawn").toBeGreaterThan(3);
     for (const chip of chips) {
       const label = chip.textContent ?? "?";
-      expect(isDetailed(await cardFor(chip)), `${label} has no card, or a thin one`).toBe(true);
+      const card = await cardFor(chip);
+      expect(card.head, `the open card is not ${label}'s`).toBe(label);
+      expect(isDetailed(card.body), `${label}'s card is a label, not an explanation`).toBe(true);
       expect(chip.hasAttribute("title"), `${label} fell back to a title attribute`).toBe(false);
     }
   });
 
-  it("puts a card on the step bar, which is the one built for a device titles do not reach", async () => {
+  it("puts a card on the step bar, which is the one built for a device titles do not reach", { timeout: 20000 }, async () => {
     mount("force");
     await settle();
     const bar = host.querySelector(".diag-step");
     expect(bar, "the step bar is not drawn").not.toBeNull();
     const parts = [...(bar?.querySelectorAll(".diag-step-btn, .diag-step-at") ?? [])];
     expect(parts.length, "the bar should be two buttons and a readout").toBe(3);
-    for (const part of parts) {
-      expect(isDetailed(await cardFor(part)), `${part.className} has no card, or a thin one`).toBe(true);
+
+    /* **The ↑ is greyed out here**, because the fixture stands the reader on
+       row 0 — and that is the case worth having. It was a `disabled` button,
+       which cannot be focused and fires no mouse events, so the card saying
+       *why it is dead* was unreachable by exactly the reader asking. */
+    expect(parts[0]?.getAttribute("aria-disabled"), "the fixture does not reach the greyed case").toBe("true");
+
+    const heads = ["Previous", "Where you are", "Next"];
+    for (const [i, part] of parts.entries()) {
+      const card = await cardFor(part);
+      expect(card.head, "the open card belongs to another control").toContain(heads[i] as string);
+      expect(isDetailed(card.body), `${card.head}'s card is a label, not an explanation`).toBe(true);
       expect(part.hasAttribute("title"), "a step control fell back to a title").toBe(false);
     }
   });
 
-  it("puts a card on the axis and colour chips, which is where a title used to be", async () => {
-    /* These need a drawn scatter: the second control row renders only when
-       there are dots. A ready projection with two points is the smallest
-       article that gets there. */
+  /* Seven controls at two 400ms waits each is over vitest's 5s default, and a
+     shorter wait is not available: 400ms is the delay group's open plus its
+     transition, and trimming it would make this flaky rather than fast. */
+  it("puts a card on the axis, colour and lane chips, which is where a title used to be", { timeout: 20000 }, async () => {
+    /* These need a drawn scatter: the second control row and the legend render
+       only when there are dots. */
     const points = [
       { id: "spya-b0", x: -0.4, y: 0.1, c: 0 },
       { id: "spya-b2", x: 0.4, y: -0.1, c: 1 },
@@ -785,15 +788,31 @@ describe("the controls explain themselves", () => {
           )
         : new Response(JSON.stringify({ model: "m", blocks: 0, eligible: 0, omitted: 0, pairs: [] }), { status: 200 }),
     );
-    mount("drift");
+    mount("drift", article, 0, "lanes");
     await settle();
 
     const opts = [...host.querySelectorAll(".diag-opt-btn")];
     expect(opts.length, "the second control row is not drawn").toBeGreaterThan(2);
     for (const o of opts) {
       const label = o.textContent ?? "?";
-      expect(isDetailed(await cardFor(o)), `${label} has no card, or a thin one`).toBe(true);
+      const card = await cardFor(o);
+      expect(card.head, `the open card is not ${label}'s`).toBe(label);
+      expect(isDetailed(card.body), `${label}'s card is a label, not an explanation`).toBe(true);
       expect(o.hasAttribute("title"), `${label} kept its title attribute`).toBe(false);
+    }
+
+    /* **The lane legend, which was the one still unreachable.** Its triggers
+       are `<li>`s and `Tooltip`'s keyboard route is focus, so the two words the
+       chip is too narrow to show could be got at by pointer only — the same
+       failure the `title` attribute already had here. ⟨Sol⟩, 2026-08-30. This
+       reaches them by focus, which a plain `<li>` cannot take. */
+    const lanes = [...host.querySelectorAll(".diag-lane")];
+    expect(lanes.length, "the lane legend is not drawn").toBeGreaterThan(0);
+    for (const [i, lane] of lanes.entries()) {
+      const card = await cardFor(lane);
+      expect(card.head, "the open card belongs to another column").toContain(`Column ${i + 1}`);
+      expect(isDetailed(card.body), "a column's card is a label, not an explanation").toBe(true);
+      expect(lane.hasAttribute("title"), "a lane chip kept its title attribute").toBe(false);
     }
   });
 });
