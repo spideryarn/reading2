@@ -8126,7 +8126,19 @@ tr:hover .block-chat,
    chain ending in an `oklch()`, and `rgb(oklch(…) / 0.88)` is invalid at
    computed-value time and drops the whole declaration without a word — the trap
    `.diag-card` and the note at the top of this section both carry. */
-.sk-peek-scrim { fill: var(--page); fill-opacity: 0.88; stroke: none; }
+.sk-peek-scrim {
+  fill: var(--page);
+  fill-opacity: 0.88;
+  /* **A frame, because the peek reaches past the region it belongs to.** It
+     grows downward to give a portrait scene room in a landscape region
+     (`peekViewport`), so its lower part lies over the picture with nothing to
+     say where it begins — a browser pass, 2026-08-31, read that as a spill
+     rather than a panel, and noted the ghost landing over a real node and
+     momentarily looking like a highlight of it. One faint edge makes it a thing
+     laid on top rather than a hole in what is underneath. */
+  stroke: var(--rule-strong);
+  stroke-width: 1;
+}
 /*
  * **The only thing the peek drops is the words**, and it is the one thing that
  * cannot survive the scale: a region is a fifth of the canvas high, so 12-unit

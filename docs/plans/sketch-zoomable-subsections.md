@@ -416,23 +416,39 @@ pass answered it: as a drop shadow, or as nothing. § 1 has what replaced it.
 
 ## Open
 
-- **Does the peek want a delay?** A ghost that appears the instant the pointer
-  crosses a label would flicker as the reader sweeps the picture. `TooltipGroup`
-  already has 300ms open / 120ms close and this could borrow those numbers, but
-  it is not a tooltip and it is inside an SVG.
-- **Does the contrast do the job the stack could not?** The stack was killed by
-  a browser pass at 288px and this replaced it; the replacement has been
-  reasoned about and not yet looked at. The question is the original one: at
-  band width, can a reader tell which regions open something?
-- **The peek at true band scale was called "borderline, not solidly legible"**
-  by the same pass — present and readable as shapes when magnified, close to the
-  edge without. Worth a second opinion before deciding whether it needs a
-  stronger scrim or a larger inset.
-- **Not yet looked at at all**: the enlarged view, the console, and the keyboard
-  paths. The browser pass ran out before reaching them.
+Three browser passes on the real drawing settled most of what was open, and what
+they settled is written into the sections above. What is left:
+
+- **A zoomable region has never been seen beside a non-zoomable one.** The
+  Noema overview has exactly two regions and `inferRegionOpens` gives both a
+  door, so what the passes established is *these look interactive*, not *these
+  look different from those*. The drawing that would show it is the other
+  article, where the inference abstains on two of its regions
+  ([sketch-diagram.md § The door the model forgot to fit](sketch-diagram.md#the-door-the-model-forgot-to-fit)
+  has the table). That is the one claim in § 1 still resting on reasoning.
+- **The ghost can land on top of a real node** and read for a moment as though
+  that node were being highlighted rather than incidentally covered — noticed
+  once, on the hexagon under the first region. The scrim now carries a faint
+  frame, which is most of the answer; whether it is all of it is a thing to look
+  at rather than to argue about.
+- **Nodes that `opens` have no affordance of their own** and no real drawing has
+  one yet. § Not doing.
 - **The picture is still two tab stops**, and a `listbox` should not hold
   interactive descendants. Above, under what was not taken.
 - **The scroll is not reset on a scene change.** A reader deep in a 1150-unit
   overview who presses a chip lands part-way down a 500-unit scene, because the
   browser clamps and nothing else moves it. The anchored zoom corrects for this;
   the plain fade does not.
+
+### What the passes did settle
+
+- The mark: *"I would guess without being told that they're interactive."*
+- The peek at band width, after it was allowed to grow: legible as a specific
+  structure — *"one node at top, forking into two branches … converging back
+  into a single node at the bottom"* — where before the fix it was 362×82 CSS
+  px and read as "there's something there". It is 362×152 now, and hits the
+  300-unit cap exactly.
+- The keyboard, all three paths: arrows move the selection ring inside the
+  picture; arrows on a focused region name move nothing at all; Enter opens the
+  part and leaves focus on the picture rather than on `<body>`.
+- No console errors or React warnings from any of it.
