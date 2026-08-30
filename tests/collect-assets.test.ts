@@ -27,6 +27,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Assets } from "../src/assets.js";
 import {
+  ASSETS_BUDGET_MS,
   ASSETS_VERSION,
   collectAssets,
   GATE,
@@ -42,6 +43,7 @@ import {
   FetchFailure,
   type FetchLike,
 } from "../src/fetch.js";
+import { DEADLINE_MARGIN_MS, LEASE_MS } from "../src/jobs.js";
 import { hashBlocks } from "../src/source-hash.js";
 import type { BlobHead, PutResult, RawSourceStore } from "../src/store/blobs.js";
 import type { Block } from "../src/types.js";
@@ -118,7 +120,77 @@ function scripted(
   return { impl, asked, opts };
 }
 
+/**
+ * **A network that takes its time, and lets go the moment the signal fires.**
+ *
+ * The abort path is the whole point of this fixture. Without it a test cannot
+ * tell an image that was *abandoned mid-flight* from one that was *never asked
+ * for*, and those are the two halves of what the wall-clock budget has to
+ * record — the first is the one a fixture usually cannot reach.
+ *
+ * `asked` is every URL a request went out for; `aborted` is the subset that was
+ * still on the wire when the deadline bit. What it rejects with is copied from
+ * the real thing: a caller's signal comes back out of `fetchAsset` as
+ * `FetchFailure("timeout", …, "Fetch cancelled.")` — src/fetch.ts `abortFailure`
+ * — which is *not* distinguishable from a slow origin by its code alone. That
+ * is exactly why `collectAssets` has to decide by asking its own deadline
+ * rather than by reading the error.
+ */
+function slow(
+  delayMs: number,
+  answer: Uint8Array,
+): { impl: AssetFetch; asked: string[]; aborted: string[] } {
+  const asked: string[] = [];
+  const aborted: string[] = [];
+  const impl: AssetFetch = (url, o) => {
+    asked.push(url);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => resolve({ bytes: answer, contentType: null, finalUrl: url }),
+        delayMs,
+      );
+      const giveUp = (): void => {
+        clearTimeout(timer);
+        aborted.push(url);
+        reject(new FetchFailure("timeout", url, "Fetch cancelled."));
+      };
+      if (o.signal?.aborted) giveUp();
+      else o.signal?.addEventListener("abort", giveUp, { once: true });
+    });
+  };
+  return { impl, asked, aborted };
+}
+
+/**
+ * The first `hangCount` requests never answer; every later one answers at once.
+ *
+ * Built for one job: making the *drain after the deadline* visible. The hanging
+ * pair keeps two permits until the clock fires, and the instant answers mean
+ * that if the queue goes on handing permits to callers that dial, it reaches
+ * every remaining URL in about a millisecond — so a count taken a moment after
+ * the step returned separates "stopped" from "returned and carried on".
+ */
+function hangsThenAnswers(hangCount: number): { impl: AssetFetch; asked: string[] } {
+  const asked: string[] = [];
+  const impl: AssetFetch = (url, o) => {
+    asked.push(url);
+    if (asked.length > hangCount) {
+      return Promise.resolve({ bytes: PNG, contentType: null, finalUrl: url });
+    }
+    return new Promise((_, reject) => {
+      const giveUp = (): void => reject(new FetchFailure("timeout", url, "Fetch cancelled."));
+      if (o.signal?.aborted) giveUp();
+      else o.signal?.addEventListener("abort", giveUp, { once: true });
+    });
+  };
+  return { impl, asked };
+}
+
 const stored = (a: Assets, url: string) => a.entries.find((e) => e.url === url);
+
+/** Every reason in the manifest, in document order, with `stored` for the rest. */
+const reasons = (a: Assets): string[] =>
+  a.entries.map((e) => (e.status === "failed" ? e.reason : "stored"));
 
 /* ------------------------------------------------------------------ *
  * Finding the URLs
@@ -531,6 +603,301 @@ describe("the limits", () => {
     expect(MAX_IMAGE_BYTES).toBe(16 * 1024 * 1024);
     expect(MAX_ARTICLE_BYTES).toBe(64 * 1024 * 1024);
     expect(MAX_IMAGES).toBe(200);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The wall clock
+ * ------------------------------------------------------------------ */
+
+/**
+ * **The one limit that is about the article rather than the image.**
+ *
+ * The four caps above bound what a single picture may cost. None of them bounds
+ * what the *step* may cost, and multiplying them out gives
+ * `200 / 2 × 2 × 15s = 3,000s` — seven and a half times the 400s a step gets
+ * before the claimant aborts it, on an article of slow images. The way that
+ * ends is a platform kill, which takes the whole invocation with it and reports
+ * nothing. GPT Sol, 2026-08-30.
+ *
+ * Real timers throughout, with `limits.budgetMs` turned down to a number a test
+ * can wait out. Fake timers would be worse here rather than better: the thing
+ * under test is a `setTimeout` racing real promise scheduling and a real
+ * `AbortSignal`, and mocking the clock would leave the test agreeing with the
+ * implementation about when the deadline fires instead of measuring it.
+ * The elapsed-time assertions are therefore ceilings with a lot of slack, not
+ * predictions.
+ */
+describe("the wall-clock budget", () => {
+  const article = (n: number): { blocks: Block[]; urls: string[] } => {
+    const urls = Array.from({ length: n }, (_, i) => `https://cdn.test/${i}.png`);
+    return { blocks: urls.map((u) => img(u)), urls };
+  };
+
+  /**
+   * **The bug, in the smallest form that shows it.**
+   *
+   * Forty images at 200ms each, two at a time, is eight seconds of work — the
+   * 3,000s worst case in miniature. The budget is 100ms. Delete the deadline
+   * and this runs the whole eight seconds.
+   *
+   * The count is the load-bearing assertion and the clock is the corroboration,
+   * not the other way round. Elapsed time on a machine with several agents
+   * building on it is noisy by hundreds of milliseconds — so the ceiling is
+   * fifteen times the budget and still a twentieth of the unbudgeted run, and
+   * jsdom is warmed *outside* the measurement because its first parse alone can
+   * cost two seconds and belongs to neither reading.
+   */
+  it("stops when the clock runs out instead of running the article to completion", async () => {
+    const { blocks, urls } = article(40);
+    const net = slow(200, PNG);
+    expect(imageUrlsIn(blocks)).toHaveLength(urls.length);
+
+    const began = Date.now();
+    const run = await collectAssets({
+      blocks,
+      fetchImpl: net.impl,
+      blobs: fakeBlobs(),
+      limits: { budgetMs: 100 },
+    });
+    const elapsed = Date.now() - began;
+
+    /* **It stopped starting fetches**, rather than starting all forty and
+       merely returning early. Nothing completes inside 100ms at 200ms each, so
+       the only requests that ever go out are the two the queue admits at t=0.
+       Forty would mean the budget bounded nothing. */
+    expect(net.asked.length).toBeLessThanOrEqual(4);
+    expect(net.aborted.length).toBeGreaterThan(0);
+    /* And the wall clock agrees: ~8,000ms unbudgeted, ~100ms budgeted. */
+    expect(elapsed).toBeLessThan(1_500);
+    expect(run.elapsedMs).toBeLessThan(1_500);
+  });
+
+  /**
+   * **The step returning is not the same as the step stopping.**
+   *
+   * Found by probe rather than by reading: with the deadline check inside `one`
+   * deleted, every test above still passed. The race hands the manifest back at
+   * the deadline, and the thirty-eight callers still queued on `GATE` go on
+   * draining *in the background afterwards* — each one dialling the publisher
+   * for a step that already ended. The manifest is right, the timing is right,
+   * and the article has quietly sent two hundred requests.
+   *
+   * So the count is taken again after a pause long enough for that drain to
+   * finish. The first two images hang until the signal fires and every later
+   * one answers instantly, so an unguarded drain reaches all forty within a
+   * millisecond or two of the deadline and a guarded one never leaves two.
+   */
+  it("stops dialling once the clock runs out, not once the step returns", async () => {
+    const { blocks, urls } = article(40);
+    const net = hangsThenAnswers(2);
+    const run = await collectAssets({
+      blocks,
+      fetchImpl: net.impl,
+      blobs: fakeBlobs(),
+      limits: { budgetMs: 60 },
+    });
+    const atReturn = [...net.asked];
+    /* Long enough for thirty-eight instant fetches to have gone out, if the
+       queue were still handing out permits to callers that dial. */
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(atReturn).toEqual([urls[0], urls[1]]);
+    expect(net.asked).toEqual([urls[0], urls[1]]);
+    expect(run.assets.entries).toHaveLength(urls.length);
+    expect(GATE.inFlight).toBe(0);
+  });
+
+  /**
+   * The same drain, seen from the caller's side.
+   *
+   * `onProgress` is `ctx.report` in the pipeline (src/pipeline.ts, the `assets`
+   * stage), which writes progress against the *job*. Thirty-eight of those
+   * arriving after the manifest has been handed back means an article that ran
+   * out of time reports "31/40 images" while the next step is the one actually
+   * running — a step's progress bar describing a different step's work.
+   */
+  it("reports no more progress once the manifest has been handed back", async () => {
+    const { blocks } = article(40);
+    const seen: number[] = [];
+    const run = await collectAssets({
+      blocks,
+      fetchImpl: hangsThenAnswers(2).impl,
+      blobs: fakeBlobs(),
+      limits: { budgetMs: 60 },
+      onProgress: (n) => void seen.push(n),
+    });
+    const atReturn = seen.length;
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(seen.length).toBe(atReturn);
+    /* Not vacuous: progress really was reported while the step was running. */
+    expect(atReturn).toBeGreaterThan(0);
+    expect(run.assets.entries).toHaveLength(40);
+  });
+
+  /**
+   * **The half that matters more than the timing.**
+   *
+   * An image dropped silently is indistinguishable from an article that never
+   * had it — `assetIndex` gives "failed" and "never looked at" the same answer
+   * on purpose, so the manifest is the only place the difference survives. Both
+   * kinds are asserted separately below because they reach the failure by
+   * different paths: two were abandoned with a request already on the wire, the
+   * other eight never got a queue permit at all.
+   */
+  it("records every unvisited and abandoned image as an explicit out-of-time failure", async () => {
+    const { blocks, urls } = article(10);
+    const net = slow(250, PNG);
+    const run = await collectAssets({
+      blocks,
+      fetchImpl: net.impl,
+      blobs: fakeBlobs(),
+      limits: { budgetMs: 80 },
+    });
+
+    expect(run.assets.entries).toHaveLength(urls.length);
+    expect(reasons(run.assets)).toEqual(urls.map(() => "out-of-time"));
+    expect(run.stored).toBe(0);
+    expect(run.failed).toBe(urls.length);
+
+    /* The two halves, told apart by the fixture rather than by the manifest. */
+    expect(net.aborted.length).toBeGreaterThan(0);
+    expect(net.asked.length).toBeLessThan(urls.length);
+    for (const url of net.aborted) {
+      expect(stored(run.assets, url)).toMatchObject({ status: "failed", reason: "out-of-time" });
+    }
+    for (const url of urls.filter((u) => !net.asked.includes(u))) {
+      expect(stored(run.assets, url)).toMatchObject({ status: "failed", reason: "out-of-time" });
+    }
+  });
+
+  /**
+   * **`network` is what an abandoned image lands on if nobody decides.**
+   *
+   * `fetchAsset` turns a caller's signal into `FetchFailure("timeout", …)`
+   * (src/fetch.ts `abortFailure`), and `FAILURE_FOR.timeout` is `network` —
+   * "the far end was slow, try later", which is a lie about an image we never
+   * gave a chance. Reuse `budget` instead and it collapses into the
+   * *image-count* overflow, which is a different decision with a different fix.
+   * Both of those are silent; this test is the thing that is not.
+   */
+  it("does not file a deadline as a network fault, nor a real fault as a deadline", async () => {
+    const { blocks, urls } = article(10);
+    const gone = new Set([urls[0], urls[1]]);
+    const late = slow(250, PNG);
+    const impl: AssetFetch = (url, o) =>
+      gone.has(url)
+        ? Promise.reject(new FetchFailure("not-found", url, "404", { status: 404 }))
+        : late.impl(url, o);
+
+    const run = await collectAssets({
+      blocks,
+      fetchImpl: impl,
+      blobs: fakeBlobs(),
+      limits: { budgetMs: 100 },
+    });
+
+    /* The two images that really were missing keep saying so. A deadline that
+       relabelled every failure after it fired would pass "everything is
+       out-of-time" while destroying the only signal that says re-running will
+       not help. */
+    expect(reasons(run.assets).slice(0, 2)).toEqual(["not-found", "not-found"]);
+    /* And the eight the clock beat say the clock beat them — not `network`,
+       which promises the far end might answer next time, and not `budget`,
+       which is the image-count overflow wearing the same word. */
+    expect(reasons(run.assets).slice(2)).toEqual(urls.slice(2).map(() => "out-of-time"));
+    expect(reasons(run.assets)).not.toContain("network");
+    expect(reasons(run.assets)).not.toContain("budget");
+  });
+
+  /**
+   * The conservation law: nothing is dropped, in the run where the deadline
+   * lands *between* images rather than before all of them.
+   *
+   * The first two answer instantly, so they are stored whatever the machine is
+   * doing — a version of this that let the scheduler decide how many got
+   * through would be flaky in exactly the direction that hides the bug.
+   */
+  it("keeps the images that finished, and accounts for every URL the article had", async () => {
+    const { blocks, urls } = article(12);
+    const instant = new Set([urls[0], urls[1]]);
+    const late = slow(250, PNG);
+    const impl: AssetFetch = (url, o) =>
+      instant.has(url)
+        ? Promise.resolve({ bytes: PNG, contentType: null, finalUrl: url })
+        : late.impl(url, o);
+
+    const run = await collectAssets({
+      blocks,
+      fetchImpl: impl,
+      blobs: fakeBlobs(),
+      limits: { budgetMs: 100 },
+    });
+
+    /* Every URL the article had, once, in document order — nothing dropped and
+       nothing invented. */
+    expect(run.assets.entries.map((e) => e.url)).toEqual(urls);
+    expect(run.stored + run.failed).toBe(urls.length);
+    expect(run.stored).toBe(2);
+    expect(reasons(run.assets).slice(0, 2)).toEqual(["stored", "stored"]);
+    expect(reasons(run.assets).slice(2).every((r) => r === "out-of-time")).toBe(true);
+  });
+
+  /**
+   * **The control, and it matters as much as the tests above.**
+   *
+   * A budget that quietly degraded the ordinary article would be worse than the
+   * bug it fixes. This runs a normal article under the *real* default budget
+   * and asserts the manifest is exactly what it was before the deadline
+   * existed — and, in particular, that the step returns as soon as the work is
+   * done rather than sitting on its timer for five minutes.
+   */
+  it("leaves an article that finishes comfortably inside the budget completely alone", async () => {
+    const urls = ["https://cdn.test/a.png", "https://cdn.test/b.jpg", "https://cdn.test/c.gif"];
+    const net = scripted({ [urls[0]!]: PNG, [urls[1]!]: JPEG, [urls[2]!]: GIF });
+    const began = Date.now();
+    const run = await collectAssets({
+      blocks: urls.map((u) => img(u)),
+      fetchImpl: net.impl,
+      blobs: fakeBlobs(),
+      /* No `limits` at all — the production numbers, deadline included. */
+    });
+    const elapsed = Date.now() - began;
+
+    expect(run.stored).toBe(3);
+    expect(run.failed).toBe(0);
+    expect(reasons(run.assets)).toEqual(["stored", "stored", "stored"]);
+    expect(run.assets.entries.map((e) => (e.status === "stored" ? e.ext : e.status))).toEqual([
+      "png",
+      "jpeg",
+      "gif",
+    ]);
+    /* Every fetch was handed the untouched per-image policy — the deadline is
+       an extra signal, not a smaller cap or a shorter per-image timeout. */
+    expect(net.opts.every((o) => o.maxBytes === MAX_IMAGE_BYTES)).toBe(true);
+    expect(net.opts.every((o) => o.timeoutMs === 15_000)).toBe(true);
+    /* It came back now, not in five minutes. `await`ing the deadline instead of
+       racing it, or forgetting to `clearTimeout`, would pass every assertion
+       above and hang the pipeline for `ASSETS_BUDGET_MS` on every article. */
+    expect(elapsed).toBeLessThan(5_000);
+    expect(GATE.inFlight).toBe(0);
+  });
+
+  /**
+   * The relationship, pinned rather than the number — the same shape
+   * `tests/jobs-lease-budget.test.ts` uses for the lease and `maxDuration`.
+   *
+   * `LEASE_MS - DEADLINE_MARGIN_MS` is when the claimant aborts the step
+   * (src/jobs.ts). A budget at or above that is a budget that never bites, and
+   * it would deploy green: the only article that shows it is a slow one.
+   */
+  it("finishes inside the deadline the job claimant gives a step", () => {
+    expect(ASSETS_BUDGET_MS).toBeGreaterThan(0);
+    expect(ASSETS_BUDGET_MS).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
+    /* And with room to spare, because the bucket writes take no signal and are
+       not covered by it. */
+    expect(ASSETS_BUDGET_MS).toBeLessThan((LEASE_MS - DEADLINE_MARGIN_MS) * 0.9);
   });
 });
 

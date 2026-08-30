@@ -31,6 +31,11 @@
  * `stored` entry is served from us, a `failed` entry stays hot-linked, and a
  * URL with **no entry at all** means this step never looked at it.
  *
+ * That third state is why the wall-clock budget below writes `out-of-time`
+ * entries rather than simply stopping. Every URL the article has gets an entry
+ * on every run, including the ones the clock beat — leave them out and they
+ * read as an article ingested before this step existed.
+ *
  * ## 3. The article budget is reserved before a fetch starts, not charged after
  *
  * The plan says the byte counter must charge bytes *as they arrive*, because
@@ -86,6 +91,16 @@ import type { Block } from "./types.js";
  *
  * Bump it when what this step *decides* changes: which URLs it picks, which
  * formats it hosts, how it classifies a failure.
+ *
+ * **Deliberately not bumped for `ASSETS_BUDGET_MS`, which is a new failure
+ * classification and looks like it qualifies.** The test is whether a re-run
+ * would decide *differently about an article that already has a manifest*, and
+ * it would not: an article that finished inside the budget produces the
+ * identical manifest, and one that did not finish never wrote a manifest at all
+ * — the platform killed the invocation — so it re-runs on its own. Bumping
+ * would re-fetch every image of every article to reach the same answer, and on
+ * a slow article it could reach a *worse* one, replacing `stored` entries with
+ * `out-of-time`. 2026-08-30.
  */
 export const ASSETS_VERSION = "assets/1" as const;
 
@@ -110,6 +125,35 @@ export const MAX_IMAGES = 200;
 export const IMAGE_TIMEOUT_MS = 15_000;
 /** One queue for the whole process. See the header, point 4. */
 export const CONCURRENCY = 2;
+
+/**
+ * **How long the whole step may take, wall clock.**
+ *
+ * Every limit above bounds what one *image* may cost. None of them bounds what
+ * the *article* may cost in time, and multiplying them out is alarming:
+ *
+ *     200 images ÷ 2 at a time × 2 attempts × 15s = 3,000s
+ *
+ * A step gets `LEASE_MS - DEADLINE_MARGIN_MS` = **400s** before the claimant
+ * aborts it (src/jobs.ts), and the platform kills the whole invocation at
+ * `maxDuration: 800` (vercel.json). So the worst case is seven and a half times
+ * the step's own deadline — and the way it ends is a platform kill, which is
+ * the worst available ending: it takes every other step in the invocation with
+ * it and reports nothing about why. GPT Sol, 2026-08-30.
+ *
+ * **300s, not 400s.** The remaining quarter is for the parts of the step this
+ * number cannot govern: `storeRawSource` takes no `AbortSignal` at all, so a
+ * slow bucket runs past the deadline no matter what the fetches do, and the
+ * unwinding of whatever was on the wire when it bit has to fit somewhere too.
+ *
+ * `tests/collect-assets.test.ts` pins the *relationship* to the job deadline
+ * rather than the number, in the shape `tests/jobs-lease-budget.test.ts` uses
+ * for the lease and `maxDuration` — so tuning this is free and letting it drift
+ * past the deadline it exists to stay inside is not. Not imported from
+ * src/jobs.ts: this file is a pipeline stage and the job runner is what calls
+ * it, so the dependency would point the wrong way.
+ */
+export const ASSETS_BUDGET_MS = 300_000;
 
 /* ------------------------------------------------------------------ *
  * The global queue
@@ -291,7 +335,7 @@ export interface CollectAssetsOptions {
   now?: () => Date;
   onProgress?: (done: number, total: number) => void;
   /**
-   * The three caps, injected, defaulting to the policy above.
+   * The caps, injected, defaulting to the policy above.
    *
    * **This exists so the budget arithmetic has a probe, and that is not a
    * convenience.** The guard being tested is "a fetch may not start unless the
@@ -302,21 +346,29 @@ export interface CollectAssetsOptions {
    * be tested by nothing at all, which is a shape this repo has been bitten by
    * more than once (docs/reusable/silent-success.md). Production never passes
    * this; tests set it to numbers they can count.
+   *
+   * `budgetMs` is here for the same reason and it is the sharper case: the real
+   * one is five minutes, so a test that waited it out would be a five-minute
+   * test, and every fixture would finish long before it — a deadline exercised
+   * by nothing.
    */
   limits?: Partial<Limits>;
 }
 
-/** The three caps, as one thing, so a test can replace them together. */
+/** The caps, as one thing, so a test can replace them together. */
 export interface Limits {
   maxImageBytes: number;
   maxArticleBytes: number;
   maxImages: number;
+  /** Wall clock for the whole step. See `ASSETS_BUDGET_MS`. */
+  budgetMs: number;
 }
 
 const DEFAULT_LIMITS: Limits = {
   maxImageBytes: MAX_IMAGE_BYTES,
   maxArticleBytes: MAX_ARTICLE_BYTES,
   maxImages: MAX_IMAGES,
+  budgetMs: ASSETS_BUDGET_MS,
 };
 
 export interface AssetsRun {
@@ -382,6 +434,17 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
   let deduped = 0;
   let done = 0;
   const storageErrors: string[] = [];
+  /**
+   * Whether the manifest has been handed back.
+   *
+   * When the deadline wins the race there are still callers queued on `GATE`,
+   * and they go on draining after this function has returned. Their bookkeeping
+   * is harmless — it mutates locals nobody reads any more — but `onProgress` is
+   * the caller's, and in the pipeline it is `ctx.report`, which writes progress
+   * against the job. Left unguarded, an article that ran out of time reports
+   * "31/200 images" while the *next* step is the one actually running.
+   */
+  let handedBack = false;
 
   const fail = (url: string, reason: AssetFailure): void => {
     entries.set(url, { url, status: "failed", reason, at: now().toISOString() });
@@ -389,6 +452,57 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
   };
 
   for (const url of overflow) fail(url, "budget");
+
+  /**
+   * **The article's wall clock, as an `AbortSignal`.**
+   *
+   * One controller for the run, fired once by one timer, and it does three jobs
+   * that would otherwise need three mechanisms:
+   *
+   *  1. every fetch already takes a signal, so aborting this one abandons
+   *     whatever is on the wire — no second timeout machinery, and no waiting
+   *     out the 15s per-image timeout that has already started;
+   *  2. a caller that has been admitted to the queue reads `.aborted` and
+   *     records itself out of time instead of dialling;
+   *  3. `Promise.race` below uses it as the hard stop, for the parts of the
+   *     step that take no signal at all.
+   *
+   * `AbortSignal.any` composes it with the caller's own cancellation rather
+   * than replacing it — src/fetch.ts does the same thing one layer down. The
+   * two are told apart afterwards by asking `deadline.signal`, never by reading
+   * the error, because both arrive as `FetchFailure("timeout", …)`.
+   */
+  const deadline = new AbortController();
+  const signalFor = signal ? AbortSignal.any([signal, deadline.signal]) : deadline.signal;
+  const timer = setTimeout(() => deadline.abort(new Error("assets budget spent")), limits.budgetMs);
+  const timeIsUp = new Promise<void>((resolve) => {
+    deadline.signal.addEventListener("abort", () => resolve(), { once: true });
+  });
+
+  /**
+   * What a throw from a fetch means, in the manifest's vocabulary. `null` is
+   * "not a fetch failure at all", which is the storage arm.
+   *
+   * `FAILURE_FOR` answers this for everything except the clock, and the clock
+   * cannot be read off the error: `fetchAsset` turns *any* caller-signal abort
+   * into `FetchFailure("timeout", …)`, identical to a slow origin. So the
+   * question is put to `deadline.signal` instead of to the error.
+   *
+   * **Only `timeout` is reinterpreted.** A `not-found` or a `too-large` that
+   * lands after the deadline is still a fact about the image and keeps saying
+   * so — relabelling every late failure would destroy the one signal that says
+   * re-running will not help. And the *caller's* cancellation is not this: it
+   * leaves `deadline.signal.aborted` false and falls through to `network`
+   * exactly as before.
+   */
+  const reasonFor = (err: unknown): AssetFailure | null => {
+    const abandoned =
+      err instanceof FetchFailure
+        ? err.code === "timeout"
+        : (err as Error | undefined)?.name === "AbortError";
+    if (deadline.signal.aborted && abandoned) return "out-of-time";
+    return err instanceof FetchFailure ? FAILURE_FOR[err.code] : null;
+  };
 
   const one = async (url: string): Promise<void> => {
     /*
@@ -407,6 +521,16 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
     let budget = 0;
     let charge = 0;
     try {
+      /* **Checked here, holding a permit, for the same reason the reservation
+         is.** `Promise.all` runs everything before the first `await`
+         synchronously, so a check placed before `GATE.acquire()` is taken by
+         all 200 callers at once, at t=0, when no clock has run out yet — it
+         would read clean for every image and bound nothing. This is the first
+         moment a caller is actually about to dial. */
+      if (deadline.signal.aborted) {
+        fail(url, "out-of-time");
+        return;
+      }
       const room = limits.maxArticleBytes - spent - reserved;
       if (room <= 0) {
         fail(url, "budget");
@@ -418,7 +542,7 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
       const got = await fetchImpl(url, {
         maxBytes: budget,
         timeoutMs: IMAGE_TIMEOUT_MS,
-        ...(signal ? { signal } : {}),
+        signal: signalFor,
       });
       charge = got.bytes.byteLength;
 
@@ -446,12 +570,15 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
       });
       stored += 1;
     } catch (err) {
-      if (err instanceof FetchFailure) {
+      const reason = reasonFor(err);
+      if (reason) {
         /* A `too-large` refusal means at least the whole budget arrived before
            the cap bit, so it is charged rather than refunded. Every other typed
-           failure either never got a body or got one we did not read. */
-        if (err.code === "too-large") charge = budget;
-        fail(url, FAILURE_FOR[err.code]);
+           failure either never got a body or got one we did not read — an image
+           abandoned at the deadline included, which is why `out-of-time` leaves
+           `charge` at zero. */
+        if (err instanceof FetchFailure && err.code === "too-large") charge = budget;
+        fail(url, reason);
         return;
       }
       /* Anything else — a `CorruptObject` at a canonical name, a Storage
@@ -470,7 +597,7 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
       reserved -= budget;
       spent += charge;
       done += 1;
-      onProgress?.(done, fetchable.length);
+      if (!handedBack) onProgress?.(done, fetchable.length);
     }
   };
 
@@ -481,7 +608,44 @@ export async function collectAssets(options: CollectAssetsOptions): Promise<Asse
    * bounds the concurrency — two in flight across the process, however many
    * promises are pending.
    */
-  await Promise.all(fetchable.map((url) => one(url)));
+  const everyImage = Promise.all(fetchable.map((url) => one(url)));
+  /* A handler so that a rejection arriving *after* the race has been won by the
+     deadline is not an unhandled rejection. This is a second, derived promise:
+     `everyImage` itself still settles into the race, so a rejection that gets
+     there first still propagates exactly as it did before. */
+  void everyImage.catch(() => {});
+  try {
+    /**
+     * **Raced, not awaited, and the race is the guarantee.**
+     *
+     * Aborting the signal is enough for every fetch, because a fetch takes one.
+     * It is not enough for the step: `storeRawSource` takes no signal, so a
+     * hung bucket walks straight past the deadline with the clock already
+     * fired and nothing able to interrupt it. Racing the whole thing makes the
+     * budget hold whatever any one image is stuck inside — which is the
+     * difference between a limit and an intention.
+     */
+    await Promise.race([everyImage, timeIsUp]);
+  } finally {
+    /* Or the timer keeps the process alive for the rest of the five minutes,
+       on every CLI run of an article that took two seconds. */
+    clearTimeout(timer);
+  }
+
+  /**
+   * Whatever the race left behind.
+   *
+   * If the deadline won, some images are still on the wire and some never got a
+   * permit. **Both get an entry**, because "no entry" has to keep meaning "this
+   * step never looked at it" — a missing entry and a failed one are the same
+   * answer to `assetIndex` (src/assets.ts) and only the manifest keeps them
+   * apart, so an image dropped here would be indistinguishable from an article
+   * that never had it. Empty when `everyImage` won, which is the ordinary case.
+   */
+  for (const url of fetchable) {
+    if (!entries.has(url)) fail(url, "out-of-time");
+  }
+  handedBack = true;
 
   /* Document order, not completion order. The manifest is read beside the
      article, and a list that reshuffles itself on every run is a diff nobody

@@ -66,6 +66,18 @@ export type AssetFailure =
   | "blocked"
   | "network"
   | "storage"
+  /**
+   * The step's wall clock ran out before this image got a turn, or while it was
+   * still on the wire. Nothing is known about the image at all.
+   *
+   * **Not `network`**, which promises the far end was asked and was slow, so a
+   * re-run might do better — the difference is that this one is entirely about
+   * us. **Not `budget`**, which is the *image-count* cap and means the article
+   * has more than 200 figures; folding the two together would file "this
+   * article is enormous" and "the pipeline is running slow today" under one
+   * word with two different fixes. src/collect-assets.ts `ASSETS_BUDGET_MS`.
+   */
+  | "out-of-time"
   | "budget";
 
 /** One image, as this revision found it. */
