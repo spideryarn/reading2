@@ -87,6 +87,7 @@ import type {
   Visibility,
 } from "../types.js";
 import { metaRawSha256, sameStamp } from "./artifacts.js";
+import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader } from "./contracts.js";
 import { pgReaderStore } from "./pg-reader.js";
 
@@ -491,6 +492,11 @@ export const REVISION_PROJECTIONS = {
     glossary: articleRevisions.glossary,
     summary: articleRevisions.summary,
     ideas: articleRevisions.ideas,
+    /* The fifth artefact that can carry a `profileHash`, and it is here for
+       that alone: `personalisedSteps` must be exhaustive or the confirmation
+       dialog tells an owner nothing was personalised while a picture drawn for
+       their profile goes public with the article. */
+    sketch: articleRevisions.sketch,
   },
   publish: {
     id: articleRevisions.id,
@@ -1203,7 +1209,10 @@ export function scalarInputsQuery(
  * **Which of this revision's artefacts were written for a reader profile.**
  *
  * `profileHash` is non-null exactly when one was used — `src/profile.ts` — and
- * only four artefacts can carry it. The tree and the arc deliberately do not
+ * only five artefacts can carry it (`sketch` was the fifth, and was missing from
+ * this list for a day: the picture is drawn for a profile like every other model
+ * call here, and an owner asking what would go public was told about four of
+ * them). The tree and the arc deliberately do not
  * vary by profile (docs/project/reader-profile.md: a reader-specific tree is one
  * that shifts under a reader who edits their box), and `fetch`, `extract` and
  * `blocks` have no model call to personalise. So this is exhaustive over the
@@ -1225,19 +1234,52 @@ export function scalarInputsQuery(
  * Ordered by `STEP_ORDER`, so the dialog lists them in the order the page shows
  * the stages rather than in the order this function happens to check.
  */
+/**
+ * **Every artefact whose own type says it can carry a `profileHash`** — derived
+ * from `ArtifactMap`, not written down. `personalisedSteps` had a hand-written
+ * list of four and `sketch` was the fifth; nothing said so, and the sentence an
+ * owner reads before publishing was quietly wrong. A list that has to stay
+ * exhaustive should not be a list.
+ *
+ * `"profileHash" extends keyof T` rather than `T extends { profileHash?: … }`,
+ * because the first asks the question and the second only appears to. The
+ * structural form does return the same five today — checked, not assumed — but
+ * only because TypeScript refuses a type with *no* property in common with a
+ * wholly-optional target. Give the probe one property these artefacts also
+ * have and it collapses: `Tree extends { profileHash?: string | null }` is
+ * false, and `Tree extends { profileHash?: string | null; version?: string }`
+ * is **true**. A rule held up by the absence of a shared field is not a rule.
+ */
+type ProfileCarrying = {
+  [K in keyof ArtifactMap]: "profileHash" extends keyof ArtifactMap[K] ? K : never;
+}[keyof ArtifactMap] &
+  StepName;
+
 function personalisedSteps(revision: {
   tweets: TweetThread | null;
   glossary: Glossary | null;
   summary: Summaries | null;
   ideas: Ideas | null;
+  sketch: Sketch | null;
 }): StepName[] {
-  const carriers: Partial<Record<StepName, { profileHash?: string | null } | null>> = {
+  /* `Record`, not `Partial<Record>`: a sixth artefact gaining a `profileHash`
+     has to fail here, at the compiler, rather than fall off the dialog. */
+  const carriers: Record<ProfileCarrying, { profileHash?: string | null } | null> = {
     tweets: revision.tweets,
     glossary: revision.glossary,
     summary: revision.summary,
     ideas: revision.ideas,
+    sketch: revision.sketch,
   };
-  return STEP_ORDER.filter((step) => carriers[step]?.profileHash != null);
+  /* `Object.entries` rather than indexing `carriers` by `StepName`, because
+     the record is now exactly the five that can be personalised and a
+     `StepName` is not a key of it — which is the point. The filter over
+     `STEP_ORDER` at the end is what keeps the dialog's order the page's. */
+  const personalised = new Set<string>();
+  for (const [step, artefact] of Object.entries(carriers)) {
+    if (artefact?.profileHash != null) personalised.add(step);
+  }
+  return STEP_ORDER.filter((step) => personalised.has(step));
 }
 
 export const pgArticleReader: Pick<
@@ -1570,7 +1612,7 @@ export const pgArticleReader: Pick<
       /* **Free, and that is why all three are here rather than behind a second
          endpoint.** `currentRevisionQuery` selects `articles` whole — the row
          `shelfFrom` above is reading — and `REVISION_PROJECTIONS.metadata`
-         already carries all four artefacts that can hold a `profileHash`, so
+         already carries all five artefacts that can hold a `profileHash`, so
          this costs no query, no projection change, and no widening of
          `REVISION_READ_POLICY`.
 

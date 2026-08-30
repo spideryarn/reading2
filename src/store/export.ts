@@ -451,6 +451,7 @@ export async function exportArticle(
   if (revision.glossary) await put("glossary.json", revision.glossary);
   if (revision.summary) await put("summary.json", revision.summary);
   if (revision.ideas) await put("ideas.json", revision.ideas);
+  if (revision.sketch) await put("sketch.json", revision.sketch);
   if (revision.labels) await put("labels.json", revision.labels);
 
   written.push(...(await writeRawDocument(dir, slug, revision, sources)));

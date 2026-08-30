@@ -26,6 +26,7 @@ import {
   nodeFits,
   readSketch,
   scoreSketch,
+  stripInferredOpens,
   type SketchNode,
   widthAt,
 } from "../src/sketch-scene.js";
@@ -317,6 +318,307 @@ describe("reaching a scene — the pointers that make a zoom visible at all", ()
     ]);
     expect(((sketch.scenes[0]?.items ?? [])[0] as { opens?: string }).opens).toBeUndefined();
     expect(report.faults.map((f) => f.what).join(" ")).toContain("no label to press");
+  });
+});
+
+describe("inferRegionOpens — the door the model forgot to fit", () => {
+  /* Greg pressed "WHY WE'RE TEMPTED TO SEE IT" and nothing happened. The region
+     was there, the zoom scene was there, and nothing joined them, because the
+     picture had been drawn before the prompt asked for `opens`. Redrawing fixes
+     one article; deriving the link fixes every sketch already on disk and every
+     future one a model forgets. The whole risk is a WRONG door — pressing a name
+     and arriving somewhere else — so most of what is tested here is abstention. */
+
+  /** A region wrapping the given blocks, and two zoom scenes to choose between. */
+  function drawing(
+    regions: unknown[],
+    inRegion: string[],
+    zoomA: string[],
+    zoomB: string[],
+  ): ReturnType<typeof readSketch> {
+    const nodes = inRegion.map((b, i) =>
+      node({ id: `r${i}`, x: 20 + i * 130, y: 60, w: 120, h: 40, block: b }),
+    );
+    const zoom = (id: string, blocks: string[]) => ({
+      id,
+      title: id,
+      height: 400,
+      items: blocks.map((b, i) => node({ id: `${id}${i}`, x: 20, y: 20 + i * 60, block: b })),
+    });
+    return readSketch(
+      {
+        title: "t",
+        caption: "c",
+        scenes: [
+          { id: "overview", title: "s", height: 400, items: [...regions, ...nodes] },
+          zoom("za", zoomA),
+          zoom("zb", zoomB),
+        ],
+      },
+      opts,
+    );
+  }
+
+  /** A band across the top, wide enough to hold four of the nodes above. */
+  const band = (over: Record<string, unknown> = {}) => ({
+    kind: "region",
+    x: 10,
+    y: 40,
+    w: 700,
+    h: 90,
+    label: "THE CASE",
+    style: "band",
+    ...over,
+  });
+
+  const regionOf = (r: ReturnType<typeof readSketch>, scene = 0) =>
+    (r.sketch.scenes[scene]?.items ?? []).find((i) => i.kind === "region") as
+      | { opens?: string; opensInferred?: true }
+      | undefined;
+
+  it("links the region whose blocks are a scene's, and says the link is ours", () => {
+    const r = drawing([band()], [BLOCKS[0], BLOCKS[1], BLOCKS[2]] as string[], [
+      BLOCKS[0],
+      BLOCKS[1],
+      BLOCKS[5],
+    ] as string[], [BLOCKS[8]] as string[]);
+    expect(regionOf(r)?.opens).toBe("za");
+    expect(regionOf(r)?.opensInferred).toBe(true);
+    expect(r.report.inferred).toBe(1);
+  });
+
+  it("matches on blocks, not on words — the real drawings share none", () => {
+    /* "THE CORE ARGUMENT" and "Why Scale Works: The Ladder" have no word in
+       common and their blocks match five to nil, which is why this is not
+       string similarity between a label and a title. */
+    const r = drawing(
+      [band({ label: "THE CORE ARGUMENT" })],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2]] as string[],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2]] as string[],
+      [BLOCKS[9]] as string[],
+    );
+    expect(regionOf(r)?.opens).toBe("za");
+  });
+
+  it("abstains when the region straddles two scenes", () => {
+    // Two of three each way is not a majority anybody can act on, and a wrong
+    // door is worse than none.
+    const r = drawing(
+      [band()],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2], BLOCKS[3]] as string[],
+      [BLOCKS[0], BLOCKS[1]] as string[],
+      [BLOCKS[2], BLOCKS[3]] as string[],
+    );
+    expect(regionOf(r)?.opens).toBeUndefined();
+    expect(r.report.inferred).toBe(0);
+  });
+
+  it("abstains on a bare majority with a runner-up worth more than half of it", () => {
+    // 3 of 5 for one scene and 2 for the other: a majority, and still a guess.
+    const r = drawing(
+      [band()],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2], BLOCKS[3], BLOCKS[4]] as string[],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2]] as string[],
+      [BLOCKS[3], BLOCKS[4]] as string[],
+    );
+    expect(regionOf(r)?.opens).toBeUndefined();
+  });
+
+  it("abstains when a scene covers only half the region", () => {
+    // Half is not "this region drawn larger" — it is a scene that overlaps it.
+    const r = drawing(
+      [band()],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2], BLOCKS[3]] as string[],
+      [BLOCKS[0], BLOCKS[1]] as string[],
+      [BLOCKS[9]] as string[],
+    );
+    expect(regionOf(r)?.opens).toBeUndefined();
+  });
+
+  it("abstains on a region holding one block — too little to match on", () => {
+    const r = drawing([band()], [BLOCKS[0]] as string[], [BLOCKS[0]] as string[], [BLOCKS[9]] as string[]);
+    expect(regionOf(r)?.opens).toBeUndefined();
+  });
+
+  it("abstains when the region holds no nodes at all", () => {
+    // The band is above every node here, so nothing's centre is inside it.
+    const r = drawing(
+      [band({ y: 300, h: 40 })],
+      [BLOCKS[0], BLOCKS[1]] as string[],
+      [BLOCKS[0], BLOCKS[1]] as string[],
+      [BLOCKS[9]] as string[],
+    );
+    expect(regionOf(r)?.opens).toBeUndefined();
+  });
+
+  it("leaves an unlabelled region shut — there is nothing to press", () => {
+    const r = drawing(
+      [{ kind: "region", x: 10, y: 40, w: 700, h: 90, style: "band" }],
+      [BLOCKS[0], BLOCKS[1]] as string[],
+      [BLOCKS[0], BLOCKS[1]] as string[],
+      [BLOCKS[9]] as string[],
+    );
+    expect(regionOf(r)?.opens).toBeUndefined();
+  });
+
+  it("never overrules a link the model wrote itself", () => {
+    // The blocks say `za` and the model says `zb`. The model wins: it knows
+    // what it meant, and this is arithmetic over what it drew.
+    const r = drawing(
+      [band({ opens: "zb" })],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2]] as string[],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2]] as string[],
+      [BLOCKS[9]] as string[],
+    );
+    expect(regionOf(r)?.opens).toBe("zb");
+    expect(regionOf(r)?.opensInferred).toBeUndefined();
+    expect(r.report.inferred).toBe(0);
+  });
+
+  it("gives one scene one door, and shuts the weaker claim on it", () => {
+    /* Two regions both matching `za` is the same ambiguity as one region
+       straddling two scenes, seen from the other side. */
+    const r = readSketch(
+      {
+        title: "t",
+        caption: "c",
+        scenes: [
+          {
+            id: "overview",
+            title: "s",
+            height: 600,
+            items: [
+              band({ label: "STRONG" }),
+              band({ label: "WEAKER", y: 200, h: 90 }),
+              node({ id: "s1", x: 20, y: 60, block: BLOCKS[0] }),
+              node({ id: "s2", x: 200, y: 60, block: BLOCKS[1] }),
+              node({ id: "w1", x: 20, y: 220, block: BLOCKS[2] }),
+              node({ id: "w2", x: 200, y: 220, block: BLOCKS[3] }),
+              node({ id: "w3", x: 380, y: 220, block: BLOCKS[9] }),
+            ],
+          },
+          {
+            id: "za",
+            title: "z",
+            height: 400,
+            items: [
+              node({ id: "za0", block: BLOCKS[0] }),
+              node({ id: "za1", y: 80, block: BLOCKS[1] }),
+              node({ id: "za2", y: 160, block: BLOCKS[2] }),
+              node({ id: "za3", y: 240, block: BLOCKS[3] }),
+            ],
+          },
+        ],
+      },
+      opts,
+    );
+    const regions = (r.sketch.scenes[0]?.items ?? []).filter((i) => i.kind === "region") as {
+      label?: string;
+      opens?: string;
+    }[];
+    // STRONG covers 2 of 2; WEAKER covers 2 of 3.
+    expect(regions.find((x) => x.label === "STRONG")?.opens).toBe("za");
+    expect(regions.find((x) => x.label === "WEAKER")?.opens).toBeUndefined();
+    expect(r.report.inferred).toBe(1);
+  });
+
+  it("does not offer a door back to the scene the reader is already in", () => {
+    // A region inside `za` whose blocks are `za`'s own. Back is what that is for.
+    const r = readSketch(
+      {
+        title: "t",
+        caption: "c",
+        scenes: [
+          { id: "overview", title: "s", height: 400, items: [node({ id: "a", opens: "za" })] },
+          {
+            id: "za",
+            title: "z",
+            height: 400,
+            items: [
+              band({ label: "IN HERE" }),
+              node({ id: "za0", x: 20, y: 60, block: BLOCKS[0] }),
+              node({ id: "za1", x: 200, y: 60, block: BLOCKS[1] }),
+            ],
+          },
+        ],
+      },
+      opts,
+    );
+    expect(regionOf(r, 1)?.opens).toBeUndefined();
+  });
+
+  it("ignores `opensInferred` written by the model — it is ours to set", () => {
+    const r = drawing(
+      [band({ opens: "zb", opensInferred: true })],
+      [BLOCKS[0], BLOCKS[1]] as string[],
+      [BLOCKS[9]] as string[],
+      [BLOCKS[8]] as string[],
+    );
+    expect(regionOf(r)?.opens).toBe("zb");
+    expect(regionOf(r)?.opensInferred).toBeUndefined();
+  });
+
+  it("keeps the derived door out of the artefact that gets written", () => {
+    /* The write path runs `readSketch` too, so without the strip a door we
+       worked out would be saved and read back tomorrow looking exactly like one
+       the model drew — and `score.inferred` would then report 0 on a picture
+       whose every door was ours. */
+    const r = drawing(
+      [band()],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2]] as string[],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2]] as string[],
+      [BLOCKS[9]] as string[],
+    );
+    expect(regionOf(r)?.opens).toBe("za");
+
+    const stored = stripInferredOpens(r.sketch);
+    const region = (stored.scenes[0]?.items ?? []).find((i) => i.kind === "region") as {
+      opens?: string;
+      opensInferred?: true;
+    };
+    expect(region.opens).toBeUndefined();
+    expect(region.opensInferred).toBeUndefined();
+
+    // …and reading that stored picture puts the door back, from the blocks.
+    const again = readSketch(JSON.parse(JSON.stringify(stored)), opts);
+    const back = (again.sketch.scenes[0]?.items ?? []).find((i) => i.kind === "region") as {
+      opens?: string;
+      opensInferred?: true;
+    };
+    expect(back.opens).toBe("za");
+    expect(back.opensInferred).toBe(true);
+    expect(again.report.inferred).toBe(1);
+  });
+
+  it("leaves a link the model wrote alone when stripping", () => {
+    const r = drawing(
+      [band({ opens: "zb" })],
+      [BLOCKS[0], BLOCKS[1]] as string[],
+      [BLOCKS[9]] as string[],
+      [BLOCKS[8]] as string[],
+    );
+    const stored = stripInferredOpens(r.sketch);
+    const region = (stored.scenes[0]?.items ?? []).find((i) => i.kind === "region") as {
+      opens?: string;
+    };
+    expect(region.opens).toBe("zb");
+  });
+
+  it("takes the scene off `unreachable` and puts it on `inferred`", () => {
+    /* The two numbers answer different questions and both are needed: the
+       reader can get there (unreachable 0), and the model did not say so
+       (inferred 1). Without the second, a prompt that stopped asking for
+       `opens` would look exactly like one that had not. */
+    const r = drawing(
+      [band()],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2]] as string[],
+      [BLOCKS[0], BLOCKS[1], BLOCKS[2]] as string[],
+      [BLOCKS[9]] as string[],
+    );
+    const score = scoreSketch(r.sketch, r.report, opts);
+    expect(score.unreachable).toBe(1); // `zb`, which nothing points at
+    expect(score.inferred).toBe(1);
+    expect(r.report.faults.map((f) => f.what).join(" ")).not.toContain("za");
   });
 });
 

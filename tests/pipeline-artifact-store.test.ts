@@ -41,6 +41,10 @@ import {
   inputFingerprint as ideasFingerprint,
   PROMPT_VERSION as IDEAS_VERSION,
 } from "../src/ideas.js";
+import {
+  inputFingerprint as sketchFingerprint,
+  PROMPT_VERSION as SKETCH_VERSION,
+} from "../src/sketch.js";
 import { PROMPT_VERSION as SUMMARY_VERSION } from "../src/summarise.js";
 import { PROMPT_VERSION as TWEETS_VERSION } from "../src/tweets.js";
 import { STEP_ORDER, STEPS, stepIsDone } from "../src/pipeline.js";
@@ -148,6 +152,10 @@ const TREE = {
 
 /** Blocks **and** tree — src/ideas.ts § `inputFingerprint`. */
 const IDEAS_SOURCE_HASH = ideasFingerprint(BLOCKS, TREE);
+/* The same pair, hashed by `sketch`'s own function rather than by `ideas`'.
+   They agree today, and a test that assumed they always would is a test that
+   goes green on the day one of them changes. */
+const SKETCH_SOURCE_HASH = sketchFingerprint(BLOCKS, TREE);
 
 /**
  * Hoisted for the reason `TREE` is, and the reason bites harder here: the arc's
@@ -272,6 +280,24 @@ async function writeWholeArticle(at: ArtifactLocations): Promise<void> {
     profileHash: null,
     version: IDEAS_VERSION,
     ideas: [],
+    generatedAt: new Date().toISOString(),
+    elapsedMs: 1,
+  });
+  /* Same two reasons as `ideas` above, and one of its own. The fingerprint is
+     the blocks AND the tree, so `...stamped` cannot be used; the `profileHash`
+     is `null` for the same "deliberately without a profile" reason; and
+     **`scenes` must be non-empty**, because `ARTEFACT_SHAPE` in
+     src/store/artifacts.ts refuses a picture with none — a rule that exists at
+     the store boundary precisely so a fixture cannot slip past it. */
+  await writeJson(pathFor(at, "sketch", "sketch"), {
+    generator: CAPABLE_MODEL,
+    slug: SLUG,
+    sourceHash: SKETCH_SOURCE_HASH,
+    profileHash: null,
+    version: SKETCH_VERSION,
+    title: "A picture",
+    caption: "What it claims.",
+    scenes: [{ id: "overview", title: "Overview", height: 400, items: [] }],
     generatedAt: new Date().toISOString(),
     elapsedMs: 1,
   });

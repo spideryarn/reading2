@@ -1310,7 +1310,7 @@ export function sharingConfirmBody(title: string): string {
    was here asserted it confidently. On 2026-08-28 it looked as though naming
    the artefacts would mean widening `REVISION_READ_POLICY`, and the general
    warning was written up as the permanent answer. It would not: the revision
-   row already carries all four artefacts that can hold a `profileHash`, so
+   row already carries all five artefacts that can hold a `profileHash`, so
    reading it was free, and `personalised` was built the same afternoon. The
    sentence below is the fallback again rather than the answer. */
 
@@ -1356,6 +1356,7 @@ const OWNED_ARTEFACT: Partial<Record<StepName, string>> = {
   glossary: "your glossary",
   summary: "your summary",
   ideas: "your list of ideas",
+  sketch: "your sketch diagram",
 };
 
 /**
@@ -1375,8 +1376,8 @@ const OWNED_ARTEFACT: Partial<Record<StepName, string>> = {
  * The dash after the list does the same job for the first half.
  *
  * A `StepName` with no entry in `OWNED_ARTEFACT` falls back to *"your <name>"*
- * rather than being dropped. Only four artefacts can carry a `profileHash` and
- * all four are in the table, so this is unreachable today — but a silently
+ * rather than being dropped. Only five artefacts can carry a `profileHash` and
+ * all five are in the table, so this is unreachable today — but a silently
  * shortened list is the failure that would matter here, since the whole point
  * of the sentence is that it is complete.
  */

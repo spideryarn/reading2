@@ -7032,8 +7032,11 @@ td.text.has-hit[data-hues="8"] {
    words it belongs to. Underlined rather than coloured alone, because at 10.5px
    on this ground a hue change is not a reliable affordance and
    docs/project/colour-scales.md is emphatic that colour is never the only
-   carrier. The padding is what makes it hittable on a touch device without
-   taking a line of its own. */
+   carrier. The padding gives it a little more to land on without taking a line
+   of its own — **not** a touch target: it comes out around 23px, under WCAG
+   2.2's 24 and a long way under Apple's 44. What this panel offers a thumb is
+   the step bar. (This said "hittable on a touch device" while the component's
+   own comment had already been corrected to say the opposite. ⟨Sol⟩.) */
 .diag-again {
   display: inline;
   border: 0;
@@ -8053,7 +8056,11 @@ tr:hover .block-chat,
   white-space: nowrap; max-width: 11rem; overflow: hidden; text-overflow: ellipsis;
 }
 .sk-scene:hover { color: var(--ink); background: var(--surface-raised); }
-.sk-scene.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); }
+/* **The open one is not truncated.** Every chip capped at 11rem meant the band
+   showed "Why We're Ter" as the name of where you are — the one label in the row
+   that has to be readable, cut off to make room for the ones that do not. The
+   row already scrolls, so this costs the others nothing. */
+.sk-scene.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); max-width: none; }
 .sk-scene:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
 
 .sk-up, .sk-crumb, .sk-zoom {

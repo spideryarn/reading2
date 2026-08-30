@@ -573,6 +573,69 @@ with its neighbour rather than a leftover.
   and the article jump is always available but never a surprise. Sol flagged the
   ambiguity; the resolution is a guess until somebody uses it.
 
+## The door the model forgot to fit
+
+Greg pressed "WHY WE'RE TEMPTED TO SEE IT" and nothing happened. The region was
+there, the zoom scene was there, and nothing joined them — the artefact had been
+drawn before the prompt started asking for `opens`, so the label was just a
+label. The tempting fix is a redraw, and it would have worked: $0.20, two
+minutes, one article. Every other sketch already on disk would have gone on
+doing nothing, and so would every future one a model forgot to wire.
+
+**So the link is derived from the blocks, which are the one thing every part of
+this agrees on.** A region encloses nodes; those nodes name blocks; a zoom scene
+names blocks too. If most of a region's blocks turn up in one scene and hardly
+any in the others, that scene *is* the region drawn larger — which is what a
+region and a zoom scene each already mean, so this is reading what the picture
+says rather than guessing at it. Note that it is not similarity between the
+label and the scene title: on the two real drawings "THE CORE ARGUMENT" and
+"Why Scale Works: The Ladder" have no word in common, and their blocks match
+five to nil.
+
+`inferRegionOpens` in [`src/sketch-scene.ts`](../../src/sketch-scene.ts), run
+inside `readSketch`, so it happens at both ends of the wire and no stored
+artefact has to change.
+
+**The whole risk is a wrong door, so most of the rule is abstention.** A reader
+who presses a name and arrives somewhere else has been lied to by the picture; a
+reader who presses a name and gets nothing has learnt only that this name is not
+a control. The winner must take a strict majority of the region's blocks *and*
+the runner-up at most half of what the winner took; a region with fewer than two
+blocks, or no label to press, is left alone; a link the model wrote itself is
+never overruled; and two regions claiming one scene means the weaker stays shut.
+
+On the six regions of the two real drawings it links three and abstains on
+three, and all six are right:
+
+| region | inferred | why |
+| --- | --- | --- |
+| WHY WE'RE TEMPTED TO SEE IT | → Why We're Tempted | 2 of 3 blocks, nil elsewhere |
+| WHY IT'S PROBABLY NOT THERE | → Why It's Probably Not There | 4 of 4, nil elsewhere |
+| THE CORE ARGUMENT | → Why Scale Works: The Ladder | 5 of 9, nil elsewhere |
+| SPECULATION | → Agency: A Forking Descent | 2 of 2, nil elsewhere |
+| PROSPECTS | shut | no zoom scene covers it |
+| CRITICS | shut | no zoom scene covers it |
+
+Both articles go from **two unreachable scenes to none**, with no model call.
+
+**The link is derived, not stored.** `readSketch` runs on the way *in* to a
+write as well as on the way out of a read, so a derived door would be saved into
+the artefact and read back tomorrow indistinguishable from one the model drew —
+and `score.inferred` would report 0 on a picture whose every door was ours.
+`stripInferredOpens` takes them out before the artefact is handed back.
+
+**And the score needed splitting in two.** `unreachable` counts what the reader
+cannot get to, so an inferred door rightly takes a scene off it — which would
+leave a prompt that had quietly stopped asking for `opens` looking exactly like
+one that still did, and that is the very failure this feature already had once
+and did not notice for six runs. `score.inferred` is the other half: how many of
+the doors are ours rather than the model's. `unreachable` says whether the
+picture is whole; `inferred` says whether the prompt is still doing its job.
+
+The thirteen tests were each checked against a mutation aimed at them — the
+inference disabled, then each guard loosened in turn — because an abstention
+test that no change can redden is testing nothing.
+
 ## Not doing
 
 - **No raw SVG from the model.** See above; it is the whole design.

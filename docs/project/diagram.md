@@ -1343,7 +1343,11 @@ that file protects first. A modal takes it from nothing.
   real drawings it links three and abstains on three, and all six are right. Not
   string similarity: "THE CORE ARGUMENT" and "Why Scale Works: The Ladder" share
   no word, and their blocks match five to nil. A link the model wrote is never
-  overruled, and a derived one is marked `opensInferred` — see
+  overruled, and a derived one is **not saved**: `stripInferredOpens` takes it
+  back out before the artefact is written, so the stored picture stays the
+  model's own work and the derivation runs afresh on every read — which is also
+  how a better rule tomorrow reaches every sketch already on disk. A derived one
+  is marked `opensInferred` — see
   [§ The scene is checked again in the browser](#the-scene-is-checked-again-in-the-browser)
   for why the score then needs two numbers rather than one.
 - **Back** appears whenever a zoom is open, and Escape does the same. The scene

@@ -161,6 +161,14 @@ export interface SketchRegion extends Toned {
    * pixels off a node would silently do something entirely different.
    */
   opens?: string;
+  /**
+   * This `opens` was **derived from the blocks, not written by the model** —
+   * see `inferRegionOpens`. Never read from the input, only ever set by
+   * `readSketch`, and the reason `score.inferred` exists: the door works, so
+   * the reader is not short of anything, but a prompt that has quietly stopped
+   * asking for `opens` must not be able to hide behind our arithmetic.
+   */
+  opensInferred?: true;
 }
 
 export interface SketchEdge extends Toned {
@@ -244,6 +252,8 @@ export interface SketchReport {
   /** Items the model wrote, and items that survived. */
   written: number;
   kept: number;
+  /** Region→scene links `inferRegionOpens` had to work out for itself. */
+  inferred: number;
 }
 
 export interface ReadOptions {
@@ -635,7 +645,12 @@ export function readSketch(
   if (!isObj(raw)) {
     return {
       sketch: { version: SKETCH_VERSION, title: "", caption: "", scenes: [] },
-      report: { faults: [{ where: "root", what: "not an object" }], written: 0, kept: 0 },
+      report: {
+        faults: [{ where: "root", what: "not an object" }],
+        written: 0,
+        kept: 0,
+        inferred: 0,
+      },
     };
   }
 
@@ -717,6 +732,15 @@ export function readSketch(
     }
   }
 
+  /* Only now that every explicit pointer has been resolved, because a region
+     the model aimed itself is not one we get to aim. */
+  const inferred = inferRegionOpens(scenes);
+  for (const scene of scenes) {
+    for (const item of scene.items) {
+      if (item.kind === "region" && item.opensInferred && item.opens) opened.add(item.opens);
+    }
+  }
+
   /**
    * **A scene nothing opens is a scene the reader can never reach.**
    *
@@ -751,15 +775,170 @@ export function readSketch(
   if (generator) sketch.generator = generator;
 
   const kept = scenes.reduce((n, s) => n + s.items.length, 0);
-  return { sketch, report: { faults, written, kept } };
+  return { sketch, report: { faults, written, kept, inferred } };
+}
+
+/* ------------------------------------------------- inferring a region's door */
+
+/** Below this many blocks, a region is not saying enough to match on. */
+export const MIN_REGION_BLOCKS = 2;
+/** The winning scene must cover more than this share of the region's blocks. */
+export const MIN_REGION_COVER = 0.5;
+
+/** A node belongs to a region when its **centre** is inside it. */
+function inside(n: SketchNode, r: SketchRegion): boolean {
+  const cx = n.x + n.w / 2;
+  const cy = n.y + n.h / 2;
+  return cx >= r.x && cx <= r.x + r.w && cy >= r.y && cy <= r.y + r.h;
+}
+
+/**
+ * **The picture already knows which scene a region is about — through the
+ * blocks, which are the one thing everything here agrees on.**
+ *
+ * Greg pressed "WHY WE'RE TEMPTED TO SEE IT" and nothing happened, because that
+ * region had no `opens`: the artefact on disk was drawn before the prompt
+ * started asking for one. Paying for another picture fixes that one article,
+ * and leaves every reader holding an older sketch — or a newer one drawn by a
+ * model that forgot — pressing names that do nothing.
+ *
+ * So it is derived instead. A region encloses some nodes; those nodes name
+ * blocks; a zoom scene names blocks too. If most of a region's blocks turn up
+ * in one scene and hardly any in the others, that scene **is** the region drawn
+ * larger — which is what a region and a zoom scene each already mean. Note that
+ * this is not similarity between a label and a title: on the two real drawings
+ * "THE CORE ARGUMENT" and "Why Scale Works: The Ladder" share no words at all,
+ * and their blocks match five to nil.
+ *
+ * **Conservative on purpose, because a wrong door is worse than none.** A
+ * reader who presses a name and arrives somewhere else has been lied to by the
+ * picture; one who presses a name and gets nothing has only learnt that this
+ * name is not a control. So it abstains unless the winning scene takes a strict
+ * majority of the region's blocks and the runner-up takes at most half of what
+ * the winner did. Over the six regions of the two real drawings that links
+ * three and abstains on three, and all six are right.
+ *
+ * The link is marked `opensInferred`, which is not decoration. `unreachable`
+ * counts what the **reader** cannot get to, so an inferred door rightly takes a
+ * scene off it — but that would leave a prompt which had quietly stopped asking
+ * for `opens` looking exactly like one that still did. `score.inferred` is the
+ * other half of the pair, and it is the one to watch: what the model wrote, as
+ * against what we had to work out for it.
+ */
+export function inferRegionOpens(scenes: SketchScene[]): number {
+  if (scenes.length < 2) return 0;
+
+  /* Only zoom scenes are targets. A region opening the overview would be a
+     door back to where the reader already is, and that is what Back is for. */
+  const targets = scenes.slice(1).map((sc) => ({
+    id: sc.id,
+    blocks: new Set(
+      sc.items
+        .filter((i): i is SketchNode => i.kind === "node" && !!i.block)
+        .map((i) => i.block as BlockId),
+    ),
+  }));
+
+  const cands: { region: SketchRegion; scene: string; cover: number }[] = [];
+
+  for (const scene of scenes) {
+    const nodes = scene.items.filter((i): i is SketchNode => i.kind === "node");
+    for (const region of scene.items) {
+      if (region.kind !== "region") continue;
+      /* No label is nothing to press. An explicit pointer is not ours to
+         second-guess — the model saying so beats us working it out. */
+      if (!region.label || region.opens) continue;
+
+      const mine = new Set(
+        nodes.filter((n) => n.block && inside(n, region)).map((n) => n.block as BlockId),
+      );
+      if (mine.size < MIN_REGION_BLOCKS) continue;
+
+      let best: { id: string; hits: number } | null = null;
+      let second = 0;
+      for (const t of targets) {
+        if (t.id === scene.id) continue;
+        let hits = 0;
+        for (const b of mine) if (t.blocks.has(b)) hits++;
+        if (!best || hits > best.hits) {
+          if (best) second = Math.max(second, best.hits);
+          best = { id: t.id, hits };
+        } else {
+          second = Math.max(second, hits);
+        }
+      }
+
+      if (!best || best.hits === 0) continue;
+      if (best.hits / mine.size <= MIN_REGION_COVER) continue;
+      /* A runner-up worth half as much means the region straddles two scenes,
+         and there is no honest way to pick one of them. */
+      if (second * 2 > best.hits) continue;
+      cands.push({ region, scene: best.id, cover: best.hits / mine.size });
+    }
+  }
+
+  /* **One door per scene.** Two regions claiming the same zoom scene is the
+     same ambiguity as one region straddling two scenes, seen from the other
+     side: the stronger match takes it and the other stays shut. */
+  let made = 0;
+  const taken = new Set<string>();
+  for (const c of [...cands].sort((a, b) => b.cover - a.cover)) {
+    if (taken.has(c.scene)) continue;
+    taken.add(c.scene);
+    c.region.opens = c.scene;
+    c.region.opensInferred = true;
+    made++;
+  }
+  return made;
+}
+
+/**
+ * **The artefact records what the model wrote, never what we worked out.**
+ *
+ * `inferRegionOpens` runs inside `readSketch`, which runs on the way *in* to a
+ * write as well as on the way out of a read — so without this, a derived door
+ * would be saved into the file and read back tomorrow indistinguishable from one
+ * the model had drawn. `opensInferred` is not persisted either (`readRegion`
+ * never reads it off the input, on purpose: it is ours to set, and a model that
+ * wrote it would otherwise be able to claim our mark). The pair would leave
+ * `score.inferred` reporting 0 on a picture whose every door we fitted — an eval
+ * over saved artefacts would then find the prompt in perfect health, which is
+ * the exact failure the number exists to make visible.
+ *
+ * So the stored picture stays the model's own work, the derivation runs afresh
+ * on every read, and a better rule tomorrow reaches every sketch already on
+ * disk instead of only the ones drawn after it.
+ *
+ * **In place**, and returned only for convenience at the call site. `strip…`
+ * rather than `without…` for that reason: the caller's own `sketch` changes,
+ * and a name promising a copy is the kind that gets one written.
+ */
+export function stripInferredOpens(sketch: Sketch): Sketch {
+  for (const scene of sketch.scenes) {
+    for (const item of scene.items) {
+      if (item.kind !== "region" || !item.opensInferred) continue;
+      delete item.opens;
+      delete item.opensInferred;
+    }
+  }
+  return sketch;
 }
 
 /* ------------------------------------------------------------------ scoring */
 
 export interface SketchScore {
   scenes: number;
-  /** Scenes after the overview that no node's `opens` points at. */
+  /**
+   * Scenes after the overview that nothing opens — counted from the reader's
+   * side, so a door `inferRegionOpens` worked out counts as a door.
+   */
   unreachable: number;
+  /**
+   * …and how many of the doors are ours rather than the model's. Read the two
+   * together: `unreachable` says whether the picture is whole, `inferred` says
+   * whether the prompt is still doing its job.
+   */
+  inferred: number;
   nodes: number;
   /** Nodes carrying a jump the article can honour. */
   linked: number;
@@ -1072,6 +1251,9 @@ export function scoreSketch(
   return {
     scenes: sketch.scenes.length,
     unreachable: sketch.scenes.slice(1).filter((sc) => !opened.has(sc.id)).length,
+    inferred: sketch.scenes
+      .flatMap((sc) => sc.items)
+      .filter((it) => it.kind === "region" && it.opensInferred).length,
     nodes: nodes.length,
     linked: nodes.filter((n) => n.block).length,
     reach: total === 0 ? 1 : widest / total,

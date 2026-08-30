@@ -38,6 +38,7 @@ import {
   CANVAS_W,
   MAX_CANVAS_H,
   readSketch,
+  stripInferredOpens,
   scoreSketch,
   type Sketch,
   type SketchReport,
@@ -586,7 +587,11 @@ export async function generateSketch(opts: {
      that wrote the file *and* returned it would give the pipeline two writes,
      one of them to a path that does not exist in production. */
   return {
-    sketch,
+    /* Stripped of the doors `readSketch` worked out from the blocks, because
+       this one is going to be *written* — see `stripInferredOpens`. The score
+       above was taken before the strip, so the run still reports how many of
+       them there were. */
+    sketch: stripInferredOpens(sketch),
     raw,
     report,
     score,
@@ -605,7 +610,11 @@ export function summarise(run: SketchRun): string[] {
   const flow = s.flow === null ? "n/a" : s.flow.toFixed(2);
   return [
     `${s.scenes} scenes, ${s.nodes} nodes, ${s.linked} of them linked to a block` +
-      (s.unreachable > 0 ? ` — ${s.unreachable} scene(s) no node opens` : ""),
+      (s.unreachable > 0 ? ` — ${s.unreachable} scene(s) nothing opens` : "") +
+      /* Worth printing even when the picture is whole: it is the difference
+         between a prompt that is still asking for `opens` and one that has
+         quietly stopped, which `unreachable` alone can no longer tell you. */
+      (s.inferred > 0 ? ` — ${s.inferred} region link(s) inferred from the blocks` : ""),
     `flow (down-the-page vs article order): ${flow}`,
     `widest run of the article no node points into: ${(s.reach * 100).toFixed(0)}%`,
     `overlap: ${(s.overlap * 100).toFixed(1)}% of node area`,
