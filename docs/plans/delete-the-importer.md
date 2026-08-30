@@ -27,6 +27,68 @@ useful kind of review.
 
 ---
 
+## Parked after D1b, 2026-08-30 — and what it would take to restart
+
+> This pipeline work seems to be taking forever. I am wondering whether there's an easier v1 we
+> could be aiming for, e.g. maybe we keep the state in the browser, and only send the required
+> end-results up when the pipeline has finished. This doesn't meet our end-goals (e.g.
+> idempotent/resumable, moving things more fully into the database), but if it simplifies things
+> dramatically and works as a stepping stone, I'd consider it...
+>
+> — Greg, 2026-08-30
+
+**Stopped after D1b, deliberately, in favour of [v1-imports-on-vercel.md](v1-imports-on-vercel.md).**
+D2 through D5, the demolition and E are not abandoned; they are waiting for something to need them.
+
+**This is a safe place to stop, by construction rather than by luck.** Nothing switches over.
+[`src/jobs.ts:57`](../../src/jobs.ts) still imports `fsArtifacts`, every stage is still on
+`LEGACY_UNCONVERTED_STEPS`, and the Postgres session would refuse all ten of them if it were wired in.
+So what is committed is a store adapter, a transactional session and fifteen tests that no production
+path reaches. It cannot rot, because nothing depends on it.
+
+### Why the browser-state idea was not taken
+
+It answers the right question — the only thing blocking imports is that each `/advance` may land on a
+different Vercel instance with an empty disk — but it is the more expensive of the two answers.
+
+| | needs a transport | needs the stages converted | works today |
+|---|---|---|---|
+| **one invocation per job** (v1 stage 3) | no | **no** | yes — worst measured job ~520s against an 800s ceiling |
+| browser holds the state | yes, artefacts down and back up each step | **yes** | yes, with a trust boundary and the tab kept open |
+| artefacts in Postgres (D2–D5) | no | yes | the end state |
+
+**The decisive point is the middle column.** All ten stages still write their own files inside `run`.
+For the browser to hold artefacts, every stage would have to *return* its product instead — and that
+conversion **is** D3–D5. So browser-state skips the work that is already finished (the adapter, the
+session) and still requires the work that remains. The cheaper variant, shipping the whole scratch
+directory to the client and back, avoids the conversion but moves megabytes per step to do what one
+invocation does with nothing.
+
+Browser-state only starts to win when a job cannot fit in one invocation. It does not yet.
+
+### What would restart this
+
+Any one of these, and the first is the one to watch:
+
+1. **An article that will not fit in one invocation.** `toc` alone is 320.4s measured; the ceiling is
+   800s. A longer piece, a slower model, or a sixth default step and one invocation stops being
+   enough. `tests/jobs-lease-budget.test.ts` fails when the sum exceeds it, which is the alarm.
+2. **Wanting a job to survive a crash.** One invocation means a killed instance loses the whole job,
+   not one step. That is the resumability D exists for.
+3. **Reader data outgrowing the filesystem** — a second instance, a second region, or anything that
+   needs two processes to see the same article.
+4. **Deleting the importer**, which is still the only way content reaches Postgres and is still
+   unsafe to leave runnable once D can publish.
+
+### Where to pick it up
+
+**D2 is the next stage and it is scoped** — see § *D2 scoped*. It is also the cheapest, because
+`pdf-read.ts` has no boundary crossing at all. **D3 is six stages, not five** — `assets` was missing
+from this plan entirely until 2026-08-29. And the reviews are the map: `delete-the-importer-d1b-sol.md`
+confirms the transaction is correct and says what D3 must do — convert the six late stages to return
+`parts` and `stamp`, remove each legacy exemption, and test real products through the injected
+Postgres session. *"D3 should undo none of D1b."*
+
 ## Where it stands, 2026-08-28
 
 Seventeen commits. **All of C is done and reviewed; C1 was built and withdrawn.** Five of
