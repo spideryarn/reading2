@@ -1786,6 +1786,37 @@ Close to the laptop figures (8pp ≈ 65 s, about a penny) and comfortably inside
 Worth knowing for latency work: for a PDF, `extract` is most of the time-to-readable, where for HTML
 it is about a second — so a provisional publish after `blocks` buys a PDF reader almost nothing.
 
+**And `extract` is not where the money goes.** On the run that got furthest, the whole job cost
+$0.1832, of which the ToC's single call was **$0.1617 — 88%**. Transcribing nine pages of PDF with a
+vision model is eight times cheaper than building a table of contents for the result. That is worth
+knowing before anyone optimises the transcription.
+
+### The ToC stage had never seen an article like this
+
+The run that cleared the quality gate then died one step later:
+
+```
+step failed: toc — arxiv-1503, ms 123399, aiCalls 1, aiCost $0.1617
+  The children of the node at root do not tile it: child 7 leaves a gap of 3 block(s).
+```
+
+One call, completed, returning a structurally invalid tree — nothing to do with budgets or effort.
+It matters beyond this article for two reasons, both from the session working on ToC repairs:
+
+- **Every previously observed tiling failure was off by one block**, and the R2 repair
+  ([`src/toc.ts`](../../src/toc.ts)) is deliberately sized to exactly that. A gap of **three** is
+  outside the repair envelope by design, so the claim that the repairs recover every measured
+  structure failure — which was the stated reason a fallback tree was judged unnecessary — has a
+  counterexample now.
+- **All four earlier observations came from HTML articles with headings.** A PDF's text is a model
+  transcription with no heading structure at all, which is the half where the recipe was measured
+  disagreeing with itself (8, 7, 8 and 3 parts from byte-identical input). PDF ingest reaching
+  production means the ToC stage started being handed a kind of article it had never been exercised
+  against, and the first thing it did was fail in a new way.
+
+`https://spideryarn.com/add/https://arxiv.org/pdf/1503.02531` reproduces it: everything through
+`blocks` now succeeds reliably, so this is the fixture the headingless case has never had.
+
 ### The gate refused both papers, and both were right
 
 This is the finding. **The checker compares the model against pdf.js's text layer, and that layer
