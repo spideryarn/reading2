@@ -58,6 +58,7 @@ import path from "node:path";
 
 import { sameCommit } from "./build-stamp.js";
 import { headText } from "../src/html.js";
+import { documentTitle } from "../src/title-text.js";
 
 /* ------------------------------------------------------------------ */
 /* Facts about the feature, fixed rather than guessed                  */
@@ -327,12 +328,12 @@ export function judgeTitleAgainstMetadata(body: string, metadataTitle: string): 
 
   const problems: string[] = [];
   const expectedOgTitle = headText(metadataTitle, 120);
-  const expectedTitle = `${headText(metadataTitle, 64)} · Spideryarn`;
+  const expectedTitle = documentTitle(metadataTitle);
 
   const decodedTitle = title === null ? null : unescapeHead(title);
   if (decodedTitle === null) problems.push("title: no <title> tag found");
   else if (decodedTitle !== expectedTitle)
-    problems.push(`title: expected '${expectedTitle}' (from /api/public/metadata's title, clamped to 64), got '${decodedTitle}'`);
+    problems.push(`title: expected '${expectedTitle}' (from /api/public/metadata's title, through documentTitle()), got '${decodedTitle}'`);
 
   const rawOgTitle = metaContent(body, "og:title");
   const ogTitle = rawOgTitle === null ? null : unescapeHead(rawOgTitle);
@@ -677,9 +678,14 @@ function runSelfTest(): void {
     wrongArticleVerdict,
   );
   check(
-    "judgeTitleAgainstMetadata: clamps the metadata title the same way the server does (64 / 120)",
+    "judgeTitleAgainstMetadata: clamps the metadata title the same way the server does (documentTitle / 120)",
     judgeTitleAgainstMetadata(
-      `<title>${headText("A".repeat(200), 64)} · Spideryarn</title><meta property="og:title" content="${headText("A".repeat(200), 120)}">`,
+      /* Spelled out, not built from `documentTitle`/`headText` — the judge
+         calls those, so a body composed with them would agree with any
+         behaviour they had, which is a positive case that cannot fail. 200 A's
+         with no space to cut at: 64 then an ellipsis for the tab, a hard 120
+         for the card. */
+      `<title>${"A".repeat(64)}… · Spideryarn</title><meta property="og:title" content="${"A".repeat(120)}">`,
       "A".repeat(200),
     ).problems.length === 0,
   );

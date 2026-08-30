@@ -135,6 +135,38 @@ const SHARED = new Set([
      URL left in place. One module, both callers.
      See src/assets.ts and docs/plans/hosting-the-articles-images.md. */
   "assets.js",
+  /* Escaping text into markup, and composing an article's page title. On the
+     list because they qualify — `html.js` imports nothing at all, and
+     `title-text.js` imports only the other leaves below it — and because being
+     on it is the whole point rather than a convenience. (This comment said
+     "only `html.js`" until `modes.js` and `read-address.js` arrived; the test
+     underneath checks purity, so the drift was in the prose alone.)
+
+     From 2026-08-29 a serverless function composes the `<title>` for a shared
+     `/read/<slug>` before the bundle loads (src/public/page-head.ts), and React
+     then assigns `document.title` over the top of it. Anything the two disagree
+     about is a tab that visibly changes in front of the reader, and they did
+     disagree: the server normalised whitespace, control characters and bidi
+     overrides and the client did not. A second copy of a title rule is one
+     place for it to drift, and this is the drift.
+     See src/title-text.ts and docs/project/page-titles.md. */
+  "html.js",
+  "title-text.js",
+  /* The nine middle-band modes. It lived in `src/web/params.ts` until
+     2026-08-30 and moved for the reason the two above are on this list: the
+     serverless function that composes a shared article's `<title>` has to know
+     which mode the address asked for, or the tab says one thing and React says
+     another a second later. It imports nothing at all, and `params.ts`
+     re-exports every name so no component knows it moved. See src/modes.ts. */
+  "modes.js",
+  /* What a `/read/…` address asks for — the view, and whether the client is
+     about to rewrite a legacy spelling into the metadata page. On the list
+     because it imports nothing at all, and because being on it is the point:
+     `main.tsx` does the rewrite and the serverless head composer has to predict
+     it, since `/read/x?about=1` is one path segment and so reaches the composer
+     while `/read/x/metadata` is two and never does. Two copies of that
+     predicate is a tab that changes at mount. See src/read-address.ts. */
+  "read-address.js",
 ]);
 
 /** Every `.ts`/`.tsx` file under a directory, recursively. */
