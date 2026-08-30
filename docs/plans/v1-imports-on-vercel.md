@@ -1,0 +1,232 @@
+# A v1 where pasting a URL on spideryarn.com gives you an article
+
+**Status: in progress. Written 2026-08-29, re-cut 2026-08-30 after GPT Sol's second review
+([v1-imports-review-sol.md](v1-imports-review-sol.md)) returned NO-SHIP on the first cut.**
+Stage 0 is committed (`f3db91e`). Stages 3 and 4 moved to the D1b owner; stage 5 is cut. Supersedes
+[durable-artefacts-on-vercel.md](durable-artefacts-on-vercel.md), which measured the problem
+correctly and then proposed the wrong fix — GPT Sol returned NO-SHIP on it and was right.
+
+> Look for simplicity, and getting to a v1 now, while being aware of the long-term-best eventual
+> state and choosing stepping stones towards that.
+>
+> — Greg, 2026-08-29
+
+## What is broken, measured
+
+Every import on production fails. 9 of 9 historical, plus a fresh job queued today
+(`spya-nygy0h`, slug `greatwork`) which failed in **16ms** at step 1:
+
+```
+ENOENT: no such file or directory, mkdir '/var/data'
+```
+
+Three causes, each confirmed against the code:
+
+1. **A path that bundling invalidates.** `artifacts-fs.ts:55` and `import.ts:90` both derive a root
+   from `import.meta.dirname`. Correct for files at `src/store/`; wrong once bundled into
+   `api-dist/vercel.js`, where two levels up is `/var`. Vercel's filesystem is read-only except an
+   ephemeral, per-invocation `/tmp`.
+2. **Artefacts crossing invocations.** `useJobs.ts:91` — *"The browser is what moves a job along.
+   `POST /api/jobs/:id/advance` runs one [step]"*. Six steps, six invocations, six disks.
+3. **A finished job publishes nothing.** `publishRevision` is called only from
+   `revisions.ts:226`, the fixture loader and tests — never from `jobs.ts` or `pipeline.ts`.
+   Publication today is a human running `npm run db:import`.
+
+## The decision
+
+**Run the whole job in one invocation on an injected writable root, and publish by calling the
+existing `importArticle` as a real pipeline step.** Decided with Fable, 2026-08-29.
+
+Why not the alternatives:
+
+- **Finish the D-series** ([delete-the-importer.md](delete-the-importer.md)) is the long-term-best
+  end state and is 2–3 weeks, gated on D1b which is unstarted and the largest piece. Greg asked for
+  a v1 now.
+- **Convert only the six default steps** is the same answer on the axis that matters: still gated on
+  D1b.
+- **A blob-backed `ArtifactStore`** was NO-SHIPped. All ten steps still write their own files inside
+  `run()` (`LEGACY_UNCONVERTED_STEPS`, `pipeline.ts:344`), so no adapter can intercept them until
+  D3–D5 convert them. This plan does not fight that — it gives those files a disk that works.
+
+The pieces already exist and are already tested: the filesystem pipeline (unchanged),
+`importArticle` (one transaction, publishes, converges on re-run), and `exportArticle` — the
+importer's inverse, which writes a full `data/<slug>/` back out of Postgres.
+`tests/store-roundtrip.test.ts` holds the pair together.
+
+### Two things a naive version of this gets wrong
+
+**Slug identity must stop asking the filesystem, or this corrupts data.** `articleExists`
+(`pipeline.ts:757`), `urlForSlug` (`pipeline.ts:780`) and `freeSlug`'s claim check all answer from
+`data/<slug>/meta.json`. On Vercel that disk is empty, so `freeSlug` hands out a slug that already
+names a published article. If it belongs to another owner, `importArticle` refuses **at the end** —
+model money spent, then a wall. If it is the **same owner's** different article, the owner check
+passes and the import replaces that article and deletes-and-reinserts its reader state
+(`articleId = derivedUuid("article", slug)`, `import.ts:523`). Every write reports success.
+
+**Re-publishing without hydrating deletes reader state.** `importArticle` reads comments, chat and
+searches through loaders and treats *the files win* as its contract. Re-importing an article whose
+`/tmp` has no `comments.json` deletes the reader's real comments and reinserts nothing. So v1
+publishes **first ingests only**, guarded, and the hydration stage lifts that guard.
+
+## Stages, and who holds each
+
+Re-cut after Sol's second review and agreed with the D1b owner (spideryarn2-84) on 2026-08-30.
+
+| # | What | Holder | State |
+|---|---|---|---|
+| 0 | lease, `maxDuration`, Fluid | this session | **done**, `f3db91e` |
+| 1 | job-scoped scratch root | this session | in flight |
+| 2 | global slug reservation | this session | next |
+| 3 | `advanceJobToCompletion` in the coordinator | spideryarn2-84 | after D1b |
+| 4 | transactional job finalizer | spideryarn2-84 | **written** as `pg-session.ts`, tests in flight |
+| 5 | hydration | — | **cut**, see below |
+| — | the end-to-end test | this session | with stage 2 |
+
+**Stage 0 — the time budget. Done.** `LEASE_MS` 420s, self-abort 400s, `maxDuration` 300 → 800.
+The two must move together: raising the lease alone puts the self-abort past the platform's kill so
+it never fires, trading a clean interrupted ending for a mid-step kill with a live lease.
+[`tests/jobs-lease-budget.test.ts`](../../tests/jobs-lease-budget.test.ts) pins the relationship
+rather than the numbers. Fluid Compute is confirmed on for the project
+(`resourceConfig.fluid = true`), which `maxDuration: 800` requires — **but this is not finished
+until the limit is read off a live deployment**, because a declared 800 silently clamped to 300
+fails exactly like today and both states print a green deploy.
+
+**Stage 1 — one job-scoped scratch root.** `dataRoot()`, resolved at call time, `SPIDERYARN_DATA_ROOT`
+overriding, the repository root locally and `/tmp/spideryarn/<ownerId>/<jobId>/` when deployed. Two
+call sites: `artifacts-fs.ts:55` and `import.ts:90`. Deployed **with no job scope it throws** rather
+than guessing, because a deployed read with no job is a real bug and must be loud.
+
+*Job-scoped rather than owner-scoped, which is Sol's Critical 4 and the nastiest finding in the
+review:* job A builds artefacts for URL A and then fails; nothing was published so the slug still
+reads free; job B for a **different URL** is handed that slug, finds A's valid files warm in `/tmp`,
+skips those steps, and **publishes A's content under B's request**. A retry gets a new job id and
+repurchases the work, which is the correct trade.
+
+**Stage 2 — global slug reservation.** Not merely an owned-article lookup. Article slugs are
+globally unique (`schema.ts:129`) while active jobs reserve only `(ownerId, slug)`
+(`schema.ts:1175`), so two owners can queue the same free slug and one pays for the whole pipeline
+before publication refuses it. Use the existing global check
+([`slug-is-taken.ts:45`](../../src/store/slug-is-taken.ts)) for existing rows plus a global
+reservation for active ingests — without exposing another owner's URL while resolving the collision.
+
+**Stage 3 — claim once and walk the job.** `advanceJobToCompletion` **inside the coordinator**, not
+a loop at the route. Sol's Critical 3: every `advanceJob` claims, runs one step and releases, and no
+route loop can close the gap between release and re-claim — two tabs on two instances alternate,
+each restarting from its own partial scratch. **This is load-bearing rather than a refinement:**
+without it each request may land on a different instance and step 2 finds nothing from step 1, so
+the job cannot finish at all. Stage 1 makes this *stricter*, not looser, because it removes the
+accidental cross-job warm cache that is currently the only thing that could rescue a multi-instance
+job.
+
+**Stage 4 — a transactional finalizer, and not a pipeline step.** Sol's Critical 1: `checkProduct`
+refuses `produces: []` by name — a step declaring no artefacts can never be done, because
+`has([], …)` answers false, so it would re-run for ever. A `publish` step would therefore publish the
+article successfully and *then* fail the job. And a "publish receipt" file is not a way round it: a
+warm receipt could skip publication when Postgres does not contain it, which is the previous plan's
+quiet success again. Publication and the fenced terminal settlement must be **one transaction**, or
+a kill between them leaves the article published, the job failed, and Retry blocked by the
+first-ingest guard.
+
+## Stage 5 is cut
+
+Hydrating `data/<slug>/` from Postgres via `exportArticle` is unsafe, and two independent audits
+agree. **That direction has no test at all** — `tests/store-roundtrip.test.ts` exercises
+`data/` → Postgres → `data/` through a different function.
+
+The worst of it: `exportArticle` writes artefacts first and reader-state files last, so any throw in
+between leaves a directory `importArticle` happily accepts — it requires only `blocks.json` and
+`tree.json` — which then runs five unconditional deletes and reinserts nothing. Every comment,
+conversation, saved search, archive flag and reader-chosen title, gone, with both halves reporting
+success and nothing on disk marking the directory partial. The inverse too: export never deletes, so
+a stale `comments.json` resurrects deleted comments. Export is also not one snapshot — many queries,
+no wrapping transaction — so a comment written during hydration is missed and then deleted.
+
+> the data we CURRENTLY have in the database is unimportant and can be thrown away once. But as soon
+> as we move the app from Alpha to Beta status (hopefully soon), we'll need to take great care of our
+> data going forwards ever after.
+>
+> — Greg, 2026-08-30
+
+So the **first-ingest guard is permanent**, not a v1 shortcut: it protects readers who have not
+arrived yet. Re-ingest and refresh stay as broken as they are today until D1b removes the need.
+
+## Decisions Greg made on 2026-08-30
+
+- **Durability lands straight after v1, not in it.** v1 runs the whole job in one invocation on
+  ephemeral scratch. The reason it is safe to defer: only `toc`, `arc` and a little `pdf` ever cost
+  money, and `arc` and `assets` have already left `DEFAULT_INGEST_STEPS` — so a re-run is nearly
+  free, and "resume where it left off" and "do it again" differ by seconds rather than pounds.
+- **Publish once everything has run**, not as soon as the article is readable — getting to a working
+  v1 beats latency, and latency comes after.
+- **Where large artefacts belong**, when durability does land: structured JSON in Postgres, opaque
+  bytes (raw HTML/PDF, images) in Supabase Storage. That split already exists and is right; do not
+  add a third mechanism.
+
+## The ceiling, and why Stage 0 is first
+
+Measured from `data/_ai-calls.jsonl`. `durationMs` is **per model call**, and `toc` makes several
+per article. Grouped into per-article step totals:
+
+| slug | step | calls | total |
+|---|---|---|---|
+| (unattributed) | `toc` | 3 | **324.0s** |
+| (unattributed) | `summarise` | 10 | 240.3s |
+| `what-if-we-had-bigger-brains…` | `toc` | 1 | 163.1s |
+| `what-if-we-had-bigger-brains…` | `labels` | 3 | 65.2s |
+| `what-if-we-had-bigger-brains…` | `arc` | 1 | 10.4s |
+
+`LEASE_MS = 4 * 60_000` with `DEADLINE_MARGIN_MS = 20_000` (`jobs.ts:131-132`), so **every step
+self-aborts at 220s** — today, on a laptop too, for anything driven through the job path. A 324s
+`toc` therefore **cannot complete through a job at all right now**; it only ever succeeded via the
+CLI, which takes no lease. That is a live bug this plan inherits rather than causes, and it is why
+the config bump leads rather than trails.
+
+The account is **Vercel Pro** (`billing.plan = "pro"`, via the API), so `maxDuration` can rise from
+300 toward 800. Worst-case default ingest — `fetch`, `extract`, `blocks`, `toc`, `assets`, `arc`,
+of which only `toc` and `arc` call a model:
+
+```
+~10s + ~5s + ~5s + 324s + ~30s + 31s  ≈  405s
+```
+
+which fits 800s with headroom. `LEASE_MS` rises to cover the longest single step.
+
+## Risks, and the verdicts
+
+- **Repeat model spend on retry.** A retry in a cold invocation re-runs everything. Accepted for v1
+  and stated rather than discovered. On a warm instance `stepIsDone` resumes real artefacts for
+  free, and it derives doneness rather than remembering it — `store.interrupted` first, `has()`
+  parses rather than stats, late stages compare stamps. Both branches are correct by construction.
+- **Stop gets slower.** The cancel POST lands on a different invocation whose `aborts` map has no
+  controller (`jobs.ts:115`), so cancellation is read at the next step boundary rather than
+  aborting mid-step. A reader stopping mid-`toc` waits for `toc`. Acceptable; said out loud.
+- **A longer lease means a dead job is unreclaimable for longer** — `failExpired` (`jobs.ts:807`) is
+  what reclaims it.
+- **Warm `/tmp` from another owner** — closed by the owner-scoped root.
+- **Warm `/tmp` older than the published revision** — cannot occur before Stage 5 (first ingests
+  only), and is closed by unconditional hydration at Stage 5.
+
+## Stepping stone or detour — the ledger
+
+**Survives into the end state:** the store-backed slug checks (required once the files are gone);
+the injected root (the fs adapters stay for laptops and tests); the **contract and its end-to-end
+tests** — *a job that ends `done` has published a revision a reader can open, and readers see the
+old or the new, never a mixture* — which is verbatim D1b's spec, so these become D-series acceptance
+tests; and the **position** of publish inside the job machinery, since D1b replaces the step's body
+with `publishRevision` inside the last step's transaction, at the same seam.
+
+**Thrown away:** the route loop (~15 lines), the hydration call, and the publish step's
+`importArticle` body — which was already scheduled for deletion. This extends the importer's life by
+the weeks D1b takes.
+
+The discarded part is glue. Everything expensive persists. That is the difference from the blob
+adapter, where the discard would have been the machinery itself.
+
+## Kill-checks
+
+| # | Check | Result |
+|---|---|---|
+| 1 | Vercel plan's `maxDuration` ceiling | **Pro**, so up to 800s. But `toc` totals 324s, so Stage 0 is mandatory and moves first |
+| 2 | `exportArticle` covers everything `importArticle` reads | in progress — Stage 5 depends on it |
+| 3 | Collision with the D1b owner | Stages 3–4 touch `enqueue`, the advance route and `importArticle`'s guard, all seams D1b re-cuts. Coordinate before Stage 3 |
+| 4 | Is the 228s `toc` a step total or one call? | **Neither** — one *call* was 320s and one step totalled 324s. Worse than the note said |
