@@ -605,6 +605,144 @@ not taken because Greg explicitly chose an eighth mode so he can go back and for
 (2026-08-28), and Sol agrees that is reasonable — but if the churn measurement comes out badly, this
 is the design to fall back to rather than tuning hysteresis.
 
+## Half the panel was unreadable, and the tokens say why (2026-08-30)
+
+> Some of Outline mode text is too faded … And can you make the levels/siblings clearer, e.g. what
+> level are we on, who are siblings at the same level? Perhaps with horizontal indenting?
+>
+> — Greg, 2026-08-30, with a screenshot
+
+The fading was not a design choice that went too far. **`§ outline mode` had been written against a
+token vocabulary this app does not have** — nine names, none of which is one of ours:
+
+| Written | What it actually did | What it is here |
+|---|---|---|
+| `color: var(--muted)` ×6 | `--muted` is shadcn's raised *surface*, `oklch(0.245 0 0)`, on an `oklch(0.145 0 0)` page — about **1.2:1** | `--ink-faint` (`--muted-foreground`, `oklch(0.63 0 0)`) |
+| `color: var(--fg)` ×2 | defined nowhere ⇒ the declaration is invalid at computed value time, dropped, and the property **inherits** | `--ink` |
+| `background: var(--panel-2, …)` ×2 | fell through to the literal `rgba(127,127,127,…)` fallback every time | `--highlight-wash`, `--surface-raised` |
+| `font-family: var(--ui-font)` | defined nowhere ⇒ inherited, and looked right by luck (one sans for everything) | `--font-ui` |
+| `font-family: var(--read-font, inherit)` ×2 | the fallback, always | `--font-reading` |
+
+The one that cost the most is `.outln-row.here { color: var(--fg) }`. `.here` is the mark on the
+reader's **whole ancestor chain** — one of the panel's two answers to "where am I", and the reason
+[the walk sets two marks and not one](#what-actually-moves). It has never once been painted. An
+undefined custom property with no fallback does not warn, does not error, and leaves a rule that
+reads exactly like a rule that was applied.
+
+`tokens.css` and `styles.css` both carry shouted comments about this class of mistake, for
+`--accent`, and [the code review](#the-code-review) had already caught this very panel using
+`--accent` for its focus ring. The comments were there, were read, and the same mistake was made
+with `--accent`'s neighbour. **A rule that is only written down is not a check.**
+[`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) is now one — an undefined-token gate
+and a text-in-a-surface-token gate over all four stylesheets, both proven red against the exact
+lines above before being called done.
+
+### The number was on its own line, on every numbered row
+
+Found on the way in, and visible in Greg's screenshot: `1` sits above `Framing The Question` rather
+than beside it. `.outln-text` needs `display: -webkit-box` for its line clamp and that is a
+*block-level* box, so as an inline-flow sibling of `.outln-num` it took a line of its own. **Every
+numbered row was two lines tall**, and the header's "one line per row, which the fit's arithmetic
+assumes" was false for all of them.
+
+Nothing caught it and nothing could have: the clamp still reported one line, and the fit measures
+real markup, so it saw the true height and simply chose a shallower rung. The panel was not wrong —
+it was spending half its height on numbers and then honestly reporting that less fits.
+
+The row is a two-column grid now (`auto minmax(0, 1fr)`), with `.outln-text` and the gist/arc
+paragraphs placed in column 2 by name rather than by auto-placement — at level 3 the number is
+`display: none` and so is not a grid item at all, and an auto-placed title would slide into the
+`auto` column and size itself to its own content, unclamped.
+
+### Levels and siblings
+
+Indent says how deep a row is. It does not say **which rows it belongs with**, and that is what Greg
+asked for: a run of six sections with two paragraphs nested inside one of them is two groups, and at
+one indent step they read as a single ragged column.
+
+Three changes, each doing one thing:
+
+- **A gutter per level.** `min-width` on `.outln-num` is now `1.1em` at level 1 and `2.3em` at level
+  2, with the tabular figures that were already there. One shared width either wastes a level-1
+  row's space or lets `1.10` push its title out of line with `1.9`'s. Siblings' titles now start at
+  the same x, which is most of what makes a run read as a run.
+- **A hairline rail per nested run**, in the gutter that level opened, on every row of the run.
+  The rows touch, so the segments join into one line; only `.lvl-1` has a margin, and that is what
+  separates the parts. A level-3 row draws **two** — its own, and its parent section's continuing
+  *through* it, because a section rail that stopped where its own paragraphs begin would say the
+  paragraphs are outside the section.
+- **The current section marked on the rail**, two pixels of `--highlight`, a thumb on a track. The
+  rail is what the eye runs down when it is asking "which of these am I in", so the answer belongs
+  on it and not only in the row's background.
+
+Nothing here steps in opacity, and `.read` and `.tier-far` are deliberately the **same** value
+rather than two tellable-apart degrees of dim — both mean periphery, and giving them a step each is
+how the panel would grow the opacity ladder [the stylesheet header](../../src/web/styles.css)
+forbids.
+
+### Sol's review of the fix, and the three things it changed
+
+[The prompt](outline-mode-fading-review-prompt.md) and
+[the answer](outline-mode-fading-sol.md), the usual way
+([codex-cli-as-subagent.md](../reusable/codex-cli-as-subagent.md)). Verdict: proceed with changes.
+The grid and the rails were cleared outright — no visible-versus-measured height mismatch, the rails
+join because level-2 and level-3 rows carry no margins, `.now.lvl-2::before` beats the base rail on
+specificity, no other rule uses those pseudo-elements, and `border-radius` cannot clip them without
+`overflow: hidden`. Three things did change:
+
+- **A supplement the reader is inside stayed faint.** `.outln-row.supplement` sat after
+  `.outln-row.here` at equal specificity, so a `.supplement.here.now` row — reachable, and
+  [`tests/outline.test.ts`](../../tests/outline.test.ts) already puts the reader in the endnotes and
+  proves `notes.here` — resolved to `--ink-faint`: **4.50:1** against `--ink`'s 14.45:1. The
+  reader's own current row was the faintest semantic category in the panel. Now
+  `.supplement:not(.here)`. Dimmed because it is outside the argument is right; dimmed while you are
+  reading it is not.
+- **The number never lifted with its row.** `.outln-num` sets an explicit colour, so it beat both
+  `.here` and `:hover` on directness, and the current row's title went to `--ink` while its number
+  stayed at the faintest value there is.
+- **Hover made a faint row fainter.** `--ink-faint` on `--surface-raised` is **4.44:1**, down from
+  5.28:1 on the band's own `--panel` — the pointer was making the row harder to read. Fixed by
+  lifting the *ink* on hover rather than by hunting for a hover grey dark enough for all four faint
+  states, which takes the class with it.
+
+A fourth was accepted rather than fixed: each row owns its own `auto` track, so the per-level
+`min-width`s are floors and not a shared gutter, and a number wider than its floor shifts that one
+title right. That is a blemish; what is not acceptable is an `auto` track with no ceiling taking the
+whole panel, so the track is `minmax(0, 40%)` now.
+
+### What the gate promised and what it actually proved
+
+The sharpest finding was not about the CSS. Sol showed nine shapes that the first version of
+[`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) passed while the CSS was broken —
+`color : var(--muted)` with a space, uppercase `COLOR`, `color-mix(… var(--muted) …)`,
+`-webkit-text-fill-color`, `--a: var(--muted); color: var(--a)`, `var(--outer, var(--muted))`, the
+semantic surfaces `--panel` / `--surface-raised` / `--rule` / `--highlight-wash` which were simply
+missing from the list, and `tw:text-muted`, which the bridge at the top of `tailwind.css` maps
+straight to the surface token. And the real point:
+
+> Your red/green mutation proves the current regex catches the two exact original spellings in the
+> current four files. It does **not** prove scoping, reachability, alias resolution, generated
+> Tailwind output, fallback validity, completeness of `SURFACES`, or even that a future regex still
+> finds any candidates.
+>
+> — GPT Sol, 2026-08-30
+
+All nine are closed and each was **individually driven red** before being called done; the file's
+own header now says in as many words what it does not prove, and is called a tripwire rather than a
+proof. Two of Sol's holes are left open on purpose and named there: scope and reachability, which a
+text scanner cannot see, and `var(--missing, 1px)`, whose fallback is present and still wrong.
+
+The last clause of the quote — "or even that a future regex still finds any candidates" — is the one
+worth carrying elsewhere. Both halves now assert they can still *see* the shape they filter, because
+a scanner that has stopped matching anything is indistinguishable from a codebase with nothing wrong
+in it. That guard found its own bug immediately: written per-sheet, it went red on `tailwind.css`
+and `colourscales.css`, which are token definitions and quite properly paint nothing.
+
+`tw:text-muted` turned out to be theoretical rather than live — all 88 uses in `src/web` are already
+`tw:text-muted-foreground`. Establishing that took two greps, because the obvious one is wrong:
+`grep "tw:text-muted\b"` reports all 88 correct call sites as broken, since `\b` matches happily
+between `d` and `-`. The needle has to be the one that can tell the two apart.
+
 ## See also
 
 - [column-context.md](../project/column-context.md) — the centred fisheye per column, the research

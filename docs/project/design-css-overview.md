@@ -74,6 +74,37 @@ The semantic layer at the top of `styles.css` (`--ink`, `--page`, `--panel`, `--
 shadcn surface names. On a dark ground the greys run the other way: *soft* and *faint* are darker,
 not lighter.
 
+### Both of those are checked, because both had already happened
+
+[`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) reads all four stylesheets and asserts
+two things. Neither was a hypothetical; `§ outline mode` had six instances of the second and three
+of the first, and the panel was half unreadable on screen for four days before Greg's screenshot.
+
+- **A `var(--x)` with no fallback names a token that exists** — in one of the four sheets, or set as
+  an inline style from `src/web` (the test reads those too, including the `--h${i}` family
+  `annotate.ts` emits). An undefined custom property with no fallback is *invalid at computed value
+  time*: the whole declaration is dropped and the property inherits. Nothing errors, and the rule
+  looks exactly like one that was applied. `.outln-row.here { color: var(--fg) }` — the mark on the
+  reader's whole ancestor chain — did nothing at all.
+- **No `color:` is a surface token.** `--muted` is `oklch(0.245 0 0)` and the page is
+  `oklch(0.145 0 0)`, so text painted in it sits at about 1.2:1. The text twin is
+  `--muted-foreground`, aliased here as `--ink-faint`.
+
+A third checks the same mistake in Tailwind's spelling: `tw:text-muted` is not the text colour —
+the bridge at the top of `tailwind.css` maps `--color-muted` to `--muted`, the surface — and
+`tw:text-muted-foreground` is. All 88 call sites in `src/web` are already the right one, so that
+check arrives with a clean baseline, which is the only time one is cheap to add.
+
+**The file's header says what it does not prove**, and that matters more than the list above.
+It is a text scanner: it cannot see scope or reachability, cannot see what is actually behind the
+text, and cannot judge a fallback that is present and still wrong. Each half also asserts it can
+still *find* the shape it filters, because a regex that has stopped matching anything is
+indistinguishable from a codebase with nothing wrong in it.
+
+The `--accent` warning above was already written in two files, in capitals, and the mistake was made
+anyway with `--accent`'s neighbour. **A rule that is only written down is not a check**, which is
+why these now are.
+
 **There is exactly one colour that is not the orange, and it is `--hit-rgb`** — the wash over search
 results ([search.md](search.md)). It exists because a comment, a glossary term and a search hit can
 all cover the same sentence, and three meanings separated only by opacity is one hue too few. That

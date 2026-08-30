@@ -8924,13 +8924,25 @@ table.only-prose thead { display: none; }
   --outln-pad-l: 0.75rem;
   --outln-pad-r: 0.5rem;
   padding: 0.75rem var(--outln-pad-r) 0 var(--outln-pad-l);
+
+  /* One step of nesting, and where that step's rail is drawn. Both are used by
+     several rules below and by both pseudo-elements, so they are named once:
+     a rail that does not sit in the gutter its own level opened is worse than
+     no rail, because it groups the wrong rows. */
+  --outln-indent: 1.15rem;
+  --outln-rail: 0.45rem;
 }
 
 .outln-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  font-family: var(--ui-font);
+  font-family: var(--font-ui);
+  /* The rung the rest of the colours are measured from. It is set here rather
+     than left to inherit because everything below either lifts off it
+     (`.here`, `.now`) or drops to `--ink-faint`, and a base that came from
+     whatever the band happens to inherit makes both of those unpredictable. */
+  color: var(--ink-soft);
 }
 /* One tab stop for the whole tree, so the rows are reachable without putting
    forty stops in front of the prose — the pattern Diagram mode already uses.
@@ -8939,7 +8951,36 @@ table.only-prose thead { display: none; }
 .outln-list:focus-visible { outline: none; }
 
 .outln-row {
-  display: block;
+  /* **A grid, so the number sits BESIDE the title instead of above it.**
+     `.outln-text` needs `display: -webkit-box` for its line clamp, and that is
+     a *block-level* box: as an inline-flow sibling of `.outln-num` it took a
+     line of its own, so every numbered row was two lines tall. Nothing
+     errored and nothing measured wrong — the clamp still said one line, and
+     the fit measures real markup so it saw the truth — the panel just spent
+     half its height on numbers, and the header's "one line per row" was false
+     for every row that had a number.
+
+     The grid also gives the title a hanging indent and starts every sibling's
+     title at the same x, which is most of what makes a run of them read as a
+     run. */
+  display: grid;
+  /* `minmax(0, 40%)`, not bare `auto`: an `auto` track has no ceiling, so a
+     pathologically deep number could take the whole panel and leave the title
+     nothing. 40% bounds that without touching the ordinary case, where the
+     track is content-sized well under the cap. Sol, 2026-08-30, and it is the
+     bound rather than the alignment that matters — a number wider than its
+     gutter shifts one title right, which is a blemish, not a broken row. */
+  grid-template-columns: minmax(0, 40%) minmax(0, 1fr);
+  column-gap: 0.4rem;
+  /* **Baseline, not the grid's default stretch.** The number is set smaller
+     than the title, and `line-height: 1.35` below is unitless — so it resolves
+     against each item's OWN font-size and gives the number a shorter line box.
+     Stretched, that box starts at the top of the row and the number floats
+     above the title's baseline. Aligning the baselines is the whole point of
+     the two sizes sitting on one line. */
+  align-items: baseline;
+  /* The level rails are absolutely positioned against the row. */
+  position: relative;
   cursor: pointer;
   border-radius: 3px;
   padding: 0.12rem 0.3rem;
@@ -8949,16 +8990,84 @@ table.only-prose thead { display: none; }
 }
 .outln-row.lvl-1 { margin-top: 0.5rem; font-weight: 600; }
 .outln-row.lvl-1:first-child { margin-top: 0; }
-.outln-row.lvl-2 { padding-left: 1.1rem; }
-.outln-row.lvl-3 { padding-left: 2.2rem; font-weight: 400; }
+.outln-row.lvl-2 { padding-left: var(--outln-indent); }
+.outln-row.lvl-3 {
+  padding-left: calc(var(--outln-indent) * 2);
+  font-weight: 400;
+}
 
+/* **Every row wears its number, at every level.** Greg, 2026-08-30, after
+   seeing the first pass: "perhaps always show the numbers (because they give a
+   sense of hierarchy), but a little faded/smaller". Level 3 used to be
+   `display: none`, and it was the level with the least other help: a paragraph
+   row has no gist, no arc and the smallest type. `1.2.3` is `buildSummaryTree`'s
+   full dotted address (tree.ts), so it says the whole path down and not just
+   which child — which is the "sense of hierarchy", and the reason the leaf
+   digit alone would have been the wrong economy: a bare `3` at level 3 reads
+   like a part number.
+
+   Smaller and quieter than the title, but NOT fainter than `--ink-faint`. The
+   step that makes a number subordinate is the size and the colour it already
+   has (0.63 against a title's 0.78 or 0.97); dropping it further is walking
+   back toward the 1.2:1 that started this. */
 .outln-num {
-  display: inline-block;
-  min-width: 1.6em;
-  color: var(--muted);
+  grid-column: 1;
+  color: var(--ink-faint);
+  font-size: 0.82em;
   font-variant-numeric: tabular-nums;
 }
-.outln-row.lvl-3 .outln-num { display: none; }
+/* **A gutter per level, not one width for all of them.** "1", "1.10" and
+   "1.10.12" are three different widths, and a shared `min-width` either wastes
+   a level-1 row's space or lets a long number push its title out of line with
+   its siblings'. Tabular figures make the reservation exact, and these are
+   `em` of the NUMBER's own size, so they shrink with the rule above rather
+   than reserving a gutter for type that is no longer there.
+
+   A number wider than its gutter is not a break: the `auto` column grows for
+   that row alone, so one title starts late and the rest stay aligned. Widths
+   here fit up to `12`, `9.12` and `9.12.19`, which is past anything in the
+   corpus. And a supplement, whose number is deliberately the empty string,
+   still reserves its gutter — so the apparatus lines up with the parts it sits
+   after rather than hanging a step to their left. */
+/* **The number lifts with its row.** `.outln-num` sets an explicit colour, so
+   it beat `.here` and `:hover` on directness and the current row's number
+   stayed at the faintest value in the panel while its title went to `--ink` —
+   Sol, 2026-08-30. One step below the title rather than equal to it, because
+   the number is still the subordinate half of the row; what it must not be is
+   the one part of "you are here" that does not say so. */
+.outln-row.here > .outln-num,
+.outln-row:hover > .outln-num { color: var(--ink-soft); }
+
+.outln-row.lvl-1 .outln-num { min-width: 1.5em; }
+.outln-row.lvl-2 .outln-num { min-width: 2.9em; }
+.outln-row.lvl-3 .outln-num { min-width: 4.3em; }
+
+/* ── Levels and siblings ─────────────────────────────────────────────────────
+   Indent says how deep a row is; it does not say which rows it belongs with.
+   A run of six sections with two paragraphs nested inside one of them is two
+   groups, and at one indent step they read as a single ragged column — the
+   complaint that produced this. So every nested run also gets a hairline rail
+   in the gutter its own level opened, drawn on each row of the run and joining
+   into a continuous line because the rows touch (only `.lvl-1` has a margin,
+   which is what separates the parts).
+
+   A level-3 row needs BOTH rails: its own, and its parent section's continuing
+   *through* it. A section rail that stopped where its own paragraphs begin
+   would say the paragraphs are outside the section. Hence `::before` for the
+   inherited rail and `::after` for the row's own. */
+.outln-row.lvl-2::before,
+.outln-row.lvl-3::before,
+.outln-row.lvl-3::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--rule-strong);
+}
+.outln-row.lvl-2::before,
+.outln-row.lvl-3::before { left: var(--outln-rail); }
+.outln-row.lvl-3::after { left: calc(var(--outln-rail) + var(--outln-indent)); }
 
 /* **One line per row, which the fit's arithmetic assumes and nothing enforced
    until now.** A wrapped title or a paragraph's navLabel silently made the
@@ -8970,6 +9079,13 @@ table.only-prose thead { display: none; }
    use. `overflow-wrap: anywhere` stays so a URL in a navLabel breaks rather
    than being hard-clipped with nothing to say so. */
 .outln-text {
+  /* Named, never auto-placed. Auto-placement would put the title in whichever
+     column happened to be free — the `auto` one, on any row whose number is
+     missing — and there it would size itself to its own content: no clamping,
+     and a row that runs off a panel which cannot scroll. `minmax(0, 1fr)` is
+     the other half of that: a bare `1fr` has an `auto` minimum, so a long
+     unbroken token would push the column wider than the panel. */
+  grid-column: 2;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
@@ -8982,20 +9098,54 @@ table.only-prose thead { display: none; }
 .outln-row.tier-cur  { font-size: 0.95rem; }
 .outln-row.tier-near { font-size: 0.9rem; }
 .outln-row.tier-mid  { font-size: 0.85rem; }
-.outln-row.tier-far  { font-size: 0.82rem; color: var(--muted); }
+.outln-row.tier-far  { font-size: 0.82rem; color: var(--ink-faint); }
 
 /* Where the reader is. `.here` is the whole ancestor chain and `.now` is the
    one deepest drawn row — two marks because at a shallow rung the part is the
    honest answer to "where am I", and a stripe repeated on four nested rows is
    not a mark anyone can find. */
-.outln-row.here { color: var(--fg); }
+.outln-row.here { color: var(--ink); }
+/* Before `.now`, so the current row keeps its own ground under the pointer.
+   The ink half of this hover is further down, after `.read` — see there. */
+.outln-row:hover { background: var(--surface-raised); }
 .outln-row.now {
-  background: var(--panel-2, rgba(127, 127, 127, 0.12));
+  /* The orange tinted into the page, the token the rest of the app already
+     uses for "this one" — and a real token, which `--panel-2` never was. */
+  background: var(--highlight-wash);
   font-weight: 650;
 }
-.outln-row.read .outln-text { color: var(--muted); }
-/* The apparatus: present in the structure, outside the argument. */
-.outln-row.supplement { font-style: italic; color: var(--muted); }
+/* **Where the reader is, marked on the sibling rail as well as in the row.**
+   The rail is the thing the eye runs down when it is asking "which of these am
+   I in", so the answer belongs on it — a thumb on a track. */
+.outln-row.now.lvl-2::before {
+  width: 2px;
+  background: var(--highlight);
+}
+/* Read, and far away, are deliberately the SAME value rather than two steps of
+   dimness that could be told apart. Both mean "periphery", and giving them a
+   step each is how the panel would end up with an opacity ladder the header
+   forbids. */
+.outln-row.read .outln-text { color: var(--ink-faint); }
+/* The apparatus: present in the structure, outside the argument.
+
+   **`:not(.here)`, because the reader can be inside it.** The apparatus is one
+   row and is never descended into, so when the reader is in the endnotes that
+   row is both `.here` and `.now` — and this rule sits after `.here` at equal
+   specificity, which made the reader's own current row the faintest thing in
+   the panel: 4.50:1 against 14.45:1. Found by Sol, 2026-08-30. Dimmed because
+   it is outside the argument is right; dimmed while you are reading it is not. */
+.outln-row.supplement { font-style: italic; }
+.outln-row.supplement:not(.here) { color: var(--ink-faint); }
+
+/* **The ink half of the hover, and it sits here so it beats `.read` above.**
+   A raised surface under unlifted faint text is a net LOSS of contrast —
+   4.44:1 on `--surface-raised` against 5.27:1 on the band's own `--panel` — so
+   the pointer was making a row *harder* to read, which is the opposite of what
+   a hover is for. Lifting the ink fixes it at the source and takes the whole
+   class with it, rather than hunting for a hover grey that happens to be dark
+   enough for every one of the four faint states. Sol, 2026-08-30. */
+.outln-row:hover,
+.outln-row:hover .outln-text { color: var(--ink); }
 /* `--highlight`, never `--accent`: tokens.css defines `--accent` as a raised
    dark SURFACE (shadcn's meaning), so a ring drawn in it is nearly invisible
    against the panel — and the native outline is suppressed on the list, so
@@ -9004,23 +9154,24 @@ table.only-prose thead { display: none; }
    `--highlight`. GPT Sol caught it, 2026-08-28. */
 .outln-row.focused { box-shadow: inset 0 0 0 2px var(--highlight, currentColor); }
 
-.outln-row:hover { background: var(--panel-2, rgba(127, 127, 127, 0.08)); }
-
 /* The sentence on the current section, and the arc sentence on the current
    part. Prose, so they take the reading face at reading size rather than the
    list's UI font — the mistake GPT's review caught in the gist columns, where
    an inherited UI font left a gist a step LARGER than the title above it. */
 .outln-gist,
 .outln-arc {
+  /* Under the title, not under the number: a sentence hanging off its heading
+     reads as belonging to it. */
+  grid-column: 2;
   margin: 0.2rem 0 0.1rem;
-  font-family: var(--read-font, inherit);
+  font-family: var(--font-reading);
   font-size: 0.85rem;
   font-weight: 400;
   line-height: 1.4;
-  color: var(--fg);
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
-.outln-arc { color: var(--muted); font-style: italic; }
+.outln-arc { color: var(--ink-soft); font-style: italic; }
 
 /* The candidates being measured. Laid out for real — same width, same styles,
    same wrapping — and simply not painted. `visibility: hidden` rather than
@@ -9042,9 +9193,9 @@ table.only-prose thead { display: none; }
 }
 
 .outln-card { max-width: 22rem; }
-.outln-card-crumb { font-size: 0.75rem; color: var(--muted); }
+.outln-card-crumb { font-size: 0.75rem; color: var(--ink-faint); }
 .outln-card-title { font-weight: 600; margin-bottom: 0.2rem; }
-.outln-card-gist { margin: 0; font-family: var(--read-font, inherit); }
+.outln-card-gist { margin: 0; font-family: var(--font-reading); }
 
 /* ── The arc, while it is being written ───────────────────────────────────────
 
