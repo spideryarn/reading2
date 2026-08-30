@@ -29,5 +29,6 @@ inventing a process.
 | Doc | What it saves you |
 |---|---|
 | [silent-success.md](silent-success.md) | **the pattern behind most of a day's bugs** — a thing reports success while doing nothing, and the check you would naturally run agrees with it, because it shares an assumption with the code |
+| [written-down-is-not-checked.md](written-down-is-not-checked.md) | **prose cannot fail, so nobody checks it** — a comment or doc that asserts a future, an absence, or a generalisation from a same-shaped sample, believed later because writing it down looked like verifying it |
 | [css-sticky-containing-block.md](css-sticky-containing-block.md) | why `position: sticky` can be declared correctly and do nothing — its range is its containing block minus itself |
 | [iterm.md](iterm.md) | scripting iTerm2 tabs from `Bash` — address sessions by UUID, and don't trust `is processing`, `index of tab`, or a tty number |
