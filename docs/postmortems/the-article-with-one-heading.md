@@ -191,29 +191,55 @@ what cost $0.39 today.
 
 Three multipliers, in increasing order of how much they are our fault.
 
-**The step is attempted repeatedly and there is no lock.** `beginStep` in
-[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts) writes a marker and says so plainly:
+**The step is attempted repeatedly and there is no lock.** See
+[the section below](#a-class-rather-than-a-bug-the-lease-that-is-not-one).
 
-> Deliberately not a lease: a pid and a timestamp invite "it has been an hour, it must be dead", and
-> that guess is how two runs end up writing one article.
-
-Each structure call takes ~50 seconds; the first four started at 08:29:00, 08:29:20, 08:29:35 and
-08:29:54, so four were in flight before any finished. That is the poller and eleven dev-server
-restarts, against a design that deliberately does not exclude them. Worth knowing, not a regression.
-
-**`assertTreeSound` runs after the labels are paid for.** In `generateToc` the order is: structure
-call → `buildTree` → `generateLabels` (up to two calls per batch) → `mergeLabels` →
-`assertTreeSound`. The comment says the choice was made knowingly:
+**~~`assertTreeSound` runs after the labels are paid for.~~ Fixed, 2026-08-30 (`835b3f5`).** In
+`generateToc` the order was: structure call → `buildTree` → `generateLabels` (up to two calls per
+batch) → `mergeLabels` → `assertTreeSound`. The comment says the choice was made knowingly:
 
 > It does mean a tree the model got wrong is found after a full label run has been paid for; that is
 > the cheaper of the two mistakes.
 
 That reasoning holds for a problem only discoverable after merging. It does not hold for
-`sourceHeading`, which is a claim about `blocks.json` — a file we have had in memory since before
-the call. Three of the four failures threw away a label run that had already succeeded.
+`sourceHeading`, which is a claim about `blocks.json` — a file we have had in memory since before the
+call. **Three of the six attempts threw away a label run that had already succeeded.**
+
+`checkTree` now also runs on `structure`, before a label is asked for. Everything it can fail on is
+fixed by the structure call — the ranges, the tiling, the coverage, the gists, the titles,
+`sourceHeading`, the supplement rules — and none of it can move in `generateLabels`, because
+`mergeLabels` touches leaves only and only sets or deletes `navLabel`.
+
+**It is an addition, not a reorder, and that distinction is the whole of it.** One `fail` in
+`checkTree` reads `navLabel`: the phantom-row rule at
+[`src/tree-invariants.ts`](../../src/tree-invariants.ts), a leaf carrying a label for a block
+`isStructural` says may never have one. There are no labels yet at the early call, so that rule is
+vacuous there and only the call after the merge can make it. **Moving the check would have silently
+gutted it** — which is what this file is otherwise entirely about, so it would have been a poor way
+to end. Two calls: the early one is a cost guard, the late one is the guarantee about the file.
+`checkTree` is pure and costs 0.111 ms on the `example/` fixture, measured.
 
 **Six structure calls at `effort: "high"`.** ~4,000 reasoning tokens and ~$0.05 each; $0.30 of the
 $0.39. The labels were the cheap half all along.
+
+## A class rather than a bug: the lease that is not one
+
+`beginStep` in [`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts) writes a marker and
+says plainly what it is not:
+
+> Deliberately not a lease: a pid and a timestamp invite "it has been an hour, it must be dead", and
+> that guess is how two runs end up writing one article.
+
+Each structure call takes ~50 seconds; the first four started at 08:29:00, 08:29:20, 08:29:35 and
+08:29:54, so four were in flight before any finished — the poller and eleven dev-server restarts,
+against a design that deliberately does not exclude them.
+
+> A step that can fail non-deterministically, behind a poller with no lease, multiplies the cost of
+> every failure by however many attempts overlap. Neither half is a bug. Nobody chose the product.
+
+That is worth the space because it generalises past this incident. The marker's reasoning is good and
+the model call's variance is legitimate; the interaction between them is what nobody costed, and it
+will do this again to any expensive step that learns to fail intermittently.
 
 ## Why nothing caught it
 
@@ -231,6 +257,27 @@ one word in it — so:
 This is [a corpus that cannot exercise its arm](../reusable/silent-success.md) in its purest form:
 three separate suites are green about behaviour none of their inputs can produce.
 
+### And the waste was invisible to every test that could have seen it
+
+`tests/toc-write-guard.test.ts` already ran the whole stage against a tree the model got wrong. It
+asserted the right things — it throws, it writes nothing — and it passed, every time, on the order
+that paid for a full label run first.
+
+It could not have failed, and the reason is worth stating on its own:
+
+> **The outcome was identical under both orders — throws, writes nothing. Only the cost differed.**
+
+An outcome-based test cannot see that, however well written it is, because the thing that changed was
+not in the outcome. The fix was to stop asserting what happened and start **counting the calls**: the
+new test tracks how many times `generateLabels` was invoked, which is the only place the difference
+was ever visible.
+
+That generalises far past this bug. Any wasted call, redundant fetch, duplicated write or
+recomputed cache lands in exactly this blind spot — the result is right, so every assertion about the
+result agrees, and the only witness is a counter nobody thought to keep. It is the sibling of
+[silent-success](../reusable/silent-success.md): there the check agrees with the bug, here the check
+is simply looking at the wrong quantity.
+
 ## The red test
 
 Three assertions, all red on `93e1cf8`, from synthetic fixtures shaped like the page:
@@ -247,27 +294,173 @@ Three assertions, all red on `93e1cf8`, from synthetic fixtures shaped like the 
 marks it as having prose of its own, and stages 4 and 5 then hold the model to two contracts that
 this block list cannot satisfy.
 
-The fix has one part that is the real one and two that are backstops. Each backstop is worth having
-on its own, because each closes a class rather than this instance.
+Four parts. One is applied; one is the real fix and is not ours to make.
 
-1. **Stage 3 should not emit a block that is a fragment of a sentence.** An inline element with no
-   block-level children and no sentence in it belongs merged into its neighbour, not standing beside
-   it. This is the only part that fixes the article rather than the symptom — the fragments are
-   equally wrong for reading time, search, granularity zoom and every block-id consumer; the ToC is
-   just where it was loud. It is also the part that has to be handled carefully, because merging
-   changes block ids, and ids are [the one contract](../project/block-ids.md).
+### 1. Check the structure before paying for the labels — **applied, `835b3f5`**
 
-2. **`buildTree` should check `sourceHeading` where it checks everything else.** It already validates
-   the model's ranges and its tiling at parse time, with a comment about exactly this class of
-   mistake. `sourceHeading` is the one remaining claim the model makes about our blocks and the only
-   one deferred to a check 100 lines and one paid label run later. Checking it there costs
-   nanoseconds. A claim the blocks cannot back should be **dropped, with the title kept and the drop
-   recorded on the run** — not fatal. `checkTree` keeps the invariant unchanged for trees arriving
-   from anywhere else, which is what it is for.
+Written up under [Why it cost $0.39](#why-it-cost-039-rather-than-011). It fixes no bug: the article
+still fails. It stops each failure costing a wasted label run, which on this ingest happened three
+times.
 
-3. **`isStructural` should not promise a nav label for a block with no prose to label.** A block the
-   model cannot describe should not be in a batch, and an unlabelled leaf is already only a warning.
-   This is the backstop that would have kept the article ingesting even with 1 and 2 unfixed.
+### 2. `buildTree` should validate `sourceHeading` where it validates the rest — **drop, never throw**
+
+`buildTree` already checks the model's ranges and its tiling at parse time, with a comment about
+exactly this class of mistake. `sourceHeading` is the one remaining claim the model makes about our
+blocks and the only one deferred.
+
+When it fires, **strip the field, keep the tree, log it.** Not a throw, and the evidence is the
+reason: four calls out of four made this same mistake on this article, so a throw is not "retry and
+it will pass" — it is a guaranteed loop at ~$0.05 a turn on an article that can never import.
+
+`sourceHeading` is **provenance, not structure**: it records that a title is the author's own rather
+than ours. Every consumer was checked rather than assumed, and none is a correctness consumer:
+
+| consumer | what it does with it |
+|---|---|
+| `TableView.tsx`, `ContextList.tsx`, `Spine.tsx` | render a `§` marker beside the title |
+| `public/dto.ts` | passes it across the boundary, optional |
+| `tree-invariants.ts` | exempts the title from the trailing-punctuation **warning** |
+
+There is no `sourceHeadingShare` in `evals/` — that measure does not currently exist, so nothing is
+scored on it. So the cost of dropping is: a `§` glyph disappears and one warning re-arms. A tree
+whose title is ours rather than the author's is a slightly worse tree; a tree that does not exist is
+not a tree.
+
+### 3. `isStructural` should not promise a nav label for a block with no prose
+
+A block the model cannot describe should not be in a batch, and an unlabelled leaf is already only a
+`warn` — the machinery for "this leaf has no label" exists and is deliberately non-fatal, so the tree
+stays valid and the article ingests. This is the backstop that would have kept the article ingesting
+with 2 and 4 unfixed.
+
+**It has a migration cost, and it is not small.** The predicate is read by `checkTree`'s phantom-row
+rule, which is a `fail`: a leaf carrying a `navLabel` for a block `isStructural` calls non-structural
+is a *problem*, and the publish guard refuses a tree with problems. Counting labelled fragments in
+the trees on disk today:
+
+| `read` | `scaling-hypothesis` | `fowler-phrenology` | `constitution` | `revistes-ub-30977` | `source` | `source-2` | `what-if…` |
+|---|---|---|---|---|---|---|---|
+| 8 | 6 | 3 | 1 | 1 | 1 | 1 | 1 |
+
+**Eight of the ten stored trees would become invalid the moment the predicate tightens**, and
+`noema-mythology-of-conscious-ai` and `writes` are the only two that would not.
+
+Two ways out, and **this file deliberately does not choose between them** — the decision has the same
+shape as the stage 3 one below, and belongs with it:
+
+- **Ship it with a sweep.** A migration walks every stored tree and strips the `navLabel` from any
+  leaf whose block the new predicate calls non-structural. Trees become valid again, the affected
+  rows disappear from the sidebar, and nothing else moves. Costs a migration and a re-publish of
+  eight articles.
+- **Give the phantom-row rule a migration story.** Line 234 fails on a tree written under the *old*
+  predicate, which is not a tree anybody got wrong — it is a tree from before the rule changed.
+  Making the rule tolerate that (a tree version, a grandfather clause) keeps stored trees valid but
+  puts a permanent exception into an invariant, which is the kind of thing this repo pays for later.
+
+**The threshold is fitted to English and has no data behind the number.** "One word or less" is what
+the evidence showed and nothing more: nine dropped labels and a corpus survey, all of them English.
+There is nothing separating a 1-word block from a 3-word one.
+
+**And a word count is not a measure of prose in Chinese, Japanese or Thai**, which do not put spaces
+between words. `wordsIn` splits on `/\s+/`, so a full Japanese paragraph counts as one "word" and the
+predicate as drafted would classify it as a fragment and refuse to label it — silently, since the
+result is a missing sidebar row rather than an error. **No article in the corpus could ever reveal
+this**, because every one of them is in English. That is exactly the class this repo keeps writing
+up: a check that cannot fail on any input we own. Whatever the rule ends up being, it must be
+measured on something other than whitespace.
+
+**Where the predicate lives.** [`block-policy.ts`](../../src/block-policy.ts) is explicit that its
+five predicates are five policies that happen to agree rather than one formula wearing five names.
+This wants a sixth question — *may we ask a model to describe this block on its own?* — not a widened
+`isStructural`. Widening it is how five policies that happen to agree become one policy that quietly
+does not, and it would drag search, reading time and embedding along with it.
+
+### 4. Stage 3 should not emit a fragment of a sentence as a block — **not on this evidence, and not by us**
+
+The real fix, and [the argument is below](#the-argument-for-stage-3-for-the-stages-owner-and-for-greg).
+
+## The quiet one, which is worse
+
+While reproducing the above, the same block list turned out to have broken something that never
+failed at all.
+
+**Not one of the 23 blocks carries `treatment` or `role`** — the field is simply absent. `isBody` is
+`block.treatment !== "supplement"`, so it is true for all 23; `splitBlocks`
+([`src/supplement.ts`](../../src/supplement.ts)) looks for a trailing run of non-body blocks, finds
+none, and returns `body = the whole article`. Stage 3 stamps `role: "footnote"` off markers that
+stage 2 leaves behind, and this page's `[<a name="f1n">1</a>]` is not recognised as footnote
+structure. Old HTML, again.
+
+So the footnotes went to the structure model as ordinary body, and the tree that eventually landed in
+`data/read/tree.json` carries a node titled `Notes` with a **gist summarising the footnotes**.
+[`docs/plans/footnotes.md`](../plans/footnotes.md) says that must never happen — the apparatus is
+shown as written, never summarised — and `checkTree` enforces it, but only for nodes actually marked
+as supplements. This node is not marked, so nothing objected.
+
+> A silent wrong artefact outranks a loud failed ingest.
+
+The ToC failure cost $0.39 and shipped nothing, which is the good kind of bad. This one shipped a
+finished, plausible, wrong artefact past every check in the pipeline, and it is on disk now. It gets
+its own fix and its own test, and it should be tracked above the failure this file was opened for.
+
+Whether the right place is stage 2's marker stamping or stage 3's role assignment is a question for
+the stage's owner. But note what it does to the argument below: **the fragments and the supplement
+miss are two consequences of one gap.** Fixing them in stages 4 and 5 means patching the same cause
+twice, in two places, neither of which is where it is.
+
+## The argument for stage 3, for the stage's owner and for Greg
+
+**What changes.** `collectElements` ([`src/blocks.ts`](../../src/blocks.ts)) descends into an unknown
+wrapper if it has block-level children, and otherwise emits it as a block *"so no content silently
+disappears"*. The rule is sound and the fallback is the right instinct. On markup where inline
+elements sit as direct children of the container — no `<p>`, `<br><br>` between paragraphs — it
+promotes fragments of a sentence to paragraphs. The fix is for such an element to be **merged into
+the adjacent block instead of standing beside it**, which keeps the "nothing disappears" guarantee
+the current rule exists to give.
+
+**Which ids move, and it is not only the fragments.** This is the part that decides whether the
+change is cheap or expensive, and it is easy to read past. Ids are re-attached across a
+re-extraction by matching `(tag, collapsed text)` against the previous run's blocks, first-come, each
+consumed once ([`src/blocks.ts`](../../src/blocks.ts), and
+[block-ids.md](../project/block-ids.md)). So:
+
+- the fragments' own ids **vanish**; and
+- **every paragraph that absorbs a fragment has its collapsed text changed, so it does not re-match
+  either, and is minted a fresh id.**
+
+The second bullet is the one that matters and it is invisible in the phrase "it moves block ids".
+Concretely:
+
+| article | fragments | paragraphs that absorb one | ids at risk |
+|---|---|---|---|
+| `read` | 8 | ~5 | ~13 of 23 |
+| `greatwork` | **89** | up to **89** | **up to ~178 of 330** |
+
+On `greatwork` that is better than half the article's ids, from a change whose one-line description
+is "stop emitting fragments".
+
+**What breaks for an article that already has comments in it.** Everything anchors on block id:
+comments, notes, highlights, saved scroll position, search deep links (`/read/<slug>?at=<blockId>`),
+and `block_identities`, whose primary key is `(articleId, blockId)`. The existing behaviour for an id
+that no longer exists is the orphan sweep in [`src/routes.ts`](../../src/routes.ts), which flips
+affected comments to `error`. So the damage is **loud rather than silent** — a reader sees a comment
+has come unstuck rather than finding it quietly attached to the wrong paragraph — and that machinery
+is already built. It is still real loss on re-extraction, and it lands on exactly the paragraphs a
+reader was most likely to annotate, because a paragraph with a footnote marker in it is a paragraph
+making a claim.
+
+**Why it is still the right fix.** These blocks are wrong for far more than the table of contents.
+Reading time counts them, search indexes them, similarity embeds them, and granularity zoom offers
+the reader a paragraph whose entire content is `.`. The ToC is only where it got loud enough to cost
+$0.39 in one sitting. And, per the section above, it is one gap producing two defects — the
+fragments and the supplement miss — so fixing it here fixes both, while fixing it downstream fixes
+neither properly.
+
+**What needs deciding before anyone writes it**, and it is not a technical question: whether
+re-extraction of an already-annotated article is gated on this, or whether the merge applies only to
+newly-ingested articles until there is a migration that can carry an annotation from a dying id to
+the block that absorbs it. The second is more work and is probably the honest answer. That is Greg's
+call.
 
 ## What would have caught it earlier
 
@@ -304,13 +497,38 @@ And the second half, which is what made it expensive rather than merely wrong:
 
 **Two structure calls in ten returned an untileable tree**, on a well-headed article as readily as on
 a headingless one. `buildTree` catches it and throws, so it is loud rather than dangerous, but it
-means a stage-4 attempt has a substantial per-call chance of costing ~$0.05 and producing nothing —
-before any of the bugs above are involved. It needs its own measurement over more than ten calls, and
-it is not this bug.
+means a stage-4 attempt has a substantial per-call chance of costing ~$0.05 and producing nothing,
+before any of the bugs above are involved.
+
+**Ten calls is not an estimate of that rate**, and this file should not pretend otherwise. It is
+properly measured by the structure eval's calibration run, which has more calls across more
+documents and now records a throw as an outcome rather than retrying past it — the change that makes
+the measurement possible, since retrying past a throw is what had kept the rate at zero.
+
+**And those throws may be repairable rather than fatal.** The check is `child[0] !== cursor`, and
+both throws seen here were off by exactly one block — so `child[0] = cursor` would close a gap and an
+overlap identically, in about twenty lines. Whether that is a fix or a disguise depends entirely on
+the size distribution of the failures, which is the thing being measured:
+
+- **If the failures are small** — a block or two, as both of these were — repairing them recovers
+  roughly a fifth of all structure calls for almost nothing, and it is the cheapest candidate fix
+  anyone found today.
+- **If some are large**, snapping a boundary silently rewrites the model's answer into a different
+  one and calls it correct. That is the tree equivalent of salvaging a truncated response, which
+  [toc-max-tokens.md](toc-max-tokens.md) deliberately refused to do, and it must not be built.
+
+Not investigated here on purpose; the calibration run answers it.
 
 **Carving instability on headingless articles** is measured above at 0.55 boundary agreement against
 0.91. It causes none of the failures here, but it means the sidebar for such an article is a
 different sidebar on every regeneration, which matters for anything that stores a node id.
+
+Both of those numbers carry the same caveat, and it is the reason the eval is the right instrument
+rather than this investigation: **0.55 and 0.91 are computed only over the runs that survived
+`buildTree`.** A run that threw contributed no boundaries to compare, so the agreement figures are
+conditioned on the tree being valid and understate the real spread. Measuring variance over the
+successes alone is a selection effect, and it would understate the noise floor of any bakeoff built
+on top of it.
 
 ## See also
 
