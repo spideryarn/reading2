@@ -4,8 +4,9 @@
  *   npm run eval:toc-structure -- --arm headings
  *   npm run eval:toc-structure -- --arm headings --arm incumbent-disk data/constitution
  *
- * The structure call in src/toc.ts is 163–320 seconds and ~70% of the whole
- * ingest wait, and the decisions queued against it (progressive waves, seeding
+ * The structure call in src/toc.ts is 163–320 seconds and 88% of the ingest
+ * wait (labels run concurrently, the arc is deferred — the measured breakdown
+ * is in the research doc), and the decisions queued against it (waves, seeding
  * the author's headings, changing model or effort — see
  * docs/research/opening-an-article-before-the-toc.md) need a number to decide
  * against. This is the harness for that number. evals/README.md
@@ -29,6 +30,7 @@ import { parseJsonFrom } from "../../src/parse-json.js";
 import type { Block, Tree } from "../../src/types.js";
 import { ARMS, armByName, type ArmSpec } from "./arms.js";
 import { buildHeadingTree } from "./heading-tree.js";
+import { runModelArm, type CallStats } from "./model-arms.js";
 import { compareTrees, scoreTree, type StructureScore, type TreeAgreement } from "./score.js";
 
 interface Article {
@@ -47,6 +49,8 @@ interface ArmResult {
   /** What this arm chose, where that is a fact worth keeping (headings arm). */
   sectionLevel?: number | null;
   flat?: boolean;
+  /** What the paid calls cost, one entry per call (model arms only). */
+  calls?: CallStats[];
   /** How differently this arm cut the article from the tree on disk. Descriptive, not a verdict. */
   vsDisk?: TreeAgreement;
 }
@@ -64,13 +68,23 @@ async function readJsonIfPresent<T>(file: string): Promise<T | null> {
   }
 }
 
-/** Every dir under data/ with a blocks.json, plus the example fixture. */
+/**
+ * Two of the three copies of one document. `source`, `source-2` and
+ * `revistes-ub-30977` are three extractions of the same 3,106-word article
+ * ("Forms of Memory in Post-colonial Australia"); the real slug stays and the
+ * other two are dropped from every arm, or one document is triple-weighted in
+ * every aggregate and every paid arm buys the same answer three times. Name a
+ * dropped dir explicitly on the command line to score it anyway.
+ */
+const DUPLICATE_DIRS = new Set(["source", "source-2"]);
+
+/** Every dir under data/ with a blocks.json — duplicates excluded — plus the example fixture. */
 async function defaultDirs(): Promise<string[]> {
   const dirs: string[] = [];
   for (const entry of (await readdir("data", { withFileTypes: true })).sort((a, b) =>
     a.name.localeCompare(b.name),
   )) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() || DUPLICATE_DIRS.has(entry.name)) continue;
     const dir = path.join("data", entry.name);
     try {
       await access(path.join(dir, "blocks.json"));
@@ -96,7 +110,10 @@ async function loadArticle(dir: string): Promise<Article> {
 }
 
 /** Produce this arm's tree for one article, or explain why it cannot yet. */
-function treeFor(arm: ArmSpec, article: Article): { tree: Tree; sectionLevel?: number | null; flat?: boolean } {
+async function treeFor(
+  arm: ArmSpec,
+  article: Article,
+): Promise<{ tree: Tree; sectionLevel?: number | null; flat?: boolean; calls?: CallStats[] }> {
   switch (arm.kind) {
     case "headings": {
       const built = buildHeadingTree(article.blocks, article.slug, article.title);
@@ -108,14 +125,14 @@ function treeFor(arm: ArmSpec, article: Article): { tree: Tree; sectionLevel?: n
       }
       return { tree: article.diskTree };
     }
-    default:
-      /* Loud on purpose. A runner that silently skipped the arms it cannot run
-         would produce a results file that reads exactly like those arms
-         scoring nothing — docs/reusable/silent-success.md. */
-      throw new Error(
-        `Arm "${arm.name}" (${arm.kind}) spends money and its executor is phase 2 of ` +
-          `the plan — not yet built. The free arms are: headings, incumbent-disk.`,
-      );
+    default: {
+      /* The executor's own PendingError propagates from here while the
+         transports are unarmed — loud on purpose. A runner that skipped the
+         arms it cannot run would produce a results file that reads exactly
+         like those arms scoring nothing — docs/reusable/silent-success.md. */
+      const run = await runModelArm(arm, article.blocks, article.slug);
+      return { tree: run.tree, calls: run.calls };
+    }
   }
 }
 
@@ -124,13 +141,21 @@ const num = (x: number, dp = 2): string => x.toFixed(dp);
 
 function print(r: ArmResult): void {
   const s = r.score;
+  /* **Arm-aware, and the first version was not.** It said "expected for the
+     free arm" about any gistless tree, whoever built it — so a paid arm that
+     omitted its gists would have been consoled rather than failed. Only the
+     headings arm is structurally unable to write gists; for every other arm a
+     missing gist is damage. GPT Sol, 2026-08-30. */
+  const gistless = armByName(r.arm).kind === "headings";
   console.log(`\n${r.slug}  [${r.arm}]`);
   console.log("─".repeat(Math.max(8, r.slug.length + r.arm.length + 4)));
   const validity =
     s.validity.otherProblems > 0
       ? `INVALID — ${s.validity.otherProblems} structural problem(s)`
       : s.validity.gistProblems > 0
-        ? `structurally sound; ${s.validity.gistProblems} node(s) missing a gist (expected for the free arm)`
+        ? gistless
+          ? `structurally sound; ${s.validity.gistProblems} node(s) missing a gist (the free arm cannot write them)`
+          : `INVALID — ${s.validity.gistProblems} internal node(s) missing a gist, from an arm that was asked for them`
         : "valid";
   console.log(`  validity      ${validity}   (${s.validity.advice} advice)`);
   if (r.sectionLevel !== undefined) {
@@ -157,6 +182,10 @@ function print(r: ArmResult): void {
       `   (two-sided — neither end is "better")`,
   );
   console.log(
+    `  no-heading    longest run ${s.headings.longestHeadinglessRun.blocks} blocks ` +
+      `(${s.headings.longestHeadinglessRun.words} words) — the article's fact, not the tree's`,
+  );
+  console.log(
     `  titles        ${s.titles.count} (${s.titles.copiedHeadings} copied headings), ` +
       `${pct(s.titles.within2to6)} within 2–6 words, retention ${pct(s.titles.retention)}`,
   );
@@ -167,7 +196,21 @@ function print(r: ArmResult): void {
         `retention ${pct(s.gists.retention)}`,
     );
   } else {
-    console.log(`  gists         none (this arm cannot write them)`);
+    console.log(
+      gistless
+        ? `  gists         none (this arm cannot write them)`
+        : `  gists         NONE — a tree without gists from this arm is broken, not economical`,
+    );
+  }
+  if (r.calls?.length) {
+    const sum = (f: (c: CallStats) => number | null) =>
+      r.calls!.reduce((n, c) => n + (f(c) ?? 0), 0);
+    console.log(
+      `  paid calls    ${r.calls.length}, ${(sum((c) => c.ms) / 1000).toFixed(1)}s total, ` +
+        `${sum((c) => c.inputTokens).toLocaleString()} in, ` +
+        `${sum((c) => c.outputTokens).toLocaleString()} out ` +
+        `(${sum((c) => c.reasoningTokens).toLocaleString()} reasoning)`,
+    );
   }
   if (r.vsDisk) {
     console.log(
@@ -210,7 +253,7 @@ async function main(): Promise<void> {
   for (const dir of articleDirs) {
     const article = await loadArticle(dir);
     for (const arm of arms) {
-      const { tree, ...chose } = treeFor(arm, article);
+      const { tree, ...chose } = await treeFor(arm, article);
       const result: ArmResult = {
         arm: arm.name,
         slug: article.slug,

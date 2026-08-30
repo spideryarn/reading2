@@ -130,15 +130,21 @@ export interface StructureScore {
    * it reorganised; either can be right (scaling-hypothesis over-segments on
    * its own headings, fowler-phrenology's were ignored by the incumbent).
    *
+   * Index 0 is excluded from BOTH sides everywhere here, because the first
+   * child of the root is forced to start there — a boundary nobody chose
+   * carries no information about the arm. The first version credited it: a
+   * heading at block zero counted as "cut" and the forced first part counted
+   * toward `l1OnHeadings`, so `writes` — whose every chosen boundary is
+   * off-heading — reported headingsCut 1.0. A heading at index 0 is
+   * unobservable, not successfully cut. GPT Sol, 2026-08-30.
+   *
    * - `boundariesOnHeadings`: of the cut points the arm *chose* (unique start
-   *   indices of internal body nodes, index 0 excluded — the first child of the
-   *   root is forced to start there), what share land on a heading block.
-   * - `headingsCut`: of the author's heading blocks, what share start some
-   *   internal node (index 0 included here — a heading at the very top did
-   *   become a boundary, even though it was forced).
-   * - `l1OnHeadings`: the same precision question asked of depth-1 parts only,
-   *   which is the row the research table counts
-   *   (docs/research/opening-an-article-before-the-toc.md § 2).
+   *   indices of internal body nodes), what share land on a heading block.
+   * - `headingsCut`: of the author's heading blocks the arm could choose to
+   *   cut at, what share start some internal node.
+   * - `l1OnHeadings`: the same precision question asked of depth-1 parts only
+   *   (the forced first part excluded), which is the row the research table
+   *   counts (docs/research/opening-an-article-before-the-toc.md § 2).
    */
   headings: {
     boundaries: number;
@@ -149,6 +155,17 @@ export interface StructureScore {
     sourceHeadingShare: number;
     /** Of those, the share whose sourceHeading really matches a heading in range (sameHeading). */
     sourceHeadingValid: number | null;
+    /**
+     * The longest run of consecutive body blocks with no heading in it — a
+     * fact about the ARTICLE, not the tree, and the one number that predicts
+     * whether a heading tree can give usable bands at all. Heading *count*
+     * cannot: fowler-phrenology has eight headings and a 61-block headingless
+     * run, because all eight are catalogue front-matter. GPT Sol landed on the
+     * same measure independently (2026-08-30). Body blocks only — Sol's 42
+     * for scaling-hypothesis counted its bibliography, which never needed
+     * bands; the body answer there is 29.
+     */
+    longestHeadinglessRun: { blocks: number; words: number };
   };
 
   /**
@@ -250,12 +267,35 @@ export function scoreTree(blocks: Block[], tree: Tree): StructureScore {
   /* Unique start indices, so an L1 node and its first L2 child — forced to
      share a start — count one cut, not two. */
   const startIdx = (n: TreeNode): number | undefined => index.get(n.range[0]);
-  const allStarts = new Set(internal.map(startIdx).filter((i): i is number => i !== undefined));
-  const chosen = new Set([...allStarts].filter((i) => i !== 0));
+  /* Index 0 dropped from every set: it is a forced start, so its presence says
+     nothing about the arm — see the interface comment. */
+  const chosen = new Set(
+    internal.map(startIdx).filter((i): i is number => i !== undefined && i !== 0),
+  );
   const chosenOnHeadings = [...chosen].filter((i) => headingIdx.has(i)).length;
-  const headingsCut = [...headingIdx].filter((i) => allStarts.has(i)).length;
-  const l1Starts = l1.map(startIdx).filter((i): i is number => i !== undefined);
+  const cuttableHeadings = [...headingIdx].filter((i) => i !== 0);
+  const headingsCut = cuttableHeadings.filter((i) => chosen.has(i)).length;
+  const l1Starts = l1
+    .map(startIdx)
+    .filter((i): i is number => i !== undefined && i !== 0);
   const l1OnHeadings = l1Starts.filter((i) => headingIdx.has(i)).length;
+
+  let runBlocks = 0;
+  let runWords = 0;
+  const longestRun = { blocks: 0, words: 0 };
+  for (const b of bodyBlocks) {
+    if (b.kind === "heading") {
+      runBlocks = 0;
+      runWords = 0;
+      continue;
+    }
+    runBlocks++;
+    runWords += b.words;
+    if (runBlocks > longestRun.blocks) {
+      longestRun.blocks = runBlocks;
+      longestRun.words = runWords;
+    }
+  }
 
   const withSource = internal.filter((n) => n.sourceHeading);
   const sourceValid = withSource.filter((n) => {
@@ -325,10 +365,11 @@ export function scoreTree(blocks: Block[], tree: Tree): StructureScore {
     headings: {
       boundaries: chosen.size,
       boundariesOnHeadings: chosen.size === 0 ? null : chosenOnHeadings / chosen.size,
-      headingsCut: headingIdx.size === 0 ? null : headingsCut / headingIdx.size,
+      headingsCut: cuttableHeadings.length === 0 ? null : headingsCut / cuttableHeadings.length,
       l1OnHeadings: l1Starts.length === 0 ? null : l1OnHeadings / l1Starts.length,
       sourceHeadingShare: internal.length === 0 ? 0 : withSource.length / internal.length,
       sourceHeadingValid: withSource.length === 0 ? null : sourceValid / withSource.length,
+      longestHeadinglessRun: longestRun,
     },
     titles: {
       count: titled.length,

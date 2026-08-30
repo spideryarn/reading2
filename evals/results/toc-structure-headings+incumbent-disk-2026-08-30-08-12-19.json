@@ -39,10 +39,14 @@
       "headings": {
         "boundaries": 25,
         "boundariesOnHeadings": 1,
-        "headingsCut": 0.7222222222222222,
+        "headingsCut": 0.7142857142857143,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.9696969696969697,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 38,
+          "words": 1163
+        }
       },
       "titles": {
         "count": 33,
@@ -109,10 +113,14 @@
       "headings": {
         "boundaries": 49,
         "boundariesOnHeadings": 0.6530612244897959,
-        "headingsCut": 0.9166666666666666,
+        "headingsCut": 0.9142857142857143,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.5862068965517241,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 38,
+          "words": 1163
+        }
       },
       "titles": {
         "count": 58,
@@ -163,10 +171,14 @@
       "headings": {
         "boundaries": 0,
         "boundariesOnHeadings": null,
-        "headingsCut": 0.125,
+        "headingsCut": 0,
         "l1OnHeadings": null,
         "sourceHeadingShare": 0,
-        "sourceHeadingValid": null
+        "sourceHeadingValid": null,
+        "longestHeadinglessRun": {
+          "blocks": 61,
+          "words": 8675
+        }
       },
       "titles": {
         "count": 1,
@@ -236,9 +248,13 @@
         "boundaries": 39,
         "boundariesOnHeadings": 0.1794871794871795,
         "headingsCut": 1,
-        "l1OnHeadings": 0.2222222222222222,
+        "l1OnHeadings": 0.125,
         "sourceHeadingShare": 0.18,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 61,
+          "words": 8675
+        }
       },
       "titles": {
         "count": 50,
@@ -298,7 +314,11 @@
         "headingsCut": 1,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.9090909090909091,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 25,
+          "words": 1749
+        }
       },
       "titles": {
         "count": 11,
@@ -366,7 +386,11 @@
         "headingsCut": 1,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.3333333333333333,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 25,
+          "words": 1749
+        }
       },
       "titles": {
         "count": 27,
@@ -426,7 +450,11 @@
         "headingsCut": 1,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.8333333333333334,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 12,
+          "words": 1148
+        }
       },
       "titles": {
         "count": 6,
@@ -494,7 +522,11 @@
         "headingsCut": 1,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.3125,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 12,
+          "words": 1148
+        }
       },
       "titles": {
         "count": 16,
@@ -557,10 +589,14 @@
       "headings": {
         "boundaries": 13,
         "boundariesOnHeadings": 1,
-        "headingsCut": 0.56,
+        "headingsCut": 0.5416666666666666,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.9375,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 29,
+          "words": 2507
+        }
       },
       "titles": {
         "count": 16,
@@ -628,10 +664,14 @@
       "headings": {
         "boundaries": 33,
         "boundariesOnHeadings": 0.696969696969697,
-        "headingsCut": 0.96,
+        "headingsCut": 0.9583333333333334,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.6046511627906976,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 29,
+          "words": 2507
+        }
       },
       "titles": {
         "count": 43,
@@ -652,52 +692,50 @@
   },
   {
     "arm": "headings",
-    "slug": "source",
+    "slug": "test-anchor-roundtrip",
     "score": {
-      "slug": "source",
-      "blocks": 41,
-      "bodyBlocks": 41,
-      "headingBlocks": 5,
+      "slug": "test-anchor-roundtrip",
+      "blocks": 19,
+      "bodyBlocks": 19,
+      "headingBlocks": 1,
       "validity": {
-        "gistProblems": 6,
+        "gistProblems": 1,
         "otherProblems": 0,
-        "advice": 36
+        "advice": 17
       },
       "parts": {
-        "count": 5,
-        "words": [
-          324,
-          754,
-          1153,
-          817,
-          58
-        ],
-        "balanceCv": 0.6210971610384785
+        "count": 0,
+        "words": [],
+        "balanceCv": 0
       },
       "depth": {
-        "maxInternal": 1,
-        "minLeaf": 2,
-        "maxLeaf": 2,
+        "maxInternal": 0,
+        "minLeaf": 1,
+        "maxLeaf": 1,
         "modalLeafDepthShare": 1
       },
       "fanout": {
-        "mean": 7.666666666666667,
-        "max": 13,
-        "within5to9": 0.5
+        "mean": 19,
+        "max": 19,
+        "within5to9": 0
       },
       "headings": {
-        "boundaries": 4,
-        "boundariesOnHeadings": 1,
-        "headingsCut": 1,
-        "l1OnHeadings": 1,
-        "sourceHeadingShare": 0.8333333333333334,
-        "sourceHeadingValid": 1
+        "boundaries": 0,
+        "boundariesOnHeadings": null,
+        "headingsCut": null,
+        "l1OnHeadings": null,
+        "sourceHeadingShare": 0,
+        "sourceHeadingValid": null,
+        "longestHeadinglessRun": {
+          "blocks": 18,
+          "words": 558
+        }
       },
       "titles": {
-        "count": 6,
-        "meanWords": 3.5,
-        "within2to6": 0.6666666666666666,
-        "copiedHeadings": 6,
+        "count": 1,
+        "meanWords": 3,
+        "within2to6": 1,
+        "copiedHeadings": 1,
         "retention": null
       },
       "gists": {
@@ -709,38 +747,37 @@
         "retention": null
       }
     },
-    "sectionLevel": 1,
-    "flat": false,
+    "sectionLevel": null,
+    "flat": true,
     "vsDisk": {
-      "partCountA": 5,
-      "partCountB": 5,
-      "l1Boundaries": 1,
-      "allBoundaries": 0.4444444444444444
+      "partCountA": 0,
+      "partCountB": 4,
+      "l1Boundaries": 0,
+      "allBoundaries": 0
     }
   },
   {
     "arm": "incumbent-disk",
-    "slug": "source",
+    "slug": "test-anchor-roundtrip",
     "score": {
-      "slug": "source",
-      "blocks": 41,
-      "bodyBlocks": 41,
-      "headingBlocks": 5,
+      "slug": "test-anchor-roundtrip",
+      "blocks": 19,
+      "bodyBlocks": 19,
+      "headingBlocks": 1,
       "validity": {
         "gistProblems": 0,
         "otherProblems": 0,
-        "advice": 2
+        "advice": 1
       },
       "parts": {
-        "count": 5,
+        "count": 4,
         "words": [
-          324,
-          754,
-          1153,
-          817,
-          58
+          37,
+          243,
+          210,
+          71
         ],
-        "balanceCv": 0.6210971610384785
+        "balanceCv": 0.6264652563420167
       },
       "depth": {
         "maxInternal": 2,
@@ -749,83 +786,85 @@
         "modalLeafDepthShare": 1
       },
       "fanout": {
-        "mean": 3.5,
-        "max": 6,
-        "within5to9": 0.25
+        "mean": 2.0588235294117645,
+        "max": 5,
+        "within5to9": 0.058823529411764705
       },
       "headings": {
-        "boundaries": 9,
-        "boundariesOnHeadings": 0.4444444444444444,
-        "headingsCut": 1,
-        "l1OnHeadings": 1,
-        "sourceHeadingShare": 0.3125,
-        "sourceHeadingValid": 1
+        "boundaries": 11,
+        "boundariesOnHeadings": 0,
+        "headingsCut": null,
+        "l1OnHeadings": 0,
+        "sourceHeadingShare": 0.058823529411764705,
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 18,
+          "words": 558
+        }
       },
       "titles": {
-        "count": 16,
-        "meanWords": 3.6875,
-        "within2to6": 0.875,
-        "copiedHeadings": 4,
-        "retention": 0.5624999999999999
+        "count": 17,
+        "meanWords": 3.2941176470588234,
+        "within2to6": 0.9411764705882353,
+        "copiedHeadings": 1,
+        "retention": 0.4375
       },
       "gists": {
-        "count": 16,
+        "count": 17,
         "coverage": 1,
-        "meanWords": 18.5625,
+        "meanWords": 19.11764705882353,
         "multiSentence": 0,
-        "templateRepetition": 0.375,
-        "retention": 0.52840387408644
+        "templateRepetition": 0.4117647058823529,
+        "retention": 0.37790012755410685
       }
     }
   },
   {
     "arm": "headings",
-    "slug": "source-2",
+    "slug": "test-seed-replaces",
     "score": {
-      "slug": "source-2",
-      "blocks": 42,
-      "bodyBlocks": 42,
-      "headingBlocks": 5,
+      "slug": "test-seed-replaces",
+      "blocks": 19,
+      "bodyBlocks": 19,
+      "headingBlocks": 1,
       "validity": {
-        "gistProblems": 6,
+        "gistProblems": 1,
         "otherProblems": 0,
-        "advice": 37
+        "advice": 17
       },
       "parts": {
-        "count": 5,
-        "words": [
-          324,
-          754,
-          1153,
-          817,
-          58
-        ],
-        "balanceCv": 0.6210971610384785
+        "count": 0,
+        "words": [],
+        "balanceCv": 0
       },
       "depth": {
-        "maxInternal": 1,
-        "minLeaf": 2,
-        "maxLeaf": 2,
+        "maxInternal": 0,
+        "minLeaf": 1,
+        "maxLeaf": 1,
         "modalLeafDepthShare": 1
       },
       "fanout": {
-        "mean": 7.833333333333333,
-        "max": 13,
-        "within5to9": 0.5
+        "mean": 19,
+        "max": 19,
+        "within5to9": 0
       },
       "headings": {
-        "boundaries": 4,
-        "boundariesOnHeadings": 1,
-        "headingsCut": 1,
-        "l1OnHeadings": 1,
-        "sourceHeadingShare": 0.8333333333333334,
-        "sourceHeadingValid": 1
+        "boundaries": 0,
+        "boundariesOnHeadings": null,
+        "headingsCut": null,
+        "l1OnHeadings": null,
+        "sourceHeadingShare": 0,
+        "sourceHeadingValid": null,
+        "longestHeadinglessRun": {
+          "blocks": 18,
+          "words": 558
+        }
       },
       "titles": {
-        "count": 6,
-        "meanWords": 3.5,
-        "within2to6": 0.6666666666666666,
-        "copiedHeadings": 6,
+        "count": 1,
+        "meanWords": 3,
+        "within2to6": 1,
+        "copiedHeadings": 1,
         "retention": null
       },
       "gists": {
@@ -837,38 +876,37 @@
         "retention": null
       }
     },
-    "sectionLevel": 2,
-    "flat": false,
+    "sectionLevel": null,
+    "flat": true,
     "vsDisk": {
-      "partCountA": 5,
-      "partCountB": 5,
-      "l1Boundaries": 1,
-      "allBoundaries": 0.36363636363636365
+      "partCountA": 0,
+      "partCountB": 4,
+      "l1Boundaries": 0,
+      "allBoundaries": 0
     }
   },
   {
     "arm": "incumbent-disk",
-    "slug": "source-2",
+    "slug": "test-seed-replaces",
     "score": {
-      "slug": "source-2",
-      "blocks": 42,
-      "bodyBlocks": 42,
-      "headingBlocks": 5,
+      "slug": "test-seed-replaces",
+      "blocks": 19,
+      "bodyBlocks": 19,
+      "headingBlocks": 1,
       "validity": {
         "gistProblems": 0,
         "otherProblems": 0,
-        "advice": 3
+        "advice": 1
       },
       "parts": {
-        "count": 5,
+        "count": 4,
         "words": [
-          324,
-          754,
-          1153,
-          817,
-          58
+          37,
+          243,
+          210,
+          71
         ],
-        "balanceCv": 0.6210971610384785
+        "balanceCv": 0.6264652563420167
       },
       "depth": {
         "maxInternal": 2,
@@ -877,32 +915,294 @@
         "modalLeafDepthShare": 1
       },
       "fanout": {
-        "mean": 3.2777777777777777,
-        "max": 6,
-        "within5to9": 0.16666666666666666
+        "mean": 2.0588235294117645,
+        "max": 5,
+        "within5to9": 0.058823529411764705
       },
       "headings": {
         "boundaries": 11,
-        "boundariesOnHeadings": 0.36363636363636365,
-        "headingsCut": 1,
-        "l1OnHeadings": 1,
-        "sourceHeadingShare": 0.3888888888888889,
-        "sourceHeadingValid": 1
+        "boundariesOnHeadings": 0,
+        "headingsCut": null,
+        "l1OnHeadings": 0,
+        "sourceHeadingShare": 0.058823529411764705,
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 18,
+          "words": 558
+        }
       },
       "titles": {
-        "count": 18,
-        "meanWords": 3.2777777777777777,
-        "within2to6": 0.8333333333333334,
-        "copiedHeadings": 6,
-        "retention": 0.6805555555555557
+        "count": 17,
+        "meanWords": 3.2941176470588234,
+        "within2to6": 0.9411764705882353,
+        "copiedHeadings": 1,
+        "retention": 0.4375
       },
       "gists": {
-        "count": 18,
+        "count": 17,
         "coverage": 1,
-        "meanWords": 20.833333333333332,
+        "meanWords": 19.11764705882353,
         "multiSentence": 0,
-        "templateRepetition": 0.16666666666666666,
-        "retention": 0.42203519791755095
+        "templateRepetition": 0.4117647058823529,
+        "retention": 0.37790012755410685
+      }
+    }
+  },
+  {
+    "arm": "headings",
+    "slug": "test-seed-shelf",
+    "score": {
+      "slug": "test-seed-shelf",
+      "blocks": 19,
+      "bodyBlocks": 19,
+      "headingBlocks": 1,
+      "validity": {
+        "gistProblems": 1,
+        "otherProblems": 0,
+        "advice": 17
+      },
+      "parts": {
+        "count": 0,
+        "words": [],
+        "balanceCv": 0
+      },
+      "depth": {
+        "maxInternal": 0,
+        "minLeaf": 1,
+        "maxLeaf": 1,
+        "modalLeafDepthShare": 1
+      },
+      "fanout": {
+        "mean": 19,
+        "max": 19,
+        "within5to9": 0
+      },
+      "headings": {
+        "boundaries": 0,
+        "boundariesOnHeadings": null,
+        "headingsCut": null,
+        "l1OnHeadings": null,
+        "sourceHeadingShare": 0,
+        "sourceHeadingValid": null,
+        "longestHeadinglessRun": {
+          "blocks": 18,
+          "words": 558
+        }
+      },
+      "titles": {
+        "count": 1,
+        "meanWords": 3,
+        "within2to6": 1,
+        "copiedHeadings": 1,
+        "retention": null
+      },
+      "gists": {
+        "count": 0,
+        "coverage": 0,
+        "meanWords": 0,
+        "multiSentence": null,
+        "templateRepetition": null,
+        "retention": null
+      }
+    },
+    "sectionLevel": null,
+    "flat": true,
+    "vsDisk": {
+      "partCountA": 0,
+      "partCountB": 4,
+      "l1Boundaries": 0,
+      "allBoundaries": 0
+    }
+  },
+  {
+    "arm": "incumbent-disk",
+    "slug": "test-seed-shelf",
+    "score": {
+      "slug": "test-seed-shelf",
+      "blocks": 19,
+      "bodyBlocks": 19,
+      "headingBlocks": 1,
+      "validity": {
+        "gistProblems": 0,
+        "otherProblems": 0,
+        "advice": 1
+      },
+      "parts": {
+        "count": 4,
+        "words": [
+          37,
+          243,
+          210,
+          71
+        ],
+        "balanceCv": 0.6264652563420167
+      },
+      "depth": {
+        "maxInternal": 2,
+        "minLeaf": 3,
+        "maxLeaf": 3,
+        "modalLeafDepthShare": 1
+      },
+      "fanout": {
+        "mean": 2.0588235294117645,
+        "max": 5,
+        "within5to9": 0.058823529411764705
+      },
+      "headings": {
+        "boundaries": 11,
+        "boundariesOnHeadings": 0,
+        "headingsCut": null,
+        "l1OnHeadings": 0,
+        "sourceHeadingShare": 0.058823529411764705,
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 18,
+          "words": 558
+        }
+      },
+      "titles": {
+        "count": 17,
+        "meanWords": 3.2941176470588234,
+        "within2to6": 0.9411764705882353,
+        "copiedHeadings": 1,
+        "retention": 0.4375
+      },
+      "gists": {
+        "count": 17,
+        "coverage": 1,
+        "meanWords": 19.11764705882353,
+        "multiSentence": 0,
+        "templateRepetition": 0.4117647058823529,
+        "retention": 0.37790012755410685
+      }
+    }
+  },
+  {
+    "arm": "headings",
+    "slug": "test-seed-vanished-anchor",
+    "score": {
+      "slug": "test-seed-vanished-anchor",
+      "blocks": 19,
+      "bodyBlocks": 19,
+      "headingBlocks": 1,
+      "validity": {
+        "gistProblems": 1,
+        "otherProblems": 0,
+        "advice": 17
+      },
+      "parts": {
+        "count": 0,
+        "words": [],
+        "balanceCv": 0
+      },
+      "depth": {
+        "maxInternal": 0,
+        "minLeaf": 1,
+        "maxLeaf": 1,
+        "modalLeafDepthShare": 1
+      },
+      "fanout": {
+        "mean": 19,
+        "max": 19,
+        "within5to9": 0
+      },
+      "headings": {
+        "boundaries": 0,
+        "boundariesOnHeadings": null,
+        "headingsCut": null,
+        "l1OnHeadings": null,
+        "sourceHeadingShare": 0,
+        "sourceHeadingValid": null,
+        "longestHeadinglessRun": {
+          "blocks": 18,
+          "words": 558
+        }
+      },
+      "titles": {
+        "count": 1,
+        "meanWords": 3,
+        "within2to6": 1,
+        "copiedHeadings": 1,
+        "retention": null
+      },
+      "gists": {
+        "count": 0,
+        "coverage": 0,
+        "meanWords": 0,
+        "multiSentence": null,
+        "templateRepetition": null,
+        "retention": null
+      }
+    },
+    "sectionLevel": null,
+    "flat": true,
+    "vsDisk": {
+      "partCountA": 0,
+      "partCountB": 4,
+      "l1Boundaries": 0,
+      "allBoundaries": 0
+    }
+  },
+  {
+    "arm": "incumbent-disk",
+    "slug": "test-seed-vanished-anchor",
+    "score": {
+      "slug": "test-seed-vanished-anchor",
+      "blocks": 19,
+      "bodyBlocks": 19,
+      "headingBlocks": 1,
+      "validity": {
+        "gistProblems": 0,
+        "otherProblems": 0,
+        "advice": 1
+      },
+      "parts": {
+        "count": 4,
+        "words": [
+          37,
+          243,
+          210,
+          71
+        ],
+        "balanceCv": 0.6264652563420167
+      },
+      "depth": {
+        "maxInternal": 2,
+        "minLeaf": 3,
+        "maxLeaf": 3,
+        "modalLeafDepthShare": 1
+      },
+      "fanout": {
+        "mean": 2.0588235294117645,
+        "max": 5,
+        "within5to9": 0.058823529411764705
+      },
+      "headings": {
+        "boundaries": 11,
+        "boundariesOnHeadings": 0,
+        "headingsCut": null,
+        "l1OnHeadings": 0,
+        "sourceHeadingShare": 0.058823529411764705,
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 18,
+          "words": 558
+        }
+      },
+      "titles": {
+        "count": 17,
+        "meanWords": 3.2941176470588234,
+        "within2to6": 0.9411764705882353,
+        "copiedHeadings": 1,
+        "retention": 0.4375
+      },
+      "gists": {
+        "count": 17,
+        "coverage": 1,
+        "meanWords": 19.11764705882353,
+        "multiSentence": 0,
+        "templateRepetition": 0.4117647058823529,
+        "retention": 0.37790012755410685
       }
     }
   },
@@ -947,10 +1247,14 @@
       "headings": {
         "boundaries": 7,
         "boundariesOnHeadings": 1,
-        "headingsCut": 0.8888888888888888,
+        "headingsCut": 0.875,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.8888888888888888,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 27,
+          "words": 2403
+        }
       },
       "titles": {
         "count": 9,
@@ -1018,10 +1322,14 @@
       "headings": {
         "boundaries": 25,
         "boundariesOnHeadings": 0.28,
-        "headingsCut": 0.8888888888888888,
+        "headingsCut": 0.875,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.2857142857142857,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 27,
+          "words": 2403
+        }
       },
       "titles": {
         "count": 35,
@@ -1072,10 +1380,14 @@
       "headings": {
         "boundaries": 0,
         "boundariesOnHeadings": null,
-        "headingsCut": 1,
+        "headingsCut": null,
         "l1OnHeadings": null,
         "sourceHeadingShare": 0,
-        "sourceHeadingValid": null
+        "sourceHeadingValid": null,
+        "longestHeadinglessRun": {
+          "blocks": 18,
+          "words": 558
+        }
       },
       "titles": {
         "count": 1,
@@ -1139,10 +1451,14 @@
       "headings": {
         "boundaries": 11,
         "boundariesOnHeadings": 0,
-        "headingsCut": 1,
-        "l1OnHeadings": 0.25,
+        "headingsCut": null,
+        "l1OnHeadings": 0,
         "sourceHeadingShare": 0.058823529411764705,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 18,
+          "words": 558
+        }
       },
       "titles": {
         "count": 17,
@@ -1193,10 +1509,14 @@
       "headings": {
         "boundaries": 0,
         "boundariesOnHeadings": null,
-        "headingsCut": 0.5,
+        "headingsCut": 0,
         "l1OnHeadings": null,
         "sourceHeadingShare": 0,
-        "sourceHeadingValid": null
+        "sourceHeadingValid": null,
+        "longestHeadinglessRun": {
+          "blocks": 21,
+          "words": 1291
+        }
       },
       "titles": {
         "count": 1,
@@ -1261,7 +1581,11 @@
         "headingsCut": 1,
         "l1OnHeadings": 1,
         "sourceHeadingShare": 0.18181818181818182,
-        "sourceHeadingValid": 1
+        "sourceHeadingValid": 1,
+        "longestHeadinglessRun": {
+          "blocks": 21,
+          "words": 1291
+        }
       },
       "titles": {
         "count": 11,

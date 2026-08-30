@@ -12,7 +12,14 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { armByName } from "../evals/toc-structure/arms.js";
 import { buildHeadingTree, PREAMBLE_TITLE } from "../evals/toc-structure/heading-tree.js";
+import {
+  parseStructureResponse,
+  PendingError,
+  renderSeedProposal,
+  runModelArm,
+} from "../evals/toc-structure/model-arms.js";
 import { compareTrees, scoreTree } from "../evals/toc-structure/score.js";
 import type { Block, NodeId, Tree, TreeNode } from "../src/types.js";
 
@@ -197,6 +204,21 @@ describe("scoreTree", () => {
     expect(score.headings.headingsCut).toBeCloseTo(1 / 2, 10);
   });
 
+  it("a heading at block zero is unobservable, never credited as cut", () => {
+    // The first child of the root is FORCED to start at index 0, so a heading
+    // there says nothing about the arm. Before the fix this fixture reported
+    // headingsCut 1.0 with every chosen boundary off-heading. GPT Sol, 2026-08-30.
+    const blocks = [heading(1, "The Title"), block(), block(), block(), block(), block()];
+    const tree = treeFrom(blocks, withGists({
+      range: [0, 5],
+      children: [{ range: [0, 1] }, { range: [2, 3] }, { range: [4, 5] }],
+    }));
+    const score = scoreTree(blocks, tree);
+    expect(score.headings.headingsCut).toBeNull(); // no cuttable heading exists
+    expect(score.headings.boundariesOnHeadings).toBe(0); // both chosen cuts are off-heading
+    expect(score.headings.l1OnHeadings).toBe(0); // the forced first part is not counted
+  });
+
   it("title retention excludes copied headings and keeps invented words out of the article's credit", () => {
     const blocks = [
       heading(2, "Soul Machine"),
@@ -246,6 +268,37 @@ describe("scoreTree", () => {
     expect(score.gists.retention).toBeGreaterThan(0);
   });
 
+  it("longest headingless run is the article's fact: body blocks only, reset at each heading", () => {
+    const blocks = [
+      heading(2, "Front matter"),
+      block({ words: 10 }),
+      heading(2, "Also front matter"),
+      block({ words: 5 }),
+      block({ words: 7 }),
+      block({ words: 9 }), // the run: 3 blocks, 21 words
+      block({ role: "footnote", treatment: "supplement", words: 100, text: "a very long note" }),
+      block({ role: "footnote", treatment: "supplement", words: 100, text: "another one" }),
+    ];
+    const tree = treeFrom(blocks.slice(0, 6), withGists({
+      range: [0, 5],
+      children: [{ range: [0, 1] }, { range: [2, 5] }],
+    }));
+    // Score against the body-only tree's blocks plus the notes, so the
+    // supplement is present and must NOT extend the run - a bibliography with
+    // no headings is not an argument that needed bands.
+    const run = scoreTree(blocks.slice(0, 6), tree).headings.longestHeadinglessRun;
+    expect(run).toEqual({ blocks: 3, words: 21 });
+    // And with the supplement in the block list, the answer must not change.
+    const supTree = treeFrom(blocks, withGists({
+      range: [0, 7],
+      children: [{ range: [0, 1] }, { range: [2, 7] }],
+    }));
+    expect(scoreTree(blocks, supTree).headings.longestHeadinglessRun).toEqual({
+      blocks: 3,
+      words: 21,
+    });
+  });
+
   it("validity: gist absences are counted apart from structural damage", () => {
     const blocks = [heading(2, "Only Part"), block(), block()];
     const bare = treeFrom(blocks, {
@@ -266,6 +319,50 @@ describe("scoreTree", () => {
     const score = scoreTree(blocks, broken);
     expect(score.validity.otherProblems).toBeGreaterThan(0);
     expect(score.validity.gistProblems).toBe(0);
+  });
+});
+
+describe("parseStructureResponse", () => {
+  const answer = (blocks: Block[], ranges: [number, number][]) =>
+    JSON.stringify({
+      root: {
+        title: "The Whole Piece",
+        gist: "One sentence carrying the whole shape of the argument.",
+        range: [blocks[0]!.id, blocks.at(-1)!.id],
+        children: ranges.map(([lo, hi], i) => ({
+          title: `Part ${i + 1}`,
+          gist: `Part ${i + 1} makes its own distinct claim here.`,
+          range: [blocks[lo]!.id, blocks[hi]!.id],
+        })),
+      },
+    });
+
+  it("turns a fenced answer into the pipeline's own validated tree", () => {
+    const blocks = Array.from({ length: 6 }, () => block());
+    const raw = "```json\n" + answer(blocks, [[0, 2], [3, 5]]) + "\n```";
+    const tree = parseStructureResponse(raw, blocks, "parsed");
+    const score = scoreTree(blocks, tree);
+    expect(score.parts.count).toBe(2);
+    expect(score.validity.otherProblems).toBe(0);
+    expect(score.validity.gistProblems).toBe(0); // this answer wrote its gists
+  });
+
+  it("refuses an answer whose children do not tile - the arm is judged on the pipeline's rules", () => {
+    const blocks = Array.from({ length: 6 }, () => block());
+    expect(() => parseStructureResponse(answer(blocks, [[0, 3], [2, 5]]), blocks, "overlap"))
+      .toThrow(/tile/);
+  });
+});
+
+describe("runModelArm", () => {
+  it("is loud, not silent, while the transports are unarmed", async () => {
+    const blocks = [heading(2, "One"), block()];
+    await expect(runModelArm(armByName("incumbent"), blocks, "pending")).rejects.toThrow(
+      PendingError,
+    );
+    await expect(runModelArm(armByName("waves"), blocks, "pending")).rejects.toThrow(
+      PendingError,
+    );
   });
 });
 
@@ -490,6 +587,26 @@ describe("buildHeadingTree", () => {
     expect(built.parts).toBe(0);
     const root = built.tree.nodes[built.tree.rootId]!;
     expect(root.children).toHaveLength(7);
+  });
+
+  it("renders a seed proposal the model could echo back verbatim", () => {
+    const blocks = [
+      heading(2, "Section A"),
+      block(),
+      heading(2, "Section B"),
+      block(),
+      heading(2, "Section C"),
+      block(),
+    ];
+    const proposal = renderSeedProposal(blocks, "seeded");
+    // The JSON half must be machine-valid on its own; the prose half sits above it.
+    const jsonStart = proposal.indexOf("{");
+    const parsed = JSON.parse(proposal.slice(jsonStart)) as {
+      root: { range: [string, string]; children?: { sourceHeading?: string }[] };
+    };
+    expect(parsed.root.range).toEqual([blocks[0]!.id, blocks[5]!.id]);
+    expect(parsed.root.children).toHaveLength(3);
+    expect(parsed.root.children![0]!.sourceHeading).toBe("Section A");
   });
 
   it("is deterministic: two builds of the same blocks agree exactly", () => {

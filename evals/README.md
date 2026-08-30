@@ -191,7 +191,7 @@ distinctive terms survived. `--shuffle` prints those sets ready to hand to someo
 Written for [opening-an-article-before-the-toc.md](../docs/research/opening-an-article-before-the-toc.md).
 `toc-labels.ts` above judges stage 4's *second* pass; this judges the first — the single model call
 in [src/toc.ts](../src/toc.ts) that proposes the nested structure, which is 163–320 seconds and
-~70% of the whole ingest wait. The decisions queued against it (progressive waves, seeding the
+88% of the ingest wait now that the labels run concurrently and the arc is deferred. The decisions queued against it (progressive waves, seeding the
 author's headings, changing model or effort) need a number to decide against.
 
 ```
@@ -206,15 +206,27 @@ money is not one. The arms are declared as data in `arms.ts`; the ones that call
 to run** until their executor lands, loudly, so a results file cannot quietly mean "those arms were
 skipped".
 
+### The corpus is seven documents, not nine articles
+
+`source`, `source-2` and `revistes-ub-30977` are **three extractions of one document** — the same
+3,106-word article, three slugs. The runner drops the first two by default and every aggregate
+must, or one document is triple-weighted and every paid arm buys the same answer three times.
+(An earlier statement of the headline result said "6 of 9"; the honest denominator is below.)
+
 ### The denominator is free
 
 **`headings` is arm zero**: the tree the author's own headings give for free, built
 deterministically in `heading-tree.ts`. On this corpus it reproduces the incumbent's depth-one
-carving *exactly* (L1 boundary agreement 100%) on six of nine articles — so an eval that scored
-model arms against nothing would credit the model for work the headings did for free. What the
-model demonstrably adds on those six is the level *below* (all-boundaries agreement 28–48%: the
-model cuts long runs at topic shifts, headings can't), the gists, and the titles where there is no
-heading to copy.
+carving *exactly* (L1 boundary agreement 100%) on **four of the seven distinct documents** — so an
+eval that scored model arms against nothing would credit the model for work the headings did for
+free. What the model demonstrably adds on those four is the level *below* (all-boundaries
+agreement 28–48%: the model cuts long runs at topic shifts, headings can't), the gists, and the
+titles where there is no heading to copy.
+
+The scorer also reports **the longest headingless run of body blocks**, which is the article's own
+fact rather than the tree's, and the number that predicts whether a heading tree can give usable
+bands at all — heading *count* cannot: fowler has eight headings and a 61-block run, because all
+eight are front-matter.
 
 The two hard cases stay hard, which is what they are in the corpus for: `scaling-hypothesis`
 over-segments on its own headings (11 parts against the model's 8, L1 agreement 42%), and
