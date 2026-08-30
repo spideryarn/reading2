@@ -1,22 +1,29 @@
 /**
- * Wait for the database's single `running` slot instead of failing on it.
+ * Wait for a contended job insert instead of failing on it.
  *
  * ## Why this exists
  *
- * `jobs_only_one_running` is a unique index on the constant `(true)`, so at
- * most one row in the whole table may be `running` — global concurrency 1, on
- * purpose. `jobs_active_slug` is narrower and covers `queued` too: it fires
- * when that *article* already has a job in flight.
+ * `jobs_active_slug` fires when that *article* already has a job in flight, and
+ * it covers `queued` as well as `running`. Suites here share fixed fixture
+ * slugs, so two copies of one file collide on it.
+ *
+ * **There was a second, wider index, and it is gone.**
+ * `jobs_only_one_running` was a unique index on the constant `(true)`: one
+ * `running` row in the whole table, global concurrency 1, on purpose. It was
+ * dropped on 2026-08-30 for a counted cap taken inside the `queue_state` lock
+ * (src/jobs.ts § `jobConcurrency`), which `claim` reports as `busy` rather than
+ * raising — so nothing can reach this retry by that route any more. What is left
+ * is per-article contention plus whatever else a suite happens to share.
  *
  * Vitest runs test files concurrently, and a second `npm test` beside yours (or
- * a dev server mid-ingest) is another claimant again. So any suite that inserts
- * a `running` row is racing every other one, and the loser does not get a
- * useful failure — it gets `duplicate key value violates unique constraint`
- * from whichever insert happened to be second, pointing at the test that lost
- * rather than at the contention.
+ * a dev server mid-ingest) is another claimant again. The loser of such a race
+ * does not get a useful failure — it gets `duplicate key value violates unique
+ * constraint` from whichever insert happened to be second, pointing at the test
+ * that lost rather than at the contention.
  *
- * That is not hypothetical. On 2026-08-28 a full-suite run failed three cases
- * in `tests/store-job-draft.test.ts` this way while its own logic was fine:
+ * That is not hypothetical, and it happened while the global slot still existed.
+ * On 2026-08-28 a full-suite run failed three cases in
+ * `tests/store-job-draft.test.ts` this way while its own logic was fine:
  * the file passed alone, passed beside its neighbours, and failed only under
  * the load of all 266 files. `tests/helpers/load-article.ts` had already met
  * this and grown the retry below; this is that code, lifted out so there is one
@@ -57,7 +64,7 @@ const ATTEMPTS = 40;
 const GAP_MS = 500;
 
 /**
- * Run `insert` and, if it lost the running slot, wait and run it again.
+ * Run `insert` and, if it lost the race for the article, wait and run it again.
  *
  * `insert` is called afresh on every attempt rather than being retried as a
  * value, because a job wants a new id per attempt — and because an insert that
@@ -79,17 +86,22 @@ export async function insertWhenSlotFree<T>(
     } catch (err) {
       /* `violatesConstraint` walks the whole error chain. Reading
          `err.cause.constraint` at one level misses Drizzle's wrapper, and a miss
-         here rethrows a contended slot as though it were a bug. */
+         here rethrows contention as though it were a bug.
+
+         `jobs_only_one_running` is the dropped index and no live insert can
+         raise it any more; the clause stays only because this file's own tests
+         synthesise that error to exercise the loop. `jobs_active_slug` is the
+         one that still fires. */
       const contended =
         violatesConstraint(err, "jobs_only_one_running") ||
         violatesConstraint(err, "jobs_active_slug");
       if (!contended) throw err;
       if (attempt >= attempts) {
         throw new Error(
-          `could not start a job for "${what}" in ${(attempts * gapMs) / 1000}s: either ` +
-            "another job holds the single running slot, or this article already has one " +
-            "queued or running. If nothing is actually working, a row is wedged and waiting " +
-            "will not clear it — look for a `queued` or `running` row in `jobs` and remove it.",
+          `could not start a job for "${what}" in ${(attempts * gapMs) / 1000}s: this article ` +
+            "already has a job queued or running. If nothing is actually working, a row is " +
+            "wedged and waiting will not clear it — look for a `queued` or `running` row in " +
+            "`jobs` and remove it.",
         );
       }
       await new Promise((resolve) => setTimeout(resolve, gapMs));

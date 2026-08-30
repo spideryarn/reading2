@@ -1,5 +1,5 @@
 /**
- * The wait that stops a contended running slot being reported as a broken test.
+ * The wait that stops a contended job insert being reported as a broken test.
  *
  * These cases drive `insertWhenSlotFree` with a fake insert rather than a
  * database, because what is being tested is the *decision* — retry, rethrow, or
@@ -10,6 +10,14 @@
  * `constraint` name, wrapped in an outer error the way Drizzle wraps pg's. A
  * flat fake would pass against a `violatesConstraint` that only read the top
  * level, which is the bug its own comment warns about.
+ *
+ * **Two constraint names go in, and only one still comes out of a database.**
+ * `jobs_only_one_running` was dropped on 2026-08-30, when global concurrency 1
+ * became a counted cap that `claim` reports as `busy` rather than raising. No
+ * live insert can produce that name now. The helper still lists it and these
+ * cases still drive it, which is what keeps the retry loop exercised — but the
+ * name that fires in earnest is `jobs_active_slug`: this article already has a
+ * job queued or running.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -40,8 +48,8 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("waiting for the single running slot", () => {
-  it("tries again when the slot is taken, and returns what the insert returned", async () => {
+describe("waiting out a contended job insert", () => {
+  it("tries again when the insert is refused, and returns what the insert returned", async () => {
     const insert = vi
       .fn()
       .mockRejectedValueOnce(duplicateKey("jobs_only_one_running"))
@@ -52,7 +60,7 @@ describe("waiting for the single running slot", () => {
     expect(insert).toHaveBeenCalledTimes(3);
   });
 
-  it("waits for the narrower per-article refusal too", async () => {
+  it("waits for the per-article refusal, the one still raised in earnest", async () => {
     const insert = vi
       .fn()
       .mockRejectedValueOnce(duplicateKey("jobs_active_slug"))

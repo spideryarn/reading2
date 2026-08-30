@@ -52,7 +52,7 @@ import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
  * job that is merely working — and the loop reads a 404 as *stop asking*.
  */
 export type ClaimRefusal =
-  /** Somebody is inside this job, or inside another one and holding the single running slot. */
+  /** Somebody is inside this job, or the machine is already running as many as it may. */
   | { kind: "busy"; why: string }
   /** No such job, or not this owner's. Those are one answer on purpose. */
   | { kind: "gone" }
@@ -150,8 +150,20 @@ export interface JobStore {
    * Refuses rather than waits, always: a claim that blocked would hold a
    * serverless invocation open doing nothing, and the caller has a perfectly
    * good thing to do with `busy`, which is ask again shortly.
+   *
+   * **`maxRunning` is passed in, exactly as `leaseMs` is, and for the same
+   * reason.** How many jobs may run at once is a policy the caller owns
+   * (`jobConcurrency()`, src/jobs.ts); enforcing it is the store's. A store that
+   * read the environment itself would be a second place the answer lives, and
+   * the two would disagree the first time a test moved one of them.
    */
-  claim(id: string, owner: OwnerId, attempt: string, leaseMs: number): Promise<ClaimOutcome>;
+  claim(
+    id: string,
+    owner: OwnerId,
+    attempt: string,
+    leaseMs: number,
+    maxRunning: number,
+  ): Promise<ClaimOutcome>;
 
   /**
    * A step ran, the job is not over: record it and **let the claim go**.

@@ -186,6 +186,14 @@ if (process.env.DATABASE_URL) {
 }
 
 const LEASE = 60_000;
+/**
+ * **Deliberately out of the way.** `claim` takes the cap as an argument, exactly
+ * as it takes the lease, so most cases here want a number high enough that the
+ * global cap never enters into what they are testing. The two cases that *are*
+ * about the cap pass their own, small, on purpose — a suite-wide constant that
+ * both sets shared would make one of them pass for the other's reason.
+ */
+const CAP = 4;
 /** Prefixed so this file's rows can be found and removed without touching anybody else's. */
 const MINE = "test-store-jobs-";
 
@@ -316,7 +324,7 @@ for (const adapter of ADAPTERS) {
       await store.enqueueOrGet(job, "k1");
       expect(await store.get(job.id, OWNER)).toBeDefined();
       expect(await store.get(job.id, STRANGER)).toBeUndefined();
-      expect((await store.claim(job.id, STRANGER, mintAttempt(), LEASE)).kind).toBe("gone");
+      expect((await store.claim(job.id, STRANGER, mintAttempt(), LEASE, CAP)).kind).toBe("gone");
     });
 
     /**
@@ -338,7 +346,7 @@ for (const adapter of ADAPTERS) {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
       const attempt = mintAttempt();
-      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
       await store.releaseStep(job.id, attempt, job.steps, {});
     });
 
@@ -346,24 +354,226 @@ for (const adapter of ADAPTERS) {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
 
-      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE)).kind).toBe("claimed");
-      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE)).kind).toBe("busy");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("busy");
     });
 
-    it("turns a claim away while another job holds the one running slot", async () => {
+    /**
+     * **The cap, which used to be the number one and is now an argument.**
+     *
+     * This case said *"turns a claim away while another job holds the one
+     * running slot"* until 2026-08-30, and it was about `jobs_only_one_running`
+     * — a unique index on the constant `(true)`, which in Postgres raised
+     * `23505` rather than matching no rows, so the point of the test was that
+     * the adapter caught that code **by name**. The index is gone
+     * (drizzle/0032_jobs_concurrency_cap.sql) and the cap is a count taken
+     * inside the `queue_state` lock, so what is worth pinning changed with it:
+     * not a constraint name, but that the number is honoured and that going
+     * over it is refused rather than merely unlikely.
+     *
+     * **`maxRunning: 1` rather than the suite's `CAP`**, so the cap is what
+     * blocks the second claim and nothing else can be. With two jobs on two
+     * slugs, the article rule cannot fire and there is only one candidate
+     * explanation left.
+     *
+     * Watched red against a claim that ignored its `maxRunning` argument: both
+     * adapters answered `claimed`.
+     */
+    it("refuses a claim that would put the machine over its cap", async () => {
       const a = aJob();
       const b = aJob();
       await store.enqueueOrGet(a, "k1");
       await store.enqueueOrGet(b, "k2");
 
-      expect((await store.claim(a.id, OWNER, mintAttempt(), LEASE)).kind).toBe("claimed");
-      /* In Postgres `jobs_only_one_running` raises 23505 rather than matching no
-         rows, so this escapes as a 500 unless the adapter catches that code by
-         name — and Drizzle wraps the driver error, so the obvious check compiles
-         and never matches. An index doing its job is not an exception. */
-      const blocked = await store.claim(b.id, OWNER, mintAttempt(), LEASE);
+      const held = mintAttempt();
+      expect((await store.claim(a.id, OWNER, held, LEASE, 1)).kind).toBe("claimed");
+      const blocked = await store.claim(b.id, OWNER, mintAttempt(), LEASE, 1);
       expect(blocked.kind).toBe("busy");
-      expect(blocked.kind === "busy" && blocked.why).toMatch(/another job is running/);
+      /* The reason names the arithmetic. `busy` already means four things to the
+         client, and a log line that cannot tell "the machine is full" from "your
+         other tab has it" makes them one symptom. */
+      expect(blocked.kind === "busy" && blocked.why).toMatch(/1 of 1/);
+
+      /* **And the same claim goes through when the cap allows it** — without
+         this half, a `claim` that refused everything would pass. */
+      expect((await store.claim(b.id, OWNER, mintAttempt(), LEASE, 2)).kind).toBe("claimed");
+      await store.releaseStep(a.id, held, a.steps, {});
+    });
+
+    /* ------------------------------------------------- several at once -- */
+
+    /**
+     * **The lock itself, and nothing else.**
+     *
+     * The cap case below proves the *arithmetic* — that `maxRunning` is read and
+     * obeyed. It cannot prove the **serialisation**, and GPT Sol's review of the
+     * built code made the point exactly: delete the `for update` line from
+     * `claim` and that test stays green, because it claims A and then claims B,
+     * one after the other, and a count taken outside a lock is perfectly correct
+     * when nothing is racing it. A test that cannot go red when the guard is
+     * removed is testing something else.
+     *
+     * So this holds the singleton from **another connection** and asks whether
+     * `claim` notices. If the lock statement is there, the claim is refused; if
+     * somebody deletes it, the claim sails past a lock it never asked for and
+     * this goes red — which is the whole point.
+     *
+     * **`NOWAIT` is why this can be written at all.** Against a plain
+     * `for update` the claim would block on the held row and the test would have
+     * to be a barrier and a race; refusing immediately makes it two statements
+     * and a `finally`. See `claim` for why refusing rather than waiting is the
+     * contract anyway.
+     *
+     * Postgres only: the filesystem adapter has no lock to take, because it has
+     * no second process to take it from.
+     */
+    it.skipIf(adapter.name !== "Postgres")(
+      "will not claim while another claimant holds the queue lock",
+      async () => {
+        const job = aJob();
+        await store.enqueueOrGet(job, "k1");
+
+        /* Its own connection, because a transaction cannot block on a lock it
+           already holds — taking it through `getDb()` would prove nothing. */
+        const holder = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+        const held = await holder.connect();
+        try {
+          await held.query("begin");
+          await held.query("select 1 from spideryarn.queue_state where id = 1 for update");
+
+          const refused = await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP);
+          expect(refused.kind).toBe("busy");
+          expect(refused.kind === "busy" && refused.why).toMatch(/being decided/);
+
+          /* **And it goes through the moment the lock is free** — without this
+             half, a `claim` that refused unconditionally would pass. */
+          await held.query("rollback");
+          const attempt = mintAttempt();
+          expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+          await store.releaseStep(job.id, attempt, job.steps, {});
+        } finally {
+          /* Belt and braces: an assertion that threw above leaves the
+             transaction open, and a released client keeps its locks. */
+          await held.query("rollback").catch(() => undefined);
+          held.release();
+          await holder.end();
+        }
+      },
+    );
+
+
+    /**
+     * **Two articles at once**, which is the whole of what Greg asked for.
+     *
+     * Red before the change and it is worth saying exactly how: today
+     * `jobs_only_one_running` is a unique index on the constant `(true)`, so the
+     * second claim raises `23505` and the adapter turns it into `busy`. The
+     * filesystem adapter reaches the same answer through `runningNow()`. Both
+     * sides therefore fail this, which is what makes it a parity case rather
+     * than a Postgres one.
+     *
+     * `aJob()` gives each job a slug of its own, so nothing here is about the
+     * article rule below.
+     */
+    it("runs two jobs on two different articles at the same time", async () => {
+      const a = aJob();
+      const b = aJob();
+      await store.enqueueOrGet(a, "k1");
+      await store.enqueueOrGet(b, "k2");
+
+      /* The tokens are kept rather than read back off the job: `toJob` does not
+         carry `attempt_id`, deliberately, so the caller's own is the only
+         spelling of it there is. */
+      const [heldA, heldB] = [mintAttempt(), mintAttempt()];
+      expect((await store.claim(a.id, OWNER, heldA, LEASE, CAP)).kind).toBe("claimed");
+      expect((await store.claim(b.id, OWNER, heldB, LEASE, CAP)).kind).toBe("claimed");
+
+      /* Released, or they hold two of the cap's slots for every case after this
+         one — which would read as those cases failing. */
+      await store.releaseStep(a.id, heldA, a.steps, {});
+      await store.releaseStep(b.id, heldB, b.steps, {});
+    });
+
+    /**
+     * **A full machine must not change what a job *is*.**
+     *
+     * The two adapters classified in opposite orders and nobody would have
+     * noticed: Postgres refused on the cap before it looked at the row, the
+     * filesystem store looked first. So at the cap a finished job read `busy`
+     * here and `finished` there, and a job that does not exist read `busy`
+     * rather than `gone` — which matters beyond tidiness, because
+     * `advanceJobWith` casts the `get()` behind its `busy` branch straight to
+     * `Job`, so a missing row would come back as a 200 where the route means a
+     * 404. GPT Sol found it reviewing the built code.
+     *
+     * The cap is 0, which no configuration would ask for and is the cleanest way
+     * to say "saturated" — every claim is over the limit whatever else is
+     * running, so nothing here depends on the state another case left behind.
+     */
+    it("answers what a job is, not how busy the machine is, when the cap is full", async () => {
+      const missing = `${ID_PREFIX}zzzzzz`;
+      expect((await store.claim(missing, OWNER, mintAttempt(), LEASE, 0)).kind).toBe("gone");
+
+      const over = aJob();
+      await store.enqueueOrGet(over, "k1");
+      const attempt = mintAttempt();
+      expect((await store.claim(over.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
+      await store.finish(over.id, attempt, { status: "done", steps: over.steps });
+      expect((await store.claim(over.id, OWNER, mintAttempt(), LEASE, 0)).kind).toBe("finished");
+
+      /* Somebody else's still reads as one that is not there, at the cap as
+         below it — otherwise a full machine is an oracle for which job ids
+         exist. */
+      const mine = aJob();
+      await store.enqueueOrGet(mine, "k2");
+      expect((await store.claim(mine.id, STRANGER, mintAttempt(), LEASE, 0)).kind).toBe("gone");
+    });
+
+    /**
+     * **And two jobs on ONE article do not**, which is the guarantee that pays
+     * for the one above.
+     *
+     * Not a nicety: a job publishes by copying whatever revision is current,
+     * writing into the copy and moving the pointer, and `publishRevisionIn`
+     * never compares what it branched from against what is current now. Two
+     * jobs on one article therefore lose one of the two results, silently, with
+     * both reporting success — docs/reusable/silent-success.md.
+     *
+     * **This fails today at its second line**, before it reaches the claim:
+     * `jobs_active_slug` covers `queued`, so the second `enqueueOrGet` does not
+     * create a row at all. That is the refusal being moved from enqueue time to
+     * claim time, seen from the store.
+     */
+    /* **Stage 2, and it is skipped rather than absent.** This is the behaviour
+       Greg asked for and it is not built yet: it must not ship before late steps
+       read the published store, because a job queued behind an ingest claims on
+       some other instance and opens `blocks.json` in its own empty scratch
+       directory — docs/plans/several-articles-at-once.md § The prerequisite, and
+       docs/plans/late-steps-read-the-store.md, which is another session's.
+       Written and watched red first, so that turning it on is a one-word change
+       to something already known to fail for the right reason. */
+    it.skip("queues a second job for one article rather than refusing it, and will not run both", async () => {
+      const first = aJob();
+      await store.enqueueOrGet(first, "k1");
+      const second = aJob({ slug: first.slug });
+
+      const queued = await store.enqueueOrGet(second, "k2");
+      expect(queued.created).toBe(true);
+      expect(queued.job.id).toBe(second.id);
+      expect(queued.job.status).toBe("queued");
+
+      const held = mintAttempt();
+      expect((await store.claim(first.id, OWNER, held, LEASE, CAP)).kind).toBe("claimed");
+
+      /* The article is busy, and the reason has to say so. `busy` already means
+         three different things to the client loop; a fourth that cannot be told
+         apart in a log is how "waiting behind an ingest" and "the machine is at
+         its cap" become one indistinguishable symptom. */
+      const blocked = await store.claim(second.id, OWNER, mintAttempt(), LEASE, CAP);
+      expect(blocked.kind).toBe("busy");
+      expect(blocked.kind === "busy" && blocked.why).toMatch(/article/i);
+
+      await store.releaseStep(first.id, held, first.steps, {});
     });
 
     it("will not claim a job the reader has stopped, or one already over", async () => {
@@ -373,11 +583,11 @@ for (const adapter of ADAPTERS) {
       const stopping = aJob();
       await store.enqueueOrGet(stopping, "k1");
       const held = mintAttempt();
-      await store.claim(stopping.id, OWNER, held, LEASE);
+      await store.claim(stopping.id, OWNER, held, LEASE, CAP);
       await store.requestCancel(stopping.id, OWNER);
       // Otherwise the API key is spent on a job that has already been stopped —
       // one of the three cancellation windows step 12 named.
-      expect((await store.claim(stopping.id, OWNER, mintAttempt(), LEASE)).kind).toBe(
+      expect((await store.claim(stopping.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe(
         "stopping",
       );
       /* Released before the second half, or it would hold the single running
@@ -388,9 +598,9 @@ for (const adapter of ADAPTERS) {
       const over = aJob();
       await store.enqueueOrGet(over, "k2");
       const attempt = mintAttempt();
-      expect((await store.claim(over.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      expect((await store.claim(over.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
       await store.finish(over.id, attempt, { status: "done", steps: over.steps });
-      expect((await store.claim(over.id, OWNER, mintAttempt(), LEASE)).kind).toBe("finished");
+      expect((await store.claim(over.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("finished");
     });
 
     /**
@@ -405,7 +615,7 @@ for (const adapter of ADAPTERS) {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
       const attempt = mintAttempt();
-      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
       const done: JobStep[] = [{ ...job.steps[0]!, status: "done" }];
       const after = await store.releaseStep(job.id, attempt, done, { title: "A Paper" });
@@ -414,7 +624,7 @@ for (const adapter of ADAPTERS) {
       expect(after.steps[0]?.status).toBe("done");
 
       // A different request, a different token, and it gets in.
-      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
     });
 
     it("writes what the card says mid-step without letting go of the claim", async () => {
@@ -426,7 +636,7 @@ for (const adapter of ADAPTERS) {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
       const attempt = mintAttempt();
-      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
       const running: JobStep[] = [{ ...job.steps[0]!, status: "running", detail: "12 KB" }];
       const after = await store.noteProgress(job.id, attempt, running);
@@ -435,7 +645,7 @@ for (const adapter of ADAPTERS) {
       expect(after.steps[0]?.detail).toBe("12 KB");
 
       // Still held: a second request must not get in behind a progress write.
-      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE)).kind).toBe("busy");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("busy");
       // And the claimant still owns it.
       await store.releaseStep(job.id, attempt, running, {});
     });
@@ -450,7 +660,7 @@ for (const adapter of ADAPTERS) {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
       const attempt = mintAttempt();
-      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
       await adapter.expire(job.id);
       expect(await store.failExpired()).toContain(job.id);
@@ -474,7 +684,7 @@ for (const adapter of ADAPTERS) {
       expect(await store.activeForSlug(job.slug, STRANGER)).toBeUndefined();
 
       const attempt = mintAttempt();
-      await store.claim(job.id, OWNER, attempt, LEASE);
+      await store.claim(job.id, OWNER, attempt, LEASE, CAP);
       expect((await store.activeForSlug(job.slug, OWNER))?.id).toBe(job.id);
 
       await store.finish(job.id, attempt, { status: "done", steps: job.steps });
@@ -499,7 +709,7 @@ for (const adapter of ADAPTERS) {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
       const attempt = mintAttempt();
-      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
       // Its lease runs out and the sweep fails it. The claimant does not know.
       await adapter.expire(job.id);
@@ -522,9 +732,9 @@ for (const adapter of ADAPTERS) {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
       const mine = mintAttempt();
-      await store.claim(job.id, OWNER, mine, LEASE);
+      await store.claim(job.id, OWNER, mine, LEASE, CAP);
       await store.releaseStep(job.id, mine, job.steps, {});
-      await store.claim(job.id, OWNER, mintAttempt(), LEASE);
+      await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP);
 
       // The first claimant comes back late. It cannot write, and it learns that
       // rather than affecting zero rows and being told nothing.
@@ -536,7 +746,7 @@ for (const adapter of ADAPTERS) {
     it("fails a job whose lease ran out, and leaves a live one alone", async () => {
       const dead = aJob();
       await store.enqueueOrGet(dead, "k1");
-      await store.claim(dead.id, OWNER, mintAttempt(), LEASE);
+      await store.claim(dead.id, OWNER, mintAttempt(), LEASE, CAP);
       await adapter.expire(dead.id);
       /* **The ids, not a count.** A sweep that returns `1` cannot say *which* job
          it failed, and this case is precisely about one job being swept while a
@@ -554,7 +764,7 @@ for (const adapter of ADAPTERS) {
       // The running slot is free again, which is the other half of why this runs.
       const alive = aJob();
       await store.enqueueOrGet(alive, "k2");
-      await store.claim(alive.id, OWNER, mintAttempt(), LEASE);
+      await store.claim(alive.id, OWNER, mintAttempt(), LEASE, CAP);
       expect(await store.failExpired()).toEqual([]);
       expect((await store.get(alive.id, OWNER))?.status).toBe("running");
     });
@@ -571,7 +781,7 @@ for (const adapter of ADAPTERS) {
 
       const running = aJob();
       await store.enqueueOrGet(running, "k2");
-      await store.claim(running.id, OWNER, mintAttempt(), LEASE);
+      await store.claim(running.id, OWNER, mintAttempt(), LEASE, CAP);
       const asked = await store.requestCancel(running.id, OWNER);
       expect(asked?.status).toBe("running");
       expect(asked?.cancelling).toBe(true);
@@ -595,7 +805,7 @@ for (const adapter of ADAPTERS) {
       const job = aJob();
       await store.enqueueOrGet(job, "k1");
       const attempt = mintAttempt();
-      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
 
       // Somebody else presses Stop. This claimant knows nothing about it.
       await store.requestCancel(job.id, OWNER);
@@ -607,7 +817,7 @@ for (const adapter of ADAPTERS) {
       expect(after.finishedAt).toBeTruthy();
 
       // And it is really over, rather than answering `stopping` for ever.
-      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE)).kind).toBe("finished");
+      expect((await store.claim(job.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("finished");
     });
 
     /**
@@ -627,12 +837,16 @@ for (const adapter of ADAPTERS) {
     it("frees the running slot once a claimant has stopped answering", async () => {
       const dead = aJob();
       await store.enqueueOrGet(dead, "k1");
-      expect((await store.claim(dead.id, OWNER, mintAttempt(), LEASE)).kind).toBe("claimed");
+      expect((await store.claim(dead.id, OWNER, mintAttempt(), LEASE, CAP)).kind).toBe("claimed");
 
       const waiting = aJob();
       await store.enqueueOrGet(waiting, "k2");
-      // Blocked, correctly, while the first job is genuinely running.
-      expect((await store.claim(waiting.id, OWNER, mintAttempt(), LEASE)).kind).toBe("busy");
+      /* Blocked, correctly, while the first job is genuinely running — and
+         **at `maxRunning: 1`**, because that is the only thing that makes the
+         dead claimant's slot *the* slot. Under the suite's ordinary `CAP` there
+         are spare slots, this claim would succeed, and the test would stop being
+         about a lease expiring at all. */
+      expect((await store.claim(waiting.id, OWNER, mintAttempt(), LEASE, 1)).kind).toBe("busy");
 
       await adapter.expire(dead.id);
       expect(await store.failExpired()).toContain(dead.id);
@@ -641,7 +855,8 @@ for (const adapter of ADAPTERS) {
       expect(after?.status).toBe("error");
       // Failed rather than taken over, and offering Retry rather than a dead end.
       expect(after?.failureKind).toBe("retry");
-      expect((await store.claim(waiting.id, OWNER, mintAttempt(), LEASE)).kind).toBe(
+      // Same cap, so the sweep is what changed and not the arithmetic.
+      expect((await store.claim(waiting.id, OWNER, mintAttempt(), LEASE, 1)).kind).toBe(
         "claimed",
       );
     });
@@ -651,7 +866,7 @@ for (const adapter of ADAPTERS) {
       await store.enqueueOrGet(job, "k1");
       expect(await store.forget(job.id, OWNER)).toBe(false);
       const attempt = mintAttempt();
-      expect((await store.claim(job.id, OWNER, attempt, LEASE)).kind).toBe("claimed");
+      expect((await store.claim(job.id, OWNER, attempt, LEASE, CAP)).kind).toBe("claimed");
       await store.finish(job.id, attempt, { status: "done", steps: job.steps });
       expect(await store.forget(job.id, OWNER)).toBe(true);
       expect(await store.get(job.id, OWNER)).toBeUndefined();
@@ -670,7 +885,7 @@ for (const adapter of ADAPTERS) {
     async function endJob(job: Job, key: string, ending: "done" | "error"): Promise<void> {
       await store.enqueueOrGet(job, key);
       const attempt = mintAttempt();
-      await store.claim(job.id, OWNER, attempt, LEASE);
+      await store.claim(job.id, OWNER, attempt, LEASE, CAP);
       await store.finish(job.id, attempt, {
         status: ending,
         steps: job.steps,

@@ -955,10 +955,12 @@ when("the baseline, over the Postgres store", () => {
    * That is the check doing its job, and it is exactly why the store cannot be
    * hand-built here.
    *
-   * `jobs_only_one_running` is a unique index over the whole table, so at most
-   * one `running` row exists anywhere — including another `npm test` on the same
-   * laptop. `insertWhenSlotFree` waits for it instead of failing with a
-   * duplicate-key error that points at the wrong suite.
+   * `jobs_active_slug` allows one job in flight per article, and another
+   * `npm test` on the same laptop is running these same fixture slugs.
+   * `insertWhenSlotFree` waits instead of failing with a duplicate-key error
+   * that points at the wrong suite. It used to be waiting for something wider —
+   * `jobs_only_one_running`, one running row in the whole table — which was
+   * dropped on 2026-08-30.
    */
   async function withClaim(
     slug: string,

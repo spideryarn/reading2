@@ -52,9 +52,9 @@ const when = reachable ? describe : describe.skip;
 /**
  * **This file starts a job, so it takes the shared run lock.**
  *
- * `jobs_only_one_running` allows one `running` row in the whole table, and this
- * file's fixtures are named the same on every run, so a second copy — a peer's
- * `npm test` beside yours — collides on both. Taken after `pgReady` and only
+ * This file's fixtures are named the same on every run, so a second copy — a
+ * peer's `npm test` beside yours — collides with it on `jobs_active_slug` and
+ * on the fixture rows themselves. Taken after `pgReady` and only
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
@@ -74,10 +74,12 @@ const STEPS: JobStep[] = [{ name: "fetch", label: "Fetching the page", status: "
  * and took its claimant's fence with it. A test that can destroy the data it is
  * run against is worse than no test. GPT Sol, 2026-08-27.
  *
- * The retirement is needed at all because `jobs_only_one_running` is a *global*
- * partial unique index: a second `running` row is a `23505` however unrelated
- * the two jobs are. That is the index doing its job, and it means a file that
- * wants a running job has to clean up after its own previous one.
+ * The retirement is needed at all because these cases reuse three fixed slugs,
+ * and `jobs_active_slug` refuses a second job in flight on an article that
+ * already has one. Until 2026-08-30 the reason was wider — `jobs_only_one_running`
+ * made a second `running` row a `23505` however unrelated the two jobs were —
+ * but dropping that index does not help a file that keeps coming back to the
+ * same slug. It still has to clean up after its own previous job.
  */
 const made: string[] = [];
 
@@ -88,11 +90,12 @@ async function claimedJob(slug: string): Promise<{ id: string; attemptId: string
       .set({ status: "done", attemptId: null, leaseExpiresAt: null, finishedAt: new Date() })
       .where(and(inArray(jobs.id, made), eq(jobs.status, "running")));
   }
-  /* The running slot is global (`jobs_only_one_running` is unique on `(true)`),
-     so a concurrent suite or a dev server mid-ingest owns it as legitimately as
-     we do. Without this wait, losing that race surfaced here as a duplicate-key
-     error against whichever case inserted second — a failure naming this file
-     for something that was never its fault. */
+  /* A concurrent copy of this file, or a dev server mid-ingest on one of these
+     slugs, owns the article as legitimately as we do. Without this wait, losing
+     that race surfaces here as a duplicate-key error against whichever case
+     inserted second — a failure naming this file for something that was never
+     its fault. (It used to be far likelier: until 2026-08-30 any running job
+     anywhere collided, not just one on this slug.) */
   return await insertWhenSlotFree(slug, async () => {
     const id = mintId();
     const attemptId = mintAttempt();

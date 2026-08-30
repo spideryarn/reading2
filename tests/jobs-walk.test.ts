@@ -269,7 +269,8 @@ describe("one claim walks the whole job", () => {
     const { ran, job, parts } = await fixture("test-walk-holds-claim", names, {
       extract: async () => {
         probe.attempted = true;
-        const outcome = await fsJobStore.claim(job.id, OWNER, mintAttempt(), LEASE_MS);
+        /* A cap high enough to be beside the point: this case is not about it. */
+        const outcome = await fsJobStore.claim(job.id, OWNER, mintAttempt(), LEASE_MS, 4);
         probe.refused = outcome.kind;
         probe.status = (await fsJobStore.get(job.id, OWNER))?.status;
       },

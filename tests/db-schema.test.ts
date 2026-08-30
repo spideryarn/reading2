@@ -277,22 +277,39 @@ describe("the schema keeps the promises the plan makes", () => {
     });
   });
 
-  dbIt("two jobs cannot be running at once", async () => {
+  /**
+   * **The schema no longer says how many jobs may run, and that is the change.**
+   *
+   * This case asserted that a second `running` insert violated
+   * `jobs_only_one_running` — a unique index on the constant `(true)`, which was
+   * global concurrency 1 across every owner. A unique index cannot express *at
+   * most N*, and N is what the cap became on 2026-08-30
+   * (drizzle/0032_jobs_concurrency_cap.sql), so the rule moved out of the schema
+   * and into a count taken inside the `queue_state` lock — src/store/pg-jobs.ts
+   * § `claim`, pinned by tests/store-jobs-parity.test.ts against both adapters.
+   *
+   * **So what is left here is the loss, said out loud.** Two running rows are
+   * now something the database will accept, and the only thing that stops a
+   * third, tenth or hundredth is application code taking a lock it could forget
+   * to take. Asserting that the insert *succeeds* is what keeps this file honest
+   * about that: a future change that quietly reinstates a schema-level cap would
+   * turn this red and have to say why, and nobody reading the table's
+   * constraints is left believing a guarantee that is not there.
+   */
+  dbIt("the schema allows two jobs to run at once — the cap is not in the database", async () => {
     await inRollback(async (c) => {
       await seed(c);
       const running = (id: string) =>
         c.query(
           `insert into spideryarn.jobs (id, owner_id, slug, steps, status, work_key, attempt_id, lease_expires_at)
            values ($1,$2,$3,'[]'::jsonb,'running','w',gen_random_uuid(), now() + interval '1 minute')`,
-          /* A slug each. `jobs_active_slug` reserves one per article, so two
-             running jobs on one slug would now be refused by *that* index and
-             this test would pass while saying nothing about the one it names. */
+          /* A slug each. `jobs_active_slug` still reserves one per article, so
+             two running rows on one slug would be refused by *that* index and
+             this would pass while saying nothing about the cap. */
           [id, OWNER, id],
         );
       await running("spya-aaaaaa");
-      // queue_state gives concurrency 1 only while every claimant follows the
-      // locking convention. This is the backstop for when one does not.
-      await expect(running("spya-bbbbbb")).rejects.toThrow(/jobs_only_one_running/);
+      await expect(running("spya-bbbbbb")).resolves.toBeDefined();
     });
   });
 

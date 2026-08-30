@@ -573,17 +573,49 @@ the problem. It was chosen on 2026-08-25 against
 the rejected list below is still the right list for the question that was being asked.
 
 What changed is the question. Concurrency 1 was a promise **this process** made, and the moment
-there can be two instances it stops being a fact. It is now `jobs_only_one_running`, a partial unique
-index that the database enforces across all of them; a second claim comes back as a `23505` and the
-caller is told `busy`. The loop that keeps a laptop's job going after the tab is closed is the pump
-in [`src/jobs.ts`](../../src/jobs.ts), which is `advanceJob` in a `for(;;)` with a backoff — the same
-primitive the browser calls, with nothing privileged about it.
+there can be two instances it stops being a fact. It became `jobs_only_one_running`, a partial unique
+index that the database enforced across all of them. The loop that keeps a laptop's job going after
+the tab is closed is the pump in [`src/jobs.ts`](../../src/jobs.ts), which is `advanceJob` in a
+`for(;;)` with a backoff — the same primitive the browser calls, with nothing privileged about it.
 
-**Concurrency is still 1, and still deliberately.** Three of the six steps are long model calls
-billed by the token and one is a fetch of somebody else's server. Running two articles at once would
-double the spend rate, halve the politeness, and turn the progress display into a race — for a
-single reader adding a handful of articles a day, in exchange for nothing. Raise it by changing the
-index, not by changing a number in a constructor.
+### Concurrency is a number now, and it was never a resource limit
+
+**Until 2026-08-30 this section said "concurrency is still 1, and still deliberately"**, and the
+argument it gave was a good one: three of the six steps are long model calls billed by the token and
+one is a fetch of somebody else's server, so running two articles at once doubles the spend rate and
+halves the politeness — *"for a single reader adding a handful of articles a day, in exchange for
+nothing."*
+
+The exchange stopped being nothing.
+
+> In general, I think we will need the ability for multiple things to run simultaneously. What is
+> stopping that? Is it worries about CPU/RAM/database connections? Or something else? Certainly
+> having one job across all owners doesn't seem feasible. Can't we rely on Vercel and the LLM
+> providers to scale?
+>
+> — Greg, 2026-08-30
+
+Mostly yes, and the honest answer to *what is stopping that* was: a policy, not a resource. So the
+index is gone ([`drizzle/0032_jobs_concurrency_cap.sql`](../../drizzle/0032_jobs_concurrency_cap.sql))
+and the cap is `SPIDERYARN_JOB_CONCURRENCY` — `jobConcurrency()` in
+[`src/jobs.ts`](../../src/jobs.ts), which is where the number and the reasoning live.
+
+**A unique index cannot express "at most N", so the mechanism changed with the number.** `claim`
+locks the `queue_state` singleton `FOR UPDATE`, counts the running rows inside that lock, and refuses
+over the cap — [`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts). Which is what `queue_state`'s own
+comment had described since the day it was written, and what nothing did until now: the table was
+seeded, protected by a delete trigger, and inert.
+
+**The cost is that the database no longer enforces this at all.** The index was a backstop against a
+claimant that did not follow the convention; a count inside a lock is only as good as every claimant
+taking the lock. What stands in for it is a test — the parity suite's cap case, watched red against
+a `claim` that ignored its argument, on both adapters
+([`tests/store-jobs-parity.test.ts`](../../tests/store-jobs-parity.test.ts)).
+
+**What the number rations is spend and provider rate limits**, not CPU, memory or connections. There
+is no spend cap anywhere in this repo, and the label and summary fan-outs each multiply by N. It does
+not ration correctness: two jobs still never run on one article, which is `jobs_active_slug`'s job
+and not this one.
 
 **The pump does not start on Vercel.** It cannot outlive the invocation that made it, so all it
 could produce there is a `running` row whose claimant is already frozen. The browser is the only

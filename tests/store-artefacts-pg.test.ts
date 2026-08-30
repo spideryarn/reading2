@@ -178,9 +178,9 @@ const when = reachable ? describe : describe.skip;
 /**
  * **This file starts a job, so it takes the shared run lock.**
  *
- * `jobs_only_one_running` allows one `running` row in the whole table, and this
- * file's fixtures are named the same on every run, so a second copy — a peer's
- * `npm test` beside yours — collides on both. Taken after `pgReady` and only
+ * This file's fixtures are named the same on every run, so a second copy — a
+ * peer's `npm test` beside yours — collides with it on `jobs_active_slug` and
+ * on the fixture rows themselves. Taken after `pgReady` and only
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
@@ -1064,12 +1064,20 @@ const JOB_STEPS: JobStep[] = [
 /**
  * A live claim on the fixture draft, and everything it touches rolled back.
  *
- * `jobs_only_one_running` is a partial unique index over the whole table: at
- * most one `running` job exists at a time, anywhere. Every suite that wants one
- * is therefore mutually exclusive with every other, and two of them already
- * fail against each other under parallel vitest. So this takes the slot inside
- * a transaction, does its work, and throws to roll the lot back — nothing
- * reaches the slot and there is nothing to clean up.
+ * A committed `running` row is a contended thing, and it was worse when this
+ * was written: `jobs_only_one_running` allowed one in the whole table, so every
+ * suite that wanted one was mutually exclusive with every other, and two of them
+ * failed against each other under parallel vitest. That index went on
+ * 2026-08-30, replaced by a counted cap; what remains is `jobs_active_slug` —
+ * one job in flight per article — and this file's slug is fixed. So this
+ * inserts inside a transaction, does its work, and throws to roll the lot back:
+ * nothing is committed and there is nothing to clean up.
+ *
+ * **The retry loop that used to sit in the `catch` went with the index.** It
+ * waited out a 23505 from `jobs_only_one_running` while another job held the one
+ * global running slot. That slot no longer exists, and this insert is direct SQL
+ * that the counted cap does not apply to either, so the loop could never fire
+ * again — dead code reading as a live guard.
  *
  * Copied in shape from tests/store-step-fence.test.ts, which explains it at
  * length.
@@ -1077,37 +1085,26 @@ const JOB_STEPS: JobStep[] = [
 async function withClaim(
   body: (tx: Tx, claimed: JobDraftRef) => Promise<void>,
 ): Promise<void> {
-  for (let attempt = 1; ; attempt++) {
-    const id = mintId();
-    const attemptId = mintAttempt();
-    try {
-      await getDb().transaction(async (tx) => {
-        await tx.insert(jobs).values({
-          id,
-          ownerId: DEV_OWNER_ID,
-          slug: SLUG,
-          steps: JOB_STEPS,
-          status: "running",
-          attemptId,
-          leaseExpiresAt: new Date(Date.now() + 600_000),
-          workKey: `wk-${id}`,
-          draftRevisionId: ref.revisionId,
-        });
-        await body(tx, { ...ref, jobId: id, attemptId });
-        throw new RollBack();
+  const id = mintId();
+  const attemptId = mintAttempt();
+  try {
+    await getDb().transaction(async (tx) => {
+      await tx.insert(jobs).values({
+        id,
+        ownerId: DEV_OWNER_ID,
+        slug: SLUG,
+        steps: JOB_STEPS,
+        status: "running",
+        attemptId,
+        leaseExpiresAt: new Date(Date.now() + 600_000),
+        workKey: `wk-${id}`,
+        draftRevisionId: ref.revisionId,
       });
-      return;
-    } catch (err) {
-      if (err instanceof RollBack) return;
-      const constraint = (err as { cause?: { constraint?: string } }).cause?.constraint;
-      if (constraint !== "jobs_only_one_running") throw err;
-      if (attempt >= 40) {
-        throw new Error(
-          "another job held the single running slot for 20s — re-run when the queue is idle.",
-        );
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
+      await body(tx, { ...ref, jobId: id, attemptId });
+      throw new RollBack();
+    });
+  } catch (err) {
+    if (!(err instanceof RollBack)) throw err;
   }
 }
 

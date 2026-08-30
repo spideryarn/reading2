@@ -35,17 +35,20 @@
  * Delete `eq(revisionStepRuns.status, "running")` and the reverse happens. Both
  * were watched failing that way, separately.
  *
- * ## The running slot is shared, so nothing here commits a job
+ * ## Nothing here commits a job
  *
- * `jobs_only_one_running` is a partial unique index over the whole table: at
- * most one `running` row exists at a time, anywhere. Two suites that each want
- * one are mutually exclusive, and `store-job-draft` and `store-jobs-parity`
- * already fail against each other under parallel vitest — seven failures,
- * measured 2026-08-27, before this file existed.
+ * `jobs_only_one_running` used to make that a rule: one `running` row in the
+ * whole table, so two suites that each wanted one were mutually exclusive, and
+ * `store-job-draft` and `store-jobs-parity` failed against each other under
+ * parallel vitest — seven failures, measured 2026-08-27, before this file
+ * existed. That index is gone since 2026-08-30, replaced by a counted cap, so
+ * the global slot no longer exists. What remains is `jobs_active_slug` — one
+ * job in flight per article — and this file's fixtures are named the same on
+ * every run, so a peer's `npm test` still collides with it.
  *
  * So the `beginStepRun` cases open a transaction, insert their job, exercise
- * the fence and roll the lot back. Nothing reaches the slot, nothing needs
- * cleaning up, and this file does not become a third contender.
+ * the fence and roll the lot back. Nothing is ever committed, nothing needs
+ * cleaning up, and the window a peer could collide with is milliseconds.
  *
  * Skips loudly when there is no database, for the reason tests/db-schema.test.ts
  * explains at length.
@@ -99,9 +102,9 @@ const when = reachable ? describe : describe.skip;
 /**
  * **This file starts a job, so it takes the shared run lock.**
  *
- * `jobs_only_one_running` allows one `running` row in the whole table, and this
- * file's fixtures are named the same on every run, so a second copy — a peer's
- * `npm test` beside yours — collides on both. Taken after `pgReady` and only
+ * This file's fixtures are named the same on every run, so a second copy — a
+ * peer's `npm test` beside yours — collides with it on `jobs_active_slug` and
+ * on the fixture rows themselves. Taken after `pgReady` and only
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
@@ -265,17 +268,19 @@ when("who may finish a step", () => {
 /**
  * The `beginStepRun` cases, entirely inside transactions that roll back.
  *
- * **Because the running slot is global and shared.** `jobs_only_one_running` is
- * a partial unique index over the whole table: at most one `running` row exists
- * at a time, anywhere. Two suites that each want one are mutually exclusive, and
- * `tests/store-job-draft.test.ts` and `tests/store-jobs-parity.test.ts` already
- * fail against each other when vitest runs them in parallel — measured, 2026-08-27,
- * seven failures before this file existed.
+ * **Because a committed `running` job is a contended thing.** It was worse when
+ * this was written: `jobs_only_one_running` allowed one `running` row in the
+ * whole table, so `tests/store-job-draft.test.ts` and
+ * `tests/store-jobs-parity.test.ts` failed against each other when vitest ran
+ * them in parallel — measured, 2026-08-27, seven failures before this file
+ * existed. That index went on 2026-08-30 and the cap is now a count, so the
+ * global slot is gone; `jobs_active_slug` still allows one job in flight per
+ * article, and this file's slug is fixed.
  *
- * So this file declines to become a third contender. Each case opens a
- * transaction, inserts its running job, exercises the fence and throws to roll
- * the lot back, so nothing is ever committed into the slot and there is nothing
- * to clean up. The window is a few milliseconds instead of the length of a test.
+ * So this file declines to contend at all. Each case opens a transaction,
+ * inserts its running job, exercises the fence and throws to roll the lot back,
+ * so nothing is ever committed and there is nothing to clean up. The window is a
+ * few milliseconds instead of the length of a test.
  *
  * It also happens to be the more honest shape: `beginStepRun` takes a `Tx`
  * because it is meant to run inside the coordinator's transaction, and this
@@ -288,14 +293,17 @@ class RollBack extends Error {}
 /**
  * Run `body` against a live claimed job, then undo all of it.
  *
- * **Rolled back *and* retried**, because the two solve different halves. The
- * rollback means this suite never leaves a `running` row behind, so it holds
- * the global slot for milliseconds rather than for the length of a test. The
- * retry is for the other direction: while somebody else holds the slot, this
- * insert is a 23505 however brief our own window is, and waiting is the honest
- * response — production's queue waits for exactly the same slot.
+ * The rollback means this suite never leaves a `running` row behind: it exists
+ * for milliseconds rather than for the length of a test.
  *
- * What it will not do is sweep whatever is running. A test that can destroy the
+ * **There was a retry loop here too, and it went on 2026-08-30** along with
+ * `jobs_only_one_running`. It waited out a 23505 from that index while somebody
+ * else held the one global running slot. There is no such slot now — the cap is
+ * a count taken by `claim` — and this insert is direct SQL, which no counted cap
+ * applies to anyway. The contention it waited for cannot happen, so a loop that
+ * still waited for it would be dead code reading as a live guard.
+ *
+ * What it never did was sweep whatever is running. A test that can destroy the
  * data it is run against is worse than no test, and
  * `tests/store-job-draft.test.ts` was caught doing precisely that.
  */
@@ -303,38 +311,26 @@ async function withClaimedJob(
   draft: string | null,
   body: (tx: Tx, job: { id: string; attemptId: string }) => Promise<void>,
 ): Promise<void> {
-  for (let attempt = 1; ; attempt++) {
-    const id = mintId();
-    const attemptId = mintAttempt();
-    try {
-      await getDb().transaction(async (tx) => {
-        await tx.insert(jobs).values({
-          id,
-          ownerId: DEV_OWNER_ID,
-          slug: SLUG,
-          steps: JOB_STEPS,
-          status: "running",
-          attemptId,
-          leaseExpiresAt: new Date(Date.now() + 600_000),
-          workKey: `wk-${id}`,
-          ...(draft ? { draftRevisionId: draft } : {}),
-        });
-        await body(tx, { id, attemptId });
-        throw new RollBack();
+  const id = mintId();
+  const attemptId = mintAttempt();
+  try {
+    await getDb().transaction(async (tx) => {
+      await tx.insert(jobs).values({
+        id,
+        ownerId: DEV_OWNER_ID,
+        slug: SLUG,
+        steps: JOB_STEPS,
+        status: "running",
+        attemptId,
+        leaseExpiresAt: new Date(Date.now() + 600_000),
+        workKey: `wk-${id}`,
+        ...(draft ? { draftRevisionId: draft } : {}),
       });
-      return;
-    } catch (err) {
-      if (err instanceof RollBack) return;
-      const constraint = (err as { cause?: { constraint?: string } }).cause?.constraint;
-      if (constraint !== "jobs_only_one_running") throw err;
-      if (attempt >= 40) {
-        throw new Error(
-          "another job held the single running slot for 20s. This suite needs it and will not " +
-            "take it from whoever has it — re-run when the queue is idle. See the header.",
-        );
-      }
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
+      await body(tx, { id, attemptId });
+      throw new RollBack();
+    });
+  } catch (err) {
+    if (!(err instanceof RollBack)) throw err;
   }
 }
 

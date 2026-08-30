@@ -462,15 +462,30 @@ something is visibly not happening, and only the *why* is missing.
 ## One database, many suites: the three shared resources
 
 Vitest runs test *files* concurrently in separate forks, and there is **one local Postgres**. A peer's
-`npm test` beside yours is another claimant again. Three things in that database are global, and a
+`npm test` beside yours is another claimant again. Three things in that database are shared, and a
 suite that ignores any of them fails in a way that looks like a product bug — which is the expensive
 part, because the failure lands in whichever file lost the race rather than in the one that caused it.
 
 | resource | what enforces it | how a suite cooperates |
 |---|---|---|
-| the single `running` job row | `jobs_only_one_running`, a unique index on `(true)` | [`tests/helpers/run-lock.ts`](../../tests/helpers/run-lock.ts) and [`running-slot.ts`](../../tests/helpers/running-slot.ts) |
-| one job per article in flight | `jobs_active_slug` | `insertWhenSlotFree`, same helper |
+| one job per article in flight | `jobs_active_slug`, and these suites share fixed fixture slugs | [`tests/helpers/run-lock.ts`](../../tests/helpers/run-lock.ts) and [`running-slot.ts`](../../tests/helpers/running-slot.ts) |
+| how many jobs run at once, anywhere | a count taken inside the `queue_state` lock by `claim`, capped by `SPIDERYARN_JOB_CONCURRENCY` | **nothing, and it does not need to** — see below |
 | the real articles in `data/` | nothing — it is a whole-suite window | [`tests/helpers/corpus-lock.ts`](../../tests/helpers/corpus-lock.ts) |
+
+**There used to be a fourth, and it was the big one.** `jobs_only_one_running`, a unique index on the
+constant `(true)`, allowed one `running` row in the whole table — global concurrency 1 — so *every*
+job suite raced *every* other one. It was dropped on 2026-08-30 for the counted cap above
+([ingest-queue.md](ingest-queue.md)). Most of the contention in the measurements below was that index;
+what remains is per-article, plus whatever fixtures a suite shares with a copy of itself. The
+cooperation did not change, because the leaks and the shared slugs did not.
+
+**And the cap that replaced it is not a shared resource for these suites at all**, which is why its
+row says nothing is needed. It is enforced inside `claim`, and a suite that wants a `running` row
+almost always writes one with direct SQL — so the count never sees it and never refuses it. The
+exception is [`tests/store-jobs-parity.test.ts`](../../tests/store-jobs-parity.test.ts), which does go
+through `claim`, and it passes its own cap on every call rather than leaning on the default: a
+suite-wide number would make the two cases that are *about* the cap pass for the same reason as the
+forty that are not.
 
 **The lock and the retry are both needed, and they cover different things.** `takeRunLock` is a
 session advisory lock taken at module load and held to teardown, so it serialises whole *files* —

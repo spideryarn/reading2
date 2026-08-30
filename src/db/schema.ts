@@ -1139,13 +1139,27 @@ export const jobs = spideryarn.table(
       "jobs_running_is_fenced",
       sql`${t.status} <> 'running' or (${t.attemptId} is not null and ${t.leaseExpiresAt} is not null)`,
     ),
-    /**
-     * At most one running job, enforced by the database rather than by every
-     * claimant following the locking convention correctly. `queue_state` gives
-     * concurrency 1 only while they do; this is the backstop for when one does
-     * not. A unique index on a constant, restricted to running rows.
+    /*
+     * **`jobs_only_one_running` was here, and it is gone on purpose.**
+     *
+     * It was `uniqueIndex(...).on(sql`(true)`).where(status = 'running')` — at
+     * most one running row in the whole table, across every owner. A unique
+     * index on a constant cannot express *at most N*, and N is what this is now:
+     * `queue_state` is locked `FOR UPDATE` and the running rows are counted
+     * inside that lock — src/store/pg-jobs.ts § `claim`. Which is what
+     * `queue_state`'s own comment below has claimed since it was written, and
+     * was not true until 2026-08-30: nothing locked it and the index carried the
+     * whole guarantee.
+     *
+     * **So the backstop really is gone, and that is the cost.** Drop the index
+     * and forget the counted check and nothing fails — `violatesConstraint(err,
+     * "jobs_only_one_running")` simply never fires and every claim succeeds. The
+     * parity suite's cap case is what stands between that and a green run;
+     * docs/reusable/silent-success.md is why it is written to be seen red.
+     *
+     * The per-article rule is a different question and keeps an index of its
+     * own — see `jobs_active_slug` below.
      */
-    uniqueIndex("jobs_only_one_running").on(sql`(true)`).where(sql`${t.status} = 'running'`),
     /**
      * A draft has exactly one owner, enforced rather than assumed.
      *

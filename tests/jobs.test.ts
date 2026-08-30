@@ -813,10 +813,15 @@ describe("running a job", () => {
     const seen: string[] = [];
     const claim = vi.spyOn(fsJobStore, "claim");
     try {
-      claim.mockImplementation(async (id, owner, attempt, lease) => {
+      /* **Every argument forwarded, `max` included.** A spy that drops one does
+         not fail — `maxRunning` arrives `undefined`, `running >= undefined` is
+         false, and the cap is silently off for whatever this wraps. That is the
+         shape docs/reusable/silent-success.md is about, and the typecheck is
+         what catches it: tests are a project of their own. */
+      claim.mockImplementation(async (id, owner, attempt, lease, max) => {
         seen.push(attempt);
         claim.mockRestore();
-        return fsJobStore.claim(id, owner, attempt, lease);
+        return fsJobStore.claim(id, owner, attempt, lease, max);
       });
       await advanceJob(job.id);
       claim.mockRestore();
@@ -857,7 +862,8 @@ describe("running a job", () => {
        Its lease is already in the past, which is the state `advanceJob` has to
        notice without anybody sweeping on its behalf. */
     const orphan = mintAttempt();
-    expect((await fsJobStore.claim(job.id, DEV_OWNER_ID, orphan, 60_000)).kind).toBe("claimed");
+    /* A cap high enough to be beside the point: this case is not about it. */
+    expect((await fsJobStore.claim(job.id, DEV_OWNER_ID, orphan, 60_000, 4)).kind).toBe("claimed");
     expireLeaseForTests(job.id);
 
     try {
@@ -873,18 +879,51 @@ describe("running a job", () => {
     }
   });
 
-  it("refuses rather than renames when a late step lands on a busy article", async () => {
+  /**
+   * **Queues rather than refuses when a late step lands on a busy article.**
+   *
+   * This test used to assert the opposite, and the sentence it asserted is the
+   * one Greg hit: *"That article already has a job running. Wait for it, or stop
+   * it first."* — pressing Tweets on an article whose ingest had not finished.
+   * The 409 was right about the danger and wrong about the remedy: two jobs must
+   * not *run* on one article, because publication is last-writer-wins
+   * (src/store/pg-revisions.ts § `publishRevisionIn`), but that is a reason to
+   * make the second one **wait**, not to throw it away. The refusal moved to the
+   * claim, where it is a `busy` — docs/plans/several-articles-at-once.md.
+   *
+   * **The half that did not change is the half worth keeping.** Renaming was
+   * never the alternative: `{slug, steps}` *names* an article, so stepping aside
+   * to `${slug}-2` would summarise a different, already-finished article
+   * perfectly successfully. So the assertion that nothing was created under a
+   * suffixed slug stays exactly as it was.
+   */
+  /* **Stage 2, and it is skipped rather than absent.** This is the behaviour
+     Greg asked for and it is not built yet: it must not ship before late steps
+     read the published store, because a job queued behind an ingest claims on
+     some other instance and opens `blocks.json` in its own empty scratch
+     directory — docs/plans/several-articles-at-once.md § The prerequisite, and
+     docs/plans/late-steps-read-the-store.md, which is another session's.
+     Written and watched red first, so that turning it on is a one-word change
+     to something already known to fail for the right reason. */
+  it.skip("queues rather than renames when a late step lands on a busy article", async () => {
     const slug = "test-enqueue-busy-article";
     /* A job holding the slug, doing different work from the one below. It never
        runs to completion here — `fetch` has no URL — which is exactly the
        window a reader hits by pressing two buttons in quick succession. */
     const held = await enqueue({ slug, steps: ["fetch"] });
+    let late: Awaited<ReturnType<typeof enqueue>> | undefined;
     try {
-      await expect(enqueue({ slug, steps: ["summary"] })).rejects.toMatchObject({ status: 409 });
-      /* And the article it named is still the article it named — nothing was
+      late = await enqueue({ slug, steps: ["summary"] });
+      /* A second job, not the first one handed back: different work, so this is
+         not the de-duplication path. */
+      expect(late.id).not.toBe(held.id);
+      expect(late.status).toBe("queued");
+      /* And both of them name the article the reader named — nothing was
          quietly created under `${slug}-2`. */
+      expect(late.slug).toBe(slug);
       expect((await getJob(held.id))?.slug).toBe(slug);
     } finally {
+      if (late) await forgetJob(late.id).catch(() => undefined);
       await settle(held.id);
       await forgetJob(held.id);
     }
@@ -1236,7 +1275,8 @@ describe("advancing a job one step at a time", () => {
      * observing a scheduler. */
     const slug = "test-advance-queue-owns";
     const queued = await enqueue({ slug, steps: ["fetch"] });
-    const held = await fsJobStore.claim(queued.id, DEV_OWNER_ID, "spya-someone", 60_000);
+    /* A cap high enough to be beside the point: this case is not about it. */
+    const held = await fsJobStore.claim(queued.id, DEV_OWNER_ID, "spya-someone", 60_000, 4);
     /* The pump may have got there first, and that is fine — either way somebody
        holds it and the assertions below are about what advance says to whoever
        does not. */

@@ -16,7 +16,7 @@
  * 4. `copyArtefacts` from the filesystem store to `pgArtifactsIn`, which is
  *    `beginStep` → `write` → `finishStep` per step, in pipeline order;
  * 5. `publishRevision`, with its guards run rather than routed around;
- * 6. the job removed, so the next call can have the single running slot.
+ * 6. the job removed, so the next call can start one for this article.
  *
  * **One thing here is deliberately not production's shape**, and the claim is
  * narrowed rather than dropped: production runs *one step per transaction*, so
@@ -194,15 +194,15 @@ async function storeRawBytesFor(slug: string): Promise<void> {
 }
 
 /**
- * Take the single running slot, run `body`, and give the slot back.
+ * Start a running job for this article, run `body`, and take the job away again.
  *
- * **The wait for the slot is not defensive padding**, and it now lives in
+ * **The wait for a free turn is not defensive padding**, and it now lives in
  * `insertWhenSlotFree` — see `./running-slot.ts` for which two refusals it
  * covers and why waiting cannot clear a wedged row. It moved there on
  * 2026-08-28 because a suite that had never met this grew the same failure:
  * one of it, not one per file that gets bitten.
  *
- * **And the slot is taken under `withRunLock`, not merely waited for.** Waiting
+ * **And the job is started under `withRunLock`, not merely waited for.** Waiting
  * on the constraint is *unfair* — it polls, so under contention one caller
  * starves and spends the whole 20s budget. `./run-lock.ts` serialises the
  * suites properly; this is how the two callers that cannot afford a file-scope
@@ -237,9 +237,9 @@ async function withRunningJob<T>(
 ): Promise<T> {
   const db = getDb();
   /* The lock wraps the whole window — insert, body, delete — and not just the
-     insert. Holding it only for the insert would let a sibling take the slot
-     the moment this one had it, which is the race the constraint then reports
-     as somebody else's failure. */
+     insert. Holding it only for the insert would let a sibling start its own
+     job on this article the moment this one had, which is the race
+     `jobs_active_slug` then reports as somebody else's failure. */
   return await withRunLock(`loading ${slug}`, async () => {
     const job = await insertWhenSlotFree(slug, async () => {
       const started = { id: mintId(), attemptId: mintAttempt() };

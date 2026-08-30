@@ -75,9 +75,9 @@ const when = reachable ? describe : describe.skip;
 /**
  * **This file starts a job, so it takes the shared run lock.**
  *
- * `jobs_only_one_running` allows one `running` row in the whole table, and this
- * file's fixtures are named the same on every run, so a second copy — a peer's
- * `npm test` beside yours — collides on both. Taken after `pgReady` and only
+ * This file's fixtures are named the same on every run, so a second copy — a
+ * peer's `npm test` beside yours — collides with it on `jobs_active_slug` and
+ * on the fixture rows themselves. Taken after `pgReady` and only
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
@@ -147,9 +147,11 @@ async function queuedJob(slug: string, owner: string = DEV_OWNER_ID): Promise<st
 /**
  * A claimed job, the way `advanceJob` leaves one while a step runs.
  *
- * Through `insertWhenSlotFree` because `jobs_only_one_running` is unique on the
- * constant `(true)` — one running row in the whole table — so a neighbouring
- * suite or a real ingest on this laptop is a claimant as legitimate as we are.
+ * Through `insertWhenSlotFree` because `jobs_active_slug` allows one job in
+ * flight per article, and a second copy of this file or a real ingest on this
+ * laptop is a claimant as legitimate as we are. (Until 2026-08-30 the wait
+ * covered more: `jobs_only_one_running` allowed one running row in the whole
+ * table, so every suite collided with every other.)
  */
 async function runningJob(slug: string): Promise<string> {
   return await insertWhenSlotFree(slug, async () => {

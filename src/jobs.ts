@@ -182,6 +182,49 @@ const aborts = new Map<string, AbortController>();
 export const LEASE_MS = 760_000;
 export const DEADLINE_MARGIN_MS = 20_000;
 
+/** What `SPIDERYARN_JOB_CONCURRENCY` is called, in one place so it cannot be misspelt twice. */
+export const CONCURRENCY_ENV = "SPIDERYARN_JOB_CONCURRENCY";
+
+/**
+ * **How many jobs may run at once, anywhere.**
+ *
+ * > Ok, so let's run multiple jobs across articles. … Certainly having one job
+ * > across all owners doesn't seem feasible. Can't we rely on Vercel and the LLM
+ * > providers to scale?
+ * >
+ * > — Greg, 2026-08-30
+ *
+ * The answer was mostly yes: what stopped it was a **policy**, not a resource.
+ * `jobs_only_one_running` was a unique index on the constant `(true)`, chosen
+ * when this was one reader on one laptop and *"in exchange for nothing"*
+ * (docs/project/ingest-queue.md). It is gone; this is what replaced it, counted
+ * inside the `queue_state` lock — src/store/pg-jobs.ts § `claim`.
+ *
+ * **Three, asked and answered**, 2026-08-30: enough to ingest one article,
+ * ingest a second, and answer a reader asking for a glossary, all at once. It
+ * supersedes the "default to 2" recorded earlier the same day in
+ * docs/plans/faster-ingest-and-concurrency.md, which was answering a narrower
+ * question.
+ *
+ * **What the number is actually rationing is spend and provider rate limits**,
+ * not CPU or connections — there is no spend cap anywhere in this repo, and the
+ * label and summary fan-outs each multiply by N. It is not rationing
+ * correctness: two jobs never run on one article, which is `jobs_active_slug`'s
+ * job and not this one.
+ *
+ * Read at call time rather than frozen at import, so a test can move it and a
+ * deployment can set it without a rebuild — the rule src/store/data-root.ts
+ * states for the same reason. A value that is not a positive whole number is
+ * **ignored rather than obeyed**: `SPIDERYARN_JOB_CONCURRENCY=0` would stop
+ * every ingest in the account and read exactly like the queue being wedged.
+ */
+export const DEFAULT_JOB_CONCURRENCY = 3;
+
+export function jobConcurrency(): number {
+  const asked = Number(process.env[CONCURRENCY_ENV]);
+  return Number.isInteger(asked) && asked > 0 ? asked : DEFAULT_JOB_CONCURRENCY;
+}
+
 /**
  * **How long one step is allowed to be**, so the claimant can tell whether the
  * next one fits before it starts it.
@@ -1065,7 +1108,10 @@ export async function advanceJobWith(
      `spya-` token is rejected by Postgres on the claim — the first statement of
      every advance. See the note on `mintAttempt`. */
   const attempt = mintAttempt();
-  const outcome = await store.claim(id, owner, attempt, LEASE_MS);
+  /* The cap is read here, at the moment somebody wants a slot, rather than
+     frozen at import — see `jobConcurrency`. The store enforces it; deciding it
+     is not the store's business, the same division `LEASE_MS` already has. */
+  const outcome = await store.claim(id, owner, attempt, LEASE_MS, jobConcurrency());
 
   switch (outcome.kind) {
     /* Somebody else's is `gone`, as a missing one is. This is the route that

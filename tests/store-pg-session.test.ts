@@ -83,17 +83,20 @@
  *
  * ## Why it takes tests/store-jobs-parity.test.ts's advisory lock
  *
- * Two global resources, neither scoped to an owner. `jobs_only_one_running` is
- * a unique index on `(true)`, so one `running` row at a time in the whole table;
- * and `advanceJob` calls `failExpired`, which sweeps **every** expired job and
- * returns a count that parity suite asserts exactly — and since 2026-08-30 a
- * case here calls `failExpired` itself, which is the same collision from the
- * other side. A lock only excludes the
+ * A global resource, scoped to no owner: `advanceJob` calls `failExpired`,
+ * which sweeps **every** expired job and returns a count the parity suite
+ * asserts exactly — and since 2026-08-30 a case here calls `failExpired` itself,
+ * which is the same collision from the other side. A lock only excludes the
  * holders that agree to take it, so this file takes the same key rather than a
  * key of its own — the point is to exclude *that file*, which is the only other
- * thing in the repo that sweeps and counts. Contention from anything else (a
- * fixture loader, a real ingest on the same laptop) is handled by waiting on
- * the constraint itself, in `insertWhenSlotFree` and `claimWhenSlotFree`.
+ * thing in the repo that sweeps and counts.
+ *
+ * There was a second global resource until 2026-08-30: `jobs_only_one_running`,
+ * a unique index on `(true)`, one `running` row at a time in the whole table.
+ * It is gone, and the cap is a count now. What is left is per-article — this
+ * file's fixed slugs — plus the cap being full. Contention from anything that
+ * never takes the lock (a fixture loader, a real ingest on the same laptop) is
+ * still handled by waiting, in `insertWhenSlotFree` and `claimWhenSlotFree`.
  *
  * ## The mutation that reddened each, watched on 2026-08-30
  *
@@ -319,8 +322,9 @@ if (reachable) {
   const lockClient = runLock.client;
 
   /* The lock is held, so no sibling can be using any of this. Jobs first: they
-     reference drafts, and a leftover `running` row from a killed run takes the
-     one running slot away from every suite in the repo. */
+     reference drafts, and a leftover `running` row from a killed run blocks
+     this file's own slugs and counts against the concurrency cap until its
+     lease lapses. */
   await lockClient.query("delete from spideryarn.jobs where owner_id::text like $1", [RUBBLE]);
   await lockClient.query("delete from spideryarn.jobs where slug like $1", [SLUG_RUBBLE]);
   await lockClient.query(
@@ -668,17 +672,21 @@ async function queueJob(slug: string, names: StepName[], force = false): Promise
 }
 
 /**
- * Claim it, waiting out anybody else holding the single running slot.
+ * Claim it, waiting out anybody else who got there first.
  *
- * `claim` answers `busy` rather than throwing when `jobs_only_one_running`
- * refuses, so this is the `insertWhenSlotFree` of the claim path: the same
- * contention, reported differently. A `busy` that never clears is named in the
+ * `claim` answers `busy` rather than throwing when it is refused — this article
+ * already has a job in flight, or the counted concurrency cap is full — so this
+ * is the `insertWhenSlotFree` of the claim path: the same contention, reported
+ * differently. Before 2026-08-30 the refusal that mattered was
+ * `jobs_only_one_running`, one running job anywhere; the wait outlived it
+ * because `busy` did. A `busy` that never clears is named in the
  * failure rather than left as a bare assertion, because the two readings —
  * somebody else is working, versus a row is wedged — want different repairs.
  */
 async function claimWhenSlotFree(id: string, attempt: string): Promise<Job> {
   for (let n = 1; n <= 40; n++) {
-    const outcome = await pgJobStore.claim(id, OWNER, attempt, LEASE_MS);
+    /* A cap high enough to be beside the point: this case is not about it. */
+    const outcome = await pgJobStore.claim(id, OWNER, attempt, LEASE_MS, 4);
     if (outcome.kind === "claimed") return outcome.job;
     if (outcome.kind !== "busy") {
       throw new Error(`claiming ${id} answered ${outcome.kind}, which this fixture cannot use`);
@@ -686,18 +694,19 @@ async function claimWhenSlotFree(id: string, attempt: string): Promise<Job> {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(
-    `could not claim ${id} in 20s: something else holds the single running slot. If nothing ` +
-      "is actually working, a `running` row is wedged and waiting will not clear it.",
+    `could not claim ${id} in 20s: something else is already running on this article, or ` +
+      "the concurrency cap is full. If nothing is actually working, a `running` row is wedged " +
+      "and waiting will not clear it.",
   );
 }
 
 /**
- * `advanceJobWith`, waiting out anybody else holding the single running slot.
+ * `advanceJobWith`, waiting out anybody else who got there first.
  *
- * The coordinator's own answer to a taken slot is `busy: true` with the job
+ * The coordinator's own answer to a refused claim is `busy: true` with the job
  * still `queued` — the same contention `claimWhenSlotFree` waits on, arriving
  * through the endpoint rather than through the store. Watched happening on
- * 2026-08-30 while a peer's suite held the slot: three cases here failed
+ * 2026-08-30 while a peer's suite was running: three cases here failed
  * asserting `ran` was null, which says nothing about the session at all.
  *
  * **`busy` with the job no longer queued is not contention** and is returned
@@ -712,8 +721,9 @@ async function advanceWhenSlotFree(id: string, parts: AdvanceParts) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(
-    `advancing ${id} answered busy for 20s: something else holds the single running slot. ` +
-      "If nothing is actually working, a `running` row is wedged and waiting will not clear it.",
+    `advancing ${id} answered busy for 20s: something else is already running on this ` +
+      "article, or the concurrency cap is full. If nothing is actually working, a `running` " +
+      "row is wedged and waiting will not clear it.",
   );
 }
 
@@ -847,13 +857,14 @@ when("the transactional session", () => {
      shared fixture would make the order of the file part of the test. */
 
   /**
-   * **Give the running slot back after every case**, including the ones that
+   * **Take the job away after every case**, including the ones that
    * deliberately leave a job mid-claim.
    *
-   * `jobs_only_one_running` is global, so a case that ends with its job still
+   * These cases share fixture slugs, so a case that ends with its job still
    * `running` does not merely leak a row — it stops the *next* case claiming at
    * all, and the symptom is a twenty-second wait ending in a timeout somewhere
-   * unrelated. Deleting rather than finishing, for the reason
+   * unrelated. It was worse when `jobs_only_one_running` was there: one leak
+   * blocked every job suite in the repo, not just this file. Deleting rather than finishing, for the reason
    * tests/helpers/load-article.ts gives: marking a job done would write
    * synthetic history that reads as a real ingest, while a deleted row says the
    * true thing — this job never existed.

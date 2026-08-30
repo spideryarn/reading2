@@ -208,9 +208,9 @@ const when = reachable ? describe : describe.skip;
 /**
  * **This file starts a job, so it takes the shared run lock.**
  *
- * `jobs_only_one_running` allows one `running` row in the whole table, and this
- * file's fixtures are named the same on every run, so a second copy — a peer's
- * `npm test` beside yours — collides on both. Taken after `pgReady` and only
+ * This file's fixtures are named the same on every run, so a second copy — a
+ * peer's `npm test` beside yours — collides with it on `jobs_active_slug` and
+ * on the fixture rows themselves. Taken after `pgReady` and only
  * when reachable, because a suite that is about to skip must not sit holding it.
  * tests/helpers/run-lock.ts has the reasoning and the measurements.
  */
@@ -433,12 +433,19 @@ async function queueJob(slug: string, names: StepName[], force = false): Promise
 }
 
 /**
- * Advance until this job actually gets the single running slot.
+ * Advance until this job actually gets to run.
  *
- * `jobs_only_one_running` is global — another suite, a second `npm test`, or a
- * dev server mid-ingest is another claimant — and `claim` reports that as
- * `busy` rather than throwing, so an unguarded call would assert against a job
- * that never ran. Same reasoning as tests/helpers/running-slot.ts, one layer up.
+ * `claim` answers `busy` rather than throwing whenever somebody else is ahead —
+ * another job already in flight on this article, or the counted concurrency cap
+ * already met across the whole database, and another suite, a second `npm test`
+ * or a dev server mid-ingest all count. An unguarded call would assert against a
+ * job that never ran. Same reasoning as tests/helpers/running-slot.ts, one layer
+ * up.
+ *
+ * The cap replaced `jobs_only_one_running` on 2026-08-30. It made `busy` far
+ * likelier than it is now — one running job anywhere in the table, so every
+ * suite queued behind every other — but `busy` did not go away with it, and
+ * neither does this wait.
  */
 async function advanceUntilNotBusy(id: string, parts: AdvanceParts) {
   for (let attempt = 1; attempt <= 40; attempt++) {
@@ -447,8 +454,8 @@ async function advanceUntilNotBusy(id: string, parts: AdvanceParts) {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   throw new Error(
-    `job ${id} never got the single running slot in 20s: either another job holds it, or a ` +
-      "row is wedged `running` and waiting will not clear it.",
+    `job ${id} never got to run in 20s: either this article already has a job, the ` +
+      "concurrency cap is full, or a row is wedged `running` and waiting will not clear it.",
   );
 }
 
@@ -487,10 +494,13 @@ when("a job that finishes", () => {
    * foreign key blocks deleting the revision the article delete is trying to
    * cascade away. With articles first the very first `delete` threw, `afterAll`
    * stopped there, and every job this file made was left behind — one of them
-   * `running`, holding the **single global running slot** that
-   * `jobs_only_one_running` allows. Every job suite in the repo then waits on it
-   * and reports `busy`, and a wedged row does not time out until its 760-second
-   * lease lapses. A teardown that leaks is worse than one that fails loudly.
+   * `running`. At the time `jobs_only_one_running` allowed a single such row in
+   * the whole table, so that one leak made every job suite in the repo report
+   * `busy`. That index went on 2026-08-30 and a leak is now cheaper, but not
+   * free: it still holds this article's `jobs_active_slug` and still counts
+   * against the concurrency cap, and a wedged row does not time out until its
+   * 760-second lease lapses. A teardown that leaks is worse than one that fails
+   * loudly.
    *
    * *By slug rather than by the ids this run minted*, because a run that died
    * part-way — a mutation under test, an agent interrupted, a `--bail` — leaves
@@ -960,8 +970,8 @@ when("a job that finishes", () => {
 
 
 /**
- * Take the single running slot for `id`, waiting for it the way
- * `advanceUntilNotBusy` does, and hand back the attempt token that now holds it.
+ * Claim `id` for real, waiting for its turn the way `advanceUntilNotBusy`
+ * does, and hand back the attempt token that now holds it.
  *
  * The two cases that drive `settleJob` directly still need a genuinely claimed
  * job: every statement the finalizer makes is fenced on
@@ -973,7 +983,8 @@ async function claimOrWait(id: string): Promise<string> {
   for (let attempt = 1; attempt <= 40; attempt++) {
     const token = mintAttempt();
     const outcome = await runAsOwner(DEV_OWNER_ID, () =>
-      pgJobStore.claim(id, DEV_OWNER_ID, token, 60_000),
+      /* A cap high enough to be beside the point: this case is not about it. */
+      pgJobStore.claim(id, DEV_OWNER_ID, token, 60_000, 4),
     );
     if (outcome.kind === "claimed") return token;
     if (outcome.kind !== "busy") {
@@ -981,7 +992,7 @@ async function claimOrWait(id: string): Promise<string> {
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  throw new Error(`job ${id} never got the single running slot in 20s`);
+  throw new Error(`job ${id} could not be claimed in 20s: something else is still running`);
 }
 
 /**

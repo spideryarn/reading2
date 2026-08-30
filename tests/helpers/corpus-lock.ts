@@ -17,9 +17,10 @@
  * the run before it was green. Five clean runs then fourteen meaningless
  * failures is the shape this repo keeps meeting.
  *
- * `jobs_only_one_running` already stops two *loads* overlapping. What it cannot
- * cover is the window between one suite's wipe and its assertions, which is
- * most of the suite.
+ * `jobs_active_slug` already stops two *loads* of the same article overlapping
+ * (as `jobs_only_one_running` did for any two loads at all, until it was dropped
+ * on 2026-08-30). What neither covers is the window between one suite's wipe and
+ * its assertions, which is most of the suite.
  *
  * ## Why a session lock and its own connection
  *
@@ -31,8 +32,7 @@
  *
  * The number is arbitrary and only has to be unique among whatever else takes
  * advisory locks here. Since 2026-08-30 that is `RUN_LOCK` (918_273_645) in
- * `./run-lock.ts`, which serialises the suites that hold the single `running`
- * job slot. **No file takes both**, deliberately: this one is held across a
+ * `./run-lock.ts`, which serialises the suites that run a job. **No file takes both**, deliberately: this one is held across a
  * whole corpus walk — `tests/store-roundtrip.test.ts` runs for 63 seconds — and
  * a file that held the run lock for that long would starve every other suite
  * waiting on it. If that ever changes, take the run lock first and this one

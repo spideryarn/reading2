@@ -23,20 +23,25 @@
  *
  * ## `23505` is an answer, not an error
  *
- * Two of the partial unique indexes in src/db/schema.ts are load-bearing here
- * and both surface as a unique violation rather than as zero rows:
- * `jobs_only_one_running` gives global concurrency 1, and `jobs_active_slug`
- * makes "one job in flight per article" a fact rather than a convention. Both
- * are caught by name and turned into ordinary outcomes — `busy` and
- * "somebody already has this slug" — because an index doing its job is not an
- * exception.
+ * `jobs_active_slug` in src/db/schema.ts is load-bearing here and surfaces as a
+ * unique violation rather than as zero rows: it makes "one job in flight per
+ * article" a fact rather than a convention, and the insert treats the conflict
+ * as an ordinary outcome — "somebody already has this slug" — because an index
+ * doing its job is not an exception.
+ *
+ * **There were two, and the other one has gone.** `jobs_only_one_running` gave
+ * global concurrency 1 as a unique index on a constant, and `claim` caught its
+ * `23505` by name. A constant cannot express *at most N*, so on 2026-08-30 the
+ * index was dropped and the cap moved into a count taken inside the `queue_state`
+ * lock — see `claim`. Nothing here catches that name any more, and a `catch` that
+ * still did would be dead code reading as a live guard.
  */
 
 import { and, desc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { guardDbStore, violatesConstraint } from "./db-errors.js";
-import { jobs } from "../db/schema.js";
+import { guardDbStore, lockUnavailable } from "./db-errors.js";
+import { jobs, queueState } from "../db/schema.js";
 import { INTERRUPTED } from "../messages.js";
 import type { FailureKind } from "../messages.js";
 import type { Job, JobStatus, JobStep, OwnerId } from "../types.js";
@@ -63,6 +68,12 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
  * transition is one fenced `UPDATE`: it is atomic on its own, which is why
  * `rawPgJobStore` may keep passing the pool. It only needs a transaction when
  * something *else* — the artefacts and the publication — has to land with it.
+ *
+ * **`claim` stopped being one of them on 2026-08-30.** It now opens a
+ * transaction of its own, because the global cap is a count that has to be taken
+ * inside the `queue_state` lock; the `UPDATE` is still one fenced statement, but
+ * it is no longer the whole of what has to be atomic. Every other transition here
+ * is unchanged.
  */
 type Executor = Db | Tx;
 
@@ -119,7 +130,13 @@ workKey: string,
       ownerId: job.ownerId,
       slug: job.slug,
       steps: job.steps,
-      status: job.status,
+      /* **Queued, always, whatever the caller handed us.** `enqueueOrGet` takes a
+         whole `Job`, and copying its `status` let a caller insert a `running`
+         row that never passed the cap check and carries no attempt token — one
+         more running job than the machine agreed to, arriving through the door
+         marked "enqueue". Nothing does that today; the contract simply should
+         not allow it. GPT Sol, reviewing the built stage 1. */
+      status: "queued",
       workKey,
       createdAt: new Date(job.createdAt),
       url: job.url ?? null,
@@ -142,6 +159,77 @@ workKey: string,
   // The holder finished between the two statements. The caller asks again.
   if (!held) return null;
   return { job: toJob(held), created: false, sameWork: held.workKey === workKey };
+}
+
+/**
+ * The claim itself, once the cap above has allowed it.
+ *
+ * Split out so that `claim` reads as the two things it now is — take the lock
+ * and count, then take the job — and so the `UPDATE` and its classifier stay one
+ * unit. It takes the caller's transaction because it must run inside the same
+ * lock the count ran inside; a version of this that opened its own would put the
+ * gap back.
+ */
+async function claimIn(
+  tx: Tx,
+  id: string,
+  owner: OwnerId,
+  attempt: string,
+  leaseMs: number,
+): Promise<ClaimOutcome> {
+    let taken: Row[];
+    try {
+      taken = await tx
+        .update(jobs)
+        .set({
+          status: "running",
+          attemptId: attempt,
+          leaseExpiresAt: new Date(Date.now() + leaseMs),
+          // A resumed job started once already, and the card's "how long has
+          // this been going" should not restart every time a tab picks it up.
+          startedAt: sql`coalesce(${jobs.startedAt}, now())`,
+        })
+        .where(
+          and(
+            eq(jobs.id, id),
+            eq(jobs.ownerId, owner),
+            eq(jobs.status, "queued"),
+            eq(jobs.cancelling, false),
+          ),
+        )
+        .returning();
+    } catch (err) {
+      /* **No `jobs_only_one_running` branch any more, and its absence is the
+         thing to notice.** That index was the whole of the global guarantee and
+         a `23505` here was an ordinary answer; it is gone
+         (drizzle/0032_jobs_concurrency_cap.sql) and the cap is counted by the
+         caller inside the queue_state lock. A `catch` that still named it would
+         be dead code that reads as a live guard. */
+      throw err;
+    }
+    if (taken[0]) return { kind: "claimed", job: toJob(taken[0]) };
+
+    /* Nothing moved, and the four reasons are four different things for the
+       caller to do. Read once and say which — after the update, never before,
+       since asking first would put a gap back in for the sake of a nicer
+       message. */
+    const current = await getIn(tx, id, owner);
+    if (!current) return { kind: "gone" };
+    if (TERMINAL.includes(current.status as (typeof TERMINAL)[number])) {
+      return { kind: "finished", job: current };
+    }
+    if (current.cancelling === true) return { kind: "stopping", job: current };
+    return { kind: "busy", why: "another request is inside this job" };
+  }
+
+/** `get`, on the caller's transaction — the classifier above must read inside the lock. */
+async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefined> {
+  const [row] = await tx
+    .select()
+    .from(jobs)
+    .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner)))
+    .limit(1);
+  return row ? toJob(row) : undefined;
 }
 
 /**
@@ -211,57 +299,122 @@ const rawPgJobStore: JobStore = {
     }
   },
 
+  /**
+   * **The one place the global cap is enforced, and it is a lock rather than an
+   * index.**
+   *
+   * It used to be neither: `jobs_only_one_running`, a unique index on the
+   * constant `(true)`, raised `23505` on the second claim and that was the whole
+   * mechanism. A unique index cannot express *at most N*, so with N configurable
+   * the index has gone (drizzle/0032_jobs_concurrency_cap.sql) and this is what
+   * replaced it.
+   *
+   *     begin
+   *       select 1 from queue_state where id = 1 for update   -- serialise claimants
+   *       select count(*) from jobs where status = 'running'  -- exact, inside the lock
+   *       update jobs set status = 'running' … where id = $id and status = 'queued'
+   *     commit
+   *
+   * **The count and the `UPDATE` are separate statements and that is still
+   * exact.** Under READ COMMITTED a bare count would be a guess — two claimants
+   * could each see `N-1` and both proceed — but no other claimant can be between
+   * them, because every transition into `running` takes the singleton lock
+   * first. A concurrent *finish* can only lower the count, so the worst this
+   * produces is a conservative `busy`, never an N+1st runner.
+   *
+   * **`queue_state` finally does the job its own comment has always described.**
+   * src/db/schema.ts said "claiming locks it FOR UPDATE before choosing a job"
+   * from the day it was written, and until 2026-08-30 nothing in this repo
+   * locked it or read it — the table was seeded, protected by a delete trigger,
+   * and inert. The trigger matters here: locking zero rows succeeds silently, so
+   * a missing row would mean every claimant believes it holds the queue.
+   *
+   * **The transaction is the cost.** This method used to be one statement on the
+   * pool, which is why the `Executor` note above says a job transition is atomic
+   * on its own. That is no longer true of *this* one, and a held transaction
+   * occupies a connection out of `poolMax()` — see src/db/client.ts, where the
+   * pool is deliberately small because the pooler's limit is shared across
+   * instances.
+   */
   async claim(
     id: string,
     owner: OwnerId,
     attempt: string,
     leaseMs: number,
+    maxRunning: number,
   ): Promise<ClaimOutcome> {
     const db = getDb();
-    let taken: Row[];
-    try {
-      taken = await db
-        .update(jobs)
-        .set({
-          status: "running",
-          attemptId: attempt,
-          leaseExpiresAt: new Date(Date.now() + leaseMs),
-          // A resumed job started once already, and the card's "how long has
-          // this been going" should not restart every time a tab picks it up.
-          startedAt: sql`coalesce(${jobs.startedAt}, now())`,
-        })
-        .where(
-          and(
-            eq(jobs.id, id),
-            eq(jobs.ownerId, owner),
-            eq(jobs.status, "queued"),
-            eq(jobs.cancelling, false),
-          ),
-        )
-        .returning();
-    } catch (err) {
-      /* Another job holds the single running slot. Not an error: it is the
-         index giving global concurrency 1, which is the guarantee
-         docs/project/ingest-queue.md chose on purpose. The caller backs off. */
-      if (violatesConstraint(err, "jobs_only_one_running")) {
-        return { kind: "busy", why: "another job is running" };
+    return db.transaction(async (tx) => {
+      /* **`NOWAIT`, because the contract says refuses and never waits.**
+         A plain `for update` queues: every claimant that arrived while somebody
+         else was deciding would sit holding a transaction and a connection out
+         of a pool that is deliberately small (src/db/client.ts), and the browser
+         starts a driver for *every* active job at once. Being told to come back
+         is the same answer a moment sooner, and the client already backs off.
+         GPT Sol, reviewing the built stage 1. */
+      let locked;
+      try {
+        locked = await tx.execute(
+          sql`select 1 from ${queueState} where ${queueState.id} = 1 for update nowait`,
+        );
+      } catch (err) {
+        if (lockUnavailable(err)) return { kind: "busy", why: "another claim is being decided" };
+        throw err;
       }
-      throw err;
-    }
-    if (taken[0]) return { kind: "claimed", job: toJob(taken[0]) };
 
-    /* Nothing moved, and the four reasons are four different things for the
-       caller to do. Read once and say which — after the update, never before,
-       since asking first would put a gap back in for the sake of a nicer
-       message. */
-    const current = await this.get(id, owner);
-    if (!current) return { kind: "gone" };
-    if (TERMINAL.includes(current.status as (typeof TERMINAL)[number])) {
-      return { kind: "finished", job: current };
-    }
-    if (current.cancelling === true) return { kind: "stopping", job: current };
-    return { kind: "busy", why: "another request is inside this job" };
+      /* **The row has to be there, and this is the one state that would not say
+         so.** Locking zero rows succeeds silently, so a missing singleton means
+         every claimant believes it holds the queue and the cap quietly stops
+         existing — the failure this whole mechanism is here to prevent, arriving
+         as success (docs/reusable/silent-success.md). The delete trigger in
+         drizzle/0001 guards the ordinary way to lose it and not `TRUNCATE`, a
+         disabled trigger, or a migration mistake. */
+      if (locked.rowCount !== 1) {
+        throw new Error(
+          "The queue_state singleton is missing, so the job concurrency cap cannot be enforced. " +
+            "See drizzle/0001_auth_fks_and_guards.sql.",
+        );
+      }
+
+      /* **Only when this job is not already running.** Re-claiming a job that is
+         already `running` must be reported as *another request is inside this
+         job*, not as the cap. The `UPDATE` refuses it either way on
+         `status = 'queued'`; this only keeps the *reason* right, and a log that
+         cannot tell those apart makes them one symptom. */
+      const [counted] = await tx
+        .select({ running: sql<number>`count(*)::int` })
+        .from(jobs)
+        .where(and(eq(jobs.status, "running"), sql`${jobs.id} <> ${id}`));
+      const running = counted?.running ?? 0;
+
+      if (running >= maxRunning) {
+        /* **Classify the job before blaming the cap**, or the answer to "what is
+           this job doing" changes depending on how busy the machine is. Without
+           this, a finished job reads `busy` at the cap and `finished` below it,
+           a deleted one reads `busy` rather than `gone` — and `advanceJobWith`
+           casts the `get()` behind its `busy` branch to `Job`, so a missing row
+           becomes a 200 where the route means a 404. The filesystem adapter
+           classifies first and would have disagreed with this one on all three.
+           GPT Sol, reviewing the built stage 1. */
+        const current = await getIn(tx, id, owner);
+        if (!current) return { kind: "gone" };
+        if (TERMINAL.includes(current.status as (typeof TERMINAL)[number])) {
+          return { kind: "finished", job: current };
+        }
+        if (current.cancelling === true) return { kind: "stopping", job: current };
+        if (current.status === "running") {
+          return { kind: "busy", why: "another request is inside this job" };
+        }
+        /* **Not "N of N".** The cap can be lowered under jobs that are already
+           running, so this really can read `already running 5 of 3` — which is a
+           true account of a machine that is over its new limit and draining, and
+           a rounder-sounding sentence would be a false one. */
+        return { kind: "busy", why: `already running ${running} of ${maxRunning} jobs` };
+      }
+      return claimIn(tx, id, owner, attempt, leaseMs);
+    });
   },
+
 
   releaseStep(id: string, attempt: string, steps: JobStep[], outcome: StepOutcome): Promise<Job> {
     return releaseStepIn(getDb(), id, attempt, steps, outcome);
