@@ -67,10 +67,16 @@ export const MODEL_MAX_TOKENS = 128_000;
  *
  * So the caveat: **this constant cannot rescue a call on its own.** It is the
  * slack that stops a well-behaved call from failing at the margin, and it is
- * not a leash. The leash is `effort`, which each stage sets for itself —
- * src/toc.ts moved to `"medium"` for exactly this reason. If this stops being
- * enough again, the answer is almost certainly a lower effort rather than a
- * bigger number here.
+ * not a leash. The leash is `effort`, which each stage sets for itself — see
+ * `EFFORT` in src/toc.ts and in src/labels.ts. If this stops being enough
+ * again, the answer is almost certainly a lower effort rather than a bigger
+ * number here.
+ *
+ * The sentence there before named a stage and the value it had, and by
+ * 2026-08-30 the value had changed and the sentence had not. Two agents read it
+ * as fact and neither checked, because a comment stating a fact is not
+ * something you go and verify. Point at where a setting lives; do not copy what
+ * it currently is — AGENTS.md § How we write docs here.
  *
  * It does not scale with the input, which is a deliberate simplification: two
  * measurements at one article length are not enough to fit a line to. A flat

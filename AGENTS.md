@@ -123,7 +123,11 @@ the other docs and to the code. Not descriptions of code, which the code already
   carries intent that a paraphrase loses. If you find you've flattened a quote into your own voice,
   put his back.
 - **Signpost heavily**, both directions, deep-linking to sections, and out to the code
-  (e.g. [`src/blocks.ts`](src/blocks.ts)).
+  (e.g. [`src/blocks.ts`](src/blocks.ts)). **One source of truth.** Where a fact lives in the code —
+  a constant, a setting, what another module does — name the file and let the reader look, rather
+  than restating the value. A restatement is a second copy that nothing keeps in step, and it goes
+  wrong by waiting: a comment in [`src/token-budget.ts`](src/token-budget.ts) said `src/toc.ts` had
+  moved to `"medium"` when it had not, and two agents believed it.
 - **Record decisions where they belong.** When something in
   [open-questions.md](docs/project/open-questions.md) gets decided, write it into the relevant doc
   and delete the question. That file should shrink.
