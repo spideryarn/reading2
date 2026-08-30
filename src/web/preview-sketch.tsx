@@ -101,6 +101,10 @@ function Band({ width, slug, label }: { width: number; slug: string; label: stri
 
 createRoot(document.getElementById("root") as HTMLElement).render(
   <div style={{ display: "flex", gap: "1.5rem", padding: "1rem", alignItems: "flex-start", background: "var(--page)" }}>
+    {/* Two panels of the SAME article, deliberately: the option ids are minted
+        per instance with `useId`, and two panels on one page is the case that
+        would make `aria-activedescendant` resolve to the wrong one if they were
+        minted from the model's own node names. */}
     <Band width={MODE_MIN} slug="noema" label="narrowest the band gets" />
     <Band width={MODE_IDEAL} slug="noema" label="what a laptop gives it" />
     <Band width={MODE_IDEAL} slug="never-drawn" label="nobody has drawn one" />

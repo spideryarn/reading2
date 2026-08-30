@@ -507,6 +507,25 @@ What the pass then confirmed, on the Noema essay:
   and did not scroll the page.
 - **The you-are-here ring** lands on the right node for the reader's row.
 
+One real defect it found that I had not: **`aria-activedescendant` was never
+set**. The listbox owns one tab stop and moves a roving marker over its options,
+so the *selection* has to be announced by name — `aria-selected` is the visual
+half and was all this had, which means a screen reader heard the listbox once
+and nothing at all as the reader arrowed through it. `OutlinePanel.tsx` had the
+precedent. The option ids are minted with `useId` rather than from the model's
+own node names (`"a"`, `"hub"`, `"start"`), because two Sketch panels on one page
+would otherwise mint the same DOM id twice and the reference would silently
+resolve to whichever came first — the preview page puts three on screen, so that
+case is now exercised rather than reasoned about: moving the selection in one
+panel changes only that panel's active descendant, and there are no duplicate
+ids on the page.
+
+Its one wrong finding, recorded because it is the kind that reads convincingly:
+that `.diag` on the panel's `<aside>` is dead weight because no `.diag {}` rule
+exists. True about the stylesheet and the wrong conclusion — `.mode-band.outln`
+is the same shape and does have rules, so `.diag` is a reserved hook consistent
+with its neighbour rather than a leftover.
+
 ### Findings taken as fair and not acted on
 
 - **`flow` overclaims.** It is ordinal: three nodes at y = 100, 100.001 and

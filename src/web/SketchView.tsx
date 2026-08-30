@@ -42,7 +42,7 @@
  * no `opens` anywhere. Depending on it would have meant paying for two pictures
  * per article that nobody could ever see.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { LoaderCircle, Maximize2, Minimize2, PenLine } from "lucide-react";
 import { paintScene, type Painted, type PaintedNode, type Prim } from "../sketch-paint.js";
 import type { SketchNode } from "../sketch-scene.js";
@@ -145,6 +145,18 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
   const [focused, setFocused] = useState(0);
   const [useProfile, setUseProfile] = useState(true);
   const svg = useRef<SVGSVGElement>(null);
+
+  /**
+   * A prefix for the options' DOM ids, so `aria-activedescendant` has something
+   * to name.
+   *
+   * **`useId`, not the node's own id.** A scene's node ids are the model's
+   * strings — `"a"`, `"hub"`, `"start"` — and two Sketch panels on one page
+   * would mint the same DOM id twice, which makes `aria-activedescendant`
+   * ambiguous and silently resolve to whichever came first. The preview page
+   * already puts three on screen at once.
+   */
+  const uid = useId();
 
   /* A new picture is a new set of scene ids, so a trail into the old one points
      at nothing. Reset rather than carry: a breadcrumb naming a scene that no
@@ -354,6 +366,15 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
           height={big ? painted.height : undefined}
           preserveAspectRatio="xMidYMin meet"
           role="listbox"
+          /* **The listbox owns one tab stop and moves a roving marker over its
+             options**, so the *selection* has to be announced by name — without
+             this a screen reader hears the listbox once and nothing at all as
+             the reader arrows through it. `aria-selected` is the visual half and
+             was all this had; a browser pass caught the other half, 2026-08-30.
+             `OutlinePanel.tsx` makes the same call for the same reason. */
+          aria-activedescendant={
+            painted.nodes[focused] ? `${uid}-${painted.nodes[focused].node.id}` : undefined
+          }
           aria-label={`${scene.title}. ${scene.caption ?? sketch.caption}`}
           tabIndex={0}
           onKeyDown={onKey}
@@ -373,6 +394,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
             /* biome-ignore lint/a11y/noNoninteractiveElementToInteractiveRole: SVG has no element that carries `option` natively, and the roles are written out for the reason scatter.ts's are — the DOM is flat, so nothing in the markup says this is the third of twelve */
             <g
               key={n.node.id}
+              id={`${uid}-${n.node.id}`}
               className={`sk-node${n.node.opens ? " opens" : ""}${n.node.block ? " links" : ""}${
                 here === n.node.id ? " on" : ""
               }${focused === i && shown === n.node.id ? " focus" : ""}`}
