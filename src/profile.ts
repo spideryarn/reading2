@@ -95,9 +95,9 @@ export function normaliseProfileText(text: string | null | undefined): string | 
  * A prompt that always carries an "about the reader" header with nothing under
  * it has taught the model to expect one, and an empty one then reads as *"this
  * reader is nobody in particular"* rather than as *"we did not ask"*. So the
- * callers test for `null` and omit the whole section, headings included —
- * exactly the rule `renderPrompt` in src/summarise.ts already follows for its
- * `guidance`, and for the same reason.
+ * callers test for `null` and omit the whole section, headings included. The
+ * summary steer's own header followed the same rule for the same reason, until
+ * it was deleted (docs/plans/steer-becomes-the-profile.md).
  *
  * The order is fixed and the labels are fixed. Not style: this string is
  * hashed, and a hash that changes when the two halves swap places would mark
@@ -345,9 +345,11 @@ export async function loadReaderProfile(): Promise<string | null> {
  * Write the global profile, or clear it with `null`.
  *
  * **Refused, not truncated**, past the cap. A silently shortened profile is one
- * the reader believes they gave and did not — the argument `readGuidance` in
- * src/routes.ts already makes about the summary steer, and it is stronger here
- * because this one is written once and then never looked at again.
+ * the reader believes they gave and did not, and this is the box where that
+ * matters most: it is written once and then never looked at again.
+ * docs/reusable/silent-success.md. (`readGuidance` in src/routes.ts used to make
+ * the same argument about the summary steer; both are gone —
+ * docs/plans/steer-becomes-the-profile.md.)
  *
  * Temp file and a rename, like src/shelf.ts: `rename` is atomic within a
  * filesystem and `writeFile` over the live path is not.

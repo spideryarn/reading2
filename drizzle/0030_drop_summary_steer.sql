@@ -1,0 +1,23 @@
+-- The summary steer's column, dropped. docs/plans/steer-becomes-the-profile.md.
+--
+-- `jobs.guidance` held a free-text note the reader typed beside "Write them
+-- again". That box asked "What are you reading this for?"; the reader profile's
+-- per-article half asks "Why you're reading this one". One question, two boxes,
+-- and the profile already reached the same prompt — so the box went, and this
+-- is the last of it. Nothing has written or read this column since 670a66c.
+--
+-- **`drizzle-kit generate` wrote three more statements than this and all three
+-- were wrong.** 0029_assets.sql is hand-written and has no
+-- `meta/0029_snapshot.json`, so the newest snapshot drizzle could diff against
+-- was 0028 — which predates the assets column and the widened step CHECK. It
+-- therefore re-emitted both, and applying them failed on
+-- `column "assets" of relation "article_revisions" already exists`. They are
+-- deleted here rather than made idempotent: 0029 already did that work, and a
+-- second migration claiming to do it again is a lie about what changed when.
+--
+-- `meta/0030_snapshot.json` beside this file is kept as generated, and it is
+-- the repair: it records assets, the widened CHECK and the absence of guidance,
+-- so the next `db:generate` diffs against reality instead of against 0028.
+-- Read a generated migration before applying it — docs/reusable/silent-success.md.
+
+ALTER TABLE "spideryarn"."jobs" DROP COLUMN "guidance";

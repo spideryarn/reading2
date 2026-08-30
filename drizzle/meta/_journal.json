@@ -211,6 +211,13 @@
       "when": 1788070344815,
       "tag": "0029_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788084884213,
+      "tag": "0030_drop_summary_steer",
+      "breakpoints": true
     }
   ]
 }

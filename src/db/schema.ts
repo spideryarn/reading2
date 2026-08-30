@@ -1005,21 +1005,6 @@ export const jobs = spideryarn.table(
     title: text("title"),
     /** Ordered, and small. The UI renders these directly. */
     steps: jsonb("steps").$type<JobStep[]>().notNull(),
-    /**
-     * **Dead since 2026-08-30, and deliberately still here.**
-     *
-     * It held the summary steer, a free-text note the reader typed beside the
-     * "write them again" button. That box is gone — it asked the same question
-     * the per-article half of the reader profile already asks, and the profile
-     * reaches the same prompt (docs/plans/steer-becomes-the-profile.md).
-     * Nothing writes this column and nothing reads it.
-     *
-     * **Not dropped, because dropping it is a migration against a database with
-     * real readers' work in it and that is Greg's call, every time** (CLAUDE.md).
-     * It is nullable, on the queue table, whose rows are ephemeral, so leaving
-     * it costs a NULL per job until somebody asks. Ask before you tidy it.
-     */
-    guidance: text("guidance"),
     status: text("status").notNull(),
     error: text("error"),
     /** Stop was pressed and the abort has not landed yet. */
