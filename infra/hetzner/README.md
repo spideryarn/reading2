@@ -16,6 +16,57 @@ the server's own disk.
 
 ## First run
 
+Zero to a box an agent can work on. Everything is scripted **except three steps that need a human
+in a browser** — they are marked ⚑, and no amount of Terraform will remove them.
+
+You need, on the laptop: OpenTofu (or Terraform) ≥ 1.5, a Hetzner Cloud project, a Read & Write API
+token for it (Hetzner console → Security → API tokens), and an ssh keypair whose public half sits at
+`ssh_public_key_path`.
+
+```
+export HCLOUD_TOKEN=...                        # env var only — the provider reads no file
+cd infra/hetzner
+cp example.tfvars terraform.tfvars             # then edit it; *.tfvars is gitignored
+npx tsx ../../scripts/check-cloud-init.ts      # preflight — see "Before every apply"
+tofu init
+tofu plan                                      # READ IT, every time
+tofu apply
+tofu output                                    # ip, and the ssh/mosh/tunnel command lines
+```
+
+**Then wait about eight minutes and check that provisioning actually worked.** `apply` returning is
+not evidence, and neither is `cloud-init: done` — both have reported success over a dead provision,
+which is why the status file exists:
+
+```
+ssh greg@<ip> 'cat /var/log/gjd-provision-status; tail -3 /var/log/provision.log'
+```
+
+It must say `PROVISION OK`. `PROVISION INCOMPLETE` means it died partway and the log says where.
+Anything else — an empty file, no file — means it never got as far as writing one.
+
+Then, in this order, from the repo root on the laptop:
+
+1. ⚑ **Log Claude Code in.** `ssh -t greg@<ip> claude`, then `/login`. Nothing below works until
+   this is done. It lands in `~/.claude`, which is on the volume, so a *rebuild* keeps it — this is
+   a per-box step, not a per-apply one.
+2. ⚑ **Issue the two GitHub tokens** and paste them onto the box —
+   [Giving the box GitHub access](#giving-the-box-github-access). Until this is done the box can
+   clone nothing, and the error it gives says `Repository not found`.
+3. **Clone the repo.** `npx tsx scripts/gjd-remote.ts clone spideryarn/reading2 --name spideryarn2`
+4. **Send the environment.** `npx tsx scripts/gjd-remote.ts push-env` — allowlisted key names only,
+   rebuilt on the box rather than copied, and it prints what it skipped. It writes *into the
+   checkout*, so it has to come after the clone and not before it.
+5. **Build it, on the box.** `npm ci`, then `npm run db:start` (first run pulls ~2GB of Docker
+   images), `npm run db:migrate`, and **`npm run db:seed-owner`** — all four, in that order.
+   The last one is the one everybody misses; see
+   [What a fresh clone cannot do](#what-a-fresh-clone-cannot-do) and
+   [supabase-local.md](../../docs/project/supabase-local.md).
+6. **Copy the article fixtures**, which git does not carry — same section.
+7. ⚑ **Authenticate the MCP servers** that need it — [MCP servers](#mcp-servers).
+8. **Check the lot:** `npx tsx scripts/gjd-remote.ts doctor`. It exits non-zero if anything failed,
+   so it is usable as a gate rather than something to read hopefully.
+
 ## Before every apply
 
 ```
@@ -44,6 +95,37 @@ survive.
 
 Do not silence this with `ignore_changes = [user_data]`. We want cloud-init edits to take effect on
 the next build. Check what the plan says before you apply, every time:
+
+### "Can I just apply the missing bits?" — no, and the reason is Hetzner, not OpenTofu
+
+Asked on 2026-08-31 and worth recording, because the tooling looks like it should allow it.
+
+OpenTofu **does** have the flag you would reach for. `-exclude` arrived in **1.9** (we run 1.12.6)
+and is the inverse of `-target`: it plans everything *except* the named addresses **and anything that
+depends on them**. The two are mutually exclusive with each other. So
+`tofu apply -exclude=hcloud_server.box` is real, and would apply other pending changes while leaving
+the box alone — note it would also skip `hcloud_volume_attachment.data`, which depends on the server.
+
+**But it cannot help with a cloud-init change**, because `user_data` on `hcloud_server` is
+force-new: Hetzner's API accepts it only at server *creation* and there is no call that changes it
+on a running machine ([hcloud#372](https://github.com/hetznercloud/terraform-provider-hcloud/issues/372)).
+Excluding the server means the new `user_data` is simply never delivered. No flag, no state edit and
+no import changes that — `state rm` + `import` would only make Terraform *believe* the box matches
+while the machine still runs the old cloud-init, which is drift you have hidden rather than fixed.
+
+So there are exactly two honest routes, and they are not alternatives — do both:
+
+1. **Now, by hand.** `provision.sh` is written to be re-runnable on a live box, so the change can be
+   applied directly. **Read it before you re-run the whole thing**: it does
+   `npm install -g @anthropic-ai/claude-code` *unpinned*, which swaps the `claude` binary under every
+   running session — there were ten live tmux sessions on 2026-08-31. Applying just the steps you
+   changed is usually the right call.
+2. **For the future, in the repo**, so the next build has it. It cannot be tested until that build,
+   which is the cost of this design and the reason the preflight and shellcheck matter so much.
+
+Sources: [OpenTofu 1.9 what's new](https://opentofu.org/docs/v1.9/intro/whats-new/) ·
+[`-exclude` RFC](https://github.com/opentofu/opentofu/blob/main/rfc/20240725-exclude-resources.md) ·
+[Command: plan](https://opentofu.org/docs/cli/commands/plan/)
 
 ```
 tofu plan | grep -E "must be replaced|Plan:"
@@ -89,6 +171,32 @@ tofu apply
 
 That reads whichever context is active, so check `hcloud context active` first — it is the one
 command standing between you and applying to the wrong project.
+
+### As of 2026-08-31 this laptop has only the client's context, and the guard caught it
+
+`hcloud context list` shows exactly one context, `droid-vm` — the **client's**. There is no
+`spideryarn` context, so the `hcloud context create spideryarn` step above has either never been run
+here or has been lost. **Terraform therefore cannot currently be run for this box from this laptop**,
+and that is the reason, not anything about the config.
+
+Found by running `tofu plan` with the snippet above, which faithfully read the active context's
+token — the client's. The plan came back `Plan: 3 to add, 0 to destroy`, proposing to build our
+firewall, SSH key and volume **in the client's project**, because none of ours are there. Then:
+
+```
+Error: Resource precondition failed
+```
+
+The `hcloud_server.box` precondition in [`main.tf`](main.tf) refused, and its message names the
+diagnosis outright: *"The likeliest cause is that HCLOUD_TOKEN belongs to another account or
+project."* It was right. Nothing was created, and the guard is the only reason.
+
+Two things follow. **A plan is not a safe read-only operation here** — it is safe, but its *output*
+is worthless when the token is wrong, and "3 to add" looks like drift rather than like a
+misconfiguration. Read `hcloud context active` before believing any plan. And the claim below that
+`tofu plan` reports `hcloud_server.box must be replaced` **cannot be reproduced right now**; whoever
+wrote it had a working token in their environment at the time. Treat it as unverified until someone
+re-checks it with the right context.
 
 Then, from the output:
 
@@ -285,6 +393,40 @@ start-vnc                                 # on the box
 
 Then open <http://localhost:6080/vnc.html>. Nothing listens on a public port for this — Xvfb,
 x11vnc and websockify are all bound to localhost and reached through the tunnel.
+
+## What a fresh clone cannot do
+
+Two things a green `git clone` does not give you. Both were found by running the suite on a new box,
+not by reading anything, and both fail in ways that do not name the cause — the archaeology is in
+[the plan](../../docs/plans/260831x-remote-box-dev-environment.md#what-a-fresh-clone-cannot-do).
+
+**`npm run db:seed-owner`.** A freshly migrated database has no owner row, so every insert carrying
+an `owner_id` dies on a foreign key. It cost 18 failing test files and the error names neither the
+constraint nor the fix.
+
+**The article fixtures.** `data/` and `output/` are gitignored — about 62MB and 11MB — and roughly
+19 test files need an article with both `blocks.json` and `tree.json`. Only two of the nineteen say
+so; the rest say things like `expected 0 to be greater than 0`. There is no scripted source for
+them, so today they are copied from a laptop that has them:
+
+```
+for d in data output; do
+  rsync -avz "$d/" "greg@<ip>:/home/greg/code/spideryarn2/$d/" > "/tmp/rs-$d.log" 2>&1
+  echo "$d exit=$?"
+done
+```
+
+Three things in that loop are load-bearing. **`-v`**, or rsync prints nothing whatever it does and
+you cannot tell a full copy from a no-op. **No pipe**, so `$?` is rsync's own status and not
+`tail`'s — reporting a sync that had transferred 75 of 254 files is a mistake already made here
+once. And **no `--delete`**: the box generates its own output, and this is a top-up, not a mirror.
+macOS ships openrsync, which is rsync 2.6.9, so none of the `--info=` flags exist — a command tested
+only on Linux dies instantly here, and quietly if you pipe it.
+
+This is the class the project already solved for Postgres, where
+[`tests/helpers/pg-ready.ts`](../../tests/helpers/pg-ready.ts) makes an absent database say so.
+**Article fixtures have no equivalent**, and every fresh clone pays for it: this box, a rebuild, the
+deploy gate's worktree, a new contributor. Worth fixing at the source.
 
 ## Things that will bite
 
