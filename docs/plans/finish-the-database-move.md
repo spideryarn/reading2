@@ -7,10 +7,10 @@ nothing has been done on it.** Six GPT Sol reviews so far, all NO-SHIP, all acce
 |---|---|---|
 | Stage 1 | every input comes from the store; the fingerprints and the blocks guard repaired | `6e3ee67` |
 | Stage 2 | every stage returns its product; `LEGACY_UNCONVERTED_STEPS` is empty | `5e8f744`, `5cf7827` |
-| **Stage 2.5** | **refetch the corpus — not started** | |
-| Stage 3 | the flip, and the four things that must precede it | |
-| Stage 4 | delete the filesystem store | |
-| Stage 5 | drop `raw_bytes`, its own deploy | |
+| **Stage 2.5** | **refetch the corpus — by hand, not a script** | |
+| Stage 3 | item 0 (slugs, parallelisable) then the flip | |
+| Stage 4 | delete the filesystem store, **and drop `raw_bytes` with it** | |
+| ~~Stage 5~~ | folded into stage 4 on Greg's decision 9 | |
 
 The **execution plan** for the remaining work in [delete-the-importer.md](delete-the-importer.md).
 That document is the authority on *why*; this one is the staging.
@@ -39,6 +39,12 @@ production exactly as they were on 2026-08-30.
 before the flip exists to make the flip *one line*. If you find yourself needing to change a stage's
 code to make Postgres work, something earlier was left undone — go and find it rather than adding a
 branch.
+
+**The order the remaining work goes in**, and it is short: **stage 2.5** (reset the database, re-add
+a few articles by hand), then **stage 3 item 0** (every slug gets a short id — this is the piece to
+hand to a second agent), then the rest of **stage 3** one agent at a time, then **stage 4**, which
+now includes what used to be stage 5. § *How to run the rest of this with subagents* has the
+parallelisation; § *The decisions* 6–9 are Greg's calls of 2026-08-31 and each of them deleted work.
 
 **Where to start reading the code**, in this order:
 
@@ -92,6 +98,32 @@ Greg, 2026-08-30:
 3. **Deploy at the end, every stage deployable**, value as early as it can honestly be had.
 4. **The data is not precious** — local *or* production. Alpha, no users. Refetch freely.
 5. **Migrations and deploys authorised**, including with tests or typechecking blocked.
+
+Greg, 2026-08-31, in answer to *"are there product decisions that would simplify this?"*. Each one
+deletes work rather than adding it, and the four together take a stage out of the plan:
+
+6. **Refetch by hand.** No refetch script — reset the database and re-add a few articles through the
+   add box. Stage 2.5 stops being a piece of software.
+7. **Every slug carries a short id, globally unique**, so two articles can never want the same one.
+
+   > Yes, let's add a short id — and actually then we could in future allow users to rename the
+   > slug, and redirect/find it from the short id. So make sure it's globally unique. I'm fine with
+   > adding that to all slugs.
+   >
+   > — Greg, 2026-08-31
+
+   Note the second half: the id is not only collision avoidance, it is **the stable handle a rename
+   would redirect through**. That is why it belongs in a column of its own rather than being parsed
+   back out of the slug.
+8. **A failed refresh starts over.** Do the simple thing now; the design for salvaging a failed
+   draft's completed work moves to § *Appendix: someday maybe*.
+9. **No rollback support after the flip** — my judgement, taken under *"use your judgment, do the
+   simple version for now"*. `raw_bytes` is dropped in stage 4 with the code that stopped naming it,
+   so there is one deploy rather than two. The trade is written out in stage 4.
+
+**And one thing deliberately *not* decided**: whether "refresh an article" should exist at all in the
+alpha. It stays, and the analysis is in the appendix. Decision 8 makes its worst failure cheap enough
+that the question does not have to be answered now.
 
 ## The thing Greg asked for that is not available
 
@@ -600,46 +632,41 @@ that loud: `extract` now dereferences the manifest, so about half the corpus ref
 until it is refetched. Same answer, same reason — decision 4 — and it is now the *first* thing a
 developer hits rather than something discovered at the flip.
 
-#### How to actually do it — nothing here exists yet
+#### How to do it — by hand, and that is decision 6
 
-**There is no bulk refetch script.** `ls scripts/` has `db-import.ts`, `db-export.ts` and
-`backfill-raw-manifests.ts`, and none of them refetches. So the first task of this stage is to
-decide between two shapes, and they are not equivalent:
+**Do not write a refetch script.** It would be software whose only purpose is to be deleted at stage
+4, and the tests that touch `data/` **enumerate the directory** rather than naming slugs
+(`store-parity` and `store-roundtrip` both `readdir`), so a smaller corpus simply means fewer cases.
 
-1. **Enqueue a forced `DEFAULT_INGEST_STEPS` job per article** through the ordinary queue. This is
-   what a reader clicking *refresh* does, so it exercises the real path and its failures are the
-   ones a reader would see. It also costs a `toc` model call per article, which is the expensive
-   part of an ingest — measure it before running it over thirty articles.
-2. **A script that runs `fetch` and `extract` only**, leaving the later stages' artefacts alone. Far
-   cheaper, and it is all that stage 2.5 actually needs: the two holes are a missing
-   `extractedHtml` and an unreachable source object, and both are stage 1–2 artefacts. But it is a
-   second way to drive the pipeline, and this repo has spent the day removing those.
-
-**Recommendation: option 2, written as a thin caller of the existing steps rather than a new
-pipeline** — and delete it at stage 4 with the rest of the filesystem-era tooling. Put the reasoning
-in the script's header so the next person does not have to re-derive it.
-
-**Two things to establish before refetching anything**, because they decide how much has to be
-refetched:
+So: reset the database, and re-add three or four articles through the add box like a reader would.
+That exercises the real path, which a script would not.
 
 ```
-# 1. Which revisions have stamped HTML and no extracted HTML — the importer's signature.
-#    Expect: every article the importer ever wrote.
-select slug from spideryarn.article_revisions r
+npm run db:reset          # ASK GREG FIRST — it empties the database and puts nothing back
+npm run db:seed-owner     # the one auth.users row every owner_id points at
+npm run dev               # then paste three or four URLs into the add box
+```
+
+**Four test files name specific slugs** and will need looking at rather than assuming:
+`tests/stage2c-raw-bytes.test.ts`, `tests/store-artefact-manifest.test.ts`,
+`tests/timeline-resolve.test.ts`, `tests/timeline-time.test.ts`. An hour, not a stage.
+
+**Two things to establish, before and after**, because the point is to end a known-bad state rather
+than to have run a command:
+
+```sql
+-- 1. Revisions with stamped HTML and no extracted HTML — the importer's signature.
+select a.slug from spideryarn.article_revisions r
   join spideryarn.articles a on a.id = r.article_id
  where r.stamped_html is not null and r.extracted_html is null;
 
-# 2. Which manifests name an object this process cannot see.
-#    The probes are in docs/postmortems/a-write-path-with-no-reader.md, verbatim; 9 of 18 locally.
+-- 2. Manifests naming an object this process cannot see: the probes are written out
+--    verbatim in docs/postmortems/a-write-path-with-no-reader.md. Nine of eighteen, locally.
 ```
 
-**Ask Greg before running anything that writes**, including against the local database. Decision 4
-makes the *data* expendable; it does not make a write unattended.
-
-**Done means:** no revision reachable by the pipeline has `stampedHtml` without `extractedHtml`, and
-every manifest's object is readable through `readRawBytes` — both proved **by running the queries and
-the dereference**, not by having re-run a script that reported success. A refetch that silently
-skipped an article looks exactly like one that refetched it.
+**Done means both queries come back empty and the probe finds every object** — proved by running
+them, not by a command having reported success. A refetch that silently skipped an article looks
+exactly like one that worked.
 
 ### Stage 3 — the flip
 
@@ -652,6 +679,50 @@ separate.
 [`src/jobs.ts:1048`](../../src/jobs.ts), where line 57 also imports `fsArtifacts` directly. Stage 2
 exists so that this line is the only one that has to change; everything before it was making that
 true.
+
+#### Item 0 — every slug carries a short id (independent, and the one piece to parallelise)
+
+**Greg's decision 7, and it deletes item 2 below rather than adding to it.** This has nothing to do
+with the store move, shares no files with the rest of stage 3, and is independently committable — so
+it is the natural thing to hand to a second agent while the first proves the coordinator.
+
+**What it is.** A new article's slug becomes `<readable>-<shortid>`; `mintId` in
+[`src/ids.ts`](../../src/ids.ts) already produces the `spya-k3m9qt` form the rest of the codebase
+uses. `articles.slug` is *already* globally unique at the column
+([`src/db/schema.ts`](../../src/db/schema.ts)), so what changes is not the constraint but the fact
+that **two new articles can no longer want the same slug**.
+
+**What it deletes**, and this is the point:
+
+- `freeUploadSlug` and `slugIsSpokenFor` ([`src/jobs.ts`](../../src/jobs.ts)) go entirely. With them
+  goes **item 2 below** — the Postgres branch GPT Sol called a hard prerequisite for the flip — and
+  the whole *"is this article this upload's own"* question, which under Postgres would have needed a
+  join to `jobs.upload_id`.
+- `freeSlug`'s collision paths — the host prefix and the `-2`…`-99` counter — become unreachable.
+
+**What it must NOT delete, and this is the trap.** `freeSlug` also *adopts*: adding the same article
+twice, in any spelling of its URL, returns the existing slug rather than making a second article.
+That is `urlKey`, it is the answer to a Greg question of 2026-08-26, and the story of getting it
+wrong is in `freeSlug`'s own header — `http://` vs `https://` produced two shelf cards under one
+headline, having paid twice. **Keep the adoption path; delete only the collision paths.**
+`tests/jobs.test.ts` § `freeSlug` covers this without a filesystem, network or queue, and is where
+the proof belongs.
+
+**The second half of the decision.** The id is also the stable handle a future rename would redirect
+through, so it goes in **its own column** rather than being parsed back out of the slug — a slug the
+reader has renamed no longer contains it. That column, its unique index, and a lookup that resolves
+`/read/<anything>-<shortid>` are the shape; **the rename UI itself is not this stage** and should not
+be built now.
+
+**Reader-visible, so it is a product change as well as a refactor.** Every new article's URL gains a
+suffix. Existing articles keep their slugs — nothing is rewritten — and the corpus is being reset at
+stage 2.5 anyway. Production articles are expendable under decision 4, but *say so to Greg before
+touching them* rather than inferring permission from the decision.
+
+**Done means:** a new article and a new upload both get a suffixed slug; adding the same URL twice in
+two spellings still returns one article; `freeUploadSlug` and `slugIsSpokenFor` are gone from
+`src/jobs.ts`; and the short id resolves an article on its own. Each proved by a test watched red
+first — in particular the adoption test, because that is the one this change can silently break.
 
 #### The line itself, exactly
 
@@ -677,24 +748,26 @@ The filesystem branch stays for now — it is what every laptop runs until stage
 
 #### Do these in this order, and none of them is optional
 
+**Item 0 above can run alongside item 1 and no further.** From item 3 onward everything converges on
+`src/jobs.ts`, and one agent at a time in that file is the lesson of 2026-08-31.
+
 **1. Prove the coordinator runs at all.** `openPgStoreSession` → `pgStoreSession` → `commit` is the
 **direct product-commit path, and it has never executed in production**. `copyArtefacts` →
 `pgArtifactsIn.write` is reachable today and is *not* the same path. Drive one real step through it
 against the local database before changing anything else, so that every later failure is about the
 thing you just changed.
 
-**2. `slugIsSpokenFor`'s Postgres branch** — [`src/jobs.ts`](../../src/jobs.ts), the read is marked
-in the code with a comment naming this stage. It asks *is this article this upload's own* by reading
-the `fetch` manifest; under Postgres the answer is not on the revision. `origin` is derivable from
-the two URLs being null, and the upload id is on `jobs.upload_id`
-([`src/db/schema.ts`](../../src/db/schema.ts) says so at the column). Without it, **retrying an
-existing upload finds its own slug occupied, takes `slug-2`, and pays for the transcription again.**
-`articleExists` in `src/pipeline.ts` is the branch to copy the shape of. Test:
-`tests/pipeline-slug-claim-files.test.ts` has the filesystem half and the mutation that reddens it —
-write the Postgres twin beside it rather than widening that file.
+**2. ~~`slugIsSpokenFor`'s Postgres branch~~ — deleted by item 0, not built.** It asked *is this
+article this upload's own* by reading the `fetch` manifest, and under Postgres that answer is on
+`jobs.upload_id` rather than on the revision. Sol called building it a hard prerequisite; Greg's
+decision 7 removes the question instead. **If item 0 is not done, this comes back** — and the failure
+is a retried upload finding its own slug occupied, taking `slug-2`, and paying for the transcription
+again. The comment in `src/jobs.ts` naming this stage must go with it.
 
-**3. Retry after a failed forced refresh** — the fourth fault, below. Decide it before you flip,
-because flipping is what makes it real.
+**3. Retry after a failed forced refresh** — the fourth fault, below. **Already decided** (Greg's
+decision 8): re-force from the earliest *originally* forced step, which is a change to
+`forceForRetry`. What is left is building it and writing the test that goes red first. Do it before
+you flip, because flipping is what makes the fault real.
 
 **4. Exact-base verification.** Reads bound to revision R1 must not be overlaid onto a draft copied
 from R2. `beginDraftIn` copies whichever revision is current when the lazy draft opens;
@@ -723,11 +796,17 @@ correct. `db:import` has **no non-test callers** — checked 2026-08-31 — so t
 5. Its new draft copies **R1**, so the earlier steps skip as current and `toc` runs over the old
    article. **The retry reports success and the refresh is silently gone.**
 
-Two ways out and they are not equivalent. **Re-force from the earliest *originally* forced step** is
-cheaper and throws away paid work — a book's PDF transcription, in the worst case. **Retain the
-failed draft** keeps that work and needs a rule for when a draft is finally dropped, which nothing
-currently has. Decide it before the flip, because the flip is what makes step 3 real: on the
-filesystem there is no draft to discard, so this cannot be reproduced today.
+**Decided: re-force from the earliest *originally* forced step.** Greg's decision 8 — do the simple
+thing, and move the alternative to § *Appendix: someday maybe*. It is a change to `forceForRetry`
+([`src/jobs.ts`](../../src/jobs.ts)), which today forces from the first step that did not *finish*;
+it must force from the first step the original request forced. `cascadeForce` takes it from there.
+
+**What that costs, stated honestly rather than waved through.** A failed refresh re-runs from the
+top, so a book's PDF transcription is paid twice. The obvious mitigation — the per-chunk checkpoints
+— **does not help on a deployment**: `pdf-read.ts` writes them to `<dataDir>/pdf-chunks/` and
+`dataDir` is the job-scoped `/tmp`, so a new job cannot see them. They work on a laptop and nowhere
+else. That is landing D2, still unbuilt, and this decision is a reason to want it sooner rather than
+an argument against the decision.
 
 **Write the failing test first.** It is four steps of fixture and it will not be obvious afterwards
 that it was ever wrong — a retry that reports success is exactly the shape that gets re-broken.
@@ -762,7 +841,6 @@ places nobody thinks of as storage:
 - **`dataRoot()`** and [`src/store/data-root.ts`](../../src/store/data-root.ts) entirely, once
   nothing resolves a path. Check `contextPaths` and `StepContext.dir`/`htmlFile` with it — several
   stages still take a `dir` for checkpoints alone, and those are the D2 landing rather than this one.
-- The stage-2.5 refetch script, whichever shape it took.
 - `RawManifest.file`, which is now a restatement of `kind`. `SHAPE.raw`
   ([`src/store/artifacts.ts`](../../src/store/artifacts.ts)) validates it, so it should come to
   validate the live reference fields instead — Sol, 2026-08-31, *"not a stage-2c blocker"*.
@@ -779,15 +857,24 @@ places nobody thinks of as storage:
   gitignored `output/`, so ~12 tests fail structurally and forcing became routine. **Fixing that is
   part of this stage**, because after it there is no `output/` to be missing.
 
-**Remove every application reference to `raw_bytes` — but keep the column.** That separation is
-stage 5's whole reason; see below.
+**Remove every application reference to `raw_bytes`, and drop the column in the same stage** —
+Greg's decision 9. It used to be two stages and two deploys; the paragraph under § *~~Stage 5~~*
+explains what that bought and why it is not being bought. Two things to get right inside this one
+stage: `beginDraftIn` copies `rawBytes` through `REVISION_CARRY_POLICY`, so the policy entry goes
+with the column; and `pgSourceStore.readPdf`'s second query — the `source = 'pdf'` fallback for rows
+written before the reference — dies here too, which is only safe because stage 2.5 refetched
+everything.
 
 **Docs in this stage:** [architecture.md](../project/architecture.md) still shows the filesystem
 layout in its diagram and its stage table, and § *Storage* still describes it as the storage model.
 That file is one of the seven entry points, so editing it goes one approved change at a time with
 the before and after shown — [edit-important-docs.md](../reusable/edit-important-docs.md).
 
-### Stage 5 — drop `raw_bytes`
+### ~~Stage 5~~ — folded into stage 4
+
+**Greg's decision 9, 2026-08-31.** The heading is kept because code comments and earlier commits
+point at it. The work now happens inside stage 4; what follows is why it was ever separate, which is
+worth reading before anyone un-folds it.
 
 Only after stage 4's release is known good.
 
@@ -796,6 +883,12 @@ Only after stage 4's release is known good.
 code and drop together and a rollback restores code naming a column that is gone. Decision 4 does not
 touch this: it protects *executable compatibility*, not data. **Sol's correction to my claim that
 decision 4 collapsed the demolition.**
+
+**Why it is folded in anyway.** The two-deploy dance buys exactly one thing: the ability to roll the
+code back after the flip without stranding it on a column that is gone. With no users and expendable
+data, the realistic response to a bad deploy is to roll *forward*. So one deploy, and if it goes
+wrong we fix and redeploy rather than revert. **That is a risk taken deliberately, not an oversight**
+— if the flip ever ships to real readers, un-fold this first.
 
 **And the ordering is forced by the deploy script rather than by taste.**
 [`scripts/deploy.ts`](../../scripts/deploy.ts) applies migrations **before** it pushes the code, so a
@@ -808,6 +901,102 @@ two runs; ours is the same shape. Greg's call, not something to run past him.
 re-added CHECK against the rows already in the table. So a DELETE of the affected rows must precede
 the ADD CONSTRAINT — and it passes on a fresh local container with no history and fails on
 production, which is a delayed fuse and a false negative in one.
+
+## How to run the rest of this with subagents
+
+Follow [engineering-manager.md](../reusable/engineering-manager.md); this is only what is specific to
+*this* job. The short version of that doc: keep the plan, the stage boundaries, the briefs, reading
+the diffs, deciding what the reviews were right about, and the commits. Hand the implementation to
+Opus subagents and the trawling to Sonnet.
+
+**What parallelises, and what does not.**
+
+| | can run alongside | why |
+|---|---|---|
+| Stage 2.5 (refetch) | nothing — do it first | everything after it needs a corpus that works |
+| Stage 3 **item 0** (slugs) | items 1 and 4 | touches `src/ingest.ts`, `src/jobs.ts` § slugs, the schema; no overlap with the store |
+| Stage 3 **item 1** (prove the coordinator) | item 0 | `src/store/pg-session.ts` and a test; reads only |
+| Stage 3 **items 3–6** | nothing | each one changes what the flip does, and they share `src/jobs.ts` |
+| Stage 4 | nothing | it deletes the files everything else still reads |
+
+So: **two agents at most, and only during item 0.** Everything else in stage 3 is one agent at a
+time, because `src/jobs.ts` is the file the whole stage converges on and three sessions editing it
+was the single largest source of trouble on 2026-08-31.
+
+**Brief every agent with the file list *and* the exclusions.** The briefs that worked on stage 2 all
+had the same four parts: the files you own, the files you must not touch and who has them, what
+"done" looks like, and *which mutation to apply to prove the check you wrote can fail*. The last one
+is what separated the useful reports from the confident ones.
+
+**Two habits worth copying from stage 2**, both of which caught real defects:
+
+- **Ask for the mutation result, not the test.** Three agents reported "watched red before green"
+  with the exact failure message, and two of those discovered their check could not go red at all —
+  which is the finding, and it would not have surfaced from a green suite.
+- **Tell them to say what they left undone and what they think is wrong with the brief.** The
+  `ideas` write, the `TocRun.inputHash` field and the pathspec problem were all caught that way, and
+  two of the three were my errors rather than theirs.
+
+**Check the tree before believing a red**, and before writing a commit message: `git diff HEAD --
+<paths>`, never bare `git diff`. Several sessions share this working tree, `npm test` and
+`typecheck` both read it rather than HEAD, and a full run under load reports timeouts that look
+exactly like failures.
+
+**GPT Sol at the end of every stage, on the built code, without exception.** Six reviews so far, six
+NO-SHIPs, every finding accepted and three of them corrections to me rather than to the code. Scope
+the diff to your own files, append the new files in full — `git diff` does not show untracked ones,
+which is how a whole seam once reached a reviewer as nothing at all — and say plainly which failures
+in the suite are other people's.
+
+## Appendix: someday maybe
+
+Ideas that were worked out far enough to be worth keeping and then deliberately not built. **Nothing
+here is a to-do.** Each is here because rediscovering the reasoning would cost more than the two
+paragraphs it takes to keep it.
+
+### Salvaging a failed refresh's completed work
+
+Deferred by Greg's decision 8; stage 3's fourth fault takes the simple road instead.
+
+The expensive half of a forced refresh is `fetch`, `extract` and — for a PDF — the transcription. If
+a refresh fails at `toc`, all of that is complete and correct in the discarded draft, and re-forcing
+from the earliest originally forced step throws it away.
+
+The alternative is to **retain the failed draft** and let the retry adopt it rather than beginning a
+new one from the published revision. What that needs, and why it was not worth it today:
+
+- **A rule for when a retained draft is finally dropped.** Nothing currently has one. A draft kept
+  for ever is a second copy of every article that failed once.
+- **A guarantee the retained draft is still the right base.** This is the same question as stage 3's
+  exact-base verification, one level harder: the published revision may have moved since.
+- **A decision about a draft whose failure was the input's fault** — a page that now 404s, a PDF that
+  will not parse. Adopting that draft retries a failure rather than salvaging a success.
+
+**The cheaper prerequisite is landing D2**, the checkpoint store's real callers. The per-chunk PDF
+checkpoints already hold the expensive part; they are simply written to a job-scoped directory that
+the next job cannot see. Making them durable would recover most of the value of this idea for a
+fraction of the work — which is why, if this ever comes back, it should come back as D2 rather than
+as draft retention.
+
+### Removing "refresh an article" from the alpha
+
+Considered on 2026-08-31 and deferred with decision 8; the refresh button on the shelf stays.
+
+The shelf sends `{ slug, force: ["fetch"] }` ([`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx))
+and `cascadeForce` re-runs everything after it. That one button is what makes the fourth fault
+reachable, and it is most of the pressure on carrying block ids across revisions.
+
+**What removing it would actually buy, measured rather than assumed:** the fourth fault vanishes
+rather than being fixed, and `assertIdsCarried`'s cross-revision baseline stops being load-bearing.
+
+**What it would not buy, which is why it looked bigger than it is.** Drafts and publication stay
+either way: a `{ steps: ["tweets"] }` job on a published article opens a draft too, so
+`beginDraftIn`, `publishAndFinish` and stage 3's exact-base verification are all still needed.
+
+**What it would cost.** An article whose page has changed could not be updated, and a sanitiser
+policy bump could not be applied to an existing article without deleting it — which takes its
+comments and notes with it. That is the reason not to: the thing this whole plan protects is reader
+data attached to block ids, and the cure would destroy it on a schedule.
 
 ## What is proven, and what is only plausible
 
