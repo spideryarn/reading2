@@ -106,12 +106,25 @@ depends on them**. The two are mutually exclusive with each other. So
 `tofu apply -exclude=hcloud_server.box` is real, and would apply other pending changes while leaving
 the box alone — note it would also skip `hcloud_volume_attachment.data`, which depends on the server.
 
+Two caveats on that flag before you reach for it. It is **OpenTofu-only** — HashiCorp Terraform has
+no equivalent, only a long-standing open request
+([terraform#2253](https://github.com/hashicorp/terraform/issues/2253)), so the "OpenTofu (or
+Terraform)" in *First run* above is not interchangeable here. And it cannot be combined with
+`-target` in one command.
+
 **But it cannot help with a cloud-init change**, because `user_data` on `hcloud_server` is
 force-new: Hetzner's API accepts it only at server *creation* and there is no call that changes it
 on a running machine ([hcloud#372](https://github.com/hetznercloud/terraform-provider-hcloud/issues/372)).
-Excluding the server means the new `user_data` is simply never delivered. No flag, no state edit and
-no import changes that — `state rm` + `import` would only make Terraform *believe* the box matches
-while the machine still runs the old cloud-init, which is drift you have hidden rather than fixed.
+Excluding the server means the new `user_data` is simply never delivered.
+
+`state rm` + `import` cannot rescue it either, and the provider source says why: `user_data` is
+`ForceNew`, its `StateFunc` stores **only a hash** of the content rather than the content, and the
+read path never populates the field at all — so an import has nothing to reconcile *from*. It can
+only be made to agree by hand-editing the stored hash, which is drift hidden rather than fixed.
+
+The textbook answer to all of this is `lifecycle { ignore_changes = [user_data] }`, and that is
+exactly what the paragraph above rules out on purpose: it would stop the diff by stopping us
+noticing it, and we want cloud-init edits to land on the next build.
 
 So there are exactly two honest routes, and they are not alternatives — do both:
 
