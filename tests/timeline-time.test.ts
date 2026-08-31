@@ -33,6 +33,7 @@ import {
   parseWhen,
   readWhen,
   type TimelineModality,
+  type WhenDirection,
   type When,
 } from "../src/timeline-time.js";
 
@@ -75,6 +76,9 @@ const BLOCKS: Record<string, string> = {
     "This wasn’t just a few instances diddling around - by July 10, PHASEONE[big] was coordinating hundreds of simultaneous agents on these three R&D programs.",
   "spya-jauf7s":
     "By July 13, Hugging Face locked down the credentials that these agents had been using. So, by the time Hugging Face tried to defend itself, the agent swarm had already been mostly (but not totally) killed off.",
+  // The mirror of spya-jauf7s, and the pair that catches a loose conflict count.
+  "spya-c2bkgz":
+    "Without another detailed independent investigation, it’s hard to tell what happened with this third civilization. But here’s what we know based on the OpenAI report. After July 12, some more agents’ evaluations were kicked off, this time with a newer, more capable model, which seems to have been built off the same base model as Astra. This model (which we’ll call “Persistent-Astra”) found the message board left behind by this previous secret Persistent-Sol civilization.",
 };
 
 function textOf(blockId: string): string {
@@ -351,29 +355,60 @@ describe("what it refuses", () => {
 });
 
 describe("the year rule", () => {
+  const BOARD = "The board went up on December 5, and the swarm found it.";
+
   it("takes the most recent instance at or before publication", () => {
-    const text = "The board went up on December 5, and the swarm found it.";
-    expect(whenFrom0(text, "on December 5", "2026-01-03")).toEqual({
+    // Published 3 January, so "December" means last December — not the
+    // December two years back, and not the one still eleven months away.
+    expect(whenFrom0(BOARD, "on December 5", "2026-01-03")).toEqual({
       earliest: "2025-12-05",
-      latest: "2026-12-05",
+      latest: "2025-12-05",
     });
-    // Published in January, so a December after publication is ambiguous:
-    // last December and this coming one are both possible, and the interval
-    // spans both rather than picking.
   });
 
-  it("does not guess between two years when the date is unambiguously past", () => {
-    const text = "The board went up on December 5, and the swarm found it.";
-    expect(whenFrom0(text, "on December 5", "2026-12-20")).toEqual({
+  it("uses the publication year when the date is already behind it", () => {
+    expect(whenFrom0(BOARD, "on December 5", "2026-12-20")).toEqual({
       earliest: "2026-12-05",
       latest: "2026-12-05",
     });
   });
 
-  it("widens rather than picking when a year-less date lands after publication", () => {
-    const text = "The report is due on December 5, and nobody has written it.";
-    const when = whenFrom0(text, "on December 5", PUBLISHED);
-    expect(when).toEqual({ earliest: "2025-12-05", latest: "2026-12-05" });
+  it("picks last year rather than widening when the date lands after publication", () => {
+    // An earlier draft spanned both candidate years here. Honest, and useless:
+    // a year-wide interval leaves the row with no date it can print, and since
+    // dates sort nothing a wrong pick costs a label rather than an order.
+    expect(whenFrom0(BOARD, "on December 5", PUBLISHED)).toEqual({
+      earliest: "2025-12-05",
+      latest: "2025-12-05",
+    });
+  });
+
+  it("looks forward instead when the caller says the event is a prediction", () => {
+    // The one case where the default is backwards: a January piece saying "in
+    // December we expect…" means the coming December.
+    const forecast = "We expect the next report on December 5, at the earliest.";
+    expect(whenFrom0(forecast, "on December 5", "2026-01-03", "future")).toEqual({
+      earliest: "2026-12-05",
+      latest: "2026-12-05",
+    });
+    // And a date already past at publication rolls to next year, not to this
+    // year's, which is what "past" would have given.
+    const july = "We expect it to happen again on July 7, if it happens at all.";
+    expect(whenFrom0(july, "on July 7", PUBLISHED, "future")).toEqual({
+      earliest: "2027-07-07",
+      latest: "2027-07-07",
+    });
+    expect(whenFrom0(july, "on July 7", PUBLISHED)).toEqual({
+      earliest: "2026-07-07",
+      latest: "2026-07-07",
+    });
+  });
+
+  it("guesses no year with no frame, whichever way it is pointed", () => {
+    const input = { text: BOARD, phrase: "on December 5", blockId: "spya-made00", frame: null };
+    for (const direction of ["past", "future"] as const) {
+      expect(readWhen({ ...input, direction })).toEqual({ ok: false, reason: "noYearFrame" });
+    }
   });
 
   it("accepts a full publication timestamp and uses only its day", () => {
@@ -406,6 +441,17 @@ describe("month ends and the leap day", () => {
     const text = "The swarm was gone before March, according to the logs.";
     const when = whenFrom0(text, "before March", "2026-08-01");
     expect(when).toEqual({ earliest: null, latest: "2026-02-28" });
+  });
+
+  it("puts an exclusive bound after the END of a month, not after its start", () => {
+    // The mirror of the case above, and the edge it needs is the other one: a
+    // day-precision date makes the two indistinguishable, so only a month can
+    // catch this.
+    const text = "Nothing moved after May, and the logs stop there.";
+    expect(whenFrom0(text, "after May", "2026-08-01")).toEqual({
+      earliest: "2026-06-01",
+      latest: null,
+    });
   });
 
   it("dates a leap day in a leap year and refuses it outside one", () => {
@@ -494,8 +540,9 @@ function whenFrom0(
   text: string,
   phrase: string,
   frame: string | null = PUBLISHED,
+  direction: WhenDirection = "past",
 ): { earliest: string | null; latest: string | null } {
-  const result = readMade(text, phrase, frame);
+  const result = readWhen({ text, phrase, blockId: "spya-made00", frame, direction });
   if (!result.ok) throw new Error(`expected a date, got ${result.reason}`);
   return { earliest: result.when.earliest, latest: result.when.latest };
 }
@@ -633,6 +680,52 @@ describe("countOrderConflicts", () => {
       row("forecast", 2, "predicted", dated("2026-09-01", null)),
     ];
     expect(countOrderConflicts(events)).toBe(0);
+  });
+
+  it("counts nothing on the one pair in the real article that looks like a conflict", () => {
+    /* The spike's final numbers: exactly one place on this article where the
+       model's `order` disagrees with the dates, **and the model is right**.
+       "By July 13" is an upper bound with nothing under it; "After July 12" is
+       a lower bound with nothing over it. An implementation that sorted each
+       event at whichever bound it happens to have would call this a
+       contradiction. It is not one — the second event could genuinely be any
+       time after the 12th, the 14th included — and a `countOrderConflicts`
+       that never returns zero on real input is not measuring anything. */
+    const lockdown = whenFrom("spya-jauf7s", "By July 13");
+    const kickoff = whenFrom("spya-c2bkgz", "After July 12");
+    expect([lockdown.earliest, lockdown.latest]).toEqual([null, "2026-07-13"]);
+    /* "after" is exclusive, so the lower bound is the 13th and not the 12th,
+       which puts the two bounds on the SAME day. That is what makes this pair
+       worth pinning: an implementation that relaxed the comparison to `<=`
+       would read "A finished before B started" out of two identical dates and
+       flag the contradiction the spike says is not there. */
+    expect([kickoff.earliest, kickoff.latest]).toEqual(["2026-07-13", null]);
+    expect(
+      countOrderConflicts([
+        row("lockdown", 1, "happened", lockdown),
+        row("kickoff", 2, "happened", kickoff),
+      ]),
+    ).toBe(0);
+    // And the same pair with the model's order the other way round is still
+    // not a conflict, because nothing about these two intervals proves an
+    // order in either direction.
+    expect(
+      countOrderConflicts([
+        row("lockdown", 2, "happened", lockdown),
+        row("kickoff", 1, "happened", kickoff),
+      ]),
+    ).toBe(0);
+  });
+
+  it("counts exactly one when two firm intervals are ordered backwards", () => {
+    // The other direction, so the function is not vacuously zero: both events
+    // bounded at both ends, not overlapping, and the model has them the wrong
+    // way round.
+    const events = [
+      row("later", 1, "happened", dated("2026-07-01", "2026-07-05")),
+      row("earlier", 2, "happened", dated("2026-05-01", "2026-05-05")),
+    ];
+    expect(countOrderConflicts(events)).toBe(1);
   });
 
   it("handles empty and single-event lists", () => {

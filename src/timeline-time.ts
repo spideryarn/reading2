@@ -48,11 +48,23 @@ import type { BlockId } from "./types.js";
 /**
  * `modality` on a timeline event.
  *
- * Declared here rather than in src/types.ts because Stage 1 lands before the
- * stage that owns the artefact types. It moves to src/types.ts with
- * `TimelineEvent`, and this alias goes away.
+ * **Local on purpose, not by omission.** Stage 1 lands before the stage that
+ * owns the artefact types, and reaching into src/types.ts while another session
+ * holds it is how two agents overwrite each other. It moves there in Stage 4
+ * with `TimelineEvent` and the rest of them, and this alias goes away.
  */
 export type TimelineModality = "happened" | "predicted" | "hypothetical";
+
+/**
+ * Which side of the publication date a year-less expression resolves to.
+ *
+ * `"past"` — the default, and right for almost everything: an article
+ * narrating what happened means the most recent July 7, not next year's.
+ * `"future"` is for a prediction, and it is the one case where the default is
+ * backwards — a January piece saying "in December we expect…" means the coming
+ * December. Stage 2 has `modality` from the model and passes it.
+ */
+export type WhenDirection = "past" | "future";
 
 /**
  * When something happened, as an interval the article's own words support.
@@ -125,6 +137,8 @@ export interface WhenInput {
    * sentence is refused rather than quietly dated.
    */
   within?: Span;
+  /** Defaults to `"past"`. Pass `"future"` for a prediction. */
+  direction?: WhenDirection;
 }
 
 /**
@@ -385,19 +399,18 @@ function sameDate(want: RawDate, have: RawDate): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * One expression's possible days: the earliest reading is `[lo, loEnd]`, the
- * latest is `[hiStart, hi]`. They are the same interval whenever the year is
- * not in doubt.
+ * The days one expression covers. "July 7" is one day wide; "May" is
+ * thirty-one, and that width is where month precision lives — there is no
+ * `granularity` field, because the interval already says it.
  *
- * Four fields rather than two because an exclusive bound needs an *edge* rather
- * than an extreme: "before May" is the day before the 1st, not the day before
- * the 31st.
+ * Both edges are kept rather than just a point, because an exclusive bound
+ * needs the right one: "before May" is the day before the 1st, not the day
+ * before the 31st.
  */
 interface Atom {
-  lo: string;
-  loEnd: string;
-  hiStart: string;
-  hi: string;
+  start: string;
+  /** Inclusive. */
+  end: string;
   yearFilled: boolean;
 }
 
@@ -417,45 +430,55 @@ function intervalIn(year: number, raw: RawDate): { start: string; end: string } 
   return day === null ? null : { start: day, end: day };
 }
 
-function atomOf(
-  early: { start: string; end: string },
-  late: { start: string; end: string },
-  yearFilled: boolean,
-): Atom {
-  return { lo: early.start, loEnd: early.end, hiStart: late.start, hi: late.end, yearFilled };
-}
-
 /**
  * The year rule, and it is a decision rather than a detail (plan § The traps,
  * item 5).
  *
- * A stated year is used as stated. A year-less date takes **the most recent
- * instance at or before publication** — so a piece published on 3 January
- * mentioning December means last December, not the December two years back.
- * With no frame, no year is guessed: the expression yields no date at all,
- * which is the correct answer rather than a plausible one.
+ * A stated year is used as stated. A year-less date takes **the nearest
+ * instance on the side `direction` names** — by default the most recent one at
+ * or before publication, so a piece published on 3 January mentioning December
+ * means last December and not the December two years back. With no frame, no
+ * year is guessed at all: the expression yields no date, which is the correct
+ * answer rather than a plausible one.
  *
- * The one genuinely ambiguous case is a date that would land *after*
- * publication. Then the article may equally be looking back a year or forward
- * within this one, and picking would assert something nobody knows — so the
- * interval is widened to span both, per the plan.
+ * **It picks rather than widening.** An earlier draft spanned both candidate
+ * years wherever a year-less date landed after publication, which is honest and
+ * useless: a year-wide interval for something almost certainly last December
+ * leaves the row with no date it can sensibly print. Greg's call that dates no
+ * longer sort anything is what makes picking cheap — a wrong pick costs a wrong
+ * label, not a wrong order.
+ *
+ * `"future"` is the case where the default is backwards, and it is the only
+ * one: a January piece saying "in December we expect…" means the coming
+ * December. Stage 2 has `modality` from the model and passes it.
  */
-function resolveAtom(raw: RawDate, frame: string | null): Atom | WhenRefusal {
+function resolveAtom(
+  raw: RawDate,
+  frame: string | null,
+  direction: WhenDirection,
+): Atom | WhenRefusal {
   if (raw.y !== undefined) {
     const only = intervalIn(raw.y, raw);
-    return only === null ? "unparseablePhrase" : atomOf(only, only, false);
+    return only === null ? "unparseablePhrase" : { ...only, yearFilled: false };
   }
   if (frame === null) return "noYearFrame";
   const frameYear = parseIsoDay(frame)?.y;
   if (frameYear === undefined) return "noYearFrame";
 
-  const current = intervalIn(frameYear, raw);
-  if (current !== null && current.start <= frame) return atomOf(current, current, true);
+  /* The publication year first, then the year on the far side of it. An
+     interval that straddles publication counts as this year's either way, so
+     "During May" in a piece published mid-May is this May. */
+  const here = intervalIn(frameYear, raw);
+  const reaches =
+    here !== null && (direction === "past" ? here.start <= frame : here.end >= frame);
+  if (reaches && here !== null) return { ...here, yearFilled: true };
 
-  const previous = intervalIn(frameYear - 1, raw);
-  if (current !== null && previous !== null) return atomOf(previous, current, true);
-  const only = current ?? previous;
-  return only === null ? "unparseablePhrase" : atomOf(only, only, true);
+  const there = intervalIn(frameYear + (direction === "past" ? -1 : 1), raw);
+  /* When the neighbouring year has no 29 February, fall back to the
+     publication year's own — the only candidate left, and better than refusing
+     a date the article plainly states. */
+  const only = there ?? here;
+  return only === null ? "unparseablePhrase" : { ...only, yearFilled: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -640,21 +663,21 @@ interface Bounds {
 function boundsFrom(atom: Atom, kind: CueKind): Bounds | null {
   switch (kind) {
     case "upperInclusive":
-      return { earliest: null, latest: atom.hi, extent: "instant" };
+      return { earliest: null, latest: atom.end, extent: "instant" };
     case "upperExclusive": {
-      const latest = shiftDay(atom.hiStart, -1);
+      const latest = shiftDay(atom.start, -1);
       return latest === null ? null : { earliest: null, latest, extent: "instant" };
     }
     case "lowerInclusive":
-      return { earliest: atom.lo, latest: null, extent: "instant" };
+      return { earliest: atom.start, latest: null, extent: "instant" };
     case "lowerExclusive": {
-      const earliest = shiftDay(atom.loEnd, 1);
+      const earliest = shiftDay(atom.end, 1);
       return earliest === null ? null : { earliest, latest: null, extent: "instant" };
     }
     case "extended":
-      return { earliest: atom.lo, latest: atom.hi, extent: "extended" };
+      return { earliest: atom.start, latest: atom.end, extent: "extended" };
     default:
-      return { earliest: atom.lo, latest: atom.hi, extent: "instant" };
+      return { earliest: atom.start, latest: atom.end, extent: "instant" };
   }
 }
 
@@ -692,15 +715,13 @@ export function readWhen(input: WhenInput): WhenResult {
   const cue = cueBefore(text, first.start, all);
   const kind: CueKind = isRange ? "extended" : (cue?.kind ?? "plain");
 
-  const early = resolveAtom(first, frame);
+  const direction = input.direction ?? "past";
+  const early = resolveAtom(first, frame, direction);
   if (typeof early === "string") return refuse(early);
-  const late = isRange ? resolveAtom(last, frame) : early;
+  const late = isRange ? resolveAtom(last, frame, direction) : early;
   if (typeof late === "string") return refuse(late);
 
-  const bounds = boundsFrom(
-    isRange ? { ...early, hiStart: late.hiStart, hi: late.hi } : early,
-    kind,
-  );
+  const bounds = boundsFrom(isRange ? { ...early, end: late.end } : early, kind);
   if (bounds === null) return refuse("unparseablePhrase");
 
   const from = cue?.start ?? first.start;
