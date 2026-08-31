@@ -199,8 +199,27 @@ run 180 "apt update" bash -c 'apt-get -o DPkg::Lock::Timeout=600 --error-on=any 
 run 300 "install chrome" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install google-chrome-stable'
 
 echo "=== playwright ==="
+# The SHARED LIBRARIES headless Chrome needs, and nothing else. There is one
+# browser on this box and it is the google-chrome-stable installed above:
+# @playwright/mcp is given --browser chrome below, chrome-devtools-mcp wants
+# real Chrome by design, and scripts/remote-smoke-browser.mjs names
+# /usr/bin/google-chrome-stable in executablePath.
+#
+# `playwright install chromium` used to run here and was removed on 2026-08-31.
+# It downloaded 651MB into ~/.cache/ms-playwright and NOTHING ever launched it:
+# during a live MCP navigation, /proc/<pid>/exe read /opt/google/chrome/chrome.
+# It was also unpinned, so the browser build number floated with the date of the
+# provisioning run while the docs named a fixed one.
+#
+# Measured before removing, not assumed: with PLAYWRIGHT_BROWSERS_PATH pointed
+# at an empty directory, `--browser chrome` navigated to a real page, and the
+# control -- the same probe forced onto the bundled chromium -- failed with
+# "expected executable at /tmp/pw-empty/chromium-1237/...", which is what proves
+# the empty cache was genuinely in effect rather than the variable ignored.
+#
+# If you ever do need Playwright's own chromium here, `npx playwright install
+# chromium` fetches it on demand; it does not need to be a provisioning step.
 run 420 "playwright system deps" npx --yes playwright@latest install-deps chromium
-run 420 "playwright chromium" su - "$USER_NAME" -c 'npx --yes playwright@latest install chromium </dev/null'
 
 echo "=== docker ==="
 # Docker's OWN apt repo, deliberately:
@@ -317,6 +336,41 @@ TMUX
   chown "$USER_NAME":"$USER_NAME" /home/"$USER_NAME"/.tmux.conf
 fi
 
+echo "=== claude settings ==="
+# One line per mouse-wheel notch, instead of the three Claude Code picks by
+# default on this terminal stack. Three overshoots badly when you are scrolling
+# back through a long transcript looking for one line.
+#
+# The knob is CLAUDE_CODE_SCROLL_SPEED, read from the `env` block of
+# ~/.claude/settings.json. That is the same file and the same key that the TUI's
+# own /config -> "Scroll speed" control writes, so the two agree instead of
+# fighting: turning the dial in the TUI later just overwrites this value.
+#
+# MERGED with jq, never written whole. On a rebuild the volume already carries
+# this file with theme, tui and notification preferences in it, and a `cat >`
+# here would silently throw all of them away. Merging is also what makes the
+# step idempotent, which re-running provision.sh on a live box depends on.
+# jq exits non-zero on a settings.json that is not valid JSON, and the `mv`
+# never happens, so a broken file fails the step rather than being replaced.
+CLAUDE_SETTINGS_SH=$(mktemp)
+cat > "$CLAUDE_SETTINGS_SH" <<'SETTINGS'
+set -eu
+f="$HOME/.claude/settings.json"
+mkdir -p "$(dirname "$f")"
+[ -f "$f" ] || printf '{}\n' > "$f"
+tmp="$f.provision.$$"
+# Without this, a settings.json that will not parse leaves its half-written
+# temp file beside it -- one more on every re-run, all of them looking like
+# a settings file to whoever finds them next.
+trap 'rm -f "$tmp"' EXIT
+jq '.env.CLAUDE_CODE_SCROLL_SPEED = "1"' "$f" > "$tmp"
+mv "$tmp" "$f"
+SETTINGS
+# 0644: the script is written by root in /tmp and read by $USER_NAME's shell.
+chmod 0644 "$CLAUDE_SETTINGS_SH"
+run 30 "claude scroll speed" su - "$USER_NAME" -c "bash $CLAUDE_SETTINGS_SH"
+rm -f "$CLAUDE_SETTINGS_SH"
+
 echo "=== mcp servers ==="
 # Pin at provision time rather than resolving @latest on every session
 # launch: that is a supply-chain surface and makes two sessions able to run
@@ -347,7 +401,12 @@ add_mcp() {
   timeout 60 su - "$USER_NAME" -c "claude mcp remove --scope user $name </dev/null" </dev/null 2>/dev/null || true
   timeout 60 su - "$USER_NAME" -c "claude mcp add --env '$CAP' --scope user $name -- $* </dev/null" </dev/null
 }
-add_mcp playwright "npx -y @playwright/mcp@$PW_MCP --headless --isolated"
+# --browser chrome, explicitly: use the system google-chrome-stable rather than
+# Playwright's own chromium download, which this box deliberately does not have.
+# It is the current default too, but a default is not a decision -- leaving it
+# implicit means a future pin of @playwright/mcp could move it and take the
+# browser away with no line of ours changing.
+add_mcp playwright "npx -y @playwright/mcp@$PW_MCP --headless --isolated --browser chrome"
 add_mcp chrome-devtools "npx -y chrome-devtools-mcp@$CDT_MCP --headless"
 
 echo "=== ssh ==="
@@ -416,13 +475,27 @@ check "swap active"              'swapon --show | grep -q swapfile'
 check "node is the wanted major" 'su - '"$USER_NAME"' -c "node -v" | grep -q "^v${GJD_NODE_MAJOR}\."'
 check "npm present"              'su - '"$USER_NAME"' -c "command -v npm"'
 check "claude runs"              'timeout 30 su - '"$USER_NAME"' -c "claude --version"'
+# Reads the value back out of the JSON rather than grepping the file for the
+# key name: a merge that landed the key with the wrong value, or under the wrong
+# parent, looks identical to a working one under grep.
+check "claude scroll speed is 1" 'jq -er ".env.CLAUDE_CODE_SCROLL_SPEED" /home/'"$USER_NAME"'/.claude/settings.json | grep -qx "1"'
 # Asserts the OUTPUT, not just the exit status. @openai/codex installs a
 # prebuilt platform binary, so the interesting failure is one that exists and
 # does not run -- and it is the login shell that has to find it, which is where
 # a global npm bin directory missing from PATH would show up.
 check "codex runs"               'timeout 60 su - '"$USER_NAME"' -c "codex --version" | grep -q "^codex-cli "'
 check "chrome runs"              'timeout 30 su - '"$USER_NAME"' -c "google-chrome --version"'
-check "playwright chromium runs" 'timeout 60 su - '"$USER_NAME"' -c "npx --yes playwright@latest cr --version" 2>/dev/null || su - '"$USER_NAME"' -c "ls ~/.cache/ms-playwright/chromium-*/chrome-linux*/chrome"'
+# Was: `playwright cr --version || ls ~/.cache/ms-playwright/.../chrome`. Both
+# halves were wrong. The `||` put the WEAK test first -- `cr --version` prints
+# the playwright CLIENT version and passes on a box with no browser at all, so
+# the strong half only ran once the weak one had already failed. And the strong
+# half looked for a chromium download this box no longer has.
+#
+# What matters now is that the MCP is pointed at the system Chrome that check
+# above just proved runs. This asserts CONFIGURATION; capability is asserted by
+# scripts/remote-smoke-browser.mjs, which `gjd-remote doctor` runs on the box and
+# which drives a real browser. Two different questions, deliberately.
+check "playwright mcp uses system chrome" 'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q -- "--browser chrome"'
 check "playwright mcp"           'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q max-old-space-size'
 check "devtools mcp"             'timeout 30 su - '"$USER_NAME"' -c "claude mcp get chrome-devtools" | grep -q max-old-space-size'
 check "docker daemon runs"       'timeout 30 docker info'

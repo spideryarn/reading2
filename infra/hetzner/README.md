@@ -107,6 +107,26 @@ evidence any of it happened; cloud-init reporting success is not.
 Use `/login`, never `claude setup-token` — a token session is model-requests-only and loses
 Remote Control, claude.ai connectors and `/schedule`.
 
+### Scroll speed, the one TUI setting provisioning owns
+
+`provision.sh` merges a single key into `~/.claude/settings.json`:
+
+```json
+"env": { "CLAUDE_CODE_SCROLL_SPEED": "1" }
+```
+
+so the mouse wheel moves **one line per notch**, rather than the three Claude Code picks by default
+on this terminal stack. Three overshoots badly when you are scrolling back through a long transcript
+looking for one line.
+
+Merged with `jq`, never written whole. `~/.claude` is on the volume, so on a rebuild that file
+already holds the theme, `tui` and notification preferences, and rewriting it would eat them.
+
+The TUI's own `/config → Scroll speed` writes the same key in the same file, so turning that dial
+changes the live box — but a later provisioning run puts it back to `1`, and a session already
+running keeps the speed it started with, because the value is read at launch. To move the number for
+good, change it in [`provision.sh`](provision.sh).
+
 ### Codex, for cross-family review
 
 `provision.sh` installs `@openai/codex` alongside Claude Code, so
@@ -290,6 +310,13 @@ x11vnc and websockify are all bound to localhost and reached through the tunnel.
 - **Playwright runs `--isolated`.** One persistent browser profile supports exactly one browser
   process, and this box exists to run sessions in parallel. The cost is that the browser does not
   stay signed in to anything.
+- **There is one browser here, and it is `google-chrome-stable`.** Both MCPs launch it — the
+  Playwright one is given `--browser chrome` explicitly — and
+  [`scripts/remote-smoke-browser.mjs`](../../scripts/remote-smoke-browser.mjs) names it in
+  `executablePath`. Playwright's own chromium download was removed from provisioning on 2026-08-31
+  after 651MB of it turned out to be launched by nothing. So **a bare `chromium.launch()` fails
+  here** with "Executable doesn't exist"; pass the path. `npx playwright install chromium` fetches
+  one on demand if you genuinely need it.
 - **The MCP list is deliberately two.** N sessions × M MCP servers spawns unbounded Node processes;
   that, not RAM, is what falls over first. Argue before adding a third.
 - **There is no backup.** By choice — the code lives in remote git. Anything on this box that is
