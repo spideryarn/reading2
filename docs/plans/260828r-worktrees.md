@@ -11,16 +11,61 @@ The obstacle is cost. Greg, 2026-08-28:
 > want to have multiple node_modules etc for each worktree), because I'm on a slow internet
 > connection and I've regrettably put this folder into Dropbox.
 
-This plan adapts the worktree scripts from
-`~/dev/gdconsult_work/mindstone/MindstoneRebel/coding-agent-instructions`, which already solved the
-expensive half of it, and throws away the two thirds of them that are about a different repo.
+The first version of this plan adapted the worktree scripts from
+`~/dev/gdconsult_work/mindstone/MindstoneRebel/coding-agent-instructions`. **That is no longer the
+answer** — see the next section. The reasoning in the middle of this document is kept because it
+records what was rejected and why, but the work list at the bottom is much shorter than it was.
 
-## Where this has got to
+## What changed on 2026-08-31, and what it deletes
 
-**Status: step 1 of 7 done and committed (`96c7661`, 2026-08-28). Nothing creates a worktree yet.**
+Four of this plan's premises stopped being true in the three days after it was written. Each one
+removes work rather than adding it, and together they cut the build from seven steps to four.
 
-Read this section and "What is left to do" at the bottom; the middle of the document is the reasoning
-behind them and can be read as needed.
+**1. Claude Code has native worktrees, and this machine has them.** `claude --version` is 2.1.252 and
+`claude --help` lists `-w, --worktree [name]` and `--tmux`. The documented feature
+([code.claude.com/docs/en/worktrees](https://code.claude.com/docs/en/worktrees)) already provides
+creation, branch selection, copying gitignored files in, a `git worktree lock` held while a session
+runs, a stale-lock sweep, and — the part no script of ours was going to do well — **tool-level
+isolation**: `Edit`/`Write` targeting the main checkout are blocked, as is a Bash command whose
+working directory resolves there, and as is `git -C`/`--git-dir`/`GIT_DIR` pointed back at it. So
+`scripts/worktree.ts` shrinks to the things the feature does not do: install dependencies, allocate a
+port, and decide when a worktree is finished.
+
+**2. `npm ci` is not slow, so the `node_modules` cache is not worth building.** Measured twice today
+in an empty directory with a warm cache:
+
+```
+  npm ci --prefer-offline --no-audit --no-fund     4–5 s     564 MB real     28,909 files
+```
+
+Deterministic across both runs, and `vite`, `tsx`, `vitest`, `esbuild`, `sentry-cli`, `drizzle-kit`
+and `biome` all execute from it. The old figure of 130 s was taken at load average 433 and was an
+artefact of the shared tree, exactly as the document warned. **The entire fingerprint-keyed CoW cache
+— step 2, the largest piece of work in the plan — buys 4 seconds and about 11 GB on a disk with
+333 GB free. Delete it.** Rebel reached the same conclusion by a different route and reverted its
+own version (`docs/plans/260611_worktree-postinit-cow-root/PLAN_HARRY_REVERT_260611.md`): its
+measured saving was ~11 s, and cloning from a live checkout was unsound because the primary's
+installed tree routinely lags its own lockfile.
+
+**3. The box is ext4, so a copy-on-write cache could never have been the shared answer.** Greg's
+answer on scope was "both, start with whichever is easiest, and only fork by OS if absolutely
+necessary". `/home` and `/` on the Hetzner box are both ext4, which has no reflink; `cp --reflink=auto`
+there silently makes a full copy. APFS `cp -c` is macOS-only. `npm ci --prefer-offline` is the same
+command on both machines and touches no link of any kind, which is what makes it the cross-platform
+answer as well as the cheap one.
+
+**4. `origin` is current, and the trunk is becoming `dev`.** Local `main` is 5 commits ahead of
+`origin/main`, not the ~100 this plan was written against. That kills the reason for branching from
+local `main` (see step 3 of the old `worktree:new`), and it means "merged and pushed" becomes a
+checkable property — which is what a sweep needs. Greg has chosen the dev-branch trunk; see
+[Step 0](#step-0-the-dev-branch-and-what-it-costs) below.
+
+### Status
+
+**Step 1 of the old seven is done and committed (`96c7661`, 2026-08-28). Nothing creates a worktree
+yet.** Steps 2 and 5 are largely deleted by the above. Read this section, [Step 0](#step-0-the-dev-branch-and-what-it-costs)
+and [What is left to do](#what-is-left-to-do); the middle of the document is the reasoning and can be
+read as needed.
 
 What exists now:
 
@@ -58,6 +103,17 @@ overturned a fix that looked finished:
   untracked, Greg's. Not yours, do not fix it.
 
 ## The measurements, first
+
+> **Re-measured 2026-08-31, and the conclusion inverted.** The times below were taken at load average
+> 433 and the document says so, but the number that mattered — 130 s for `npm ci` — was wrong by a
+> factor of thirty. On a quiet machine it is **4–5 seconds for 564 MB and 28,909 files**, twice in a
+> row, with every binary executing. The table below is kept because the *disk* figures were sound and
+> because the `cp -R` control is still the right way to prove clonefile sharing. But it is what made
+> the cache look worth building, and it should be read with the correction in mind.
+>
+> Two other numbers here have moved: `node_modules` is now **1.2 GB rather than 591 MB** — though
+> 636 MB of that is leaked `.vite-temp` files, not dependencies — and the disk has 333 GB free rather
+> than 169 GB. Both push the same way.
 
 Every number below is from this repo, this laptop, 2026-08-28. **Disk figures are reliable. Times
 are not** — load average was 433 while they ran, because the other twelve sessions were working.
@@ -189,28 +245,169 @@ The last two answers together **changed the dependency recommendation**. The fir
 proposed cloning `node_modules` straight from the primary, guarded by a lockfile hash. That is unsafe
 once Greg is actively editing the primary *and* ten worktrees are cloning from it: the source is
 mutable, and an install in progress is invisible to a hash of the lockfile. Rebel tried
-clone-from-primary and reverted it for this reason. So this plan ports Rebel's actual design — a
-separate fingerprint-keyed cache, populated only from a verified install.
+clone-from-primary and reverted it for this reason. So this plan ported Rebel's actual design — a
+separate fingerprint-keyed cache, populated only from a verified install. **That is now deleted too**,
+for the simpler reason that a plain install costs 4 seconds; see point 2 above.
+
+### And on 2026-08-31
+
+Three more answers, which set the shape of everything below.
+
+- **The trunk** — *"dev branch as trunk, promote to main"*. Agents pull and push `dev`; `main` stays
+  the production branch that Vercel deploys. [Step 0](#step-0-the-dev-branch-and-what-it-costs).
+- **Which machines** — *"Both. Start with whichever is easiest. I would consider slightly different
+  approaches for the different operating systems, but only if absolutely necessary."* So: one
+  mechanism unless something forces a fork. Nothing does, now that the CoW cache is gone.
+- **What this session was for** — *"Think through any issues that we haven't already got a good
+  answer for, and then update the official plan doc."* No code was written.
+
+## Step 0: the dev branch, and what it costs
+
+**Ship this first, on its own.** It is worth doing whether or not worktrees ever happen, it is a
+prerequisite for them (agent branches need something to branch from and merge into), and it is much
+smaller than it looks.
+
+Today every agent commits on `main`, and `npm run deploy` pushes `main` to `origin`, which is what
+triggers the Vercel production build. So every push is a deploy. Greg's answer:
+
+> maybe we switch to working out of a dev branch, and pull/push to that, and then every so often
+> trigger a proper deploy with a script that pushes main? Maybe that latter idea would be best?
+>
+> — Greg, 2026-08-31
+
+### `npm run deploy` is already the promotion script
+
+This is the finding that makes the change cheap. [`scripts/deploy.ts`](../../scripts/deploy.ts)
+does not deploy by pushing the branch you are on. It captures one sha, gates it, and then pushes
+**that sha by name** into `main`:
+
+```js
+git push origin <sha>:refs/heads/main          // deploy.ts:1334
+```
+
+and then polls the Vercel API until a production deployment *of that sha* is `PROMOTED`. Everything
+around it already treats `origin/main` as "what is live" rather than as "the branch I work on":
+
+| line | what it does | with a `dev` trunk |
+|---|---|---|
+| 323 | refuses unless `HEAD` is on `main` | **the one line that must change** — accept `dev` |
+| 335–342 | fetch `origin/main`, refuse if the sha is behind it | still right, and now more meaningful: production really is an ancestor |
+| 570 | `git diff origin/main <sha>` to spot a lockfile change | still right |
+| 1334 | push the gated sha to `main` | unchanged — this *is* the promotion |
+
+`grep` finds no other `main` or `origin/main` in `scripts/deploy.ts`, and none at all in
+`scripts/deploy-checks.ts`. So the deploy half of Step 0 is a one-line change plus its test.
+
+**Git auto-deploy on `main` must therefore stay ON.** Option (b) from Greg's list — disabling
+push-to-deploy — would break the pipeline, because `waitForDeployment` is waiting for the build that
+the push causes. That is a good reason to prefer the dev-branch option beyond the ones Greg gave.
+
+### The risk to check before enabling anything
+
+**A preview deployment of `dev` may hold production credentials.** Vercel scopes environment
+variables to Production / Preview / Development, and a variable set for "All Environments" is handed
+to preview builds too. This project's production environment includes `SUPABASE_URL`,
+`SUPABASE_ANON_KEY`, `SPIDERYARN_STORE`, `OPENROUTER_API_KEY` and `ANTHROPIC_API_KEY`. If those are
+scoped to all environments, then every agent push to `dev` builds a deployment that can reach **the
+one production database** and spend money on model calls — many times a day, from code nobody has
+reviewed. Against a repo whose first rule is that real data belongs to the reader, that is the
+sharpest edge in this whole plan.
+
+It was not possible to read the per-environment scoping from here; the dashboard or
+`vercel env ls` will say. **Until it has been read, disable preview deploys for `dev`** — which is
+also the cheaper default:
+
+```json
+"git": { "deploymentEnabled": { "dev": false } }
+```
+
+in [`vercel.json`](../../vercel.json). That key is per-branch, so it does not touch `main`.
+
+### The base-branch catch
+
+Claude Code's `--worktree` branches from **the repository's default branch on the remote** and
+`worktree.baseRef` accepts only `"fresh"` or `"head"` — *not* a branch name. So with `main` still the
+GitHub default, every native worktree would branch from production rather than from the trunk, and
+nothing would say so.
+
+Two ways out, and they want deciding together with the branch switch:
+
+- **Change the GitHub default branch to `dev`.** Then `"fresh"` means `origin/dev` and everything
+  lines up with no setting at all. This is the clean answer. It also changes where new PRs target,
+  which is what you would want anyway.
+- **Set `worktree.baseRef: "head"`.** Worktrees branch from the primary's local `HEAD`, which is
+  `dev`. Simpler to do, but it inherits whatever the primary happens to be sitting on, and Rebel
+  branches from the remote specifically to avoid inheriting a peer's uncommitted state.
+
+Prefer the first. Note that `main` stays the Vercel *production* branch either way — Vercel's
+production branch and GitHub's default branch are separate settings.
+
+### What Step 0 is, in full
+
+1. Create `dev` from `main`, push it, and make it the GitHub default branch.
+2. `deploy.ts:323` accepts `dev`. A test that watches it refuse from the wrong branch.
+3. `vercel.json`: `git.deploymentEnabled.dev = false` until the env-var scoping has been read.
+4. Read the env-var scoping and record the answer in
+   [deployment.md](../project/deployment.md); decide then whether previews on `dev` are wanted.
+5. `AGENTS.md` and [version-control.md](../project/version-control.md): agents commit and **push** to
+   `dev`; `main` is written only by `npm run deploy`.
+
+### Push at the end of a piece of work
+
+Greg asked for this convention, and Rebel has a postmortem that is the argument for it. A fix that
+had been implemented, reviewed at 96/100 and committed sat on an unmerged worktree branch for 31
+hours with no remote ref, while the bug it fixed stayed live; it was found only because a routine
+sweep flagged the branch as `UNMERGED — has work`
+(`docs-private/postmortems/260619_reviewed_fix_stranded_unlanded_on_worktree_postmortem.md`). The
+recommendation from that postmortem — a session-close surfacer for unlanded commits — was never
+implemented, which is why it could recur.
+
+So: **push at the end of a piece of work**, into `AGENTS.md` and
+[engineering-manager.md](../reusable/engineering-manager.md). It is not only tidiness. It is what
+makes the sweep's "merged" guard mean anything, and it is the only way work reaches the remote box,
+which can see nothing that has not been pushed.
 
 ## The layout
 
 ```
   Dropbox — syncs to the cloud            Not Dropbox — never leaves the laptop
   ───────────────────────────────         ──────────────────────────────────────
-  ~/Dropbox/dev/experim/spideryarn2/      ~/dev/worktrees/spideryarn2/
-    src/ docs/ tests/ …                     <slug-a>/    ← agent 1
-    node_modules/   591 MB                  <slug-b>/    ← agent 2
-    data/            27 MB                  <slug-c>/    ← agent 3
-    .git             35 MB
-                                          ~/.cache/spideryarn-worktree-nm/
-                                            <fingerprint>/node_modules
-                                            (one copy, cloned into each worktree)
+  ~/Dropbox/dev/experim/spideryarn2/
+    src/ docs/ tests/ …
+    node_modules/   1.2 GB   ← Dropbox-ignored already
+    data/            27 MB
+    .git             35 MB   ← still synced; see risk row 11
+    .claude/worktrees/       ← where `claude --worktree` puts them
+      <name-a>/    ← agent 1     MUST be Dropbox-ignored and gitignored
+      <name-b>/    ← agent 2
 ```
 
-Worktrees outside Dropbox is the whole answer to *"we don't want multiple node_modules per
-worktree"* syncing. Dropbox never sees them. The cache is under `~/.cache` for the same reason, and
-because APFS `clonefile` needs source and destination on one volume — verified, `/Users`,
-`/Users/greg/.cache` and `/private/tmp` are all device `16777234`.
+**This is a change from the original layout, and it is forced.** That plan put worktrees at
+`~/dev/worktrees/spideryarn2/`, outside Dropbox entirely. Claude Code creates them under
+`.claude/worktrees/` at the repository root, and the only way to move them elsewhere is a
+`WorktreeCreate` hook that **replaces the default creation logic entirely** — which costs you
+`.worktreeinclude` (not processed when a hook is used), the marker the cleanup sweep looks for, and
+the transcript following the session. Symlinking is not a way out either: Claude Code explicitly
+refuses to create a worktree when `.claude`, `.claude/worktrees` or the worktree directory is a
+symlink.
+
+So the cheaper answer is to leave them where the tool puts them and stop Dropbox seeing them:
+
+```bash
+xattr -w com.dropbox.ignored 1 .claude/worktrees
+xattr -w 'com.apple.fileprovider.ignore#P' 1 .claude/worktrees
+```
+
+the same two attributes `node_modules` and `dist` already carry — and `.gitignore` needs
+`.claude/worktrees/` too, which the Claude Code docs also recommend, or every worktree shows up as
+untracked in the main checkout. **Neither is done today**: `.claude/` carries no Dropbox attribute
+and appears nowhere in `.gitignore`. Both must land *before* the first worktree is created, because
+ignoring a directory removes it from the cloud rather than merely stopping the upload.
+
+This is the one place where paying for a `WorktreeCreate` hook might still be right, and it should be
+decided rather than defaulted: a hook could put worktrees on a non-Dropbox volume *and* run `npm ci`,
+solving two problems at once, at the cost of reimplementing creation and losing `.worktreeinclude`.
+Start without it.
 
 `.git` stays in Dropbox for now, by Greg's decision. **When the repo moves out**, every worktree's
 recorded `gitdir` path breaks; the fix is one command from the moved primary:
@@ -230,17 +427,38 @@ orchestration, Electron, five subprojects, a 15 GB disk floor. This repo has no 
 workspaces, one `package.json`, and **no `preinstall`, `postinstall` or `prepare` script at all** —
 verified, which removes the main reason Rebel's cache needs its lifecycle-script handling.
 
-Written in TypeScript run by `tsx`, matching `scripts/deploy.ts` and `scripts/check.ts`, rather than
-bash — the repo's scripts are TypeScript, and "prefer boring" here means matching what is already
-there.
+**Most of the rest is now done by `claude --worktree`.** What the native feature covers, and what it
+leaves:
 
-```
-  npm run worktree:new <slug>     create and provision
-  npm run worktree:doctor         list, and name what is broken
-  npm run worktree:rm <slug>      remove, with guards
-```
+| | |
+|---|---|
+| Creating the worktree and its branch | native |
+| Choosing the base branch | native, via `worktree.baseRef` — but only `"fresh"`/`"head"`, see the base-branch catch above |
+| Copying `.env.local` in | native, via `.worktreeinclude` — a gitignore-syntax file listing gitignored files to copy |
+| Keeping one session out of another's files | native, and stronger than a script could be |
+| Locking a worktree while a session runs, and releasing a killed session's lock | native |
+| Removing a clean worktree at session exit; sweeping old subagent/background worktrees | native, and it already refuses to remove one holding changed files, untracked files **or unpushed commits** |
+| **Installing dependencies** | **ours** — the docs are explicit that a worktree is a fresh checkout and nothing installs for you |
+| **Allocating a dev-server port** | **ours** |
+| **The database** | **ours** |
+| **Deciding a worktree's work has landed** | **ours** — the native sweep checks "unpushed", never "merged" |
 
-### `worktree:new <slug>`
+So the script is much smaller than planned, and its remaining name is closer to `worktree:setup`
+(run once inside a new worktree) plus `worktree:sweep` than to the `new`/`doctor`/`rm` trio below.
+Written in TypeScript run by `tsx`, matching `scripts/deploy.ts` and `scripts/check.ts` — the repo's
+scripts are TypeScript, and "prefer boring" here means matching what is already there.
+
+There is one gap worth naming: **there is no post-creation hook**. `WorktreeCreate` *replaces*
+creation rather than running after it, so "create the worktree and then `npm ci`" cannot be
+automatic without giving up the defaults. Until that changes, the install is the first thing an agent
+does in a new worktree, and `AGENTS.md` has to say so.
+
+### `worktree:new <slug>` — superseded, kept for the reasoning
+
+The ten steps below were the plan before the native feature existed. Steps 1, 3, 4, 5 and 9 are now
+`claude --worktree`'s job; step 7 is `.worktreeinclude`; step 10's `READY` marker is the lock Claude
+Code already takes. What survives into the new list is step 6 (`data/`), step 8 (the port) and the
+`HEAD`-assertion idea inside step 3.
 
 1. **Validate the slug** — lowercase, non-alphanumeric runs to a single `-`, reject if it normalises
    to empty. Refuse if `agent/<slug>` already exists or the path is occupied.
@@ -273,9 +491,28 @@ cleanup trap: a trap does not run on `SIGKILL` or a shutdown, and with ten workt
 will happen. It only earns its keep if `doctor` and `rm` refuse to treat a non-`READY` tree as
 usable, so they must.
 
-### The `node_modules` cache
+### The `node_modules` cache — **dropped**
 
-Ported from Rebel's `worktree-postinit.sh`, minus the parts this repo doesn't need.
+> **Superseded 2026-08-31.** A plain `npm ci --prefer-offline --no-audit --no-fund` takes 4–5 seconds
+> and 564 MB, and every binary runs from it. The cache below saves about 4 seconds and 11 GB out of
+> 333 GB free, on a design that cannot work on the ext4 box anyway. The whole of it — fingerprint,
+> blocking lock, staging directory, smoke test, `COMPLETE` marker, same-device probe, free-space
+> assertion — is **not being built**. What replaces it is one line in the worktree setup script:
+>
+> ```bash
+> npm ci --prefer-offline --no-audit --no-fund
+> ```
+>
+> `--prefer-offline` rather than `--offline` because it is the one command that suits both machines:
+> the laptop's npm cache is 21 GB and will serve all of it, the box's is 266 MB and will fetch the
+> rest over a datacentre link. `--offline` would fail on the box for no benefit.
+>
+> Two things from the section below are worth keeping in mind anyway, because they are true of any
+> future attempt: **never clone dependencies from the primary**, which is a tree Greg is editing and
+> whose installed state routinely lags its own lockfile; and **a smoke test has to execute things**,
+> not just check that a `.bin` shim exists.
+
+The original design, ported from Rebel's `worktree-postinit.sh`, follows.
 
 ```
   fingerprint = sha256( cache-format version
@@ -323,7 +560,17 @@ named `cache` destroys the install.
 `esbuild` and `sentry-cli`, and verify the embedded lockfile and fingerprint, before writing
 `COMPLETE`.
 
-### The install-script policy has to be committed, not hashed
+### The install-script policy has to be committed, not hashed — **mostly moot now**
+
+> **Superseded 2026-08-31.** This section exists because a *cache* keyed without the script policy
+> would serve a tree built under one policy to a worktree expecting another. With no cache, that
+> failure has nowhere to happen. What is left is worth one line rather than a work item: npm 11 does
+> block these scripts by default here — the fresh install printed
+> `npm warn install-scripts` for `esbuild@0.25.12`, `esbuild@0.28.2` and `fsevents@2.3.3` — and
+> **everything still works**, because those packages ship prebuilt platform binaries. `esbuild
+> --version` prints `0.28.2` and `sentry-cli --version` prints `2.58.6` from a tree whose install
+> scripts never ran. Committing the policy is still the right thing to do eventually; it is no longer
+> blocking anything.
 
 An earlier draft of this plan reasoned that because the repo has no `preinstall`, `postinstall` or
 `prepare` script, lifecycle scripts could be left out of the fingerprint. **That reasoning is wrong**,
@@ -365,9 +612,22 @@ then browses, screenshots and tests against a different worktree's server while 
 success. That is the failure this repo has been bitten by in other forms often enough to have written
 a doc about it.
 
-`worktree:new` scans sibling worktrees' `.env.local` files for used ports, takes the lowest free one
-at or above 5274, and persists it. A scan-then-pick has a race between two simultaneous creations;
-`strictPort` is what makes that race loud instead of silent.
+**Where the port comes from.** The original plan scanned sibling worktrees' `.env.local` files and
+took the lowest free port at or above 5274 — a scan-then-pick with a race between two simultaneous
+creations. Two things have changed the recommendation:
+
+- **Rebel has no allocator to copy.** The claim that this plan ports Rebel's design was wrong on this
+  point: its worktree docs tell a human to "pick any free port ≥ 5184… increment to avoid
+  collisions", and there is no registry, lock or allocator script anywhere in that repo. This is a
+  gap in their tooling, not a pattern.
+- **A deterministic port needs no allocation at all.** Hash the worktree name into the range —
+  `5274 + (hash(name) % N)` — and the same worktree always gets the same port, with no registry file,
+  no lock, and no race to lose. This is the pattern the parallel-agent tooling has converged on. Its
+  cost is birthday collisions: with ten slots, two worktrees can hash to the same port. That is
+  exactly what `strictPort: true` turns into a loud refusal, and the fix is to rename the worktree.
+
+Prefer the deterministic hash. It is fewer moving parts than an atomic lease, and the failure it
+admits is the one `strictPort` already catches.
 
 **Changing the port breaks sign-in, and breaks it quietly.** `supabase/config.toml:217` pins
 `site_url = "http://localhost:5273"`, and `additional_redirect_urls` lists that exact port and no
@@ -411,6 +671,22 @@ Auth and Storage stay bound to the project's main database, so it is half-isolat
 hold. If concurrent schema work ever becomes normal, the answer is separate full stacks with distinct
 project ids and port blocks, not separate databases inside one.
 
+**This remains the weakest part of the plan, and it should be held as a known compromise rather than
+a solved problem.** The wider practice is against it: the pattern everyone warns away from is exactly
+one shared local database with no isolation, relying on timing. The ladder above it, in ascending
+cost, is a per-worktree *schema* in one instance, a per-worktree database cloned with
+`CREATE DATABASE … TEMPLATE`, and a full per-worktree Supabase stack with its own `project_id` and
+port block. The last is real isolation and is what a `WorktreeCreate` hook would provision if this
+ever hurts enough; on a laptop running ten of them it is roughly eighty containers, which is why it
+is not v1.
+
+**Migration numbers will collide, and more often than before.** `drizzle-kit generate` names files
+sequentially — the tree is at `0036_drop_summary_column.sql` — so two agents on two branches both
+generating a migration both mint `0037_`, and each branch's `drizzle-kit check` sees only its own
+history and is happy. Rebasing does not prevent it; it only moves where the collision is noticed. For
+v1 this is policy plus detection: treat schema work as exclusive (one agent at a time, claimed
+explicitly), and add a check after rebase that no two migration files share a number.
+
 ### Landing
 
 Agent branches get **no upstream**, so a bare `git push` fails rather than finding a path to `main`.
@@ -421,15 +697,26 @@ straight to the integration branch — seductive for a solo repo, and exactly th
 ```bash
 # in the worktree, clean and committed
 npm test && npm run typecheck
-git rebase main
+git rebase dev
 npm test && npm run typecheck
 
 # in the primary
-git merge --ff-only agent/<slug>
-npm run worktree:rm <slug>
+git merge --ff-only <worktree-branch>
+git push origin dev            # ← the part that makes "merged" checkable
 ```
 
-`--ff-only` fails safely if `main` moved after the tests ran; rebase and test again.
+`--ff-only` fails safely if `dev` moved after the tests ran; rebase and test again. The push is not
+optional: without it the sweep cannot tell finished work from abandoned work, the remote box cannot
+see the change at all, and the 31-hour stranding described in Step 0 is what happens instead.
+
+Rebel's postmortem `260702_git_safe_sync_worktree_push_target_postmortem.md` is worth reading before
+writing any of this. Their worktree branches tracked `origin/dev` and expected a bare `git push` to
+land there; because `git push origin <branch>` expands a bare name to `<branch>:<branch>`,
+`push.default=upstream` was never consulted and four pushes silently created stray `origin/<slug>`
+branches instead — each printing "Sync Complete!" and exiting 0. One of them held a commit that never
+landed. **This plan's choice of no upstream at all is the safer one and should stay**, and any script
+that pushes should name its destination explicitly (`HEAD:refs/heads/dev`) and then verify the remote
+actually moved, rather than trusting the exit code.
 
 ### What changes in `CLAUDE.md`
 
@@ -444,6 +731,23 @@ with it, and this is worth stating explicitly or agents will guess:
   threaten anyone else's work, but they still destroy that agent's only uncommitted copy.
 - `git rebase` — allowed in a worktree on a clean, committed agent branch. Still banned in the
   primary.
+
+Three additions, from what the native feature turned out to do:
+
+- **Claude Code enforces most of this itself now**, and more strictly than the rules did. Inside a
+  worktree it blocks an `Edit` or `Write` aimed at the main checkout, a Bash command whose working
+  directory resolves there, and any `git -C` / `--git-dir` / `GIT_DIR` / `cd` redirect back into it.
+  The rules stay written down because the primary is still shared and because an agent needs to know
+  why a refusal happened, but the enforcement is no longer only social.
+- **One check will surprise people and cannot be turned off.** Claude Code refuses Bash commands
+  whose scope it cannot trace without running them — brace expansion, and heredocs with unquoted
+  delimiters. Plenty of habits in this repo use both. `AGENTS.md` should say so, and say the fix is
+  to split the command up, or the first week of worktrees is spent rediscovering it.
+- **Install dependencies first.** A new worktree is a fresh checkout with no `node_modules`, and
+  nothing installs them for you. Rebel has a postmortem for precisely this
+  (`251219_worktree_sync_missing_node_modules_postmortem.md`): tooling dispatched into fresh
+  worktrees failed with `cannot find module 'clipanion'` for nine days, because `git worktree add`
+  does not install and nothing checked.
 
 ## Ranked failure modes
 
@@ -466,10 +770,26 @@ Ordered by how much they cost times how quietly they happen.
 | 11 | Dropbox writes back an older-but-valid ref into the shared `.git` | **yes** | `fsck` **cannot** see this — every object is valid. Only an off-Dropbox backup and reflog comparison will |
 | 12 | `rm` deletes untracked work — `data/` artefacts, a `.env.local` an agent edited | **yes** | a clean `status` plus an ancestor check reports safe and deletes it anyway, because both are gitignored. Record a manifest of ignored state at creation; refuse removal when it has changed, unless given an explicit discard flag |
 
+| 13 | Sweep deletes a peer's worktree because "merged" was true for the wrong reason | **yes** | a branch created an hour ago, or reset to the trunk tip, is trivially an ancestor of it. **An age guard is the only thing that catches this** — see below |
+| 14 | Sweep deletes untracked work because `git status --porcelain` looked clean | **yes** | `--untracked-files=all` is mandatory; plain `--porcelain` misses exactly the new files that have no other copy |
+
+Rows 1, 4, 7 and 7b are now moot: there is no cache to publish, no `cp -c` to fall back silently, and
+`claude --worktree` resolves and records the base ref itself. Row 5b is unchanged and still the
+sharpest of the port failures. Row 11 has got **less** dangerous, not more: `origin/main` is 5
+commits behind local `main` rather than a hundred, so the remote is now a real backup rather than a
+theoretical one — and Step 0's push-at-the-end convention keeps it that way.
+
+**Rows 13 and 14 are new, and both are from Rebel's field experience rather than reasoning.** Their
+sweep tool refuses to remove anything whose last commit is under 24 hours old, and the guard is not
+paranoia: the predecessor shell script lacked it and was retired on 2026-06-14 for that reason, after
+two same-day worktrees read as "merged" with reflog activity fifteen minutes old. The other half of
+their design is worth copying wholesale — **`classify` is read-only and `remove` re-runs every
+mechanical guard itself**, with a fresh fetch, so a stale classification can never authorise a
+deletion, and removal is per-branch with no bulk flag so each one re-validates independently.
+
 Rows 10 and 11 are the two this plan does not close. Row 10 needs a global content-hash lease that
 does not exist yet. Row 11 is only fully answered by moving the repo out of Dropbox — until then, a
-verified bundle stored outside Dropbox is the mitigation, and it should be taken **before** rollout,
-because local `main` is a hundred commits ahead of `origin/main` and that is currently the only copy.
+verified bundle stored outside Dropbox is the mitigation.
 
 ## What this deliberately does not do
 
@@ -483,6 +803,17 @@ because local `main` is a hundred commits ahead of `origin/main` and that is cur
   importing something it did not declare. The CoW cache gets most of the benefit for none of that.
   Worth revisiting if worktrees become permanent and heavy. (pnpm's own caveat — do not share one
   writable store between mutually untrusted agents — does not apply here.)
+  **Restated 2026-08-31:** the CoW cache is gone, so the comparison is now pnpm against a 4-second,
+  564 MB `npm ci`, and the case for pnpm is weaker still. Its one remaining advantage is real and
+  worth recording: pnpm handles the macOS/Linux split *for you* under one identical setting, cloning
+  on APFS and hardlinking on ext4, which is precisely the fork this plan was worried about. If
+  per-worktree disk ever becomes the complaint, pnpm is the answer rather than a bespoke cache.
+- **A hardlink farm** (`rsync -a --link-dest=…`, which unlike `cp -al` is the same command on both
+  machines). Near-zero disk, and hardlinks are invisible to build tools in a way symlinks are not.
+  Rejected because a hardlink shares bytes rather than history: anything that ever writes into a
+  package in place — a postinstall, `patch-package`, an editor save — silently corrupts every
+  worktree sharing that inode. pnpm avoids this by baking postinstall output into its store before
+  linking out; a bare rsync farm has no equivalent. Not worth the risk to save 4 seconds.
 - **A shared or symlinked `node_modules`.** Measured above: the three cache directories live inside
   it. There is a second, independent reason. esbuild does not follow symlinks without
   `--preserve-symlinks`, which then breaks its own watch-mode change detection; and both esbuild and
@@ -507,45 +838,52 @@ because local `main` is a hundred commits ahead of `origin/main` and that is cur
 
 ## What is left to do
 
-Nothing that creates a worktree ships before the shared-database and removal safeguards exist: both
-of those failures are silent, and both land on work that is not in git.
+Four steps, not seven. The order matters: Step 0 is independently useful and unblocks the rest, and
+nothing that creates a worktree ships before the database and removal safeguards exist, because both
+of those failures are silent and both land on work that is not in git.
+
+### 0. The dev branch — do this first, on its own
+
+Described in full in [Step 0](#step-0-the-dev-branch-and-what-it-costs). One line in `deploy.ts`, one
+key in `vercel.json`, a GitHub default-branch change, and the env-var scoping read and written down.
+It stands on its own merits and is the prerequisite for everything below.
 
 ### 1. The two `deploy.ts` bugs — done (`96c7661`)
 
-Kept here because step 4 inherits a decision from it.
+Kept because step 3 inherits a decision from it.
 
 **The lock does not steal a stale lock.** `read it, decide it is dead, unlink, create` lets two
 processes both take the same leftover — the second unlinks the first one's *new* lock — and POSIX has
 no unlink-if-unchanged, so a bounded retry does not help. A leftover is reported with the `rm`
 command to clear it. Affordable because `process.on("exit")` already releases on every death except
-`SIGKILL`. **Step 4 must not reintroduce stealing.**
+`SIGKILL`. **Step 3 must not reintroduce stealing.**
 
 Two smaller findings from the same review, both fixed and both worth not undoing: the claim links a
 fully-written temporary file into place rather than using `open(…,"wx")`, which publishes the path
 before its contents and lets a contender read an empty file and call the holder dead; and `release`
 checks inode and token before unlinking, because the exit hook outlives the lock it was made for.
 
-### 2. The deterministic install contract, and the cache
+### 2. Make a worktree usable — the small setup layer
 
-Two halves, in this order.
+Everything the native feature does not do, and nothing it does.
 
-**a. Commit the install-script policy.** Five dependencies have install scripts — esbuild (three
-versions), `@sentry/cli`, `fsevents` — and npm 11 gates them behind `allowScripts`. Different policies
-produce different installed trees *while `npm ci` still exits 0*, so a cache keyed without them serves
-the wrong tree silently. Put the intended policy in `package.json`/`.npmrc`, make unreviewed scripts
-fail closed, and run installs with an explicit sanitised configuration. Then the policy is a repo fact
-that reaches the fingerprint through the files themselves. Do **not** try to hash the invoking user's
-configuration.
+1. **`.gitignore` gets `.claude/worktrees/`, and Dropbox gets told to ignore it** — both xattrs, as
+   for `node_modules`. Before the first worktree exists, because ignoring removes the cloud copy.
+2. **`.worktreeinclude`** listing `.env.local`. Only gitignored files that match are copied, so it
+   cannot duplicate a tracked file.
+3. **`worktree.baseRef`**, decided together with the GitHub default branch — see
+   [the base-branch catch](#the-base-branch-catch).
+4. **`npm run worktree:setup`**, run inside a fresh worktree: `npm ci --prefer-offline --no-audit
+   --no-fund`, clone `data/` from the primary, write the port, and print what it did. It has to be
+   run by hand or by the agent, because `WorktreeCreate` replaces creation rather than following it.
+5. `tmutil addexclusion` on the new `node_modules`, on macOS.
 
-**b. The cache**, as described in [The `node_modules` cache](#the-node_modules-cache) above. The
-shape review settled on: fingerprint → **one blocking atomic lock** → re-check for a completed entry
-→ `npm ci --offline` **straight into a cache staging directory** → smoke test → atomic rename →
-`cp -c -R` into the worktree. No non-blocking lock and no TTL prune in v1.
-
-The smoke test must **execute** `vite`, `tsx`, `vitest`, `esbuild` and `sentry-cli` and check the
-embedded fingerprint. "One `.bin` shim resolves" proves nothing — during this work `@sentry/cli` was
-wrongly reported as missing by exactly that kind of shallow check, when
-`node_modules/.bin/sentry-cli --version` prints `2.58.6`.
+`data/` is a copy rather than a symlink, and that reasoning has not changed: the tests create and
+delete directories under `data/`, so a link would point that at the real one. The *how* is the one
+place a per-OS line survives, and it is a one-liner rather than a fork: `cp -c -R` on macOS to get
+clonefile sharing, plain `cp -a` on the box, where 27 MB apparent is not worth a second mechanism.
+Do not reach for `cp --reflink=auto` on the box — ext4 has no reflink and it falls back to a full
+copy without saying so.
 
 ### 3. Ports, as one unit
 
@@ -553,7 +891,8 @@ Half of this is worse than none, because each half hides the other's failure.
 
 1. `SPIDERYARN_DEV_PORT` in [`vite.config.ts`](../../vite.config.ts) (currently hardcodes `5273`),
    with **`strictPort: true`**.
-2. An **atomic** port lease — `scripts/lockfile.ts` is the primitive, not a scan-then-pick.
+2. A **deterministic port from the worktree name**, not a scan-then-pick and not a lease — see
+   [Ports](#ports).
 3. The `additional_redirect_urls` range in [`supabase/config.toml`](../../supabase/config.toml),
    **then restart Supabase and check the running container**: the file is not re-read automatically
    ([setup-dev.md](../project/setup-dev.md)).
@@ -564,9 +903,9 @@ pointed at 5273 still reaches the *first* worktree's server and everything looks
 identity check, an agent can screenshot and test another worktree's work and report success.
 
 Why (3) caps concurrency: the allow-list is a list of exact ports, so the number of listed ports is
-the number of concurrent worktrees. `worktree:new` must **refuse** when the range is exhausted rather
-than allocate outside it — a port that is not on the list produces a sign-in that appears to work and
-silently drops the return path.
+the number of concurrent worktrees. The port function must **refuse** to produce a port outside it —
+a port that is not on the list produces a sign-in that appears to work and silently drops the return
+path.
 
 ### 4. The database lease, and a `test:db` that fails closed
 
@@ -582,32 +921,34 @@ expects. Today about a dozen Postgres suites **skip themselves silently** when t
 misconfigured worktree reports green while testing nothing. `npm test` may stay usable without a
 database; schema and store work must run `test:db` before landing.
 
-### 5. `scripts/worktree.ts` — `new`, `doctor`, `rm`
+Plus the migration-number collision check described under [Postgres](#postgres).
 
-`new`, in order: validate the slug; **warn** if the primary is dirty (Greg explicitly does not want a
-refusal); resolve local `main` to a SHA; `git worktree add --lock --reason initialising -b agent/<slug>`;
-mark `INITIALIZING`; **assert the new worktree's `HEAD` equals the captured SHA**; `node_modules` from
-the cache; `cp -c -R` the `data/` directory; copy `.env.local` at mode 0600 with the leased port;
-`tmutil addexclusion`; mark `READY`; unlock; print the absolute path on stdout and everything else on
-stderr.
+### 5. `worktree:sweep` — the part the native cleanup does not do
 
-Use `--no-track` explicitly and then **verify** the branch has no upstream.
+Claude Code's own sweep already refuses to remove a worktree holding changed files, untracked files
+or unpushed commits, and holds a `git worktree lock` while a session runs. What it never asks is
+whether the work **landed**. So the script is small, and its shape is Rebel's:
 
-`rm` needs the guard that the current primitive deliberately does not have.
-`forceRemoveThrowawayWorktree` is named that way because it discards tracked modifications *and*
-untracked files. `data/` and `.env.local` are both gitignored, so a clean `git status` plus an
-ancestor check will report "safe to remove" and then delete real work. Record a manifest of ignored
-state at creation; refuse removal when it has changed, unless given an explicit discard flag.
+- **`classify`** — read-only. For each worktree: merged (`git merge-base --is-ancestor <branch>
+  origin/dev`, after a fresh fetch), clean (`git status --porcelain=v1 --untracked-files=all`), and
+  **age of the last commit**. Prints a table, writes JSON, deletes nothing.
+- **`remove --branch <name>`** — the only destructive path, per-branch with no bulk flag, and it
+  **re-runs every guard itself** with a fresh fetch rather than trusting the classification. Refuses,
+  naming the blocker, if the worktree is the current checkout, unmerged, dirty, under the age
+  threshold, or if the fetch failed.
 
-`doctor` reports ghosts (`ghosts()` already handles main, bare and `prunable`), `INITIALIZING` trees
-older than some threshold, and unexpected locks.
+The age guard is the one that is easy to leave out and must not be — failure row 13. And the removal
+guard the original plan identified stays: `data/` and `.env.local` are both gitignored, so a clean
+`git status` will report "safe" and then delete real work. Record a manifest of ignored state at
+creation and refuse removal when it has changed, unless given an explicit discard flag.
 
 ### 6. Docs, alongside each step rather than batched
 
-`CLAUDE.md` — see [What changes in `CLAUDE.md`](#what-changes-in-claudemd); and
+`AGENTS.md` — see [What changes in `CLAUDE.md`](#what-changes-in-claudemd) — and
 `docs/project/worktrees.md`, parented under
 [dev-and-deployment-overview.md](../project/dev-and-deployment-overview.md), or
-`tests/doc-links.test.ts` fails.
+`tests/doc-links.test.ts` fails. The worktrees doc is the overview Greg asked for: how to start one,
+what to run first, what the ports are, what the sweep does, and the traps above.
 
 ### 7. Later: move the repo out of Dropbox
 
@@ -620,11 +961,43 @@ the main worktree and repairing the links:
 4. `git worktree repair` against the **recorded paths, not a shell glob**.
 5. From every worktree verify status, branch, common git dir and registered path.
 
-Take the off-Dropbox backup before any of it.
+Take the off-Dropbox backup before any of it. Note that this move would also make the
+`.claude/worktrees/` location a non-issue, which is an argument for doing it sooner.
 
+### And on the box
+
+Nothing above is macOS-only, which was the point. The box runs Ubuntu 24.04 on ext4 with 44 GB free
+on `/home`, 16 cores and 30 GB of RAM, so ten worktrees at 564 MB each is 5.6 GB and comfortable. Two
+differences to expect rather than discover: its npm cache is 266 MB against the laptop's 21 GB, so the
+first `npm ci --prefer-offline` there fetches over the network (cheap, it is a datacentre link), and
+`gjd-remote` currently assumes one checkout per repo — `new` would need to know how to start a session
+in a worktree. That is the same seam as the `.gjd-remote/run setup` contract being designed in
+[260831ad-multi-repo-support-for-gjd-remote-box.md](260831ad-multi-repo-support-for-gjd-remote-box.md),
+and the two should be decided together rather than growing two answers.
 ## Open decisions
 
-Everything here needs Greg, and none of it blocks step 2.
+Everything here needs Greg. The first four are new on 2026-08-31 and the first two block Step 0.
+
+0a. **Preview deploys on `dev`, and what environment variables they would carry.** The one with teeth:
+   if this project's Supabase and model-provider keys are scoped to all environments rather than to
+   production, every agent push to `dev` builds something that can reach the production database and
+   spend money. Read the scoping, then decide. Default until then: previews off.
+
+0b. **Change the GitHub default branch to `dev`?** Recommended, because it makes
+   `claude --worktree` branch from the trunk with no setting at all — `worktree.baseRef` cannot name
+   a branch. The alternative is `baseRef: "head"`. Vercel's production branch stays `main` either way.
+
+0c. **`.claude/worktrees/` inside Dropbox.** The plan is to leave worktrees where Claude Code puts
+   them and set both Dropbox xattrs plus a `.gitignore` line. The alternative is a `WorktreeCreate`
+   hook that relocates them off the Dropbox volume and runs `npm ci` at the same time, at the cost of
+   `.worktreeinclude` and the cleanup marker. Worth a decision rather than a default — and it
+   disappears entirely if the repo moves out of Dropbox first (step 7).
+
+0d. **`node_modules/.vite-temp` is holding 636 MB of leaked files** — 107 `vite.config.ts.timestamp-*.mjs`
+   dating back to 27 August, left by vite processes that were killed before they could clean up. It is
+   most of the gap between the primary's 1.2 GB `node_modules` and a fresh install's 564 MB. Harmless
+   but not free, it will get worse with a dev server per worktree, and it is safe to delete. Unrelated
+   to worktrees; found while measuring for them.
 
 1. **`data/` and Dropbox.** `node_modules` and `dist` are ignored; `data/` is not. Ignoring it stops
    27 MB syncing but **deletes Dropbox's copy**, and that is 27 MB of pipeline output that cost model
@@ -647,8 +1020,11 @@ From the ranked table above, the two with no mechanism behind them:
 - **Row 10** — two worktrees each paying for the same `data/` artefact. Needs a global content-hash
   lease that does not exist. Policy only for now: treat pipeline work on one article as exclusive.
 - **Row 11** — Dropbox restoring an older-but-valid ref into the shared `.git`. `git fsck` cannot see
-  it, because every object is valid. Only step 7 really answers it. Greg has accepted this risk
-  knowingly; local `main` is roughly a hundred commits ahead of `origin/main`.
+  it, because every object is valid. Only step 7 really answers it, and Greg has accepted the risk
+  knowingly. It is **smaller than when this was written**: local `main` was a hundred commits ahead of
+  `origin/main` then and is five ahead now, so the remote is a real backup. Step 0's
+  push-at-the-end-of-a-piece-of-work convention is what keeps it that way, which makes it a safety
+  measure as well as a workflow one.
 
 ## How to check you have not broken anything
 
