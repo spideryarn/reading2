@@ -53,8 +53,9 @@ arrived, exit code *and* answer file. Mechanics in
 
 The orchestrator should do **little of the implementation**. Hand the main work to Opus subagents,
 and the low-level work — research, repo-wide trawls, Claude-in-Chrome, running tests and reading
-logs — to Sonnet. Those are defaults, not rules; use your judgment about what a given piece of work
-needs.
+logs — to Sonnet. GPT Luna via [codex-cli-as-subagent.md](codex-cli-as-subagent.md) is the cheap tier
+for the same low-level and token-heavy work, and it's a different model family, so the variety is
+free. Those are defaults, not rules; use your judgment about what a given piece of work needs.
 
 Keep for yourself: the plan, the stage boundaries, the briefs, reading the diffs, deciding what the
 reviews were right about, and the commits.
@@ -62,6 +63,13 @@ reviews were right about, and the commits.
 A subagent starts with nothing but your prompt. Name the files, say what the stage excludes as well
 as what it is for, say what done looks like, and ask for the conclusion rather than the material.
 Run them in parallel only when their file sets don't overlap.
+
+Subagents all reading the same code can agree confidently without anyone having touched real
+evidence. Send one to run the thing, read the logs, or reproduce it.
+
+**When a subagent fails, re-dispatch it.** An empty, stale or wrong report means running it again, or
+handing it to a different model — not doing its work yourself. Several failures in a row is the
+environment being broken; stop and ask rather than taking the whole job back.
 
 ## Along the way
 
