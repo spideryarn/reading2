@@ -16,12 +16,28 @@ the server's own disk.
 
 ## First run
 
+**Use a project of its own.** Hetzner API tokens are scoped to one project, and that scope is the
+blast radius: a token from another project would let a mistake here reach that project's servers.
+In the console, create a project for this box, then **Security -> API tokens -> Generate** with
+Read & Write, and give the CLI its own context:
+
 ```
-export HCLOUD_TOKEN=$(hcloud context active --token)
-terraform init
-terraform plan
-terraform apply
+hcloud context create spideryarn     # prompts for the token; does not echo it
+hcloud context use spideryarn
+hcloud context active                 # confirm it is not some other project
 ```
+
+The CLI deliberately offers no way to print a stored token, so hand Terraform its own copy:
+
+```
+export HCLOUD_TOKEN=$(python3 -c "import tomllib,os;d=tomllib.load(open(os.path.expanduser('~/.config/hcloud/cli.toml'),'rb'));print(next(c['token'] for c in d['contexts'] if c['name']==d['active_context']))")
+tofu init
+tofu plan
+tofu apply
+```
+
+That reads whichever context is active, so check `hcloud context active` first — it is the one
+command standing between you and applying to the wrong project.
 
 Then, from the output:
 
