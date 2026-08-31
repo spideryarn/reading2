@@ -80,7 +80,7 @@ import { stageFailure } from "./job-failure.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { partsOf } from "./arc.js";
 import { isSupplementNode } from "./supplement.js";
-import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
+import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
 import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
@@ -781,9 +781,21 @@ export function countCitations(
  * /api/summary/:slug` puts the answer in the response so the panel can say so,
  * and `summariesAreCurrent` below wraps it so the pipeline will not skip a step
  * whose artefact has gone stale.
+ *
+ * **Blocks, tree and metadata since 2026-08-31.** This asked about the blocks
+ * alone, which is a third of what the prompt reads: `batchesOf` and
+ * `skeletonOf` are built out of the tree and `articleText` writes the metadata
+ * head, so the sections could be re-cut or the extracted title changed and every
+ * summary went on reporting itself current.
+ * docs/plans/finish-the-database-move.md § stage 1.
  */
-export function isStale(summaries: Summaries, blocks: BlockFingerprint[]): boolean {
-  return summaries.sourceHash !== hashBlocks(blocks);
+export function isStale(
+  summaries: Summaries,
+  blocks: BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprint | null,
+): boolean {
+  return summaries.sourceHash !== articleFingerprint(blocks, tree, meta);
 }
 
 /** The summaries on disk, or null. Exported so the step and the API read them one way. */
@@ -807,8 +819,16 @@ export async function summariesAreCurrent(dir: string): Promise<boolean> {
   if (summaries.version !== PROMPT_VERSION) return false;
   if (summaries.generator !== CAPABLE_MODEL) return false;
   const blocksFile = await readJsonOrNull<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
-  if (!blocksFile?.blocks) return false;
-  return !isStale(summaries, blocksFile.blocks);
+  /* The tree as well as the blocks, since 2026-08-31: `batchesOf` and
+     `skeletonOf` build this stage's prompt out of it, so a re-cut article is a
+     different question at identical blocks. A tree we cannot read is "we cannot
+     tell", which answers not-current like everything else here. The metadata is
+     optional by design — the stage tolerates a missing `meta.json` and hashes
+     "no meta" as a legitimate input. */
+  const tree = await readJsonOrNull<Tree>(path.join(dir, "tree.json"));
+  if (!blocksFile?.blocks || !tree) return false;
+  const meta = await readJsonOrNull<Meta>(path.join(dir, "meta.json"));
+  return !isStale(summaries, blocksFile.blocks, tree, meta ?? null);
 }
 
 /* ------------------------------------------------------------ the stage --- */
@@ -1080,7 +1100,10 @@ export async function generateSummaries(opts: {
       slug: tree.slug,
       targets,
       blocks,
-      sourceHash: hashBlocks(blocks),
+      /* Blocks, tree and metadata — all three go into this stage's prompt
+         (`skeletonOf`, and `articleText`'s head), so all three belong in the
+         fingerprint. src/source-hash.ts § `articleFingerprint`. */
+      sourceHash: articleFingerprint(blocks, tree, meta),
       profile: opts.profile ?? null,
       elapsedMs: Date.now() - started,
     },

@@ -695,11 +695,20 @@ wrong.
 
 The step's freshness check is its `stamp` in [`src/pipeline.ts`](../../src/pipeline.ts), compared
 by `sameStamp`. It checks the three things
-[architecture.md § Storage](architecture.md#storage) has always specified for a cached artefact: the
-blocks it was written from (`sourceHash`), the prompt version, and the model id. Change any one and
+[architecture.md § Storage](architecture.md#storage) has always specified for a cached artefact: what
+it was written from (`sourceHash`), the prompt version, and the model id. Change any one and
 it regenerates by itself, with no `force` and nobody having to remember. Anything unreadable answers
 **false**, which is the safe way round: the cost is one model call, where the other way is a stale
 glossary served for ever.
+
+**`sourceHash` is the blocks, the tree and the metadata head, since 2026-08-31** —
+`articleFingerprint` in [`src/source-hash.ts`](../../src/source-hash.ts). It was the blocks alone,
+which is a third of what this prompt reads: `renderPrompt` builds the skeleton out of
+`partsOf(tree)`, and `articleText` writes `TITLE:`, `BY:` and `PUBLISHED IN:` above the prose. The
+sharp edge is not the wasted model call — it is that this same hash decides, through `existingFor`,
+whether the next run **appends** to the list or starts it again, so a fingerprint that missed a
+re-cut tree would go on adding terms to a glossary written about a differently-shaped article.
+[finish-the-database-move.md](../plans/finish-the-database-move.md) § stage 1.
 
 Until 2026-08-28 this was a hand-written `glossaryIsCurrent` in `src/glossary.ts` doing the same
 three comparisons. `stamp` replaced it, the function kept only its own tests alive, and a comment in
@@ -709,7 +718,9 @@ pure half, and the API response uses it to tell the panel the list is out of dat
 `hashBlocks` moved out of `src/tweets.ts` into [`src/source-hash.ts`](../../src/source-hash.ts) for
 this, and that is not tidying: two stages computing "the same" fingerprint two ways can only ever
 disagree, and the day they do, one artefact reports itself current against a different definition of
-current.
+current. The article fingerprints are beside it now, for exactly the same reason and across six
+stages rather than two — two functions, because `articleText` and `articleWithIds` do not print the
+same head.
 
 `glossary` is in `FORCE_ONLY_WHEN_NAMED` for two reasons, and the second is not shared with `tweets`.
 It reads the blocks and the tree and nothing reads what it writes, so the positional cascade would

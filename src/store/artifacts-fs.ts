@@ -52,6 +52,7 @@ import type {
   ArtifactParts,
   ArtifactStore,
 } from "./artifacts.js";
+import type { SourceStore } from "./contracts.js";
 
 /* `"store"` because that is what this is — src/log.ts keeps the component list
    closed on purpose, and every line here carries `step` and `kind` besides. */
@@ -158,6 +159,9 @@ export const PATHS: {
   ideas: {
     ideas: (at) => path.join(at.dir, "ideas.json"),
   },
+  quotes: {
+    quotes: (at) => path.join(at.dir, "quotes.json"),
+  },
   sketch: {
     sketch: (at) => path.join(at.dir, "sketch.json"),
   },
@@ -257,6 +261,10 @@ const DECODERS: Record<ArtifactKind, Decoder> = {
      hundred terms — but the same ceiling, because the cap is a guard against a
      corrupt or hostile file rather than a size estimate. */
   ideas: { maxBytes: 32 * MiB, decode: json("ideas") },
+  /* At most sixteen quotes of at most 400 characters each, so a real one is a
+     few KB — but the same ceiling as its neighbours, because the cap is a
+     guard against a corrupt or hostile file rather than a size estimate. */
+  quotes: { maxBytes: 32 * MiB, decode: json("quotes") },
   summary: { maxBytes: 32 * MiB, decode: json("summary") },
 };
 
@@ -634,3 +642,40 @@ export function createFsArtifactStore(
 
 /** The ordinary store: `data/<slug>/` and `output/<slug>.html`. */
 export const fsArtifacts: ArtifactStore = createFsArtifactStore();
+
+/**
+ * **The reader's own file, off the disk** — the filesystem half of
+ * `GET /api/source/:slug`.
+ *
+ * It is here rather than in [fs.ts](fs.ts), where the other filesystem adapters
+ * are assembled, because this is the module that is allowed to know where an
+ * article's files are, and the whole of this answer is one path: the manifest
+ * says which file holds the bytes, and the bytes are beside it. `fs.ts`
+ * delegates to code that already does the job and adds no behaviour; there was
+ * no such code for this — it was written out inline in `sendSource`, which is
+ * exactly the problem.
+ *
+ * **Through `fsArtifacts.read`, not a second `readRaw`.** The manifest is
+ * already an artefact of the `fetch` step, with a path in `PATHS` and a shape
+ * check in `SHAPE`; reaching for `raw.json` again here would be a second copy
+ * of where it is and of what a usable one looks like.
+ *
+ * The bytes are **not** an artefact and deliberately are not becoming one: an
+ * `ArtifactKind` is a JSON value both stores can hold in a column, and up to
+ * 32 MiB of somebody's scan is not that. Postgres keeps it as a reference to an
+ * object in a bucket — see [pg-source.ts](pg-source.ts).
+ */
+export const fsSourceStore: SourceStore = {
+  async readPdf(slug) {
+    const manifest = await fsArtifacts.read(slug, "fetch", "raw");
+    /* Absent, unreadable, or a web page — all three are "no PDF here", and the
+       route says one sentence for all three. */
+    if (manifest?.kind !== "pdf") return null;
+    /* **ENOENT here is a throw, not a `null`.** The manifest is stage 1 saying
+       the bytes are beside it; an assertion that turns out false is a fault
+       somebody should see, not an article that never had a scan. routes.ts
+       still answers 404 on `err.code === "ENOENT"`, which is what this route
+       did before and is the behaviour worth keeping identical. */
+    return new Uint8Array(await readFile(path.join(fsLocations(slug).dir, manifest.file)));
+  },
+};

@@ -32,7 +32,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
-import { createHash } from "node:crypto";
 import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
@@ -44,7 +43,7 @@ import { articleText } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
 import { isSupplementNode } from "./supplement.js";
 import { withLedger } from "./cli-ledger.js";
-import { hashBlocks, structureHash, type BlockFingerprint } from "./source-hash.js";
+import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
 
 /**
  * Exported since 2026-08-29 so that the pipeline's `stamp` can compare against it
@@ -226,42 +225,31 @@ export function buildArc(
  * `buildArcColumn` is by exact block range, and an entry matching no node is simply
  * not drawn.
  *
- * **Blocks and tree, for the reason `ideas` gives** (src/ideas.ts §
- * `inputFingerprint`): section boundaries move without a single block changing, and
- * this stage writes one sentence per *part*, so a re-cut article is a different
- * question against an input a blocks-only hash calls unchanged. `structureHash`
- * covers titles and gists too, which matters here because `renderParts` builds the
- * prompt out of them — a reworded gist is a different question at identical ranges.
+ * **Blocks, tree and metadata — and the definition now lives in
+ * src/source-hash.ts.** This was the first stage to get all three right, and on
+ * 2026-08-31 the other five article-reading stages were completed against it, so
+ * the body moved to `articleFingerprint` where all six can share one definition
+ * rather than six that are free to drift. The canonical string is unchanged, so
+ * every `arc.json` already on a shelf keeps its fingerprint. Why each third is
+ * there — and the one head line it knowingly does not cover — is written up
+ * there; this name stays because it is what the arc's own callers ask for.
  *
- * **And the metadata, which is this stage's own addition.** `generateArc` reads
- * `meta.json` and hands it to `articleText`, which puts `TITLE:`, `BY:` and
- * `PUBLISHED IN:` at the head of the prompt (src/article-prompt.ts). Only those
- * three: folding in `fetchedAt` would mark every arc stale on every re-fetch of an
- * unchanged page, a paid re-run bought for nothing. A *missing* `meta.json` is a
- * distinct input rather than an error, because `generateArc` tolerates one.
+ * A *missing* `meta.json` is a distinct input rather than an error, because
+ * `generateArc` tolerates one.
  *
- * GPT Sol raised the metadata half on 2026-08-29, having noticed that the reading
- * view renames articles in place (`useArticleRename`), so a title change is
- * reachable rather than theoretical.
+ * GPT Sol raised the metadata half on 2026-08-29. **The reason given at the time
+ * was wrong** and is corrected here: it cited the reading view's rename, which is
+ * a shelf override (`shelf.json`, `articles.title_override`) that no generator
+ * reads. What really moves this head is a re-extraction — the title, byline and
+ * site are stage 2's, and they change when the page does.
  * docs/plans/defer-arc-and-rename-hierarchy.md § 2.1.
  */
 export function inputFingerprint(
   blocks: readonly BlockFingerprint[],
   tree: Tree,
-  meta: Meta | null,
+  meta: MetaFingerprint | null,
 ): string {
-  /* JSON, not a delimiter join, and for the reason src/source-hash.ts sets out at
-     length: title, byline and siteName are the page's own text, so any unescaped
-     separator is a collision waiting for the page that contains it. `null` for an
-     absent meta is a different canonical string from a meta whose fields are all
-     empty, which is correct — they are different states. */
-  const head = meta
-    ? JSON.stringify([meta.title ?? "", meta.byline ?? "", meta.siteName ?? ""])
-    : "none";
-  return `${hashBlocks(blocks)}.${structureHash(tree)}.${createHash("sha256")
-    .update(`spya-arc-meta/1\n${head}`, "utf8")
-    .digest("hex")
-    .slice(0, 16)}`;
+  return articleFingerprint(blocks, tree, meta);
 }
 
 /**
@@ -280,7 +268,7 @@ export function isStale(
   arc: Arc,
   blocks: readonly BlockFingerprint[],
   tree: Tree,
-  meta: Meta | null,
+  meta: MetaFingerprint | null,
 ): boolean {
   if (!arc.sourceHash) return true;
   if (arc.version !== PROMPT_VERSION) return true;

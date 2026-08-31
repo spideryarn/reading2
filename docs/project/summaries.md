@@ -227,9 +227,13 @@ production 504s were caused by **output** tokens, not by the article going in
 seven-part article otherwise takes seven model calls end to end.
 
 Roughly: a 30-node tree comes to about 20k output tokens across half a dozen calls, a minute or two
-of wall clock. Cached on the article's fingerprint (`hashBlocks`,
-[source-hash.ts](../../src/source-hash.ts)) plus the prompt version and the model id, so it is written
-once and never again unless one of those three moves. **Theirs were never cached at all** and were
+of wall clock. Cached on the article's fingerprint (`articleFingerprint` — the `articleText` half,
+[source-hash.ts](../../src/source-hash.ts) — the blocks, the tree and the metadata head, which is
+what `batchesOf`, `skeletonOf` and `articleText` between them read) plus the prompt version and the
+model id, so it is written once and never again unless one of those three moves. **It hashed the
+blocks alone until 2026-08-31**, and this is the stage where that cost the most: regenerating is one
+model call per part, so the sections could be re-cut and every summary went on reporting itself
+current. **Theirs were never cached at all** and were
 regenerated on every page view; their own doc lists that as a limitation.
 
 ### Partial salvage, which is the one thing we do differently

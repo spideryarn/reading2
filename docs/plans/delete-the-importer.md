@@ -2657,11 +2657,31 @@ behaviour, which is the shape this plan exists to close.
 > present and mutually inconsistent. Whatever D2 does here, that ordering property has to survive or
 > be consciously given up — it is not incidental.
 >
-> **The open question this exposes:** if the checkpoint store has no `delete` by design, **what
-> reclaims a finished run's checkpoint under Postgres?** On the filesystem `scripts/checkpoints-sweep.ts`
-> answers it — but that sweeps the `data/` root directly, so it is a *filesystem* answer that does not
-> carry over. Either the store needs a reclamation path, or checkpoints accumulate for ever. This is
-> unresolved and must be settled before D2 is built, not during.
+> **Correction to this correction, 2026-08-31 — two of the three claims above were wrong, and both
+> errors were mine.**
+>
+> **The line numbers were stale again**: `clearCheckpoint` is at **`src/toc.ts:1384`** and
+> `src/labels.ts:2544` (implementation `:2411`). Re-derive; do not trust any number written here.
+>
+> **"`clearCheckpoint` last is a crash-safety property" is false.**
+> [`src/labels.ts`](../../src/labels.ts) states the opposite outright — a checkpoint is *"harmless to
+> forget: read by the next run, matched fingerprint by fingerprint, and either reused correctly or
+> ignored."* That gap protects **money**, not consistency. What *is* real is a different ordering —
+> labels, blocks, tree, tree last — which holds because `src/pipeline.ts` reads *file exists* as
+> *step done* and `writeFile` truncates before writing. Under one transaction both halves of that
+> justification vanish, so keep the ordering until D3/D4 actually merges the three artefacts into one
+> `parts` map, then drop it.
+>
+> **"What reclaims a checkpoint under Postgres?" was already answered when it was asked.**
+> `scripts/checkpoints-sweep.ts` **branches on `STORE`** and calls `sweepPgCheckpoints`
+> ([`src/store/checkpoints-pg.ts`](../../src/store/checkpoints-pg.ts)) — a delete on `last_used_at`,
+> dry-run by default, indexed, mutation-tested. I had read only its `else` branch. `article_id`'s
+> `on delete cascade` (migration 0028) is a second path. Both landed 2026-08-29, and
+> `checkpoints.ts:122` names the sweep in the same comment this note was quoting.
+>
+> **So D2 builds nothing here** and deletes what it always planned to. Measured: the whole corpus,
+> had nothing ever been reclaimed, is under 500 KB. Working:
+> [checkpoint-reclamation.md](checkpoint-reclamation.md).
 >
 > Also read `src/labels.ts` **after** the current ToC work lands rather than working from the
 > paragraph below: `LabelRun` has since gained fields, a shortfall re-ask for missing ordinals and a

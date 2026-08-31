@@ -105,8 +105,38 @@ imports it; the only reference is a guard test. Deleted in stage 4.
 
 ## What the inventory found
 
-**`sendSource()` is ungated** — [`src/routes.ts`](../../src/routes.ts) reaches `fsLocations(slug)` and
-`readRaw(dir)` with no store branch.
+**~~`sendSource()` is ungated~~** — ✅ **Built 2026-08-31 (stage 1b).** It reached `fsLocations(slug)`
+and `readRaw(dir)` with no store branch, and it was the last unconditional filesystem read in
+[`src/routes.ts`](../../src/routes.ts). It now asks `sourceStore.readPdf(slug)`, a new `SourceStore`
+seam in [`contracts.ts`](../../src/store/contracts.ts) selected in
+[`index.ts`](../../src/store/index.ts) like every other store: `fsSourceStore` in
+[`artifacts-fs.ts`](../../src/store/artifacts-fs.ts), `pgSourceStore` in the new
+[`pg-source.ts`](../../src/store/pg-source.ts). `node:fs` and `node:path` are gone from routes.ts
+altogether and a test says they stay gone.
+
+- **`readPdf`, not `readSource`, and the narrowness is the safety.** The content type is the
+  boundary — an HTML source served from our own origin is stored XSS — so the store hands back the
+  one kind the route may set a type for, and adding a second kind has to be a deliberate second
+  method. [security.md](../project/security.md).
+- **The Postgres side serves both eras.** Reference first (`raw_source_sha256` +
+  `raw_source_kind` → the `sources` bucket, bytes re-hashed against the key on the way out), and
+  `raw_bytes` behind a `source = 'pdf'` guard for rows written before the reference — which is
+  **every article the importer has ever written**, so reference-only would have 404'd the whole
+  local corpus while reporting nothing wrong. That second query dies with the column in stage 5.
+- **A dangling reference throws `status: 500`, it does not answer `null`.** Same rule as
+  `readRawDocument` in [`export.ts`](../../src/store/export.ts). The numeric status is load-bearing:
+  `guardDbStore` scrubs everything else.
+- **It was also the deployed jobless `dataRoot()` caller** that
+  [`data-root.ts`](../../src/store/data-root.ts) named by route. It is not one any more, and that
+  file's header says so.
+- **Two negative controls were missing, and the review found both.** GPT Sol passed the
+  implementation on every point and then said what the *tests* could not do: every Postgres fixture
+  was a PDF, so an implementation returning referenced **or** legacy HTML would have passed — and
+  that is the guard the whole `readPdf`-not-`readSource` decision rests on. Nothing asserted the
+  first query excludes `raw_bytes` either, so putting the 32 MiB column back was a one-word edit no
+  test could see. Both are now in `tests/source-store.test.ts` with two HTML fixtures (one
+  referenced with its object really present in the bucket, one legacy), and all three were made to
+  go red on the mutation they guard before being taken green.
 
 **Upload collision handling reads outside job scope** — `slugIsSpokenFor` reads `raw.json` through
 `contextPaths` during enqueue, before `runInJob`, where `dataRoot()` deliberately throws on a
@@ -137,14 +167,44 @@ are updated in the same commit as the stage.**
 
 No switchover, no behaviour change a reader would notice, and nothing that can break a fresh ingest.
 
-- **Complete every fingerprint.** `tweets`, `glossary`, `summary` stamp only the blocks hash but
-  consume the tree and metadata; `ideas` and `sketch` omit metadata. Harmless while reads return
-  `null`; the moment they succeed, an incomplete stamp lets a **stale artefact skip**.
-- **Replace the blocks freshness guard** — `htmlCarriesItsIds`, before any Postgres-backed preflight
-  exists to invert it.
+- **Complete every fingerprint.** ✅ **Built 2026-08-31 (stage 1a).** `tweets`, `glossary` and
+  `summary` stamped only the blocks hash but consume the tree and metadata; `ideas` and `sketch`
+  omitted the metadata. All six article-reading stages now share one definition —
+  `articleFingerprint` in [`src/source-hash.ts`](../../src/source-hash.ts), lifted from `arc`'s,
+  covering blocks + tree + the three metadata fields the prompt head carries. `assets` keeps the
+  blocks-only hash, correctly: it is the one stamped stage with no prompt. Harmless while reads
+  return `null`; the moment they succeed, an incomplete stamp lets a **stale artefact skip**.
+  - **One function per prompt head, not one for all of them.** `articleText` prints three metadata lines;
+    `articleWithIds` prints those three **and `URL:`**, and `ideas`/`sketch` synthesise
+    `TITLE: <tree.slug>` rather than dropping the head when there is no `meta.json`. The first
+    version of this work covered neither and argued the URL out on a reason that was factually wrong
+    (`article_revisions.final_url` exists and Postgres already rebuilds `Meta.url` from it).
+    `articleWithIdsFingerprint` covers both, resolving the fallback through the shared
+    `fallbackHeadTitle` so the stage and its fingerprint cannot drift. Widening the single function
+    instead would have spent four model calls on a line the model was never shown.
+    GPT Sol NO-SHIP, 2026-08-31.
+  - **The Postgres reader had to learn "no metadata" the same way.** `metaFingerprintOf` answered
+    `{ title: "" }` where the artefact adapter answers `null`, and the fingerprint tells those apart
+    — so an article with no metadata was current to the pipeline and stale to every reader path.
+    `citedMetaFingerprintOf` is the URL-carrying sibling, and it takes `final_url` in its argument
+    type so a projection that forgot the column is a compile error rather than a silent hash.
+- **Replace the blocks freshness guard** — ✅ **Built 2026-08-31 (stage 1a), then rebuilt the same
+  day after review.** `htmlCarriesItsIds` is now `blocksMatchTheirHtml`, and asks a second question
+  the first one could not: whether stage 3, run against the HTML stage 2 is holding *now*, would
+  produce the blocks that are stored. It re-derives candidates with `splitIntoBlocks` and compares
+  them through `blockIdentityFree`, a projection of every `Block` field except the id.
+
+  **The first version compared the two documents' parsed text and was unsound in both directions** —
+  it skipped a genuine re-split (`<p>Alpha</p><p>Beta</p>` → `<p>AlphaBeta</p>` has identical text)
+  and it re-ran for ever on any article where the sanitiser legitimately removed something, because
+  in Postgres `extracted_html` stays unsanitised while `stamped_html` does not. It had been measured
+  against one real article. Both halves red-then-green;
+  [block-ids.md § The freshness guard](../project/block-ids.md) has the cost and the idempotence
+  measurement it rests on. GPT Sol NO-SHIP, 2026-08-31.
 - **Convert every path-based input**: the six late stages, `blocks`, **and `toc` and forced
-  `extract`**.
-- Fix `sendSource`, the upload-collision read, and `deleteGlossary`.
+  `extract`**. *(Stage 1b, not built.)*
+- Fix `sendSource` — ✅ **Built 2026-08-31 (stage 1b)**, see § *What the inventory found* above.
+- Fix the upload-collision read and `deleteGlossary`. *(Not built.)*
 
 ### Stage 2 — every stage returns its product
 
@@ -159,15 +219,61 @@ checkpoint is discarded only once `labels.json`, `blocks.json` and `tree.json` a
 last**, because the tree is the file every reader starts from. A crash mid-sequence otherwise leaves
 new labels and blocks beside last week's tree, all three mutually inconsistent.
 
-**Unresolved, settle before building:** the original plan deletes `clearCheckpoint` deliberately,
-because the checkpoint store has **no `delete`** by design. So what reclaims a finished run's
-checkpoint under Postgres? `scripts/checkpoints-sweep.ts` is a filesystem answer that does not carry
-over. Either the store gains a reclamation path or checkpoints accumulate for ever.
+**~~Unresolved, settle before building.~~ Resolved 2026-08-31, and my premise was false.** I wrote
+that `scripts/checkpoints-sweep.ts` is "a filesystem answer that does not carry over". It is not: it
+**branches on `STORE`** and calls `sweepPgCheckpoints`
+([`src/store/checkpoints-pg.ts`](../../src/store/checkpoints-pg.ts)) — a delete on `last_used_at`,
+dry-run by default, indexed, and mutation-tested. I had read only the `else` branch. A second
+reclamation path exists too: `article_id`'s `on delete cascade`, from migration 0028. Both landed
+2026-08-29, and `checkpoints.ts:122` names the sweep in the very comment I was quoting.
+
+**So the question was already answered by its own dependency, and the answer is: build nothing.**
+
+**And the crash-safety framing was wrong as well** — mine and the peer's, propagated by me into two
+documents. Two orderings were conflated:
+
+- **Labels → blocks → tree, tree last, is real today**, but not for the reason given. It holds
+  because [`src/pipeline.ts`](../../src/pipeline.ts) reads *file exists* as *step done* and
+  `writeFile` truncates before writing. Under one transaction — `toc` returning one `ArtifactParts`
+  map through `writeArtefacts` — **both halves of that justification vanish**. Keep the ordering
+  until stage 2 actually merges the three, then drop it.
+- **`clearCheckpoint` last was never a crash-safety property.**
+  [`src/labels.ts`](../../src/labels.ts) says so outright: a checkpoint is *"harmless to forget: read
+  by the next run, matched fingerprint by fingerprint, and either reused correctly or ignored."* The
+  gap protects **money**, not consistency. A transaction makes it *harder*, since the store sits
+  outside the transaction by design — but both branches end at "a leftover row is fine".
+
+**Measured rather than estimated:** 18 pdf chunks totalling 302,942 bytes; exactly one surviving
+`labels-progress.json` at 14,824 bytes; the whole corpus, had nothing ever been reclaimed, is **under
+500 KB**. Growth is per distinct question set, not per article, and every row costs a paid model
+call, which is the floor under the rate. Leave the sweep unscheduled; watch
+`sum(pg_column_size(value))` and schedule past ~100 MB.
+
+Full working: [checkpoint-reclamation.md](checkpoint-reclamation.md).
 
 Read `src/labels.ts` after the peer's ToC work lands — `LabelRun` has gained fields, a shortfall
 re-ask and a bounded partial accept.
 
-### Stage 3 — the flip, and the faults close
+### Stage 2.5 — refetch the corpus, **before** the flip and not after
+
+**Moved here from stage 4 on 2026-08-31, on Sol's third review.** The plan had refetching as
+tidying-up after the switchover. It is a prerequisite, and the reason is concrete:
+
+The importer writes `extractedHtml: null` while setting `stampedHtml`
+([`src/store/import.ts`](../../src/store/import.ts)), and draft creation carries both columns
+forward. Every article in the corpus arrived that way. So after the flip, a `blocks`-only job over an
+imported article copies `extractedHtml = null`, fails the new guard, and **has no
+`BLOCKS_INPUT_HTML` for the converted stage 3 to run from at all**. Not a degraded result — no input.
+
+That state also contradicts [`src/blocks.ts`](../../src/blocks.ts) § around line 1221, which claims
+no state exists with stamped HTML and no extracted HTML. It does; the importer makes it.
+
+Two ways out: write explicit legacy handling for imported revisions, or **refetch every imported
+article before the flip**. Refetching wins on Greg's decision 4 — the data is expendable and refetch
+is free — and it avoids writing compatibility code whose only purpose is to be deleted at stage 4.
+
+**Done:** no revision reachable by the pipeline has `stampedHtml` without `extractedHtml`, proved by
+a query rather than by re-running the importer.
 
 - **Exercise the real coordinator through `openPgStoreSession`** — the unexercised path.
 - **Add exact-base verification**: reads bound to revision R1 must not be overlaid onto a draft

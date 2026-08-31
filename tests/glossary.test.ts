@@ -32,7 +32,7 @@ import {
   suggestedCount,
 } from "../src/glossary.js";
 import { formsOf, termPattern, termSpans } from "../src/term-match.js";
-import { hashBlocks } from "../src/source-hash.js";
+import { articleFingerprint } from "../src/source-hash.js";
 import { CAPABLE_MODEL } from "../src/models.js";
 import {
   GATE_STEP,
@@ -50,7 +50,7 @@ import {
   entryProse,
 } from "../src/web/GlossaryPanel.js";
 import { gateParam } from "../src/web/params.js";
-import type { Block, Glossary, GlossaryEntry } from "../src/types.js";
+import type { Block, Glossary, GlossaryEntry, Tree } from "../src/types.js";
 
 function block(id: string, text: string): Block {
   return {
@@ -378,12 +378,33 @@ describe("suggestedCount", () => {
 });
 
 describe("isStale", () => {
+  /* The three inputs this stage's prompt reads — `renderPrompt` builds the
+     skeleton out of the tree and `articleText` writes the metadata head — so
+     all three are in the fingerprint. src/source-hash.ts § `articleFingerprint`. */
+  const STALE_TREE: Tree = {
+    version: "toc/2",
+    generator: CAPABLE_MODEL,
+    slug: "a-slug",
+    rootId: "n0",
+    nodes: {
+      n0: {
+        id: "n0",
+        parent: null,
+        range: [BLOCKS[0]!.id, BLOCKS[BLOCKS.length - 1]!.id],
+        title: "The whole thing",
+        gist: "One sentence.",
+        children: [],
+      },
+    },
+  } as unknown as Tree;
+  const STALE_META = { title: "A title", byline: "Seth", siteName: "Somewhere" };
+
   function glossary(over: Partial<Glossary> = {}): Glossary {
     return {
       version: PROMPT_VERSION,
       generator: CAPABLE_MODEL,
       slug: "a-slug",
-      sourceHash: hashBlocks(BLOCKS),
+      sourceHash: articleFingerprint(BLOCKS, STALE_TREE, STALE_META),
       entries: [entry({ name: "Seth" })],
       passes: 1,
       generatedAt: "2026-08-25T12:00:00.000Z",
@@ -393,8 +414,33 @@ describe("isStale", () => {
   }
 
   it("notices when the blocks it was written from have moved", () => {
-    expect(isStale(glossary(), BLOCKS)).toBe(false);
-    expect(isStale(glossary(), [...BLOCKS, block("spya-dddddd", "A new paragraph.")])).toBe(true);
+    expect(isStale(glossary(), BLOCKS, STALE_TREE, STALE_META)).toBe(false);
+    expect(
+      isStale(
+        glossary(),
+        [...BLOCKS, block("spya-dddddd", "A new paragraph.")],
+        STALE_TREE,
+        STALE_META,
+      ),
+    ).toBe(true);
+  });
+
+  /* Red before 2026-08-31, when this compared the blocks alone: the prompt
+     shows the model the skeleton, so a re-cut article is a different question
+     at byte-identical blocks. docs/plans/finish-the-database-move.md § stage 1. */
+  it("notices when the sections have been re-cut under it", () => {
+    const recut = {
+      ...STALE_TREE,
+      nodes: { n0: { ...STALE_TREE.nodes.n0!, gist: "A different sentence." } },
+    } as Tree;
+    expect(isStale(glossary(), BLOCKS, recut, STALE_META)).toBe(true);
+  });
+
+  /* Red before the same date. The extracted title is stage 2's, so a
+     re-extraction moves it, and it goes straight into the head of this prompt.
+     Not the reader's own rename — that is a shelf override no generator sees. */
+  it("notices when the article has been renamed under it", () => {
+    expect(isStale(glossary(), BLOCKS, STALE_TREE, { ...STALE_META, title: "Renamed" })).toBe(true);
   });
 });
 

@@ -68,9 +68,11 @@ import type {
   ReaderStore,
   SearchStore,
   ShelfStore,
+  SourceStore,
   VisibilityStore,
 } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
+import { fsSourceStore } from "./artifacts-fs.js";
 import {
   fsArticleReader,
   fsAssertWritableGlossary,
@@ -92,6 +94,7 @@ import { pgGlossaryLookupStore } from "./pg-lookups.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgSearchStore } from "./pg-searches.js";
 import { pgLibrarySearch, pgShelfStore } from "./pg-shelf.js";
+import { pgSourceStore } from "./pg-source.js";
 import { pgVisibilityStore } from "./pg-visibility.js";
 
 /**
@@ -198,6 +201,7 @@ export const listArticles = reader.listArticles.bind(reader);
 export const articleMetadata = reader.articleMetadata.bind(reader);
 export const loadTweets = reader.loadTweets.bind(reader);
 export const loadGlossary = reader.loadGlossary.bind(reader);
+export const loadQuotes = reader.loadQuotes.bind(reader);
 export const loadSummaries = reader.loadSummaries.bind(reader);
 export const loadIdeas = reader.loadIdeas.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
@@ -296,6 +300,24 @@ export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch, 
  * failure `notMigrated` exists to prevent. docs/plans/reader-profile.md.
  */
 export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore, fsReaderStore);
+
+/**
+ * **The document the article was made from** — `GET /api/source/:slug`.
+ *
+ * The last route that did not come through this file. `sendSource` in
+ * src/routes.ts authorised through `shelfStore` and then read
+ * `data/<slug>/raw.pdf` off the disk itself, whatever `SPIDERYARN_STORE` said,
+ * so under `postgres` it reported *"that article did not come from a PDF"*
+ * about a PDF sitting in the `sources` bucket — and on a deployment it was the
+ * jobless `dataRoot()` caller that src/store/data-root.ts names by route.
+ * docs/plans/finish-the-database-move.md, stage 1.
+ *
+ * `guarded(...)` like the reads above it, because there really are two
+ * implementations: `data/<slug>/` beside the manifest naming the file, and a
+ * reference to a content-addressed object in the bucket. Not `notMigrated`, not
+ * a refusal — both stores can answer.
+ */
+export const sourceStore: SourceStore = guarded("source", pgSourceStore, fsSourceStore);
 
 /**
  * Who has signed up — the admin page's one endpoint.

@@ -148,7 +148,15 @@ edit to each of the four stage files necessary: see
 [database.md](database.md) covers this layout as a whole, and what changes when it becomes Supabase
 Postgres.
 
-Filesystem, one directory per article, no database:
+**Half-moved, as of 2026-08-31.** Every *reader* store is Postgres under `SPIDERYARN_STORE=postgres`,
+which is what production runs; the *pipeline* still writes the filesystem layout below, because
+[`src/jobs.ts`](../../src/jobs.ts) imports `fsArtifacts` directly and never joins that selection. The
+gap between the two halves is not cosmetic — it is where three live faults came from, including one
+that mints new block ids over an article that already had them. Finishing it is
+[finish-the-database-move.md](../plans/finish-the-database-move.md); the reasoning is
+[delete-the-importer.md](../plans/delete-the-importer.md).
+
+The layout the pipeline writes, one directory per article:
 
 ```
   data/_jobs/       ingest job records, one file per job (ingest-queue.md)
@@ -173,8 +181,8 @@ Filesystem, one directory per article, no database:
     arc.json        one sentence per part: where the argument stands there
                     (stage 5b — joined to the tree by RANGE, never by node id)
     tweets.json     the article as a numbered thread (stage 5c, on demand only —
-                    docs/plans/tweet-thread-page.md). Carries a sourceHash of
-                    blocks.json, so a thread that has gone stale can say so.
+                    docs/plans/tweet-thread-page.md). Carries a sourceHash, so a
+                    thread that has gone stale can say so.
     glossary.json   the terms the piece uses, and which blocks use them (stage 5d,
                     on demand only — glossary.md). Carries a sourceHash too, and
                     a `passes` count, because the list grows a batch at a time.
@@ -185,23 +193,47 @@ Filesystem, one directory per article, no database:
                     loses only its own sections rather than the whole file.
     ideas.json      the propositions the piece needs you to hold — the ones it
                     assumes and the ones it adds (stage 5f, on demand only —
-                    ideas.md). Its sourceHash covers the TREE as well as the
-                    blocks, which no other artefact's does: the model judges what
-                    the argument rests on from the skeleton, so a re-sectioned
-                    article is a different question even when every paragraph is
-                    byte-identical.
+                    ideas.md).
     reader.json     per-reader state: progress, highlights, notes (all keyed by block id)
 ```
 
 Anything expensive is cached on a content hash. `tree.json` is keyed on
 `hash(blocks.json) + prompt version + model id` — change any of those and it regenerates.
 
-**That was aspirational until 2026-08-25, and now one artefact really does it.** `tweets.json`
-carries a `sourceHash` and the pipeline reads it (`isDone` on a step, see
+**That was aspirational until 2026-08-25, and six artefacts really do it now.** `tweets.json` was
+first, and the pipeline reads its hash (`isDone` on a step, see
 [ingest-queue.md](ingest-queue.md#a-step-can-now-say-whether-its-artefact-is-current-not-just-present));
-**`arc.json` joined it on 2026-08-29** and carries a `sourceHash` over the blocks, the tree and the
-metadata its prompt uses ([`src/arc.ts`](../../src/arc.ts) § `inputFingerprint`), read through a
-`stamp` on the step. `tree.json` still carries no hash, so for it "cached" still means "the file is
+`arc.json` joined on 2026-08-29 with the first fingerprint that covered everything its prompt reads.
+
+**Since 2026-08-31 the six article-reading stages are fingerprinted against everything their prompt
+reads** — the blocks, the tree, *and the head* — in
+[`src/source-hash.ts`](../../src/source-hash.ts). Before that, four of the six hashed the blocks
+alone and two omitted the metadata, so the sections could be re-cut, or the page re-extracted under a
+new headline, and every one of them went on reporting itself current.
+
+**One function per prompt head**, and one function for all of them was the first attempt. Three
+heads exist today and the list grows as stages arrive:
+
+| function | stages | what its head prints |
+|---|---|---|
+| `articleFingerprint` | `arc`, `tweets`, `glossary`, `summary`, `quotes` | `TITLE:`, `BY:`, `PUBLISHED IN:` (`articleText`) |
+| `articleWithIdsFingerprint` | `ideas`, `sketch` | those three **and `URL:`** (`articleWithIds`) |
+| `datedArticleFingerprint` | `timeline` | those four **and the publication date**, which is its reference frame |
+
+The last two also hash the synthetic `TITLE: <tree.slug>` those two stages fall back to when there is
+no `meta.json`, through the shared `fallbackHeadTitle` — `structureHash` does not cover `tree.slug`,
+so re-slugging a metadata-less article moved the prompt and nothing else. Widening the first function
+instead would have spent four model calls on a `URL:` line the model was never shown. GPT Sol found
+both halves, 2026-08-31.
+
+That was harmless only while the pipeline's artefact reads answered `null` and the step re-ran
+regardless; the failure arrives with the reads that make it work.
+[finish-the-database-move.md](../plans/finish-the-database-move.md) § stage 1.
+
+`assets.json` keeps the narrow hash — the blocks and nothing else — because that is genuinely all it
+is built from: a list of images to fetch, no prompt and no head.
+
+`tree.json` still carries no hash, so for it "cached" still means "the file is
 there" and it still relies on the force-cascade to notice that something upstream moved — see
 [`src/pipeline.ts`](../../src/pipeline.ts) § `toc`, where a stamp was written and withdrawn because
 it needs consumer invalidation first.
@@ -268,8 +300,11 @@ every id permanently, and orphans every note, highlight and gist that pointed at
 
 - TypeScript, ESM (`"type": "module"`), strict mode — see [`tsconfig.json`](../../tsconfig.json).
 - Every stage is runnable on its own against a slug, so any one can be re-run without the others.
-- Anything expensive should be cached on a content hash. Two stages do it, and copy *their* choice of
-  hash input rather than only the idea — [database.md](database.md#the-filesystem-era-files-under-dataslug).
+- Anything expensive should be cached on a content hash. Seven stages do it, and copy *their* choice
+  of hash input rather than only the idea — the rule is that a fingerprint covers **everything the
+  stage's prompt reads** — for six of the seven that is the blocks, the tree and the head, and there
+  are two head functions because there are two heads
+  ([`src/source-hash.ts`](../../src/source-hash.ts)); for `assets` it is the blocks alone. [database.md](database.md#the-filesystem-era-files-under-dataslug).
 - **A cache whose key is deterministic must be written atomically and read tolerantly**, and the two
   are one rule. `writeFile` truncates before it writes, so a killed process leaves a file that exists
   and does not parse; the key does not change between runs, so every later run finds that same file

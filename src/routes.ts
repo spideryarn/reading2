@@ -26,6 +26,7 @@
  *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources
  *   GET    /api/summary/:slug    the piece at more than one length, and whether it is stale
  *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
+ *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
  *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
  *   GET    /api/comments/:slug   every stored comment for the article
  *   POST   /api/comments/:slug   { blockId, quote, start } → the answered comment
@@ -57,8 +58,10 @@
  * docs/project/ingest-queue.md.
  */
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+/* No `node:fs` and no `node:path` here, deliberately, and it is worth keeping
+   that way: this file's last filesystem read was `sendSource`, and it is now a
+   store call. A route reaching for a path is a route that ignores
+   SPIDERYARN_STORE — docs/plans/finish-the-database-move.md. */
 import type { IncomingMessage, ServerResponse } from "node:http";
 /* From the store rather than from src/api.ts directly, so that
    SPIDERYARN_STORE=postgres swaps every article read at once and no route has
@@ -79,6 +82,7 @@ import {
   lookUpTerm,
   loadArc,
   loadIdeas,
+  loadQuotes,
   loadSketch,
   loadSummaries,
   loadTweets,
@@ -101,15 +105,13 @@ import { isStorableColour } from "./searches.js";
    They cannot be split: a comment anchors to a block id, and leaving the
    questions on disk while the paragraphs they point at come from Postgres puts
    the two halves in stores nothing keeps in step. */
-import { fsLocations } from "./store/artifacts-fs.js";
-import { adminStore, commentStore, visibilityStore } from "./store/index.js";
+import { adminStore, commentStore, sourceStore, visibilityStore } from "./store/index.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import type { ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
 import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
-import { readRaw } from "./fetch.js";
 import { isSpideryarnId } from "./ids.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
 import { advanceJob, cancelJob, enqueue, forgetJob, getJob, listJobs, retryJob } from "./jobs.js";
@@ -171,6 +173,7 @@ import type {
   LibrarySearchResponse,
   ShelfState,
   IdeasResponse,
+  QuotesResponse,
   SketchResponse,
   ReviewStance,
   ThreadKind,
@@ -244,13 +247,23 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
      into in production, and it is why it does. */
   await shelfStore.read(slug);
 
-  /* `fsLocations`, not a path built here — the store is the layer allowed to
-     know where an article's files are, and a second copy of that knowledge is
-     how one of them ends up pointing somewhere else. src/store/artifacts-fs.ts. */
-  const { dir } = fsLocations(slug);
-  const manifest = await readRaw(dir);
-  if (manifest?.kind !== "pdf") throw httpError(404, "That article did not come from a PDF.");
-  const bytes = await readFile(path.join(dir, manifest.file));
+  /* **The store, not the disk** — and until 2026-08-31 this was the disk.
+
+     It read `fsLocations(slug)` and `data/<slug>/raw.pdf` whatever
+     `SPIDERYARN_STORE` said: the last unconditional filesystem read in this
+     file, found twice independently (docs/plans/finish-the-database-move.md
+     § What the inventory found). Under `postgres` that answered *"this article
+     did not come from a PDF"* about a PDF sitting in the `sources` bucket, and
+     deployed it was the jobless `dataRoot()` caller that
+     src/store/data-root.ts names by route — where that function deliberately
+     throws, because both available answers are wrong.
+
+     `readPdf`, not "read the source document", because the content type is the
+     boundary: an HTML source served from our own origin is stored XSS, so the
+     store hands back the one kind this route may set a type for.
+     src/store/contracts.ts § SourceStore. */
+  const bytes = await sourceStore.readPdf(slug);
+  if (!bytes) throw httpError(404, "That article did not come from a PDF.");
   res.statusCode = 200;
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="${slug}.pdf"`);
@@ -3485,6 +3498,10 @@ export async function serveAuthenticatedApi(
      throw away. Asking for these is
      POST /api/jobs { slug, steps: ["ideas"] }. */
   const ideas = /^\/api\/ideas\/([\w.%-]+)$/.exec(url);
+  /* Read only, and no DELETE, for exactly the reason `ideas` above has none:
+     the step replaces rather than appends, so re-running it already *is* "find
+     them again". POST /api/jobs { slug, steps: ["quotes"] }. */
+  const quotes = /^\/api\/quotes\/([\w.%-]+)$/.exec(url);
   /* The Sketch diagram — docs/project/diagram.md § Sketch. GET only, like the
      four reads around it: drawing one is
      POST /api/jobs { slug, steps: ["sketch"] }, which is also how "draw it
@@ -3742,6 +3759,17 @@ export async function serveAuthenticatedApi(
       {
         const at = slugPart(ideas, 1);
         send(res, 200, await withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas));
+      }
+      return;
+    }
+    if (quotes && req.method === "GET") {
+      {
+        const at = slugPart(quotes, 1);
+        send(
+          res,
+          200,
+          await withProfileChanged<QuotesResponse>(at, () => loadQuotes(at), (found) => found.quotes),
+        );
       }
       return;
     }

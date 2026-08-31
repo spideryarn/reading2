@@ -45,7 +45,12 @@ import {
   type SketchScore,
   SKETCH_VERSION,
 } from "./sketch-scene.js";
-import { type BlockFingerprint, hashBlocks, structureHash } from "./source-hash.js";
+import {
+  articleWithIdsFingerprint,
+  type BlockFingerprint,
+  fallbackHeadTitle,
+  type MetaFingerprintWithUrl,
+} from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Meta, Tree, TreeNode } from "./types.js";
 
@@ -64,15 +69,27 @@ export const OVERVIEW_MIN = 6;
 export const OVERVIEW_MAX = 16;
 
 /**
- * **The blocks and the section boundaries this was drawn against, together.**
+ * **The blocks, the section boundaries and the head this was drawn against, all
+ * three** — `articleFingerprint` in src/source-hash.ts.
  *
- * Both halves, for the reason `inputFingerprint` in src/ideas.ts gives at
- * length: the prompt shows the model the outline *before* the article, so
- * re-cutting the sections changes the question being asked while every block
- * stays byte-identical, and a blocks-only hash would report no change at all.
+ * The tree, for the reason `inputFingerprint` in src/ideas.ts gives at length:
+ * the prompt shows the model the outline *before* the article, so re-cutting
+ * the sections changes the question being asked while every block stays
+ * byte-identical, and a blocks-only hash would report no change at all.
+ *
+ * **The metadata joined on 2026-08-31.** `generateSketch` hands `meta` to
+ * `articleWithIds`, which writes `TITLE:`, `BY:` and `PUBLISHED IN:` at the
+ * head of the prompt. Those are stage 2's fields and a re-extraction moves
+ * them, so a change there is reachable rather than theoretical — a reader's own
+ * rename is a shelf override the generators never see.
+ * docs/plans/finish-the-database-move.md § stage 1.
  */
-export function inputFingerprint(blocks: readonly BlockFingerprint[], tree: Tree): string {
-  return `${hashBlocks(blocks)}.${structureHash(tree)}`;
+export function inputFingerprint(
+  blocks: readonly BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprintWithUrl | null,
+): string {
+  return articleWithIdsFingerprint(blocks, tree, meta);
 }
 
 /** Has the article moved underneath this picture? */
@@ -80,8 +97,9 @@ export function isStale(
   sketch: Sketch,
   blocks: readonly BlockFingerprint[],
   tree: Tree,
+  meta: MetaFingerprintWithUrl | null,
 ): boolean {
-  return sketch.sourceHash !== inputFingerprint(blocks, tree);
+  return sketch.sourceHash !== inputFingerprint(blocks, tree, meta);
 }
 
 /**
@@ -466,10 +484,17 @@ export async function generateSketch(opts: {
     await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
     "tree.json",
   );
-  const meta: Meta =
-    (await readFile(path.join(opts.dir, "meta.json"), "utf-8")
-      .then((raw) => JSON.parse(raw) as Meta)
-      .catch(() => null)) ?? ({ title: tree.slug } as Meta);
+  const onDiskMeta: Meta | null = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
+    .then((raw) => JSON.parse(raw) as Meta)
+    .catch(() => null);
+  /* A stub with the slug in it when there is none — `articleWithIds` needs a
+     head, and a stage that silently rendered a different head would silently
+     send uncacheable bytes. The **fingerprint** below is taken from
+     `onDiskMeta`, never from the stub: the stamp in src/pipeline.ts asks the
+     store and hashes `null` when there is no metadata, so a stub in the hash
+     would be a fingerprint the stamp can never produce, and every article
+     without a `meta.json` would report this stage stale for ever. */
+  const meta: Meta = onDiskMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
 
   /* The argument, not the apparatus — the same filter and the same reason as
      src/ideas.ts. A picture of an article's shape that gives a third of the
@@ -560,8 +585,13 @@ export async function generateSketch(opts: {
      `readSketch` fails to resolve them. The structure half matters as much as
      the blocks half here — the prompt shows the model the tree, so re-cutting
      the sections changes the question while every block stays byte-identical
-     (the reasoning is in src/ideas.ts § inputFingerprint). GPT Sol, 2026-08-30. */
-  sketch.sourceHash = `${hashBlocks(blocks)}.${structureHash(tree)}`;
+     (the reasoning is in src/ideas.ts § inputFingerprint). GPT Sol, 2026-08-30.
+
+     **Through `inputFingerprint`, not spelled out again.** These two lines were
+     a second copy of that function's body — the same formula, free to drift,
+     and the drift would show as a picture that never regenerates or never stops.
+     They drifted the day the metadata joined the fingerprint (2026-08-31). */
+  sketch.sourceHash = inputFingerprint(blocks, tree, onDiskMeta);
   sketch.profileHash = profile ? hashProfile(profile) : null;
   const score = scoreSketch(sketch, report, { blockOrder });
 

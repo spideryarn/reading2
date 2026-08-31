@@ -64,13 +64,22 @@ import { getTableColumns } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { articleRevisions } from "../src/db/schema.js";
+import { STEP_ORDER, STEPS } from "../src/pipeline.js";
 import {
+  citedMetaFingerprintOf,
   currentRevisionQuery,
   listArticlesQuery,
+  metaFingerprintOf,
   PRESENCE_OF_FOR_TEST as PRESENCE_OF,
   REVISION_READ_POLICY_FOR_TEST as POLICY,
   REVISION_PROJECTIONS,
 } from "../src/store/pg.js";
+import {
+  articleFingerprint,
+  articleWithIdsFingerprint,
+  type BlockFingerprint,
+} from "../src/source-hash.js";
+import type { Tree } from "../src/types.js";
 
 type Uses = Record<string, "value" | "presence" | undefined>;
 
@@ -167,6 +176,10 @@ const READS = [
   "ideas",
   "sketch",
   "arc",
+  /* Added 2026-08-31 with the `quotes` stage from another session — the
+     projection landed and this list did not, which is exactly what the
+     assertion below exists to catch. */
+  "quotes",
 ] as const;
 
 describe("the list of projections this file checks", () => {
@@ -207,10 +220,21 @@ describe("every projection obeys the policy", () => {
 
   it("does not let the glossary read take another artefact's document", () => {
     /* The point of the whole change, stated as a fact rather than as a diff:
-       reading the glossary must not pull the tree, the summaries, the ideas or
-       the article's HTML along with it. */
+       reading the glossary must not pull the summaries, the ideas, the thread
+       or the article's HTML along with it.
+
+       **The tree and the three metadata scalars are here since 2026-08-31**,
+       and they are the exception the rest of this rule is measured against:
+       this read answers `stale`, and `stale` compares the fingerprint the
+       pipeline would stamp — blocks, tree and metadata head (src/source-hash.ts
+       § `articleFingerprint`). A read that could not see the outline or the
+       title would answer a narrower question than the writer asked, and the two
+       stores would disagree about the same article. The blocks it also needs
+       come from `blockHashInputs`, which is already the whole article's text —
+       so the tree beside it is the small half of a cost this read was always
+       paying. */
     const taken = Object.keys(REVISION_PROJECTIONS.glossary);
-    expect(taken.sort()).toEqual(["glossary", "id"]);
+    expect(taken.sort()).toEqual(["byline", "glossary", "id", "siteName", "title", "tree"]);
   });
 });
 
@@ -246,16 +270,41 @@ describe("the query actually uses its projection", () => {
 
   it("asks for the glossary and nothing else that is large", () => {
     /* The read this whole change is about. It used to take `extracted_html`,
-       `stamped_html`, the tree, the labels, the ideas and the summaries —
-       roughly 508 KB on a 360-block article — to return a 10 KB glossary. */
+       `stamped_html`, the labels, the ideas and the summaries — roughly 508 KB
+       on a 360-block article — to return a 10 KB glossary.
+
+       The tree is no longer on the forbidden list: this read compares it to
+       answer `stale` (see the projection test above). Everything else that is
+       another artefact's document still is. */
     const sql = sqlFor("glossary");
     expect(sql).toContain('"glossary"');
-    expect(sql).not.toContain('"tree"');
     expect(sql).not.toContain('"summary"');
     expect(sql).not.toContain('"ideas"');
     expect(sql).not.toContain('"arc"');
     /* `tweets` is a whole thread document and was missing from this list. */
     expect(sql).not.toContain('"tweets"');
+  });
+
+  /**
+   * The tree goes to every read that compares it, and to no read that does not.
+   *
+   * Stated as one list rather than as a case per read, because the failure this
+   * catches is asymmetric and quiet in both directions: a read that lost the
+   * tree would report its artefact stale for ever in Postgres while the
+   * filesystem store called the same article current, and a read that gained
+   * one nobody compares is the latency this whole map exists to stop.
+   * src/source-hash.ts § `articleFingerprint`.
+   */
+  it("gives the tree to every read whose staleness compares it, and no other", () => {
+    const compares = new Set(["tweets", "glossary", "summaries", "ideas", "sketch", "arc"]);
+    for (const read of READS) {
+      /* `article`, `metadata` and `publish` render or validate the tree rather
+         than fingerprinting it, and the library asks about it in SQL. Those
+         four are outside this rule and keep their own reasons. */
+      if (!compares.has(read)) continue;
+      expect({ read, tree: sqlFor(read).includes('"tree"') }).toEqual({ read, tree: true });
+      expect({ read, title: sqlFor(read).includes('"title"') }).toEqual({ read, title: true });
+    }
   });
 
   it("gives ideas the tree, because its staleness compares it", () => {
@@ -372,5 +421,128 @@ describe("the revision query that is not reachable as a builder", () => {
     expect(src).toContain(".select(REVISION_PROJECTIONS.publish)");
     /* The bare form is what took `raw_bytes`. */
     expect(src).not.toMatch(/\.select\(\)\s*\n?\s*\.from\(articleRevisions\)/);
+  });
+});
+
+/**
+ * **The two stores have to reconstruct "no metadata" the same way**, or an
+ * article that legitimately has none is current to one of them and stale to the
+ * other, for ever.
+ *
+ * `readMeta` in src/store/artifacts-pg.ts returns `null` when `title` is null —
+ * *"a null title has nothing that would make a usable `meta`"* — and that is
+ * what the pipeline's stamp is handed, on both stores. The reader path here
+ * rebuilds a fingerprint from the same columns, and it used to answer
+ * `{ title: "" }`, which the fingerprint deliberately distinguishes from `null`
+ * (they are different states: extraction ran and produced nothing usable, versus
+ * nothing was recorded). So the pipeline called such an article current and
+ * `loadTweets`, `loadGlossary`, `loadSummaries`, `loadIdeas`, `loadSketch`,
+ * `loadArc` and the metadata page all called it stale. GPT Sol, 2026-08-31.
+ *
+ * Asserted as the two paths **agreeing**, rather than as "the helper returns
+ * null" — the second is a restatement of the implementation and would survive
+ * the fingerprint changing its mind about `null` versus `{}`.
+ */
+describe("what a revision with no metadata hashes to", () => {
+  const BLOCKS: BlockFingerprint[] = [{ id: "spya-aaaaaa", text: "One paragraph." }];
+  const TREE = {
+    version: "toc/2",
+    generator: "fixture",
+    slug: "a-slug",
+    rootId: "n0",
+    nodes: {
+      n0: {
+        id: "n0",
+        parent: null,
+        range: ["spya-aaaaaa", "spya-aaaaaa"],
+        title: "All",
+        gist: "One sentence.",
+        children: [],
+      },
+    },
+  } as unknown as Tree;
+
+  const NOTHING = { title: null, byline: null, siteName: null, finalUrl: null };
+
+  it("agrees with what the pipeline stamps for the articleText stages", () => {
+    expect(articleFingerprint(BLOCKS, TREE, metaFingerprintOf(NOTHING))).toBe(
+      articleFingerprint(BLOCKS, TREE, null),
+    );
+  });
+
+  it("agrees with what the pipeline stamps for the articleWithIds stages", () => {
+    expect(articleWithIdsFingerprint(BLOCKS, TREE, citedMetaFingerprintOf(NOTHING))).toBe(
+      articleWithIdsFingerprint(BLOCKS, TREE, null),
+    );
+  });
+
+  /* Not vacuous: a row that *has* a title must hash differently from one that
+     has none, or the two cases above would pass by collapsing everything. */
+  it("still tells a titled revision from an untitled one", () => {
+    const titled = { ...NOTHING, title: "A real title" };
+    expect(articleFingerprint(BLOCKS, TREE, metaFingerprintOf(titled))).not.toBe(
+      articleFingerprint(BLOCKS, TREE, null),
+    );
+    expect(articleWithIdsFingerprint(BLOCKS, TREE, citedMetaFingerprintOf(titled))).not.toBe(
+      articleWithIdsFingerprint(BLOCKS, TREE, null),
+    );
+  });
+
+  /* And the URL reaches the two stages whose head prints it. A row carrying a
+     `final_url` that the fingerprint could not see is the Postgres half of
+     GPT Sol's third finding. */
+  it("carries the final URL into the articleWithIds fingerprint", () => {
+    const one = { ...NOTHING, title: "A real title", finalUrl: "https://one.example/" };
+    const two = { ...NOTHING, title: "A real title", finalUrl: "https://two.example/" };
+    expect(articleWithIdsFingerprint(BLOCKS, TREE, citedMetaFingerprintOf(one))).not.toBe(
+      articleWithIdsFingerprint(BLOCKS, TREE, citedMetaFingerprintOf(two)),
+    );
+    /* And not into the other four, whose head never prints it. */
+    expect(articleFingerprint(BLOCKS, TREE, metaFingerprintOf(one))).toBe(
+      articleFingerprint(BLOCKS, TREE, metaFingerprintOf(two)),
+    );
+  });
+});
+
+/**
+ * **Every step that can tell whether it is current must have a case on the
+ * metadata page**, or the two stores answer differently about the same article.
+ *
+ * `isCurrent` in src/store/pg.ts is a switch with a `default: true` arm, and
+ * `default: true` is the wrong answer for any step that has a `stamp`: the
+ * filesystem store asks that stamp and says "stale", while Postgres says
+ * "done". `sketch` sat in the default arm from the day it gained a stamp —
+ * carry a finished sketch, change the tree or the title, and `loadSketch`
+ * reports it stale on the panel while the page listing the stages reports it
+ * finished. GPT Sol, 2026-08-31.
+ *
+ * **Read out of the source rather than asserted on one name.** A test naming
+ * `sketch` would have been green the day before `sketch` existed and green
+ * again the day after the next stage arrives without a case — and one did
+ * arrive while this was being written. A rule stated in one function is not a
+ * rule the codebase follows; the precedent is tests/blocks-baseline.test.ts and
+ * tests/sanitize-stale-artefact.test.ts.
+ *
+ * `toc` is deliberately not required here: it has no `stamp`, on purpose
+ * (src/pipeline.ts § `toc` says why at length), and its case exists for a
+ * different reason.
+ */
+describe("the metadata page and the pipeline agree about which steps can be current", () => {
+  it("has a case for every stamped step", async () => {
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+    const source = await readFile(path.join(root, "src", "store", "pg.ts"), "utf-8");
+
+    /* The switch only, not the whole file: a `case "sketch"` in some unrelated
+       function would otherwise satisfy this. */
+    const from = source.indexOf("const isCurrent = (step: StepName): boolean =>");
+    const to = source.indexOf("const stages: StageState[]", from);
+    expect({ from: from > 0, to: to > from }, "the anchors still exist").toEqual({
+      from: true,
+      to: true,
+    });
+    const body = source.slice(from, to);
+
+    const missing = STEP_ORDER.filter((name) => STEPS[name].stamp && !body.includes(`case "${name}"`));
+    expect(missing).toEqual([]);
   });
 });

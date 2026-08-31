@@ -597,19 +597,43 @@ when("one owner's article, asked for by another", { timeout: 20_000 }, () => {
     ).resolves.toBeTruthy();
   });
 
-  /** And the route really does ask, rather than the check merely existing. */
-  it("and the route asks before it touches the disk", async () => {
+  /**
+   * And the route really does ask, rather than the check merely existing.
+   *
+   * **The second half of this moved on 2026-08-31 and the property did not.**
+   * It used to read *before `fsLocations(slug)`*, because `sendSource` fetched
+   * the bytes off the disk itself; it now reads *before
+   * `sourceStore.readPdf(slug)`*, because that read went through the store
+   * (docs/plans/finish-the-database-move.md, stage 1). The thing being pinned is
+   * unchanged — **authorise, then move bytes** — and it is worth being explicit
+   * that this is the same assertion at a new seam rather than a weakened one:
+   * the store call is the *only* way this function can now obtain a byte, so
+   * anything after it is after the check.
+   *
+   * `indexOf` on a name that is no longer in the file returns `-1`, and `x < -1`
+   * is false for every real index, so the rename could not have slipped past
+   * silently — this test went red on it. tests/source-store.test.ts restates
+   * the ordering outside this suite's `describe`, which is `describe.skip` when
+   * there is no database; a security ordering that only holds when Postgres is
+   * up is not a property anybody wants to depend on.
+   */
+  it("and the route asks before it goes for the bytes", async () => {
     const { readFile } = await import("node:fs/promises");
     const { fileURLToPath } = await import("node:url");
     const source = await readFile(
       fileURLToPath(new URL("../src/routes.ts", import.meta.url)),
       "utf8",
     );
-    const body = /async function sendSource\([\s\S]*?\n}/.exec(source)?.[0] ?? "";
+    /* Comments stripped, like the store sweep above: `sendSource`'s own comment
+       explains what it used to do, and quotes both names while doing it. */
+    const body =
+      /async function sendSource\([\s\S]*?\n}/.exec(
+        source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""),
+      )?.[0] ?? "";
     expect(body).toContain("shelfStore.read(slug)");
-    /* Before `fsLocations`, not after. A check that runs after the file has been
-       read is not a check, and the order is the whole of it. */
-    expect(body.indexOf("shelfStore.read(slug)")).toBeLessThan(body.indexOf("fsLocations(slug)"));
+    expect(body.indexOf("shelfStore.read(slug)")).toBeLessThan(
+      body.indexOf("sourceStore.readPdf(slug)"),
+    );
   });
 
   /** The reader profile is keyed on owner directly, rather than through a slug. */

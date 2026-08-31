@@ -190,6 +190,9 @@ describe("what the two columns cannot see", () => {
        (An earlier line here asserted `hashBlocks(blocks) === hashBlocks(blocks)`
        to make that point, which proves nothing at all — GPT Sol's fifth
        tautology, and the last of one per review round.) */
-    expect(inputFingerprint(blocks, whole)).not.toEqual(inputFingerprint(blocks, split));
+    const meta = { title: "All", byline: "Somebody", siteName: "Somewhere" };
+    expect(inputFingerprint(blocks, whole, meta)).not.toEqual(
+      inputFingerprint(blocks, split, meta),
+    );
   });
 });

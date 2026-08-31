@@ -46,11 +46,19 @@ import {
 import { isStale as arcIsStale, PROMPT_VERSION as ARC_PROMPT_VERSION } from "../arc.js";
 import { isStale as glossaryIsStale, PROMPT_VERSION } from "../glossary.js";
 import {
+  isStale as quotesAreStale,
+  PROMPT_VERSION as QUOTES_PROMPT_VERSION,
+} from "../quotes.js";
+import {
   isStale as ideasAreStale,
   inputFingerprint as ideasFingerprint,
   PROMPT_VERSION as IDEAS_PROMPT_VERSION,
 } from "../ideas.js";
-import { isStale as sketchIsStale, PROMPT_VERSION as SKETCH_PROMPT_VERSION } from "../sketch.js";
+import {
+  inputFingerprint as sketchFingerprint,
+  isStale as sketchIsStale,
+  PROMPT_VERSION as SKETCH_PROMPT_VERSION,
+} from "../sketch.js";
 import type { Sketch } from "../sketch-scene.js";
 import { isSlug } from "../ingest.js";
 import { deriveLibraryScalars, headingTitleOf, type LibraryScalars } from "../library-scalars.js";
@@ -59,7 +67,13 @@ import { CAPABLE_MODEL } from "../models.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
-import { hashBlocks, type BlockFingerprint } from "../source-hash.js";
+import {
+  articleFingerprint,
+  type BlockFingerprint,
+  hashBlocks,
+  type MetaFingerprint,
+  type MetaFingerprintWithUrl,
+} from "../source-hash.js";
 import { isStale as summariesStale } from "../summarise.js";
 import { isStale as tweetsStale } from "../tweets.js";
 import type {
@@ -71,6 +85,8 @@ import type {
   Block,
   Glossary,
   GlossaryFound,
+  Quotes,
+  QuotesFound,
   Ideas,
   IdeasFound,
   SketchFound,
@@ -271,6 +287,7 @@ type RevisionReader =
   | "publish"
   | "tweets"
   | "glossary"
+  | "quotes"
   | "summaries"
   | "ideas"
   | "sketch"
@@ -288,7 +305,7 @@ const REVISION_READ_POLICY: Record<
      them to this. */
   id: {
     article: "value", library: "value", metadata: "value", publish: "value",
-    tweets: "value", glossary: "value", summaries: "value", ideas: "value",
+    tweets: "value", glossary: "value", quotes: "value", summaries: "value", ideas: "value",
     sketch: "value", arc: "value",
   },
   articleId: { publish: "value" },
@@ -296,15 +313,42 @@ const REVISION_READ_POLICY: Record<
   status: { publish: "value" },
 
   /* `metaFrom` — the reading view's masthead and the library card. */
-  /* `metadata` reads these three because the arc's freshness fingerprint covers
-     them — src/arc.ts § `inputFingerprint`. */
-  title: { article: "value", library: "value", metadata: "value", arc: "value" },
-  byline: { article: "value", library: "value", metadata: "value", arc: "value" },
-  siteName: { article: "value", library: "value", metadata: "value", arc: "value" },
+  /* `metadata` reads these three because the freshness fingerprint of every
+     article-reading artefact covers them — src/source-hash.ts §
+     `articleFingerprint` — and so, since 2026-08-31, does each of those
+     artefacts' own read. The prompt head carries `TITLE:`, `BY:` and
+     `PUBLISHED IN:` (src/article-prompt.ts), so a changed *extracted* title is
+     a different question, and a read that could not see the name would report
+     every one of them current for ever. Three columns, never `...META_COLUMNS`:
+     `fetchedAt` in a fingerprint would mark everything stale on every
+     re-fetch. */
+  title: {
+    article: "value", library: "value", metadata: "value", arc: "value",
+    tweets: "value", glossary: "value", quotes: "value", summaries: "value", ideas: "value",
+    sketch: "value",
+  },
+  byline: {
+    article: "value", library: "value", metadata: "value", arc: "value",
+    tweets: "value", glossary: "value", quotes: "value", summaries: "value", ideas: "value",
+    sketch: "value",
+  },
+  siteName: {
+    article: "value", library: "value", metadata: "value", arc: "value",
+    tweets: "value", glossary: "value", quotes: "value", summaries: "value", ideas: "value",
+    sketch: "value",
+  },
   lang: { article: "value", library: "value" },
   excerpt: { article: "value", library: "value", publish: "value" },
   note: { article: "value", library: "value" },
-  finalUrl: { article: "value", library: "value" },
+  /* `ideas`, `sketch` and `metadata` since 2026-08-31: those two stages send
+     `articleWithIds`, whose head prints a `URL:` line, so their freshness
+     fingerprint covers it and a read that could not see the column would report
+     them stale for ever. src/source-hash.ts § `articleWithIdsFingerprint`. Not
+     on the other four — `articleText` never prints a URL, and a fingerprint
+     over a line the model was never shown spends a model call for nothing. */
+  finalUrl: {
+    article: "value", library: "value", metadata: "value", ideas: "value", sketch: "value",
+  },
   fetchedAt: { article: "value", library: "value" },
   rawSha256: { article: "value", library: "value" },
   source: { article: "value", library: "value" },
@@ -327,8 +371,22 @@ const REVISION_READ_POLICY: Record<
     /* `arc` and `sketch` for the same reason `ideas` has it: all three hash the
        outline as well as the blocks, so a blocks-only comparison would call a
        re-sectioned article's artefact current while the filesystem store called
-       it stale — see `REVISION_PROJECTIONS.sketch`. */
+       it stale — see `REVISION_PROJECTIONS.sketch`.
+
+       **`tweets`, `glossary` and `summaries` joined them on 2026-08-31**, when
+       the other three fingerprints were completed to match: every one of these
+       prompts is built out of `partsOf(tree)` or `batchesOf(tree)`, so all six
+       were always reading it and only three were comparing it. The marginal
+       cost is small where it lands — each of these reads already pulls every
+       block's id and text through `blockHashInputs` to compute the same
+       fingerprint, which is the whole article. */
     arc: "value", sketch: "value",
+    tweets: "value", glossary: "value", summaries: "value",
+    /* `quotes` arrived from another session on 2026-08-31 taking
+       `FINGERPRINT_COLUMNS` in its projection, which is right — it hashes the
+       outline like its five neighbours — and this line had not caught up.
+       tests/store-revision-columns.test.ts is what noticed. */
+    quotes: "value",
     library: "presence",
   },
   arc: { article: "value", library: "presence", metadata: "value", arc: "value" },
@@ -360,6 +418,9 @@ const REVISION_READ_POLICY: Record<
      with null was the second half of docs/plans/library-read-latency.md. */
   tweets: { metadata: "value", tweets: "value", library: "presence" },
   glossary: { metadata: "value", glossary: "value", library: "presence" },
+  /* Its own reader and the metadata page, and **not the library**: a card shows
+     four ticks and a fifth would not fit — the same call `sketch` makes below. */
+  quotes: { metadata: "value", quotes: "value" },
   summary: { metadata: "value", summaries: "value", library: "presence" },
   ideas: { metadata: "value", ideas: "value" },
   /* Its own reader and the metadata page, and **not the library**: a card shows
@@ -430,6 +491,45 @@ const META_COLUMNS = {
 } as const;
 
 /**
+ * What every article-reading artefact's freshness check needs beside its own
+ * document: the outline, and the three metadata fields the prompt head carries.
+ *
+ * Named once because six projections take exactly these four and a seventh
+ * spelling of them is a seventh chance to leave one out — which would not fail,
+ * it would report that one artefact stale for ever in Postgres while the
+ * filesystem store called the same article current. src/source-hash.ts §
+ * `articleFingerprint`.
+ *
+ * Three metadata columns, never `...META_COLUMNS`: a projection that selects
+ * more than its reader needs is the habit this whole map exists to break, and
+ * `fetchedAt` inside a fingerprint would mark every artefact stale on every
+ * re-fetch of an unchanged page.
+ */
+const FINGERPRINT_COLUMNS = {
+  tree: articleRevisions.tree,
+  title: articleRevisions.title,
+  byline: articleRevisions.byline,
+  siteName: articleRevisions.siteName,
+} as const;
+
+/**
+ * The same four **plus `final_url`**, for the two reads whose stage sends
+ * `articleWithIds` — `ideas` and `sketch`, whose prompt head prints a `URL:`
+ * line that the other four never send (src/source-hash.ts §
+ * `articleWithIdsFingerprint`).
+ *
+ * A second constant rather than widening the first, so the four stages that
+ * must **not** be judged on a URL cannot quietly acquire one. `citedMetaFinger‑
+ * printOf` requires the column in its argument type, so a projection that
+ * forgot it is a compile error at the call site rather than a fingerprint built
+ * without it.
+ */
+const CITED_FINGERPRINT_COLUMNS = {
+  ...FINGERPRINT_COLUMNS,
+  finalUrl: articleRevisions.finalUrl,
+} as const;
+
+/**
  * The projections themselves — **written out, not built from the policy**.
  *
  * A projection derived from the map at runtime is opaque to Drizzle, which then
@@ -497,9 +597,14 @@ export const REVISION_PROJECTIONS = {
     title: articleRevisions.title,
     byline: articleRevisions.byline,
     siteName: articleRevisions.siteName,
+    /* For `ideas`, whose head prints it — see `CITED_FINGERPRINT_COLUMNS`. This
+       page asks every step "would we write this again today", so it needs
+       whatever the widest of them is judged on. */
+    finalUrl: articleRevisions.finalUrl,
     assets: articleRevisions.assets,
     tweets: articleRevisions.tweets,
     glossary: articleRevisions.glossary,
+    quotes: articleRevisions.quotes,
     summary: articleRevisions.summary,
     ideas: articleRevisions.ideas,
     /* The fifth artefact that can carry a `profileHash`, and it is here for
@@ -515,29 +620,27 @@ export const REVISION_PROJECTIONS = {
     tree: articleRevisions.tree,
     excerpt: articleRevisions.excerpt,
   },
-  tweets: { id: articleRevisions.id, tweets: articleRevisions.tweets },
-  glossary: { id: articleRevisions.id, glossary: articleRevisions.glossary },
-  summaries: { id: articleRevisions.id, summary: articleRevisions.summary },
-  ideas: { id: articleRevisions.id, ideas: articleRevisions.ideas, tree: articleRevisions.tree },
-  /* The tree beside the sketch, for the reason `ideas` gives one line up: this
-     artefact's fingerprint covers the outline as well as the blocks, so a
-     blocks-only comparison here would call a re-sectioned article's picture
-     current while the filesystem store called it stale — and two stores
-     disagreeing about staleness is what the parity tests exist to catch. */
-  sketch: { id: articleRevisions.id, sketch: articleRevisions.sketch, tree: articleRevisions.tree },
-  /* Wider than its neighbours by three columns, and only by three. The arc's
-     fingerprint covers the blocks, the tree **and** the metadata the prompt
-     carries, so `title`, `byline` and `siteName` have to be here — but nothing
-     else from META_COLUMNS does, and selecting them would be the habit this map
-     exists to break. src/arc.ts § `inputFingerprint`. */
-  arc: {
+  /* **All six of these carry `FINGERPRINT_COLUMNS`, and none of them did until
+     2026-08-31 except `arc`** (which had all four) and `ideas`/`sketch` (which
+     had the tree and not the name). Each of these reads answers `stale` for its
+     artefact, and `stale` is a comparison against the fingerprint the pipeline
+     would stamp — so a read that cannot see the outline or the title answers a
+     narrower question than the one the writer asked, and the two stores
+     disagree about the same article. src/source-hash.ts § `articleFingerprint`,
+     docs/plans/finish-the-database-move.md § stage 1. */
+  tweets: { id: articleRevisions.id, tweets: articleRevisions.tweets, ...FINGERPRINT_COLUMNS },
+  glossary: { id: articleRevisions.id, glossary: articleRevisions.glossary, ...FINGERPRINT_COLUMNS },
+  /* `FINGERPRINT_COLUMNS` and not the cited set: `quotes` sends `articleText`,
+     whose head prints no `URL:` line — src/models.ts § ARTICLE_RENDERER. */
+  quotes: { id: articleRevisions.id, quotes: articleRevisions.quotes, ...FINGERPRINT_COLUMNS },
+  summaries: { id: articleRevisions.id, summary: articleRevisions.summary, ...FINGERPRINT_COLUMNS },
+  ideas: { id: articleRevisions.id, ideas: articleRevisions.ideas, ...CITED_FINGERPRINT_COLUMNS },
+  sketch: {
     id: articleRevisions.id,
-    arc: articleRevisions.arc,
-    tree: articleRevisions.tree,
-    title: articleRevisions.title,
-    byline: articleRevisions.byline,
-    siteName: articleRevisions.siteName,
+    sketch: articleRevisions.sketch,
+    ...CITED_FINGERPRINT_COLUMNS,
   },
+  arc: { id: articleRevisions.id, arc: articleRevisions.arc, ...FINGERPRINT_COLUMNS },
 } as const;
 
 /** Exported for the test that guards the policy. Not a read seam. */
@@ -848,6 +951,7 @@ const STEP_STORAGE: Record<StepName, string[]> = {
   arc: ["article_revisions.arc"],
   tweets: ["article_revisions.tweets"],
   glossary: ["article_revisions.glossary"],
+  quotes: ["article_revisions.quotes"],
   summary: ["article_revisions.summary"],
   ideas: ["article_revisions.ideas"],
   sketch: ["article_revisions.sketch"],
@@ -886,6 +990,82 @@ const STEP_STORAGE: Record<StepName, string[]> = {
 export const ADDED_AT = sql`coalesce(${articleRevisions.fetchedAt}, ${articles.createdAt})`;
 
 /**
+ * The three metadata fields a staleness check is entitled to look at, rebuilt
+ * from the revision's own columns.
+ *
+ * **One helper rather than the literal written out at six call sites**, because
+ * the fields are the fingerprint's definition (src/source-hash.ts §
+ * `MetaFingerprint`) and a call site that spelled one of them differently would
+ * mark that artefact stale for ever, in Postgres only, with the filesystem
+ * store calling the same article current. That is exactly the two-stores-
+ * disagree failure the parity tests exist to catch.
+ *
+ * `?? ""` on the title matches what `articleFingerprint` does with an absent
+ * one. The `byline` and `siteName` spreads are conditional because the columns
+ * are nullable and `Meta`'s fields are optional — an explicit `undefined` and an
+ * absent key hash the same, but the type does not accept the first.
+ *
+ * **Deliberately not `metaFrom`.** That builds a whole `Meta` for a reader,
+ * including `url`, `lang` and `fetchedAt`, and falls back to the article's own
+ * first heading for a missing title. None of that belongs in a fingerprint: the
+ * head of a prompt carries three fields and a fingerprint over more of them
+ * would invalidate artefacts for changes the model never saw.
+ */
+export function metaFingerprintOf(revision: {
+  title: string | null;
+  byline: string | null;
+  siteName: string | null;
+}): MetaFingerprint | null {
+  /* **`null` when there is no title, matching `readMeta` in
+     src/store/artifacts-pg.ts** — *"a null title has nothing that would make a
+     usable `meta`"*. That is what the pipeline's stamp is handed, on both
+     stores, and the fingerprint deliberately tells `null` from an object whose
+     fields are empty: they are different states. Returning `{ title: "" }` here
+     made an article with no metadata current to the pipeline and stale to every
+     reader path, permanently and in Postgres only. GPT Sol, 2026-08-31;
+     tests/store-revision-columns.test.ts asserts the two agree rather than
+     asserting this returns null, so the assertion survives the fingerprint
+     changing its mind about how it encodes "absent".
+
+     `=== null`, not truthiness, for the reason `readMeta` gives: an
+     empty-string title is a different fact — extraction ran and produced
+     nothing usable — and should hash as the empty title it is. */
+  if (revision.title === null) return null;
+  return {
+    title: revision.title,
+    ...(revision.byline == null ? {} : { byline: revision.byline }),
+    ...(revision.siteName == null ? {} : { siteName: revision.siteName }),
+  };
+}
+
+/**
+ * The same, **plus the final URL**, for the two stages whose prompt head prints
+ * one — `ideas` and `sketch`, which send `articleWithIds`.
+ *
+ * **A separate function taking a wider row, and that is the point rather than a
+ * cost.** A projection that forgot `final_url` cannot reach this: it is a type
+ * error at the call site instead of a fingerprint quietly built without the
+ * field, which is the failure mode this whole family keeps producing. The four
+ * `articleText` stages go on calling `metaFingerprintOf`, so they cannot be
+ * judged on a line their prompt never carries.
+ *
+ * The column exists and is already how Postgres reconstructs `Meta.url`
+ * (`readMeta`, src/store/artifacts-pg.ts) — an earlier version of this work
+ * claimed no Postgres call site carried a URL and left it out of the
+ * fingerprint on that basis. That was simply wrong. GPT Sol, 2026-08-31.
+ */
+export function citedMetaFingerprintOf(revision: {
+  title: string | null;
+  byline: string | null;
+  siteName: string | null;
+  finalUrl: string | null;
+}): MetaFingerprintWithUrl | null {
+  const base = metaFingerprintOf(revision);
+  if (base === null) return null;
+  return { ...base, ...(revision.finalUrl == null ? {} : { url: revision.finalUrl }) };
+}
+
+/**
  * Is the stored `ideas` artefact one we would write again today?
  *
  * **A function rather than a fifth arm of `isCurrent`**, and not only because
@@ -902,14 +1082,18 @@ export const ADDED_AT = sql`coalesce(${articleRevisions.fetchedAt}, ${articles.c
 function ideasAreCurrent(
   revision: { ideas: unknown; tree: unknown },
   blocks: readonly Block[],
+  /* The **cited** head: `ideas` sends `articleWithIds`, which prints a `URL:`
+     line the other four never send. src/source-hash.ts. */
+  meta: MetaFingerprintWithUrl | null,
 ): boolean {
   const found = revision.ideas as Ideas | null;
   const tree = revision.tree as Tree | null;
   if (!found || !tree || blocks.length === 0) return false;
-  /* The blocks AND the tree — src/ideas.ts § `inputFingerprint`. This artefact
-     is written from the skeleton as much as from the paragraphs, so a
-     re-sectioned article is a different question even when every block is
-     byte-identical. */
+  /* The blocks AND the tree AND the metadata head — src/ideas.ts §
+     `inputFingerprint`. This artefact is written from the skeleton as much as
+     from the paragraphs, so a re-sectioned article is a different question even
+     when every block is byte-identical; and the prompt carries `TITLE:`, `BY:`
+     and `PUBLISHED IN:`, so a changed extracted title is another one. */
   const profile =
     found.profileHash !== undefined ? { profileHash: found.profileHash } : {};
   return sameStamp(
@@ -920,7 +1104,7 @@ function ideasAreCurrent(
       ...profile,
     },
     {
-      inputHash: ideasFingerprint(blocks, tree),
+      inputHash: ideasFingerprint(blocks, tree, meta),
       promptVersion: IDEAS_PROMPT_VERSION,
       model: CAPABLE_MODEL,
       /* The artefact's own value on both sides, deliberately. The profile the
@@ -930,6 +1114,98 @@ function ideasAreCurrent(
          reader is told about a changed profile by `loadIdeas`'s
          `profileChanged`, and whether to RE-RUN is decided by the stamp in
          src/pipeline.ts, which does know. */
+      ...profile,
+    },
+  );
+}
+
+/**
+ * Is the stored `glossary` one we would write again today?
+ *
+ * `sameStamp` rather than three comparisons written out again — one definition
+ * of "current", and this artefact can be checked in full because its prompt
+ * version is exported.
+ *
+ * **The article fingerprint, not the block hash.** The glossary's prompt is
+ * built from the tree's skeleton and carries the metadata head, so the blocks
+ * alone would call a re-sectioned or re-titled article's glossary current —
+ * while the filesystem store, which asks `STEPS.glossary.stamp`, called it
+ * stale. `null` is "we cannot tell", and `sameStamp` refuses a comparison that
+ * declares nothing.
+ *
+ * A function rather than an arm of the switch for the reason `ideasAreCurrent`
+ * is one: the switch has a complexity ceiling and this was the longest arm in
+ * it. Nothing about the rule changed in the move.
+ */
+function glossaryIsCurrent(glossary: Glossary | null, articleHash: string | null): boolean {
+  if (!glossary) return false;
+  return sameStamp(
+    {
+      inputHash: glossary.sourceHash,
+      promptVersion: glossary.version,
+      model: glossary.generator,
+    },
+    {
+      ...(articleHash ? { inputHash: articleHash } : {}),
+      promptVersion: PROMPT_VERSION,
+      model: CAPABLE_MODEL,
+    },
+  );
+}
+
+/**
+ * Is the stored `sketch` artefact one we would draw again today?
+ *
+ * **A sibling of `ideasAreCurrent`, and it was missing until 2026-08-31** —
+ * `sketch` fell through to `default: true`, so the metadata page reported every
+ * carried sketch finished while `loadSketch` a few hundred lines below reported
+ * the same artefact stale. Two answers to one question, and the confident one
+ * was wrong; the identical bug `ideasAreCurrent` was written to fix, one step
+ * along. GPT Sol, 2026-08-31.
+ *
+ * The **cited** head, like `ideas`: this stage sends `articleWithIds`, so its
+ * fingerprint covers the `URL:` line and the synthetic title it falls back to
+ * (src/source-hash.ts § `articleWithIdsFingerprint`).
+ *
+ * `profileHash` is taken from the artefact and put on **both** sides, for the
+ * reason `ideasAreCurrent` gives: the profile the pipeline would stamp with is
+ * resolved per job (src/jobs.ts) and this read has no access to it, so a guess
+ * would mark every profiled picture stale on a page whose whole job is to list
+ * which stages have run. Whether to redraw is decided by the stamp in
+ * src/pipeline.ts, which does know.
+ */
+function sketchIsCurrent(
+  revision: { sketch: unknown; tree: unknown },
+  blocks: readonly Block[],
+  meta: MetaFingerprintWithUrl | null,
+): boolean {
+  const found = revision.sketch as Sketch | null;
+  const tree = revision.tree as Tree | null;
+  /* An empty scene list counts as no sketch, the same rule `loadSketch` and
+     `readSketchFile` keep: a column can hold `{"scenes": []}` from an import or
+     a hand edit, and calling that a finished stage would put a tick over a band
+     with nothing in it. */
+  if (!found || !Array.isArray(found.scenes) || found.scenes.length === 0) return false;
+  if (!tree || blocks.length === 0) return false;
+  const profile = found.profileHash !== undefined ? { profileHash: found.profileHash } : {};
+  /* **Spread rather than assigned**, because `Sketch.sourceHash` and
+     `Sketch.generator` are optional and this project has
+     `exactOptionalPropertyTypes` on: writing `inputHash: found.sourceHash`
+     would put an explicit `undefined` on the key, which is a different thing
+     from the key being absent. `sameStamp` compares the fields the *expected*
+     stamp declares, so an absent one on the recorded side simply fails to
+     match — which is the right answer for an artefact that recorded nothing. */
+  return sameStamp(
+    {
+      ...(found.sourceHash === undefined ? {} : { inputHash: found.sourceHash }),
+      promptVersion: found.version,
+      ...(found.generator === undefined ? {} : { model: found.generator }),
+      ...profile,
+    },
+    {
+      inputHash: sketchFingerprint(blocks, tree, meta),
+      promptVersion: SKETCH_PROMPT_VERSION,
+      model: CAPABLE_MODEL,
       ...profile,
     },
   );
@@ -1268,15 +1544,18 @@ export type ProfileCarrying = {
 function personalisedSteps(revision: {
   tweets: TweetThread | null;
   glossary: Glossary | null;
+  quotes: Quotes | null;
   summary: Summaries | null;
   ideas: Ideas | null;
   sketch: Sketch | null;
 }): StepName[] {
-  /* `Record`, not `Partial<Record>`: a sixth artefact gaining a `profileHash`
-     has to fail here, at the compiler, rather than fall off the dialog. */
+  /* `Record`, not `Partial<Record>`: a seventh artefact gaining a `profileHash`
+     has to fail here, at the compiler, rather than fall off the dialog. It has
+     done its job once since — `quotes` joined on 2026-08-31. */
   const carriers: Record<ProfileCarrying, { profileHash?: string | null } | null> = {
     tweets: revision.tweets,
     glossary: revision.glossary,
+    quotes: revision.quotes,
     summary: revision.summary,
     ideas: revision.ideas,
     sketch: revision.sketch,
@@ -1299,6 +1578,7 @@ export const pgArticleReader: Pick<
   | "articleMetadata"
   | "loadTweets"
   | "loadGlossary"
+  | "loadQuotes"
   | "loadSummaries"
   | "loadIdeas"
   | "loadSketch"
@@ -1478,6 +1758,23 @@ export const pgArticleReader: Pick<
     const blocks = await blocksFor(found.revision.id);
     const blocksHash = blocks.length ? hashBlocks(blocks) : null;
     const { revision } = found;
+    /* Read once, beside the blocks and for the same reason. Six of the eight
+       checks below are about an artefact whose prompt read the tree and the
+       metadata head as well as the paragraphs — src/source-hash.ts §
+       `articleFingerprint` — and `null` here is "we cannot tell", which answers
+       not-current for every one of them. */
+    const tree = revision.tree as Tree | null;
+    /* **Two heads, because there are two prompts.** `articleText` (arc, tweets,
+       glossary, summary) prints three metadata lines; `articleWithIds` (ideas,
+       sketch) prints those three and a `URL:`, and falls back to the tree's slug
+       when there is no metadata at all. src/source-hash.ts. */
+    const metaFingerprint = metaFingerprintOf(revision);
+    const citedFingerprint = citedMetaFingerprintOf(revision);
+    /* The fingerprint every article-reading stage stamps, computed once beside
+       `blocksHash` for the same reason: several arms below want it, and `null`
+       is "we cannot tell", which answers not-current for all of them. */
+    const articleHash =
+      tree && blocks.length ? articleFingerprint(blocks, tree, metaFingerprint) : null;
 
     /** Is this step's output one we would write again today? */
     const isCurrent = (step: StepName): boolean => {
@@ -1508,33 +1805,46 @@ export const pgArticleReader: Pick<
         }
         case "tweets": {
           const thread = revision.tweets as TweetThread | null;
-          return Boolean(thread && !tweetsStale(thread, blocks));
+          return Boolean(thread && tree && !tweetsStale(thread, blocks, tree, metaFingerprint));
         }
-        case "glossary": {
-          const glossary = revision.glossary as Glossary | null;
-          if (!glossary) return false;
-          // The one of the three that can be checked in full, because its
-          // prompt version is exported. `sameStamp` rather than three
-          // comparisons written out again — one definition of "current".
+        case "glossary":
+          return glossaryIsCurrent(revision.glossary as Glossary | null, articleHash);
+        case "quotes": {
+          const quotes = revision.quotes as Quotes | null;
+          if (!quotes) return false;
+          /* Checked in full, like the glossary above and for the same reason:
+             its `PROMPT_VERSION` is exported. **`articleHash`, not
+             `blocksHash`** — the prompt is built from the tree's skeleton and
+             carries the metadata head, so the blocks alone would call a
+             re-sectioned or renamed article's quotes current while the
+             filesystem store called them stale. */
           return sameStamp(
             {
-              inputHash: glossary.sourceHash,
-              promptVersion: glossary.version,
-              model: glossary.generator,
+              inputHash: quotes.sourceHash,
+              promptVersion: quotes.version,
+              model: quotes.generator,
             },
             {
-              ...(blocksHash ? { inputHash: blocksHash } : {}),
-              promptVersion: PROMPT_VERSION,
+              ...(articleHash ? { inputHash: articleHash } : {}),
+              promptVersion: QUOTES_PROMPT_VERSION,
               model: CAPABLE_MODEL,
             },
           );
         }
         case "summary": {
           const summaries = revision.summary as Summaries | null;
-          return Boolean(summaries && !summariesStale(summaries, blocks));
+          return Boolean(
+            summaries && tree && !summariesStale(summaries, blocks, tree, metaFingerprint),
+          );
         }
         case "ideas":
-          return ideasAreCurrent(revision, blocks);
+          return ideasAreCurrent(revision, blocks, citedFingerprint);
+        /* The same shape as `ideas`, and absent until 2026-08-31 — see
+           `sketchIsCurrent`. tests/store-revision-columns.test.ts now holds
+           every stamped step to having an arm here, rather than naming the one
+           that was missing. */
+        case "sketch":
+          return sketchIsCurrent(revision, blocks, citedFingerprint);
         /* **Added 2026-08-29, the day `arc.json` started recording what it was
            made from.** Before that this step genuinely had nothing to compare and
            sat in the `default` arm below with `fetch`, `extract` and `blocks`.
@@ -1549,19 +1859,13 @@ export const pgArticleReader: Pick<
            **Blocks, tree AND the three metadata fields**, because that is what
            `inputFingerprint` covers — the arc's prompt carries `TITLE:`, `BY:`
            and `PUBLISHED IN:` at its head (src/article-prompt.ts). The revision
-           row stores those three as columns, so the meta is rebuilt from it
-           rather than read again. `slug` is not in the fingerprint, so the
-           placeholder here cannot affect the answer. */
+           row stores those three as columns, so the meta is rebuilt from them by
+           `metaFingerprintOf` rather than read again. Five of its neighbours
+           above now do the same; this was the first. */
         case "arc": {
           const arc = revision.arc as Arc | null;
-          const tree = revision.tree as Tree | null;
           if (!arc || !tree || blocks.length === 0) return false;
-          return !arcIsStale(arc, blocks, tree, {
-            slug,
-            title: revision.title ?? "",
-            ...(revision.byline == null ? {} : { byline: revision.byline }),
-            ...(revision.siteName == null ? {} : { siteName: revision.siteName }),
-          });
+          return !arcIsStale(arc, blocks, tree, metaFingerprint);
         }
         default:
           // fetch, extract, blocks — nothing to compare, in either store.
@@ -1658,7 +1962,16 @@ export const pgArticleReader: Pick<
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
-    return { thread, stale: tweetsStale(thread, blocks) };
+    /* The tree and the metadata head as well as the blocks — the three inputs
+       the thread's prompt reads (src/source-hash.ts § `articleFingerprint`). A
+       tree we cannot read is "we cannot tell", which counts as stale here for
+       the reason the filesystem half gives: the cost is a banner offering a
+       regeneration nobody needed. */
+    const tree = found.revision.tree as Tree | null;
+    return {
+      thread,
+      stale: !tree || tweetsStale(thread, blocks, tree, metaFingerprintOf(found.revision)),
+    };
   },
 
   async loadGlossary(slug: string): Promise<GlossaryFound> {
@@ -1673,6 +1986,8 @@ export const pgArticleReader: Pick<
         { status: 404 },
       );
     }
+    const glossaryTree = found.revision.tree as Tree | null;
+    const glossaryMeta = metaFingerprintOf(found.revision);
     /* Lookups are attached HERE, at the read seam, exactly as src/api.ts does
        it — not stored on the entry. Forgetting this would not fail; it would
        quietly drop every "checked on the web" answer from the panel while the
@@ -1711,12 +2026,45 @@ export const pgArticleReader: Pick<
 
     return {
       glossary: { ...glossary, entries },
-      stale: glossaryIsStale(glossary, blocks),
+      /* Blocks, tree and metadata head — the glossary's prompt reads all
+         three, so the fingerprint covers all three. */
+      stale: !glossaryTree || glossaryIsStale(glossary, blocks, glossaryTree, glossaryMeta),
       /* A different fact from `stale`, and it needs its own field because it
          needs its own sentence: `stale` means the article moved underneath
          these terms; this means the article is the same and we would write them
          differently now. */
       outdated: glossary.version !== PROMPT_VERSION,
+    };
+  },
+
+  async loadQuotes(slug: string): Promise<QuotesFound> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "quotes");
+    if (!found) throw notFound(slug);
+
+    const quotes = found.revision.quotes as Quotes | null;
+    if (!quotes) {
+      throw Object.assign(
+        new Error(`No quotes for "${slug}" yet. Choose them with \`npm run quotes -- ${slug}\`.`),
+        { status: 404 },
+      );
+    }
+    const quotesTree = found.revision.tree as Tree | null;
+    const quotesMeta = metaFingerprintOf(found.revision);
+    const blocks = await blockHashInputs(found.revision.id);
+
+    return {
+      quotes,
+      /* Blocks, tree and metadata head — the prompt reads all three, so the
+         fingerprint covers all three. It matters more here than for its
+         neighbours: a stale quote list holds block ids that may no longer
+         exist, so pressing a row could jump nowhere, and the words themselves
+         may no longer be in the piece. */
+      stale: !quotesTree || quotesAreStale(quotes, blocks, quotesTree, quotesMeta),
+      /* A different fact from `stale`, needing its own sentence: `stale` means
+         the article moved underneath these quotes; this means the article is
+         the same and we would choose differently now. */
+      outdated: quotes.version !== QUOTES_PROMPT_VERSION,
     };
   },
 
@@ -1735,7 +2083,11 @@ export const pgArticleReader: Pick<
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
-    return { summaries, stale: summariesStale(summaries, blocks) };
+    const tree = found.revision.tree as Tree | null;
+    return {
+      summaries,
+      stale: !tree || summariesStale(summaries, blocks, tree, metaFingerprintOf(found.revision)),
+    };
   },
 
   async loadIdeas(slug: string): Promise<IdeasFound> {
@@ -1762,7 +2114,7 @@ export const pgArticleReader: Pick<
     const tree = found.revision.tree as Tree | null;
     return {
       ideas,
-      stale: !tree || ideasAreStale(ideas, blocks, tree),
+      stale: !tree || ideasAreStale(ideas, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: ideas.version !== IDEAS_PROMPT_VERSION,
     };
   },
@@ -1795,7 +2147,7 @@ export const pgArticleReader: Pick<
     const tree = found.revision.tree as Tree | null;
     return {
       sketch,
-      stale: !tree || sketchIsStale(sketch, blocks, tree),
+      stale: !tree || sketchIsStale(sketch, blocks, tree, citedMetaFingerprintOf(found.revision)),
       outdated: sketch.version !== SKETCH_PROMPT_VERSION,
     };
   },
@@ -1807,7 +2159,7 @@ export const pgArticleReader: Pick<
    * **Four inputs, where `loadIdeas` above needs three.** Blocks and tree for the
    * reason that one gives, and the metadata besides: the arc's prompt carries
    * `TITLE:`, `BY:` and `PUBLISHED IN:` at its head (src/article-prompt.ts), so a
-   * renamed article is a different question. The revision row stores those three
+   * changed extracted title is a different question. The revision row stores those three
    * as columns, which is why the `arc` projection selects them — a store that
    * compared only blocks and tree here would call an arc current while the
    * filesystem store called it stale, and two stores disagreeing about staleness
@@ -1832,14 +2184,7 @@ export const pgArticleReader: Pick<
     const tree = found.revision.tree as Tree | null;
     return {
       arc,
-      stale:
-        !tree ||
-        arcIsStale(arc, blocks, tree, {
-          slug,
-          title: found.revision.title ?? "",
-          ...(found.revision.byline == null ? {} : { byline: found.revision.byline }),
-          ...(found.revision.siteName == null ? {} : { siteName: found.revision.siteName }),
-        }),
+      stale: !tree || arcIsStale(arc, blocks, tree, metaFingerprintOf(found.revision)),
       outdated: arc.version !== ARC_PROMPT_VERSION,
     };
   },

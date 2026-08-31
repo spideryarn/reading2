@@ -1232,7 +1232,7 @@ export function blocksArtefact(blocks: Block[]): { sanitizer: number; blocks: Bl
  * stage 2's output means the baseline is load-bearing on every single run, so a
  * broken baseline fails immediately rather than eventually.
  */
-export const BLOCKS_INPUT_HTML: ArtifactKind = "extractedHtml";
+export const BLOCKS_INPUT_HTML = "extractedHtml" satisfies ArtifactKind;
 
 /**
  * The carry-forward did not happen, and stage 3 refuses to paper over it.

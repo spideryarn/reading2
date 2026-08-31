@@ -13,8 +13,8 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { articleMetadata, loadArticle, loadGlossary } from "../src/api.js";
 import { PROMPT_VERSION } from "../src/glossary.js";
-import { hashBlocks } from "../src/source-hash.js";
-import type { Block } from "../src/types.js";
+import { articleFingerprint } from "../src/source-hash.js";
+import type { Block, Tree } from "../src/types.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { STEP_ORDER, STEPS } from "../src/pipeline.js";
 
@@ -290,17 +290,22 @@ describe("loadGlossary's two verdicts", () => {
     /* `articleDir` needs BOTH blocks.json and tree.json before it will call a
        directory an article — otherwise it falls through to the `example/`
        fixture, which is how this test first failed. */
-    await writeFile(
-      path.join(dir, "tree.json"),
-      JSON.stringify({ rootId: "spya-aaaaaa", nodes: {} }),
-    );
+    const tree = { rootId: "spya-aaaaaa", nodes: {} } as unknown as Tree;
+    await writeFile(path.join(dir, "tree.json"), JSON.stringify(tree));
+    /* The metadata is the third input to the glossary's fingerprint (its prompt
+       carries `TITLE:`, `BY:` and `PUBLISHED IN:`), so the fixture has to write
+       one — an absent `meta.json` is a legitimate but *different* input, and
+       these two cases are about the prompt version, not about staleness.
+       src/source-hash.ts § `articleFingerprint`. */
+    const meta = { slug, title: "A title" };
+    await writeFile(path.join(dir, "meta.json"), JSON.stringify(meta));
     await writeFile(
       path.join(dir, "glossary.json"),
       JSON.stringify({
         version,
         generator: "a-model",
         slug,
-        sourceHash: hashBlocks(blocks),
+        sourceHash: articleFingerprint(blocks, tree, meta),
         entries: [],
         passes: 1,
         generatedAt: "2026-08-25T12:00:00.000Z",

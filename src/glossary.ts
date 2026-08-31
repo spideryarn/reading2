@@ -47,7 +47,7 @@ import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
+import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
 import { formsOf, termAppears, termPattern } from "./term-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
@@ -705,10 +705,16 @@ export function buildGlossary(
  * The pipeline no longer calls this. Its `stamp` (src/pipeline.ts) applies the
  * same rule to the same `sourceHash` independently, which is a second place the
  * comparison lives — worth knowing, because the two agreeing is a convention
- * rather than something enforced.
+ * rather than something enforced. Both now go through `articleFingerprint`
+ * (src/source-hash.ts), so the convention is at least one function wide.
  */
-export function isStale(glossary: Glossary, blocks: BlockFingerprint[]): boolean {
-  return glossary.sourceHash !== hashBlocks(blocks);
+export function isStale(
+  glossary: Glossary,
+  blocks: BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprint | null,
+): boolean {
+  return glossary.sourceHash !== articleFingerprint(blocks, tree, meta);
 }
 
 /**
@@ -1169,7 +1175,16 @@ export async function generateGlossary(opts: {
     .then((raw) => JSON.parse(raw) as Meta)
     .catch(() => null);
 
-  const sourceHash = hashBlocks(blocks);
+  /* **Blocks, tree and metadata**, not the blocks alone. `renderPrompt` builds
+     the skeleton out of `partsOf(tree)` and `articleText` writes the `TITLE:`,
+     `BY:` and `PUBLISHED IN:` head, so all three are inputs to the question the
+     model was asked. This decides two things and the second is the sharp one:
+     whether the step may skip, and — through `existingFor` below — whether the
+     next run *appends* to this list or starts it again. A fingerprint that
+     missed a re-cut tree would go on appending terms to a glossary written
+     about a differently-shaped article. src/source-hash.ts §
+     `articleFingerprint`, docs/plans/finish-the-database-move.md § stage 1. */
+  const sourceHash = articleFingerprint(blocks, tree, meta);
   /* **Handed in, not read from `opts.dir`** — see `previous` on the options
      above, and `previousGlossaryFrom` for the four states the caller had to
      tell apart before it could pass one. The name stays `onDisk` because

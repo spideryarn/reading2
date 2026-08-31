@@ -34,7 +34,12 @@ import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { loadEnvLocal } from "./env.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
+import {
+  articleFingerprint,
+  type BlockFingerprint,
+  hashBlocks,
+  type MetaFingerprint,
+} from "./source-hash.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
 import { parseJsonFrom, stripFence } from "./parse-json.js";
@@ -111,9 +116,24 @@ export { hashBlocks };
  * docs/plans/delete-the-importer.md. What went with it is a freshness check
  * that read `data/<slug>/` directly, which is a second door into the storage
  * the artefact store exists to be the only one of.
+ *
+ * **The tree and the metadata joined the fingerprint on 2026-08-31**, and until
+ * then this asked about a third of what the prompt reads. `renderPrompt` builds
+ * the skeleton out of `partsOf(tree)`, and `articleText` puts `TITLE:`, `BY:`
+ * and `PUBLISHED IN:` at the head — so the sections could be re-cut or the
+ * extracted title changed and the thread went on reporting itself current. Harmless
+ * only while the pipeline's artefact reads answer `null` and the step re-runs
+ * regardless; the moment they succeed it is a stale artefact that skips.
+ * `articleFingerprint` in src/source-hash.ts,
+ * docs/plans/finish-the-database-move.md § stage 1.
  */
-export function isStale(thread: TweetThread, blocks: BlockFingerprint[]): boolean {
-  return thread.sourceHash !== hashBlocks(blocks);
+export function isStale(
+  thread: TweetThread,
+  blocks: BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprint | null,
+): boolean {
+  return thread.sourceHash !== articleFingerprint(blocks, tree, meta);
 }
 
 /**
@@ -511,7 +531,7 @@ export async function generateTweets(opts: {
 
   const thread = buildThread(parseJson(raw), {
     slug: tree.slug,
-    sourceHash: hashBlocks(blocks),
+    sourceHash: articleFingerprint(blocks, tree, meta),
     profile,
     elapsedMs: Date.now() - started,
   });

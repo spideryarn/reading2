@@ -34,6 +34,11 @@ import {
   readIdeas,
 } from "./ideas.js";
 import {
+  isStale as quotesAreStale,
+  PROMPT_VERSION as QUOTES_PROMPT_VERSION,
+  readQuotes,
+} from "./quotes.js";
+import {
   isStale as sketchIsStale,
   PROMPT_VERSION as SKETCH_PROMPT_VERSION,
   readSketchFile,
@@ -57,6 +62,7 @@ import type {
   Block,
   GlossaryFound,
   IdeasFound,
+  QuotesFound,
   SketchFound,
   SummariesFound,
   LibraryEntry,
@@ -334,7 +340,16 @@ export async function loadTweets(slug: string): Promise<ThreadFound> {
   // `articleDir` already proved blocks.json is there, so the fallback is for a
   // file that has become unreadable between the two reads. Unknown counts as
   // stale: the honest answer, and the safe way round to be wrong.
-  return { thread, stale: !blocksFile || isStale(thread, blocksFile.blocks) };
+  /* The tree and the metadata as well, since 2026-08-31: the thread's prompt is
+     built from `partsOf(tree)` and carries the `TITLE:`/`BY:`/`PUBLISHED IN:`
+     head, so all three are what it was written from — src/source-hash.ts §
+     `articleFingerprint`. The metadata is optional by design, like the arc's. */
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  const meta = await readJson<Meta>(path.join(dir, "meta.json"));
+  return {
+    thread,
+    stale: !blocksFile || !tree || isStale(thread, blocksFile.blocks, tree, meta ?? null),
+  };
 }
 
 /**
@@ -386,13 +401,69 @@ export async function loadGlossary(slug: string): Promise<GlossaryFound> {
     lookups[entry.id] ? { ...entry, lookup: lookups[entry.id]! } : entry,
   );
 
+  /* Blocks, tree and metadata head — all three go into this stage's prompt, so
+     all three are in its fingerprint. src/source-hash.ts § `articleFingerprint`. */
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  const meta = await readJson<Meta>(path.join(dir, "meta.json"));
+
   return {
     glossary: { ...glossary, entries },
-    stale: !blocksFile || glossaryIsStale(glossary, blocksFile.blocks),
+    stale:
+      !blocksFile || !tree || glossaryIsStale(glossary, blocksFile.blocks, tree, meta ?? null),
     /* Two different facts, computed side by side, both at read time for the
        reason the header gives: a flag stored at generation time is right until
        the moment it matters. `stale` is about the article; this is about us. */
     outdated: glossary.version !== PROMPT_VERSION,
+  };
+}
+
+/**
+ * The article's quotes, and whether they still describe it.
+ *
+ * The read half of stage 5h, and the same shape as `loadGlossary` above for the
+ * same reason: two functions answering the same question about different
+ * artefacts must not be allowed to drift.
+ *
+ * **`stale` carries more weight here than for any of its neighbours.** A stale
+ * glossary entry is a definition that still reads correctly; a stale quote list
+ * holds block ids that may have gone *and* strings that were verified against a
+ * version of the article that no longer exists. It is the one artefact in the
+ * band whose staleness can make it false rather than merely dated, which is why
+ * the panel puts the banner above the list rather than beside it.
+ */
+export async function loadQuotes(slug: string): Promise<QuotesFound> {
+  requireSlug(slug);
+
+  const dir = await articleDir(slug);
+  if (!dir) {
+    throw Object.assign(new Error(`No article artefacts for "${slug}".`), { status: 404 });
+  }
+  const quotes = await readQuotes(dir);
+  if (!quotes) {
+    throw Object.assign(
+      new Error(
+        `No quotes for "${slug}" yet. Choose them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["quotes"] }.`,
+      ),
+      { status: 404 },
+    );
+  }
+  const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  /* The metadata as well as the blocks and the tree: `articleText` puts the
+     title, the byline and the site at the head of this prompt, and those are
+     stage 2's fields — a re-extraction moves them. (Not the reader's own
+     rename, which an earlier version of this comment cited: that is a shelf
+     override no generator reads. src/shelf.ts.) Optional by design — the stage
+     tolerates a missing `meta.json`. */
+  const quotesMeta = await readJson<Meta>(path.join(dir, "meta.json"));
+  // Unknown counts as stale — the honest answer, and the safe way round to be
+  // wrong: the cost is a banner offering a regeneration nobody needed.
+  return {
+    quotes,
+    stale:
+      !blocksFile || !tree || quotesAreStale(quotes, blocksFile.blocks, tree, quotesMeta ?? null),
+    outdated: quotes.version !== QUOTES_PROMPT_VERSION,
   };
 }
 
@@ -429,11 +500,19 @@ export async function loadIdeas(slug: string): Promise<IdeasFound> {
   }
   const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
   const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  /* The metadata too, since 2026-08-31 — `articleWithIds` puts the title, the
+     byline and the site at the head of this prompt, and the reading view
+     are stage 2's fields, so a re-extraction moves them. Optional by design:
+     the stage tolerates a missing `meta.json`, and for these two the
+     fingerprint hashes the synthetic `TITLE: <tree.slug>` they fall back to
+     rather than treating it as no input at all. */
+  const ideasMeta = await readJson<Meta>(path.join(dir, "meta.json"));
   // Unknown counts as stale — the honest answer, and the safe way round to be
   // wrong: the cost is a banner offering a regeneration nobody needed.
   return {
     ideas,
-    stale: !blocksFile || !tree || ideasAreStale(ideas, blocksFile.blocks, tree),
+    stale:
+      !blocksFile || !tree || ideasAreStale(ideas, blocksFile.blocks, tree, ideasMeta ?? null),
     outdated: ideas.version !== IDEAS_PROMPT_VERSION,
   };
 }
@@ -467,9 +546,13 @@ export async function loadSketch(slug: string): Promise<SketchFound> {
   }
   const blocksFile = await readJson<{ blocks: Block[] }>(path.join(dir, "blocks.json"));
   const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  /* And the metadata, for the reason `loadIdeas` gives: the same prompt
+     builder, the same head, the same rename. */
+  const sketchMeta = await readJson<Meta>(path.join(dir, "meta.json"));
   return {
     sketch,
-    stale: !blocksFile || !tree || sketchIsStale(sketch, blocksFile.blocks, tree),
+    stale:
+      !blocksFile || !tree || sketchIsStale(sketch, blocksFile.blocks, tree, sketchMeta ?? null),
     outdated: sketch.version !== SKETCH_PROMPT_VERSION,
   };
 }
@@ -639,7 +722,14 @@ export async function loadSummaries(slug: string): Promise<SummariesFound> {
   // `articleDir` already proved blocks.json is there, so the fallback is for a
   // file that has become unreadable between the two reads. Unknown counts as
   // stale: the honest answer, and the safe way round to be wrong.
-  return { summaries, stale: !blocksFile || summariesStale(summaries, blocksFile.blocks) };
+  /* The tree and the metadata as well: `batchesOf` and `skeletonOf` build this
+     stage's prompt out of the tree, and `articleText` writes the head. */
+  const tree = await readJson<Tree>(path.join(dir, "tree.json"));
+  const meta = await readJson<Meta>(path.join(dir, "meta.json"));
+  return {
+    summaries,
+    stale: !blocksFile || !tree || summariesStale(summaries, blocksFile.blocks, tree, meta ?? null),
+  };
 }
 
 /* ----------------------------------------------------------- provenance --

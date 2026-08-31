@@ -123,23 +123,37 @@ Why files at all: *"Prefer boring: filesystem over database, one server process"
 [AGENTS.md](../../AGENTS.md). Each stage writes JSON and every stage stays independently runnable.
 See [architecture.md](architecture.md#stage-ownership).
 
-**Caching is not what the docs claim.** "Anything expensive is cached on a content hash" is true of
-exactly two stages of seven: `tweets` and `glossary`, via `hashBlocks` in
-[`src/source-hash.ts`](../../src/source-hash.ts) and the optional `isDone(ctx)` hook on
-`PipelineStep`. (That helper began life inside `src/tweets.ts` and moved out when the glossary needed
-the identical question answered — two stages computing "the same" fingerprint two ways can only ever
-disagree.) **`arc` joined them on 2026-08-29** — `arc.json` now records the blocks, the tree *and* the three
-metadata fields its prompt carries, and the step has a `stamp` rather than an existence check
-([`src/arc.ts`](../../src/arc.ts) § `inputFingerprint`). It hashes more than `tweets` and `glossary`
-do, on purpose: those two hash the blocks alone, which cannot see a tree re-cut without a block
-changing — and the arc writes one sentence per *part*, so a re-cut article is a different question.
+**Caching was not what the docs claimed, and since 2026-08-31 it very nearly is.** "Anything
+expensive is cached on a content hash" began as a claim about `tweets` and `glossary` alone, via
+`hashBlocks` in [`src/source-hash.ts`](../../src/source-hash.ts) and the optional `isDone(ctx)` hook
+on `PipelineStep`. (That helper began life inside `src/tweets.ts` and moved out when the glossary
+needed the identical question answered — two stages computing "the same" fingerprint two ways can
+only ever disagree.) `arc` joined on 2026-08-29 with the first fingerprint that covered everything
+its prompt actually reads.
+
+**All six article-reading stages are now fingerprinted against everything their prompt reads** —
+the blocks, the tree and the head — through **one function per prompt head** in the same file:
+`articleFingerprint` for the stages that send `articleText`, and `articleWithIdsFingerprint` for
+`ideas` and `sketch`, whose head also prints a `URL:` line and whose absent-metadata fallback is a
+synthetic `TITLE: <tree.slug>`. A stage with a head of its own adds a function and a domain string
+rather than widening one of these — which is what `timeline` did when it needed the publication
+date. The stages that hashed less than that were harmless only because the
+pipeline's artefact reads return `null` today and the stage re-runs regardless; the moment those
+reads succeed, an incomplete stamp lets a **stale artefact skip**.
+[finish-the-database-move.md](../plans/finish-the-database-move.md) § stage 1. `assets` keeps the
+narrow blocks-only hash, honestly: it fetches the images the blocks name and has no prompt.
+
 `toc` still uses `stepIsDone`, an
 `access()` existence check — a file exists, therefore the step is done, whatever it was generated
 from. That is deliberate rather than pending, and
 [`src/pipeline.ts`](../../src/pipeline.ts) § `toc` explains at length why a stamp there needs
 consumer invalidation first. When it comes to generalising this, copy their choice of **hash input**, not just the idea:
-it hashes `id \t text` per block, deliberately *not* the bytes of `blocks.json`, because those bytes
-change when an unread field is recomputed and *don't* change when two blocks swap ids.
+`hashBlocks` hashes `id \t text` per block, deliberately *not* the bytes of `blocks.json`, because
+those bytes change when an unread field is recomputed and *don't* change when two blocks swap ids —
+and the article fingerprints put the tree's `structureHash` and the prompt head beside it, because a
+stage's fingerprint has to cover **everything its prompt reads** — including the lines that are not
+about the article's text at all, and including whatever the stage substitutes when an input is
+missing.
 
 ## Next: Supabase Postgres
 

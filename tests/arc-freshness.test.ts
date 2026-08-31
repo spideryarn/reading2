@@ -123,10 +123,13 @@ describe("inputFingerprint", () => {
 
   it("changes when only the TITLE changes — blocks and tree byte-identical", () => {
     /* The one a blocks+tree fingerprint would miss, and it is reachable: the
-       reading view renames articles in place (useArticleRename,
-       src/web/TitleEditor.tsx). `generateArc` reads meta.json and articleText
-       puts `TITLE:` at the head of the prompt (src/article-prompt.ts), so a
-       rename genuinely changes what the model was asked. */
+       extracted title is stage 2's own reading of the page and moves whenever
+       the page is re-extracted. **Not** the reader's own rename, which this
+       comment used to cite — that is a shelf override (src/shelf.ts,
+       `articles.title_override`) and no generator reads it. `generateArc` reads
+       meta.json and `articleText` puts `TITLE:` at the head of the prompt
+       (src/article-prompt.ts), so a changed extracted title genuinely changes
+       what the model was asked. GPT Sol, 2026-08-31. */
     const renamed: Meta = { ...META, title: "Nobody had to write" };
     expect(inputFingerprint(BLOCKS, tree(), META)).not.toBe(
       inputFingerprint(BLOCKS, tree(), renamed),
@@ -145,10 +148,15 @@ describe("inputFingerprint", () => {
   it("ignores metadata the prompt never sees", () => {
     /* `articleText` reads title, byline and siteName and nothing else. Folding
        in `fetchedAt` would mark every arc stale on every re-fetch of an
-       unchanged page — a paid re-run bought for nothing. */
-    expect(inputFingerprint(BLOCKS, tree(), META)).toBe(
-      inputFingerprint(BLOCKS, tree(), { ...META, fetchedAt: "2026-08-29T00:00:00Z", excerpt: "x" }),
-    );
+       unchanged page — a paid re-run bought for nothing.
+
+       **A named `Meta`, not an object literal**, and that is the point rather
+       than a workaround. Since the parameter narrowed to `MetaFingerprint`
+       (src/source-hash.ts) a *literal* carrying `fetchedAt` no longer compiles
+       at all, which is the stronger guard; a whole `Meta` still goes in, and
+       this asserts that the extra fields on it change nothing. */
+    const noisy: Meta = { ...META, fetchedAt: "2026-08-29T00:00:00Z", excerpt: "x" };
+    expect(inputFingerprint(BLOCKS, tree(), META)).toBe(inputFingerprint(BLOCKS, tree(), noisy));
   });
 
   it("treats a missing meta.json as its own input, not as a crash", () => {

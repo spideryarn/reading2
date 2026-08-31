@@ -46,6 +46,7 @@ import type {
   Glossary,
   Ideas,
   Meta,
+  Quotes,
   StepName,
   Summaries,
   Tree,
@@ -84,6 +85,7 @@ export type ArtifactKind =
   | "glossary"
   | "summary"
   | "ideas"
+  | "quotes"
   | "sketch";
 
 /**
@@ -136,6 +138,7 @@ export interface ArtifactMap {
   glossary: Glossary;
   summary: Summaries;
   ideas: Ideas;
+  quotes: Quotes;
   sketch: Sketch;
 }
 
@@ -239,6 +242,11 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
   tweets: { field: "tweets", ok: isArray },
   glossary: { field: "entries", ok: isArray },
   ideas: { field: "ideas", ok: isArray },
+  /* A `quotes` array. An EMPTY one is not usable, like the sketch below and
+     unlike the assets manifest: `buildQuotes` throws rather than write one,
+     because a quote list with nothing in it is a model call that produced
+     nothing and storing it would make the step report done for ever. */
+  quotes: { field: "quotes", ok: (v) => isArray(v) && (v as unknown[]).length > 0 },
   summary: { field: "entries", ok: isArray },
   /* **`scenes`, and an empty one is NOT usable**, unlike the assets manifest
      two rows up. An article with no images legitimately has an empty list; a
@@ -365,6 +373,11 @@ export const BASELINE: Partial<Record<ArtifactKind, BaselineRule>> = {
     keyField: "name",
   },
   ideas: { hashField: "sourceHash", itemsField: "ideas", idField: "id", keyField: "name" },
+  /* `keyField: "text"` because a quote HAS no name — its identity is the
+     author's own words, which is also why this key is the most reliable of the
+     three: unlike a term's gloss or an idea's statement, the prose does not get
+     rewritten between runs. src/quotes.ts § `idsByText`. */
+  quotes: { hashField: "sourceHash", itemsField: "quotes", idField: "id", keyField: "text" },
 };
 
 /** A hash we could compare — see `BaselineRule` for why the test is this weak. */
@@ -513,15 +526,28 @@ export const NO_INPUT_HASH = "unstamped";
  */
 export interface StepStamp {
   /**
-   * A fingerprint of what went in — `hashBlocks` today (src/source-hash.ts),
-   * stored on disk as `sourceHash`.
+   * A fingerprint of what went in, stored on disk as `sourceHash`.
    *
-   * **One hash is not right for every step**, and this field is where that will
-   * bite. `arc`, `tweets`, `glossary` and `summary` all read the *tree* as well
-   * as the blocks, and src/labels.ts already keeps a separate `structureHash`
-   * precisely because section boundaries can move without a single block
-   * changing. Making the input hash step-specific is a stage-5 job for each
-   * step's owner; this type does not stand in the way of it.
+   * **One hash is not right for every step**, and this field said so as a
+   * warning until 2026-08-31. It is now a fact about two groups rather than a
+   * hazard:
+   *
+   * - `assets` hashes the blocks alone (`hashBlocks`, src/source-hash.ts),
+   *   because a list of images to fetch is all it is built from.
+   * - Every stage whose prompt reads the article hashes the blocks, the tree
+   *   **and its own prompt head** — and there are two heads, so there are two
+   *   functions (src/source-hash.ts). `arc`, `tweets`, `glossary`, `summary`
+   *   and `quotes` send `articleText` and use `articleFingerprint`; `ideas` and
+   *   `sketch` send `articleWithIds`, whose head also prints a `URL:` line and
+   *   falls back to a synthetic title, and use `articleWithIdsFingerprint`.
+   *   Most of them hashed the blocks alone, and the ones that did not still
+   *   missed the head — so the sections could be re-cut, or the page
+   *   re-extracted under a different headline, and every one of them reported
+   *   itself current.
+   *
+   * Harmless only while the pipeline's artefact reads answer `null` and the
+   * stage re-runs regardless — which is what made it invisible.
+   * docs/plans/finish-the-database-move.md § stage 1.
    */
   inputHash?: string;
   /**
@@ -596,6 +622,7 @@ export const STAMP_SOURCE: Partial<Record<StepName, ArtifactKind>> = {
   glossary: "glossary",
   summary: "summary",
   ideas: "ideas",
+  quotes: "quotes",
   sketch: "sketch",
 };
 

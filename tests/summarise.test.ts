@@ -46,6 +46,7 @@ import {
 import { SummaryPanel, type SummariesAccess, type SummariesOwner } from "../src/web/SummaryPanel.js";
 import { buildSummaryTree, currentEntryId, rungText } from "../src/web/tree.js";
 import { PROFILE_RULES } from "../src/profile.js";
+import { articleFingerprint } from "../src/source-hash.js";
 import type { Block, Summaries, SummaryEntry, Tree, TreeNode } from "../src/types.js";
 
 /* ------------------------------------------------------------- fixtures -- */
@@ -354,15 +355,44 @@ describe("buildSummaries", () => {
 });
 
 describe("isStale", () => {
-  it("is true when the blocks it was written from have changed", () => {
-    const built = buildSummaries([{ node: TREE.nodes.root!, short: "s" }], {
+  /* Blocks, tree and metadata head — `batchesOf` and `skeletonOf` build this
+     stage's prompt out of the tree and `articleText` writes the head, so all
+     three are in the fingerprint. src/source-hash.ts § `articleFingerprint`. */
+  const META = { title: "A title", byline: "Somebody", siteName: "Somewhere" };
+  const built = (sourceHash: string) =>
+    buildSummaries([{ node: TREE.nodes.root!, short: "s" }], {
       slug: "fixture",
       targets: [TREE.nodes.root!],
       blocks: BLOCKS,
-      sourceHash: "not-the-real-hash",
+      sourceHash,
       elapsedMs: 1,
     });
-    expect(isStale(built, BLOCKS)).toBe(true);
+
+  it("is true when the blocks it was written from have changed", () => {
+    expect(isStale(built("not-the-real-hash"), BLOCKS, TREE, META)).toBe(true);
+  });
+
+  it("is false for summaries written from exactly these inputs", () => {
+    const current = built(articleFingerprint(BLOCKS, TREE, META));
+    expect(isStale(current, BLOCKS, TREE, META)).toBe(false);
+  });
+
+  /* Both red before 2026-08-31, when this compared the blocks alone — and this
+     is the stage where being wrong costs the most, because a regeneration is
+     one model call per part rather than one per article.
+     docs/plans/finish-the-database-move.md § stage 1. */
+  it("is true once the sections have been re-cut", () => {
+    const current = built(articleFingerprint(BLOCKS, TREE, META));
+    const recut = {
+      ...TREE,
+      nodes: { ...TREE.nodes, root: { ...TREE.nodes.root!, gist: "A different sentence." } },
+    } as Tree;
+    expect(isStale(current, BLOCKS, recut, META)).toBe(true);
+  });
+
+  it("is true once the article has been renamed", () => {
+    const current = built(articleFingerprint(BLOCKS, TREE, META));
+    expect(isStale(current, BLOCKS, TREE, { ...META, title: "Renamed" })).toBe(true);
   });
 });
 

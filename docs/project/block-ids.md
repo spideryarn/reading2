@@ -135,11 +135,69 @@ The `blocks` step turns that one into a `blocked` stage failure, so the job card
 stage 3 the same prose-free HTML and stop in the same place — which is what the error already tells
 the reader, and for a while it said so above a button that contradicted it.
 
-The read side keeps its own copy of that question — `htmlCarriesItsIds` in
+The read side keeps its own copy of that question — `blocksMatchTheirHtml` in
 [`src/pipeline.ts`](../../src/pipeline.ts) refuses to call the step done when `blocks.json` lists
 nothing. Belt and braces on purpose: the write-time guard stops new empties being created, and the
 read-time one still has work to do, because `blocks.json` files already on disk can be empty and
 nothing will rewrite them.
+
+### The freshness guard, and the two ways it was wrong
+
+`blocksMatchTheirHtml` in [`src/pipeline.ts`](../../src/pipeline.ts) asks two things.
+
+1. **Every id in the blocks artefact is in the stamped HTML.** Cheap, and it settles the commonest
+   failure — stage 2 re-ran and wiped the ids — before anything is parsed.
+2. **Re-derive the blocks from the extracted HTML and compare**, through `splitIntoBlocks`: the same
+   splitter, the same sanitiser, the same everything except which ids were handed out.
+   `blockIdentityFree` is the projection that takes the ids out — every field of a `Block` except
+   `id`, with `spya-` id attributes and `#spya-…` fragments normalised out of the stored `html`.
+
+Question 1 alone was enough **by accident** until 2026-08-31. On disk `extract.extractedHtml` and
+`blocks.stampedHtml` are the same path (`PATHS` in
+[`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts)), so a re-extraction overwrites the
+very file question 1 reads and the missing ids give it away. Split into the two Postgres columns the
+alias goes, question 1 compares stage 3's own output against stage 3's own blocks, and it returns
+**true always**.
+
+**Question 2 was a comparison of the two documents' parsed text first, and that was wrong in both
+directions.** Worth keeping, because it looked well-measured and was not:
+
+- **It under-fires.** `<p>Alpha</p><p>Beta</p>` re-extracted as `<p>AlphaBeta</p>` has identical text
+  and genuinely different blocks — and so does a heading demoted to a paragraph, a repointed `href`,
+  a changed `src` or `alt`, and whitespace inside a `<pre>`.
+- **It over-fires, and that half cannot cure.** Stage 3 sanitises what it is handed, and `FORBID_TAGS`
+  in [`src/sanitize-policy.ts`](../../src/sanitize-policy.ts) removes `style` and friends, so a
+  healthy stamped HTML legitimately says less than the extraction it came from. Under Postgres
+  `extracted_html` stays unsanitised while `stamped_html` stays sanitised, so stage 3 would re-run for
+  ever and never report itself done.
+
+The comparison had been measured against one real article and found sound. **One healthy pair says
+nothing about the unhealthy ones, and nothing at all about the pairs that ought to be healthy and are
+not** — [silent-success.md](../reusable/silent-success.md). Deriving the candidates through the same
+code the stage uses removes both halves at once: both sides are sanitised, so there is nothing to
+over-fire on, and both keep their boundaries, tags and attributes, so there is nothing left to
+under-fire through. GPT Sol found both, 2026-08-31.
+
+**What it costs.** A full jsdom parse, a DOMPurify pass and a document walk, on every skip check for
+this one step: 16 ms for a 19 KB article, 169 ms for 77 KB, 687 ms for the 676 KB `consciousness`,
+which is the worst case in `output/`. It is not short-circuited on the filesystem, where the two
+reads return the same string — a guard that knows which store it is in is a guard with an untested
+half.
+
+**What it rests on.** On the filesystem the candidates come from stage 3's *own* output, because
+there is only one document; that is sound only if the splitter is idempotent. Measured across ten
+real articles, twice over each (94 to 669 blocks): identical every time. If it ever stops being true,
+every filesystem article reports this step not-done at once rather than quietly — the right way round
+for it to break.
+
+**What it still does not prove.** Question 1 is membership, not binding: two ids swapped between
+elements, or one parked on an unrelated wrapper, both pass. Question 2 says stage 3 would produce the
+same blocks, not that these blocks carry the ids a reader's comments name — `assertIdsCarried` is
+what holds that, at write time. The end state is a generation token stage 3 writes into both
+artefacts, and it has nowhere to live yet: in Postgres the blocks artefact is rows, and
+`STAMP_SOURCE` in [`src/store/artifacts.ts`](../../src/store/artifacts.ts) lists no entry for
+`blocks`, so a `stamp` for this step reads back `null`. **That absence is a reason to do the storage
+work before the flip, not a reason to keep a cheaper heuristic.**
 
 Stage 3's input is **stage 2's HTML** (`extractedHtml`), never its own previous output
 (`stampedHtml`) — `BLOCKS_INPUT_HTML` in [`src/blocks.ts`](../../src/blocks.ts). On disk the two are

@@ -39,8 +39,8 @@
  *    survives is id inheritance, and see `idsByName` for why its promise is
  *    weaker here than there.
  *
- * **The freshness input is blocks AND tree**, unlike every artefact before it —
- * see `inputFingerprint`. And the profile is in the stamp rather than merely
+ * **The freshness input is blocks AND tree AND metadata** — see
+ * `inputFingerprint`. And the profile is in the stamp rather than merely
  * recorded, because "what you need to bring" is *defined by* who is reading.
  */
 
@@ -53,7 +53,12 @@ import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
 import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
-import { hashBlocks, structureHash, type BlockFingerprint } from "./source-hash.js";
+import {
+  articleWithIdsFingerprint,
+  type BlockFingerprint,
+  fallbackHeadTitle,
+  type MetaFingerprintWithUrl,
+} from "./source-hash.js";
 import { findQuote } from "./quote-match.js";
 import { budgetFor, truncationFailure } from "./token-budget.js";
 import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
@@ -106,24 +111,35 @@ export function suggestedIdeas(words: number): number {
 }
 
 /**
- * What this artefact was written from: **the blocks and the tree**.
+ * What this artefact was written from: **the blocks, the tree and the
+ * metadata** — `articleFingerprint` in src/source-hash.ts.
  *
- * The first stage to fold the second half in, and it is not a refinement — it
- * closes a hole `StepStamp` (src/store/artifacts.ts) has flagged since it was
- * written: *"`arc`, `tweets`, `glossary` and `summary` all read the tree as
- * well as the blocks, and src/labels.ts already keeps a separate
- * `structureHash` precisely because section boundaries can move without a
- * single block changing."*
+ * The first stage to fold the tree in, and it was not a refinement: it closed a
+ * hole `StepStamp` (src/store/artifacts.ts) had flagged since it was written —
+ * *"`arc`, `tweets`, `glossary` and `summary` all read the tree as well as the
+ * blocks, and src/labels.ts already keeps a separate `structureHash` precisely
+ * because section boundaries can move without a single block changing."*
  *
- * It matters more here than anywhere. The prompt shows the model the skeleton
- * *before* the article, so that it judges what is load-bearing against the
- * shape of the argument rather than against how often a phrase appears. Re-cut
- * the sections and that judgment is being made against a different question —
- * while every block is byte-identical and a blocks-only hash reports no change
- * at all.
+ * The tree matters more here than anywhere. The prompt shows the model the
+ * skeleton *before* the article, so that it judges what is load-bearing against
+ * the shape of the argument rather than against how often a phrase appears.
+ * Re-cut the sections and that judgment is being made against a different
+ * question — while every block is byte-identical and a blocks-only hash reports
+ * no change at all.
+ *
+ * **The metadata joined on 2026-08-31**, and it was the same hole one door
+ * along: `generateIdeas` hands `meta` to `articleWithIds`, which writes
+ * `TITLE:`, `BY:` and `PUBLISHED IN:` at the head of the prompt, and the
+ * those fields are stage 2's and move when the page is re-extracted. `arc` had
+ * covered all three since 2026-08-29 and this stage had not.
+ * docs/plans/finish-the-database-move.md § stage 1.
  */
-export function inputFingerprint(blocks: readonly BlockFingerprint[], tree: Tree): string {
-  return `${hashBlocks(blocks)}.${structureHash(tree)}`;
+export function inputFingerprint(
+  blocks: readonly BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprintWithUrl | null,
+): string {
+  return articleWithIdsFingerprint(blocks, tree, meta);
 }
 
 function text(value: unknown): string {
@@ -490,9 +506,14 @@ export function buildIdeas(
   };
 }
 
-/** Does this artefact still describe the article and tree on disk? */
-export function isStale(ideas: Ideas, blocks: readonly BlockFingerprint[], tree: Tree): boolean {
-  return ideas.sourceHash !== inputFingerprint(blocks, tree);
+/** Does this artefact still describe the article, tree and metadata on disk? */
+export function isStale(
+  ideas: Ideas,
+  blocks: readonly BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprintWithUrl | null,
+): boolean {
+  return ideas.sourceHash !== inputFingerprint(blocks, tree, meta);
 }
 
 /**
@@ -829,12 +850,19 @@ export async function generateIdeas(opts: {
      enough — the head is context for the model, not something the answer cites
      — and it keeps a missing meta.json from failing a run that has everything
      it actually needs. */
-  const meta: Meta =
-    (await readFile(path.join(opts.dir, "meta.json"), "utf-8")
-      .then((raw) => JSON.parse(raw) as Meta)
-      .catch(() => null)) ?? ({ title: tree.slug } as Meta);
+  const onDiskMeta: Meta | null = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
+    .then((raw) => JSON.parse(raw) as Meta)
+    .catch(() => null);
+  const meta: Meta = onDiskMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
 
-  const sourceHash = inputFingerprint(blocks, tree);
+  /* **`onDiskMeta`, not the stub.** The stamp in src/pipeline.ts asks the store
+     for the metadata and hashes `null` when there is none, so hashing the stub
+     here would write a fingerprint the stamp can never produce — and every
+     article without a `meta.json` would report this stage stale for ever, on
+     every run, while looking perfectly healthy. The two sides of a fingerprint
+     have to be handed the same input; the stub is a *prompt* fallback and stops
+     at the prompt. */
+  const sourceHash = inputFingerprint(blocks, tree, onDiskMeta);
   const profile = opts.profile ?? null;
   /* No `existingFor`, because there is no append. The only thing the old file
      is read for is its ids — and only when it describes the same article, since

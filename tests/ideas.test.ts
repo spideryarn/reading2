@@ -513,9 +513,26 @@ describe("idsByName and normaliseName", () => {
 });
 
 describe("inputFingerprint and isStale", () => {
+  /* The head this stage's prompt carries — `articleWithIds` writes `TITLE:`,
+     `BY:` and `PUBLISHED IN:` — so the fingerprint covers it too, since
+     2026-08-31. src/source-hash.ts § `articleFingerprint`. */
+  const META = { title: "A title", byline: "Somebody", siteName: "Somewhere" };
+
   it("changes when a block changes", () => {
     const moved = [...BLOCKS.slice(0, 2), block("spya-cccccc", "Different words entirely.")];
-    expect(inputFingerprint(BLOCKS, tree())).not.toBe(inputFingerprint(moved, tree()));
+    expect(inputFingerprint(BLOCKS, tree(), META)).not.toBe(
+      inputFingerprint(moved, tree(), META),
+    );
+  });
+
+  /* Red before 2026-08-31: the extracted title is stage 2's and a
+     re-extraction moves it, and it goes into the head of the prompt these ideas
+     were found from. Not the reader's own rename — a shelf override the
+     generators never read. */
+  it("changes when only the article's name moves", () => {
+    expect(inputFingerprint(BLOCKS, tree(), META)).not.toBe(
+      inputFingerprint(BLOCKS, tree(), { ...META, title: "Renamed since" }),
+    );
   });
 
   it("changes when only the TREE moves — the whole reason this is not hashBlocks", () => {
@@ -528,23 +545,26 @@ describe("inputFingerprint and isStale", () => {
       node({ id: "n1", title: "First half", gist: "A gist.", range: ["spya-aaaaaa", "spya-bbbbbb"] }),
       node({ id: "n2", title: "Second half", gist: "Another.", range: ["spya-cccccc", "spya-cccccc"] }),
     ]);
-    expect(inputFingerprint(BLOCKS, tree())).not.toBe(inputFingerprint(BLOCKS, recut));
+    expect(inputFingerprint(BLOCKS, tree(), META)).not.toBe(
+      inputFingerprint(BLOCKS, recut, META),
+    );
   });
 
   it("reports an artefact stale when the tree alone has moved", () => {
     const built = buildIdeas({ ideas: [raw()] }, {
       slug: "test",
       blocks: BLOCKS,
-      sourceHash: inputFingerprint(BLOCKS, tree()),
+      sourceHash: inputFingerprint(BLOCKS, tree(), META),
       elapsedMs: 1,
       dropped: fresh(),
     });
-    expect(isStale(built, BLOCKS, tree())).toBe(false);
+    expect(isStale(built, BLOCKS, tree(), META)).toBe(false);
     const recut = tree([
       node({ id: "n1", title: "Half", gist: "A gist.", range: ["spya-aaaaaa", "spya-bbbbbb"] }),
       node({ id: "n2", title: "Other half", gist: "B.", range: ["spya-cccccc", "spya-cccccc"] }),
     ]);
-    expect(isStale(built, BLOCKS, recut)).toBe(true);
+    expect(isStale(built, BLOCKS, recut, META)).toBe(true);
+    expect(isStale(built, BLOCKS, tree(), { ...META, title: "Renamed since" })).toBe(true);
   });
 });
 

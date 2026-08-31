@@ -23,7 +23,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CAPABLE_MODEL } from "../src/models.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
-import { hashBlocks } from "../src/source-hash.js";
+import { articleFingerprint } from "../src/source-hash.js";
 import { PROMPT_VERSION as SUMMARY_VERSION } from "../src/summarise.js";
 import {
   type ArtifactLocations,
@@ -31,7 +31,7 @@ import {
   pathFor,
 } from "../src/store/artifacts-fs.js";
 import type { ArtifactStore } from "../src/store/artifacts.js";
-import type { Block } from "../src/types.js";
+import type { Block, Tree } from "../src/types.js";
 
 const SLUG = "test-summary-stamp";
 
@@ -68,13 +68,38 @@ async function tempArticle(): Promise<ArtifactLocations> {
   return at;
 }
 
+/**
+ * The tree and the metadata these summaries are written against.
+ *
+ * Both are inputs to this stage's prompt — `batchesOf` and `skeletonOf` come
+ * from the tree, the head from `articleText` — so both are in the fingerprint
+ * the stamp compares. src/source-hash.ts § `articleFingerprint`.
+ */
+const STAMP_TREE: Tree = {
+  version: "toc/2",
+  generator: CAPABLE_MODEL,
+  slug: SLUG,
+  rootId: "n0",
+  nodes: {
+    n0: {
+      id: "n0",
+      parent: null,
+      range: [BLOCKS[0]!.id, BLOCKS[BLOCKS.length - 1]!.id],
+      title: "The whole thing",
+      gist: "One sentence.",
+      children: [],
+    },
+  },
+} as unknown as Tree;
+const STAMP_META = { slug: SLUG, title: "A title" };
+
 /** Summaries as the stage would have written them against `blocks`. */
 function summariesFor(blocks: Block[], over: Record<string, unknown>): Record<string, unknown> {
   return {
     version: SUMMARY_VERSION,
     generator: CAPABLE_MODEL,
     slug: SLUG,
-    sourceHash: hashBlocks(blocks),
+    sourceHash: articleFingerprint(blocks, STAMP_TREE, STAMP_META),
     entries: [],
     missing: 0,
     generatedAt: new Date().toISOString(),
@@ -123,6 +148,7 @@ describe("summary freshness, through the step's stamp", () => {
   async function ask(
     summaries: Record<string, unknown> | "unreadable" | null,
     blocks: Block[] | null,
+    over: { tree?: Tree; meta?: unknown } = {},
   ): Promise<boolean> {
     const file = pathFor(where, "summary", "summary");
     if (summaries === "unreadable") await writeFile(file, "{ not json", "utf8");
@@ -133,11 +159,34 @@ describe("summary freshness, through the step's stamp", () => {
     if (blocks) await writeJson(blocksFile, { blocks });
     else await rm(blocksFile, { force: true });
 
+    /* The other two thirds of what this stamp compares. Written on every call
+       so that "no blocks" stays the only thing a case takes away. */
+    await writeJson(pathFor(where, "toc", "tree"), over.tree ?? STAMP_TREE);
+    await writeJson(pathFor(where, "extract", "meta"), over.meta ?? STAMP_META);
+
     return stepIsDone(STEPS.summary, ctxAt(elsewhere), store);
   }
 
   it("says done for summaries written against these very blocks", async () => {
     expect(await ask(summariesFor(BLOCKS, {}), BLOCKS)).toBe(true);
+  });
+
+  /* Both green — wrongly — until 2026-08-31, when this stamp stopped hashing
+     the blocks alone. And this is the stage where being wrong costs the most:
+     regenerating is one model call per part, not one per article.
+     docs/plans/finish-the-database-move.md § stage 1. */
+  it("says not-done once the sections have been re-cut underneath them", async () => {
+    const recut = {
+      ...STAMP_TREE,
+      nodes: { n0: { ...STAMP_TREE.nodes.n0!, gist: "A different sentence." } },
+    } as Tree;
+    expect(await ask(summariesFor(BLOCKS, {}), BLOCKS, { tree: recut })).toBe(false);
+  });
+
+  it("says not-done once the article has been renamed underneath them", async () => {
+    expect(
+      await ask(summariesFor(BLOCKS, {}), BLOCKS, { meta: { ...STAMP_META, title: "Renamed" } }),
+    ).toBe(false);
   });
 
   it("says not-done once the article has changed underneath it", async () => {

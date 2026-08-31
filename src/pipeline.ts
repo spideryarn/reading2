@@ -27,7 +27,14 @@ import {
   inputFingerprint as arcFingerprint,
   PROMPT_VERSION as ARC_PROMPT_VERSION,
 } from "./arc.js";
-import { type BlocksRun, NoBlocksProduced, previousBlocksFrom, runBlocks } from "./blocks.js";
+import {
+  BLOCKS_INPUT_HTML,
+  type BlocksRun,
+  NoBlocksProduced,
+  previousBlocksFrom,
+  runBlocks,
+  splitIntoBlocks,
+} from "./blocks.js";
 import { ASSETS_VERSION, collectAssets, writeAssets } from "./collect-assets.js";
 import { runExtract } from "./extract.js";
 import { fetchDocument, type RawManifest, readRaw, writeRaw } from "./fetch.js";
@@ -42,6 +49,12 @@ import {
   previousIdeasFrom,
   PROMPT_VERSION as IDEAS_PROMPT_VERSION,
 } from "./ideas.js";
+import {
+  generateQuotes,
+  inputFingerprint as quotesFingerprint,
+  previousQuotesFrom,
+  PROMPT_VERSION as QUOTES_PROMPT_VERSION,
+} from "./quotes.js";
 import { stageFailure } from "./job-failure.js";
 import {
   generateSketch,
@@ -52,7 +65,7 @@ import { runPdfExtract } from "./pdf-read.js";
 import { generateSummaries, PROMPT_VERSION as SUMMARY_PROMPT_VERSION } from "./summarise.js";
 import { log } from "./log.js";
 import { ARTICLE_RENDERER, type ArticleStage, CAPABLE_MODEL, STAGE_EFFORT } from "./models.js";
-import { hashBlocks } from "./source-hash.js";
+import { articleFingerprint, hashBlocks } from "./source-hash.js";
 import { hashProfile } from "./profile.js";
 import { type RejectReason, looksLikePdf, MAX_UPLOAD_BYTES, rejectionFailure, stagingKey } from "./source.js";
 import { readUpload, rejectUpload, settleUpload } from "./upload-records.js";
@@ -67,7 +80,7 @@ import {
 } from "./store/artifacts.js";
 import { generateToc } from "./toc.js";
 import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
-import type { JobUpload, Meta, StepName } from "./types.js";
+import type { Block, JobUpload, Meta, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
 import { articleRevisions, articles } from "./db/schema.js";
 import { STORE } from "./store/live.js";
@@ -132,6 +145,13 @@ export const STEP_ORDER: StepName[] = [
   "arc",
   "tweets",
   "glossary",
+  /* Straight after `glossary`, and that is not cosmetic: the two send
+     byte-identical article bytes at the same effort, so a job asking for BOTH
+     pays for the article once (src/models.ts § ARTICLE_RENDERER). Two separate
+     jobs share nothing — `cacheArticle` below only marks a prefix a later step
+     of the same job will read — so this buys the reader who asks for both at
+     once and nobody else. docs/project/quotes.md. */
+  "quotes",
   "summary",
   "ideas",
   /* Last, and off `DEFAULT_INGEST_STEPS`: nothing reads what it writes, and it
@@ -234,8 +254,9 @@ export function sharesArticleCache(step: StepName, later: readonly StepName[]): 
  * did not move.
  *
  * The reason it is *safe* to take it out of the cascade is the other half of
- * this change, and the two must be read together: `tweets` has an `isDone` of
- * its own that compares the thread's `sourceHash` against the blocks on disk.
+ * this change, and the two must be read together: `tweets` has a freshness
+ * check of its own that compares the thread's `sourceHash` against what the
+ * store holds.
  * So when the article really has changed it re-runs **without** being forced,
  * and `force` goes back to meaning only what it says — "run this even though it
  * looks current".
@@ -246,7 +267,7 @@ export function sharesArticleCache(step: StepName, later: readonly StepName[]): 
  *
  * `glossary` is here for both halves of the same argument: it reads the blocks
  * and the tree, nothing reads what it writes, and its `stamp` below compares the
- * stored `sourceHash` against the blocks on disk. **And one thing more that
+ * stored `sourceHash` against what the store holds. **And one thing more that
  * `tweets` does not have to worry about** — forcing this step *appends* a batch
  * of terms rather than replacing the list (src/glossary.ts § `generateGlossary`),
  * so being swept into the cascade would not merely waste a model call, it would
@@ -269,6 +290,11 @@ export const FORCE_ONLY_WHEN_NAMED: ReadonlySet<StepName> = new Set<StepName>([
   "arc",
   "tweets",
   "glossary",
+  /* It reads `blocks.json` and `tree.json` and nothing reads what it writes, so
+     the positional cascade would buy a model call for nothing. Like `ideas` and
+     unlike the glossary, forcing it cannot silently lengthen anything — it
+     replaces rather than appends. */
+  "quotes",
   "summary",
   /* Same two reasons as the three above: it reads `blocks.json` and
      `tree.json`, nothing reads what it writes, so the positional cascade would
@@ -561,32 +587,140 @@ export interface PipelineStep<N extends StepName = StepName> {
 }
 
 /**
- * Are the ids stage 3 recorded actually in the HTML beside them?
+ * One block, as a string that can be compared across storage shapes.
  *
- * **The one check that can tell `extractedHtml` from `stampedHtml`**, which the
- * filesystem cannot: they are the same path, and both are "some non-empty
- * text". So after a re-extraction — stage 2 overwriting the HTML with
- * Readability's output, ids nowhere in it — an old `blocks.json` sits beside
- * new unstamped HTML, every path exists, every path parses, and `blocks`
- * reported itself done. The stage after it then serves an article whose
- * paragraphs have no anchors, and every comment in it points at nothing. Found
- * by review, 2026-08-26, as the second of three criticals in this seam.
+ * **Keys sorted and every field included, id and all.** Sorted because the two
+ * sides are built by different code — `splitIntoBlocks` writes an object
+ * literal, the Postgres adapter assembles one from columns — so key *order* is
+ * not a fact about the block. Every field, rather than a chosen tuple, because
+ * a field added to `Block` later is then covered without anybody remembering,
+ * and the way this check fails when a field is forgotten is silence.
  *
- * **Every** id in `blocks.json` has to be in the HTML — all of them, not a
- * sample. Verified against the real articles in `data/` — 360 blocks and 360
- * ids, 141 and 141 — so that is the actual invariant rather than an
- * approximation that starts failing on a long page.
+ * **Nothing is normalised away, and an earlier version of this stripped the
+ * ids.** That version could not see a block id that had moved, nor an internal
+ * link repointed from one heading to another — both of which are exactly what
+ * `blocks` exists to get right (docs/project/block-ids.md). GPT Sol reproduced
+ * both against the real guard, 2026-08-31.
+ */
+function canonicalBlock(block: Block): string {
+  const fields = block as unknown as Record<string, unknown>;
+  return JSON.stringify(Object.keys(fields).sort().map((key) => [key, fields[key]]));
+}
+
+/**
+ * Is stage 3's output still what stage 3 would produce from the HTML stage 2 is
+ * holding **now**?
  *
- * **What it does not prove**, said plainly because the first version of this
- * comment claimed more: it is a membership test, not a binding. Two ids swapped
- * between elements, an id parked on an unrelated wrapper, or a duplicate id all
- * pass. It catches the case it was built for — a re-extraction wiping every id —
- * and not a corrupted stamping. The stronger version is a generation token
- * written by stage 3 into both `blocks.json` and the HTML, which is cheap here
- * *because* both files have one writer: the reason a token was rejected for
- * `extract` (a later step legitimately rewrites its HTML) does not apply.
- * Raised by review 2026-08-26 and not built; see
- * docs/plans/postgres-storage-implementation.md.
+ * Three questions, in increasing order of cost.
+ *
+ * 1. **Every id in the blocks artefact is in the stamped HTML.** All of them,
+ *    not a sample. A cheap early rejection: it settles the commonest failure
+ *    (stage 2 re-ran and wiped the ids) before anything is parsed, and it is
+ *    the only question that can be asked without a full parse.
+ * 2. **Stage 3, run again against the extracted HTML, writes the same
+ *    document.** `splitIntoBlocks(extracted, storedBlocks).html` byte for byte
+ *    against `stampedHtml`. This is the one question about the document as a
+ *    document: a changed `<title>`, or anything else outside a block, moves it
+ *    while every block stays identical.
+ * 3. **And the same blocks, exactly** — ids, link targets, note fields and all.
+ *
+ * ## Why the baseline is passed, which took three goes to get right
+ *
+ * `splitIntoBlocks(extracted, file.blocks)`. Handing the stored blocks in is
+ * what makes an **exact** comparison possible: unchanged content comes back
+ * carrying the ids it already had (`carryOverIds`), so anything that differs
+ * differs because the article did. Two earlier versions of this function got
+ * that wrong in opposite directions — one omitted the baseline believing it
+ * would manufacture agreement, the other passed it but then stripped the ids
+ * out of the comparison, which threw away the very thing the baseline buys.
+ * Omitting it is also the shape tests/blocks-baseline.test.ts refuses in `src/`,
+ * because one argument to that function means "mint everything".
+ *
+ * ## Why question 1 is not enough on its own
+ *
+ * This began as `htmlCarriesItsIds`, which asked it alone. On disk that was
+ * enough **by accident**: `extract.extractedHtml` and `blocks.stampedHtml` both
+ * resolve to `at.htmlFile` (`PATHS` in src/store/artifacts-fs.ts), so a
+ * re-extraction overwrites the very file question 1 reads and the missing ids
+ * give it away. In Postgres they are two columns (`extracted_html`,
+ * `stamped_html`), question 1 compares stage 3's own output against stage 3's
+ * own blocks, and it **returns true always** — a vacuous guard over the one
+ * contract this codebase is built on, arriving at the moment the reads start
+ * succeeding. docs/plans/finish-the-database-move.md § stage 1.
+ *
+ * ## Why not something cheaper than re-running the split
+ *
+ * Two cheaper things were tried and both were unsound, in ways worth keeping
+ * because they looked well-measured at the time.
+ *
+ * - **Comparing the two documents' parsed text.** It under-fires:
+ *   `<p>Alpha</p><p>Beta</p>` re-extracted as `<p>AlphaBeta</p>` has identical
+ *   text and genuinely different blocks, as do a heading demoted to a
+ *   paragraph, a repointed `href`, and whitespace inside a `<pre>`. And it
+ *   over-fires in a way that cannot cure: stage 3 sanitises what it is handed
+ *   and `FORBID_TAGS` (src/sanitize-policy.ts) removes `style` outright, so a
+ *   healthy stamped HTML legitimately says less than its extraction — and under
+ *   Postgres `extracted_html` stays unsanitised for ever, so the step would
+ *   re-run and never report itself done.
+ * - **Comparing the blocks with the ids normalised out.** Blind to a moved id
+ *   and to a repointed internal link, which is most of what this guard is for.
+ *
+ * **The lesson, and it is the general one.** The first of those was measured
+ * against one real article and found sound. One healthy pair says nothing about
+ * the unhealthy ones, and nothing at all about the pairs that ought to be
+ * healthy and are not — docs/reusable/silent-success.md.
+ *
+ * There is no cheap *exact* pre-check available from what is stored today. The
+ * one that would work is persisted binding — digests of stage 2's input, the
+ * stamped output and the blocks, written transactionally with the step run —
+ * and that is storage work for a later stage. **Its absence is a reason to do
+ * that work before the flip, not a reason to keep a cheaper heuristic now.**
+ *
+ * ## What it costs
+ *
+ * A full jsdom parse, a DOMPurify pass and a document walk — `splitIntoBlocks`
+ * less the writing. Measured over the twenty articles in `output/` that have a
+ * blocks artefact beside them: 7 ms for the smallest, 469 ms at 669 blocks, and
+ * **934 ms for the 676 KB `consciousness`**, which is the worst case in the
+ * corpus. It runs once per `stepIsDone` for this one step: once per job that
+ * contains `blocks`, and once per metadata-page load (src/api.ts). Accepted as
+ * temporary, against the persisted binding above.
+ *
+ * It is **not** short-circuited on the filesystem, where the two reads return
+ * the same string. Two reasons: a guard that knows which store it is in is a
+ * guard with an untested half, and the equality would not be safe anyway —
+ * `runBlocks` writes the HTML before the blocks (src/blocks.ts), so an
+ * interruption between the two leaves a stamped document and a blocks artefact
+ * from different generations, wearing the same ids. GPT Sol, 2026-08-31.
+ *
+ * ## What it rests on, stated so it can be checked again
+ *
+ * Question 2 compares bytes, so it needs `splitIntoBlocks` to be **exactly**
+ * idempotent: on the filesystem the candidates are derived from stage 3's own
+ * output, because there is only one document. Measured across the twenty
+ * articles in `output/` with a blocks artefact — exact HTML and exact blocks —
+ * and independently by GPT Sol across 313 targeted and combinatorial cases
+ * (canonical footnotes, nested lists, anchor retargeting, sanitiser removal,
+ * embeds, templates, malformed nesting, SVG, orphan text, duplicate ids). No
+ * non-idempotent class found. Evidence, not proof; and if it ever stops being
+ * true, every filesystem article reports this step not-done at once rather than
+ * quietly, which is the right way round for it to break.
+ *
+ * **The one case that is not idempotent is not reachable here**: `debugPage`
+ * (src/extract.ts) writes `<!doctype html>` and jsdom serialises `<!DOCTYPE
+ * html>`, so stage 2's string is not its own serialisation. It does not matter,
+ * because both sides of question 2 are serialisations — `stampedHtml` is always
+ * `dom.serialize()` output and so is the candidate. `output/revistes-ub-30977`
+ * is the one article in the corpus still holding the lower-case form, and its
+ * blocks artefact is from a different run anyway: question 1 rejects it, 0 ids
+ * of 43.
+ *
+ * ## What it still does not prove
+ *
+ * That these blocks carry the ids a reader's comments name. Question 3 says
+ * stage 3 would produce this artefact again, not that the ids in it were
+ * carried rather than minted — `assertIdsCarried` (src/blocks.ts) is what holds
+ * that, at write time, and it refuses rather than warns.
  *
  * **No ids at all is not "all of them are there".** `every` over an empty array
  * is true, so a `blocks.json` listing nothing passed this vacuously and the step
@@ -603,18 +737,29 @@ export interface PipelineStep<N extends StepName = StepName> {
  * to answer for the `blocks.json` files already on disk, which nothing will
  * rewrite. Deleting either leaves a real state unguarded.
  *
- * Cheap enough to run on every skip check: one pass of the HTML with a regex,
- * then a set lookup per block. And the cost of being wrong is small in the
- * direction it can be wrong — stage 3 makes no model call, and re-running it
- * carries the ids over rather than minting new ones.
+ * The cost of being wrong is small in the direction it can be wrong — stage 3
+ * makes no model call, and re-running it carries the ids over rather than
+ * minting new ones.
  */
-async function htmlCarriesItsIds(ctx: StepContext, store: ArtifactReads): Promise<boolean> {
+async function blocksMatchTheirHtml(ctx: StepContext, store: ArtifactReads): Promise<boolean> {
   const file = await store.read(ctx.slug, "blocks", "blocks");
-  const html = await store.read(ctx.slug, "blocks", "stampedHtml");
-  if (!file?.blocks?.length || !html) return false;
-  const stamped = new Set<string>();
-  for (const [, id] of html.matchAll(/\sid="(spya-[a-z0-9]{6})"/g)) stamped.add(id!);
-  return file.blocks.every((block) => stamped.has(block.id));
+  const stamped = await store.read(ctx.slug, "blocks", "stampedHtml");
+  /* Stage 2's output, named through `BLOCKS_INPUT_HTML` rather than spelled
+     again, so this can never end up asking about a different document than the
+     one stage 3 consumes. A missing one answers **not current** rather than
+     "nothing to compare against": a `blocks` artefact whose input has gone is
+     precisely the state this exists to refuse to call finished. */
+  const extracted = await store.read(ctx.slug, "extract", BLOCKS_INPUT_HTML);
+  if (!file?.blocks?.length || !stamped || !extracted) return false;
+
+  const ids = new Set<string>();
+  for (const [, id] of stamped.matchAll(/\sid="(spya-[a-z0-9]{6})"/g)) ids.add(id!);
+  if (!file.blocks.every((block) => ids.has(block.id))) return false;
+
+  const run = splitIntoBlocks(extracted, file.blocks);
+  if (run.html !== stamped) return false;
+  if (run.blocks.length !== file.blocks.length) return false;
+  return run.blocks.every((c, i) => canonicalBlock(c) === canonicalBlock(file.blocks[i]!));
 }
 
 /** Stage 3's own artefact, beside the HTML. Stage 4 copies it into `data/<slug>/`. */
@@ -704,11 +849,46 @@ export async function stepIsDone(
  * `null` when the blocks cannot be read at all, which is *"we cannot tell"* and
  * must not be confused with a hash that fails to match. Both answer
  * not-current; only one of them is a stale artefact.
+ *
+ * **One caller left: `assets`**, which really does read the blocks and nothing
+ * else — `collectAssets` takes a block list, fetches the images in it, and has
+ * no prompt and no head. Every stage that sends the article to a model reads the
+ * tree and the metadata too and uses `articleInputHash` below.
  */
 async function inputHashFor(ctx: StepContext, store: ArtifactReads): Promise<string | null> {
   const file = await store.read(ctx.slug, "toc", "blocks");
   if (!file?.blocks) return null;
   return hashBlocks(file.blocks);
+}
+
+/**
+ * The fingerprint an **article-reading** stage would be written against today:
+ * the blocks, the tree and the metadata head.
+ *
+ * The three inputs every prompt in this half of the pipeline actually consumes —
+ * `articleFingerprint` in src/source-hash.ts says which fields and why. Used by
+ * `tweets`, `glossary` and `summary`; `arc`, `ideas` and `sketch` call their own
+ * stage's `inputFingerprint`, which is the same function under a name that
+ * belongs to the stage.
+ *
+ * **Until 2026-08-31 those three stamped `inputHashFor` above**, so the
+ * sections could be re-cut or the extracted title changed and all three went on
+ * reporting themselves current. Nothing showed, because the pipeline's artefact
+ * reads answer `null` today and the step re-runs regardless — the fault arrives
+ * with the reads that make it work. docs/plans/finish-the-database-move.md
+ * § stage 1; docs/reusable/silent-success.md.
+ *
+ * `null` is *"we cannot tell"* for the blocks and the tree alike. **The metadata
+ * is not one of those cases**: every one of these stages tolerates a missing
+ * `meta.json` on purpose, so "no meta" is a legitimate input and the fingerprint
+ * hashes it as one.
+ */
+async function articleInputHash(ctx: StepContext, store: ArtifactReads): Promise<string | null> {
+  const file = await store.read(ctx.slug, "toc", "blocks");
+  const tree = await store.read(ctx.slug, "toc", "tree");
+  if (!file?.blocks || !tree) return null;
+  const meta = await store.read(ctx.slug, "extract", "meta");
+  return articleFingerprint(file.blocks, tree, meta ?? null);
 }
 
 /**
@@ -1284,8 +1464,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     outputs: (ctx) => [blocksPathFor(ctx), ctx.htmlFile],
     produces: ["blocks", "stampedHtml"],
     /* Presence is not enough here, and this is the only step where that is
-       true for a reason other than cost — see `htmlCarriesItsIds`. */
-    isDone: (ctx, store) => htmlCarriesItsIds(ctx, store),
+       true for a reason other than cost — see `blocksMatchTheirHtml`. */
+    isDone: (ctx, store) => blocksMatchTheirHtml(ctx, store),
     async run(ctx, store) {
       /*
        * **The store, not a path, and read before the stage runs.**
@@ -1609,9 +1789,10 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * gists, which matters because `renderParts` builds the prompt from them.
      * **And the metadata**, which is this step's own addition: `generateArc` hands
      * `meta.json` to `articleText`, which puts `TITLE:`, `BY:` and
-     * `PUBLISHED IN:` at the head of the prompt — and the reading view renames
-     * articles in place (`useArticleRename`), so that is reachable rather than
-     * theoretical. GPT Sol, 2026-08-29.
+     * `PUBLISHED IN:` at the head of the prompt — and those three are stage 2's
+     * own reading of the page, so a re-extraction moves them. (An earlier note
+     * here cited the reading view's rename instead; that is a shelf override no
+     * generator reads. GPT Sol, 2026-08-31.)
      *
      * `null` is "we cannot tell", which the runner must not confuse with a hash
      * that fails to match: both answer not-current, but only one is a stale
@@ -1676,7 +1857,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        D0 (docs/plans/delete-the-importer.md). The comparison belongs in one
        place (`sameStamp`); only the three values belong to the stage. */
     stamp: async (ctx, store) => {
-      const inputHash = await inputHashFor(ctx, store);
+      /* `articleInputHash`, not `inputHashFor`: this prompt reads the tree and
+         the metadata as well as the blocks. See that function. */
+      const inputHash = await articleInputHash(ctx, store);
       if (!inputHash) return null;
       return { inputHash, promptVersion: TWEETS_PROMPT_VERSION, model: CAPABLE_MODEL };
     },
@@ -1740,7 +1923,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        glossary that goes first purely because glossary is the one of the three
        that already exports its `PROMPT_VERSION` — see the note on `isDone`. */
     stamp: async (ctx, store) => {
-      const inputHash = await inputHashFor(ctx, store);
+      /* `articleInputHash`, not `inputHashFor`: the skeleton comes from the
+         tree and the head from the metadata. See that function. */
+      const inputHash = await articleInputHash(ctx, store);
       if (!inputHash) return null;
       return { inputHash, promptVersion: GLOSSARY_PROMPT_VERSION, model: CAPABLE_MODEL };
     },
@@ -1801,6 +1986,105 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       return { detail: `${total} ${total === 1 ? "term" : "terms"}${added}` };
     },
   },
+  /**
+   * **Stage 5h — the quotes**: the lines worth keeping, in the author's own
+   * words. docs/project/quotes.md, docs/plans/quotes-mode.md.
+   *
+   * In `STEP_ORDER` but not in `DEFAULT_INGEST_STEPS`, for the reason `tweets`
+   * established and `glossary`, `summary`, `ideas` and `sketch` have followed:
+   * everything up to `arc` makes the article readable, and everything after it
+   * is a thing somebody asks for.
+   *
+   * A **converted** step, like `sketch` and unlike its eight other neighbours:
+   * `generateQuotes` writes nothing and this returns the artefact as `parts`.
+   * A step that wrote `<dir>/quotes.json` inside `run` works on a laptop and
+   * cannot work through a store that puts the artefact in a Postgres column.
+   */
+  quotes: {
+    name: "quotes",
+    label: "Choosing the quotes",
+    outputs: (ctx) => [path.join(ctx.dir, "quotes.json")],
+    produces: ["quotes"],
+    /**
+     * Three values, not four — **the profile is deliberately not in here**, and
+     * this is the one place `quotes` parts company with `ideas`.
+     *
+     * For `ideas` the profile is in the stamp because it decides what "assumed"
+     * *means*: what a reader has to bring is defined by who they are, so an
+     * artefact written for a different profile answers a different question.
+     * A profile changes which *lines* are worth keeping here too — but it
+     * cannot change what the author wrote, so an older list is a differently
+     * chosen selection of the same real sentences rather than an answer to a
+     * question nobody asked. That is the glossary's position, and the read path
+     * still raises the banner and lets the reader decide.
+     */
+    stamp: async (ctx, store) => {
+      const blocksFile = await store.read(ctx.slug, "toc", "blocks");
+      const tree = await store.read(ctx.slug, "toc", "tree");
+      /* `null` is "we cannot tell", which is not the same answer as a hash that
+         fails to match. Both mean not-current; only one means stale. The
+         metadata is not one of those cases — `generateQuotes` tolerates a
+         missing `meta.json` and hashes "no meta" as a legitimate input. */
+      if (!blocksFile?.blocks || !tree) return null;
+      const meta = await store.read(ctx.slug, "extract", "meta");
+      return {
+        inputHash: quotesFingerprint(blocksFile.blocks, tree, meta ?? null),
+        promptVersion: QUOTES_PROMPT_VERSION,
+        model: CAPABLE_MODEL,
+      };
+    },
+    async run(ctx, store) {
+      /* **The store, not a path.** The only thing the previous artefact is read
+         for is its ids, and only when `sourceHash` matches — so after landing D
+         this stage would keep working in every visible way while every
+         `?quote=` link a reader holds went dead. `previousQuotesFrom` refuses
+         when there is a previous artefact it cannot read, and returns `null`
+         quietly when there is none. */
+      const previous = await previousQuotesFrom(store, ctx.slug);
+      const run = await generateQuotes({
+        dir: ctx.dir,
+        previous,
+        profile: ctx.profile ?? null,
+        onProgress: ctx.report,
+        signal: ctx.signal,
+        cacheArticle: ctx.cacheArticle,
+      });
+      const total = run.quotes.quotes.length;
+      plog.info(
+        {
+          slug: ctx.slug,
+          step: "quotes",
+          model: run.model,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          cacheReadTokens: run.cacheReadTokens,
+          cacheWriteTokens: run.cacheWriteTokens,
+          ms: run.elapsedMs,
+          quotes: total,
+          /* **`unfound` is the number this stage exists to watch.** It counts
+             lines the model offered that are nowhere in the article — the model
+             paraphrasing rather than copying, which is the one failure this
+             feature may not have, and which is completely invisible from
+             outside: a dropped quote looks exactly like a line the model chose
+             not to offer. A run that starts returning several is the prompt
+             having drifted. docs/reusable/silent-success.md. */
+          unfound: run.dropped.unfound,
+          wrongLength: run.dropped.wrongLength,
+          overlapping: run.dropped.overlapping,
+          overCap: run.dropped.overCap,
+          malformed: run.dropped.malformed,
+          /* The profile's LENGTH, never the profile — it is the reader's own
+             words about themselves. docs/project/logging.md. */
+          profileChars: ctx.profile?.length ?? 0,
+        },
+        `quotes ${ctx.slug}: ${total} quotes (${run.dropped.unfound} not found)`,
+      );
+      return {
+        parts: { quotes: run.quotes },
+        detail: `${total} ${total === 1 ? "quote" : "quotes"}`,
+      };
+    },
+  },
   summary: {
     name: "summary",
     label: "Writing the summaries",
@@ -1811,7 +2095,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        above. The function is still in src/summarise.ts and now has no caller;
        it goes in a follow-up, because that file is being edited elsewhere. */
     stamp: async (ctx, store) => {
-      const inputHash = await inputHashFor(ctx, store);
+      /* `articleInputHash`, not `inputHashFor`: `batchesOf` and `skeletonOf`
+         are built out of the tree, and this stage is the one where being
+         wrong costs the most — one model call per part, not one per article.
+         See that function. */
+      const inputHash = await articleInputHash(ctx, store);
       if (!inputHash) return null;
       return { inputHash, promptVersion: SUMMARY_PROMPT_VERSION, model: CAPABLE_MODEL };
     },
@@ -1876,16 +2164,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     outputs: (ctx) => [path.join(ctx.dir, "ideas.json")],
     produces: ["ideas"],
     /**
-     * Four values, where every other stamped step declares three.
+     * Four values, where most stamped steps declare three.
      *
-     * **The blocks AND the tree.** `inputHashFor` above hashes only the blocks,
-     * which `StepStamp`'s own docstring has flagged as wrong for exactly this
-     * family of stages since it was written: section boundaries can move
-     * without a single block changing. It matters more here than anywhere
-     * because the prompt shows the model the skeleton *before* the article
-     * precisely so that it judges what the argument rests on — re-cut the
-     * sections and that judgment was made against a different question, while
-     * a blocks-only hash reports no change at all.
+     * **The blocks, the tree AND the metadata** — `articleFingerprint`, which
+     * this stage's `inputFingerprint` is. It was the first step to fold the
+     * tree in, for a reason that matters more here than anywhere: the prompt
+     * shows the model the skeleton *before* the article precisely so that it
+     * judges what the argument rests on, so re-cut the sections and that
+     * judgment was made against a different question while a blocks-only hash
+     * reports no change at all. The metadata joined on 2026-08-31, when all six
+     * article-reading stages were completed against one definition.
      *
      * **And the profile.** Every other stage records a `profileHash` and lets
      * the read path put a banner in front of the reader; none of them puts it
@@ -1899,10 +2187,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const blocksFile = await store.read(ctx.slug, "toc", "blocks");
       const tree = await store.read(ctx.slug, "toc", "tree");
       /* `null` is "we cannot tell", which must not be confused with a hash that
-         fails to match. Both answer not-current; only one is a stale artefact. */
+         fails to match. Both answer not-current; only one is a stale artefact.
+         The metadata is **not** one of those cases: `generateIdeas` tolerates a
+         missing `meta.json` and hashes "no meta" as a legitimate input. */
       if (!blocksFile?.blocks || !tree) return null;
+      const meta = await store.read(ctx.slug, "extract", "meta");
       return {
-        inputHash: ideasFingerprint(blocksFile.blocks, tree),
+        inputHash: ideasFingerprint(blocksFile.blocks, tree, meta ?? null),
         promptVersion: IDEAS_PROMPT_VERSION,
         model: CAPABLE_MODEL,
         profileHash: ctx.profile ? hashProfile(ctx.profile) : null,
@@ -2005,10 +2296,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const blocksFile = await store.read(ctx.slug, "toc", "blocks");
       const tree = await store.read(ctx.slug, "toc", "tree");
       /* `null` is "we cannot tell", which is not the same answer as a hash that
-         fails to match. Both mean not-current; only one means stale. */
+         fails to match. Both mean not-current; only one means stale. The
+         metadata is not one of those cases — `generateSketch` tolerates a
+         missing `meta.json`. */
       if (!blocksFile?.blocks || !tree) return null;
+      const meta = await store.read(ctx.slug, "extract", "meta");
       return {
-        inputHash: sketchFingerprint(blocksFile.blocks, tree),
+        inputHash: sketchFingerprint(blocksFile.blocks, tree, meta ?? null),
         promptVersion: SKETCH_PROMPT_VERSION,
         model: CAPABLE_MODEL,
         profileHash: ctx.profile ? hashProfile(ctx.profile) : null,

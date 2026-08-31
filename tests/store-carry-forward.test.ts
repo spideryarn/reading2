@@ -68,7 +68,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { PROMPT_VERSION as GLOSSARY_PROMPT_VERSION } from "../src/glossary.js";
 import { mintUniqueId } from "../src/ids.js";
 import { CAPABLE_MODEL } from "../src/models.js";
-import { hashBlocks } from "../src/source-hash.js";
+import { articleFingerprint, hashBlocks } from "../src/source-hash.js";
 import { PROMPT_VERSION as SUMMARY_PROMPT_VERSION } from "../src/summarise.js";
 import { PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "../src/tweets.js";
 import { pgArticleReader } from "../src/store/pg.js";
@@ -159,6 +159,19 @@ const HASH1 = hashBlocks(B1);
 const HASH2 = hashBlocks(B2);
 
 /**
+ * The **article** fingerprint of each publication — blocks, tree and metadata
+ * head, which is what `tweets`, `glossary` and `summary` stamp
+ * (src/source-hash.ts § `articleFingerprint`).
+ *
+ * Separate from `HASH1`/`HASH2` above rather than replacing them, because the
+ * two answer different questions and two steps still ask the narrow one:
+ * `toc.input_hash` is compared against the stored blocks by
+ * `reasonsNotToPublish`, and `assets` really is built from the blocks alone.
+ * Declared below `treeFor` — see the note there.
+ */
+let FINGERPRINT1 = "";
+
+/**
  * A tree of one root over one leaf per block — the smallest shape `checkTree`
  * accepts, and it has to really pass: `publishRevision` runs the full
  * structural check rather than "every id in a range exists".
@@ -197,6 +210,13 @@ function treeFor(blocks: Block[]): Tree {
     },
   } as Tree;
 }
+
+/* Assigned once `treeFor` exists, because a `const` initialiser that called it
+   from above would read the function before its declaration. The metadata is
+   the three fields the prompt head carries and nothing else — the same three
+   `metaFingerprintOf` rebuilds from the revision's columns on the Postgres
+   side, so both stores hash the identical input. */
+FINGERPRINT1 = articleFingerprint(B1, treeFor(B1), { title: "A fixture article" });
 
 const assetsFor = (sourceHash: string): Assets => ({
   version: "assets/1",
@@ -395,9 +415,9 @@ async function writeTheFiles(): Promise<void> {
   /* Stamped against B1, like the three below it: the blocks moved and this
      manifest did not, so both stores have to say the images want re-fetching. */
   await writeFileJson("assets.json", assetsFor(HASH1));
-  await writeFileJson("glossary.json", glossaryFor(HASH1));
-  await writeFileJson("tweets.json", tweetsFor(HASH1));
-  await writeFileJson("summary.json", summaryFor(HASH1));
+  await writeFileJson("glossary.json", glossaryFor(FINGERPRINT1));
+  await writeFileJson("tweets.json", tweetsFor(FINGERPRINT1));
+  await writeFileJson("summary.json", summaryFor(FINGERPRINT1));
   await writeFileJson("meta.json", {
     slug: SLUG,
     title: "A fixture article",
@@ -443,9 +463,9 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
         tree: treeFor(B1),
         arc: arcFor(B1),
         assets: assetsFor(HASH1),
-        tweets: tweetsFor(HASH1),
-        glossary: glossaryFor(HASH1),
-        summary: summaryFor(HASH1),
+        tweets: tweetsFor(FINGERPRINT1),
+        glossary: glossaryFor(FINGERPRINT1),
+        summary: summaryFor(FINGERPRINT1),
       })
       .where(eq(articleRevisions.id, firstRevision));
 
@@ -465,17 +485,17 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     });
     await step(firstRevision, "arc", { inputHash: HASH1 });
     await step(firstRevision, "tweets", {
-      inputHash: HASH1,
+      inputHash: FINGERPRINT1,
       promptVersion: TWEETS_PROMPT_VERSION,
       model: CAPABLE_MODEL,
     });
     await step(firstRevision, "glossary", {
-      inputHash: HASH1,
+      inputHash: FINGERPRINT1,
       promptVersion: GLOSSARY_PROMPT_VERSION,
       model: CAPABLE_MODEL,
     });
     await step(firstRevision, "summary", {
-      inputHash: HASH1,
+      inputHash: FINGERPRINT1,
       promptVersion: SUMMARY_PROMPT_VERSION,
       model: CAPABLE_MODEL,
     });
@@ -585,7 +605,7 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     expect(summaries.stale).toBe(true);
     // The one thing that must not have happened: the artefact reading as
     // "nobody has found the terms for this one yet" under a green tick.
-    expect(glossary.glossary.sourceHash).toBe(HASH1);
+    expect(glossary.glossary.sourceHash).toBe(FINGERPRINT1);
   }, 30_000);
 
   it("still says what the carried artefacts ran against", async () => {
@@ -593,9 +613,9 @@ when("a re-extraction, through beginRevision and publishRevision", () => {
     /* `input_hash` unchanged by the copy, which is the whole point of it: the
        row says *tweets ran against B1* while the blocks hash B2, and that
        comparison is what yields "present but not current". */
-    expect(runs.get("tweets")?.inputHash).toBe(HASH1);
-    expect(runs.get("glossary")?.inputHash).toBe(HASH1);
-    expect(runs.get("summary")?.inputHash).toBe(HASH1);
+    expect(runs.get("tweets")?.inputHash).toBe(FINGERPRINT1);
+    expect(runs.get("glossary")?.inputHash).toBe(FINGERPRINT1);
+    expect(runs.get("summary")?.inputHash).toBe(FINGERPRINT1);
     expect(runs.get("toc")?.inputHash, "toc was re-run against B2").toBe(HASH2);
     expect(runs.get("fetch")?.inputHash, "fetch records nothing about its input").toBe(
       NO_INPUT_HASH,

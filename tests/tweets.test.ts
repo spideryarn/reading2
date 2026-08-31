@@ -24,6 +24,7 @@ import {
   suggestedLength,
   TARGET,
 } from "../src/tweets.js";
+import { articleFingerprint } from "../src/source-hash.js";
 import { STEPS, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import {
@@ -32,7 +33,7 @@ import {
   pathFor,
 } from "../src/store/artifacts-fs.js";
 import type { ArtifactStore } from "../src/store/artifacts.js";
-import type { Block, TweetThread } from "../src/types.js";
+import type { Block, Tree, TweetThread } from "../src/types.js";
 
 function block(id: string, text: string): Block {
   return { id, tag: "p", kind: "text", text, words: text.split(/\s+/).length, html: "", gistable: true };
@@ -145,13 +146,64 @@ describe("hashBlocks and isStale", () => {
     expect(hashBlocks(rehtml)).toBe(hashBlocks(BLOCKS));
   });
 
-  it("says a thread is stale once the article moves under it", () => {
-    const thread = buildThread(
+  /* The thread's fingerprint is the blocks, the tree and the metadata head —
+     `renderPrompt` shows the model `partsOf(tree)` and `articleText` writes the
+     `TITLE:`/`BY:`/`PUBLISHED IN:` lines, so all three are what it was written
+     from. src/source-hash.ts § `articleFingerprint`. */
+  const STALE_TREE: Tree = {
+    version: "toc/2",
+    generator: "x",
+    slug: "s",
+    rootId: "n0",
+    nodes: {
+      n0: {
+        id: "n0",
+        parent: null,
+        range: [BLOCKS[0]!.id, BLOCKS[BLOCKS.length - 1]!.id],
+        title: "The whole thing",
+        gist: "One sentence.",
+        children: [],
+      },
+    },
+  } as unknown as Tree;
+  const STALE_META = { title: "A title", byline: "Somebody", siteName: "Somewhere" };
+  const freshThread = () =>
+    buildThread(
       { tweets: ["a"] },
-      { slug: "s", sourceHash: hashBlocks(BLOCKS), elapsedMs: 0 },
+      {
+        slug: "s",
+        sourceHash: articleFingerprint(BLOCKS, STALE_TREE, STALE_META),
+        elapsedMs: 0,
+      },
     );
-    expect(isStale(thread, BLOCKS)).toBe(false);
-    expect(isStale(thread, [...BLOCKS, block("spya-dddddd", "And a third.")])).toBe(true);
+
+  it("says a thread is stale once the article moves under it", () => {
+    expect(isStale(freshThread(), BLOCKS, STALE_TREE, STALE_META)).toBe(false);
+    expect(
+      isStale(
+        freshThread(),
+        [...BLOCKS, block("spya-dddddd", "And a third.")],
+        STALE_TREE,
+        STALE_META,
+      ),
+    ).toBe(true);
+  });
+
+  /* Both red before 2026-08-31, when this compared the blocks alone: the
+     sections could be re-cut or the extracted title changed and the thread went on
+     reporting itself current. docs/plans/finish-the-database-move.md § stage 1. */
+  it("says a thread is stale once the sections are re-cut", () => {
+    const recut = {
+      ...STALE_TREE,
+      nodes: { n0: { ...STALE_TREE.nodes.n0!, title: "Something else" } },
+    } as Tree;
+    expect(isStale(freshThread(), BLOCKS, recut, STALE_META)).toBe(true);
+  });
+
+  it("says a thread is stale once the article is renamed", () => {
+    expect(isStale(freshThread(), BLOCKS, STALE_TREE, { ...STALE_META, title: "Renamed" })).toBe(
+      true,
+    );
   });
 });
 
@@ -218,11 +270,40 @@ async function tempArticle(): Promise<ArtifactLocations> {
   return at;
 }
 
+/**
+ * The tree and the metadata the stamped cases are written against.
+ *
+ * Both are inputs to this stage's prompt — the skeleton comes from
+ * `partsOf(tree)` and the head from `articleText` — so both are in the
+ * fingerprint. src/source-hash.ts § `articleFingerprint`.
+ */
+const STAMP_TREE: Tree = {
+  version: "toc/2",
+  generator: "x",
+  slug: SLUG,
+  rootId: "n0",
+  nodes: {
+    n0: {
+      id: "n0",
+      parent: null,
+      range: [BLOCKS[0]!.id, BLOCKS[BLOCKS.length - 1]!.id],
+      title: "The whole thing",
+      gist: "One sentence.",
+      children: [],
+    },
+  },
+} as unknown as Tree;
+const STAMP_META = { slug: SLUG, title: "A title" };
+
 /** A thread as the stage would have written it against `blocks`. */
 function threadFor(blocks: Block[], over: Partial<TweetThread>): TweetThread {
   const full = buildThread(
     { tweets: ["a post"] },
-    { slug: SLUG, sourceHash: hashBlocks(blocks), elapsedMs: 0 },
+    {
+      slug: SLUG,
+      sourceHash: articleFingerprint(blocks, STAMP_TREE, STAMP_META),
+      elapsedMs: 0,
+    },
   );
   return { ...full, ...over };
 }
@@ -267,6 +348,7 @@ describe("tweets freshness, through the step's stamp", () => {
   async function ask(
     thread: Partial<TweetThread> | "unreadable" | null,
     blocks: Block[] | null,
+    over: { tree?: Tree; meta?: unknown } = {},
   ): Promise<boolean> {
     const file = pathFor(where, "tweets", "tweets");
     if (thread === "unreadable") await writeFile(file, "{ not json", "utf8");
@@ -277,11 +359,32 @@ describe("tweets freshness, through the step's stamp", () => {
     if (blocks) await writeJson(blocksFile, { blocks });
     else await rm(blocksFile, { force: true });
 
+    /* The other two thirds of what the stamp compares. Written every time, so
+       that "no blocks" stays the only thing a case removes. */
+    await writeJson(pathFor(where, "toc", "tree"), over.tree ?? STAMP_TREE);
+    await writeJson(pathFor(where, "extract", "meta"), over.meta ?? STAMP_META);
+
     return stepIsDone(STEPS.tweets, ctxAt(elsewhere), store);
   }
 
   it("says done for a thread written against these very blocks", async () => {
     expect(await ask({}, BLOCKS)).toBe(true);
+  });
+
+  /* Both green — wrongly — until 2026-08-31, when this stamp stopped hashing
+     the blocks alone. The thread is built from the outline and carries the
+     article's name; either could move with every block byte-identical.
+     docs/plans/finish-the-database-move.md § stage 1. */
+  it("says not-done once the sections have been re-cut underneath it", async () => {
+    const recut = {
+      ...STAMP_TREE,
+      nodes: { n0: { ...STAMP_TREE.nodes.n0!, title: "Something else" } },
+    } as Tree;
+    expect(await ask({}, BLOCKS, { tree: recut })).toBe(false);
+  });
+
+  it("says not-done once the article has been renamed underneath it", async () => {
+    expect(await ask({}, BLOCKS, { meta: { ...STAMP_META, title: "Renamed" } })).toBe(false);
   });
 
   it("says not-done once the article has changed underneath it", async () => {

@@ -188,8 +188,8 @@ nothing else would report it.
 
 ## Freshness: the two holes this stage does not inherit
 
-Every other stamped step compares three values — the blocks, the prompt version, the model. This one
-compares four, and both differences close gaps the others still have.
+Most stamped steps compare three values — the input fingerprint, the prompt version, the model. This
+one compares four, and the fourth still closes a gap the others have.
 
 **The tree, as well as the blocks.** `StepStamp` in
 [`src/store/artifacts.ts`](../../src/store/artifacts.ts) has said since it was written that the late
@@ -197,9 +197,24 @@ stages read both, and that `inputHashFor` hashing only the blocks would bite. It
 the prompt shows the model the **skeleton before the article**, precisely so it judges what the
 argument rests on rather than what the piece says most often. Re-cut the sections and that judgment
 was made against a different question, while every block is byte-identical.
-`inputFingerprint` is `hashBlocks` + `structureHash`, and `structureHash` moved into
-[`src/source-hash.ts`](../../src/source-hash.ts) to sit beside its sibling — the same move
-`hashBlocks` made out of `tweets.ts`, for the same reason.
+
+This stage was the first to fold the tree in, and on 2026-08-31 the whole family caught up:
+`inputFingerprint` here is now `articleWithIdsFingerprint` in
+[`src/source-hash.ts`](../../src/source-hash.ts) — blocks, tree **and** the head, which is the part
+this stage was itself missing.
+
+**A different function from the other four, and the difference is real.** `articleWithIds` writes
+`TITLE:`, `BY:`, `PUBLISHED IN:` **and `URL:`** above the prose, where `articleText` writes only the
+first three; and when there is no `meta.json` this stage does not drop the head, it synthesises
+`TITLE: <tree.slug>`. `structureHash` does not hash `tree.slug`, so re-slugging a metadata-less
+article changed the prompt and left the fingerprint standing still — GPT Sol's probe returned
+`{"hashEqual":true,"promptEqual":false}`. Both are covered now, through the shared
+`fallbackHeadTitle` so the stage and its fingerprint cannot spell the fallback differently.
+
+Those fields are stage 2's, so a re-extraction moves them. (An earlier version of this line blamed
+the reading view's rename. That is a shelf override no generator reads; GPT Sol corrected it on
+2026-08-31.)
+[finish-the-database-move.md](../plans/finish-the-database-move.md) § stage 1.
 
 **The profile, in the stamp rather than merely recorded.** Other artefacts record a `profileHash` and
 the read path shows a banner; nothing makes the step re-run. For a glossary that is arguable — a

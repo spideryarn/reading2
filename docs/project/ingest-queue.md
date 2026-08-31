@@ -480,11 +480,24 @@ read it.**
 can only narrow the answer, so a freshness check can never declare a missing file fine. `tweets` was
 the first step to supply one, as `threadIsCurrent` in `src/tweets.ts`; since D0 on 2026-08-29 it is a
 `stamp` in [`src/pipeline.ts`](../../src/pipeline.ts) like every other stamped step, and `sameStamp`
-compares the stored `sourceHash` against the blocks the store holds, with the prompt version and the
+compares the stored `sourceHash` against what the store holds, with the prompt version and the
 model id beside it — which is what [architecture.md § Storage](architecture.md#storage) has always
 specified for a cached artefact and what nothing had implemented. Anything unreadable answers *not
 current*: the cost of being wrong that way is one model call, and the other way round is a wrong
 thread served for ever.
+
+**A stamp has to cover everything the prompt reads, and four of them did not.** `tweets`, `glossary`
+and `summary` hashed the blocks alone; `ideas` and `sketch` added the tree and left out the
+metadata. Every one of those prompts is built out of the tree's skeleton and carries the article's
+title, byline and site at its head, so the sections could be re-cut or the page re-extracted under a
+new headline and the
+step went on reporting itself current. All six are now fingerprinted against their own prompt
+([`src/source-hash.ts`](../../src/source-hash.ts)) — two functions, because `ideas` and `sketch` send
+a head with a `URL:` line and a synthetic title the other four never send; `assets` keeps the
+blocks-only hash because the blocks really are all it reads. Nothing was visibly broken, and that is the shape to notice: the
+pipeline's artefact reads return `null` today, so the stage re-runs whatever the stamp says. The
+fault would have arrived with the reads that make skipping work.
+[finish-the-database-move.md](../plans/finish-the-database-move.md) § stage 1.
 
 The consequence worth stating: a refresh does not force the thread, but it does not strand one
 either. The next time anything asks for `tweets` the hash no longer matches, so the step runs
