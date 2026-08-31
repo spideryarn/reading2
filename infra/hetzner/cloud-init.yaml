@@ -1,0 +1,208 @@
+#cloud-config
+# Runs once, on first boot. Must be safe to run again on a rebuilt server whose
+# volume already holds a populated /home.
+#
+# ESCAPING: this file is rendered by Terraform's templatefile(), which consumes
+# dollar-brace interpolation ANYWHERE in the file, comments included. Terraform
+# variables are written unescaped; every SHELL brace must be doubled. A missed
+# one is a plan-time error, not a silent substitution — which is the good case.
+# The first version of this file got that wrong in this very comment.
+
+locale: en_GB.UTF-8      # mosh refuses to run without a UTF-8 locale.
+timezone: ${timezone}
+package_update: true
+package_upgrade: true
+ssh_pwauth: false        # belt to the braces of the sshd drop-in below.
+
+users:
+  - name: ${username}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+packages:
+  - build-essential
+  - ca-certificates
+  - curl
+  - fail2ban
+  - git
+  - gnupg
+  - htop
+  - jq
+  - mosh
+  - novnc
+  - rsync
+  - ripgrep
+  - tmux
+  - unattended-upgrades
+  - unzip
+  - websockify
+  - x11vnc
+  - xvfb
+
+write_files:
+  # 00-, not 99-. OpenSSH takes the FIRST value it sees for most directives and
+  # Ubuntu reads sshd_config.d lexically, so a 99- file loses to the 50-cloud-init
+  # one that ships with the image.
+  - path: /etc/ssh/sshd_config.d/00-hardening.conf
+    content: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      X11Forwarding no
+      MaxAuthTries 3
+
+  - path: /etc/fail2ban/jail.d/sshd.local
+    content: |
+      [sshd]
+      enabled = true
+      maxretry = 5
+      bantime = 1h
+
+  - path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+
+  - path: /usr/local/bin/start-vnc
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      export DISPLAY=:99
+      pgrep -f "Xvfb :99" >/dev/null || (Xvfb :99 -screen 0 1920x1080x24 >/dev/null 2>&1 &)
+      sleep 1
+      pgrep -f "x11vnc .*:99" >/dev/null || (x11vnc -display :99 -localhost -nopw -forever -shared -quiet >/dev/null 2>&1 &)
+      pgrep -f "websockify" >/dev/null || (websockify --web=/usr/share/novnc 127.0.0.1:6080 localhost:5900 >/dev/null 2>&1 &)
+      echo "Tunnel:  ssh -L 6080:localhost:6080 ${username}@<ip>"
+      echo "Open:    http://localhost:6080/vnc.html"
+
+  - path: /etc/profile.d/display.sh
+    content: |
+      export DISPLAY=:99
+
+  # One script, fail-fast, verified at the end. The previous version was twelve
+  # loose runcmd entries with no `set -e` and several `|| true`, so a failed npm
+  # install was followed by a successful sshd restart and cloud-init reported
+  # success. That is the failure mode this repo has a doc about.
+  - path: /usr/local/sbin/provision.sh
+    permissions: "0700"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      USER_NAME=${username}
+      DEV=/dev/disk/by-id/scsi-0HC_Volume_${volume_id}
+
+      echo "=== swap ==="
+      if [ ! -f /swapfile ]; then
+        fallocate -l ${swap_gb}G /swapfile
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        echo 'vm.swappiness=10' > /etc/sysctl.d/99-swappiness.conf
+        sysctl -w vm.swappiness=10
+      fi
+
+      echo "=== volume ==="
+      # The attachment is a separate Terraform resource applied AFTER the server
+      # boots, so the device genuinely may not be here yet. Wait generously, then
+      # fail loudly. Do NOT `exit 0` on absence: every runcmd entry is one shell
+      # script, so that aborted the whole provision while reporting success.
+      # There is deliberately no mkfs anywhere in this file — Terraform formats
+      # the volume once, at creation, so no boot can ever wipe the data.
+      for _ in $(seq 1 60); do [ -e "$DEV" ] && break; sleep 5; done
+      if [ ! -e "$DEV" ]; then
+        echo "FATAL: $DEV never appeared after 300s" >&2
+        exit 1
+      fi
+      mkdir -p /mnt/data
+      grep -q "$DEV" /etc/fstab || echo "$DEV /mnt/data ext4 discard,nofail,defaults 0 0" >> /etc/fstab
+      mountpoint -q /mnt/data || mount /mnt/data
+
+      echo "=== /home onto the volume ==="
+      if [ ! -d /mnt/data/home ]; then
+        mkdir -p /mnt/data/home
+        rsync -a /home/ /mnt/data/home/
+      else
+        # Rebuild. The Terraform-managed key is the single source of truth, so
+        # REPLACE rather than append: appending would leave a rotated-out key
+        # valid forever. If you keep a second key by hand, it lives here and
+        # this will remove it — that is the trade, and it is deliberate.
+        install -d -m 700 -o "$USER_NAME" -g "$USER_NAME" /mnt/data/home/"$USER_NAME"/.ssh
+        install -m 600 -o "$USER_NAME" -g "$USER_NAME" \
+          /home/"$USER_NAME"/.ssh/authorized_keys \
+          /mnt/data/home/"$USER_NAME"/.ssh/authorized_keys
+      fi
+      grep -q "/mnt/data/home /home" /etc/fstab || \
+        echo "/mnt/data/home /home none bind,nofail,x-systemd.requires-mounts-for=/mnt/data 0 0" >> /etc/fstab
+      mountpoint -q /home || mount --bind /mnt/data/home /home
+
+      echo "=== node ==="
+      curl -fsSL https://deb.nodesource.com/setup_${node_major}.x | bash -
+      apt-get install -y nodejs
+      npm install -g @anthropic-ai/claude-code
+
+      echo "=== chrome ==="
+      # chrome-devtools-mcp needs real Chrome stable, not Playwright's Chromium.
+      # amd64 only: this block is wrong on an ARM (CAX) server.
+      curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+        | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+      echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+        > /etc/apt/sources.list.d/google-chrome.list
+      apt-get update
+      apt-get install -y google-chrome-stable
+
+      echo "=== playwright ==="
+      npx --yes playwright@latest install-deps chromium
+      su - "$USER_NAME" -c 'npx --yes playwright@latest install chromium'
+
+      echo "=== mcp servers ==="
+      # Pin at provision time rather than resolving @latest on every session
+      # launch: that is a supply-chain surface and makes two sessions able to run
+      # different code. Re-provision to move them.
+      PW_MCP=$(npm view @playwright/mcp version)
+      CDT_MCP=$(npm view chrome-devtools-mcp version)
+      echo "pinning @playwright/mcp@$PW_MCP and chrome-devtools-mcp@$CDT_MCP"
+      # --scope user, or they register against /home as a "project" and vanish
+      # the moment you cd into a repository.
+      # --isolated, because one persistent profile supports exactly one browser
+      # process and the whole point of this box is parallel sessions.
+      su - "$USER_NAME" -c "claude mcp add --scope user playwright -- npx -y @playwright/mcp@$PW_MCP --headless --isolated"
+      su - "$USER_NAME" -c "claude mcp add --scope user chrome-devtools -- npx -y chrome-devtools-mcp@$CDT_MCP --headless"
+
+      echo "=== ssh ==="
+      sshd -t
+      systemctl enable --now fail2ban
+      systemctl restart ssh || systemctl restart sshd
+
+      echo "=== verify ==="
+      # Every one of these has a way of silently not happening.
+      fail=0
+      check() { if eval "$2" >/dev/null 2>&1; then echo "ok   $1"; else echo "FAIL $1"; fail=1; fi; }
+      check "/home is the volume"      'mountpoint -q /home'
+      check "swap active"              'swapon --show | grep -q swapfile'
+      check "claude installed"         'command -v claude'
+      check "chrome installed"         'command -v google-chrome'
+      check "playwright chromium"      'su - '"$USER_NAME"' -c "ls ~/.cache/ms-playwright" | grep -q chromium'
+      check "playwright mcp"           'su - '"$USER_NAME"' -c "claude mcp list" | grep -q playwright'
+      check "devtools mcp"             'su - '"$USER_NAME"' -c "claude mcp list" | grep -q chrome-devtools'
+      check "sshd config valid"        'sshd -t'
+      check "password auth off"        'sshd -T | grep -qi "^passwordauthentication no"'
+      check "root login off"           'sshd -T | grep -qi "^permitrootlogin no"'
+      if [ "$fail" -ne 0 ]; then
+        echo "PROVISION INCOMPLETE — see above" >&2
+        exit 1
+      fi
+      echo "PROVISION OK"
+
+runcmd:
+  - bash /usr/local/sbin/provision.sh 2>&1 | tee /var/log/provision.log
+
+final_message: |
+  Box up after $UPTIME s.
+  Check provisioning actually succeeded:  sudo tail -20 /var/log/provision.log
+  It must end with PROVISION OK. Then run `claude` and log in with /login.
