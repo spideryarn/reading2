@@ -103,6 +103,36 @@ Two habits that catch it:
   read both back. If the control works and yours does not, it is your property; if neither works, it
   is your method. That one call is what turned "the CSS is broken" into "the browser is stale".
 
+### A preview page that never imported the stylesheet
+
+The sibling of the trap above, and worse, because nothing about it looks stale. On 2026-08-31 a
+throwaway page was built to check whether the chat composer's row still fits with three more
+controls in it — and `preview-composer.tsx` had no `import "./styles.css"`. It mounted the **real**
+component and rendered it as unstyled browser defaults: `display: block` instead of the flex row, no
+tokens, buttons at browser-default size.
+
+Every measurement was internally consistent. `scrollWidth === clientWidth` everywhere, nothing
+wrapped, nothing overflowed — and all of it was a fact about `display: block`, which cannot overflow
+the way a flex row can. Reported as "the layout holds", it would have been the exact opposite of the
+truth: the real row *was* crushing the textarea to 58px at 320px, which is what the page was built to
+find.
+
+**So before trusting a preview page, prove the stylesheet is there.** Not by looking — an unstyled
+page and a plainly-styled one are hard to tell apart in a screenshot when you have not seen the real
+thing:
+
+```js
+document.styleSheets.length;                       // 1 scaffold sheet ⇒ suspect
+[...document.styleSheets].map((s) => s.cssRules.length);  // [7] ⇒ certain
+getComputedStyle(document.documentElement).getPropertyValue("--rule-strong");  // "" ⇒ no tokens
+getComputedStyle(el).display;                      // "block" where the CSS says flex
+```
+
+`src/web/main.tsx` imports `./tailwind.css` alone and says why — it pulls `styles.css` in inside
+`@layer app`, and importing the two side by side leaves `styles.css` unlayered where it silently
+outranks every Tailwind utility. The preview pages import **both**, in that order, matching
+`preview-profile.tsx`. Copy an existing preview entry rather than writing a new one from scratch.
+
 ### A hidden tab does not animate, and half this app is animated
 
 The measuring tab is not the frontmost window, so `document.visibilityState` reads `hidden` — and
