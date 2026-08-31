@@ -44,6 +44,11 @@
  * with an article that has none. The second is the case the near-miss was about,
  * and an ordinary fixture never exercises it.
  *
+ * **And a third copy for one stage.** `timeline` is the only stage whose hash
+ * folds in the publication date, and `example/meta.json` carries none — so a
+ * `dated-meta` copy exists to give that field a value. See `MetaState` and the
+ * last test in this file for what a green suite was hiding without it.
+ *
  * `assets` is here too. It takes a **blocks-only** hash on purpose — it is the
  * one stamped stage with no prompt, so there is no head and no tree in its
  * question (`inputHashFor` in src/pipeline.ts) — and its two rows therefore
@@ -51,7 +56,7 @@
  * correct rather than an omission, and this file asserts it as a property so
  * that nobody "fixes" it into `articleFingerprint`.
  */
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -121,7 +126,7 @@ vi.mock("../src/fetch.js", async (importOriginal) => {
 const REPO = path.resolve(import.meta.dirname, "..");
 const SLUG = "noema-mythology-of-conscious-ai";
 
-/** Two copies of `example/`: one with `meta.json`, one with it removed. */
+/** Three copies of `example/`, differing only in `meta.json` — see `MetaState`. */
 let root = "";
 
 interface Fixture {
@@ -129,15 +134,42 @@ interface Fixture {
   article: Article;
 }
 
+/**
+ * What one copy of the fixture does with `meta.json`.
+ *
+ * `"dated"` is here for one stage. `example/meta.json` carries **no
+ * `publishedAt`** — like almost every article on the shelf, because the field
+ * arrives only on re-extraction — so with only the first two states the whole
+ * of this file compares two undated articles, and the one field that separates
+ * `datedArticleFingerprint` from `articleWithIdsFingerprint` *in value* is
+ * never given a value. Measured rather than assumed: deleting `publishedAt`
+ * from the head in `datedArticleFingerprint` (src/source-hash.ts) left every
+ * assertion in this file green.
+ */
+type MetaState = "as-is" | "removed" | "dated";
+
 /** With metadata — the ordinary state, and the one every other fixture has. */
 let withMeta: Fixture;
 /** Without — a real, legitimate input that no ordinary fixture reaches. */
 let noMeta: Fixture;
+/** With metadata **and a publication date**, which only `timeline` hashes. */
+let datedMeta: Fixture;
 
-async function fixtureAt(name: string, keepMeta: boolean): Promise<Fixture> {
+/** The publisher's own string, in the shape `dayFrame` reads (src/timeline-time.ts). */
+const PUBLISHED_AT = "2023-09-14T00:00:00Z";
+
+async function fixtureAt(name: string, meta: MetaState): Promise<Fixture> {
   const at = path.join(root, name);
-  await cp(path.join(REPO, "example"), path.join(at, "data", SLUG), { recursive: true });
-  if (!keepMeta) await rm(path.join(at, "data", SLUG, "meta.json"));
+  const dir = path.join(at, "data", SLUG);
+  await cp(path.join(REPO, "example"), dir, { recursive: true });
+  const metaFile = path.join(dir, "meta.json");
+  if (meta === "removed") await rm(metaFile);
+  if (meta === "dated") {
+    const asIs = JSON.parse(await readFile(metaFile, "utf8")) as Record<string, unknown>;
+    /* The fixture's own metadata plus one field, so the only thing that can
+       move a hash between this copy and `with-meta` is the date itself. */
+    await writeFile(metaFile, JSON.stringify({ ...asIs, publishedAt: PUBLISHED_AT }, null, 2));
+  }
   const store = createFsArtifactStore((slug) => ({
     dir: path.join(at, "data", slug),
     htmlFile: path.join(at, "output", `${slug}.html`),
@@ -147,8 +179,9 @@ async function fixtureAt(name: string, keepMeta: boolean): Promise<Fixture> {
 
 beforeAll(async () => {
   root = await mkdtemp(path.join(tmpdir(), "spya-stamp-"));
-  withMeta = await fixtureAt("with-meta", true);
-  noMeta = await fixtureAt("no-meta", false);
+  withMeta = await fixtureAt("with-meta", "as-is");
+  noMeta = await fixtureAt("no-meta", "removed");
+  datedMeta = await fixtureAt("dated-meta", "dated");
 }, 30_000);
 
 afterAll(async () => {
@@ -179,9 +212,24 @@ function ctxFor(): StepContext {
  * The stages this file covers, and the artefact key each returns in `parts`.
  *
  * Every one of them carries a `sourceHash`; the whole point of the list is that
- * one shape of test covers all seven rather than seven near-copies.
+ * one shape of test covers all eight rather than eight near-copies.
+ *
+ * **The list is hand-written, and that is how `timeline` went uncovered from
+ * the day it shipped (2026-08-31) until it was noticed.** Nothing derives this
+ * from `STEPS`, because not every step is stamped and not every stamped step
+ * takes an article — so a new stage joins by somebody remembering. If you add
+ * one, add it here.
  */
-const STAGES = ["arc", "tweets", "glossary", "ideas", "quotes", "sketch", "assets"] as const;
+const STAGES = [
+  "arc",
+  "tweets",
+  "glossary",
+  "ideas",
+  "quotes",
+  "sketch",
+  "timeline",
+  "assets",
+] as const;
 type Stage = (typeof STAGES)[number];
 
 /** A block with enough prose in it to quote — chosen from the article, not typed. */
@@ -234,6 +282,35 @@ function scriptFor(stage: Stage, article: Article): string[] {
       ];
     case "quotes":
       return [JSON.stringify({ quotes: [{ text: block.text.slice(0, 120) }] })];
+    case "timeline":
+      /* One event, anchored to a real block, with **no `phrase`** — so the
+         parser reads no date and `dateEvent` answers `untimed`. Dating is
+         src/timeline-time.ts's subject and tests/timeline-time.test.ts's;
+         asking for a date here would make this row fail the day a parser rule
+         moved, for a reason with nothing to do with hashing.
+
+         The event still has to survive `toEvents`, and that is deliberate
+         rather than incidental: `buildTimeline` throws when the model names
+         events and every one of them is dropped, so a stub whose block id or
+         quote stopped resolving fails loudly instead of writing an empty
+         timeline. An empty one would carry a perfectly good `sourceHash` and
+         this row would go on passing while testing nothing —
+         docs/reusable/silent-success.md.
+
+         The label carries no date-shaped words, or `labelStatesAnUncitedDate`
+         would drop the event for stating a date its passage does not. */
+      return [
+        JSON.stringify({
+          events: [
+            {
+              label: "The piece describes something happening",
+              order: 1,
+              modality: "happened",
+              occurrences: [{ blockId: block.id, quote: block.text.slice(0, 60) }],
+            },
+          ],
+        }),
+      ];
     case "sketch":
       return [JSON.stringify(sketchAnswer(article))];
     case "assets":
@@ -354,4 +431,37 @@ describe("the hash a stage writes is the hash its stamp expects", () => {
       }
     }
   }, 60_000);
+
+  /**
+   * **And the publication date is in `timeline`'s hash — on both sides.**
+   *
+   * The fourteen rows above cannot ask this. `example/meta.json` has no
+   * `publishedAt`, so both metadata states are undated and `timeline`'s hash
+   * differs from `ideas`' only by a domain string. Deleting the date from the
+   * head of `datedArticleFingerprint` (src/source-hash.ts) leaves every one of
+   * them green — I ran that mutation before writing this, and it did.
+   *
+   * That is the mutation this stage is most exposed to, because the date is the
+   * only thing `timeline` hashes that nothing else does, and it is the thing the
+   * output actually turns on: it is the reference frame every year-less
+   * expression is read against, so a publisher re-dating a post changes almost
+   * every row of the artefact. A hash that ignored it would serve the old rows
+   * for ever and call them current.
+   *
+   * Both halves are asserted, because they fail differently. If only the
+   * *writing* side read the date, the artefact would be born stale; if only the
+   * *stamping* side did, the step would re-run on every job for ever. Either way
+   * the two must still agree with each other, which is the first assertion here.
+   */
+  it("and the publication date is in timeline's hash, on both sides", async () => {
+    const dated = await bothHashes("timeline", datedMeta);
+    const undated = await bothHashes("timeline", withMeta);
+    expect(dated.wrote, "timeline's two sides disagree on a dated article").toBe(dated.expected);
+    expect(dated.wrote, "the artefact's own sourceHash ignores the publication date").not.toBe(
+      undated.wrote,
+    );
+    expect(dated.expected, "timeline's stamp ignores the publication date").not.toBe(
+      undated.expected,
+    );
+  }, 30_000);
 });
