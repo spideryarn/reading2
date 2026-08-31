@@ -466,6 +466,29 @@ never land in it. The report keeps the two apart and says which half it has neve
 
 Written up in [ai-spend-outside-the-gateway.md](../plans/ai-spend-outside-the-gateway.md).
 
+## The exception that is coming, and what it costs the rule
+
+Everything above rests on one vendor. **Live Conversations — interactive voice dialogue on OpenAI's
+Realtime API — cannot rest on it**, because OpenRouter does not proxy that API. Nothing is built yet,
+so the "no exceptions" claim at the top of this file is still true; the day it ships, it stops being.
+
+The decision was made in advance rather than discovered in a diff, and it is in
+[realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md): a **third first-class
+seam**, not a [declared bypass](../../src/spend-declarations.ts) — *"a permanent product feature is
+not an admitted bypass"* — with the rule restated as *every paid operation goes through one of three
+owned seams; OpenRouter owns messages/chat/embeddings, OpenAI owns realtime.*
+
+Two things about it are worth knowing before you touch this file's claims:
+
+- **The usage numbers will come from the reader's browser**, because with browser WebRTC the
+  `response.done` events land there and there is no way to ask OpenAI afterwards. So realtime rows
+  carry a new `usageSource` field: `CostSource` says who did the arithmetic, and that is a different
+  question from whether the numbers were observed or reported.
+- **`beginSpend`'s guarantee does not stretch that far.** It holds the pending call in memory
+  ([`src/ai-spend.ts`](../../src/ai-spend.ts)), which is honest about itself — *"if the process dies,
+  this dies with it"* — and a five-minute conversation across many Vercel invocations is the case
+  that makes it bite. Realtime gets its own durable session lifecycle instead.
+
 ## The one thing still open
 
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows
@@ -498,6 +521,12 @@ clause.
   were spending into no total, and the scan that stops a ninth
 - [openrouter-as-sole-gateway.md](../research/openrouter-as-sole-gateway.md) — the research, with the
   catalogue of ways caching breaks silently in other people's projects
+- [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the one paid call
+  that will not fit through OpenRouter, and how it is accounted for instead
+- [realtime-voice-cost-tracking-web.md](../research/realtime-voice-cost-tracking-web.md) — what the
+  Realtime API emits as usage, current pricing, and the survey of tools that mostly cannot help
+- [realtime-voice-vercel-transport.md](../research/realtime-voice-vercel-transport.md) — why a
+  server cannot ask for a session's cost afterwards, and what Vercel can hold open now
 - [prompt-caching.md](prompt-caching.md) — the three caches and how to tell whether they are working
 - [setup-dev.md](setup-dev.md) — which model each job uses
 - [logging.md](logging.md) — where the per-step cost fields go and why they are logged from the seam
