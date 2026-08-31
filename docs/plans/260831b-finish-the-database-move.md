@@ -944,7 +944,33 @@ places nobody thinks of as storage:
 
 - **Local dev and the fixtures.** `example/` and `data/` are what every test and every laptop reads.
   76 of 320 test files referenced `example/`, `data/` or `output/` when last counted — an upper
-  bound, grepped by path. Expect this to be most of the work.
+  bound, grepped by path. **28 of 400 as of 2026-08-31.** Expect this to be most of the work.
+
+  **This is being designed by [260828r-worktrees.md](260828r-worktrees.md) rather than here**, and on
+  Greg's decision the ~76-file sweep is deferred until this stage gives it a durable target. Four
+  things came out of that work that change what this stage must do, and three of them correct this
+  document:
+
+  - **`SPIDERYARN_DATA_ROOT` does not redirect a test that computes its own root.**
+    `store-roundtrip:48`, `artefact-copy:55` and `store-parity:109` each do
+    `path.resolve(import.meta.dirname, "..")`. So they follow no store-side change this stage makes,
+    and two of them are enumerators — **this stage could move the seam, watch the suite stay green,
+    and conclude the corpus had followed it.** It would not have.
+  - **Several suites enumerate the corpus rather than naming slugs** — `store-artefact-manifest`,
+    `jobs`, `parse-json`, `store-guarded`, `glossary-lookups`, `ai-call`, `auth-users-fence` all
+    `readdir`. A corpus that shrinks makes them quieter, not redder, and an empty one passes
+    everything. Whatever replaces `data/` needs a **declared inventory that a test asserts**.
+  - **A test-side article loader must take a fixture-shaped contract, not wrap `readArticleFromDir`** —
+    that function is on this stage's own deletion list below, and wrapping it would cancel the payoff
+    the list is claiming ("a function to delete rather than seven `readFile`s to hunt").
+  - **`example/` is already committed** — 6 tracked files, 76 KB, a complete small article. That is
+    the precedent for a committed fixture corpus, and it has been there the whole time.
+
+  **And a constraint that is not technical.** `data/<slug>/chat.json`, `comments.json` and
+  `searches.json` are **Greg's real reading** — his conversations and annotations, not test data;
+  `noema`'s `chat.json` alone is 92 KB. A committed fixture corpus changes what is in this repository
+  for ever. Fixtures that need reader state should **synthesise it rather than copy his**, and
+  nothing under `data/` belongs in a review prompt sent off this machine.
 - **The deploy scripts.** [`scripts/deploy.ts`](../../scripts/deploy.ts) copies `data/` and
   `output/` into the deploy-test worktree, and `deploy-checks.ts` gates on sentinel files beneath
   them. Both need rewriting off that layout, and there is a known trap:
