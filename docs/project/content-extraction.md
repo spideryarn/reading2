@@ -52,6 +52,12 @@ The differences that matter to a reader:
   layer ([`src/pdf-score.ts`](../../src/pdf-score.ts)) and the step fails, naming the page, rather
   than writing a half-transcribed article that reads fluently.
 - **A scan cannot be checked at all**, has no text layer to check against, and says so on the page.
+- **A word broken by a page break is mended from the text layer, not by a second model call.** The
+  chunks are read in parallel and none of them sees over its own edge, so `dis-` / `patcher` arrives
+  as two records and used to render as "dis patcher". `mendSeamHyphens` in
+  [`src/pdf-read.ts`](../../src/pdf-read.ts) glues it back where pass 0's own lines say so on both
+  pages, and declines otherwise — the evidence rules, and the case it deliberately gives up on, are
+  in the comment above the function.
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
 [../plans/pdf-ingestion.md](../plans/pdf-ingestion.md).

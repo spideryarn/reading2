@@ -63,6 +63,7 @@ import {
   foldLine,
   type Pass0,
   pass0,
+  pageLines,
   type PdfRecord,
   RENDERED,
   type RecordType,
@@ -651,6 +652,171 @@ const escapeHtml = (s: string) =>
  * the reader can see where the machine could not read the ink rather than
  * having to trust that it could — docs/plans/pdf-ingestion.md § the scan.
  */
+/** A line that breaks a word: a letter, then a hyphen, then the line ends. */
+const BREAKS_A_WORD = /\p{L}[-‐­]$/u;
+/** The first run of letters in a string — a word, ignoring anything around it. */
+const FIRST_WORD = /\p{L}+/u;
+const HAS_LETTER = /\p{L}/u;
+
+/** Letters only, case folded — for comparing a model's word with the text layer's. */
+const letters = (s: string) => s.normalize("NFKC").replace(/[^\p{L}]/gu, "").toLowerCase();
+
+/**
+ * Does the earlier page break a word after `before`, ending in `tail`?
+ *
+ * The anchor is both words folded together, matched as a suffix of the line, so
+ * `...and then passed the dis-` answers a record ending "the dis" and `An in-`
+ * does not answer one ending "arrived in".
+ *
+ * `before` folding to nothing — a dash, a bracket, a bare footnote marker —
+ * collapses the anchor back to the bare stem it exists to replace, so that
+ * declines too.
+ */
+function brokeAfter(pass: Pass0, page: number, before: string, tail: string): boolean {
+  const anchor = letters(before);
+  if (!anchor) return false;
+  const wanted = anchor + letters(tail);
+  return pageLines(pass, page).some((line) => {
+    const trimmed = line.trimEnd();
+    return BREAKS_A_WORD.test(trimmed) && letters(trimmed).endsWith(wanted);
+  });
+}
+
+/**
+ * Does the later page's first letter-bearing line open with exactly this word?
+ *
+ * The whole word, not a prefix of it: `startsWith` on the folded line would
+ * accept the model's `patch` where the page says `patcher`, and glue
+ * `dispatch` — a plausible word that is on no page of the document, which is
+ * the one thing this function must never produce.
+ */
+function opensWith(pass: Pass0, page: number, head: string): boolean {
+  const opening = pageLines(pass, page).find((l) => HAS_LETTER.test(l)) ?? "";
+  return letters(FIRST_WORD.exec(opening)?.[0] ?? "") === letters(head);
+}
+
+/**
+ * Glue back a word the page break cut in half — `dis` + `patcher` → `dispatcher`
+ * — using pass 0's text layer as the evidence, and no model call at all.
+ *
+ * **Why there is anything left to do here.** The model is told to mend
+ * hyphenation itself, and it does, wherever it can see both halves. `planChunks`
+ * sends the previous page as read-only context precisely so it usually can. But
+ * at a *chunk seam* it cannot: the earlier chunk's last page has no successor in
+ * its own call, and the later chunk is forbidden from emitting records for its
+ * context page. So the two halves are read by two different calls, neither of
+ * which knows the word is broken. `renderHtml` then joins the records with a
+ * space, and the reader gets **"passed the dis patcher"**. That exact string is
+ * in committed output: data/ball-lightning, pages 3 and 4.
+ *
+ * **Why this is deterministic rather than a second model pass.** A Sonnet
+ * subagent read every seam in the corpus on 2026-08-30: five of seven were
+ * ordinary sentence continuations, which `continues` already handles correctly,
+ * and the other two were this. One defect, and the text layer already holds the
+ * answer — page 3 ends `dis-` and page 4 begins `patcher`. Asking a model to
+ * re-read the whole document to recover a hyphen would be paying for judgment
+ * where there is none to exercise. GPT Sol reached the same conclusion
+ * independently and proposed this repair.
+ *
+ * **What it will not touch, and that is the point.** Both sides have to agree.
+ * Some line on the earlier page must break a word *and* end with the last two
+ * words the model emitted — `...passed the dis-` answers a record ending
+ * "passed the dis". And the first letter-bearing line of the later page must
+ * open with exactly the word the model emitted next. Where the model already
+ * mended the word — anywhere inside a chunk — its last word is `dispatcher`,
+ * no line ends `the dispatcher-`, and nothing happens. Where the page's reading
+ * order is not the text layer's, the second half does the work: ball-lightning
+ * page 5 ends `thun-`, but page 6's text layer opens with "Figure 2. Sketch
+ * 1997 by…" rather than "derstorm", so this declines. That seam stays broken,
+ * and declining is right — gluing `thunFigure` would be worse than the space.
+ *
+ * **The word before the stem is the whole of the evidence, and the first
+ * version did not have it.** It asked only that some line on the page break a
+ * word with that stem, which sounds specific and is not: page 3 of the
+ * ball-lightning fixture ends *twenty-three* lines with a hyphen — `motion-`,
+ * `Land-`, `dif-`, `thunder-`, `as-`, `os-`. And the later-page check cannot
+ * make up the difference, because it is not independent: a paragraph that
+ * continues across a page break always opens with that page's first words. GPT
+ * Sol built the counter-example — a page holding `An in-` and, elsewhere, a
+ * sentence ending `arrived in`, with the next page opening `time to hear the
+ * verdict` — and the first version produced **"arrived intime"**.
+ *
+ * **The false negatives that buys, listed rather than discovered later.** The
+ * stem alone on its line, with the word before it wrapped onto the line above;
+ * a one-word record; a preceding word that is only punctuation; a later page
+ * whose first letters are a header, a caption or a drop cap. All of these
+ * decline, and the word stays broken with a space in it. That is the right way
+ * round for a function whose other failure mode is inventing plausible prose.
+ *
+ * **Order matters: this runs after scoring, never before.** Recall is measured
+ * against the baseline, where the word is still two halves (`else-` on one page,
+ * `where` on the next). Repairing first would make a correct transcription look
+ * like an invented word on one page and a missing one on the other.
+ */
+export function mendSeamHyphens(records: PdfRecord[], pass: Pass0): PdfRecord[] {
+  const out = records.map((r) => ({ ...r }));
+  /* Mirrors renderHtml's own cursor, so this only ever repairs a boundary
+     renderHtml is actually going to join: reset by a record it does not render,
+     and skipping one with no text. All three of renderHtml's join conditions —
+     `continues`, the same type, and nothing unrendered in between — are checked
+     below, each with a test that fires when it is removed. */
+  let previous: PdfRecord | null = null;
+
+  for (const record of out) {
+    if (!RENDERED.has(record.type)) {
+      previous = null;
+      continue;
+    }
+    if (!record.text.trim()) continue;
+    const prev: PdfRecord | null = previous;
+    previous = record;
+    if (!prev) continue;
+    if (!record.continues || record.type !== prev.type) continue;
+    if (record.page !== prev.page + 1) continue;
+
+    /* The model is told to mend hyphenation, but it is not always obeyed, and a
+       record ending "dis-" is the same break with the hyphen still on it. Both
+       spellings are accepted; the hyphen comes off in the glue below. Anything
+       else at the end — a full stop, a comma, a bracket — means the flow ended
+       there and any matching break on the page is a coincidence. */
+    const words = prev.text.trimEnd().split(/\s+/);
+    const tail = /^(\p{L}+)[-‐­]?$/u.exec(words.at(-1) ?? "")?.[1];
+    const before = words.at(-2);
+    if (tail === undefined || before === undefined) continue;
+
+    /**
+     * **The stem alone is not evidence, and this is where the first version was
+     * wrong.** Page 3 of the ball-lightning fixture ends twenty-three lines with
+     * a hyphen — `motion-`, `Land-`, `dif-`, `thunder-`, `as-`, `os-`. A rule of
+     * "some line on this page breaks a word whose stem is `in`" matches on
+     * almost any academic page, and the later-page check cannot make up the
+     * difference because it is not independent: a paragraph that continues
+     * across a page break *always* opens with that page's first words.
+     *
+     * GPT Sol found it and built the case: a page holding `An in-` / `ternal
+     * distinction matters.` and later `They finally arrived in`, with the next
+     * page opening `time to hear the verdict.`, produced **"arrived intime"**.
+     *
+     * So the line has to carry the word before it too. `...passed the dis-`
+     * anchors on `the dis`, and `An in-` does not offer `arrived in`.
+     */
+    if (!brokeAfter(pass, prev.page, before, tail)) continue;
+
+    const token = record.text.trimStart().split(/\s+/)[0] ?? "";
+    const head = FIRST_WORD.exec(token)?.[0];
+    if (head === undefined || !token.startsWith(head)) continue;
+    if (!opensWith(pass, record.page, head)) continue;
+
+    prev.text = prev.text.trimEnd().replace(/[-‐­]$/u, "") + token;
+    /* A one-word continuation is left empty. That is fine, and deliberately not
+       special-cased: renderHtml skips an empty record, and an empty record can
+       never anchor a later repair anyway, because its last word is the empty
+       string and fails the all-letters test above. */
+    record.text = record.text.trimStart().slice(token.length).trimStart();
+  }
+  return out;
+}
+
 export function renderHtml(records: PdfRecord[], title: string): string {
   const parts: string[] = [];
   let list: "ul" | null = null;
@@ -1149,15 +1315,19 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   }
 
   all.sort((a, b) => a.page - b.page);
+  /* After the scoring loop above, and it has to be: the baseline still has the
+     word in two halves, so repairing before measuring would read as an invented
+     word on one page and a missing one on the next. See mendSeamHyphens. */
+  const mended = mendSeamHyphens(all, pass);
   /* Rung 4 of the ladder wants **a name**, and the two origins spell one
      differently: an uploaded file has the reader's own filename, and a fetched
      one has the last segment of its URL. Worked out here rather than inside
      `titleFrom`, so that function keeps taking one string and stays testable
      without a URL. `decodeURIComponent` can throw on a hand-mangled escape,
      which used to take the whole stage with it. */
-  const title = titleFrom(all, pass, lastName(opts));
+  const title = titleFrom(mended, pass, lastName(opts));
   await mkdir(path.dirname(opts.outFile), { recursive: true });
-  await writeFile(opts.outFile, renderHtml(all, title), "utf-8");
+  await writeFile(opts.outFile, renderHtml(mended, title), "utf-8");
 
   /**
    * The mean recall, **and how many pages it is a mean of** — which is the
