@@ -80,6 +80,56 @@ Any one of these, and the first is the one to watch:
 4. **Deleting the importer**, which is still the only way content reaches Postgres and is still
    unsafe to leave runnable once D can publish.
 
+### Trigger 5 fired on 2026-08-30, in production, before any of the four above
+
+**The safety claim at the top of this section is false as stated.** "Nothing switches over" is true
+of the D work — the Postgres session is still unwired and cannot rot. What it misses is that the
+**reader** half switched over long ago: `SPIDERYARN_STORE=postgres` swaps every reader store through
+[`src/store/index.ts`](../../src/store/index.ts), while [`src/jobs.ts:57`](../../src/jobs.ts) still
+imports `fsArtifacts` directly and so the pipeline's reads never join that selection. Parking left a
+**mixed** deployment, and a mixed deployment has a hole in it that neither half has on its own.
+
+The hole: a job whose `steps` list does not include the stages that produce its inputs has nothing to
+read. `POST /api/jobs { slug, steps: ["tweets"] }` on an already-published article gets a fresh
+job-scoped `/tmp`, no earlier step runs, and the stage opens `data/<slug>/blocks.json` off an empty
+directory. All six late stages read `blocks.json`, `tree.json` and `meta.json` off `ctx.dir` this way;
+only `blocks` reads through the store.
+
+Three failures in eleven minutes on 2026-08-30, deployment `dpl_2ydtHC76pndcgjsAnucrCXgvQsdE`
+(commit `1ed4407`) — one `tweets`, two `arc`, on two different slugs:
+
+```
+ENOENT: no such file or directory, open
+'/tmp/spideryarn/<owner>/spya-bpcjus/data/nagel-bat/blocks.json'
+  at async generateTweets … at async runStep … at async advanceJobWith
+```
+
+**It is invisible in every error view.** The step failure is caught and the request answers 200, so
+neither Sentry nor `get_runtime_errors` shows it. The runtime log is the only record, and it is
+retained for a day.
+
+**So the fifth restart trigger is: any job that does not run the whole pipeline.** That is not a
+future article too large for one invocation — it is `tweets`, `glossary`, `summary`, `ideas`,
+`sketch` and `arc`, every one of which is asked for on its own by design
+(`DEFAULT_INGEST_STEPS` deliberately excludes them), and every one of which has been broken on the
+deployed path since the reader moved to Postgres.
+
+The work is scoped in [late-steps-read-the-store.md](late-steps-read-the-store.md), with a red repro
+at `tests/late-step-on-a-cold-instance.test.ts` and a GPT Sol review
+([late-steps-read-the-store-review-sol.md](late-steps-read-the-store-review-sol.md)) that returned
+NO-SHIP on the first design. It needs the **read** half of D3 and none of the write half, so it does
+not undo D1b and does not commit this plan to restarting. Two of Sol's findings belong to this
+document rather than to that one:
+
+- **The stamp fingerprints must be completed before, not after.** `tweets`, `glossary` and `summary`
+  consume the tree and the meta but stamp only the blocks hash; `ideas` and `sketch` consume the meta
+  and omit it. Today an incomplete stamp is harmless because the read returns `null` and the step
+  runs anyway. The moment the reads succeed, an incomplete stamp lets a **stale published artefact
+  skip**. § *D3* already says fingerprints must cover every real input; this is what makes it a
+  prerequisite rather than a tidy-up.
+- **`assertProduced` must keep reading the scratch alone.** Give it a view that can see the published
+  artefact and a stage that wrote nothing passes its own postcondition.
+
 ### Where to pick it up
 
 **D2 is the next stage and it is scoped** — see § *D2 scoped*. It is also the cheapest, because
@@ -2592,6 +2642,31 @@ is one of the things D2 deletes: the checkpoint store has **no `delete`**, delib
 ([`src/store/checkpoints.ts:122`](../../src/store/checkpoints.ts)). A peer is live in `src/toc.ts`,
 so this waits for them. Leaving a no-op `clearCheckpoint` behind would be a second door into removed
 behaviour, which is the shape this plan exists to close.
+
+> **Correction, 2026-08-31 — two things above are wrong, and one is a live question.**
+>
+> **The line number is stale.** `clearCheckpoint` is called at **`src/toc.ts:1285`**, and again at
+> `src/labels.ts:2065`. Re-derive it rather than trusting either number; `src/toc.ts` has been edited
+> heavily since.
+>
+> **"A three-line deletion" undersells what is there.** `spideryarn2-fe`, who owns that file, points
+> out the call is the **last step of a deliberately ordered write sequence** — the label checkpoint is
+> discarded only once `labels.json`, `blocks.json` and `tree.json` are all whole, **tree last**,
+> because the tree is the file every reader starts from. GPT Sol raised that ordering on 2026-08-26;
+> a crash mid-sequence otherwise leaves new labels and new blocks beside last week's tree, all three
+> present and mutually inconsistent. Whatever D2 does here, that ordering property has to survive or
+> be consciously given up — it is not incidental.
+>
+> **The open question this exposes:** if the checkpoint store has no `delete` by design, **what
+> reclaims a finished run's checkpoint under Postgres?** On the filesystem `scripts/checkpoints-sweep.ts`
+> answers it — but that sweeps the `data/` root directly, so it is a *filesystem* answer that does not
+> carry over. Either the store needs a reclamation path, or checkpoints accumulate for ever. This is
+> unresolved and must be settled before D2 is built, not during.
+>
+> Also read `src/labels.ts` **after** the current ToC work lands rather than working from the
+> paragraph below: `LabelRun` has since gained fields, a shortfall re-ask for missing ordinals and a
+> bounded partial accept, so a run can now finish having deliberately dropped labels. A checkpoint
+> move sized against the old shape will miss the new state.
 
 **So D2 splits.** `pdf-read.ts` has no boundary crossing at all — its only caller is `runPdfExtract`
 ([`src/pipeline.ts:941`](../../src/pipeline.ts)), already passing `dataDir` and `slug`, and nothing has
