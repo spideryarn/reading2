@@ -1,6 +1,6 @@
 /**
- * **The reader's twelve middle-band modes, named once, in a module that imports
- * nothing.**
+ * **The reader's thirteen middle-band modes, named once, in a module that
+ * imports nothing.**
  *
  * This vocabulary was in src/web/params.ts, which is where it is used and where
  * its history is. It moved here on 2026-08-30 because a **second** reader of it
@@ -51,6 +51,27 @@ export const MODES = [
   "chat",
   "glossary",
   "search",
+  /* The thirteenth, 2026-08-31: the mode for somebody who has been **asked to
+     peer-review** the piece — their own criteria run over it, what the piece
+     promises against where it delivers, and the model reading their review
+     rather than the paper.
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md.
+
+     **`referee` and not `reviewer`, because `review` is already in this list**
+     further down, and it is a different thing: there the reader says what
+     they took from a piece they have read for themselves. A `reviewer` mode
+     beside a `review` mode is one word meaning two things, which is the exact
+     collision `toc`/`hierarchy` above cost this repo a rename to get out of.
+     `referee` is also what journals call the person, so the word is the plainer
+     one as well as the free one. The plan § The name is `referee`, not
+     `reviewer` records that Greg had not seen it: the button's word is one
+     string in `MODE_LABEL` (src/title-text.ts) and one in `MODES_UI`
+     (src/web/Dock.tsx) if he wants "Reviewer" there instead.
+
+     It sits **after Search** because it is Search's kind of thing — a pass over
+     the piece looking for passages — rather than a restatement of it. Its
+     sub-modes are their own vocabulary, in src/web/referee-views.ts. */
+  "referee",
   "summary",
   "diagram",
   "ideas",

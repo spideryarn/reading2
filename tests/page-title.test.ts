@@ -96,6 +96,7 @@ describe("an article", () => {
       ideas: "Ideas",
       quotes: "Quotes",
       search: "Search",
+      referee: "Referee",
       diagram: "Diagram",
       chat: "Chat",
       review: "Review",

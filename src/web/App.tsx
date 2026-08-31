@@ -104,6 +104,9 @@ import {
   gateParam,
   quoteParam,
   rankParam,
+  refereeParam,
+  REFEREE_VIEWS,
+  type RefereeView,
   barParam,
   eventParam,
   ideaParam,
@@ -126,7 +129,7 @@ import {
    button, the dock's button and the browser tab cannot say three things.
    src/title-text.ts § MODE_LABEL. */
 import { MODE_LABEL } from "../title-text.js";
-import { X } from "lucide-react";
+import { ClipboardCheck, X } from "lucide-react";
 import {
   arrivalTarget,
   glideTarget,
@@ -167,6 +170,7 @@ import { markedModes, visitorGap } from "./visitor.js";
 import { NotSharedPage, SharedNotice, ViewOnlyChip, VisitorBand } from "./PublicChrome.js";
 import { PublicMetadataPage, VisitorTweetsPage } from "./PublicPages.js";
 import { useRenderCount } from "./perf.js";
+import { REFEREE_DECLARE_IT, REFEREE_TEXT_ALREADY_SENT } from "../messages.js";
 
 /**
  * The owner's `marked` map: nothing is marked, and it is one object for the
@@ -2518,6 +2522,14 @@ function Reader({
           onOpenHit={setOpenHit}
         />
       )}
+      {/* **`owner &&`, like every other mode that will spend money**, and it is
+          the gate rather than a decoration: nothing in stage 1 calls a model,
+          but Criteria, Claims and Mirror all will, and a band a visitor could
+          open now would have to be taken away from them later. `visitorGap`
+          fails closed and already answers `owners-only` for this mode, so a
+          visitor pressing the button gets the boundary sentence and not a blank
+          band. src/web/visitor.ts. */}
+      {owner && mode === "referee" && <RefereeBand />}
 
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
           are drawn over everything, and matching source order to paint order is
@@ -4023,5 +4035,243 @@ function DiagramBand({
       hue={hue}
       onHue={(next) => void setHue(next)}
     />
+  );
+}
+
+/**
+ * **Referee mode — for somebody who has been asked to peer-review this piece.**
+ *
+ * Stage 1 of docs/plans/260831an-referee-mode-for-peer-reviewers.md: the mode
+ * exists, every sub-mode is reachable, and **nothing here calls a model.** What
+ * is on screen is the confidentiality notice, the buttons and a line per panel
+ * saying what that panel will do. The panels themselves arrive in later stages.
+ *
+ * There are **four** of them and the plan on disk says three: `candidates` was
+ * added on Greg's say-so the same night, overruling the cut the plan's appendix
+ * argues for. It is the only one that is not the referee's own question —
+ * see `CandidatesPanel`.
+ *
+ * The design problem the whole mode is built around is Greg's, 2026-08-31:
+ *
+ * > it felt like a useful service to help them scan a document efficiently, and
+ * > flag useful/relevant stuff. At the same time, I'm wary about handing off too
+ * > much of the intellectual labour to AI and leading to cognitive surrender.
+ *
+ * Which is why **no verdict, ever** is the rule every one of these panels will
+ * be built under — no accept/reject, no score, no per-criterion grade. Ranking
+ * within the paper is the only ordering the mode offers.
+ *
+ * ## The notice is in the past tense, is not dismissible, and holds no state
+ *
+ * All three are deliberate. **Past tense** because by the time anybody is
+ * looking at this band the article's text has already gone to the model
+ * provider — ingest ran extraction, hierarchy and gists on it, and a PDF was
+ * read by a model before it was anything else. A notice here saying *this will
+ * send your manuscript to a third party* would be warning about something the
+ * app has already done. The present-tense half of the same fact belongs at the
+ * point of adding an article, and is there: `ADDING_SENDS_TEXT_AWAY` in
+ * src/web/AddArticle.tsx.
+ *
+ * **No acknowledgement**, which the plan's first draft asked for. A box that
+ * says "I understand" in front of something already done would imply that
+ * ticking it makes prohibited use permissible. It would also have to be
+ * remembered somewhere, and both places available are wrong: `localStorage` is
+ * banned outright (docs/project/url-state.md), and a column is a migration for
+ * a checkbox.
+ *
+ * **Not dismissible**, for the reason `SharedNotice` in src/web/PublicChrome.tsx
+ * gives about itself: *it is what this page is, and a control to make it go away
+ * would say otherwise.*
+ *
+ * It is styled as a notice and not as an error — src/web/styles.css § referee
+ * mode. Nothing has gone wrong.
+ */
+function RefereeBand() {
+  useRenderCount("RefereeBand");
+  const [view, setView] = useQueryState("referee", refereeParam);
+
+  return (
+    <aside className="mode-band gloss referee" aria-label="Referee">
+      <div className="gloss-head">
+        <ClipboardCheck size={14} className="gloss-head-icon" />
+        <h2>Referee</h2>
+      </div>
+
+      {/* Always, above everything, and before any sub-mode has been pressed.
+          src/messages.ts owns both sentences. */}
+      <div className="ref-notice">
+        <p>{REFEREE_TEXT_ALREADY_SENT}</p>
+        <p className="ref-notice-also">{REFEREE_DECLARE_IT}</p>
+      </div>
+
+      <RefereeViews view={view} onView={(next) => void setView(next)} />
+
+      <div className="ref-panel">
+        <RefereeSubMode view={view} />
+      </div>
+    </aside>
+  );
+}
+
+/**
+ * **The sub-mode chips**, and they are `DiagramPanel`'s exactly —
+ * `role="radiogroup"` with `role="radio"` children, each its own tab stop, and
+ * no arrow-key handling of any kind.
+ *
+ * That combination looks like a mistake and is not. The ARIA roles are the
+ * honest description of the control: one of these is on, and choosing another
+ * turns this one off. What Greg had removed on 2026-08-31 was arrow-key
+ * *selection* — the roving tabindex and its handler — because on this page the
+ * arrows belong to the article: up and down step it, left and right choose the
+ * stride, and a group that swallowed them left the reader's keyboard dead while
+ * a chip had focus. He met it as a bug. So the roles stay and the keys go, every
+ * chip is tabbable, and Enter, Space or a click selects.
+ * docs/project/keyboard.md, and tests/arrows-belong-to-the-article.test.tsx,
+ * which sweeps every `role="radio"` in the client for exactly this and renders
+ * these to check the arrows still reach the window.
+ *
+ * **Exported for that test**, and it is a seam worth having anyway: this
+ * component is a pure function of its two props, where `RefereeBand` above owns
+ * the `?referee=` parameter — the same band-owns-the-URL, panel-is-pure split
+ * every other mode in this file makes.
+ */
+export function RefereeViews({
+  view,
+  onView,
+}: {
+  view: RefereeView;
+  onView(next: RefereeView): void;
+}) {
+  return (
+    <div className="ref-views" role="radiogroup" aria-label="What Referee is showing">
+      {REFEREE_VIEWS.map((v) => (
+        // biome-ignore lint/a11y/useSemanticElements: a radiogroup of <button>s is the documented ARIA pattern and the call DiagramPanel.tsx, Dock.tsx and SearchPanel.tsx already make — a real <input type="radio"> cannot be styled as a chip without hiding the input and faking every state it already had
+        <button
+          key={v}
+          type="button"
+          role="radio"
+          aria-checked={v === view}
+          /* **Its own tab stop, and no key handler.** A roving `tabIndex` is
+             inseparable from arrow navigation — it is one tab stop for the whole
+             group and only navigable because the arrows move within it — so
+             leaving it here while removing the handler would make all but one
+             of them unreachable by keyboard altogether. */
+          tabIndex={0}
+          className={`ref-view-btn${v === view ? " on" : ""}`}
+          onClick={() => onView(v)}
+        >
+          {REFEREE_VIEW_LABEL[v]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * What each button says.
+ *
+ * A total `Record` rather than a `map` over capitalised keys, so a fifth
+ * sub-mode is a red compile here as well as in the switch below —
+ * docs/project/typechecking.md. Not in src/web/referee-views.ts: that file is the
+ * vocabulary a URL is parsed against and nothing server-side needs these words,
+ * where `MODE_LABEL` had a second reader on the far side of the client/server
+ * line and had to move.
+ */
+const REFEREE_VIEW_LABEL: Record<RefereeView, string> = {
+  criteria: "Criteria",
+  claims: "Claims",
+  mirror: "Mirror",
+  candidates: "Candidates",
+};
+
+/**
+ * The selected sub-mode's panel.
+ *
+ * An exhaustive `switch` with a `never` in the default, so a fifth member of
+ * `RefereeView` cannot be added without a panel to draw for it — which is not
+ * hypothetical: `candidates` was added the same night, and this is what said
+ * where. The alternative
+ * — a lookup keyed by the view — would compile with a hole in it under
+ * `noUncheckedIndexedAccess` and render nothing at runtime, which is the shape
+ * docs/reusable/silent-success.md is about.
+ */
+function RefereeSubMode({ view }: { view: RefereeView }) {
+  switch (view) {
+    case "criteria":
+      return <CriteriaPanel />;
+    case "claims":
+      return <ClaimsPanel />;
+    case "mirror":
+      return <MirrorPanel />;
+    case "candidates":
+      return <CandidatesPanel />;
+    default: {
+      const unknown: never = view;
+      throw new Error(`unknown referee view: ${String(unknown)}`);
+    }
+  }
+}
+
+/**
+ * **Stage 2.** The referee's own criteria, each one a saved, re-runnable pass
+ * over the article whose hits are marked in the prose — Search's machinery, with
+ * a valence, a ranking, and the starter packs from real referee forms.
+ */
+function CriteriaPanel() {
+  return (
+    <p className="gloss-quiet">
+      Write the criteria you have been asked to judge this on, and each one becomes a pass over the
+      article. Not built yet.
+    </p>
+  );
+}
+
+/**
+ * **Stage 3.** What the piece promises up front, against the passages meant to
+ * deliver it — ranked by how thin the delivery is. Linkage, never adequacy:
+ * whether one page of results carries the abstract's sentence is the referee's
+ * job, and it is the interesting part.
+ */
+function ClaimsPanel() {
+  return (
+    <p className="gloss-quiet">
+      What the piece claims up front, and where in it each claim is actually delivered. Not built
+      yet.
+    </p>
+  );
+}
+
+/**
+ * **Stage 4.** The model reads the referee's own comments rather than the paper
+ * — the one design in the literature with a controlled result behind it. It
+ * says nothing about whether the paper is any good, and it writes no review
+ * prose.
+ */
+function MirrorPanel() {
+  return (
+    <p className="gloss-quiet">
+      Your own comments, read back to you: what is unanchored, what the passage does not say, and
+      what you have not written about. Not built yet.
+    </p>
+  );
+}
+
+/**
+ * **Somebody else's stage.** The one sub-mode that is not for the referee: it
+ * answers an **editor's** question — who could review this paper, and what
+ * expertise it would take.
+ *
+ * The plan's appendix had cut it, for two reasons that are still true and that
+ * whoever builds it has to answer: it serves a user who is not in the app, and
+ * it is the one output nothing in the article can check, since a plausible name
+ * beside a real URL is exactly what a model hallucinates well. Greg overruled
+ * the cut on 2026-08-31.
+ */
+function CandidatesPanel() {
+  return (
+    <p className="gloss-quiet">
+      Who could review this paper, and what expertise it would take — the editor's question rather
+      than the referee's. Not built yet.
+    </p>
   );
 }

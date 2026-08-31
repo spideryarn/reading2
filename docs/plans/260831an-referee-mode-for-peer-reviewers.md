@@ -76,9 +76,9 @@ So:
 A blocking attestation at ingest is a product call and Greg is asleep, so it is not in v1. It is the
 first thing to discuss when he wakes.
 
-## The three sub-modes
+## The four sub-modes
 
-`?mode=referee` with `?referee=criteria|claims|mirror`, following Diagram's precedent
+`?mode=referee` with `?referee=criteria|claims|mirror|candidates`, following Diagram's precedent
 (`?diagram=force|drift|trail`, [params.ts](../../src/web/params.ts)) with a stated default, an
 invalid-value fallback and `history: "push"`.
 
@@ -132,6 +132,42 @@ Greg's preference for ranking is honoured by what the panel *leads with* — the
 the number small beside it — and by what the mode refuses to produce: no total, no per-criterion
 grade, no accept/reject, ever. That is a real constraint, tested in the prompt and read in an eval.
 It is not a claim that the underlying number stopped being a number.
+
+**The referee places passages on the scale too, and the gap is the point.** Greg, 2026-09-01:
+
+> I'm keen to also include some kind of ranked red, green, and/or red-green-spectrum, for a range of
+> criteria defined by the user, perhaps harmonising with the ability for the user to comment (perhaps
+> quantitatively) on things (eg yes this seems like an important methodological issue; no that's not
+> that innovative, see X Y Z; etc)
+
+So a passage can carry **two** valences on one criterion — the model's and the referee's. They never
+share a field and they are never averaged, because the whole value is in the distance between them.
+
+This turns out to fix the objection Sol raised hardest. Its finding 5 was that valence is an absolute
+score painted into the reader's view before the reader has formed one — the anchoring problem, which
+Fable and Sol both wanted solved by a commit-before-reveal ceremony ("Rank Before Reveal"), and which
+the first draft deferred. It does not need a ceremony. Once the referee can place a passage
+themselves, **the mode's headline list becomes where the two of you disagree most** — sorted by the
+size of the gap, the referee's own mark shown first. That list is argumentative rather than
+deferential: every row is a thing the referee has already thought about and the model contradicts, or
+the reverse. It cannot be used to avoid reading, because you cannot appear in it without having read.
+
+**The referee's mark is a comment, not a new store.** `comments` gains two nullable columns —
+`criterionId` (which criterion this note answers) and `valence` (their own −100…+100). A comment with
+a criterion is a review comment; one without is a reading note. That also answers, better than a
+boolean would, a question Greg asked earlier about flagging comments as for-refereeing: the
+distinction falls out of the data instead of being a separate switch, and Mirror, the gutter,
+anchoring and any future export get it for nothing. Adding a second store would have meant two places
+to write about one passage and Mirror having to read both.
+
+**The scale is per-criterion, and it defaults to red ↔ green.** `--div-rg-*` and `--div-*` both exist
+in `styles/colourscales.css`. [colour-scales.md](../project/colour-scales.md#--div-rg--is-red-green-and-it-is-here-because-it-was-asked-for)
+calls blue↔red "the one to use" and permits red↔green under a stated condition: *use it where the
+reader already knows which end is which from something other than the colour — a printed number, a
+label, a position.* This design meets that condition by construction, because every row prints the
+rank, the signed number and the direction in words, and now the referee's own mark beside the
+model's. Greg has asked for red↔green three times; the condition holds; it is the default, and
+blue↔red is one value in the same column for anyone who wants it.
 
 **Marks are default-off**, which is already Search's rule — the article acquires marks when the
 reader asks and at no other time. That is also the cheap 80% of the anchoring problem: the referee
@@ -211,6 +247,68 @@ It reuses `review` mode's prompt and eval machinery ([`converse.ts`](../../src/c
 eval under `evals/` whose transcript a person reads, which is how
 [review-mode.md](../project/review-mode.md) says a prompt this load-bearing gets checked.
 
+### 4. Candidates — who could review this, for an editor
+
+Added 2026-09-01 after Greg overruled the cut:
+
+> I do want to include candidate reviewers/referees to help editors because a friend explicitly said
+> this would help them. It does seem a bit of a deep rabbithole/tangent though I recognise, but let's
+> at least see how far we can get in a stage or two, if necessary as a fourth sub-mode.
+
+So it is a fourth sub-mode. He also said how it should work, the next morning, and that reshaped it
+from a bespoke panel into a conversation.
+
+**It is Chat, not a bespoke panel.** Greg, 2026-09-01:
+
+> The candidates search should allow for an extra and flexible prompt to scope the web search, which
+> could be anything from criteria to names to emphasize/exclude, or something else. Probably this
+> should be a special reuse of Chat mode, to get access to tools and make it interactive and
+> potentially multiple messages back and forth.
+
+That is the right call and it makes this sub-mode much smaller than the version above it replaced.
+`ThreadKind` is already `"chat" | "review"` ([`types.ts`](../../src/types.ts)), and `review` mode is
+already a second personality on the same machinery — a system prompt branch in
+[`converse.ts`](../../src/converse.ts) and nothing else. `candidates` becomes the **third kind**, and
+it inherits streaming, the seven tools, OpenRouter's server-side web search, citation chips, thread
+persistence and retry for free. What has to change is small and known: the
+`chat_threads_kind` check constraint in [`schema.ts`](../../src/db/schema.ts) currently reads
+`in ('chat','review')` and needs widening, and [`routes.ts`](../../src/routes.ts) refuses any kind
+that is not one of those two.
+
+Finding reviewers is genuinely a conversation — *not that lab, prefer early-career, must know
+Bayesian methods, exclude anyone at the authors' institutions* — and a form cannot take those.
+
+**The thread opens with the fit brief.** The model's first message, before the editor says anything,
+is the safe layer: what expertise a competent reviewer of this paper would need — methods, subfield,
+statistics, domain knowledge the claims assume — **each requirement anchored to the passage that
+motivates it**, so it obeys the mode's provenance rule and the editor can see why the paper is asking
+for a statistician. It has no hallucinated-person failure mode, it is useful on its own, and it is
+also the query the conversation then refines. If layer two disappoints, this still stands.
+
+**Then names, under four hard rules**, whether they arrive in the first answer or the fifth:
+
+- **No name without a source link** the web search actually returned. A candidate with no citation is
+  not shown — the same rule the `literature` criterion follows, and for the same reason: a plausible
+  name attached to a real-sounding paper is exactly what a model produces well.
+- **The paper's own authors are excluded.** This is the one call in Referee mode that legitimately
+  sees the byline, and only to exclude — a stated exception to rule 4 below, written here rather than
+  discovered in a diff.
+- **Every candidate says which fit-requirement it answers**, and links the passage behind it.
+- **What we cannot check is said in the panel, not in a footnote.** We have no co-authorship graph and
+  no affiliation history, so we cannot detect conflicts of interest. The research is candid that even
+  Prophy, Web of Science Reviewer Locator and Elsevier's recommender catch only recent co-authorship
+  and miss informal conflicts and homophily. The editor does that check; the panel says so.
+
+**The bias gets labelled rather than denied.** The MIT study (27k evaluations, four models) found
+LLMs rate papers higher for prestigious institutions and famous authors, and the matching literature
+documents over-suggestion of well-known, well-indexed people with gender and geography skew. The
+prompt is told not to weight prestige, and the panel says the list skews toward people the web indexes
+well — the honest version, and the useful one, because it tells the editor what they are looking at.
+
+**What is deliberately not in v1**: any scholarly identity graph. OpenAlex, ORCID and Crossref could
+back real co-authorship COI checks, and that is the obvious next step — it is also a different
+project, and Greg's own framing is *"see how far we can get in a stage or two"*.
+
 ## The rules the whole mode obeys
 
 Each is a test, not an intention.
@@ -223,7 +321,9 @@ Each is a test, not an intention.
    study (27k evaluations, four models) found LLMs rate papers higher for prestigious institutions
    and famous authors. [`article-prompt.ts`](../../src/article-prompt.ts)'s `head()` emits `BY:`,
    `PUBLISHED IN:` and `URL:` into every prompt today. Referee calls get an **anonymous renderer
-   option** that omits all three. Additive — no other stage changes.
+   option** that omits all three. Additive — no other stage changes. **Candidates is the one stated
+   exception**: it sees the byline in order to exclude the paper's own authors from its suggestions,
+   and for nothing else.
 5. **A deterministic injection scan, before the model, not by it.** The first draft made
    hidden-instruction detection a *criterion*, i.e. asked the possibly-compromised model to find the
    attack on itself. That is detection after exposure by the component under attack. Instead: a
@@ -252,7 +352,14 @@ changes the thing**, not deferred — Sol's finding, and CLAUDE.md already says 
   for the reason in § 2 above. The pipeline version is follow-up work, not v1.
 - **Stage 5 — Mirror.** The `converse` branch, the four remark kinds, abstention, the eval and its
   committed transcript.
-- **Stage 6 — finish.** `docs/project/referee-mode.md`, its line in
+- **Stage 6 — Candidates as a third thread kind.** The migration widening `chat_threads_kind`, the
+  route's kind check, the `converse` branch and its system prompt, the scoping box, and the fit brief
+  as the thread's opening message. Web search on for this kind.
+- **Stage 7 — Candidates, the hard rules.** Citation-or-it-does-not-show, author exclusion, the
+  fit-requirement link on every candidate, and the panel's own statement of what it cannot check.
+  Greg's framing is *"see how far we can get in a stage or two"*, so this is where to stop if it
+  becomes the rabbit hole he expects.
+- **Stage 8 — finish.** `docs/project/referee-mode.md`, its line in
   [reading-view-overview.md](../project/reading-view-overview.md), a browser pass over all three
   including a colour-vision simulation and a narrow screen, GPT Sol on the code.
 
@@ -264,10 +371,11 @@ Sol reviews the diff at the end of every stage. Evals measure the things unit te
 **Sol would drop valence entirely** (finding 5), on the grounds that a signed score is a score and
 that "are the controls adequate?" asks the model for exactly the evaluative call we said we would not
 make. The argument is good and the conclusion is not mine to take: Greg asked for the oppositional
-scale in his opening message and confirmed hedged verdicts when asked directly. What Sol's finding
-does change is where the number is allowed to appear — out of the prose stripe, into the panel — and
-that the plan stops describing a score as a ranking. If Greg wants valence gone, it is one kind in a
-union.
+scale in his opening message, confirmed hedged verdicts when asked directly, and on 2026-09-01 asked
+for it a third time with the referee's own placement beside it. What Sol's finding changed is where
+the number may appear — out of the prose stripe, into the panel — and that the plan stopped calling a
+score a ranking. Its underlying worry, anchoring, is answered by the referee's own valence rather
+than argued with: see § 1.
 
 **Sol would build the Anchored Notebook first** — tagged comments, no AI, as the substrate — and
 would ship JSON/CSV export in v1. Both are good and both are Greg's own deferred item: he said
@@ -296,9 +404,7 @@ research, and Sol's review. Roughly in the order I would build them next.
 |---|---|---|
 | **Number Hound** | Thread every n, percentage and p-value through the paper; flag where the declared n and a table's n disagree. | Sol's preferred third sub-mode over Claims: more checkable, more distinct from Search, with real deployment precedent (StatReviewer, SciScore). The strongest thing to build next. |
 | **Anchored Notebook + JSON/CSV export** | The referee's own comments, tagged major/minor/question/typo, exported. No AI in it at all. | Sol wanted it as the substrate under everything else. Greg deferred export himself to a later stage; this is his call to make, not mine to overrule at 1am. |
-| **Rank Before Reveal** | The referee orders the paper's claims before seeing the model's ordering. | Sol calls it a required safeguard rather than polish if valence ships. The cheap 80% is already in — criteria marks are default-off, so the referee reads before the model paints. The full version needs Claims to exist. |
-| **Candidate reviewers** | For an editor: who could review this. | Greg raised it and did **not** veto it, so this is the cut he should overrule if he disagrees — but Sol independently agreed with cutting it: it serves editors, needs a scholarly identity graph and real conflict-of-interest handling, and is the one output nothing in the article can check. |
-| **Reviewer-Fit Brief** | Describe the *expertise* a reviewer would need, naming no people. | Sol's safer substitute for the above. Genuinely appealing, and it has no hallucinated-person failure mode. |
+| **Rank Before Reveal** | The referee orders the paper's claims before seeing the model's ordering. | **Superseded**, not deferred. Sol called it a required safeguard if valence ships. The referee's own valence (§ 1) does the same job without a ceremony: the disagreement list only contains passages the referee has already judged. |
 | **Sealed Second Opinion** | The model's concerns sealed until the referee commits their own. | Fable named this the trap and I agree: behind the seal it is still a full AI review. The seal changes when the anchor lands, not whether, and the "only it found this" column gets harvested straight into reports. |
 | **Import the cited papers** | Ingest the reference list and cross-read. | Greg ruled it out of v1; much the largest build here. |
 | **Draft my referee report** | A scaffold collecting flagged passages into report structure. | Greg vetoed it. The survey data agrees: 57% of reviewers would be dissatisfied by an AI-written review, 42% by an AI-augmented one. |

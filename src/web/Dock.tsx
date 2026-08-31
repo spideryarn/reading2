@@ -99,6 +99,7 @@ import { useEffect, type ReactNode } from "react";
 import {
   AlignLeft,
   BookA,
+  ClipboardCheck,
   Lightbulb,
   ChevronUp,
   Clock,
@@ -307,7 +308,7 @@ const MODES_UI: {
    * costs a sighted reader a hover and a screen-reader user nothing (styles.css
    * § the modes segment). Exactly one button is worth the width anyway: the one
    * that gets you *out*, which a reader is reaching for precisely when they do
-   * not want to hover ten icons to find it. So on a phone the row is twelve
+   * not want to hover ten icons to find it. So on a phone the row is thirteen
    * glyphs and one word, and the word is the exit.
    */
   keepLabel?: true;
@@ -421,6 +422,28 @@ const MODES_UI: {
     icon: Search,
     label: "Search",
     blurb: "Find a passage by the words it uses, or by what it says",
+  },
+  /* **Straight after Search, because it is Search's kind of thing** — a pass
+     over the piece looking for passages — pointed at somebody who has been
+     asked to peer-review it rather than at somebody reading it for themselves.
+     Its first sub-mode is very nearly a saved search, which is the argument for
+     the placement and also the thing the plan says to watch: if Criteria turns
+     out to be Search with extra steps, the honest move is to fold it back.
+     docs/plans/260831an-referee-mode-for-peer-reviewers.md.
+
+     `ClipboardCheck` rather than the three other candidates, and the reason is
+     the one rule this whole mode obeys: **no verdict, ever.** `Gavel` and
+     `Stamp` both draw a judgement being handed down, which is the single thing
+     this mode refuses to produce, and an icon that promises it would be the
+     mode's own anti-goal sitting in the bar. `ScanSearch` says "search" one
+     button along from Search. A clipboard with a tick is the referee *form* the
+     venue sends you — the criteria you were asked about — which is what the
+     mode is actually for. docs/project/icons.md. */
+  {
+    mode: "referee",
+    icon: ClipboardCheck,
+    label: "Referee",
+    blurb: "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
   },
   /* Diagram sits between the ways *into* the article and the conversation about
      it, next to Summary rather than next to Chat, because it is the same move
@@ -566,7 +589,7 @@ export function Dock({ slug, view, mode, onMode, marked, signedIn, visitor, draw
         </div>
       )}
 
-      {/* Above the bar rather than in it: it is a sentence, and the bar is twelve
+      {/* Above the bar rather than in it: it is a sentence, and the bar is thirteen
           icons. Renders nothing at all except on an uninstalled iOS device that
           has not dismissed it — install-hint.ts. */}
       <InstallHint />
@@ -760,7 +783,7 @@ export function withMode(search: string, mode: Mode): string {
  * ## What a radiogroup costs, and the promise this one deliberately breaks
  *
  * `role="radiogroup"` is a promise about the keyboard, not a label: a screen
- * reader announces "radio group, twelve items" and its user will then press an
+ * reader announces "radio group, thirteen items" and its user will then press an
  * arrow key. The ARIA authoring practice makes that good with a roving tabindex
  * — one tab stop for the group — plus arrows that move *and select* in one
  * gesture, plus focus following the selection. This group had all three, and
@@ -789,10 +812,10 @@ export function withMode(search: string, mode: Mode): string {
  *
  * **What replaces it: a tab stop per button.** Tab reaches every mode, Enter,
  * Space or a click selects, and no arrow key is captured anywhere in the bar.
- * The cost is that the segment is twelve tab stops rather than one, so tabbing
+ * The cost is that the segment is thirteen tab stops rather than one, so tabbing
  * past the bar takes longer — accepted, because the alternative is worse in a
- * way a mouse cannot see: a roving tabindex with no arrows leaves eleven of the
- * twelve modes unreachable by keyboard altogether.
+ * way a mouse cannot see: a roving tabindex with no arrows leaves twelve of the
+ * thirteen modes unreachable by keyboard altogether.
  *
  * `role="radio"` and `aria-checked` stay. *Exactly one of these is on* is still
  * true, it is what the hairline frame says to a sighted reader (styles.css
@@ -866,10 +889,10 @@ function DockModes({
    * A settle delay was drafted to race that; taking the arrows off removes it
    * instead, which is the smaller thing to have to be right about.
    *
-   * **The cost, which is real:** the segment goes from one tab stop to twelve,
+   * **The cost, which is real:** the segment goes from one tab stop to thirteen,
    * so tabbing past the bar takes more presses. That is the price of every mode
    * staying reachable without arrows, and it is the right way round — a roving
-   * tabindex with no arrows would leave eleven of the twelve unreachable by
+   * tabindex with no arrows would leave twelve of the thirteen unreachable by
    * keyboard, which is worse than what was fixed and invisible to a mouse.
    *
    * `role="radio"` and `aria-checked` stay: *exactly one of these is on* is
@@ -916,7 +939,7 @@ function DockModes({
               aria-label={m.label}
               /* Every button, not a roving one. See the note above the
                  radiogroup: with no arrow keys to move within the group, a
-                 single tab stop would leave eleven of the twelve modes
+                 single tab stop would leave twelve of the thirteen modes
                  unreachable by keyboard. */
               tabIndex={0}
               onClick={(e) => {
@@ -985,7 +1008,7 @@ function DockLink({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § a narrow window
-          can drop all twelve of the bar's labels with one rule rather than with
+          can drop all thirteen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the `title`
           above is the accessible name on both of these. */}
@@ -1034,7 +1057,7 @@ function DockTab({
     >
       <Icon size={15} />
       {/* Same class the modes segment gives its label, so § a narrow window
-          can drop all twelve of the bar's labels with one rule rather than with
+          can drop all thirteen of the bar's labels with one rule rather than with
           one rule and a bare-element selector that would break the moment
           somebody wrapped the text. The name is still announced: the `title`
           above is the accessible name on both of these. */}

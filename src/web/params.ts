@@ -259,6 +259,19 @@ export { isMode };
 import { DEFAULT_MODE, MODES, type Mode } from "../modes.js";
 export { DEFAULT_MODE, MODES, type Mode };
 
+/* Referee's four sub-modes, from src/web/referee-views.ts and re-exported here
+   for the same reason the three above are: this file is where a component looks
+   for the vocabulary a parameter is drawn from. Unlike `modes.js` above, that
+   module lives *inside* src/web/ — nothing on the server reads a sub-mode, and
+   the file header says what putting it outside cost. */
+import {
+  DEFAULT_REFEREE_VIEW,
+  isRefereeView,
+  REFEREE_VIEWS,
+  type RefereeView,
+} from "./referee-views.js";
+export { DEFAULT_REFEREE_VIEW, isRefereeView, REFEREE_VIEWS, type RefereeView };
+
 export const modeParam = createParser<Mode>({
   /* `isMode` and not a second `MODES.includes` here. The serverless function
      that composes a shared article's `<title>` asks the same question of the
@@ -926,6 +939,39 @@ export const deepParam = createParser<number>({
   serialize: (v) => String(v),
 })
   .withDefault(1)
+  .withOptions({ history: "push" });
+
+/* ------------------------------------------------------------ referee mode --
+   The mode for somebody who has been asked to peer-review the piece. One
+   parameter, and it names which of the four sub-modes is open.
+   docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
+
+/**
+ * Which of Referee's four sub-modes is open.
+ *
+ * `criteria` is the referee's own criteria run over the piece, `claims` is what
+ * it promises against where it delivers, `mirror` is the model reading the
+ * referee's own comments rather than the paper, and `candidates` is the
+ * editor's question of who should review it. Genuinely different things to be
+ * looking at rather than skins on one, so it belongs in the URL like every
+ * other bit of view state (docs/project/url-state.md).
+ *
+ * **Diagram's `?diagram=` is the precedent, deliberately and exactly** — same
+ * parser shape, same `push`, same degrade-to-the-default. Switching sub-mode is
+ * a deliberate act on the view and Back should undo it, and unlike stepping
+ * between glossary terms you do not do it twice in ten seconds.
+ *
+ * `isRefereeView` and not a second `REFEREE_VIEWS.includes` here, for the
+ * reason `modeParam` above gives: one place decides what a sub-mode is, so the
+ * answer cannot drift, and an unknown value opens the default rather than an
+ * error page. The vocabulary itself is in src/web/referee-views.ts, which
+ * imports nothing.
+ */
+export const refereeParam = createParser<RefereeView>({
+  parse: (v) => (isRefereeView(v) ? v : null),
+  serialize: (v) => v,
+})
+  .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
 /* -------------------------------------------------------- the library --- */

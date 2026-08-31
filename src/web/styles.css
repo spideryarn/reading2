@@ -6067,6 +6067,92 @@ td.text.has-hit[data-hues="8"] {
 .tip-hit-meta b { color: var(--ink-soft); font-weight: 600; }
 .tip-hit-meta em { font-style: italic; }
 
+/* -------------------------------------------------------- § referee mode ----
+   The mode for somebody who has been asked to peer-review the piece. The shell
+   is `.mode-band` above and the head is `.gloss-head`'s, unchanged; what is here
+   is the three things this band has that no other one does. See App.tsx
+   § RefereeBand and docs/plans/260831an-referee-mode-for-peer-reviewers.md.
+
+   Everything else is borrowed on purpose rather than duplicated — `.gloss-head`
+   for the title row and `.gloss-quiet` for the placeholder lines — so this
+   section stays the size of what is genuinely new. */
+
+/* **The confidentiality notice, and the one rule about it is that it is not an
+   error.** Nothing has gone wrong: the referee is being told, in the past tense,
+   where this article's text has already been, and which manuscripts this mode is
+   for. So it takes `--surface-raised` and a plain rule, like
+   `.gloss-stale`, and specifically NOT `--highlight-ink`, the red of
+   `.gloss-error`. A red panel makes a person dismiss the sentence as chrome
+   they have seen before, which is the exact failure this notice exists to
+   avoid — and there is nothing to dismiss it with, because it is always here.
+
+   Wider measure than the panel's other text and a taller line height: it is a
+   paragraph somebody has to actually read, not a label. */
+.ref-notice {
+  margin: 0.5rem 0.7rem 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+.ref-notice p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+/* The disclosure line is for a different reader — somebody whose agreement
+   permits this — so it is separated rather than run on. */
+.ref-notice .ref-notice-also { margin-top: 0.45rem; color: var(--ink-faint); }
+
+/* The sub-modes. Deliberately the same shape as the summary panel's depth
+   pills and the quotes panel's order buttons, because it is the same gesture:
+   one of these is on, you press another, the panel below changes. The markup is
+   Diagram's — a `role="radiogroup"` of `role="radio"` buttons, each its own tab
+   stop and none of them handling a key — so the styling has to carry the
+   selected state on its own; see App.tsx § RefereeViews. */
+.ref-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+}
+.ref-view-btn {
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.ref-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
+/* Fill rather than a border change: the selected one has to be tellable from
+   the hovered one at a glance, and a border is the channel hover is already
+   using. */
+.ref-view-btn.on {
+  border-color: var(--rule-strong);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-weight: 600;
+}
+.ref-view-btn:focus-visible { outline: 2px solid var(--highlight); outline-offset: 1px; }
+
+/* The scroller. `.mode-band` is a fixed flex column from the controls bar to
+   the dock, so every band puts a `flex: 1; min-height: 0; overflow-y: auto`
+   child inside it — without one the panel's last rows sit below the bottom of
+   the band with no way to reach them, and it looks perfectly fine on a tall
+   window. The ideas panel shipped without one; see § ideas mode. There is
+   nothing tall in here yet, and it is here now so that stage 2 does not have to
+   discover it. */
+.ref-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* -------------------------------------------------------- § summary mode ----
    The article at more than one length, in the mode band. The shell is
    `.mode-band` above; everything here is what goes inside it. See

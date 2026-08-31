@@ -31,6 +31,7 @@ import { AlertCircle, Check, ChevronRight, Circle, LoaderCircle, Plus, RotateCw,
 import { Button } from "@/components/ui/button";
 import { slugFromUrl } from "../ingest.js";
 import { jobWorthRetrying } from "../job-failure.js";
+import { ADDING_SENDS_TEXT_AWAY } from "../messages.js";
 import { addHref, navigate } from "./router.js";
 import { UploadPicker } from "./UploadPicker.js";
 import type { Job, JobStep } from "../types.js";
@@ -254,6 +255,22 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
           section. See docs/plans/260826u-pdf-upload-and-storage.md for what is behind
           it, which today is nothing. */}
       <UploadPicker />
+
+      {/* **What happens to the text, said once, at the point of deciding.**
+          One sentence, no gate and no checkbox: the reader is told, and then
+          they decide. It sits under both controls because it is true of both —
+          a pasted URL and an uploaded PDF go the same way — and because it is
+          about what happens *after* Add, not about the box above it.
+
+          It matters most to somebody who has been sent a manuscript to
+          peer-review, and Referee mode says the past-tense half of it
+          (`REFEREE_TEXT_ALREADY_SENT`, src/web/App.tsx § RefereeBand). This is
+          the half that arrives while the choice is still open, which is the
+          only reason that one can be honest.
+          docs/plans/260831an-referee-mode-for-peer-reviewers.md § Confidentiality. */}
+      <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
+        {ADDING_SENDS_TEXT_AWAY}
+      </p>
 
       {queue.error && (
         <p className="tw:mt-3 tw:mb-0 tw:text-xs tw:text-destructive">{queue.error}</p>

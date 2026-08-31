@@ -221,11 +221,16 @@ describe("what a visitor is told, mode by mode", () => {
         .sort(),
     );
     /* Everything built: the artefact modes drop out, and what is left is
-       the five that spend a model call. `timeline` is the fifth since
+       the six that spend a model call. `timeline` is the fifth since
        2026-08-31 — it has no `PublicArtefacts` flag to drop out on, so it stays
-       marked however much has been built. */
+       marked however much has been built — and `referee` is the sixth, the same
+       night, for the same reason. It is marked by `visitorGap`'s fail-closed
+       fall-through rather than by a `COSTS` entry, and that is the arrangement
+       working rather than an omission: a mode arrives owners-only until
+       somebody says otherwise, and this one will spend money in stage 2.
+       docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "diagram", "review", "search", "timeline"].sort(),
+      ["chat", "diagram", "referee", "review", "search", "timeline"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
     for (const built of ["glossary", "ideas", "quotes"] as const) {

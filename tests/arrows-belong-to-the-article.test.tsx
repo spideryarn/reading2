@@ -44,7 +44,9 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Dock } from "../src/web/Dock.js";
+import { RefereeViews } from "../src/web/App.js";
 import type { Mode } from "../src/web/params.js";
+import { REFEREE_VIEWS, type RefereeView } from "../src/web/referee-views.js";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -155,6 +157,82 @@ describe("the bottom bar's mode segment", () => {
     expect(second).toBeDefined();
     act(() => (second as HTMLElement).click());
     expect(changes).toHaveLength(1);
+  });
+});
+
+/**
+ * **Referee mode's sub-modes**, which are the newest copy of the pattern
+ * and therefore the likeliest place for the deleted arrow handler to come back
+ * (docs/plans/260831an-referee-mode-for-peer-reviewers.md).
+ *
+ * The sweep below would catch a `tabIndex={x ? 0 : -1}` or an `onKeyDown`
+ * textually. This is the behavioural half: the band is on screen, focus is on a
+ * chip, and every arrow still reaches the window — which is where `keynav.ts`
+ * listens and therefore the only thing that decides whether ↑ / ↓ still step the
+ * article while Referee mode is open.
+ *
+ * `RefereeViews` rather than `RefereeBand`: the band owns `?referee=` and would
+ * want a nuqs adapter around it, where this component is a pure function of two
+ * props. The URL half is covered in tests/referee-mode.test.ts.
+ */
+describe("referee mode's sub-modes", () => {
+  function paintViews(selected: RefereeView = "criteria"): { changes: RefereeView[] } {
+    const changes: RefereeView[] = [];
+    act(() => {
+      root.render(
+        createElement(RefereeViews, {
+          view: selected,
+          onView: (next: RefereeView) => changes.push(next),
+        }),
+      );
+    });
+    return { changes };
+  }
+
+  function chips(): HTMLElement[] {
+    return [...host.querySelectorAll<HTMLElement>('.ref-views [role="radio"]')];
+  }
+
+  it("does not change sub-mode on any arrow key", () => {
+    const { changes } = paintViews();
+    const first = chips()[0];
+    expect(first).toBeDefined();
+    for (const key of ARROWS) press(first as HTMLElement, key);
+    expect(changes).toEqual([]);
+  });
+
+  it("lets every arrow through to the window, so keynav still steps the article", () => {
+    paintViews();
+    const first = chips()[0];
+    expect(first).toBeDefined();
+    for (const key of ARROWS) {
+      expect(press(first as HTMLElement, key), `${key} was swallowed by the referee band`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("gives every sub-mode its own tab stop", () => {
+    paintViews();
+    const found = chips();
+    expect(found).toHaveLength(REFEREE_VIEWS.length);
+    for (const el of found) expect(el.tabIndex, `${el.textContent} is not tabbable`).toBe(0);
+  });
+
+  it("is a radiogroup with exactly one checked", () => {
+    paintViews("claims");
+    expect(host.querySelector('.ref-views[role="radiogroup"]')).not.toBeNull();
+    const checked = chips().filter((el) => el.getAttribute("aria-checked") === "true");
+    expect(checked).toHaveLength(1);
+    expect(checked[0]?.textContent).toBe("Claims");
+  });
+
+  it("still selects on a click", () => {
+    const { changes } = paintViews();
+    const second = chips()[1];
+    expect(second).toBeDefined();
+    act(() => (second as HTMLElement).click());
+    expect(changes).toEqual(["claims"]);
   });
 });
 
