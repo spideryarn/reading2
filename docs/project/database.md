@@ -169,10 +169,16 @@ it; the app is still entirely on files. What is built:
 | [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts) | `npm run db:migrate` |
 
 ```bash
-npm run db:start     # docs/project/supabase-local.md
-npm run db:migrate   # apply drizzle/ to DATABASE_URL
-npm test             # tests/db-schema.test.ts now runs for real
+npm run db:start       # docs/project/supabase-local.md
+npm run db:migrate     # apply drizzle/ to DATABASE_URL
+npm run db:seed-owner  # required on a fresh database — see supabase-local.md
+npm test               # tests/db-schema.test.ts now runs for real
 ```
+
+**Skip `db:seed-owner` on a fresh database and dozens of test files fail on a foreign key**, not on
+anything that names itself: `StoreFailure: This app asked its database for something it would not
+do, so that did not go through` names neither the constraint nor the fix.
+[supabase-local.md § Running it](supabase-local.md#running-it) has the symptom in full and the fix.
 
 **`npm run db:migrate`, never `drizzle-kit push`.** `drizzle.config.ts` deliberately carries no
 connection details, so `push` — which introspects a live database and computes a diff — cannot

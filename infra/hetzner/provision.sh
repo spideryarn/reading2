@@ -8,6 +8,21 @@ set -euo pipefail
 # broke a previous build: an unescaped ${...} inside a *comment* failed planning.
 #
 # The four values Terraform knows arrive in this file instead, written by cloud-init.
+# Stamp the status file as INCOMPLETE before anything fallible runs.
+#
+# It used to be written only at the very end. A run that died in the middle
+# therefore left the PREVIOUS run's `PROVISION OK` in place, and `gjd-remote
+# doctor` read that as the current state -- a stale success, which is the one
+# thing this file exists to make impossible. Now the only way to see
+# PROVISION OK is for a run to reach the end and overwrite this.
+STATUS=/var/log/gjd-provision-status
+{
+  echo "ran: $(date -Is)"
+  echo "script-sha256: $(sha256sum "$0" 2>/dev/null | cut -d" " -f1)"
+  echo "PROVISION INCOMPLETE (started, has not finished)"
+} > "$STATUS" 2>/dev/null || true
+chmod 0644 "$STATUS" 2>/dev/null || true
+
 CONF=/etc/gjd-provision.env
 if [ ! -r "$CONF" ]; then
   echo "FATAL: $CONF missing -- cloud-init should have written it before running me" >&2
@@ -423,7 +438,11 @@ check "supabase cli pinned"      'timeout 30 su - '"$USER_NAME"' -c "supabase --
 check "git identity"             'su - '"$USER_NAME"' -c "git config --global user.email" | grep -q "@"'
 check "git credential helper"    'su - '"$USER_NAME"' -c "git config --global credential.https://github.com.helper" | grep -q github-owner-credential-helper'
 check "git useHttpPath on"       'su - '"$USER_NAME"' -c "git config --global credential.useHttpPath" | grep -qx true'
-check "credential helper runs"   'printf "protocol=https\nhost=github.com\npath=nobody-here/x.git\n\n" | /usr/local/bin/github-owner-credential-helper.sh get; [ $? -eq 1 ]'
+# Refusal is now "emit quit=1, return no password, exit 0" -- exit 0 because git
+# ignores a failed helper's output, and quit=1 because a non-zero exit only stops
+# US: git moves on to the next configured helper. So assert the two things that
+# matter rather than the exit status, which used to be 1 and deliberately is not.
+check "helper refuses unknown"   'out=$(printf "protocol=https\nhost=github.com\npath=nobody-here/x.git\n\n" | /usr/local/bin/github-owner-credential-helper.sh get 2>/dev/null); case "$out" in *password=*) false;; *quit=1*) true;; *) false;; esac'
 check "token dir"                'test -d /etc/github-tokens && [ "$(stat -c %a /etc/github-tokens)" = "700" ]'
 check "tmux config parses"       'timeout 20 su - '"$USER_NAME"' -c "tmux -f ~/.tmux.conf -L verify start-server \; kill-server"'
 check "sshd config valid"        'sshd -t'
@@ -437,7 +456,6 @@ check "root login off"           'sshd -T 2>/dev/null | grep -qi "^permitrootlog
 # which was wrong for a day while the sshd checks were lying, and would be wrong
 # again after any re-run. This file is overwritten by whoever ran the script
 # last, so a reader always gets the latest answer and can see when it was.
-STATUS=/var/log/gjd-provision-status
 {
   echo "ran: $(date -Is)"
   echo "script-sha256: $(sha256sum "$0" 2>/dev/null | cut -d" " -f1)"

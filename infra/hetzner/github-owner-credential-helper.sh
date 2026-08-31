@@ -31,6 +31,20 @@
 # repository list on github.com. Adding a new owner is one new file.
 set -eu
 
+# REFUSING MUST STOP GIT, NOT JUST STOP US.
+#
+# A helper that exits non-zero does not end the lookup: git moves on to the next
+# configured helper, and then to prompting. Verified 2026-08-31 on git 2.50 -- a
+# refused owner was answered by a broader helper configured after this one, which
+# is exactly the bypass this file exists to prevent. Emitting `quit=1` is the
+# documented way to end the chain (gitcredentials(5)), and it must be paired with
+# exit 0, because git ignores the output of a helper that failed.
+refuse() {
+  echo "github-owner-credential-helper: $1" >&2
+  echo "quit=1"
+  exit 0
+}
+
 TOKEN_DIR="${GITHUB_OWNER_TOKEN_DIR:-/etc/github-tokens}"
 ACTION="${1:-}"
 
@@ -38,11 +52,13 @@ ACTION="${1:-}"
 # reading leaves git writing into a closed pipe.
 host=""
 path=""
+protocol=""
 while IFS='=' read -r key value; do
   [ -z "$key" ] && continue
   case "$key" in
     host) host="$value" ;;
     path) path="$value" ;;
+    protocol) protocol="$value" ;;
     *) ;;
   esac
 done
@@ -52,34 +68,58 @@ case "$ACTION" in
   # non-zero status as an error even though it ignores the output.
   store|erase) exit 0 ;;
   get) ;;
-  *) echo "github-owner-credential-helper: unknown action '$ACTION'" >&2; exit 1 ;;
+  *) refuse "unknown action '$ACTION'" ;;
 esac
 
+# Refuse anything but https, even though the git config registers this helper
+# only for https://github.com. That registration is git protecting the helper;
+# this is the helper protecting itself. Verified 2026-08-31 that without this a
+# `protocol=http` request was answered with a real token -- which would put it on
+# the wire in clear text -- and the only thing preventing that was a config line
+# somewhere else that this file cannot see.
+if [ "$protocol" != "https" ]; then
+  refuse "refusing protocol '$protocol' -- https only"
+fi
+
 if [ "$host" != "github.com" ]; then
-  echo "github-owner-credential-helper: refusing non-github.com host '$host'" >&2
-  exit 1
+  refuse "refusing non-github.com host '$host'"
 fi
 
 # `path` arrives as `<owner>/<repo>.git`, and only when credential.useHttpPath is
 # on. If it is off, git sends no path at all, owner is empty, and we refuse --
 # which is the right answer, because guessing an owner would mean sending one
 # repo's token to another repo's host.
+# Require exactly `owner/repo` (optionally .git). A raw first segment accepts
+# `gregdetre/../spideryarn/repo`, which picks the gregdetre token for a path that
+# may normalise somewhere else entirely, and accepts a bare `owner` with no repo.
+case "$path" in
+  */*/*) refuse "path '$path' has more than owner/repo -- refusing to guess an owner" ;;
+  */*)   : ;;
+  *)     refuse "path '$path' is not owner/repo" ;;
+esac
+case "$path" in
+  .*|*/.*|*..*) refuse "path '$path' contains a relative segment" ;;
+esac
+
 owner="${path%%/*}"
+# GitHub treats owner names case-insensitively, but ext4 does not, so a remote
+# URL written `SpiderYarn/x.git` would find no token and be refused for a reason
+# that has nothing to do with permissions. Fold the case to match the file names.
+# (This is invisible on a Mac, whose filesystem folds case for you -- so the
+# behaviour differs between where this is tested and where it runs.)
+owner=$(printf '%s' "$owner" | tr '[:upper:]' '[:lower:]')
 if [ -z "$owner" ]; then
-  echo "github-owner-credential-helper: no owner in path '$path' -- is credential.useHttpPath set?" >&2
-  exit 1
+  refuse "no owner in path '$path' -- is credential.useHttpPath set?"
 fi
 
 token_file="$TOKEN_DIR/$owner.token"
 if [ ! -f "$token_file" ]; then
-  echo "github-owner-credential-helper: no token for owner '$owner' (looked for $token_file)" >&2
-  exit 1
+  refuse "no token for owner '$owner' (looked for $token_file)"
 fi
 
 token=$(tr -d '\n\r \t' < "$token_file")
 if [ -z "$token" ]; then
-  echo "github-owner-credential-helper: $token_file is empty" >&2
-  exit 1
+  refuse "$token_file is empty"
 fi
 
 # GitHub validates the token, not the username, so any non-empty string works --

@@ -19,6 +19,7 @@ npm run db:stop        # containers down; the data is kept and restored on next 
 npm run db:reset       # wipes the database and replays NOTHING — read below first
 npm run db:migrate     # apply drizzle/ — this is what creates the `spideryarn` schema
 npm run db:generate    # regenerate drizzle/ SQL after editing src/db/schema.ts
+npm run db:seed-owner  # the one auth.users row every owner_id points at — required, see below
 ```
 
 **After any reset, run `npm run db:migrate`.** Our migrations are Drizzle's, in `drizzle/`, and the
@@ -29,10 +30,28 @@ naming the suite and the missing table, with `npm run db:migrate` in it — see
 [testing.md § A suite that cannot run](testing.md#a-suite-that-cannot-run-and-how-to-make-it-say-so).
 The tables and what they promise are in [database.md](database.md#next-supabase-postgres).
 
-Docker has to be running first. Greg's `docker` context points at **OrbStack**, so `open -a
-OrbStack` is what starts the engine; `docker info` failing with *"Cannot connect to the Docker
-daemon"* means it isn't up, even though the socket file at `~/.orbstack/run/docker.sock` still
-exists from last time.
+**And then run `npm run db:seed-owner`, on a database that has never had one run before.** Skip it
+and every insert that carries an `owner_id` has nothing to point at, and the failure does not say
+so: `StoreFailure: This app asked its database for something it would not do, so that did not go
+through` names neither the constraint nor the fix. `LOG_LEVEL=debug` gives the real answer —
+sqlstate `23503`, a foreign key such as `uploads_owner_fk` with no owner row. Found this way
+2026-08-31, setting up the remote box: seeding took the suite from 41 failing files to 23.
+[database.md § next: Supabase Postgres](database.md#next-supabase-postgres) has the command.
+
+Docker has to be running first. On Greg's laptop the `docker` context points at **OrbStack**, so
+`open -a OrbStack` is what starts the engine; `docker info` failing with *"Cannot connect to the
+Docker daemon"* means it isn't up, even though the socket file at `~/.orbstack/run/docker.sock`
+still exists from last time.
+
+**On the remote box, there is no OrbStack.** Docker Engine is installed from Docker's own apt repo
+by [`infra/hetzner/provision.sh`](../../infra/hetzner/provision.sh) and runs as a systemd service —
+nothing to open. In the Supabase CLI version it pins, the Postgres data directory and storage
+objects are bind-mounted from `~/.local/state/supabase/managed/` rather than kept inside Docker, and
+on the box that path is on the persistent volume, so a server rebuild loses only re-pullable image
+layers, not data — the deliberate reason Docker's own `data-root` was left where it was.
+[infra/hetzner/README.md](../../infra/hetzner/README.md) is the box itself;
+[260831x-remote-box-dev-environment.md](../plans/260831x-remote-box-dev-environment.md) is the fuller
+story of setting this stack up there.
 
 | What | Where |
 |---|---|
@@ -53,6 +72,14 @@ Supabase developer's machine on earth, and signed with a JWT secret that is the 
 `super-secret-jwt-token-with-at-least-32-characters-long`. Treating them as credentials is a
 category error in one direction; forgetting that `service_role` bypasses every policy is the error
 in the other, so keep it server-side even here, where "even here" costs nothing.
+
+**And the stack listens on every interface, not just localhost.** `db:start` prints `All services
+bind to 0.0.0.0 (network-accessible, not just localhost)`, verified against the CLI's own source.
+Combined with keys that are public and identical everywhere, whatever firewall sits in front of the
+machine is the *only* thing stopping anyone who can reach these ports from having full access. On
+the remote box that is the Hetzner firewall's SSH-and-mosh-only inbound rule
+([infra/hetzner/README.md](../../infra/hetzner/README.md)) — worth knowing before anyone edits a
+firewall rule there.
 
 ## The ports, and the Postgres version
 
