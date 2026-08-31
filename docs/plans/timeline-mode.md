@@ -1244,10 +1244,16 @@ Mechanical and compiler-guided, done in one sitting against a freshly-read `src/
 
 Written down rather than left as a feeling.
 
-- **`TimelineEvent` and friends are declared twice** — in `src/types.ts`, where the panel can reach
-  them, and still in `src/timeline.ts` / `src/timeline-time.ts`. They had to move a stage early
-  because `tests/client-imports.test.ts` keeps `src/web/` to pure leaves and a stage with a CLI is
-  not one. Deleting the copies is owed; both files say so.
+- ~~`TimelineEvent` and friends are declared twice~~ — **already closed**, and this entry was wrong
+  for about ten minutes. The types had to move to `src/types.ts` a stage early, because
+  `tests/client-imports.test.ts` keeps `src/web/` to pure leaves and a stage with a CLI is not one —
+  so the panel physically could not import them from `src/timeline.ts`. The duplicate declarations
+  were then deleted before the panel's commit landed. Verified: `TimelineEvent` is declared once, in
+  `src/types.ts`.
+
+  Kept rather than deleted because the *reason* is durable: **a mode's artefact types belong in
+  `src/types.ts` from the start, not in the stage file**, and the constraint that forces it is a
+  test about import purity rather than anything about types.
 - **`TimelineBand`'s five effects in `App.tsx` are a second copy of `useIdeasMode`'s** — the same five
   rules, each of which was got wrong once in Ideas before it was got right. Not merged because
   another session was rewriting `App.tsx` at the time. A shared hook over
