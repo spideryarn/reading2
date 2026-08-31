@@ -77,6 +77,14 @@ const OWNED = [
   "data/writes/glossary.json",
   "data/writes/summary.json",
   "data/writes/ideas.json",
+  /* **`quotes.json` is deliberately NOT here yet**, and the reason is this
+     list's own first assertion: every row asserts the fixture HAS the file
+     before it asserts the copy does, so a row for an artefact nothing has
+     generated fails rather than passing vacuously. Nothing has run
+     `npm run quotes` against `data/writes`. Add the row on the first real run
+     — `quotes` is already in the store's own maps and in
+     tests/store-roundtrip.test.ts, so what is missing is the fixture and not
+     the wiring. docs/project/quotes.md § What is still open. */
   "output/writes.html",
   "output/writes.blocks.json",
 ] as const;

@@ -14,6 +14,7 @@ import type {
   BlockId,
   GlossaryEntry,
   Idea,
+  Quote,
   ReviewStance,
   SummaryEntry,
   ThreadKind,
@@ -47,6 +48,8 @@ import { useSlow } from "./useSlow.js";
 import { Dock } from "./Dock.js";
 import { ChatPanel } from "./ChatPanel.js";
 import { GlossaryPanel } from "./GlossaryPanel.js";
+import { QuotesPanel } from "./QuotesPanel.js";
+import { useQuotes } from "./useQuotes.js";
 import { ProseHoverCard } from "./ProseHoverCard.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "./notes-view.js";
 import { useArc } from "./useArc.js";
@@ -65,6 +68,7 @@ import {
   hitMarks as buildHitMarks,
   orderFound,
   resolveIdea,
+  resolveQuote,
   keepAbove,
   PRIORITY_CONF,
   resolveHits,
@@ -96,6 +100,9 @@ import {
   rungParam,
   sortParam,
   gateParam,
+  quoteParam,
+  rankParam,
+  barParam,
   ideaParam,
   termParam,
   findParam,
@@ -144,6 +151,7 @@ import type {
   PublicArtefacts,
   PublicArticle,
   PublicGlossary,
+  PublicQuotes,
   PublicIdeas,
   PublicSummaries,
 } from "../public-types.js";
@@ -191,6 +199,7 @@ const OWNER_HAS_EVERYTHING: PublicArtefacts = {
   glossary: true,
   summary: true,
   ideas: true,
+  quotes: true,
 };
 
 
@@ -1523,6 +1532,12 @@ function Reader({
    */
   const [ideaFound, setIdeaFound] = useState<Found[]>([]);
   const [openOccurrence, setOpenOccurrence] = useState<string | null>(null);
+  /* **A third state rather than a third writer of `found`**, for the reason the
+     comment above gives about the second: two modes sharing one state clear each
+     other on the way out, and the mode arriving second wins by accident of
+     effect ordering. Quotes has no `openKey` of its own — a quote is exactly one
+     passage, so there is nothing to step between and nothing to leave open. */
+  const [quoteFound, setQuoteFound] = useState<Found[]>([]);
 
   /* Two maps, memoised separately from everything else on the page. `found`
      changes on every keystroke in words mode, and recomputing every comment's
@@ -1535,8 +1550,8 @@ function Reader({
      read it — the same "compute once, hand to both" rule the panel and the
      prose already follow. The two modes are mutually exclusive, so this is a
      pick rather than a merge. */
-  const passages = mode === "ideas" ? ideaFound : found;
-  const openPassage = mode === "ideas" ? openOccurrence : openHit;
+  const passages = mode === "ideas" ? ideaFound : mode === "quotes" ? quoteFound : found;
+  const openPassage = mode === "ideas" ? openOccurrence : mode === "quotes" ? null : openHit;
   const hitMarks = useMemo(
     () => buildHitMarks(passages, openPassage),
     [passages, openPassage],
@@ -2324,6 +2339,17 @@ function Reader({
           onOpenKey={setOpenOccurrence}
         />
       )}
+      {owner && mode === "quotes" && (
+        <QuotesBand slug={slug} blocks={article.blocks} onJump={jumpTo} onFound={setQuoteFound} />
+      )}
+      {!owner && mode === "quotes" && artefacts?.quotes && (
+        <VisitorQuotesBand
+          quotes={artefacts.quotes}
+          blocks={article.blocks}
+          onJump={jumpTo}
+          onFound={setQuoteFound}
+        />
+      )}
       {owner && mode === "search" && (
         <SearchBand
           slug={slug}
@@ -3009,6 +3035,126 @@ function GlossaryBand({
       onJump={onJump}
     />
   );
+}
+
+/**
+ * Quotes, and the fetch that belongs to it.
+ *
+ * A component of its own for the reason `GlossaryBand` and `IdeasBand` are:
+ * `useQuotes` fetches on mount, and calling it up in `Reader` would charge every
+ * reader of every article a request for a list almost none of them will open.
+ *
+ * What it pushes up is the **resolved** passage, not the stored quote. The panel
+ * and the prose have to be showing the same thing, and the only way to
+ * guarantee that is for one of them to compute it and hand it to the other —
+ * the rule `SearchBand` and `IdeasBand` both follow. Resolution can drop a
+ * quote whose block the article no longer has, which is exactly the case a
+ * stale artefact produces here.
+ */
+function QuotesBand({
+  slug,
+  blocks,
+  onJump,
+  onFound,
+}: {
+  slug: string;
+  blocks: Block[];
+  onJump(id: BlockId): void;
+  onFound(found: Found[]): void;
+}) {
+  useRenderCount("QuotesBand");
+  const quotes = useQuotes(slug);
+  const band = useQuotesMode({ quotes: quotes.quotes, blocks, onFound });
+  return (
+    <QuotesPanel
+      access={{ kind: "owner", owner: quotes, quotes: quotes.quotes }}
+      {...band}
+      onJump={onJump}
+    />
+  );
+}
+
+/**
+ * **The same panel, for somebody who does not own the article.**
+ *
+ * No `useQuotes` and therefore no `useJobs`: the list came in the page's own
+ * payload. See `VisitorGlossaryBand` for why this is a second band and not a
+ * second panel.
+ */
+function VisitorQuotesBand({
+  quotes,
+  blocks,
+  onJump,
+  onFound,
+}: {
+  quotes: PublicQuotes;
+  blocks: Block[];
+  onJump(id: BlockId): void;
+  onFound(found: Found[]): void;
+}) {
+  useRenderCount("VisitorQuotesBand");
+  const band = useQuotesMode({ quotes, blocks, onFound });
+  return <QuotesPanel access={{ kind: "visitor", quotes }} {...band} onJump={onJump} />;
+}
+
+/**
+ * Everything the quotes band does that is not a fetch: `?quote=`, `?rank=`,
+ * `?bar=`, and the resolved passage it pushes up.
+ *
+ * **No colour slot to assign**, which is the one thing this hook does not share
+ * with `useIdeasMode`. Ideas paint every idea a lane so a colour does not depend
+ * on which one is open; only one quote can be selected at a time and there is
+ * never a second one on screen, so slot `0` is the whole palette question. It is
+ * still a *real* slot rather than `null`, because `blockHues` drops `null` slots
+ * and a quote without one would paint the rail and leave the paragraph bar
+ * blank — which looks like a rendering bug and is not one.
+ */
+function useQuotesMode({
+  quotes,
+  blocks,
+  onFound,
+}: {
+  quotes: { quotes: Quote[] } | null;
+  blocks: Block[];
+  onFound(found: Found[]): void;
+}) {
+  const [quoteId, setQuoteId] = useQueryState("quote", quoteParam);
+  const [rank, setRank] = useQueryState("rank", rankParam);
+  /* Null is "nobody has touched the bar", which the panel resolves to
+     `PROMOTE_BAR`. Kept as null rather than defaulted here so the default stays
+     one number in one file — see `barParam` in params.ts. */
+  const [bar, setBar] = useQueryState("bar", barParam);
+
+  const selected = useMemo(
+    () => quotes?.quotes.find((q) => q.id === quoteId) ?? null,
+    [quotes, quoteId],
+  );
+
+  const found = useMemo(() => {
+    if (!selected) return [];
+    return resolveQuote(blocks, {
+      id: selected.id,
+      slot: 0,
+      blockId: selected.blockId,
+      text: selected.text,
+      ...(selected.start !== undefined && { start: selected.start }),
+      ...(selected.reason !== undefined && { reason: selected.reason }),
+    });
+  }, [selected, blocks]);
+
+  /* **`useLayoutEffect`, not `useEffect`** — a passive effect leaves one
+     paintable frame in which the panel shows the new quote and the prose still
+     marks the old one. Same reasoning, and the same pairing with an
+     unmount-only clear below, as `SearchBand` and `IdeasBand`. */
+  useLayoutEffect(() => {
+    onFound(found);
+  }, [found, onFound]);
+
+  /* Leaving quotes mode must take the mark out of the prose. On unmount only:
+     clearing on every change would race the layout effect above. */
+  useEffect(() => () => onFound([]), [onFound]);
+
+  return { quoteId, onQuote: setQuoteId, rank, onRank: setRank, bar, onBar: setBar };
 }
 
 /**

@@ -165,6 +165,7 @@ const PAID_CLIS: Readonly<Record<string, string>> = {
   "src/ideas.ts": "npm run ideas — streamMessage",
   "src/labels.ts": "npm run labels — streamMessage per batch",
   "src/pdf-read.ts": "npm run pdf — openRouterJson per chunk",
+  "src/quotes.ts": "npm run quotes — streamMessage",
   "src/summarise.ts": "npm run summarise — streamMessage per granularity",
   "src/toc.ts": "npm run toc — streamMessage",
   "src/tweets.ts": "npm run tweets — streamMessage",

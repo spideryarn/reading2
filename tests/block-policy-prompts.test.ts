@@ -177,6 +177,21 @@ describe("the automatic stages never see the note", () => {
     expect(prompt).not.toContain(NOTE_WORD);
   });
 
+  it("quotes — where the note is a passage the reader could be offered", async () => {
+    /* Sharper here than for its neighbours. Everywhere else a note in the
+       prompt buys a slightly worse summary; here it is a line the model could
+       return, `locate` would verify against a real block, and the panel would
+       offer as one of the lines worth keeping from the piece — which is a
+       bibliography entry presented as the author's best sentence. The filter
+       has to be on both halves and it is one variable: `generateQuotes` passes
+       the same `evidence` list to `articleText` and to `buildQuotes`.
+       GPT Sol, 2026-08-31. */
+    const { generateQuotes } = await import("../src/quotes.js");
+    const prompt = await promptOf(() => generateQuotes({ dir: DIR, previous: null }));
+    expect(prompt).toContain(BODY_WORD);
+    expect(prompt).not.toContain(NOTE_WORD);
+  });
+
   it("ideas — the one the obvious refactor gets wrong", async () => {
     /* `ideas` sends `articleWithIds`, the same builder explain, search and
        converse send, and it is automatic. Filtering inside the builder would be

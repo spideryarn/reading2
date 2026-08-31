@@ -1361,6 +1361,7 @@ export const OWNED_ARTEFACT = {
   glossary: "your glossary",
   summary: "your summary",
   ideas: "your list of ideas",
+  quotes: "your set of quotes",
   sketch: "your sketch diagram",
   /* `satisfies`, not an annotation. `Partial<Record<StepName, string>>` as the
      declared type makes every value `string | undefined`, and the coverage
@@ -1386,8 +1387,8 @@ export const OWNED_ARTEFACT = {
  * The dash after the list does the same job for the first half.
  *
  * A `StepName` with no entry in `OWNED_ARTEFACT` falls back to *"your <name>"*
- * rather than being dropped. Only five artefacts can carry a `profileHash` and
- * all five are in the table, so this is unreachable today — but a silently
+ * rather than being dropped. Only six artefacts can carry a `profileHash` and
+ * all six are in the table, so this is unreachable today — but a silently
  * shortened list is the failure that would matter here, since the whole point
  * of the sentence is that it is complete.
  */

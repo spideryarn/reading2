@@ -235,6 +235,14 @@ export const REVISION_CARRY_POLICY: Record<
 
   tweets: "carry",
   glossary: "carry",
+  /* Carries like its neighbours, and it is the one where a carried artefact
+     can be more than dated: every quote holds a block id and a string that
+     were both verified against the previous revision, so a carried list on a
+     re-extracted article may name paragraphs that are gone and words that are
+     no longer there. `stale` is computed at read time from `sourceHash` and
+     the panel says so — which is the same bargain the sketch strikes below:
+     something to look at, honestly labelled, until the step re-runs. */
+  quotes: "carry",
   summary: "carry",
   /* Carries like its four neighbours, and its staleness is answered the same
      way: `sourceHash` on the artefact against the blocks and tree now, computed

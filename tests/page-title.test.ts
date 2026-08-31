@@ -85,6 +85,7 @@ describe("an article", () => {
       summary: "Summary",
       glossary: "Glossary",
       ideas: "Ideas",
+      quotes: "Quotes",
       search: "Search",
       diagram: "Diagram",
       chat: "Chat",

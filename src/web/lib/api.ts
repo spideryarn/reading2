@@ -513,6 +513,7 @@ const CACHEABLE = [
   "/api/glossary/",
   "/api/summary/",
   "/api/ideas/",
+  "/api/quotes/",
   "/api/metadata/",
   "/api/tweets/",
   "/api/chat/",

@@ -1,0 +1,1089 @@
+/**
+ * Pipeline stage 5h — the **quotes**: the lines worth keeping, in the author's
+ * own words.
+ *
+ *   npm run quotes -- data/writes
+ *
+ * Greg, 2026-08-31:
+ *
+ * > Create a "Quotes" mode that extracts the most central, helpful, interesting
+ * > quotes. By default, display them in order. But also have a sub-mode for
+ * > ordering them by importance, and a sub-mode for ordering by how
+ * > memorable/interesting/striking/lyrical/etc. And add a threshold UI bar, and
+ * > a Prioritised mode. Take inspiration from the Glossary mode.
+ *
+ * The third question the band answers. The glossary asks *what does this word
+ * mean*, the ideas ask *what do I have to hold*, and this asks *which lines is
+ * it worth carrying out of here* — and it is the only one of the three whose
+ * answer is **entirely the author's own prose**. Nothing this stage stores is
+ * generated text except two numbers and one caption.
+ *
+ * ## The one safety property
+ *
+ * **A quote that `findQuote` cannot locate in the article is dropped, never
+ * stored.**
+ *
+ * Every other stage here can be wrong about a judgment. This one can be wrong
+ * about *what the author wrote*, which is a different and worse kind of wrong:
+ * a plausible paraphrase, in quotation marks, attributed to a real person, on a
+ * page beside the real text. There is exactly one defence and it is
+ * src/quote-match.ts, run over every block of the article. The drops are
+ * counted and logged, because an invented quote silently discarded looks
+ * identical to a quote the model chose not to return —
+ * docs/reusable/silent-success.md.
+ *
+ * ## The model never names a block id
+ *
+ * This is the glossary's rule (`findOccurrences`) and not the ideas' rule
+ * (`validateOccurrences`), and the choice is deliberate. An idea is a
+ * proposition with no text of its own, so the only way back to the page is an
+ * id the model supplies. A quote *is* text, so the model returns the words and
+ * `locate` below finds the block. Three things fall out and all three are worth
+ * having: the model cannot invent a location; a quote the model would have
+ * misattributed is repaired rather than dropped; and the prompt can send
+ * `articleText` rather than `articleWithIds`, which is what makes this stage
+ * cache-compatible with the glossary (src/models.ts § ARTICLE_RENDERER —
+ * compatible, and only a saving inside one job; see `cacheArticle` below).
+ *
+ * ## It replaces, it does not append
+ *
+ * The ideas' lifecycle, for the ideas' reason: a piece has a dozen quotable
+ * lines rather than an encyclopaedia of terms, so there is nothing to paginate
+ * and running the step again already *is* "find them again". That removes the
+ * FORBIDDEN checklist, `existingFor`, "a stale list is not appended to", the
+ * `passes` counter and the DELETE route at once. What it keeps is `idsByText`,
+ * so a reader's `?quote=` links survive a rewrite.
+ *
+ * See docs/plans/quotes-mode.md and docs/project/quotes.md.
+ */
+
+import type Anthropic from "@anthropic-ai/sdk";
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { partsOf } from "./arc.js";
+import { mintUniqueId } from "./ids.js";
+import { streamMessage, wasRefused } from "./messages-stream.js";
+import { CAPABLE_MODEL, effortFor } from "./models.js";
+import { loadEnvLocal } from "./env.js";
+import { MODEL_REFUSED } from "./messages.js";
+import { anthropicCallFailed } from "./anthropic-call.js";
+import { articleFingerprint, type BlockFingerprint, type MetaFingerprint } from "./source-hash.js";
+import { findQuote, type Span } from "./quote-match.js";
+import { budgetFor, truncationFailure } from "./token-budget.js";
+import { parseJsonFrom, readJsonOrNull, stripFence } from "./parse-json.js";
+import { articleText } from "./article-prompt.js";
+import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
+import { PROFILE_RULES, hashProfile, profileSection } from "./profile.js";
+import type { Block, BlockId, Meta, Quote, QuoteDrops, Quotes, Tree } from "./types.js";
+import type { ArtifactStore } from "./store/artifacts.js";
+import { stageCli } from "./cli-ledger.js";
+
+/**
+ * Bumped whenever the prompt changes in a way that changes what a quote *is*.
+ *
+ * Exported so tests assert against the current value rather than pinning a
+ * literal that has to be edited on every bump — a fixture that hardcodes the
+ * version tests the fixture.
+ */
+export const PROMPT_VERSION = "quotes/1";
+
+/** The most quotes one call may return. A piece does not have forty good lines. */
+export const MAX_QUOTES = 16;
+
+/**
+ * Shorter than this is a phrase, not a quotation.
+ *
+ * A six-word fragment is not a line worth keeping and it is the length at which
+ * `findQuote`'s forgiving second pass starts matching things nobody meant —
+ * that pass drops whitespace entirely, so a short needle has very little shape
+ * left to be wrong about. The floor is a matcher precaution as much as an
+ * editorial one.
+ */
+export const MIN_QUOTE_CHARS = 30;
+
+/**
+ * Longer than this is the paragraph, not a line out of it.
+ *
+ * Dropped rather than truncated, and that is the rule this stage cannot bend:
+ * an ellipsis inside quotation marks attributed to a named author is a claim
+ * about what they wrote.
+ */
+export const MAX_QUOTE_CHARS = 400;
+
+/**
+ * How many quotes to ask for — one per ~600 words, clamped to 4–16.
+ *
+ * Between the glossary's density (one per 400, clamped 6–20: a term is a word
+ * the piece happens to use) and the ideas' (one per 800, clamped 3–10: an idea
+ * is something the whole argument leans on). A padded quote list is not a weak
+ * entry a reader can skip — it is a forgettable line presented as memorable,
+ * which discredits the ones around it.
+ */
+export function suggestedQuotes(words: number): number {
+  return Math.min(MAX_QUOTES, Math.max(4, Math.round(words / 600)));
+}
+
+/**
+ * What this artefact was written from: the blocks, the tree and the metadata
+ * head — `articleFingerprint` in src/source-hash.ts, the same definition the
+ * other five article-reading stages use.
+ *
+ * All three are inputs to the question the model was asked. `renderPrompt`
+ * builds the skeleton out of `partsOf(tree)` so the model can weigh a line
+ * against the shape of the argument, and `articleText` writes `TITLE:`, `BY:`
+ * and `PUBLISHED IN:` above the prose.
+ */
+export function inputFingerprint(
+  blocks: readonly BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprint | null,
+): string {
+  return articleFingerprint(blocks, tree, meta);
+}
+
+function text(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function score(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  if (value < 0 || value > 1) return undefined;
+  return value;
+}
+
+/** One quote as the model returns it, before any of it has been believed. */
+interface RawQuote {
+  text?: unknown;
+  reason?: unknown;
+  importance?: unknown;
+  striking?: unknown;
+}
+
+/**
+ * What was thrown away, and why — re-exported so this stage's callers and its
+ * tests name it in one place.
+ *
+ * **The shape lives in src/types.ts** because it is part of the artefact:
+ * `Quotes.discarded` carries it, so the panel can say *"three suggestions were
+ * discarded because their wording could not be verified"* rather than leaving
+ * the reader with a list that is quietly shorter than the model offered. A log
+ * line is invisible to the person the drop happened to — GPT Sol, 2026-08-31.
+ */
+export type Dropped = QuoteDrops;
+
+/** A fresh set of counters. One per run, threaded through by hand so nothing sums two runs. */
+export function noneDropped(): Dropped {
+  return { unfound: 0, otherVoice: 0, wrongLength: 0, overlapping: 0, overCap: 0, malformed: 0 };
+}
+
+/**
+ * Where in the article these words are, or nothing.
+ *
+ * **This is the safety property, and it is one function so that it is one
+ * answer.** The model is never shown a block id and never returns one, so it
+ * cannot be wrong about *where*; it can only be wrong about *what*, and that is
+ * exactly what this catches. Words that are nowhere in the article are not the
+ * author's words, and a quote we cannot find is dropped rather than shown.
+ *
+ * **Every block, in document order, first match wins.** Searching the whole
+ * article rather than one block the model named is what repairs a
+ * misattribution instead of dropping it — but it also means a short needle gets
+ * many chances to match something nobody meant, which is what `MIN_QUOTE_CHARS`
+ * is for and why that floor is checked *before* this runs.
+ *
+ * `findQuote` and never a string compare, because it is the rule the browser
+ * will use to draw the marks. If the server's idea of "are these words in this
+ * block" differed from the client's, the panel would list a quote and the
+ * article would show nothing marked — the failure src/quote-match.ts exists to
+ * prevent.
+ */
+export function locate(
+  quote: string,
+  blocks: readonly Block[],
+): { blockId: BlockId; block: Block; span: Span } | null {
+  for (const block of blocks) {
+    if (!block.text) continue;
+    const span = findQuote(block.text, quote, undefined, "spaced");
+    if (span) return { blockId: block.id, block, span };
+  }
+  return null;
+}
+
+/**
+ * Is this passage plausibly **the article author's own voice**?
+ *
+ * The honest answer to a question we cannot fully answer, and the shape of it
+ * matters more than either check inside it. `findQuote` proves the words are in
+ * the article. **It says nothing about who wrote them** — and an article is full
+ * of other people's sentences. GPT Sol's review, 2026-08-31, found the case
+ * that makes this concrete: `data/meditations-on-moloch` carries twenty
+ * `kind: "quote"` blocks, and the first of them is Ginsberg's *Howl*. It is
+ * exactly the striking passage this stage is built to reach for, it verifies
+ * perfectly, and offering it in a list headed by the essay's author would be
+ * this feature's worst failure wearing its verification badge.
+ *
+ * Two deterministic refusals, and each is deliberately narrow:
+ *
+ *  - **a `quote` block** — a `<blockquote>`. Whoever wrote it, the piece has
+ *    typographically disowned it. This loses a real thing: an author quoting
+ *    their own earlier work, which the Moloch essay also does. That is an
+ *    acceptable loss, because a reader looking at the list cannot tell the two
+ *    apart and we cannot either.
+ *  - **a span wholly wrapped in quotation marks** — the inline case, where a
+ *    sentence sits inside `"…"` in an ordinary paragraph. `wholly` is the whole
+ *    care here: a line that merely *contains* a quoted phrase is still the
+ *    author's sentence and is kept.
+ *
+ * **What this does not catch**, and the doc says so out loud rather than
+ * implying otherwise: an inline quotation with no marks, an indirect one, a
+ * translated one. Block text carries no provenance, so nothing at this layer
+ * can. The answer is either provenance recorded during extraction, or —
+ * which is what we do — a promise that matches what the machine can prove:
+ * these are **verbatim passages from this article**, not a claim about
+ * authorship. docs/project/quotes.md § Whose words these are.
+ */
+export function authorVoice(block: Block, span: Span): boolean {
+  /* `kind`, not `tag`. The tag is whatever the publisher wrote; `kind` is
+     stage 3's own classification and is what every other consumer here reads
+     (src/block-policy.ts). */
+  if (block.kind === "quote") return false;
+  const before = block.text.slice(0, span.start).trimEnd();
+  const after = block.text.slice(span.end).trimStart();
+  const opener = before.at(-1) ?? "";
+  const closer = after.at(0) ?? "";
+  return !(OPENERS.has(opener) && CLOSERS.has(closer));
+}
+
+/* The marks a publisher's typography actually uses. Straight and curly both,
+   and the two guillemet directions, because an article translated out of French
+   or German is not a rarity. Deliberately NOT the apostrophes: `'…'` around a
+   sentence is far more often emphasis or scare quotes than attribution, and
+   dropping the author's own emphasised line is a worse error than keeping a
+   quoted one. */
+const OPENERS: ReadonlySet<string> = new Set(['"', "“", "«", "„"]);
+const CLOSERS: ReadonlySet<string> = new Set(['"', "”", "»", "“"]);
+
+/** A located quote, before it has an id or has been checked against its neighbours. */
+interface Placed {
+  text: string;
+  blockId: BlockId;
+  span: Span;
+  reason?: string;
+  importance?: number;
+  striking?: number;
+}
+
+/**
+ * Turn what the model said into located quotes, believing as little of it as
+ * possible.
+ *
+ * The drop rule is **words we can find, of a sensible length**. Everything else
+ * degrades to a default rather than failing the batch: fifteen good quotes must
+ * not be lost because one came back with `importance: "high"`.
+ *
+ * The order of the three checks is deliberate. Length first, because it is free
+ * and because a two-word "quote" put through `locate` would search the whole
+ * article with a needle that has no shape. Then `locate`, which is the
+ * expensive and the load-bearing one.
+ */
+export function place(raw: unknown, blocks: readonly Block[], dropped: Dropped): Placed[] {
+  const out: Placed[] = [];
+  for (const item of Array.isArray(raw) ? raw : []) {
+    /* Per element, before any field is read. A `null` or a bare string in the
+       array throws on the first property access and takes the whole batch with
+       it — the salvage this function advertises has to cover the array's
+       elements and not only the fields inside them. src/glossary.ts §
+       `toEntries` had exactly this bug and it was found in review. */
+    if (!item || typeof item !== "object") {
+      dropped.malformed++;
+      continue;
+    }
+    const q = item as RawQuote;
+    const quote = text(q.text);
+    if (!quote) {
+      dropped.malformed++;
+      continue;
+    }
+    if (quote.length < MIN_QUOTE_CHARS || quote.length > MAX_QUOTE_CHARS) {
+      dropped.wrongLength++;
+      continue;
+    }
+    const at = locate(quote, blocks);
+    if (!at) {
+      dropped.unfound++;
+      continue;
+    }
+    if (!authorVoice(at.block, at.span)) {
+      dropped.otherVoice++;
+      continue;
+    }
+    /* **The article's characters, not the model's string** — the second half of
+       the safety property, and the half that was missing until GPT Sol's review
+       on 2026-08-31.
+    
+       `findQuote` is an equivalence relation, not an identity test: it folds
+       curly quotes to straight ones and collapses runs of whitespace, so a match
+       says *these are the same passage*, never *these are the same characters*.
+       Storing the model's typing therefore put words in the author's mouth on
+       every fold — a straightened apostrophe at best, and, before `locate` was
+       narrowed to the whitespace-preserving pass, a word the model had split in
+       two.
+    
+       Slicing the block makes the model's text a **locator and nothing else**.
+       Whatever it typed, what is stored, shown and attributed is what the
+       article says. It also makes the client's job easier: `resolveQuote`
+       re-finds these words in the rendered text, and it is now looking for the
+       real ones. */
+    const exact = at.block.text.slice(at.span.start, at.span.end);
+    const reason = text(q.reason);
+    const importance = score(q.importance);
+    const striking = score(q.striking);
+    out.push({
+      text: exact,
+      blockId: at.blockId,
+      span: at.span,
+      ...(reason ? { reason } : {}),
+      ...(importance === undefined ? {} : { importance }),
+      ...(striking === undefined ? {} : { striking }),
+    });
+  }
+  return out;
+}
+
+/**
+ * Two quotes may not cover the same words.
+ *
+ * Overlapping spans in one block would draw two marks over one passage and
+ * offer the reader the same line twice — and where one contains the other, the
+ * shorter adds nothing the longer does not already say.
+ *
+ * **The longer span wins**, which is the glossary's `richness` argument one
+ * door along: *"keep whichever came first" is not a tie-break, it is a coin
+ * toss*, and here it would systematically keep the fragment over the sentence,
+ * because a model listing its favourite lines tends to give the short punchy
+ * form first. Ties go to the earlier one, which is stable and arbitrary rather
+ * than arbitrary and unstable.
+ *
+ * Comparison is on `[start, end)` in `block.text`, which is the space `locate`
+ * answered in. Touching but not overlapping — one ends exactly where the next
+ * begins — is two quotes, not one.
+ */
+export function dedupeOverlaps(placed: Placed[], dropped: Dropped): Placed[] {
+  const byLength = [...placed]
+    .map((p, i) => ({ p, i, len: p.span.end - p.span.start }))
+    .sort((a, b) => (a.len === b.len ? a.i - b.i : b.len - a.len));
+  const kept: Placed[] = [];
+  for (const { p } of byLength) {
+    const clash = kept.some(
+      (k) => k.blockId === p.blockId && p.span.start < k.span.end && k.span.start < p.span.end,
+    );
+    if (clash) {
+      dropped.overlapping++;
+      continue;
+    }
+    kept.push(p);
+  }
+  return kept;
+}
+
+/**
+ * Document order: whichever line the article says first comes first.
+ *
+ * The reader's own order through the piece, which is a real order rather than a
+ * judgment about what matters — and it is what Greg asked for as the default
+ * (*"By default, display them in order"*). The panel's ranked orders are
+ * controls the reader presses; this is what the artefact stores.
+ *
+ * Ties inside one block break on the offset, so two quotes from one paragraph
+ * come out in reading order rather than in whatever order the model listed
+ * them. The array index is the last tie-break so the sort is stable for a
+ * reason rather than by accident.
+ */
+export function inDocumentOrder(quotes: Quote[], blocks: readonly Block[]): Quote[] {
+  const position = new Map<BlockId, number>();
+  for (const [i, b] of blocks.entries()) position.set(b.id, i);
+  return quotes
+    .map((quote, i) => ({
+      quote,
+      i,
+      rank: position.get(quote.blockId) ?? Number.MAX_SAFE_INTEGER,
+    }))
+    .sort(
+      (a, b) =>
+        a.rank - b.rank || (a.quote.start ?? 0) - (b.quote.start ?? 0) || a.i - b.i,
+    )
+    .map((x) => x.quote);
+}
+
+/**
+ * A quote reduced to the form two typings of it have in common.
+ *
+ * **Comparison key only** — nothing normalised here is ever shown or stored.
+ * The same four kinds of noise `normaliseTerm` strips in src/glossary.ts, plus
+ * double quotes, because a model returning a line that itself contains a
+ * quotation will sometimes straighten the inner marks and sometimes not.
+ *
+ * It deliberately does **not** stem, singularise or drop stop-words. This key
+ * decides whether a rewritten list inherits a reader's `?quote=` link, and an
+ * over-eager key hands a link to a *different sentence*, which is worse than
+ * letting the link go: a dead `?quote=` opens the list, where a wrongly
+ * inherited one opens somebody else's words wearing the reader's bookmark.
+ */
+export function normaliseQuote(value: string): string {
+  return value
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—−]/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")
+    .trim();
+}
+
+/**
+ * The ids the previous artefact used, by normalised quote — so a rewrite keeps
+ * the reader's `?quote=` links pointing at the same words.
+ *
+ * **Names are display; ids are identity.** The prose of a quote is the
+ * author's, so unlike a glossary entry it does not get rewritten between runs —
+ * which makes this key unusually reliable. What it cannot survive is the model
+ * returning the same sentence with one more clause on the end: that is a
+ * different key, a fresh id, and a dead link. Correct rather than clever — a
+ * near-match rule here would hand a link to words the reader did not bookmark.
+ */
+export function idsByText(onDisk: Quotes | null): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const quote of onDisk?.quotes ?? []) {
+    const key = normaliseQuote(quote.text);
+    if (key && !out.has(key)) out.set(key, quote.id);
+  }
+  return out;
+}
+
+function inheritIds(fresh: Quote[], inherit: Map<string, string> | null): Quote[] {
+  if (!inherit || inherit.size === 0) return fresh;
+  const used = new Set<string>();
+  return fresh.map((quote) => {
+    const old = inherit.get(normaliseQuote(quote.text));
+    /* `used`, because two fresh quotes can normalise to one old key and an id
+       handed out twice is worse than a new one — `?quote=` would then address
+       whichever the panel happened to find first. */
+    if (!old || used.has(old)) return quote;
+    used.add(old);
+    return { ...quote, id: old };
+  });
+}
+
+/**
+ * The artefact, from what the model said plus what we could verify of it.
+ *
+ * An empty result throws. Nothing to say is not a degenerate success — it is a
+ * model call that produced nothing, and writing it would make the step report
+ * done for ever after while the panel showed an empty band.
+ */
+export function buildQuotes(
+  parsed: { quotes?: unknown },
+  opts: {
+    slug: string;
+    blocks: readonly Block[];
+    sourceHash: string;
+    /** The rendered profile this was written from, or null for none. */
+    profile?: string | null;
+    elapsedMs: number;
+    /** Ids from the list this run is replacing — see `idsByText`. */
+    inherit?: Map<string, string> | null;
+    dropped: Dropped;
+  },
+): Quotes {
+  const placed = dedupeOverlaps(place(parsed.quotes, opts.blocks, opts.dropped), opts.dropped);
+
+  /* Ids already spent, so a fresh quote cannot be minted onto an id the
+     inheritance is about to hand to a different one. */
+  const taken = new Set<string>(opts.inherit?.values() ?? []);
+  const minted: Quote[] = placed.map((p) => ({
+    id: mintUniqueId(taken),
+    blockId: p.blockId,
+    text: p.text,
+    start: p.span.start,
+    ...(p.reason ? { reason: p.reason } : {}),
+    ...(p.importance === undefined ? {} : { importance: p.importance }),
+    ...(p.striking === undefined ? {} : { striking: p.striking }),
+  }));
+
+  /* **The cap is applied in document order, not in the model's order.** Cutting
+     the model's own list would silently keep whichever end of the article it
+     happened to enumerate first; cutting in reading order at least fails
+     legibly, as "it stops part-way down the piece". `overCap` counts it either
+     way, which is what makes the choice checkable rather than a preference. */
+  const ordered = inDocumentOrder(inheritIds(minted, opts.inherit ?? null), opts.blocks);
+  if (ordered.length > MAX_QUOTES) opts.dropped.overCap += ordered.length - MAX_QUOTES;
+  const quotes = ordered.slice(0, MAX_QUOTES);
+
+  if (quotes.length === 0) {
+    throw new Error("The model returned no quotes we could find in the article. Nothing to write.");
+  }
+
+  return {
+    version: PROMPT_VERSION,
+    generator: CAPABLE_MODEL,
+    slug: opts.slug,
+    sourceHash: opts.sourceHash,
+    /* `null`, never absent. Absent means "written before this existed"; `null`
+       means "written deliberately without a profile", and the panel needs to
+       tell those two apart to decide whether its checkbox starts ticked.
+       src/profile.ts § profileIsStale. */
+    profileHash: opts.profile ? hashProfile(opts.profile) : null,
+    quotes,
+    /* A copy, not the live object. `dropped` is threaded through by reference
+       so the counters accumulate across `place` and `dedupeOverlaps`, and
+       storing the reference would let a later mutation edit an artefact that
+       has already been built. */
+    discarded: { ...opts.dropped },
+    generatedAt: new Date().toISOString(),
+    elapsedMs: opts.elapsedMs,
+  };
+}
+
+/**
+ * Do these quotes still describe the article on disk?
+ *
+ * Pure. `GET /api/quotes/:slug` calls it and puts the answer in the response,
+ * so the panel can say the list is out of date — which matters more here than
+ * anywhere else in the band: a stale quote list is a set of *block ids that may
+ * no longer exist*, so pressing a row could jump nowhere, and the words
+ * themselves may no longer be in the piece.
+ */
+export function isStale(
+  quotes: Quotes,
+  blocks: BlockFingerprint[],
+  tree: Tree,
+  meta: MetaFingerprint | null,
+): boolean {
+  return quotes.sourceHash !== inputFingerprint(blocks, tree, meta);
+}
+
+/**
+ * The quotes on disk, or null — for the API and this file's own CLI, and **not
+ * for the pipeline**, which asks `previousQuotesFrom` below.
+ *
+ * Every road to `null` here is the same road: no file, a truncated one, a
+ * document of the wrong shape. That is right for the panel, which has one thing
+ * to say either way, and wrong for the stage, which loses every `?quote=` link
+ * on one of them.
+ */
+export async function readQuotes(dir: string): Promise<Quotes | null> {
+  const found = await readJsonOrNull<Quotes>(path.join(dir, "quotes.json"));
+  /* A truncated write parses as `null`, and `null` is a perfectly good JSON
+     document. Without this check the panel reports "nobody has found the quotes
+     for this one yet" — the artefact gone, and nothing anywhere saying so. */
+  if (!found || typeof found !== "object" || !Array.isArray(found.quotes)) return null;
+  return found;
+}
+
+/**
+ * There is a previous `quotes` artefact, this store cannot read it, and we are
+ * not guessing which of the two harmless cases it would have been.
+ *
+ * The sibling of `GlossaryBaselineUnusable` and `IdeasBaselineUnusable`, and a
+ * separate type rather than a shared one because the sentence a person needs is
+ * about *this* artefact: which links go dead, and where to put the file back.
+ */
+export class QuotesBaselineUnusable extends Error {
+  constructor(readonly slug: string) {
+    super(
+      `quotes "${slug}": there is a previous quotes artefact and this store cannot read it — it ` +
+        "will not parse, is of the wrong shape, or is past the size the store reads back.\n" +
+        "Every id in it is one a reader's `?quote=` links name (docs/project/quotes.md), so " +
+        "carrying on would mint a fresh id for every quote and orphan all of them, quietly.\n" +
+        "Nothing has been written — the quotes are still the previous run's.\n" +
+        "Put it back from a backup, or delete it deliberately if this article's quotes really are " +
+        "starting again from nothing.",
+    );
+    this.name = "QuotesBaselineUnusable";
+  }
+}
+
+/**
+ * The previous quotes, **from the store** — the only thing this stage reads the
+ * old artefact for, and the thing landing D would otherwise take away.
+ *
+ * **Four states, and the same table as the glossary's and the ideas'**, for the
+ * same reason: this stage inherits ids **only when `sourceHash` matches**, so a
+ * mismatch is a legitimate refusal to inherit rather than a fault.
+ *
+ * | | what it means | what happens |
+ * |---|---|---|
+ * | no previous quotes | a first run for this article | mint, quietly |
+ * | ones whose `sourceHash` differs | the article's text or its tree moved | mint, quietly — **correct, not an error** |
+ * | ones this store cannot read | we cannot tell which of those two it was | **the stage fails** |
+ * | the store read throws | an infrastructure fault | **propagates; the stage fails** |
+ *
+ * Row two is `generateQuotes`'s to decide and not this function's, which is why
+ * this hands back the artefact rather than a map of ids: an id inherited across
+ * a re-extraction would carry a reader's link onto a quote from a different
+ * text, and the comparison that stops that wants the whole artefact.
+ *
+ * Row three is the one that has to be told from row one. A truncated
+ * `quotes.json` still holds every id; a person with a backup can put it back,
+ * and minting over it takes that away while reporting success.
+ */
+export async function previousQuotesFrom(
+  store: Pick<ArtifactStore, "readBaseline">,
+  slug: string,
+): Promise<Quotes | null> {
+  const outcome = await store.readBaseline(slug, "quotes", "quotes");
+  if (outcome.state === "unusable") throw new QuotesBaselineUnusable(slug);
+  return outcome.state === "ok" ? outcome.value : null;
+}
+
+export interface QuotesRun {
+  quotes: Quotes;
+  blocks: number;
+  words: number;
+  dropped: Dropped;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  /* What the cache did on this call. Reported next to the token counts because
+     a cache that has silently stopped hitting is indistinguishable from one that
+     is working — same answer, no error, a bigger bill.
+     docs/reusable/silent-success.md. */
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  elapsedMs: number;
+}
+
+const SYSTEM = `You are choosing the QUOTES worth keeping from this article: the
+lines a reader would want to carry out of it.
+
+THE ABSOLUTE RULE
+
+Every quote must be copied from the article VERBATIM — character for character,
+the author's words and no others. Not paraphrased, not tidied, not shortened
+with an ellipsis, not stitched together from two places. If you cannot copy a
+line exactly, leave it out.
+
+This is not a style preference. Everything you return is shown to the reader in
+quotation marks, attributed to the author, beside the real text. A line that is
+nearly what they wrote is a false claim about a real person. Anything we cannot
+find in the article is thrown away, so an approximation costs you the entry and
+gains nothing.
+
+WHAT EARNS A QUOTE
+
+A line earns its place for one of two reasons, and either one alone is enough.
+
+- It CARRIES THE ARGUMENT. The sentence the piece turns on; the claim the rest
+  is spent defending; the objection stated in the author's own voice; the
+  distinction everything after it depends on.
+- It IS WELL PUT. The line you would repeat to somebody. Memorable, exact,
+  surprising, funny, or simply better written than the sentences around it.
+
+The best quotes are both. Many good ones are only one, and a line that is only
+one is still worth having — do not pass over the piece's central claim because
+it is plainly written, and do not pass over its best-written sentence because
+the argument would survive without it.
+
+WHAT DOES NOT
+
+- Scaffolding. "In this essay I will argue that ...", "But first, some
+  background", "Let us turn to the second objection."
+- A sentence that needs the paragraph around it to mean anything. A quote is
+  shown on its own, so a line beginning "This is why it fails" is useless.
+- A statement of fact with nothing of the author in it. A date, a figure, a
+  definition anyone would write the same way.
+- Someone ELSE's words. A line the article quotes from another writer is that
+  writer's, not this author's. Skip it, however good it is.
+- Two overlapping versions of one line. Pick the form that stands alone best;
+  one of them will be thrown away anyway.
+- Anything under 30 characters or over 400. Below that it is a phrase; above it
+  it is the paragraph, and both are thrown away.
+
+SPREAD THEM OUT
+
+Take them from across the whole piece. Three quotes from one paragraph and none
+from the second half is a list about the opening, not about the article.
+
+THE SCORES
+
+"importance" 0-1: how much of the article's argument rests on this line. 0 is an
+aside; 1 is the sentence the piece exists to say.
+
+"striking" 0-1: how memorable and well put it is. 0 is functional prose; 1 is
+the line a reader would quote to somebody else a week later.
+
+These are two different questions and a line may be high on one and low on the
+other. That is the normal case, and answering them independently is what makes
+them worth having. Do not inflate either, and do not let one drag the other up.
+
+THE REASON
+
+"reason" is one short sentence on why THIS line, and the reader sees it only if
+they ask for it — so make it worth asking for.
+
+Say what the line DOES: which move in the argument it is, or what makes the
+phrasing land. Do NOT describe the page the reader is looking at. If your
+sentence would begin "The author says ...", "Quoted here to ...", "This passage
+argues ...", "Used to introduce ..." — you are narrating a page they can already
+see, and the caption is wasted. Leave it out rather than write one of those; an
+absent reason is a real answer.
+
+  BAD  — "The author argues that writing and thinking are inseparable."
+         That is the sentence, said again, worse.
+  GOOD — "The claim the rest of the essay is spent defending."
+  GOOD — "Names the objection more sharply than the objectors do."
+
+WRITING
+
+- "text": the author's words, verbatim, nothing else.
+- "reason": one plain sentence, or absent. No Markdown.
+
+OUTPUT
+
+JSON only, no prose, no code fence:
+
+{"quotes": [
+  {
+    "text": "...",
+    "reason": "...",
+    "importance": 0.0,
+    "striking": 0.0
+  }
+]}
+
+"reason", "importance" and "striking" may each be omitted. "text" may not.
+
+${PROFILE_RULES}`;
+
+/**
+ * What the model is shown.
+ *
+ * The skeleton before the full text, for the same reason the arc, the glossary
+ * and the ideas do it: it is what lets the model weigh a line against the shape
+ * of the argument rather than against how well it happens to read on its own.
+ * `importance` is unanswerable without it.
+ *
+ * **The article is not in here**, deliberately. It is a cached `system` block —
+ * see `generateQuotes` — so what is left is only the part that changes.
+ */
+/* Exported for tests/profile-prompts.test.ts, which pins the two things a
+   profile must do here: arrive when there is one, and leave no trace when there
+   is not. Same reason src/glossary.ts and src/summarise.ts export theirs. */
+export function renderPrompt(opts: {
+  tree: Tree;
+  count: number;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * It changes *which* lines are worth keeping — what is a well-known
+   * formulation to a specialist is the sentence of the piece to somebody
+   * meeting the idea — and it must not change what the words are. In the user
+   * prompt and never the `system` block: the article is up there with the
+   * breakpoint on it, and this changes between readers.
+   */
+  profile: string | null;
+}): string {
+  const { tree, count } = opts;
+  const skeleton = partsOf(tree)
+    .map((p, i) => `PART ${i + 1}: ${p.title}\n  ${p.gist ?? "(no gist)"}`)
+    .join("\n\n");
+
+  /* Near the top, where it will be read, and before the shape — the reader is
+     context for *choosing* the lines, and the choosing is what the rest of this
+     prompt is about. src/profile.ts § PROFILE_RULES. */
+  const who = profileSection(opts.profile);
+
+  return `Choose up to ${count} quotes. Fewer is fine — a short piece has few
+lines worth keeping, and a list padded to a number is worse than a short list.
+${who ? `\n${who}\n` : ""}
+=== ITS SHAPE ===
+
+${skeleton}`;
+}
+
+/**
+ * Read the model's answer, fence and all.
+ *
+ * `stripFence` then `parseJsonFrom`, never a bare `JSON.parse` — src/parse-json.ts
+ * § `stripFence` has the reasoning, and the short version is that nothing in this
+ * file logs and that is not enough, because a thrown error is logged where it is
+ * caught and V8 quotes the input in it.
+ */
+function parseJson(raw: string): { quotes?: unknown } {
+  return parseJsonFrom(stripFence(raw), "the quotes response");
+}
+
+/**
+ * Stage 5h over a data directory: one model call, and the artefact handed back.
+ *
+ * **It writes nothing**, which is the converted shape `sketch` introduced —
+ * see the note in `main()` below. The pipeline step returns it as `parts`; the
+ * CLI writes `quotes.json`.
+ *
+ * **It replaces.** There is no append path and therefore no `existing`, no
+ * FORBIDDEN list and no "a stale list is not appended to" rule — see the header.
+ * `previous` is read for its ids and for nothing else.
+ *
+ * Exported because two callers run this stage and they must not drift —
+ * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
+ */
+export async function generateQuotes(opts: {
+  dir: string;
+  onProgress?: (detail: string) => void;
+  /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
+  signal?: AbortSignal;
+  /**
+   * Mark the article as a cache breakpoint.
+   *
+   * Off by default, because a cache write costs 1.25x and a prefix nobody reads
+   * never earns it back. This stage makes one call per run, so it caches
+   * nothing for itself; the entry pays off only if a stage in the same group
+   * runs **later in the same job** inside the TTL. **Its group is `glossary`** —
+   * same effort, same renderer (src/models.ts § ARTICLE_RENDERER).
+   *
+   * That is narrower than it sounds and the plan first overstated it: a reader
+   * who opens the glossary and then the quotes has made two jobs, so neither
+   * marks anything and neither reads anything. The saving is real for
+   * `steps: ["glossary","quotes"]` and for nothing else. src/jobs.ts sets this
+   * from the steps the job actually has left. GPT Sol, 2026-08-31.
+   */
+  cacheArticle?: boolean;
+  /**
+   * Who is reading, already rendered — `renderProfile` in src/profile.ts.
+   *
+   * **Frozen by whoever queued the job, not read here**, so that a reader who
+   * edits their profile mid-run does not get an artefact stamped with a profile
+   * only half of it was written from. src/jobs.ts resolves it once and carries
+   * it.
+   */
+  profile?: string | null;
+  /**
+   * The quotes this article already has, or `null` **only** when it genuinely
+   * has none — `previousQuotesFrom` above is how the pipeline gets it.
+   *
+   * **Required, and that is the point of it.** An optional parameter is exactly
+   * what a later landing could drop and still compile, and the symptom would be
+   * every `?quote=` link in the database going dead while the step reported
+   * success. A required one cannot be.
+   */
+  previous: Quotes | null;
+}): Promise<QuotesRun> {
+  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
+     own parse error quotes the first characters of what it was handed. Nothing
+     in this file logs, but a step that throws is logged by src/jobs.ts with
+     `errorFields`, which keeps `message` and `stack`. src/parse-json.ts. */
+  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
+    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
+    "blocks.json",
+  );
+  const tree = parseJsonFrom<Tree>(
+    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
+    "tree.json",
+  );
+  // Optional, and only ever used to tell the model what it is reading. A
+  // missing meta.json is not worth failing the whole stage over.
+  const meta = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
+    .then((raw) => JSON.parse(raw) as Meta)
+    .catch(() => null);
+
+  const sourceHash = inputFingerprint(blocks, tree, meta);
+  const onDisk = opts.previous;
+  /* Ids come across only when the article has not moved. A quote inherited
+     across a re-extraction would carry a reader's `?quote=` link onto words
+     from a different version of the piece. */
+  const inherit = onDisk && onDisk.sourceHash === sourceHash ? idsByText(onDisk) : null;
+
+  /* **The argument, not the apparatus** — the same filter every article-reading
+     stage applies at its call site rather than inside the prompt builders.
+     Sharper here than anywhere: a bibliography entry or a footnote is not a
+     line worth keeping, and it is exactly the kind of self-contained,
+     confidently-worded sentence a model reaches for. It is also the half of the
+     article `locate` must not search, or a quote lifted from a reference list
+     would resolve to a real block and look verified. src/block-policy.ts. */
+  const evidence = blocks.filter(isBodyEvidence);
+  const words = articleWordCounts(blocks).body;
+  const count = suggestedQuotes(words);
+  const started = Date.now();
+
+  /* Bounded by `count`, which is bounded by MAX_QUOTES. Each quote is up to
+     MAX_QUOTE_CHARS of prose plus a short reason and two numbers — call it 180
+     tokens — and the allowance still scales with the article because the model
+     reads the whole piece and thinks about it inside this same number. See
+     src/token-budget.ts. Undersizing this does not degrade: it throws
+     `truncationFailure` and loses the whole pass. */
+  const answerTokens = 500 + count * 220;
+  const maxTokens = budgetFor("quotes", answerTokens);
+
+  /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
+     anywhere upstream of here, and the installed SDK builds `Error.message`
+     from the upstream error body — the one place it can echo back part of what
+     we sent, which is the whole article. See src/anthropic-call.ts. */
+  let message: Anthropic.Message;
+  try {
+    const call = streamMessage(
+      "quotes",
+      {
+        max_tokens: maxTokens,
+        thinking: { type: "adaptive" },
+        output_config: { effort: effortFor("quotes") },
+        /* Two system blocks, breakpoint on the first, and the article goes
+           *before* this stage's instructions because the cache prefix runs from
+           the very top of the request. These are byte-for-byte the bytes
+           `glossary` sends, which is the whole of the sharing — see
+           `cacheArticle` above. */
+        system: [
+          {
+            type: "text" as const,
+            text: articleText(meta, evidence),
+            ...(opts.cacheArticle ? { cache_control: { type: "ephemeral" as const } } : {}),
+          },
+          { type: "text" as const, text: SYSTEM },
+        ],
+        messages: [
+          {
+            role: "user",
+            content: renderPrompt({ tree, count, profile: opts.profile ?? null }),
+          },
+        ],
+      },
+      { ...(opts.signal ? { signal: opts.signal } : {}) },
+    );
+
+    if (opts.onProgress) {
+      const report = opts.onProgress;
+      let chars = 0;
+      let last = 0;
+      call.onText((delta) => {
+        chars += delta.length;
+        // Throttled: the model emits deltas far faster than anyone can read
+        // them, and every one of these is a write the job poller may pick up.
+        const now = Date.now();
+        if (now - last < 500) return;
+        last = now;
+        report(`up to ${count} quotes, ${Math.round(chars / 1000)}k characters so far`);
+      });
+    }
+
+    /* `call.finalMessage()`, never `call.stream.finalMessage()` — the wrapper is
+       what records what this call cost. The stream's own method works and
+       records nothing. See src/messages-stream.ts. */
+    message = await call.finalMessage();
+  } catch (err) {
+    throw anthropicCallFailed(err);
+  }
+  if (wasRefused(message)) {
+    /* `stop_details` is deliberately neither thrown nor logged — it is the
+       provider's own words about a request that carried the whole article, and
+       this error is copied onto the job and shown on the progress card. */
+    throw new Error(MODEL_REFUSED.message);
+  }
+  if (message.stop_reason === "max_tokens") {
+    throw truncationFailure("quotes", maxTokens, answerTokens, {
+      outputTokens: message.usage.output_tokens,
+      answerChars: message.content
+        .filter((b): b is Anthropic.TextBlock => b.type === "text")
+        .reduce((n, b) => n + b.text.length, 0),
+    });
+  }
+
+  const raw = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+
+  const dropped = noneDropped();
+  /* **`evidence`, not `blocks`** — `locate` must search exactly the text the
+     model was shown. Searching the whole article would let a quote lifted out
+     of a footnote or a reference list resolve to a real block and arrive
+     wearing the same verification as every other row. The two lists have to be
+     the same list, which is why this reads the one variable. */
+  const quotes = buildQuotes(parseJson(raw), {
+    slug: tree.slug,
+    blocks: evidence,
+    sourceHash,
+    profile: opts.profile ?? null,
+    elapsedMs: Date.now() - started,
+    inherit,
+    dropped,
+  });
+
+  return {
+    quotes,
+    blocks: blocks.length,
+    words,
+    dropped,
+    model: CAPABLE_MODEL,
+    inputTokens: message.usage.input_tokens,
+    outputTokens: message.usage.output_tokens,
+    cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
+    cacheWriteTokens: message.usage.cache_creation_input_tokens ?? 0,
+    elapsedMs: Date.now() - started,
+  };
+}
+
+async function main(): Promise<void> {
+  const dir = process.argv[2];
+  if (!dir) {
+    console.error("Usage: tsx src/quotes.ts <dir with blocks.json + tree.json>");
+    console.error("Running it again replaces the list — it does not append to it.");
+    process.exit(1);
+  }
+  /* At the program's edge, not inside the gateway — see `messagesClient` in
+     src/messages-stream.ts for the test that proved the difference. */
+  loadEnvLocal();
+  console.log(`Choosing the quotes with ${CAPABLE_MODEL}…`);
+  const run = await generateQuotes({
+    dir,
+    /* The CLI has files and no store, so it reads the file — and `readQuotes`
+       swallows the difference between "no quotes" and "quotes I cannot read",
+       which is exactly why this is not the pipeline's path any more. Acceptable
+       here: a person is watching, and the worst case is a rewrite that mints
+       fresh ids in a directory they chose by hand. */
+    previous: await readQuotes(dir),
+    onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
+  });
+
+  const { quotes, dropped } = run;
+  /* **The caller writes, not the generator** — the converted shape `sketch`
+     introduced and the one `PipelineStep`'s types now make the default. A stage
+     that wrote `<dir>/quotes.json` inside `generateQuotes` would work on a
+     laptop and could not work through a store that puts the artefact in a
+     Postgres column; a generator that wrote AND returned would give the
+     pipeline two writes, one of them to a path that does not exist in
+     production. So there are two callers and they decide: this one writes the
+     file, and the step returns `parts`. */
+  const outFile = path.join(dir, "quotes.json");
+  await writeFile(outFile, JSON.stringify(quotes, null, 2), "utf-8");
+
+  console.log(`\n${run.blocks} blocks, ${run.words} words → ${quotes.quotes.length} quotes`);
+  console.log(`\nTokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
+  console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
+  /* **`unfound` first and on its own line.** It is the model paraphrasing
+     rather than copying, which is the one failure this stage may not have, and
+     it is invisible everywhere else. */
+  console.log(`Not found: ${dropped.unfound}  ← the model paraphrasing, if it is not 0`);
+  console.log(
+    `Dropped:   ${dropped.wrongLength} wrong length, ${dropped.overlapping} overlapping, ` +
+      `${dropped.overCap} over the cap, ${dropped.malformed} malformed`,
+  );
+  console.log(`Wrote:     ${path.resolve(outFile)}\n`);
+  for (const quote of quotes.quotes) {
+    const scores = [
+      quote.importance === undefined ? null : `imp ${quote.importance.toFixed(2)}`,
+      quote.striking === undefined ? null : `str ${quote.striking.toFixed(2)}`,
+    ]
+      .filter(Boolean)
+      .join("  ");
+    console.log(`${quote.blockId}  ${scores}`);
+    console.log(`  "${quote.text}"`);
+    if (quote.reason) console.log(`  why: ${quote.reason}`);
+    console.log("");
+  }
+}
+
+/* **`stageCli`, which is the guard and the ledger together.** Awaited rather
+   than `void`ed: flushing the ledger, and any failure in it, are part of the
+   command finishing rather than something the process might exit before doing.
+   src/cli-ledger.ts says what the one line replaces and why it is one line. */
+await stageCli(import.meta.url, main);

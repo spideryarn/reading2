@@ -190,7 +190,7 @@ export function pathFor(job: ChatJob): OpenRouterPath {
 /** The jobs that come down this wire — everything that is not a pipeline stage. */
 export type ChatJob = Exclude<
   AiJob,
-  "toc" | "labels" | "arc" | "tweets" | "glossary" | "summarise" | "ideas" | "sketch"
+  "toc" | "labels" | "arc" | "tweets" | "glossary" | "quotes" | "summarise" | "ideas" | "sketch"
 >;
 
 /**

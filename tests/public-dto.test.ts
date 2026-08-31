@@ -54,6 +54,7 @@ const NO_ARTEFACTS = {
   glossary: null,
   summary: null,
   ideas: null,
+  quotes: null,
   tweets: null,
 } as const;
 
@@ -816,6 +817,7 @@ describe("the four artefacts a shared link carries", () => {
     glossary: GLOSSARY,
     summary: SUMMARIES,
     ideas: IDEAS,
+    quotes: null,
     tweets: THREAD,
   });
 
@@ -931,6 +933,7 @@ describe("the four artefacts a shared link carries", () => {
       glossary: { ...GLOSSARY, entries: [] },
       summary: null,
       ideas: { ...IDEAS, ideas: [] },
+      quotes: null,
       tweets: null,
     });
     expect("glossary" in empty).toBe(true);
@@ -968,7 +971,14 @@ describe("the public metadata payload", () => {
     slug: "noema",
     title: "The mythology of conscious AI",
     headingTitle: null,
-    available: { arc: true, tweets: false, glossary: true, summary: false, ideas: false },
+    available: {
+      arc: true,
+      tweets: false,
+      glossary: true,
+      summary: false,
+      ideas: false,
+      quotes: false,
+    },
   });
 
   /**
@@ -985,6 +995,7 @@ describe("the public metadata payload", () => {
         "available.arc",
         "available.glossary",
         "available.ideas",
+        "available.quotes",
         "available.summary",
         "available.tweets",
         "slug",
@@ -1000,6 +1011,7 @@ describe("the public metadata payload", () => {
       glossary: true,
       summary: false,
       ideas: false,
+      quotes: false,
     });
   });
 

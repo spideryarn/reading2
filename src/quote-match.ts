@@ -30,6 +30,18 @@
  * the whole paragraph gets washed instead of the sentence — a visible loss of
  * precision with no visible cause. Hence two increasingly forgiving passes.
  *
+ * ## The second pass is a drawing aid, not a verifier
+ *
+ * Added 2026-08-31, after GPT Sol pointed out that a forgiving *equivalence*
+ * had been read as a claim of *identity*. Pass two deletes whitespace, so
+ * `fall a part` matches `fall apart` — harmless when the answer is "which
+ * characters do I wash", and a false claim about a real person when the answer
+ * is "did the model copy this". The `passes` argument on `findQuote` is that
+ * distinction, and `"spaced"` is the setting for anything that will be shown
+ * as a quotation. The other half of the same fix lives at the call site:
+ * **store the slice of the article, never the model's string** —
+ * src/quotes.ts § `place`.
+ *
  * ## Why not a regex
  *
  * Because the needle is a sentence of the author's prose, and a sentence
@@ -162,13 +174,47 @@ function endOf(map: number[], index: number): number {
  * about `block.text` and the client asks about the rendered text, and a
  * function that quietly preferred one of them would be wrong half the time.
  */
-export function findQuote(text: string, quote: string, near?: number): Span | null {
+export function findQuote(
+  text: string,
+  quote: string,
+  near?: number,
+  /**
+   * **Which passes to run**, and it is a safety switch rather than a tuning
+   * knob. Default `"forgiving"` — both passes, which is what every caller
+   * wanted until 2026-08-31.
+   *
+   * `"spaced"` runs **only** the whitespace-preserving pass. Use it wherever a
+   * match is being read as a claim that the model copied the text rather than
+   * as a best effort at drawing a mark, because pass two deletes whitespace
+   * entirely and therefore accepts a word the model split in two: an article
+   * saying *fall apart* matches a model saying *fall a part*.
+   *
+   * The split is really between the two ends of this file's job:
+   *
+   * - **The browser** compares a stored quote against the *rendered* text,
+   *   which genuinely lacks spaces `extractText` invented at a nested block
+   *   boundary. Pass two exists for that and must stay.
+   * - **The server** compares the model's typing against `block.text` — the
+   *   exact string the model was shown. There is no whitespace discrepancy to
+   *   forgive, so the forgiving pass buys nothing and costs the guarantee.
+   *
+   * Found by GPT Sol's review of docs/plans/quotes-mode.md, 2026-08-31, with a
+   * worked case from `data/noema-mythology-of-conscious-ai`.
+   *
+   * **`validateHits` (src/search.ts) and `validateOccurrences` (src/ideas.ts)
+   * still pass the default**, and that is a known gap rather than a decision —
+   * both store the model's string too. Changing them is a separate landing with
+   * its own artefacts to think about; src/quotes.ts § `place` is where the
+   * shape they should take is written down.
+   */
+  passes: "forgiving" | "spaced" = "forgiving",
+): Span | null {
   if (quote.trim() === "" || text === "") return null;
   // Pass one keeps whitespace as single spaces; pass two drops it. Two passes
   // rather than one forgiving one, because the second is genuinely more likely
   // to find a false positive — "in the end" would match "inthe end" — and it
   // should only ever run when the careful pass has already failed.
-  for (const keepSpaces of [true, false]) {
+  for (const keepSpaces of passes === "spaced" ? [true] : [true, false]) {
     const hay = reduce(text, keepSpaces);
     const needle = reduce(quote, keepSpaces);
     if (needle.value === "") continue;

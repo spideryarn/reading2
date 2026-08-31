@@ -1,0 +1,350 @@
+# Quotes — the lines worth keeping
+
+The sentences of a piece that are worth carrying out of it, in the band between the spine and the
+prose. **Every row is the article's own text**, verified verbatim against the block it came from, and
+pressing one marks it in the prose and takes you there.
+
+Built 2026-08-31. Greg asked for it that day:
+
+> Create a "Quotes" mode that extracts the most central, helpful, interesting quotes. By default,
+> display them in order. But also have a sub-mode for ordering them by importance, and a sub-mode for
+> ordering by how memorable/interesting/striking/lyrical/etc. And add a threshold UI bar, and a
+> Prioritised mode. Take inspiration from the Glossary mode.
+
+The design, the alternatives, and the cross-family review that rewrote two of its foundations before
+a line was written are in [quotes-mode.md](../plans/quotes-mode.md). **Read that before changing
+anything here** — the two exclusions in `authorVoice` and the "store the slice, not the model's
+string" rule look like fussiness until you know what they are answers to.
+
+```
+  QUOTES MODE — same spine, same article, the band is the piece's own sentences
+
+ ┌─────────────┬───────────────────────┬────────────────────────────┬───┐
+ │             │  Mode: quotes                                       │   │
+ │  ▇▇▇▇▇▇▇▇   ├───────────────────────┼────────────────────────────┤ ▍ │
+ │  ▇▇▇▇▇      │ ❝ Quotes      14      │  … and the most mundane    │   │
+ │  ▇▇▇        │ order  in order       │    boilerplate — the sort  │   │
+ │  ▇▇▇▇▇▇▇    │  [prioritised]        │    ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓    │   │
+ │  ▇▇         │  most important       │  ┃ of thing you'd have to  │ ▍ │
+ │  ▇▇▇▇       │  most striking        │    be able to write …      │   │
+ │  ▇▇▇        ├───────────────────────┤                            │   │
+ │  ▇▇▇▇▇      │ bar 0·70 · 5 of 14    │      ↑ the wash and the    │   │
+ │  ▇▇         │ ────────●──────────   │        ┃ border — the SAME │ ▍ │
+ │  ▇▇▇▇▇▇     ├───────────────────────┤        marks a search hit  │   │
+ │             │ ✧ 2 suggestions were  │        draws, because it   │   │
+ │             │   dropped because the │        IS one              │   │
+ │             │   words are not in    │                            │   │
+ │             │   the article.        │                            │ ▍ │
+ │             ├───────────────────────┤                            │   │
+ │             │ WORTH KEEPING     5   │                            │   │
+ │             ├───────────────────────┤                            │   │
+ │             │ ┃Writing is thinking; │                            │   │
+ │             │ ┃there is no other    │  ⓘ  k3m9qt                 │   │
+ │             │ ┃kind.                │  ↑                         │   │
+ │             │ │ imp·91  str·88      │  └─ press it and the       │   │
+ │             │ │                     │     model says WHY this    │   │
+ │             │ ┃A model that cannot  │     one. Hover, focus or   │   │
+ │             │ ┃be surprised has     │     tap — a tap pins it.   │   │
+ │             │ ┃stopped reading.     │  ⓘ  qw82nf                 │   │
+ │             │ │ imp·62  str·94      │                            │   │
+ │             ├───────────────────────┤                            │   │
+ │             │ THE REST          9   │                            │   │
+ │             ├───────────────────────┤                            │   │
+ │             │ ┃…                    │                            │   │
+ ├─────────────┴───────────────────────┴────────────────────────────┴───┤
+ │ ⊞Hierarchy ▤Summary 📖Glossary 💡Ideas ❝Quotes ● 🔍Search ⌸Chat  …     │
+ └───────────────────────────────────────────────────────────────────────┘
+
+ EVERY WORD IN THE LIST IS FROM THE ARTICLE. The only things on screen that
+ are not are the two numbers, which are labelled as the model's judgment,
+ and the reason, which is behind the ⓘ.
+
+ The solid left rule is the glossary's "in this piece" rule, reused rather
+ than re-declared: it means the same thing here — this came from the
+ article — and a second panel drawing that distinction differently would
+ teach the reader it means something else.
+
+ The line under the bar is what the stage REFUSED to store. It is there
+ because a list quietly shorter than the model produced is the failure
+ docs/reusable/silent-success.md keeps catching, and a log line is
+ invisible to the reader it happened to.
+```
+
+Code: [`src/quotes.ts`](../../src/quotes.ts) (stage 5h — the prompt, the call, the verification),
+[`src/quote-match.ts`](../../src/quote-match.ts) (the matching rule, shared with search and ideas),
+[`src/api.ts`](../../src/api.ts) § `loadQuotes`, [`src/routes.ts`](../../src/routes.ts),
+[`src/web/QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx),
+[`src/web/useQuotes.ts`](../../src/web/useQuotes.ts), `resolveQuote` in
+[`src/web/search-hits.ts`](../../src/web/search-hits.ts), `QuotesBand` in
+[`src/web/App.tsx`](../../src/web/App.tsx), and `§ quotes mode` at the end of
+[`src/web/styles.css`](../../src/web/styles.css). Tests:
+[`tests/quotes.test.ts`](../../tests/quotes.test.ts).
+
+## The one safety property
+
+**A line the model offers that cannot be found in the article is dropped, never shown.**
+
+Every other stage here can be wrong about a judgment. This one can be wrong about *what the author
+wrote*, which is a different and worse kind of wrong: a plausible paraphrase, in quotation marks,
+attributed to a real person, sitting next to the real text. Everything below is downstream of that.
+
+### The model returns words, never a block id
+
+The glossary's rule rather than the ideas' rule, and the choice is deliberate. An idea is a
+proposition with no text of its own, so the only route back to the page is an id the model names
+([ideas.md](ideas.md#this-is-the-first-stage-that-lets-the-model-name-block-ids)). A quote *is* text.
+
+```
+   the model returns  →  the exact words, and nothing else
+   we find            →  which block they are in — `locate`, over every body block
+```
+
+So the model cannot invent a location, a quote it would have misattributed is repaired rather than
+dropped, and the prompt can send `articleText` rather than `articleWithIds`.
+
+### What is stored is the article's characters, not the model's
+
+`findQuote` is an **equivalence relation, not an identity test**: it folds curly quotes to straight
+ones and collapses runs of whitespace, so a match says *these are the same passage* and never *these
+are the same characters*. The first version of this stage stored the model's typing, which put words
+in the author's mouth on every fold.
+
+`place` slices the block instead — `block.text.slice(span.start, span.end)` — so the model's text is
+a **locator and nothing else**. Whatever it typed, what is stored, shown and attributed is what the
+article says.
+
+**And the verification runs only `findQuote`'s first pass** (`passes: "spaced"`). The second pass
+deletes whitespace, which is right for the browser — `extractText` invents spaces at nested block
+boundaries that the rendered text does not have — and wrong as a claim that the model copied
+something: it accepts `fall a part` against an article saying `fall apart`. Verified against
+`data/noema-mythology-of-conscious-ai`. GPT Sol found both halves of this, 2026-08-31.
+
+### Whose words these are
+
+**`findQuote` proves the words are in the article. It proves nothing about who wrote them**, and an
+article is full of other people's sentences. `data/meditations-on-moloch` carries twenty
+`kind: "quote"` blocks and the first is Ginsberg's *Howl* — exactly the striking passage this stage
+reaches for, verifying perfectly, and offering it under the essayist's name would be this feature's
+worst failure wearing its verification badge.
+
+`authorVoice` refuses two things, deterministically:
+
+| refused | why |
+|---|---|
+| a `kind: "quote"` block | whoever wrote it, the piece has typographically disowned it |
+| a span **wholly** wrapped in quotation marks | the inline case, in an ordinary paragraph |
+
+`wholly` is the care in the second one: a line that merely *contains* a quoted phrase is still the
+author's sentence and is kept. The first one costs something real — an author quoting their own
+earlier work, which the Moloch essay also does — and that is an accepted loss, because a reader
+looking at the list cannot tell the two apart and neither can we.
+
+**What it does not catch:** an inline quotation with no marks, an indirect one, a translated one.
+Block text carries no provenance, so nothing at this layer can. Hence the promise the mode actually
+makes is the one the machine can keep — **these are verbatim passages from this article** — rather
+than a claim about authorship. Recording provenance during extraction is the real fix and is not
+built.
+
+### The drops are counted, and the reader is told
+
+```ts
+{ unfound, otherVoice, wrongLength, overlapping, overCap, malformed }
+```
+
+`unfound` is the one to watch: it counts the model paraphrasing rather than copying, and a run that
+starts returning several is a prompt that has drifted. Nothing else would report it — a dropped
+quote looks exactly like a line the model chose not to offer
+([silent-success.md](../reusable/silent-success.md)).
+
+They ride on the **artefact** (`Quotes.discarded`), not only in the log, and the panel says the two
+the reader has a stake in: *"2 suggestions were dropped because the words are not in the article."*
+A count in a log is invisible to the person the drop happened to. The other three are editorial rules
+of ours that the reader has no stake in, and naming them would turn a disclosure into a changelog.
+
+## Two scores, combined with `max`
+
+| field | the question |
+|---|---|
+| `importance` | how much of the article's argument rests on this line |
+| `striking` | how memorable, quotable, well-put it is |
+
+The glossary **multiplies** its two, and that is right *there*: `difficulty × centrality` is the cost
+of not knowing a term, and a term that is easy, or peripheral, has no such cost. Two factors of one
+quantity.
+
+**These two are not factors of one quantity. They are two separate reasons to keep a line.** Greg
+chose `max` on 2026-08-31:
+
+> what this gets right: a line can earn its place for ONE good reason. The sentence the whole essay
+> turns on is promoted even if it is drily written; the line you would tattoo on your arm is promoted
+> even if the argument would survive without it.
+
+Three consequences, and the third is a correction:
+
+- **A missing score is skipped, not read as zero** — and under `max` that is safe in a way it is not
+  under a product. A maximum over a subset can only be *lower* than the maximum over both, so a
+  quote scored on one axis can be under-promoted and never over-promoted, which is the direction an
+  honest default has to fail in.
+- **The bar starts at `0.70`, not the glossary's `0.30`**, because a product of two 0–1 scores
+  clusters low and a maximum clusters high. It is a guess with no measurement behind it, exactly as
+  `0.30` was; the slider under it is the feedback loop.
+- **The right-hand end promotes "all the top-scored quotes", not "exactly one".** The plan claimed
+  the glossary's promise and it does not carry: under `max` either score can produce a top value, so
+  ties at the top are common. GPT Sol showed it false with a five-quote example.
+
+Both raw numbers are on a prioritised row and the composite never is — that is our arithmetic dressed
+as the model's judgment, and a number the reader can neither interpret nor check. `document` order
+shows no numbers at all, which is the glossary's rule and the whole condition on keeping model scores
+([glossary.md § The scores](glossary.md#the-scores-and-the-condition-attached-to-keeping-them)).
+
+## The orders, and the bar
+
+| `?rank=` | label | what it does |
+|---|---|---|
+| `document` | **in order** | first appearance — **the default** |
+| `prioritised` | **prioritised** | two groups split by the bar; first appearance inside each |
+| `importance` | **most important** | descending; unscored last |
+| `striking` | **most striking** | descending; unscored last |
+
+**`document` is the default and that is Greg's own instruction**, not an inherited convention — *"By
+default, display them in order."* The glossary defaults to `prioritised`; copying that here was the
+first version, and a cross-family review pointed out that the glossary's later override is not
+permission to override an explicit decision about a different feature.
+
+The bar (`?bar=`) is the glossary's slider with the composite changed, and it keeps all four of its
+properties: the number and the count are on screen, the track ends where the data does, it says in
+words when it has divided nothing, and it can be put back. `?bar=` has **no default of its own**, so
+"absent" keeps meaning *nobody has touched this*.
+
+**`?rank=` and `?bar=`, not `sort` and `gate`.** Those names are the glossary's and search's, both on
+`/read/<slug>` — [url-state.md](url-state.md#the-librarys-own-five) records what distinct names are
+worth.
+
+## The reason is behind a button
+
+Greg, 2026-08-31, on what should sit under each quote besides the quote:
+
+> with reason as a tooltip
+
+Which is a stronger answer than it looks. Asked *why this quote*, the obvious reply is a description
+of the page the reader is looking at — *"the author says here that…"* — the register the glossary
+spent a whole rewrite fixing in `senseHere`
+([§ A prompt ban relocates a register](glossary.md#a-prompt-ban-relocates-a-register-it-does-not-delete-one)),
+and here it is not merely tempting but the natural reading of the question. Keeping it off the row
+means the list a reader scans is prose and nothing else. The prompt still bans the register, because
+relocating one is not deleting one.
+
+**A separate ⓘ button beside the row, not a tooltip on the row itself.** GPT Sol's amendment: an
+uncontrolled hover tooltip does not exist on a device with no pointer, and a trigger nested inside
+the row's own button is invalid HTML. So the tooltip is *controlled* — hover and focus open it
+transiently, a tap or click pins it — and the row stays one big target. `Tooltip.tsx` and never a
+`title=` attribute, which does not open on keyboard focus ([tooltips.md](tooltips.md)).
+
+## The stage
+
+`data/<slug>/quotes.json`, stage 5h, in `STEP_ORDER` and **not** in `DEFAULT_INGEST_STEPS` —
+everything after `arc` is a thing somebody asks for. In `FORCE_ONLY_WHEN_NAMED`.
+
+```
+npm run quotes -- data/<slug>
+```
+
+or `POST /api/jobs { "slug": "…", "steps": ["quotes"] }`, which is what the panel's button does.
+
+**It is a converted step**, like `sketch` and unlike its eight other neighbours:
+`generateQuotes` writes nothing and hands the artefact back, and the two callers decide — the step
+returns it as `parts`, the CLI writes the file. A step that wrote `<dir>/quotes.json` inside `run`
+works on a laptop and cannot work through a store that puts the artefact in a Postgres column.
+
+### It replaces. It does not append.
+
+The ideas' rule for the ideas' reason: a piece has a dozen quotable lines, not an encyclopaedia, so
+running the step again already *is* "choose them again". That removes the FORBIDDEN checklist,
+`existingFor`, "a stale list is not appended to", `passes` and the `DELETE` route at once.
+
+What it keeps is **id inheritance**: `idsByText` gives a fresh quote the id the old artefact used for
+the same words, keyed on a normalised form, so `?quote=` links survive a rewrite. Deliberately
+conservative — a sentence returned with one more clause is a different key and gets a new id. A dead
+`?quote=` opens the list; a wrongly inherited one opens somebody else's words wearing the reader's
+bookmark.
+
+### Freshness
+
+`stamp` in [`pipeline.ts`](../../src/pipeline.ts): `inputHash` (`articleFingerprint` — blocks, tree
+and the metadata head), `promptVersion`, `model`. **Not `profileHash`**, which is where this parts
+company with `ideas`: there the profile decides what *assumed* means, so an older artefact answers a
+different question. A profile changes which *lines* are worth keeping here too, but it cannot change
+what the author wrote — so the read path raises the banner and the reader decides. That is the
+glossary's position.
+
+**A stale quote list matters more than a stale anything else in this band.** A stale glossary entry
+is a definition that still reads correctly; a stale quote carries a block id that may be gone *and*
+words that may no longer be in the piece. It is the one artefact here whose staleness can make it
+false rather than merely dated, which is why the banner sits above the list and says so plainly.
+
+### Effort, and the cache
+
+`STAGE_EFFORT.quotes = "medium"`, `ARTICLE_RENDERER.quotes = "text"` — so this stage is
+**cache-compatible with `glossary`** and with nothing else: same model, same effort, same renderer,
+same bytes.
+
+**Compatible is all it is.** A cache entry is only *written* when a later step in the same job would
+read it (`cacheArticle` in [`pipeline.ts`](../../src/pipeline.ts)), and a reader pressing *Find the
+terms* and then *Choose the quotes* has made two jobs minutes apart. The saving is real for
+`steps: ["glossary","quotes"]` in one job and for nothing else — the plan claimed more and GPT Sol
+caught it. It is still a constraint: moving either stage's effort ends the compatibility silently.
+
+`medium` is a guess, like every effort choice that has not been through
+`evals/results/effort-vs-quality.md`.
+
+## Five ways to break this quietly
+
+1. **Store the model's string instead of the block's slice.** Every fold `findQuote` makes then
+   becomes a word the author did not write, and nothing anywhere errors.
+2. **Use the forgiving pass for verification.** `findQuote(text, quote)` without `"spaced"` accepts
+   a word split in two. It is the right call in the browser and a false claim on the server.
+3. **Search all the blocks instead of `evidence`.** A line lifted out of a footnote or a reference
+   list would resolve to a real block and arrive wearing the same verification as every other row.
+   `generateQuotes` passes one variable to both the prompt and `buildQuotes` for exactly this reason,
+   and `tests/block-policy-prompts.test.ts` holds it.
+4. **Sort the list in the artefact.** `quotes.json` stores document order, so `?rank=document` means
+   the article's order and not the last writer's preference — the glossary's second trap, one door
+   along.
+5. **Let `max` become a product in one of the places it is computed.** `priorityOf` is one function
+   and the panel, the count, the track end and the groups all call it. A second copy is how the bar
+   comes to say `5 of 14` over a list of six.
+
+## What is still open
+
+- **Nothing has run this stage against a real article.** So `0.70`, `4–16`, `medium` and the whole
+  `unfound` rate are guesses, `data/writes/quotes.json` does not exist, and `quotes.json` sits in
+  `NOT_YET_WRITTEN` in `tests/store-artefact-manifest.test.ts` and off `GATE_FIXTURES`. The first
+  real run is the thing that would tell us most.
+- **`validateHits` (search) and `validateOccurrences` (ideas) have the same two bugs** this stage was
+  fixed for: both call `findQuote` with the forgiving pass and both store the model's string. Their
+  quotes are shown in a results list rather than presented as the author's chosen lines, so the harm
+  is smaller — but it is the same harm. A separate landing, noted here because this is where the
+  shape of the fix is written down.
+- **No copy button.** Worth having; it needs a decision about whether it copies the quote, the quote
+  and a citation, or a deep link.
+- **No keyboard traversal of the list**, the same gap the glossary and ideas panels have, for the
+  same reason ([keyboard.md](keyboard.md) — ↑ / ↓ belong to the article). The rows and the ⓘ are
+  ordinary tab stops, so everything is *reachable*; what is missing is a fast way through.
+- **Nothing generates quotes for the `example/` fixture**, consistent with the glossary and equally
+  unsatisfying.
+
+## See also
+
+- [glossary.md](glossary.md) — the mode this took its shape from: the prioritised order, the
+  threshold slider, and the condition attached to keeping model scores
+- [ideas.md](ideas.md) — the mode this took its lifecycle from: replaces rather than appends, one
+  verb, no DELETE
+- [search.md](search.md) — where `Found`, the wash and the rail lane come from
+- [block-ids.md](block-ids.md) — why a passage is a block id and never an offset
+- [url-state.md](url-state.md) — `?mode=quotes`, `?quote=`, `?rank=`, `?bar=`
+- [security.md](security.md) — the sanitiser, and the `hit` class this mode's marks made it reserve
+- [architecture.md](architecture.md#pipeline) — where stage 5h sits
+
+---
+
+Up: [reading-view-overview.md](reading-view-overview.md)

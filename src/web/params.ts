@@ -318,6 +318,93 @@ export const termParam = parseAsBlockId.withOptions({ history: "replace" });
 export const ideaParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
+ * Which quote is selected, and therefore which passage is marked in the prose
+ * and painted down the rail.
+ *
+ * A quote's id is minted by `mintId`, so it is a block id by construction and
+ * the same parser validates it for free — and the same "a mangled link degrades
+ * to nothing" behaviour falls out, which here means the list with nothing
+ * selected.
+ *
+ * `replace`, exactly like `?term=` and `?idea=` beside it: stepping between
+ * quotes while you read is browsing rather than navigating, and `mode` already
+ * put one entry on the stack for the trip into the mode, which is the entry
+ * Back should use.
+ */
+export const quoteParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * How the quote list is ordered.
+ *
+ * **`document` is the default, and that is Greg's own instruction rather than
+ * an inherited convention.** He asked for this mode in one sentence — *"By
+ * default, display them in order. But also have a sub-mode for ordering them by
+ * importance, and a sub-mode for ordering by how memorable/interesting/striking
+ * /lyrical/etc. And add a threshold UI bar, and a Prioritised mode"* — and the
+ * first clause settles it. The glossary defaults to `prioritised`, and copying
+ * that here was the first version of this parameter; a cross-family review
+ * pointed out that the glossary's later override is not permission to override
+ * an explicit decision about a different feature. GPT Sol, 2026-08-31.
+ *
+ * So the ranked orders are all things the reader asks for. `importance` and
+ * `striking` are the model's two judgments straight; `prioritised` is the
+ * gentler shape the glossary arrived at — the two scores decide only which of
+ * two groups a quote is in, and inside a group the order is first appearance,
+ * so the model chooses nothing there.
+ *
+ * **Not called `sort`.** That name is the glossary's and `order` is the search
+ * results', both on `/read/<slug>`, and url-state.md § The library's own five
+ * records what distinct names are worth: a link should be readable without
+ * knowing which mode it is for.
+ *
+ * `push`, like `sort` and `order`: changing the order of a list is a deliberate
+ * act on the view, and Back should undo it.
+ *
+ * An unknown value parses to the default, so a link written by a version with
+ * more orders still shows a list.
+ */
+export const RANKS = ["document", "prioritised", "importance", "striking"] as const;
+export type QuoteRank = (typeof RANKS)[number];
+
+export const rankParam = createParser<QuoteRank>({
+  parse: (v) => (RANKS.includes(v as QuoteRank) ? (v as QuoteRank) : null),
+  serialize: (v) => v,
+})
+  .withDefault("document")
+  .withOptions({ history: "push" });
+
+/**
+ * How high the bar is for the prioritised order's top group — the reader's hand
+ * on the threshold, which is the second thing Greg asked for by name.
+ *
+ * The number is `max(importance, striking)`, the same value `priorityOf` in
+ * QuotesPanel.tsx computes, so `?bar=0.75` says *promote the quotes the model
+ * called at least 0.75 on one of the two axes*.
+ *
+ * **`max`, where the glossary's `?gate=` is a product**, and Greg chose it:
+ * the glossary's two scores are factors of one quantity (the cost of not
+ * knowing a term), where these two are separate reasons to keep a line. A
+ * product would push the essay's thesis sentence below the fold for being
+ * plainly written. docs/plans/quotes-mode.md § Two scores.
+ *
+ * **No default, deliberately** — the same call `gateParam` and `confParam` make
+ * above, for the same reason. Absent means *nobody has touched this*, and the
+ * panel resolves it to `PROMOTE_BAR`.
+ *
+ * `replace` and debounced, exactly as `?gate=` is: a range input fires on every
+ * pixel of a drag, browsers rate-limit history writes, and a Back button that
+ * walked back through a drag one step at a time would be useless. Back should
+ * undo the *decision*, which is the `?rank=` push that got you here.
+ */
+export const barParam = createParser<number>({
+  parse: (v) => {
+    const n = Number.parseFloat(v);
+    return Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;
+  },
+  serialize: (v) => v.toFixed(2),
+}).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
+
+/**
  * How the glossary list is ordered.
  *
  * `document` — first use in the article first — is what the **artefact** stores

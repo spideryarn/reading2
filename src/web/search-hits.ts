@@ -465,6 +465,56 @@ export function resolveIdea(
   return out;
 }
 
+/**
+ * One quote, resolved into the same `Found` every search hit and idea becomes.
+ *
+ * A quote is a `{blockId, text, start}`, which is what `resolveOne` already
+ * takes — so this is a shape change and nothing else, and that is deliberate: a
+ * second way of drawing a marked passage is a second thing to keep in step with
+ * the first. The prose gets the same wash, the rail gets the same lane, and the
+ * panel steps through it with the same component.
+ *
+ * Three fields worth a word:
+ *
+ * - **`confidence: null`.** A search hit's confidence answers *is this what you
+ *   asked for*, and nobody asked the article a question. The value a literal
+ *   word-match already carries, so `keepAbove`, the ordering and the wash all
+ *   already know what to do with it.
+ * - **`reasoning` is the model's `reason`**, which the panel shows in a tooltip
+ *   rather than as body text. It reaches the prose hover card too, which is the
+ *   right place for it: it is a caption on the passage either way.
+ * - **A real `slot`, and `runId` is the quote's own id.** One lane per quote,
+ *   and a slot so the paragraph bar has a hue — `blockHues` drops `null` slots,
+ *   so a quote without one would paint the rail and leave the bar blank, which
+ *   looks like a rendering bug and is not one.
+ *
+ * **The `text` here is the article's own characters**, not the model's typing —
+ * src/quotes.ts § `place` slices the block. So this re-find is looking for the
+ * real words, which is the one place the two halves of src/quote-match.ts are
+ * allowed to differ: this side runs both passes, because the rendered text
+ * genuinely lacks whitespace `extractText` invented.
+ */
+export function resolveQuote(
+  blocks: Block[],
+  quote: { id: string; slot: number; blockId: BlockId; text: string; start?: number; reason?: string },
+): Found[] {
+  const one = resolveOne(page(blocks), {
+    /* The same three-part key shape as a hit and an occurrence, with `0` for
+       the index: a quote is exactly one passage, so there is no second one to
+       tell apart — and keeping the shape means nothing downstream has to know
+       which of the three sources it is looking at. */
+    key: `${quote.id}:${quote.blockId}:0`,
+    blockId: quote.blockId,
+    runId: quote.id,
+    slot: quote.slot,
+    quote: quote.text,
+    ...(quote.start !== undefined && { start: quote.start }),
+    confidence: null,
+    reasoning: quote.reason ?? "",
+  });
+  return one ? [one] : [];
+}
+
 export function resolveHits(blocks: Block[], runs: ActiveRun[]): Found[] {
   const at = page(blocks);
   const found: Found[] = [];

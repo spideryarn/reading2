@@ -52,7 +52,7 @@ import type { Config, DOMPurify } from "dompurify";
  * against a policy, and this names the policy. Tying it to the dependency would
  * re-sanitise every article in the library on every patch release, for nothing.
  */
-export const SANITIZER_VERSION = 3;
+export const SANITIZER_VERSION = 4;
 /* 1 → 2 on 2026-08-27: the policy now strips URLs pointing at our own `/api/`
    (see `isOwnApi`). Stricter, so every artefact stored under 1 was cleaned by a
    policy that has never seen this rule and has to be re-cleaned on next read —
@@ -62,7 +62,14 @@ export const SANITIZER_VERSION = 3;
    2 → 3 on 2026-08-28: three more class names are reserved (`chat`, `zoomable`,
    `zoom-btn`) and `data-zoom-kind` is forbidden. Stricter again, and the same
    reasoning applies — an artefact cleaned under 2 could be carrying any of
-   them. GPT Sol, 2026-08-28, reviewing docs/plans/figures-in-the-prose.md. */
+   them. GPT Sol, 2026-08-28, reviewing docs/plans/figures-in-the-prose.md.
+
+   3 → 4 on 2026-08-31: the `hit` class and the `data-hit` / `data-hues`
+   attributes are reserved. They were the one `MarkKind` nobody had claimed,
+   while `data-hit-open` had been forbidden all along — the asymmetry is what
+   gave it away. Stricter again, and the same reasoning: an artefact cleaned
+   under 3 could be carrying a forged search-or-quote highlight. GPT Sol,
+   2026-08-31, reviewing docs/plans/quotes-mode.md. */
 
 /**
  * Video embeds, by exact origin and path prefix.
@@ -191,6 +198,15 @@ export const ARTICLE_CONFIG: Config = {
        un-forbidding one is how a hole reopens. Found by a GPT Sol review. */
     "data-comment", "data-mark-end", "data-term",
     "data-chat", "data-chat-end",
+    /* **`data-hit` and `data-hues` were missing, and `data-hit-open` beside them
+       was not** — an asymmetry that is the clearest possible sign of an
+       oversight rather than a decision. A hit mark is what search, ideas and
+       (since 2026-08-31) quotes all draw in the prose, so a publisher could ship
+       markup that reads as *the app having selected these words for you*:
+       `data-hues` in particular drives the paragraph bar's colour count
+       (src/web/annotate.ts), so a forged pair paints our rail from a stranger's
+       document. Found by GPT Sol reviewing docs/plans/quotes-mode.md. */
+    "data-hit", "data-hues",
     "data-open", "data-cmt-open", "data-chat-open", "data-hit-open", "data-term-open",
     /* The enlarge wrapper's own attribute (src/web/zoomable.ts). It decides
        whether the figure is laid out inline or as a block, so an article that
@@ -531,7 +547,11 @@ export function installArticlePolicy(purify: DOMPurify): void {
        marks landed and was never actually in this list — the code and its own
        documentation had disagreed since. Added 2026-08-28 alongside the two
        zoom classes, which is when reading the list against the prose found it. */
-    for (const own of ["cmt", "chat", "term", "zoomable", "zoom-btn"]) {
+    /* `hit` joined on 2026-08-31 with the two `data-` attributes above. It is
+       the fourth `MarkKind` (src/web/annotate.ts) and the one three features
+       now share, and a class alone still draws the highlight — which is exactly
+       the argument the `term` entry above makes. */
+    for (const own of ["cmt", "chat", "term", "hit", "zoomable", "zoom-btn"]) {
       if (el.classList?.contains(own)) el.classList.remove(own);
     }
     if (el.classList?.length === 0 && el.hasAttribute("class")) el.removeAttribute("class");

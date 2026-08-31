@@ -164,6 +164,7 @@ type WholeColumn =
   | "glossary"
   | "summary"
   | "ideas"
+  | "quotes"
   | "sketch";
 
 /**
@@ -235,6 +236,7 @@ export const STORAGE: {
   glossary: { glossary: { at: "column", column: "glossary" } },
   summary: { summary: { at: "column", column: "summary" } },
   ideas: { ideas: { at: "column", column: "ideas" } },
+  quotes: { quotes: { at: "column", column: "quotes" } },
   sketch: { sketch: { at: "column", column: "sketch" } },
 };
 

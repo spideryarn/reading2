@@ -165,6 +165,7 @@ import {
   Undo2,
   Upload,
   Waypoints,
+  Quote,
 } from "lucide-react";
 import type {
   Article,
@@ -235,6 +236,7 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   glossary: BookA,
   summary: Layers,
   ideas: Lightbulb,
+  quotes: Quote,
   sketch: PenLine,
 };
 

@@ -296,7 +296,14 @@ const METADATA: PublicMetadata = {
   /* Two `true`s and three `false`s on purpose: a visitor pressing Glossary must
      get a different sentence from one pressing Summary, and a fixture that
      answered the same to every question could not tell that apart. */
-  available: { arc: false, tweets: false, glossary: true, summary: false, ideas: false },
+  available: {
+    arc: false,
+    tweets: false,
+    glossary: true,
+    summary: false,
+    ideas: false,
+    quotes: false,
+  },
 };
 
 /**

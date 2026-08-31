@@ -715,7 +715,14 @@ when("sharing one article", { timeout: 60_000 }, () => {
     expect(r.body).toEqual({
       slug: SLUG,
       title: EXTRACTED_TITLE,
-      available: { arc: false, tweets: true, glossary: true, summary: true, ideas: true },
+      available: {
+        arc: false,
+        tweets: true,
+        glossary: true,
+        summary: true,
+        ideas: true,
+        quotes: false,
+      },
     });
   });
 

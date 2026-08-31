@@ -255,6 +255,7 @@ const PUBLIC_PROJECTIONS = {
     glossary: articleRevisions.glossary,
     summary: articleRevisions.summary,
     ideas: articleRevisions.ideas,
+    quotes: articleRevisions.quotes,
     tweets: articleRevisions.tweets,
   },
   /**
@@ -293,6 +294,7 @@ const PUBLIC_PROJECTIONS = {
     hasGlossary: sql<boolean>`${articleRevisions.glossary} is not null`.as("has_glossary"),
     hasSummary: sql<boolean>`${articleRevisions.summary} is not null`.as("has_summary"),
     hasIdeas: sql<boolean>`${articleRevisions.ideas} is not null`.as("has_ideas"),
+    hasQuotes: sql<boolean>`${articleRevisions.quotes} is not null`.as("has_quotes"),
   },
   /**
    * **Enough to fill in a `<head>`, and deliberately not enough to render.**
@@ -491,6 +493,7 @@ export const pgPublicReader: PublicArticleReader = {
         glossary: found.revision.glossary,
         summary: found.revision.summary,
         ideas: found.revision.ideas,
+        quotes: found.revision.quotes,
         tweets: found.revision.tweets,
       });
     });
@@ -521,6 +524,7 @@ export const pgPublicReader: PublicArticleReader = {
           glossary: found.revision.hasGlossary,
           summary: found.revision.hasSummary,
           ideas: found.revision.hasIdeas,
+          quotes: found.revision.hasQuotes,
         },
       });
     });

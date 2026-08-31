@@ -110,6 +110,7 @@ import {
   Search,
   Speech,
   X,
+  Quote,
 } from "lucide-react";
 import type { Comment } from "../types.js";
 import { DEFAULT_MODE, type Mode, type Panel } from "./params.js";
@@ -329,6 +330,18 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
     icon: Lightbulb,
     label: "Ideas",
     blurb: "The propositions this piece needs you to hold — the ones it assumes, and the ones it adds",
+  },
+  /* Next again, and it belongs at this end of the order for the same reason
+     Ideas does: the bar runs outwards from the article's own words, and this is
+     the mode that is *closest* to them — every row is a sentence out of the
+     piece rather than something a model wrote about it. Greg set this order by
+     hand, so a new mode goes where it belongs in his reasoning rather than on
+     the end. docs/project/quotes.md. */
+  {
+    mode: "quotes",
+    icon: Quote,
+    label: "Quotes",
+    blurb: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
   },
   /* Search was **two** dimmed placeholders in the `SOON` list this file used to
      carry — `Search` and `Highlights`, side by side — and is one mode now. That

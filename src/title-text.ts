@@ -234,6 +234,7 @@ export const MODE_LABEL: Record<Mode, string> = {
   summary: "Summary",
   glossary: "Glossary",
   ideas: "Ideas",
+  quotes: "Quotes",
   search: "Search",
   diagram: "Diagram",
   chat: "Chat",

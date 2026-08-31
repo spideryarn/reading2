@@ -94,6 +94,7 @@ const HOMES: Record<string, string> = {
   "glossary.json": "article_revisions.glossary",
   "summary.json": "article_revisions.summary",
   "ideas.json": "article_revisions.ideas",
+  "quotes.json": "article_revisions.quotes",
   "sketch.json": "article_revisions.sketch",
   "comments.json": "comments",
   "chat.json": "chat_threads + chat_messages",
@@ -177,6 +178,13 @@ const NOT_YET_WRITTEN: Record<string, string> = {
      produced one, and the assertion below duly failed and made somebody delete
      the line. It has a home in `HOMES` and always did.
      docs/plans/hosting-the-articles-images.md, stage B. */
+
+  /* Stage 5h landed on 2026-08-31 and nothing has run it against a real article
+     yet, so there is no `quotes.json` anywhere on this disk. Its home in
+     `HOMES` is real — the column exists, drizzle/0033_quotes.sql — and this
+     line clears itself the moment somebody runs `npm run quotes`, which is the
+     whole design of this pair of lists. docs/plans/quotes-mode.md. */
+  "quotes.json": "no real run yet — stage 5h landed 2026-08-31",
 };
 
 describe("the artefact manifest", () => {

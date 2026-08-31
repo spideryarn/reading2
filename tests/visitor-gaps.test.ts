@@ -53,6 +53,7 @@ const NOTHING_BUILT: PublicArtefacts = {
   glossary: false,
   summary: false,
   ideas: false,
+  quotes: false,
 };
 const EVERYTHING_BUILT: PublicArtefacts = {
   arc: true,
@@ -60,6 +61,7 @@ const EVERYTHING_BUILT: PublicArtefacts = {
   glossary: true,
   summary: true,
   ideas: true,
+  quotes: true,
 };
 
 /**
@@ -85,6 +87,7 @@ function only(built: keyof PublicArtefacts): PublicArtefacts {
   return {
     arc: built === "arc",
     tweets: built === "tweets",
+    quotes: built === "quotes",
     glossary: built === "glossary",
     summary: built === "summary",
     ideas: built === "ideas",
@@ -198,7 +201,7 @@ describe("what a visitor is told, mode by mode", () => {
       ["chat", "diagram", "review", "search"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
-    for (const built of ["glossary", "summary", "ideas"] as const) {
+    for (const built of ["glossary", "summary", "ideas", "quotes"] as const) {
       expect([...markedModes(only(built)).keys()], built).not.toContain(built);
     }
   });
@@ -211,7 +214,8 @@ describe("what a visitor is told, mode by mode", () => {
         mode === "outline" ||
         mode === "glossary" ||
         mode === "summary" ||
-        mode === "ideas"
+        mode === "ideas" ||
+        mode === "quotes"
       ) {
         expect(gap, mode).toBeNull();
       } else {
@@ -308,6 +312,7 @@ describe("what the payload says it has", () => {
       glossary: false,
       summary: false,
       ideas: false,
+      quotes: false,
     });
     expect(
       artefactsIn({

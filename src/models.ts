@@ -305,6 +305,12 @@ export type Task =
   | "glossary"
   | "summarise"
   | "ideas"
+  /* The lines worth keeping, in the author's own words —
+     docs/project/quotes.md. Article-reading like `glossary`, and like
+     `glossary` it never names a block id: the model returns the words and
+     `locate` in src/quotes.ts finds the block, so it renders with
+     `articleText` and shares its cached prefix. */
+  | "quotes"
   /* The picture a model draws of the argument — docs/project/diagram.md
      § Sketch. Article-reading like `ideas`, and like `ideas` it names block
      ids, so it renders with `articleWithIds` and shares no cached prefix with
@@ -403,6 +409,7 @@ export const TASK_TIER: Record<Task, Tier> = {
   glossary: "capable",
   summarise: "capable",
   ideas: "capable",
+  quotes: "capable",
   sketch: "capable",
   explain: "capable",
   chat: "capable",
@@ -487,6 +494,7 @@ export const TASK_WIRE: Record<Task, Wire> = {
   glossary: "messages",
   summarise: "messages",
   ideas: "messages",
+  quotes: "messages",
   sketch: "messages",
   explain: "chat",
   chat: "chat",
@@ -552,6 +560,7 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
   glossary: null,
   summarise: null,
   ideas: null,
+  quotes: null,
   sketch: null,
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
@@ -739,7 +748,7 @@ for (const task of PIPELINE_TASKS) {
 export type Effort = "low" | "medium" | "high";
 
 /** The stages that read the whole article and could share one cached copy of it. */
-export type ArticleStage = "arc" | "tweets" | "glossary" | "ideas" | "sketch";
+export type ArticleStage = "arc" | "tweets" | "glossary" | "quotes" | "ideas" | "sketch";
 
 /**
  * **How hard each article-reading stage thinks — and it lives here because it is
@@ -785,6 +794,26 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
   arc: "high",
   tweets: "high",
   glossary: "medium",
+  /* `medium`, and it is the same setting for the same reason the glossary's is:
+     choosing the sentence a piece turns on is a judgment about *this* text with
+     the text in front of it, not the multi-step inference `ideas` makes when it
+     argues a piece collapses without an unstated premise.
+
+     **It is cache-COMPATIBLE with `glossary` and with nothing else** — same
+     model, same effort, same renderer, same bytes. Compatible is all it is, and
+     the first version of this comment claimed a saving it does not get: a cache
+     entry is only *written* when a later step in the SAME job would read it
+     (`cacheArticle` in src/pipeline.ts § StepContext), and a reader pressing
+     "Find the terms" and then "Choose the quotes" makes two jobs minutes apart.
+     The saving is real for `steps: ["glossary","quotes"]` in one job and for
+     nothing else. GPT Sol, 2026-08-31.
+
+     It is still a constraint: `sharesArticleCache` groups on effort AND
+     renderer, so moving either stage's effort ends the compatibility silently.
+     Untested, like every effort choice that has not been through
+     evals/results/effort-vs-quality.md, and said out loud so the next person
+     knows it is a guess rather than a measurement. */
+  quotes: "medium",
   /* `high`: finding an unstated premise and then arguing that the piece
      collapses without it is the hardest judgment any stage here makes — harder
      than the glossary's "is this word obvious", which is what `medium` was
@@ -839,6 +868,10 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   arc: "text",
   tweets: "text",
   glossary: "text",
+  /* The model returns the words and never a block id — src/quotes.ts § the
+     header — so this sends the same bytes `glossary` does, which is what lets
+     the two share one cached article. */
+  quotes: "text",
   ideas: "ids",
   /* Every node the picture draws may carry a block id for the reader to jump
      to, so the ids have to be on the page — the same reason `ideas` is `ids`,

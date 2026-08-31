@@ -147,7 +147,14 @@ async function visitor(meta: Partial<Meta>) {
       createElement(PublicMetadataPage, {
         slug: SLUG,
         article: article(meta),
-        available: { arc: false, tweets: false, glossary: false, summary: false, ideas: false },
+        available: {
+          arc: false,
+          tweets: false,
+          glossary: false,
+          summary: false,
+          ideas: false,
+          quotes: false,
+        },
         signedIn: false,
       }),
     );

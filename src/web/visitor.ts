@@ -94,6 +94,7 @@ const NOUN: Record<keyof PublicArtefacts, string> = {
   summary: "a summary",
   glossary: "a glossary",
   ideas: "a list of ideas",
+  quotes: "a set of quotes",
   tweets: "a tweet thread",
 };
 
@@ -120,6 +121,7 @@ const ARTEFACT: Partial<Record<Mode, keyof PublicArtefacts>> = {
   summary: "summary",
   glossary: "glossary",
   ideas: "ideas",
+  quotes: "quotes",
 };
 
 /** The modes that spend, and what the button that opens them is called. */
