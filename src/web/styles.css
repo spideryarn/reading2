@@ -6856,6 +6856,21 @@ td.text.has-hit[data-hues="8"] {
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--ink);
+  /* **One line, cut** — as `.chat-head h2` above, and here for a reason that is
+     easy to miss. The row holds the caveat icon so that the caveat costs no
+     vertical space, and the argument for that was `.diag-head` having no
+     `flex-wrap`, so it cannot gain a flex line. True, and not the whole story:
+     a flex item can gain a *text* line instead, which makes the row just as
+     tall. "Diagram" is one word and so cannot wrap today — but that is a fact
+     about the heading, not about the row, and it would stop being true the
+     moment the heading became two words. These four make it a fact about the
+     row. `min-width: 0` is the one that does the work: without it a flex item's
+     automatic minimum is its longest word, so it never shrinks far enough for
+     `text-overflow` to have anything to do. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* The three pictures, as one control. Same shape as `.gloss-sort`, because it
@@ -8427,10 +8442,19 @@ tr:hover .block-chat,
    width**, not alignment. At the ideal band width Drift's two chip groups plus
    this icon do not fit on one line, so something wraps whichever way the
    alignment is written. `.diag-head` has no `flex-wrap`, so it shrinks its
-   heading instead of gaining a line, and the claim is a property of the markup.
+   heading instead of gaining a flex line.
+
+   **That is still not the whole argument, and the missing half is a text
+   line.** A row with no `flex-wrap` cannot gain a line, but the flexible item
+   inside it can wrap its own text once it has been shrunk far enough, and the
+   row is then just as tall. Nothing about `.diag-head` prevented that; only
+   the heading being the single unbreakable word "Diagram" did, which is a fact
+   about today's copy rather than about the row. `.diag-head h2` now declares
+   the one-line-cut four (§ heading), so the claim is a property of the markup.
 
    `flex: none` so it is the icon that keeps its size when that shrinking
-   happens; `h2 { flex: 1 }` above is what pushes it right.
+   happens, rather than collapsing and taking the caveat with it;
+   `h2 { flex: 1 }` above is what pushes it right.
 
    `cursor: help` rather than `pointer`, because pressing it does nothing — the
    card is the whole of it. Sized to the row rather than to a thumb: what this

@@ -1079,12 +1079,32 @@ rides free; Trail at its widest, where there is only one chip group and
 everything fits. The costly combination — Drift at the ideal width — was in
 neither.
 
-`.diag-head` has no `flex-wrap`, so it cannot gain a line at any width: it
-shrinks its heading instead. The claim is now a property of the markup rather
-than a measurement that happened to hold. That is the difference between fixing
-this and re-wording it, and it is the general lesson —
+`.diag-head` has no `flex-wrap`, so it cannot gain a flex line at any width: it
+shrinks its heading instead.
+
+**And that argument had the same shape as the two before it — true about the
+thing it named, and not the whole story.** A row that cannot gain a flex line
+can still get taller, because the flexible item inside it wraps its own text
+once it has been shrunk far enough. The only thing stopping that here was that
+`.diag-head`'s heading is the single unbreakable word "Diagram" — a fact about
+today's copy, which would stop being true the moment the heading became two
+words. `.diag-head h2` now declares `min-width: 0`, `overflow: hidden`,
+`text-overflow: ellipsis` and `white-space: nowrap`, the same four
+`.chat-head h2` has carried all along, and
+[`tests/diagram-css.test.ts`](../../tests/diagram-css.test.ts) holds them there.
+`min-width: 0` is the load-bearing one: without it a flex item's automatic
+minimum is its longest word, so it never shrinks far enough for
+`text-overflow` to do anything, and the other three read as present and working.
+
+Three routes to the same extra line, then, found one at a time by three
+different people looking at the same claim. The claim is now a property of the
+markup rather than a measurement that happened to hold, which is the difference
+between fixing this and re-wording it —
 [silent-success.md](../reusable/silent-success.md) applies to a *claim in a
-comment* exactly as it applies to code.
+comment* exactly as it applies to code. The test written to hold it down
+demonstrated the point once more on its way in: it matched the word
+`min-width: 0` in the rule's own explanatory comment, so deleting the
+declaration left it green.
 
 ### Sideways on Drift: lanes or spread
 
