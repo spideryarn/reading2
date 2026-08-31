@@ -96,6 +96,19 @@ That is framework churn, and it was weighed against this principle rather than s
 cost in full and recommends only the cheap half of it. The principle was not forgotten; its owner
 overrode it.
 
+### Simpler first
+
+The same tiebreak applies to product decisions, not only to tools. When two versions of a feature
+would both work, build the simpler one first and let use, not foresight, decide whether the fuller
+one is needed. A plan says which simpler option it passed over, and why
+([AGENTS.md § Writing code](../../AGENTS.md#writing-code)).
+
+> prefer the simpler product decision first, get a v1 working and then gradually layer in
+> complexity/optimisations afterwards as needed, to highlight when a product decision will add
+> extra complexity or other tradeoffs
+>
+> — Greg, 2026-08-31
+
 It still governs how far shadcn is allowed to spread.
 [web-client.md § Tailwind and shadcn](web-client.md#tailwind-and-shadcn-components) says what is
 deliberately staying hand-written, and
