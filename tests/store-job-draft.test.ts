@@ -12,7 +12,7 @@
  *
  * The symptom would have been *"extract cannot find the raw document"* on every
  * fresh article: a message pointing at stage 2, from a fault in the runner.
- * GPT Sol found it reviewing docs/plans/transactional-stage-runner.md, before
+ * GPT Sol found it reviewing docs/plans/260827j-transactional-stage-runner.md, before
  * anything was built against it.
  *
  * `openOrBeginJobDraft` is the fix, and this is the test that says so. It is
@@ -262,7 +262,7 @@ when("the draft a job owns", () => {
    * the file contradicted itself, and only caller sequencing kept the cycle from
    * closing. D1b needs one transaction that opens a draft *and* publishes it,
    * so the order became an invariant instead of an argument.
-   * docs/plans/delete-the-importer-d1b-design-sol.md.
+   * docs/plans/260827aa-delete-the-importer-d1b-design-sol.md.
    *
    * The race the old order closed is still closed, by the article lock instead:
    * two callers both read `draft_revision_id = null`, both mint, and the second

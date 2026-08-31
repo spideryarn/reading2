@@ -4,7 +4,7 @@
  *
  * `tests/store-session.test.ts` is the filesystem half of the seam, where there
  * is no transaction to hold and the file says so out loud. This is the Postgres
- * half — `src/store/pg-session.ts`, D1b of docs/plans/delete-the-importer.md —
+ * half — `src/store/pg-session.ts`, D1b of docs/plans/260827aa-delete-the-importer.md —
  * and everything here is a claim that could not be made on the filesystem.
  *
  * ## The eight, and what each is for
@@ -45,7 +45,7 @@
  *    attempt).
  *
  * Five more arrived on 2026-08-30 with GPT Sol's review of the built code
- * (docs/plans/delete-the-importer-d1b-sol.md):
+ * (docs/plans/260827aa-delete-the-importer-d1b-sol.md):
  *
  * 9. Case 5 again, **through `advanceJobWith`** rather than through the session:
  *    a settlement nobody reads correctly is a settlement that does nothing, and
@@ -68,7 +68,7 @@
  * prove something else. Production is hardwired to `fsStoreSession` and stays
  * that way until D2, so `advanceJobWith` takes the session factory and the step
  * registry as arguments and production supplies today's defaults. GPT Sol,
- * 2026-08-29, docs/plans/delete-the-importer-d1b-design-sol.md finding 4.
+ * 2026-08-29, docs/plans/260827aa-delete-the-importer-d1b-design-sol.md finding 4.
  *
  * ## `SPIDERYARN_STORE=postgres`, set before any import runs
  *
@@ -1192,7 +1192,7 @@ when("the transactional session", () => {
          (src/store/pg-jobs.ts), so this is what proves its rejection still comes
          out through the session's guard with the query text and the bound
          parameters taken off it. GPT Sol, 2026-08-30,
-         docs/plans/delete-the-importer-d1b-sol.md finding 3. */
+         docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 3. */
     ).rejects.toMatchObject({
       name: "StoreFailure",
       message: STORAGE_FAILED.message,
@@ -1290,7 +1290,7 @@ when("the transactional session", () => {
    * The case this is about is the one where the flag arrives from *another
    * instance* — the step finishes normally and the release is where the cancel
    * lands. GPT Sol, 2026-08-30,
-   * docs/plans/delete-the-importer-d1b-sol.md finding 5.
+   * docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 5.
    */
   mine("answers done when a Stop lands while the coordinator is inside a step", async () => {
     const slug = `${SLUG_PREFIX}coordinator-stop`;
@@ -1371,7 +1371,7 @@ when("the transactional session", () => {
    * this passing at all: `finishStepRun` takes `requireLiveJobOwnsDraft`, which
    * wants the job still `running` and still pointing at this draft — so marking
    * the step after `failRevisionIn` or after `finishIn` would be refused.
-   * GPT Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md finding 2.
+   * GPT Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 2.
    */
   mine("marks the step run error when the stage fails, rather than leaving it running", async () => {
     const slug = `${SLUG_PREFIX}step-error`;
@@ -1654,7 +1654,7 @@ when("the transactional session", () => {
    * The assertion is that the reader ends up looking at **request one's arc**.
    * Discarding instead would report the job done having thrown that work away —
    * a silent success, in the path built to prevent them. GPT Sol, 2026-08-30,
-   * docs/plans/delete-the-importer-d1b-sol.md finding 5.
+   * docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 5.
    */
   mine("publishes the work an earlier request released, when every step skips", async () => {
     const slug = `${SLUG_PREFIX}skipped`;
@@ -1777,7 +1777,7 @@ when("the transactional session", () => {
    * **It starts from a real pointer, and that is not decoration.** A job with no
    * draft satisfies "the pointer is null" before the sweep as well as after it,
    * so the same assertion over the same code would pass with the fix deleted.
-   * GPT Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md finding 1.
+   * GPT Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1.
    */
   mine("clears the draft pointer when a lapsed claim is swept", async () => {
     const slug = `${SLUG_PREFIX}expired`;
@@ -1879,7 +1879,7 @@ when("the transactional session", () => {
    * literal would be refused by excess-property checking whatever the parameter
    * type were, so the transition is a named `JobTransition` const: the sneaky
    * form, and the only one that tests the narrowing rather than the literal.
-   * GPT Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md finding 4.
+   * GPT Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 4.
    */
   it("takes only endings through settleJob", () => {
     const release: JobTransition = {

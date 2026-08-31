@@ -7,7 +7,7 @@
  * `owner_id uuid not null references auth.users(id)`, from day one and on
  * purpose — docs/project/database.md. Supabase owns `auth.users`, so there is
  * nothing our migrations can put in it, and until the beta gate lands
- * (docs/plans/deploy-and-repo-move.md#the-beta-gate) there is no login to
+ * (docs/plans/260825d-deploy-and-repo-move.md#the-beta-gate) there is no login to
  * create one either. Without a row here, the very first `insert into articles`
  * fails on the foreign key.
  *

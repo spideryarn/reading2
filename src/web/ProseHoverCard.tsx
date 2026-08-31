@@ -75,7 +75,7 @@ interface Hit {
    *
    * The card this produces is not a description of a destination — it is the
    * destination, in full. "make the hover preview good enough that most visits
-   * never jump at all" (docs/plans/footnotes.md § The fisheye).
+   * never jump at all" (docs/plans/260828o-footnotes.md § The fisheye).
    */
   note: NoteMarker | null;
   /** A note's back-link: the same machinery pointing the other way. */
@@ -204,7 +204,7 @@ export function ProseHoverCard({
        so `describeLink` returned `{kind: "other"}` and the reader got a panel
        saying `link` over `/library`. Nobody had reported it, which is what an
        ignorable wart looks like; narrowing it was needed anyway to let chat's
-       links in, so it was done there. docs/plans/chat-web-links.md.
+       links in, so it was done there. docs/plans/260827ao-chat-web-links.md.
 
        Three places earn a card, and they are the three where the reader is
        deciding whether to follow an address somebody else chose: the article's
@@ -233,7 +233,7 @@ export function ProseHoverCard({
        13% of this corpus's links have a glossary term as their link text, the
        card carries both halves, and its foot still has "open in a new tab". So
        the link goes from zero taps away to one, and what the author means by
-       the word goes from unreachable to zero. docs/plans/touch-glossary-card.md. */
+       the word goes from unreachable to zero. docs/plans/260827ak-touch-glossary-card.md. */
     /* **And a footnote marker, which is the exception that proves the rule.**
        A marker is a link, so by the paragraph above a tap should be left to
        navigate — and navigating is the one thing a marker should not do under a
@@ -660,7 +660,7 @@ function ExternalBody({
  * all three panels on "Notes" and takes the reader's place in the argument out
  * of every column; the plan's answer to that is not cleverness in the panels but
  * "make the hover preview good enough that most visits never jump at all"
- * (docs/plans/footnotes.md § The fisheye). So: the note's full text, over the
+ * (docs/plans/260828o-footnotes.md § The fisheye). So: the note's full text, over the
  * note's whole *range* of blocks, with its own hyperlinks live.
  *
  * Three things it does not do, each of them deliberate:

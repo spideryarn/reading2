@@ -663,7 +663,7 @@ when("the Postgres chat store", () => {
      The two fields review added, against the two ways Postgres could lose them
      that the filesystem store cannot. Both are silent failures: no error, no
      visible symptom, and a transcript that still reads as one conversation.
-     docs/plans/review-mode.md, and GPT Sol's review of it (findings 5 and 6). */
+     docs/plans/260827ah-review-mode.md, and GPT Sol's review of it (findings 5 and 6). */
 
   it("keeps a thread's kind across a second turn that does not mention it", async () => {
     /* A client continuing a conversation sends no kind — the thread already has

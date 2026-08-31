@@ -45,7 +45,7 @@ The 200 is correct. The call did what it was asked: it ran a step and recorded a
 Returning 500 would turn a recorded *application* failure into a *transport* failure, and
 [`src/web/useJobs.ts`](../../src/web/useJobs.ts) **retries** transport failures. The reader is not
 misled either — the shelf renders a red card carrying the error. GPT Sol's call, 2026-08-28,
-reviewed in [html-ingest-var-data-sol.md](../plans/html-ingest-var-data-sol.md).
+reviewed in [260828at-html-ingest-var-data-sol.md](../plans/260828at-html-ingest-var-data-sol.md).
 
 What the 200 *does* hide is the whole class from Vercel's error dashboard, which only sees 5xx —
 [vercel-hosting-deployment.md § the trap](vercel-hosting-deployment.md#the-trap-get_runtime_errors-will-not-show-you-an-application-failure).
@@ -54,7 +54,7 @@ card, and without this nobody else ever hears about it."*
 
 ## It is a fifth egress, and the logging rules apply to it
 
-Everything [error-boundary.md](../plans/error-boundary.md) says about an `Error.message` carrying
+Everything [260826p-error-boundary.md](../plans/260826p-error-boundary.md) says about an `Error.message` carrying
 article text is *more* true when the message leaves the machine:
 
 - `Error.message` is dropped unless it ends in a code from [`src/messages.ts`](../../src/messages.ts)
@@ -64,7 +64,7 @@ article text is *more* true when the message leaves the machine:
   one by one
 
 The full build, the options reference and the source-map story are in
-[error-monitoring-sentry.md](../plans/error-monitoring-sentry.md).
+[260827y-error-monitoring-sentry.md](../plans/260827y-error-monitoring-sentry.md).
 
 ## The two gaps, both open
 
@@ -86,7 +86,7 @@ check's env list, and it is not done.
 - [vercel-hosting-deployment.md](vercel-hosting-deployment.md) — the one-day half, and its traps
 - [logging.md](logging.md) — why capture is not wired through the logger
 - [security.md](security.md) — what may leave this machine at all
-- [error-monitoring-sentry.md](../plans/error-monitoring-sentry.md) — the plan it was built from
+- [260827y-error-monitoring-sentry.md](../plans/260827y-error-monitoring-sentry.md) — the plan it was built from
 
 ---
 

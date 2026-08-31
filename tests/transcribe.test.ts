@@ -185,7 +185,7 @@ describe("the vocabulary", () => {
      "Why you're reading this one" is a sentence they wrote about this article,
      minutes ago, in their own spelling — and a reader who typed it and then
      pressed the microphone is often about to say it out loud. Greg asked for
-     this source on 2026-08-28. docs/plans/dictation-vocabulary.md. */
+     this source on 2026-08-28. docs/plans/260828l-dictation-vocabulary.md. */
   it("carries what the reader typed into \"why you're reading this one\"", async () => {
     const words = await vocabularyFor({ kind: "article", slug: "known" });
     expect(words).toContain("Byzantine generals");
@@ -231,7 +231,7 @@ describe("the vocabulary", () => {
      defining; it does not name the people cited, and a reader talking about a
      paper says who wrote it, and adding these is what stopped `fowler-names`
      losing `Alimentiveness`. The measurement is in evals/dictation/ and the
-     numbers in docs/plans/dictation-vocabulary.md. */
+     numbers in docs/plans/260828l-dictation-vocabulary.md. */
   it("carries the article's own names, which the glossary does not", async () => {
     const words = await vocabularyFor({ kind: "article", slug: "known" });
     expect(words).toContain("Lamport");

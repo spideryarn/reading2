@@ -18,7 +18,7 @@ This doc is *how it works now*. The day of debugging that got the microphone its
 the 1.1-second gap nobody could see, the level meter, the conferencing loopback that emitted exact
 digital silence — is in [reader-profile.md § The microphone](reader-profile.md#the-microphone-and-what-it-took-to-make-it-believable),
 and the change described here is planned out with its measurements and its review in
-[dictation-two-pass.md](../plans/dictation-two-pass.md).
+[260827x-dictation-two-pass.md](../plans/260827x-dictation-two-pass.md).
 
 ## It transcribes twice
 
@@ -66,7 +66,7 @@ the reader is least likely to say. Three files, and the split is what makes it r
 [`src/vocabulary-sources.ts`](../../src/vocabulary-sources.ts) turns a *place* into a term list, and
 [`src/transcribe.ts`](../../src/transcribe.ts) takes a vocabulary as a string and never needs to
 know where it came from. The plan, the measurements and the alternatives are in
-[dictation-vocabulary.md](../plans/dictation-vocabulary.md).
+[260828l-dictation-vocabulary.md](../plans/260828l-dictation-vocabulary.md).
 
 1. **The app's own words** — `Spideryarn`, `granularity zoom`, a block id. Small, flat, always.
    Nothing in an article ever supplies them, and `Spideryarn` is the word a reader is most likely to
@@ -348,6 +348,6 @@ once for that origin. And the origin includes the port, which Vite moves.
 [reader-profile.md](reader-profile.md) · [comments.md](comments.md) · [glossary.md](glossary.md) ·
 [live-conversation.md](live-conversation.md) ·
 [copy.md](copy.md) · [logging.md](logging.md) ·
-[dictation-two-pass.md](../plans/dictation-two-pass.md) ·
-[dictation-vocabulary.md](../plans/dictation-vocabulary.md) ·
-[microphone-library-options.md](../research/microphone-library-options.md)
+[260827x-dictation-two-pass.md](../plans/260827x-dictation-two-pass.md) ·
+[260828l-dictation-vocabulary.md](../plans/260828l-dictation-vocabulary.md) ·
+[260827b-microphone-library-options.md](../research/260827b-microphone-library-options.md)

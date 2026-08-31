@@ -139,7 +139,7 @@ export type { StepName };
  * the pair of them is what turned that from an exception into the shape of the
  * list: everything up to `arc` makes the article readable, and everything after
  * it is a thing somebody asks for. See
- * docs/plans/tweet-thread-page.md#the-one-real-snag-stated-precisely and
+ * docs/plans/260825g-tweet-thread-page.md#the-one-real-snag-stated-precisely and
  * docs/project/glossary.md.
  */
 export const STEP_ORDER: StepName[] = [
@@ -153,7 +153,7 @@ export const STEP_ORDER: StepName[] = [
      second one invented for this step. Before `arc` because everything up to
      `arc` is what makes the article readable, and an article whose figures are
      still being fetched from the publisher is not finished being ingested.
-     docs/plans/hosting-the-articles-images.md#the-step. */
+     docs/plans/260829b-hosting-the-articles-images.md#the-step. */
   "assets",
   "arc",
   "tweets",
@@ -212,7 +212,7 @@ export const STEP_ORDER: StepName[] = [
  * to the root gist, which looks fine. Greg was offered a second, non-blocking arc
  * job after ingest, which would have closed this, and chose the smaller change.
  * tests/visitor-gaps.test.ts pins it, so it stays a decision rather than becoming
- * a bug report. docs/plans/defer-arc-and-rename-hierarchy.md § 2.2.
+ * a bug report. docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.2.
  */
 export const DEFAULT_INGEST_STEPS: StepName[] = [
   "fetch",
@@ -223,7 +223,7 @@ export const DEFAULT_INGEST_STEPS: StepName[] = [
      and an article whose images are still hot-linked to the publisher announces
      the reader's IP to that publisher on every single read. That is the privacy
      leak this step exists to close, so closing it cannot be something somebody
-     has to ask for. docs/plans/hosting-the-articles-images.md. */
+     has to ask for. docs/plans/260829b-hosting-the-articles-images.md. */
   "assets",
 ];
 
@@ -365,7 +365,7 @@ export interface StepContext {
    * — which the reader's panel asks and the pipeline does not. (A `guidance`
    * steer sat beside this and was left out for a different reason again: it was
    * a reason to *force* a rewrite rather than evidence of staleness. It is gone
-   * — docs/plans/steer-becomes-the-profile.md.)
+   * — docs/plans/260830o-steer-becomes-the-profile.md.)
    */
   profile?: string;
   /**
@@ -394,7 +394,7 @@ export interface StepContext {
  *
  * On the filesystem that buys nothing — there is no transaction to hold — and
  * that is exactly why the shape lands first, with nothing converted, so the
- * boundary exists before anything depends on it (docs/plans/delete-the-importer.md
+ * boundary exists before anything depends on it (docs/plans/260827aa-delete-the-importer.md
  * § D1a). Under Postgres it is the difference between a step's artefacts, its
  * postcondition and its completion committing together or one at a time.
  *
@@ -426,7 +426,7 @@ export interface StepProduct {
  * **Empty since 2026-08-31, and it is kept rather than deleted.**
  *
  * Every one of the eleven steps now returns its artefacts and writes no file of
- * its own (docs/plans/finish-the-database-move.md § Stage 2). The exemption has
+ * its own (docs/plans/260831b-finish-the-database-move.md § Stage 2). The exemption has
  * no members, which means `LegacyUnconvertedStep` is `never` and `run` must
  * return a `ConvertedProduct` for every step in the pipeline — so the mechanism
  * has stopped being a list of exceptions and become a compile-time rule with no
@@ -449,7 +449,7 @@ export interface StepProduct {
  * session consults this list and a transactional one deliberately passes an
  * empty set instead — because a stage writing outside the transaction is the
  * failure the transaction exists to prevent
- * (docs/plans/delete-the-importer.md § D1b). With the list empty those are the
+ * (docs/plans/260827aa-delete-the-importer.md § D1b). With the list empty those are the
  * same question, and that is the point of the migration rather than a reason to
  * merge them: the day somebody adds a name back, they diverge again on purpose.
  */
@@ -512,7 +512,7 @@ export interface PipelineStep<N extends StepName = StepName> {
    * the old one, with a test holding them together, is what makes the swap
    * checkable before anything depends on it. `outputs` goes when the Postgres
    * adapter lands and `assertProduced` stops needing a path — see
-   * docs/plans/postgres-storage-implementation.md § The order.
+   * docs/plans/260826e-postgres-storage-implementation.md § The order.
    */
   produces: readonly ArtifactKind[];
   /**
@@ -567,7 +567,7 @@ export interface PipelineStep<N extends StepName = StepName> {
    *
    * Worth doing before the artefacts leave the filesystem rather than after:
    * both of these `isDone` implementations read `ctx.dir`, and under Postgres
-   * there is no directory to read. docs/plans/transactional-stage-runner.md § D.
+   * there is no directory to read. docs/plans/260827j-transactional-stage-runner.md § D.
    */
   isDone?(ctx: StepContext, store: ArtifactReads): Promise<boolean>;
   /**
@@ -655,7 +655,7 @@ function canonicalBlock(block: Block): string {
  * `stamped_html`), question 1 compares stage 3's own output against stage 3's
  * own blocks, and it **returns true always** — a vacuous guard over the one
  * contract this codebase is built on, arriving at the moment the reads start
- * succeeding. docs/plans/finish-the-database-move.md § stage 1.
+ * succeeding. docs/plans/260831b-finish-the-database-move.md § stage 1.
  *
  * ## Why not something cheaper than re-running the split
  *
@@ -791,7 +791,7 @@ function blocksPathFor(ctx: StepContext): string {
  * The replacement is not a better count. It is `previousBlocksFrom` and
  * `assertIdsCarried` in src/blocks.ts: the baseline comes from the store, and
  * losing it throws instead of warning. See
- * docs/plans/delete-the-importer.md § Three stages carry identity in a file.
+ * docs/plans/260827aa-delete-the-importer.md § Three stages carry identity in a file.
  */
 
 /**
@@ -884,7 +884,7 @@ async function inputHashFor(ctx: StepContext, store: ArtifactReads): Promise<str
  * sections could be re-cut or the extracted title changed and all three went on
  * reporting themselves current. Nothing showed, because the pipeline's artefact
  * reads answer `null` today and the step re-runs regardless — the fault arrives
- * with the reads that make it work. docs/plans/finish-the-database-move.md
+ * with the reads that make it work. docs/plans/260831b-finish-the-database-move.md
  * § stage 1; docs/reusable/silent-success.md.
  *
  * `null` is *"we cannot tell"* for the blocks and the tree alike. **The metadata
@@ -923,7 +923,7 @@ async function articleInputHash(ctx: StepContext, store: ArtifactReads): Promise
  * carries the ids. An earlier version of this comment claimed the untouched-old
  * case was caught; a review found it was not. Closing it properly means one
  * validation used both after a run and at the skip decision, which is
- * docs/plans/postgres-storage-implementation.md § Step 11 half B, stage 5.
+ * docs/plans/260826e-postgres-storage-implementation.md § Step 11 half B, stage 5.
  */
 export async function assertProduced(
   step: PipelineStep,
@@ -1124,7 +1124,7 @@ function requireUrl(ctx: StepContext): string {
  * > retry and `assertProduced` — the exact machinery built to make interrupted
  * > work visible.
  * >
- * > — docs/plans/pdf-upload-and-storage.md, on GPT Sol's review
+ * > — docs/plans/260826u-pdf-upload-and-storage.md, on GPT Sol's review
  *
  * So it is `fetch`'s other half. Same step name, same contract, same one output
  * (`raw.json`), and from stage 2 onwards nothing can tell which half ran.
@@ -1217,7 +1217,7 @@ async function acquireUpload(
     kind: "pdf",
     file: "raw.pdf",
     /* **No URL, and none invented.** `RawManifest` used to require two, which
-       is exactly the assumption docs/plans/pdf-upload-and-storage.md § 5 warned
+       is exactly the assumption docs/plans/260826u-pdf-upload-and-storage.md § 5 warned
        would take the time. A `file://` or an `upload://…` here would have read
        as an address to everything downstream — `GET /api/source/:slug`,
        import/export, the metadata page — and none of them would have said
@@ -1380,7 +1380,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      **Two extractors, one artefact.** A web page goes through Readability; a
      PDF goes through a model that reads its pages. Both write `article.html`
      and `meta.json`, and stage 3 onwards cannot tell which produced them —
-     which is the entire design. See docs/plans/pdf-ingestion.md.
+     which is the entire design. See docs/plans/260826c-pdf-ingestion.md.
 
      The branch is on **what stage 1 says it fetched**, never on the URL: a
      `.pdf` address that served a Cloudflare challenge is HTML, an
@@ -1692,7 +1692,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * storage a private freshness rule for `toc` would put the pipeline's logic
      * in the storage layer *and* walk straight back into the hazard above, by a
      * different door. GPT Sol, 2026-08-28;
-     * docs/plans/artifacts-pg-has-sol.md.
+     * docs/plans/260828b-artifacts-pg-has-sol.md.
      *
      * **What the runner must still do is record the hash.** Having no expected
      * stamp and recording no input are different things: `finishStepRun` has to
@@ -1985,7 +1985,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
     produces: ["tweets"],
     /* Was `threadIsCurrent(ctx.dir)`, which did these same three comparisons by
        hand and read the article's directory rather than the store — deleted in
-       D0 (docs/plans/delete-the-importer.md). The comparison belongs in one
+       D0 (docs/plans/260827aa-delete-the-importer.md). The comparison belongs in one
        place (`sameStamp`); only the three values belong to the stage. */
     stamp: async (ctx, store) => {
       /* `articleInputHash`, not `inputHashFor`: this prompt reads the tree and
@@ -2050,7 +2050,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        function doing the same three comparisons by hand. That function was
        deleted on 2026-08-28. This comment used to say it survived "because its
        CLI uses it"; glossary's `main()` never called it, and only its own tests
-       did, so the sentence was keeping dead code alive. docs/plans/simplification-wave-2.md § 0.5.
+       did, so the sentence was keeping dead code alive. docs/plans/260828aj-simplification-wave-2.md § 0.5.
 
        `stamp` rather than `isDone` because the *comparison* belongs in one
        place (`sameStamp`) and only the four values belong to the stage. It is
@@ -2074,7 +2074,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * fails on every run and looks like a first pass, so "find more terms"
        * quietly becomes "replace the glossary", `passes` resets to 1, every
        * `?term=` link goes dead and every stored lookup is orphaned. Nothing
-       * throws. docs/plans/delete-the-importer.md § Three stages carry identity
+       * throws. docs/plans/260827aa-delete-the-importer.md § Three stages carry identity
        * in a file.
        *
        * `previousGlossaryFrom` asks the store instead, and refuses rather than
@@ -2125,7 +2125,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   },
   /**
    * **Stage 5h — the quotes**: the lines worth keeping, in the author's own
-   * words. docs/project/quotes.md, docs/plans/quotes-mode.md.
+   * words. docs/project/quotes.md, docs/plans/260831j-quotes-mode.md.
    *
    * In `STEP_ORDER` but not in `DEFAULT_INGEST_STEPS`, for the reason `tweets`
    * established and `glossary`, `ideas` and `sketch` have followed:
@@ -2346,7 +2346,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
 
      **The first step whose stamp reads the publication date**, and the only one
      — see its `stamp` below. docs/project/timeline.md,
-     docs/plans/timeline-mode.md. */
+     docs/plans/260831i-timeline-mode.md. */
   timeline: {
     name: "timeline",
     label: "Reading the dates",
@@ -2373,7 +2373,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * **And no `profileHash`**, unlike `ideas` and `sketch` — a decision rather
      * than an omission. Who is reading changes what an *idea* is; it does not
      * change when something happened, so there is one fewer reason to
-     * regenerate. docs/plans/timeline-mode.md § Freshness.
+     * regenerate. docs/plans/260831i-timeline-mode.md § Freshness.
      */
     stamp: async (ctx, store) => {
       /* `tryReadArticle`, where `run` below takes `readArticle`, and the
@@ -2485,7 +2485,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   },
   /**
    * **The picture a model draws of the argument** — docs/project/diagram.md
-   * § Sketch, docs/plans/sketch-diagram.md.
+   * § Sketch, docs/plans/260830j-sketch-diagram.md.
    *
    * **The first converted step in this pipeline, and for a while the only one.**
    * It returns `parts` and writes no file of its own. That is not a flourish —

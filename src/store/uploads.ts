@@ -24,7 +24,7 @@
  * Everything else is the same shape on both sides, which is what
  * `tests/store-uploads-parity.test.ts` is for.
  *
- * See docs/plans/durable-queue-and-uploads.md.
+ * See docs/plans/260827h-durable-queue-and-uploads.md.
  */
 
 import { type RejectReason, type UploadStatus, grantExpired } from "../source.js";

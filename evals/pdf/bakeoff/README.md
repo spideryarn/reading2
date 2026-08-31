@@ -1,7 +1,7 @@
 # The bake-off harness
 
 A **spike, kept.** It decided which reader v1 uses, and it is committed only because
-[the plan](../../../docs/plans/pdf-ingestion.md#the-bake-off-and-what-it-decided-2026-08-26) cites
+[the plan](../../../docs/plans/260826c-pdf-ingestion.md#the-bake-off-and-what-it-decided-2026-08-26) cites
 its numbers — a measurement whose method you cannot read is an anecdote. It will be replaced by
 `scripts/pdf-eval.ts` and `src/pdf-score.ts`, and deleted when it is.
 

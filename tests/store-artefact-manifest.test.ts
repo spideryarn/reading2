@@ -57,7 +57,7 @@ const HOMES: Record<string, string> = {
   /* A PDF, and the record of which of the two it is. Stage 1 writes exactly one
      of `raw.html` / `raw.pdf` plus `raw.json` naming it — a refresh can leave
      both raw files there, and "whichever exists" then picks the stale one
-     silently (docs/plans/pdf-ingestion.md). The bytes go in the same column
+     silently (docs/plans/260826c-pdf-ingestion.md). The bytes go in the same column
      either way; the manifest's fields are what the pipeline used to throw away,
      and `raw_content_type` and `raw_encoding` already exist for them. */
   "raw.pdf": "article_revisions.raw_bytes — the same column; raw.json says which arrived",
@@ -69,7 +69,7 @@ const HOMES: Record<string, string> = {
   /* The manifest is the column. The image bytes are content-addressed objects
      in the `sources` bucket and get no row of their own — an image is not the
      document, so `raw_sources.kind` stays `in ('pdf','html')`.
-     docs/plans/hosting-the-articles-images.md. */
+     docs/plans/260829b-hosting-the-articles-images.md. */
   "assets.json": "article_revisions.assets",
   /* The label run's checkpoint, and the one entry here whose home is decided
      but **not yet wired**. `src/db/schema.ts` § checkpoints says in as many
@@ -87,7 +87,7 @@ const HOMES: Record<string, string> = {
      What is genuinely unanswered is who *reclaims* a finished run's checkpoint
      once it is in Postgres: on the filesystem `scripts/checkpoints-sweep.ts`
      sweeps the `data/` root, which is a filesystem answer that does not carry
-     over. docs/plans/delete-the-importer.md § D2 records it as open. */
+     over. docs/plans/260827aa-delete-the-importer.md § D2 records it as open. */
   "labels-progress.json": "checkpoints (namespace 'toc-labels') — decided, not yet wired",
   "arc.json": "article_revisions.arc",
   "tweets.json": "article_revisions.tweets",
@@ -127,7 +127,7 @@ const NOT_MIGRATED: Record<string, string> = {
      whole point. Stage 5e wrote the generated summary ladder here until
      2026-08-31; the stage, the artefact kind, every reader of it and the
      `article_revisions.summary` column are all gone
-     (docs/plans/gist-only-summaries.md, drizzle/0036). `data/` is gitignored, so
+     (docs/plans/260831s-gist-only-summaries.md, drizzle/0036). `data/` is gitignored, so
      the files linger on whichever machine ran the stage — orphans that nothing
      reads and nothing moves. */
   "summary.json": "deleted with stage 5e; no home, because there is nothing to home",
@@ -135,7 +135,7 @@ const NOT_MIGRATED: Record<string, string> = {
      "a decision not to migrate it, not an omission" — a cache, one file per page
      range, keyed on the PDF's bytes + the prompt version + the reader, holding
      the model's raw answer so that fixing the renderer or the checker costs
-     nothing (docs/plans/pdf-ingestion.md).
+     nothing (docs/plans/260826c-pdf-ingestion.md).
 
      That decision was reversed and this list was never told. `src/db/schema.ts`
      § checkpoints names **both** checkpoint forms as the table's Postgres home,
@@ -190,7 +190,7 @@ const NOT_YET_WRITTEN: Record<string, string> = {
      not been run against a real article" — until a real run on 2026-08-30
      produced one, and the assertion below duly failed and made somebody delete
      the line. It has a home in `HOMES` and always did.
-     docs/plans/hosting-the-articles-images.md, stage B. */
+     docs/plans/260829b-hosting-the-articles-images.md, stage B. */
 
   /* `quotes.json` sat here for a few hours on 2026-08-31 and is gone again,
      which is this pair of lists working exactly as `assets.json` did before it:

@@ -13,7 +13,7 @@
  * model simply not mentioning that passage**. That is the whole reason these
  * are counted rather than silently skipped, and the reason they are tested.
  *
- * See docs/plans/ideas-mode.md and docs/project/testing.md.
+ * See docs/plans/260826ac-ideas-mode.md and docs/project/testing.md.
  */
 import { describe, expect, it } from "vitest";
 import {

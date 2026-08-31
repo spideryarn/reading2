@@ -1,6 +1,6 @@
 /**
  * Does a deployed `/read/:slug` actually behave the way
- * docs/plans/public-read-only-stage2-input-sol.md says it must?
+ * docs/plans/260828ao-public-read-only-stage2-input-sol.md says it must?
  *
  *     npx tsx scripts/check-public-shell.ts --self-test
  *     npx tsx scripts/check-public-shell.ts \
@@ -510,7 +510,7 @@ interface RawResponse {
  * header names into one comma-joined value (or silently keeps only one,
  * depending on the name), which is precisely the evidence checks 6 and 7 need
  * to see intact: a duplicated `x-robots-tag` has to look duplicated. Flags
- * match docs/plans/public-read-only-stage2-input-sol.md § 3 exactly:
+ * match docs/plans/260828ao-public-read-only-stage2-input-sol.md § 3 exactly:
  * `--http1.1 --path-as-is -H 'Accept-Encoding: identity'`, and never
  * `--compressed` — check 6 hashes exact bytes.
  */

@@ -21,7 +21,7 @@
  * what the reader selected is a form of the term the article really uses.
  *
  * See docs/project/glossary.md and
- * docs/plans/postgres-storage-implementation.md § `lookUpTerm` has to move out.
+ * docs/plans/260826e-postgres-storage-implementation.md § `lookUpTerm` has to move out.
  */
 
 import { afterAll, describe, expect, it } from "vitest";

@@ -10,7 +10,7 @@
  * checked `r.ok`, so when the failing reply was not JSON the parser threw first
  * and the careful `body.error ?? r.statusText` line never ran. The error
  * handling was not missing; it was unreachable. See
- * docs/postmortems/first-vercel-deploy-silent-failures.md.
+ * docs/postmortems/260826g-first-vercel-deploy-silent-failures.md.
  *
  * So the bodies below are the real ones: Vercel's plain-text 500, Vercel's HTML
  * 404, and the single-page-app shell that a misrouted `/api/…` gets back. The

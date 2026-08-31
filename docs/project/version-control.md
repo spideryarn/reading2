@@ -720,13 +720,13 @@ uncommitted work rather than the project.
 
 ## The other repo, and the move that hasn't happened
 
-[deploy-and-repo-move.md](../plans/deploy-and-repo-move.md) plans folding this codebase into the
+[260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md) plans folding this codebase into the
 original app's repo, `spideryarn/reading`, with everything currently there swept into `legacy/`.
 That is still open and this remote does not do it — `spideryarn/reading2` is a separate repo, and
 creating it changes nothing about the plan except that its step 4 can now fetch from GitHub instead
 of from a Dropbox path.
 
-Read the plan's [sequencing trap](../plans/deploy-and-repo-move.md#the-sequencing-trap) before
+Read the plan's [sequencing trap](../plans/260825d-deploy-and-repo-move.md#the-sequencing-trap) before
 starting any of it: the moment this codebase lands at the root of `spideryarn/reading`, the old
 Vercel project tries to build it as a Next.js app.
 

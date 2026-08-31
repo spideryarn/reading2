@@ -514,7 +514,7 @@ export async function* explainStream({
                not a stylistic preference.** Tools render at position 0, ahead of
                the system prompt and the article, and editing a tool definition
                invalidates all three cache tiers — see the invalidation table in
-               docs/research/prompt-caching-anthropic.md and note that neither of
+               docs/research/260826b-prompt-caching-anthropic.md and note that neither of
                Anthropic's escape hatches applies on Sonnet 5. A `max_uses` that
                varied per request would mean two cached prefixes, each paying the
                1.25x write premium, and the only symptom would be the bill: the

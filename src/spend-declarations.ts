@@ -12,7 +12,7 @@
  * checks the list is complete. A table of facts is safe to share; the thing
  * that can spend money is not.
  *
- * Why any of this exists: docs/plans/ai-spend-outside-the-gateway.md.
+ * Why any of this exists: docs/plans/260828g-ai-spend-outside-the-gateway.md.
  */
 
 import type { ProviderAccount } from "./ai-spend.js";

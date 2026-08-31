@@ -5,7 +5,7 @@
  * > path, then verify ownership, size, checksum and the `%PDF-` magic before
  * > enqueueing.
  * >
- * > — docs/plans/pdf-ingestion.md, quoted in pdf-upload-and-storage.md as the
+ * > — docs/plans/260826c-pdf-ingestion.md, quoted in 260826u-pdf-upload-and-storage.md as the
  * >   load-bearing sentence of the design
  *
  * So the assertions here are about **what the request may name** rather than
@@ -243,7 +243,7 @@ describe("what an upload request may carry besides the id", () => {
   });
 
   /* **`guidance` was a fourth thing on that list and is now ignored instead.**
-     The summary steer it named is gone (docs/plans/steer-becomes-the-profile.md),
+     The summary steer it named is gone (docs/plans/260830o-steer-becomes-the-profile.md),
      and the two behaviours are not interchangeable: refusing is right for a
      field that would *change what runs*, because claiming an upload and then
      400-ing strands the attempt; ignoring is right for a field that now changes

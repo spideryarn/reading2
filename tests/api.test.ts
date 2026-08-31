@@ -25,7 +25,7 @@ import { STEP_ORDER, STEPS } from "../src/pipeline.js";
  * hypothetical: an article that does not exist, and an article whose blocks are
  * written but whose tree is not. The second is a normal few seconds of every
  * ingest once the ToC moves out of the critical path
- * (docs/plans/faster-ingest-and-concurrency.md), and serving the fixture there
+ * (docs/plans/260830am-faster-ingest-and-concurrency.md), and serving the fixture there
  * means a reader who opens their own article early reads somebody else's.
  *
  * Asserted as "not the fixture" rather than only as a 404, because a 404 for the
@@ -102,7 +102,7 @@ describe("the example/ fixture is not a fallback for other slugs", () => {
 
   it("still opens the fixture under its own slug", async () => {
     // The control. Six test files read `example/` as static data and
-    // docs/plans/postgres-migration.md says it stays, so the refusal above must
+    // docs/plans/260825f-postgres-migration.md says it stays, so the refusal above must
     // be about the slug and not about the directory.
     const article = await loadArticle("example");
     expect(article.blocks.length).toBeGreaterThan(0);
@@ -134,7 +134,7 @@ describe("loadArticle", () => {
  * There is deliberately no staleness test, because there is deliberately no
  * staleness verdict — mtimes cannot prove what a file was built from, and the
  * obvious comparison marks every *successful* toc run stale. The reasoning is
- * on `articleMetadata` itself and in docs/plans/metadata-page.md.
+ * on `articleMetadata` itself and in docs/plans/260825e-metadata-page.md.
  */
 describe("articleMetadata", () => {
   it("reports every pipeline stage, in pipeline order", async () => {
@@ -148,7 +148,7 @@ describe("articleMetadata", () => {
     // All three: stage 4 writes the tree, the nav labels its second model pass
     // produced, AND copies the blocks beside them, so a caller checking only
     // the first would call a half-finished run done. src/toc.ts writes the tree
-    // last for the same reason — docs/plans/toc-scaling.md.
+    // last for the same reason — docs/plans/260826h-toc-scaling.md.
     expect(toc?.outputs).toEqual([
       "example/tree.json",
       "example/labels.json",
@@ -231,7 +231,7 @@ describe("articleMetadata", () => {
   it("counts the questions asked, so the page never has to fetch them", async () => {
     // The count is here rather than on the client because the metadata page
     // must NOT call `useComments` — that hook fetches on mount, and a visit
-    // would buy a drawer nobody opened (docs/plans/metadata-page.md § The
+    // would buy a drawer nobody opened (docs/plans/260825e-metadata-page.md § The
     // shell). This endpoint is already looking in the article's directory.
     const m = await articleMetadata("example");
     expect(typeof m.comments).toBe("number");

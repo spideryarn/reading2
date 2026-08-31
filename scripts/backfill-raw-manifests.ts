@@ -8,7 +8,7 @@
  * the key it is under, and how big it is. Every manifest written before those
  * dates has neither, and the Postgres artefact store is about to **refuse** a
  * manifest with no `storedSha256` rather than write a `fetch` step that reports
- * done beside a revision holding no document — docs/plans/delete-the-importer.md
+ * done beside a revision holding no document — docs/plans/260827aa-delete-the-importer.md
  * § C6. So without this, every article already on a laptop stops being
  * ingestable at the moment that refusal lands.
  *
@@ -23,7 +23,7 @@
  *
  * ## The hash is computed, never copied
  *
- * This is the trap docs/plans/raw-bytes-in-storage.md § The backfill can put
+ * This is the trap docs/plans/260827o-raw-bytes-in-storage.md § The backfill can put
  * the wrong bytes under a hash is about, and it is the subtlest thing in that
  * document. `manifest.sha256` is the hash of the bytes **off the network**; for
  * HTML, `writeRaw` stores the *decoded, UTF-8 re-encoded* text instead —

@@ -22,7 +22,7 @@
  * **And the reducer stays pure.** Every transition here runs twice against a
  * deep-frozen state whose `Map`s throw on `set` — see helpers/chat-reduce.ts.
  *
- * docs/plans/live-conversation-in-chat.md § 1.
+ * docs/plans/260831l-live-conversation-in-chat.md § 1.
  */
 import { describe, expect, it } from "vitest";
 

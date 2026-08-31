@@ -16,7 +16,7 @@
  * automatic **and** sends ids, so filtering in the builders is right three
  * times out of four and silently leaves the ideas stage reading the
  * bibliography — with a comment two lines above it explaining why it needs ids,
- * so the next person does not think to look. docs/plans/footnotes.md.
+ * so the next person does not think to look. docs/plans/260828o-footnotes.md.
  *
  * ## And why there is a second token
  *
@@ -113,7 +113,7 @@ beforeAll(async () => {
     note.role = "footnote";
     note.treatment = "supplement";
     /* One `noteId` across both, because a note is a RANGE of blocks and not a
-       block — docs/plans/footnotes.md § A note is a range of blocks. */
+       block — docs/plans/260828o-footnotes.md § A note is a range of blocks. */
     note.noteId = "note-1";
   }
 

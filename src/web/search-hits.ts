@@ -556,7 +556,7 @@ export function resolveQuote(
  *   caption them with, and inventing an empty string here would put a blank
  *   caption slot into the prose hover card.
  * - **`slot: 0`.** Timeline paints no lane down the rail — that is on the
- *   deferred list with the marks (docs/plans/timeline-mode.md § Appendix), so
+ *   deferred list with the marks (docs/plans/260831i-timeline-mode.md § Appendix), so
  *   there is no palette to assign from. Zero is the value `assignSlots` would
  *   give the first row anyway, so the wash in the prose is the ordinary one.
  *

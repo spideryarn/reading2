@@ -5,7 +5,7 @@
  * lands in the message array is not a style question: everything above the
  * `cache_control` breakpoint has to stay byte-identical for the life of a
  * conversation, or the whole article is written to the cache again on every
- * turn. That is the bug in docs/postmortems/chat-cache-automatic-breakpoint.md,
+ * turn. That is the bug in docs/postmortems/260826h-chat-cache-automatic-breakpoint.md,
  * and it cost exactly that.
  *
  * So the split is:

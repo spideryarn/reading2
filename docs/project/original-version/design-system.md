@@ -70,7 +70,7 @@ processed. Both should name the step.
 ([`Metadata.tsx`](../../../src/web/Metadata.tsx)): it says *"Checking which files the pipeline
 wrote…"* rather than `Looking…`, and it says it only after 600ms, which on localhost means it
 almost never appears at all. See
-[metadata-page.md § A second pass over theirs](../../plans/metadata-page.md#a-second-pass-over-theirs-2026-08-25).
+[260825e-metadata-page.md § A second pass over theirs](../../plans/260825e-metadata-page.md#a-second-pass-over-theirs-2026-08-25).
 
 **And on the other three, the same day.** `App.tsx`, `Library.tsx` and `Tweets.tsx` each had a bare
 `Loading…` or `Looking…`; all three now stay silent for 600ms and then name what is being waited
@@ -174,7 +174,7 @@ reduced rather than merely fast — a tooltip's transform, the context panel's s
 commands — ending with "Implementation 📋 Awaiting Stage 2 execution". It doesn't record what
 happened.
 
-Ours does: [shadcn-migration.md](../../plans/shadcn-migration.md), including an honest assessment
+Ours does: [260825a-shadcn-migration.md](../../plans/260825a-shadcn-migration.md), including an honest assessment
 and a list of predictions that turned out wrong. That is the more useful artefact, and the
 difference between the two is exactly the difference between a plan and a record.
 
@@ -185,4 +185,4 @@ difference between the two is exactly the difference between a plan and a record
 - [../design-css-overview.md](../design-css-overview.md) — our stylesheets and what owns what
 - [../icons.md](../icons.md) — Lucide, the one stroke weight, and the spinner recipe
 - [../browser-testing.md](../browser-testing.md) — how to look at this app without being misled
-- [../../plans/shadcn-migration.md](../../plans/shadcn-migration.md) — our migration, written down afterwards
+- [../../plans/260825a-shadcn-migration.md](../../plans/260825a-shadcn-migration.md) — our migration, written down afterwards

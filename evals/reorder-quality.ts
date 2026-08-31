@@ -5,7 +5,7 @@
  *
  * Prompt caching needed the article to move to the front of the arc, thread and
  * glossary prompts, ahead of each stage's own instructions
- * ([docs/plans/prompt-caching.md](../docs/plans/prompt-caching.md) step 3). That
+ * ([docs/plans/260826g-prompt-caching.md](../docs/plans/260826g-prompt-caching.md) step 3). That
  * is not a free edit and this file exists because saying so is not enough:
  * models weight recency, and moving the instructions from before a 35,000-token
  * article to after it could plausibly make them count for less.

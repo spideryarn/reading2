@@ -9,7 +9,7 @@
  * with satellites, a ladder, a funnel, two columns compared — the model decides
  * which the article *is*, and lays it out itself. The whole design and the
  * reasoning are in docs/project/diagram.md § Sketch and
- * docs/plans/sketch-diagram.md.
+ * docs/plans/260830j-sketch-diagram.md.
  *
  * What it does **not** do is emit SVG. It writes a scene in the five primitives
  * of src/sketch-scene.ts, which `readSketch` then checks against the article
@@ -83,7 +83,7 @@ export const OVERVIEW_MAX = 16;
  * head of the prompt. Those are stage 2's fields and a re-extraction moves
  * them, so a change there is reachable rather than theoretical — a reader's own
  * rename is a shelf override the generators never see.
- * docs/plans/finish-the-database-move.md § stage 1.
+ * docs/plans/260831b-finish-the-database-move.md § stage 1.
  */
 export function inputFingerprint(
   blocks: readonly BlockFingerprint[],

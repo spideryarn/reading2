@@ -13,7 +13,7 @@
  * job.** The stage used to write `labels.json`, `blocks.json` and `tree.json`
  * itself, so every test below looked in the directory afterwards. It now
  * returns the three artefacts in one object and its caller stores them
- * (docs/plans/finish-the-database-move.md § Stage 2), so the question "was a
+ * (docs/plans/260831b-finish-the-database-move.md § Stage 2), so the question "was a
  * bad tree published?" becomes "did a bad tree come back?" — and the assertions
  * moved from `readdir` to the returned `parts`. A throw is still the whole of
  * what stops it: there is no half-way state in which the stage returns a tree
@@ -82,7 +82,7 @@ let labelsFor: Record<string, string> = {};
  * one ingest. Counting the call is the only way to see it: the outcome —
  * throws, writes nothing — is identical whether the check runs before the
  * labels or after them, which is why the existing tests in this file all passed
- * on the wasteful order. See docs/postmortems/the-article-with-one-heading.md.
+ * on the wasteful order. See docs/postmortems/260830a-the-article-with-one-heading.md.
  */
 let labelCalls = 0;
 
@@ -255,7 +255,7 @@ describe("generateToc refuses to hand back an invalid tree", () => {
      block backs up costs the node its provenance mark and costs the reader
      nothing; before this, four structure calls in four made the same wrong
      claim on one article and it was a guaranteed failure loop for that
-     document. docs/research/opening-an-article-before-the-toc.md § 7b. */
+     document. docs/research/260830a-opening-an-article-before-the-toc.md § 7b. */
   it("returns the tree, minus the claim, when a node claims a heading it does not contain", async () => {
     modelTree = wholeArticle({ sourceHeading: "A Heading Nobody Wrote" });
     const result = await run();

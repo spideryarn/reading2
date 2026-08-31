@@ -48,7 +48,7 @@ const SHARED = new Set([
      article you are reading and the card you decide from before you open it are
      on opposite sides of the wire, and nothing would ever have told us the two
      had drifted. It imports `types.js` and nothing else.
-     See src/block-policy.ts and docs/plans/footnotes.md. */
+     See src/block-policy.ts and docs/plans/260828o-footnotes.md. */
   "block-policy.js",
   /* What a supplement node is, and which nodes sit under one. On the list for
      the same reason `block-policy.js` is, and it imports that file and types
@@ -88,20 +88,20 @@ const SHARED = new Set([
      for the same reason `messages.js` is: it imports nothing but that file and
      types, and both halves of monitoring have to agree on the rules exactly —
      a browser copy and a server copy would be two allowlists, and the looser
-     one would be the one nobody read. See docs/plans/error-monitoring-sentry.md
+     one would be the one nobody read. See docs/plans/260827y-error-monitoring-sentry.md
      and src/monitoring-scrub.ts. */
   "monitoring-scrub.js",
   // Whether a failed ingest job is worth offering a Retry for. It imports
   // messages.js and nothing else, and the card is the only thing that asks —
   // so the rule lives in one place rather than being spelled out at the
-  // button. See docs/postmortems/toc-max-tokens.md.
+  // button. See docs/postmortems/260826a-toc-max-tokens.md.
   "job-failure.js",
   // What counts as a PDF worth uploading, and how big is too big. The picker
   // asks (src/web/UploadPicker.tsx) and `POST /api/uploads` will ask when it
   // exists, which is the whole reason it is a module rather than a constant in
   // the component — the two disagreeing is invisible until a file is accepted
   // in one place and refused in the other. Imports nothing.
-  // See docs/plans/pdf-upload-and-storage.md.
+  // See docs/plans/260826u-pdf-upload-and-storage.md.
   "uploads.js",
   // Who the administrator is. On the list because it qualifies rather than
   // because it was convenient: one exported constant, one three-line function,
@@ -136,7 +136,7 @@ const SHARED = new Set([
      The client needs it because the public reader and the public metadata page
      are typed against exactly the shapes the server projects — the whole point
      of an allowlist projection is lost if the browser re-declares its own idea
-     of what came back. See docs/plans/public-read-only-access.md § The payload. */
+     of what came back. See docs/plans/260827ai-public-read-only-access.md § The payload. */
   "public-types.js",
   /* What we know about the article's own images: which URLs a block would have
      the browser fetch, what a downloaded file turns out to be, and the map a URL
@@ -151,7 +151,7 @@ const SHARED = new Set([
      selection would miss every entry with a query string — five of the corpus's
      thirteen images — with no error and no broken picture, just the publisher's
      URL left in place. One module, both callers.
-     See src/assets.ts and docs/plans/hosting-the-articles-images.md. */
+     See src/assets.ts and docs/plans/260829b-hosting-the-articles-images.md. */
   "assets.js",
   /* Escaping text into markup, and composing an article's page title. On the
      list because they qualify — `html.js` imports nothing at all, and

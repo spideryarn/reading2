@@ -15,7 +15,7 @@
  * **Opus in MP4**, which macOS cannot play. It is a
  * [silent success](../docs/reusable/silent-success.md) with a file extension.
  *
- * docs/plans/microphone-device-and-recording.md.
+ * docs/plans/260827k-microphone-device-and-recording.md.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {

@@ -5,7 +5,7 @@
  * same questions, and the answers come from `article_revisions`,
  * `revision_blocks` and `revision_step_runs` instead of from `data/<slug>/`.
  *
- * This file is landing C of docs/plans/delete-the-importer.md, and it is what
+ * This file is landing C of docs/plans/260827aa-delete-the-importer.md, and it is what
  * replaces `db:import` — not by being a better importer, but by being the thing
  * the pipeline writes through, so that there stops being a second path into the
  * database that only tests exercise.
@@ -18,7 +18,7 @@
  * job. That must happen **once per advance**, in the coordinator, not lazily
  * behind whichever store method the caller happened to reach first. So the
  * store is constructed from a `JobDraftRef` that has already been resolved.
- * GPT Sol, 2026-08-27; docs/plans/artifacts-pg-shape-sol.md.
+ * GPT Sol, 2026-08-27; docs/plans/260827ac-artifacts-pg-shape-sol.md.
  *
  * `slug` still travels in every method signature, and it is not decoration: it
  * is asserted against the bound reference **before anything is read or
@@ -229,7 +229,7 @@ export const STORAGE: {
      names live in the `sources` bucket rather than in a table. There is
      deliberately no `raw_sources` row per image: that table exists so
      `article_revisions` can foreign-key to *the document*, and an image is not
-     the document. docs/plans/hosting-the-articles-images.md § Where the bytes go. */
+     the document. docs/plans/260829b-hosting-the-articles-images.md § Where the bytes go. */
   assets: { assets: { at: "column", column: "assets" } },
   arc: { arc: { at: "column", column: "arc" } },
   tweets: { tweets: { at: "column", column: "tweets" } },
@@ -676,7 +676,7 @@ async function runRowFor(
  * run since — which moves the tree's boundaries, which silently drops every
  * `arc` entry whose block range no longer matches a node (src/web/tree.ts). That is the hazard the `toc` stamp was withdrawn to avoid,
  * reached by a different door. GPT Sol, 2026-08-28;
- * docs/plans/artifacts-pg-has-sol.md.
+ * docs/plans/260828b-artifacts-pg-has-sol.md.
  *
  * The gap it was trying to close is real — neither store can tell a carried
  * tree from a freshly built one — and it belongs to the runner, which knows at

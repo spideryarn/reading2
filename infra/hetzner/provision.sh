@@ -150,6 +150,44 @@ command -v npm >/dev/null || { echo "FATAL: node installed but npm is missing" >
 run 300 "install claude code" npm install -g @anthropic-ai/claude-code
 command -v claude >/dev/null || { echo "FATAL: npm reported success but claude is not on PATH" >&2; exit 1; }
 
+echo "=== codex cli ==="
+# OpenAI's agent CLI, so scripts/run-codex.ts works here as it does on the
+# laptop -- the cross-family review that docs/reusable/codex-cli-as-subagent.md
+# makes a standing rule. Without it, every plan built on this box would have to
+# go back to the laptop to be reviewed.
+#
+# Unpinned, deliberately, exactly like claude-code above and unlike the two MCP
+# servers below. Both agent CLIs move fast and are steered by explicit flags on
+# every invocation (the wrapper passes model, effort, sandbox and approval
+# policy itself), so a floating version costs little; an MCP server is picked up
+# implicitly by whatever session happens to start, which is why those are pinned.
+#
+# @openai/codex ships a prebuilt platform binary rather than JS, so this is the
+# one npm global here that can install "successfully" with nothing runnable for
+# this architecture. The version assertion below is what catches that -- npm's
+# exit code would not.
+run 300 "install codex cli" npm install -g @openai/codex
+command -v codex >/dev/null || { echo "FATAL: npm reported success but codex is not on PATH" >&2; exit 1; }
+# Run it, do not just look for the file. See above: the failure mode is a
+# binary that exists and cannot execute.
+CODEX_V=$(timeout 60 codex --version 2>/dev/null || echo none)
+case "$CODEX_V" in
+  codex-cli\ *) echo "$CODEX_V" ;;
+  *) echo "FATAL: codex is on PATH but '--version' printed '$CODEX_V'" >&2; exit 1 ;;
+esac
+# No ~/.codex/config.toml is written, on purpose. run-codex.ts passes model,
+# effort, sandbox and -c approval_policy=never on every invocation precisely
+# because a local config file silently overrides codex's own safe defaults --
+# see the approval-policy trap in docs/reusable/codex-cli-as-subagent.md. A
+# config here would be a second source of truth for settings the wrapper
+# already owns.
+#
+# Auth is a human step and is NOT done here, the same as claude's /login: the
+# box reads CODEX_API_KEY out of the repo's .env.local (gjd-remote push-env
+# allowlists it), and `codex login --device-auth` adds the ChatGPT subscription
+# if Greg wants the wrapper's default subscription-first path to have something
+# to spend. infra/hetzner/README.md has the ceremony.
+
 echo "=== chrome ==="
 # chrome-devtools-mcp needs real Chrome stable, not Playwright's Chromium.
 # amd64 only: this block is wrong on an ARM (CAX) server.
@@ -352,7 +390,7 @@ say() { echo "$1"; REPORT="$REPORT$1\n"; }
 check() { if ( set +o pipefail; eval "$2" ) >/dev/null 2>&1; then say "ok   $1"; else say "FAIL $1"; fail=1; fi; }
 
 # Before any real check: two self-tests of the checking machinery itself.
-# docs/postmortems/the-match-that-still-failed.md is the whole story. `seq 1
+# docs/postmortems/260831f-the-match-that-still-failed.md is the whole story. `seq 1
 # 100000` is not debris — it is a producer big enough that `grep -q` ALWAYS
 # leaves while seq is still writing, so it reproduces the exact bug with
 # nothing installed and no network.
@@ -378,6 +416,11 @@ check "swap active"              'swapon --show | grep -q swapfile'
 check "node is the wanted major" 'su - '"$USER_NAME"' -c "node -v" | grep -q "^v${GJD_NODE_MAJOR}\."'
 check "npm present"              'su - '"$USER_NAME"' -c "command -v npm"'
 check "claude runs"              'timeout 30 su - '"$USER_NAME"' -c "claude --version"'
+# Asserts the OUTPUT, not just the exit status. @openai/codex installs a
+# prebuilt platform binary, so the interesting failure is one that exists and
+# does not run -- and it is the login shell that has to find it, which is where
+# a global npm bin directory missing from PATH would show up.
+check "codex runs"               'timeout 60 su - '"$USER_NAME"' -c "codex --version" | grep -q "^codex-cli "'
 check "chrome runs"              'timeout 30 su - '"$USER_NAME"' -c "google-chrome --version"'
 check "playwright chromium runs" 'timeout 60 su - '"$USER_NAME"' -c "npx --yes playwright@latest cr --version" 2>/dev/null || su - '"$USER_NAME"' -c "ls ~/.cache/ms-playwright/chromium-*/chrome-linux*/chrome"'
 check "playwright mcp"           'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q max-old-space-size'

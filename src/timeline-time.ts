@@ -3,7 +3,7 @@
  * the whole timeline mode rests on, and the only route a date has into the
  * artefact.
  *
- * See docs/plans/timeline-mode.md § The model supplies evidence; code supplies
+ * See docs/plans/260831i-timeline-mode.md § The model supplies evidence; code supplies
  * dates. The model is never asked for a date. It returns the article's temporal
  * words — "By the next morning, July 11" — and this file reads the date out of
  * the block those words came from. A date the article does not contain has no

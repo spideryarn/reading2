@@ -19,7 +19,7 @@
  *    src/converse.ts read exactly that difference.
  *
  * And the 409, which is not a guard in the ordinary sense: it is the whole
- * idempotency of the endpoint. docs/plans/live-conversation-in-chat.md § 1.
+ * idempotency of the endpoint. docs/plans/260831l-live-conversation-in-chat.md § 1.
  */
 import { cp, readFile, rm } from "node:fs/promises";
 import path from "node:path";

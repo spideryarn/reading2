@@ -9,7 +9,7 @@
  * the `begin` frame that the wish is waiting for arrives afterwards, into a hook
  * that is gone.
  *
- * GPT Sol found the bug that hides there (docs/plans/chat-operation-model-stage2-review-sol.md,
+ * GPT Sol found the bug that hides there (docs/plans/260828v-chat-operation-model-stage2-review-sol.md,
  * finding 1): the wish was consumed by `controller.onNamed`, a callback the hook
  * installed in an effect and *cleared in that effect's cleanup*. Unmount, and
  * nothing was left to send the `/cancel`. The server finished the answer, stored
@@ -21,7 +21,7 @@
  * pushed at any point on either side of the unmount, and the assertions are on
  * the *requests* that left the tab, because after unmount there is no screen
  * left to ask. That is the same reason tests/chat-intent-paths.test.ts asserts on
- * `posts` — docs/postmortems/cancel-before-begin.md § what would have caught this.
+ * `posts` — docs/postmortems/260828b-cancel-before-begin.md § what would have caught this.
  *
  * The controller survives the unmount on purpose and that is what makes the fix
  * possible: the in-flight stream still holds it, so the reducer still runs, and

@@ -56,7 +56,7 @@
  * state, and stopped being one on 2026-08-31: `sendSource` went through
  * `sourceStore` (src/store/index.ts), so on a deployment it reads the article's
  * source document out of Postgres and the `sources` bucket and never asks this
- * function anything. docs/plans/finish-the-database-move.md, stage 1.
+ * function anything. docs/plans/260831b-finish-the-database-move.md, stage 1.
  *
  * The refusal stays, and it is not now decorative. Anything else that reaches a
  * path outside `runInJob()` on a deployment lands here, and the two answers

@@ -65,7 +65,7 @@ const CHECK_ENV = 'USER_NAME=greg; GJD_NODE_MAJOR=26; SUPABASE_VERSION=2.115.0;'
  */
 const REQUIRED_CHECKS = [
   // The two canaries that test the checking machinery itself — see
-  // docs/postmortems/the-match-that-still-failed.md. They are first because
+  // docs/postmortems/260831f-the-match-that-still-failed.md. They are first because
   // without them every other name on this list is a claim nothing verifies.
   "self-test: a check that must pass",
   "self-test: a check that must fail",
@@ -74,6 +74,7 @@ const REQUIRED_CHECKS = [
   "node",
   "npm",
   "claude",
+  "codex",
   "chrome",
   "playwright",
   "mcp",

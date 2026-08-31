@@ -7,7 +7,7 @@ Set up 2026-08-25.
 The reading app still reads and writes JSON files under `data/`; this is the database the storage
 layer is being built against, and what [`npm run db:migrate`](../../scripts/db-migrate.ts) points
 at while the schema is being worked out. What goes *in* the database is
-[postgres-migration.md](../plans/postgres-migration.md); where the data lives today is
+[260825f-postgres-migration.md](../plans/260825f-postgres-migration.md); where the data lives today is
 [database.md](database.md).
 
 ## Running it
@@ -80,8 +80,8 @@ wholesale rather than in the two spots that clash today.
 equal the CLI's default today, which is exactly why it is worth writing down: nobody should read
 this line as "we left it alone". It was **15** for the first few hours of this stack's life, pinned
 to the old app's project (**15.8**) back when we expected to reuse it
-([§ The old project](../plans/postgres-migration.md#the-old-project-we-inspected-and-did-not-use)). Greg then chose a **new**
-project ([§ A new project](../plans/postgres-migration.md#a-new-project-and-what-that-deletes)),
+([§ The old project](../plans/260825f-postgres-migration.md#the-old-project-we-inspected-and-did-not-use)). Greg then chose a **new**
+project ([§ A new project](../plans/260825f-postgres-migration.md#a-new-project-and-what-that-deletes)),
 so local moved to 17. That project now exists — `alschkahzfagtppxspfq`, `eu-west-2` — and reports
 **17.6.1.165**; local reports **17.6**. Checked against the dashboard on 2026-08-25 rather than
 assumed from the CLI's default, which is the whole point of the rule.
@@ -105,9 +105,9 @@ you created to test the gate with, is gone and is not in a migration file.
 
 One more thing worth knowing rather than changing: **`[api].schemas` does not list `spideryarn`.**
 The `spideryarn` schema is deliberately invisible to PostgREST, because
-[the API layer is the security boundary here](../plans/deploy-and-repo-move.md#rls-and-realtime-not-now),
+[the API layer is the security boundary here](../plans/260825d-deploy-and-repo-move.md#rls-and-realtime-not-now),
 not RLS. That is the safe default and it should stay until something specific needs it — see
-[§ The Supabase docs' grant block opens the database](../plans/postgres-migration.md#the-supabase-docs-grant-block-opens-the-database).
+[§ The Supabase docs' grant block opens the database](../plans/260825f-postgres-migration.md#the-supabase-docs-grant-block-opens-the-database).
 
 ## The ways this goes wrong quietly
 
@@ -115,7 +115,7 @@ not RLS. That is the safe default and it should stay until something specific ne
   and replays only *this* repo's migrations, so anything the old app owns is gone and not
   recoverable from our history. `npm run db:reset` has no `--linked` in it and must never grow one.
   **This got sharper, not softer, when Spideryarn moved to its own Supabase project
-  ([§ A new project](../plans/postgres-migration.md#a-new-project-and-what-that-deletes)):** our
+  ([§ A new project](../plans/260825f-postgres-migration.md#a-new-project-and-what-that-deletes)):** our
   migrations are Drizzle's, and the Supabase CLI cannot see them at all. It reads
   `supabase_migrations.schema_migrations`, ours live in `spideryarn_migrations`, so a linked reset
   finds an empty history, drops `spideryarn` and replays nothing. The same applies to
@@ -182,7 +182,7 @@ upload.
 
 The whole upload path is [ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf); what
 was measured against these containers rather than read in a doc is in
-[pdf-upload-and-storage.md § What was measured, not read](../plans/pdf-upload-and-storage.md#what-was-measured-not-read).
+[260826u-pdf-upload-and-storage.md § What was measured, not read](../plans/260826u-pdf-upload-and-storage.md#what-was-measured-not-read).
 
 ## What is deliberately not set up
 
@@ -199,17 +199,17 @@ was measured against these containers rather than read in a doc is in
   remembering.
 - **No `seed.sql`.** `supabase start` warns about the missing file on every run. That warning is
   expected and harmless until there is something to seed — possibly the `example` fixture, which is
-  [an open question](../plans/postgres-migration.md#open-questions).
+  [an open question](../plans/260825f-postgres-migration.md#open-questions).
 
 So the split is: **the Supabase CLI owns the stack, Drizzle owns the schema inside it.** Anything
 that mixes those two up is the class of mistake
-[§ A new project, and what that deletes](../plans/postgres-migration.md#a-new-project-and-what-that-deletes)
+[§ A new project, and what that deletes](../plans/260825f-postgres-migration.md#a-new-project-and-what-that-deletes)
 is about.
 
 ## See also
 
 - [database.md](database.md) — where the data lives today, and the shape it is moving into
-- [postgres-migration.md](../plans/postgres-migration.md) — the schema, the order of work, the traps
+- [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md) — the schema, the order of work, the traps
 - [auth.md](auth.md) — the one-email beta gate this local auth server will host
 - [setup-dev.md](setup-dev.md) — the rest of the dev commands
 - [original-version/](original-version/overview.md) — the other repo on this laptop, and its stack

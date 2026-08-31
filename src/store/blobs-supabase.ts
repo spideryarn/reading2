@@ -15,7 +15,7 @@
  * is in the body, under `statusCode`, as a *string*. That is the one thing to
  * know before editing anything here.
  *
- * See docs/plans/pdf-upload-and-storage.md § What was measured, not read.
+ * See docs/plans/260826u-pdf-upload-and-storage.md § What was measured, not read.
  */
 import type { BlobHead, PutResult, RawSourceStore, UploadGrants } from "./blobs.js";
 
@@ -34,7 +34,7 @@ import type { BlobHead, PutResult, RawSourceStore, UploadGrants } from "./blobs.
  * vars, and `fsBlobs` ignores `contentType` entirely, so the probe's bytes went
  * to `data/_blobs/` and never touched Storage at all. The container's request
  * log covers its whole life and contains none of those uploads.
- * docs/postmortems/the-config-file-is-not-the-bucket.md.
+ * docs/postmortems/260828a-the-config-file-is-not-the-bucket.md.
  *
  * Re-measured against the running container on 2026-08-29, with the bucket
  * declaring the five types it declares today:
@@ -47,7 +47,7 @@ import type { BlobHead, PutResult, RawSourceStore, UploadGrants } from "./blobs.
  * holds independently of our own checks — `looksLikePdf` and the SHA-256
  * comparison in `acquireUpload` are the other line, not the only one. It is
  * also why SVG cannot be stored today even by mistake, which is the decision
- * docs/plans/hosting-the-articles-images.md made in code and this enforces in
+ * docs/plans/260829b-hosting-the-articles-images.md made in code and this enforces in
  * infrastructure.
  *
  * [silent-success](docs/reusable/silent-success.md): the natural check is to

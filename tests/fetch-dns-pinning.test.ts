@@ -12,7 +12,7 @@
  * DNS *and* Greg's clipboard. Fetching an article's own images ends that
  * argument: the URLs come from the page, so the publisher chooses them, and
  * there may be hundreds. GPT Sol, 2026-08-29 —
- * docs/plans/hosting-the-articles-images.md.
+ * docs/plans/260829b-hosting-the-articles-images.md.
  *
  * The three layers below are deliberately not one test. Layer 1 proves the
  * mechanism really redirects a connection, against a real socket, because a

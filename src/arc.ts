@@ -243,7 +243,7 @@ export function buildArc(
  * a shelf override (`shelf.json`, `articles.title_override`) that no generator
  * reads. What really moves this head is a re-extraction — the title, byline and
  * site are stage 2's, and they change when the page does.
- * docs/plans/defer-arc-and-rename-hierarchy.md § 2.1.
+ * docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1.
  */
 export function inputFingerprint(
   blocks: readonly BlockFingerprint[],
@@ -313,7 +313,7 @@ export interface ArcRun {
  * written against, which works on a laptop and cannot work through a store that
  * puts the artefact in a Postgres column — so the caller writes now:
  * src/pipeline.ts through the store, `main()` below to the directory it was
- * given. docs/plans/finish-the-database-move.md § Stage 2.
+ * given. docs/plans/260831b-finish-the-database-move.md § Stage 2.
  *
  * It no longer reads anything either. The three artefacts it is written from
  * arrive together as one `Article` (src/article-input.ts), so the bytes it
@@ -368,7 +368,7 @@ export async function generateArc(opts: {
      reads to write them, and the model's reasoning over it comes out of the
      same allowance as the answer. That is what the 16,000 typed here before
      could not survive: not a long arc, a long article. See src/token-budget.ts,
-     and docs/postmortems/toc-max-tokens.md for the run that found it. */
+     and docs/postmortems/260826a-toc-max-tokens.md for the run that found it. */
   const answerTokens = 300 + parts.length * 80;
   const maxTokens = budgetFor("arc", answerTokens);
 
@@ -392,7 +392,7 @@ export async function generateArc(opts: {
       output_config: { effort: effortFor("arc") },
       /* Article first, instructions second — the cache prefix starts at the top of
          the request, so anything stage-specific ahead of the article stops two
-         stages ever matching. docs/plans/prompt-caching.md. */
+         stages ever matching. docs/plans/260826g-prompt-caching.md. */
       system: [
         {
           type: "text" as const,

@@ -5,7 +5,7 @@
  * This is the regression test for the homepage freeze of 2026-08-27: typing a
  * single character into the "Add an article" box locked the tab up completely,
  * and the same page was already burning ~470 renders a second while sitting
- * still. See docs/postmortems/shelf-render-loop.md for the measurement and the
+ * still. See docs/postmortems/260827e-shelf-render-loop.md for the measurement and the
  * whole chain; the two-line version is:
  *
  *   TanStack's sorted-row-model memo is keyed on `table.getState().sorting`. A

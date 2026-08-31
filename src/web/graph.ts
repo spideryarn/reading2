@@ -343,7 +343,7 @@ export function buildGraph(
      traversal three pictures share and the outline genuinely wants the
      supplement in it. Diagram mode is what does not. GPT Sol found this one
      last, after the other six projections were already dealt with;
-     docs/plans/footnotes.md. */
+     docs/plans/260828o-footnotes.md. */
   const entries = walk(root, collapsed, MAX_DRAWN_DEPTH).filter((e) => !e.node.supplement);
 
   /* Term counts per node, over the node's own blocks. A part's counts include
@@ -604,7 +604,7 @@ function collectAnchorLinks(
  * Two different worries behind one shape of constant.
  *
  * `MAX_ANCHOR_EDGES` is about **footnotes**. Nothing in this corpus had them
- * when it was written (see the table in docs/plans/force-diagram-links.md — five
+ * when it was written (see the table in docs/plans/260827d-force-diagram-links.md — five
  * internal links across seven articles, all of them in the constitution), but a
  * paper with forty back-links from its endnotes to their markers would draw
  * forty lines converging on one bubble and call it structure. The cap is what

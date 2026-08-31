@@ -31,7 +31,7 @@
  * fresh array every render is a changed dependency every render, so the memo
  * recomputed, TanStack saw new state, and round it went. `act` waits for React
  * to go quiet, so a loop is exactly the shape that makes it hang for ever
- * rather than fail — see docs/postmortems/shelf-render-loop.md, found on the
+ * rather than fail — see docs/postmortems/260827e-shelf-render-loop.md, found on the
  * shelf and fixed in both places.
  *
  * Worth keeping because of what it says about this kind of test: it caught a

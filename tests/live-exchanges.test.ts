@@ -11,7 +11,7 @@
  * question, is something the reader reads back a week later and disbelieves.
  * There is no error, no exception, nothing in a log.
  *
- * Written from GPT Sol's review of docs/plans/live-conversation-in-chat.md,
+ * Written from GPT Sol's review of docs/plans/260831l-live-conversation-in-chat.md,
  * whose finding 1 supplied the interleaving in "an answer can arrive before the
  * question it answers".
  */

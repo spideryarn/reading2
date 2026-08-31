@@ -1,6 +1,6 @@
 /**
  * **How a `/read/:slug` request reaches the function, and what it must not
- * drag in with it** — stage 2 slice 1 of docs/plans/public-read-only-access.md.
+ * drag in with it** — stage 2 slice 1 of docs/plans/260827ai-public-read-only-access.md.
  *
  * Three separate things, in the order a request meets them:
  *
@@ -23,7 +23,7 @@
  *
  * Deterministic — no network, no deployment. What this file **cannot** prove is
  * that Vercel matches these rules the way the documentation says it does; that
- * is a deployed check, and docs/plans/public-read-only-stage2-input-sol.md § 7
+ * is a deployed check, and docs/plans/260828ao-public-read-only-stage2-input-sol.md § 7
  * lists it as one of the three genuinely platform-composition claims.
  */
 

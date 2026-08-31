@@ -62,14 +62,14 @@ export const SANITIZER_VERSION = 4;
    2 → 3 on 2026-08-28: three more class names are reserved (`chat`, `zoomable`,
    `zoom-btn`) and `data-zoom-kind` is forbidden. Stricter again, and the same
    reasoning applies — an artefact cleaned under 2 could be carrying any of
-   them. GPT Sol, 2026-08-28, reviewing docs/plans/figures-in-the-prose.md.
+   them. GPT Sol, 2026-08-28, reviewing docs/plans/260828az-figures-in-the-prose.md.
 
    3 → 4 on 2026-08-31: the `hit` class and the `data-hit` / `data-hues`
    attributes are reserved. They were the one `MarkKind` nobody had claimed,
    while `data-hit-open` had been forbidden all along — the asymmetry is what
    gave it away. Stricter again, and the same reasoning: an artefact cleaned
    under 3 could be carrying a forged search-or-quote highlight. GPT Sol,
-   2026-08-31, reviewing docs/plans/quotes-mode.md. */
+   2026-08-31, reviewing docs/plans/260831j-quotes-mode.md. */
 
 /**
  * Video embeds, by exact origin and path prefix.
@@ -205,7 +205,7 @@ export const ARTICLE_CONFIG: Config = {
        markup that reads as *the app having selected these words for you*:
        `data-hues` in particular drives the paragraph bar's colour count
        (src/web/annotate.ts), so a forged pair paints our rail from a stranger's
-       document. Found by GPT Sol reviewing docs/plans/quotes-mode.md. */
+       document. Found by GPT Sol reviewing docs/plans/260831j-quotes-mode.md. */
     "data-hit", "data-hues",
     "data-open", "data-cmt-open", "data-chat-open", "data-hit-open", "data-term-open",
     /* The enlarge wrapper's own attribute (src/web/zoomable.ts). It decides
@@ -496,7 +496,7 @@ export function installArticlePolicy(purify: DOMPurify): void {
    * user gets the TeX read out.
    *
    * Wikipedia emits one on all 188 formulas of a single article; LaTeXML emits
-   * them too. Found 2026-08-28 — docs/plans/readability-repair-pass.md. Two
+   * them too. Found 2026-08-28 — docs/plans/260827ab-readability-repair-pass.md. Two
    * independent browser checks agree it never paints: the `<math>` box measures
    * the same width with the stray node and without, and `Range.getClientRects()`
    * returns zero boxes for all 45 of the affected elements on that page.

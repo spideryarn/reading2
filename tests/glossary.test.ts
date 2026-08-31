@@ -427,7 +427,7 @@ describe("isStale", () => {
 
   /* Red before 2026-08-31, when this compared the blocks alone: the prompt
      shows the model the skeleton, so a re-cut article is a different question
-     at byte-identical blocks. docs/plans/finish-the-database-move.md § stage 1. */
+     at byte-identical blocks. docs/plans/260831b-finish-the-database-move.md § stage 1. */
   it("notices when the sections have been re-cut under it", () => {
     const recut = {
       ...STALE_TREE,
@@ -449,7 +449,7 @@ describe("isStale", () => {
    moved to `stamp` and src/pipeline.ts kept a comment saying the CLI still used
    it, which was not true. The conditions those tests covered — blocks, prompt
    version, model — are asserted against the live path in
-   tests/pipeline-artifact-store.test.ts. See docs/plans/simplification-wave-2.md § 0.5. */
+   tests/pipeline-artifact-store.test.ts. See docs/plans/260828aj-simplification-wave-2.md § 0.5. */
 
 describe("sortEntries", () => {
   const list = [
@@ -777,7 +777,7 @@ describe("what an entry says — the glossary/2 field split", () => {
      good answer for an allusion, and the fix is two fields whose names carry
      their provenance. What is testable is the plumbing that shape needs; the
      prose itself is a model call and is not. See
-     docs/plans/glossary-entries-worth-reading.md. */
+     docs/plans/260826d-glossary-entries-worth-reading.md. */
   const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1234 };
 
   it("keeps an entry with only one of the two prose fields", () => {

@@ -17,7 +17,7 @@
  * one: written chat cites by putting `[spya-k3m9qt]` in the answer, so seeding a
  * *voice* model verbatim hands it examples of its own past speech containing
  * block ids while its instructions forbid saying one aloud. Found by Fable;
- * docs/plans/live-conversation-in-chat.md § 1d.
+ * docs/plans/260831l-live-conversation-in-chat.md § 1d.
  *
  * `fetch` is stubbed, so nothing here reaches OpenAI and no key is needed.
  */

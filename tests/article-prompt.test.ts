@@ -251,7 +251,7 @@ describe("converse's article message is stable across a conversation", () => {
 
        An explicit breakpoint on the article fixes it by making the cached prefix
        stop before anything that varies — which is what the other two builders
-       have always done. docs/postmortems/chat-cache-automatic-breakpoint.md. */
+       have always done. docs/postmortems/260826h-chat-cache-automatic-breakpoint.md. */
     const one = buildConverseMessages({
       meta,
       blocks,

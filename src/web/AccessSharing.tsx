@@ -3,7 +3,7 @@
  * article.
  *
  * The section name is the original version's own, which
- * docs/plans/metadata-page.md recorded and deliberately dropped — *"**drop** —
+ * docs/plans/260825e-metadata-page.md recorded and deliberately dropped — *"**drop** —
  * no accounts here"* — on the day there were no accounts. There are now.
  *
  * ## How it finds out whether the document is already shared

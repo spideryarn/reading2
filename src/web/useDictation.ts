@@ -4,7 +4,7 @@
  *
  * The whole design, the measurements behind the model choice and the
  * alternatives are in
- * [docs/plans/dictation-two-pass.md](../../docs/plans/dictation-two-pass.md).
+ * [docs/plans/260827x-dictation-two-pass.md](../../docs/plans/260827x-dictation-two-pass.md).
  * What follows is what somebody changing this file has to know.
  *
  * ## Two passes, and only one of them is the truth
@@ -956,7 +956,7 @@ export function useDictation(options: DictationOptions): UseDictation {
       /* **The name of what we opened**, which is the piece that was missing. A
          meter reading zero and a meter pointed at a dead conferencing loopback
          are the same picture until something says which device produced it.
-         docs/plans/microphone-device-and-recording.md. */
+         docs/plans/260827k-microphone-device-and-recording.md. */
       setDeviceLabel(labelled(outcome.track));
       /* The context is created only now, and only when there is something to
          measure. It is a shared singleton, so this is a get rather than a build

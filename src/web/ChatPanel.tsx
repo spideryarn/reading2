@@ -17,7 +17,7 @@
  * contents is the default one. So this file is not a special case bolted beside
  * the table; it is the second implementation of a slot, and the layout
  * arithmetic (layout.ts § modeWidth) knows about the slot rather than about
- * chat. See docs/plans/chat-mode.md.
+ * chat. See docs/plans/260826a-chat-mode.md.
  *
  * ## Why it is beside the article and not over it
  *
@@ -37,7 +37,7 @@
  * — since 2026-08-27 — a link to the web, which is the only one of the three
  * that reaches an attribute rather than a text node. Every one of them is a
  * *string* handed to React, never HTML. Cited.tsx has each rule and
- * docs/plans/chat-web-links.md has the reasoning for the last.
+ * docs/plans/260827ao-chat-web-links.md has the reasoning for the last.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -197,7 +197,7 @@ interface Props {
    * differs is the empty state, the composer's size, and one `<select>`. A
    * second component would have been a second copy of all of the first list in
    * order to vary the second — which is the duplication GPT Sol's review of
-   * docs/plans/review-mode.md (finding 9) said not to build.
+   * docs/plans/260827ah-review-mode.md (finding 9) said not to build.
    *
    * The list of conversations is **shared**: Greg's call, 2026-08-27. Both
    * modes show every thread for this article, and a review carries a tag.
@@ -209,7 +209,7 @@ interface Props {
    * Above the composer because the composer is keyed by thread id and remounts;
    * seeded by the band from the last answer in the open conversation, so a
    * reader who picked Socratic yesterday finds it still on Socratic. Unused in
-   * chat mode. See docs/plans/review-mode.md § Where the stance picker's value
+   * chat mode. See docs/plans/260827ah-review-mode.md § Where the stance picker's value
    * lives.
    */
   stance: ReviewStance;
@@ -224,7 +224,7 @@ interface Props {
  * and must not be added: it is the anti-goal
  * ([vision.md](../../docs/project/vision.md)) in a single click, and a chat
  * that opens by offering to replace the reading is not the feature that was
- * argued for in docs/plans/chat-mode.md.
+ * argued for in docs/plans/260826a-chat-mode.md.
  *
  * They are borrowed rather than invented. Greg, 2026-08-26: *"borrow ideas from
  * docs/project/original-version/ for suggestions for the user about what to use
@@ -560,7 +560,7 @@ export function ChatPanel({
               now, in `refresh` itself, where pressing `+` fast enough could
               reach it without the box at all — `mergedArrival` and the load
               number in useChat.ts, and
-              docs/plans/chat-mode.md § The list arriving is not allowed to
+              docs/plans/260826a-chat-mode.md § The list arriving is not allowed to
               overwrite what the reader did.
 
               `focusNonce={0}` on purpose: this box must never take the caret.
@@ -1080,7 +1080,7 @@ export function Conversation({
 
         So the region carries a status line and nothing else. It tells you when
         to go and read, and the answer stays in one place to be read. See the
-        streaming-accessibility note in docs/plans/chat-mode.md.
+        streaming-accessibility note in docs/plans/260826a-chat-mode.md.
       */}
       <p className="sr-only" aria-live="polite">
         {busy
@@ -1340,7 +1340,7 @@ function Turn({
            truncated the audio it was still playing and kept the transcript
            whole, so the text above may run *past* what they actually heard.
            Saying so is the only honest thing available — the transcript cannot
-           be corrected, only labelled. docs/plans/live-conversation-in-chat.md § 1c. */
+           be corrected, only labelled. docs/plans/260831l-live-conversation-in-chat.md § 1c. */
         <p className="chat-stopped">You spoke over this — it may say more than you heard.</p>
       )}
       {message.passages && message.passages.length > 0 && (
@@ -1352,7 +1352,7 @@ function Turn({
            instead. So without this the stored transcript is an *uncited claim*,
            which is the one thing the chat contract exists to prevent — the
            reader would have the companion's word for it and no way back to the
-           prose. docs/plans/live-conversation-in-chat.md § 1b. */
+           prose. docs/plans/260831l-live-conversation-in-chat.md § 1b. */
         <ul className="chat-pointed">
           {message.passages.map((passage, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: an immutable stored list
@@ -1879,7 +1879,7 @@ export function Composer({
    * a reader asking about this article is about to use. Measured on 2026-08-27:
    * with the terms in the prompt the model got this app's own jargon right
    * every run; without them it made the same mistakes as every dedicated
-   * speech-to-text model. docs/plans/dictation-two-pass.md.
+   * speech-to-text model. docs/plans/260827x-dictation-two-pass.md.
    */
   const dictate = useDictationField({
     value,
@@ -1903,7 +1903,7 @@ export function Composer({
    * tail, and a flush still in flight is about to move it — so an unawaited
    * handoff turns the expected-tail guard into a 409 we inflicted on ourselves,
    * which the reader would see as their question being refused for no reason.
-   * docs/plans/live-conversation-in-chat.md § 1d.
+   * docs/plans/260831l-live-conversation-in-chat.md § 1d.
    *
    * The box is cleared before the wait rather than after, which is the same
    * optimism this button has always had: the question is on its way, and text
@@ -2055,7 +2055,7 @@ export function Composer({
            composer would sit where arrow keys are already the caret's, and the
            article's own ↑/↓ navigation is a third claimant. A select has all of
            this for free and announces itself correctly. GPT Sol's review of
-           docs/plans/review-mode.md.
+           docs/plans/260827ah-review-mode.md.
 
            Its own `onKeyDown` stop, for the same reason the textarea has one:
            this form sits inside the reading view, whose keynav listens on the

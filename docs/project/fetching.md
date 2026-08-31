@@ -186,7 +186,7 @@ the test never mentioned. **Assert what you require, never somebody else's defec
 tests assert only that `decodeHtml` is right — including on the four Shift_JIS bytes Node currently
 gets wrong, which still catches the import being swapped for the global, and which will keep passing
 rather than going red if Node ever catches up there too.
-[docs/postmortems/windows-1252-node-caught-up.md](../postmortems/windows-1252-node-caught-up.md).
+[docs/postmortems/260826b-windows-1252-node-caught-up.md](../postmortems/260826b-windows-1252-node-caught-up.md).
 
 ### What kind of document it is
 
@@ -323,7 +323,7 @@ without them it is `data/_blobs/`. The local corpus was written by processes of 
 of its eighteen manifests name an object the other store holds. Nothing noticed while nothing read
 them back. They now fail loudly, with a sentence naming the article, the key, the mechanism and the
 fix — which is a re-fetch. The measurement, the two probes that produced it and the counts are in
-[a-write-path-with-no-reader.md](../postmortems/a-write-path-with-no-reader.md).
+[260831e-a-write-path-with-no-reader.md](../postmortems/260831e-a-write-path-with-no-reader.md).
 
 **`npm run fetch -- <url> [dir]` still writes its files**, and that is deliberate rather than
 left over. The rule the conversion follows is *the generator stops writing and the caller writes*,
@@ -394,7 +394,7 @@ too, not just the first.
 **DNS rebinding is closed, since 2026-08-29.** It was the known gap here for months, and the
 argument for leaving it open was that the URL comes from Greg's own text box, so an attacker would
 need a domain's DNS *and* his clipboard. [Hosting the article's own
-images](../plans/hosting-the-articles-images.md) ends that argument — those URLs come from the page,
+images](../plans/260829b-hosting-the-articles-images.md) ends that argument — those URLs come from the page,
 so a publisher picks them, and there can be hundreds per article.
 
 So `guardAddress` now **returns** the addresses it approved, and the connection is pinned to them
@@ -473,7 +473,7 @@ Honest list, none of it blocking:
    `article.html` + `meta.json`. What the previous version learned still held:
    [original-version/extraction.md](original-version/extraction.md#pdfs-out-of-scope-but-the-lesson-transfers)
    says *don't parse structurally when a multimodal model will read the bytes*, and that is what was
-   built. [../plans/pdf-ingestion.md](../plans/pdf-ingestion.md).
+   built. [../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).
 4. **A JS-rendered page returns its shell**, and we report success. `x.com` gives 193 KB of HTML
    with no post text in it. Detecting this needs the two-sided extraction ratio check, which belongs
    to stage 2 and is [on the borrow list](original-version/borrow-list.md).
@@ -481,9 +481,9 @@ Honest list, none of it blocking:
 6. **Nothing pins the Node version.** No `engines` field, no `.nvmrc`, no CI. Which Node this runs on
    is whatever Homebrew installed locally and whatever the Vercel project settings say remotely, and
    the two have already diverged by six major versions. It has cost one confusing red build so far
-   ([the postmortem](../postmortems/windows-1252-node-caught-up.md)) and nothing worse, because the
+   ([the postmortem](../postmortems/260826b-windows-1252-node-caught-up.md)) and nothing worse, because the
    decoder is a dependency rather than a built-in. Pinning it belongs with the deploy work
-   ([deploy-and-repo-move.md](../plans/deploy-and-repo-move.md)) rather than with stage 1.
+   ([260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md)) rather than with stage 1.
 
 ## See also
 
@@ -495,6 +495,6 @@ Honest list, none of it blocking:
   here, what it got right, and the fix of theirs that has since rotted
 - [../reusable/silent-success.md](../reusable/silent-success.md) — the failure family the decoder
   bug belongs to
-- [../postmortems/windows-1252-node-caught-up.md](../postmortems/windows-1252-node-caught-up.md) —
+- [../postmortems/260826b-windows-1252-node-caught-up.md](../postmortems/260826b-windows-1252-node-caught-up.md) —
   Node fixed the bug this stage's decoder was chosen over, the test that pinned it went red, and why
   believing the test would have deleted something still load-bearing

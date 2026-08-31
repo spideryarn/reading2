@@ -5,7 +5,7 @@
  * force-weighted graphs, creating a richer data structure to lay things out."*
  *
  * The first round surveyed the field and installed nothing — the reasoning is
- * in docs/plans/diagram-mode.md. That conclusion was
+ * in docs/plans/260826ah-diagram-mode.md. That conclusion was
  * about the *data*, and it is worth restating rather than quietly reversing:
  * with only the tree to draw, `d3-hierarchy.tree()` and `partition()` were the
  * two functions worth having and both were wrong for a 288px band. What changed

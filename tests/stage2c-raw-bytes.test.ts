@@ -1,6 +1,6 @@
 /**
  * **Stage 1 hands stage 2 a content address, and this is the seam that carries
- * it.** docs/plans/finish-the-database-move.md § Stage 2c.
+ * it.** docs/plans/260831b-finish-the-database-move.md § Stage 2c.
  *
  * `writeRaw` stopped writing files on 2026-08-31 and now only puts the bytes in
  * the object store and returns the manifest; `readRawBytes` is how stage 2 gets
@@ -27,7 +27,7 @@
  * ## What is deliberately NOT here
  *
  * Anything asserting that a *particular* article in `data/` can still be
- * extracted. Greg's decision 4 (docs/plans/finish-the-database-move.md) is that
+ * extracted. Greg's decision 4 (docs/plans/260831b-finish-the-database-move.md) is that
  * the corpus is expendable and refetching is free, so the corpus is not a
  * fixture and pinning it would be pinning today's accident.
  */
@@ -633,7 +633,7 @@ describe("npm run pdf keeps the original where the reader can reach it", () => {
  * `data/_blobs/` and `raw.json`, the queue counted the fetch step done, and
  * extraction then dereferenced the manifest against Supabase and blocked on an
  * object that exists. GPT Sol found it, 2026-08-31; it is the same split as
- * docs/postmortems/a-write-path-with-no-reader.md, made fresh by the command
+ * docs/postmortems/260831e-a-write-path-with-no-reader.md, made fresh by the command
  * meant to be safe.
  *
  * So this runs the **real entry point** in a real child process. It cannot

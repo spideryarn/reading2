@@ -21,7 +21,7 @@ not the same shape for every article.
   [`src/projection.ts`](../../src/projection.ts) over
   [`src/article-vectors.ts`](../../src/article-vectors.ts).
 - **Why nothing was installed for the hand-rolled outline** —
-  [diagram-mode.md](../plans/diagram-mode.md), which has the whole library
+  [260826ah-diagram-mode.md](../plans/260826ah-diagram-mode.md), which has the whole library
   survey and the answers on Mermaid and on generated images. The outline itself
   is gone; the survey is the reasoning behind the one rule none of the survivors
   gave up. What changed when the data got richer is in
@@ -37,7 +37,7 @@ Greg, 2026-08-26:
 > article's ordering as top to bottom.
 
 It is a **mode**, in the sense [url-state.md](url-state.md) and
-[chat-mode.md](../plans/chat-mode.md) use: it takes the band between the spine
+[260826a-chat-mode.md](../plans/260826a-chat-mode.md) use: it takes the band between the spine
 and the prose, the article stays exactly where it was, and `?mode=diagram` says
 so. The fifth one, and it cost `MODES` one word.
 
@@ -464,8 +464,8 @@ that looks the same and is not:
 
 **Four defects came out of the review of this, and they are the interesting
 part.** GPT Sol read the built code on 2026-08-30
-([prompt](../plans/v1-diagram-chain-ramp-review-prompt.md),
-[answer](../plans/v1-diagram-chain-ramp-review-sol.md)); each of these draws
+([prompt](../plans/260830ag-v1-diagram-chain-ramp-review-prompt.md),
+[answer](../plans/260830ae-v1-diagram-chain-ramp-review-sol.md)); each of these draws
 perfectly well when wrong.
 
 - **Trail's ramp ended in the cliff it was designed to remove.** Its chain
@@ -586,7 +586,7 @@ lookup as row 0 would draw a confident line to the first section of the article.
 [`embeddings.ts`](../../src/embeddings.ts). The model is `voyageai/voyage-4`,
 chosen by [the eval](../../evals/results/embedding-retrieval-2026-08-26.md)
 rather than by argument, and the reasoning is in
-[semantic-search.md](../plans/semantic-search.md).
+[260826n-semantic-search.md](../plans/260826n-semantic-search.md).
 
 Four decisions worth knowing:
 
@@ -658,7 +658,7 @@ by slug and by what the blocks say, and a cold process re-embeds one article for
 about $0.002 and a second or two — which on Vercel is the normal case rather
 than the unlucky one. Persisting them needs pgvector, a migration and a
 re-embed-on-change rule, and that is the substance of
-[semantic-search.md](../plans/semantic-search.md). A diagram toggle wanting a
+[260826n-semantic-search.md](../plans/260826n-semantic-search.md). A diagram toggle wanting a
 cache is not a good enough reason to settle it early.
 
 ### Vocabulary
@@ -892,7 +892,7 @@ Two things follow, and neither of them is in this file:
   GPT Sol found that one in review of the fix, before it shipped.
 
 The whole write-up, with the commit that made the assumption false and the four removal probes, is
-[the-spy-wrote-a-section-over-the-paragraph.md](../postmortems/the-spy-wrote-a-section-over-the-paragraph.md).
+[260830b-the-spy-wrote-a-section-over-the-paragraph.md](../postmortems/260830b-the-spy-wrote-a-section-over-the-paragraph.md).
 
 And one that is: `DiagramBand` took `?at=` by reading `location.search` at render time, which the
 other bands can afford and this one cannot. `jumpTo` writes the URL on the next task, so a second
@@ -923,7 +923,7 @@ the article, a band laid out past the right edge, a column that loses one row pe
 section — all of them render, and all of them look like a design choice. That is
 why every number is computed by pure functions in a module of its own with
 tests, and why three of those tests exist because they caught live bugs. The list
-is in [the plan](../plans/diagram-mode.md#what-the-tests-caught).
+is in [the plan](../plans/260826ah-diagram-mode.md#what-the-tests-caught).
 
 **Text is wrapped by counting characters.** SVG will not wrap, and the honest
 alternative is render-measure-relayout, which is two passes, a `ResizeObserver`
@@ -953,7 +953,7 @@ saturated fill at 20px tall is a shout and thirty of them is a mess.
 **structure** at all. One dot per paragraph, placed by an embedding of what that paragraph says —
 [`src/projection.ts`](../../src/projection.ts) does the arithmetic on the
 server, [`src/web/scatter.ts`](../../src/web/scatter.ts) turns two numbers into
-pixels, and [embedding-scatter-diagrams.md](../plans/embedding-scatter-diagrams.md)
+pixels, and [260827g-embedding-scatter-diagrams.md](../plans/260827g-embedding-scatter-diagrams.md)
 is the design and the review it survived.
 
 ```
@@ -1327,7 +1327,7 @@ reading a word. Nothing else here could have found that.
 
 The whole design, the measurements, the review it survived and what a reader who
 had not read the articles made of the pictures are in
-[sketch-diagram.md](../plans/sketch-diagram.md). What follows is what the reader
+[260830j-sketch-diagram.md](../plans/260830j-sketch-diagram.md). What follows is what the reader
 touches.
 
 ### It does not emit SVG, and that is the design
@@ -1434,7 +1434,7 @@ glossary, and three consequences follow from it rather than from taste:
 in a Postgres column. `generateSketch` writes nothing and hands the scene back;
 the step returns it as `parts`, the CLI writes `sketch.json`, the harness writes
 into a results directory. Every other article-reading stage followed on
-2026-08-31 — [finish-the-database-move.md § Stage 2](../plans/finish-the-database-move.md).
+2026-08-31 — [260831b-finish-the-database-move.md § Stage 2](../plans/260831b-finish-the-database-move.md).
 
 ### 288px is not a size a diagram fits in, and zooming inside it does not help
 
@@ -1488,7 +1488,7 @@ that file protects first. A modal takes it from nothing.
   drawn *inside that region*, small, over a scrim — the real scene, painted by
   `paintScene` into a nested viewport, with only the words dropped. Press it and
   the new scene grows out of the box you pressed; Back reverses the same motion.
-  All of it is [sketch-zoomable-subsections.md](../plans/sketch-zoomable-subsections.md),
+  All of it is [260830ap-sketch-zoomable-subsections.md](../plans/260830ap-sketch-zoomable-subsections.md),
   including why the ghost is not a simplified redraw and why the swap happens
   before the animation rather than after it.
 - **Click a region's name** — "WHY WE'RE TEMPTED TO SEE IT" — and the picture
@@ -1584,7 +1584,7 @@ that prompt.
 - **Trail draws neither the anchor nor the semantic edges** that Force now has.
   The chain is already the densest thing in the band.
 - **No persistence of the vectors.** Memory only, keyed by slug, source hash and
-  the recipe that made them. When [semantic-search.md](../plans/semantic-search.md)
+  the recipe that made them. When [260826n-semantic-search.md](../plans/260826n-semantic-search.md)
   lands, [`src/article-vectors.ts`](../../src/article-vectors.ts) is the one file
   that changes.
 - **No search hits on the picture.** The spine paints them

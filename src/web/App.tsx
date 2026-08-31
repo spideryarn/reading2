@@ -248,7 +248,7 @@ export function App() {
      two-step does the asking, and `not-shared` still lands here — a stranger
      gets `LandingPage` exactly as they did before, which is why nothing above
      this line had to learn about sharing.
-     docs/plans/public-read-only-access.md § The seam. */
+     docs/plans/260827ai-public-read-only-access.md § The seam. */
   if (!user) {
     if (route.kind === "login") return <SignInPage />;
     if (route.kind !== "read") return <LandingPage />;
@@ -536,7 +536,7 @@ async function findArticle(
      swallowed to `null`. The artefacts are in this payload now, so the payload
      answers that — and the endpoint itself stays, tested and in the route
      inventory, for stage 2's link preview. The win was the request, never the
-     route. docs/plans/public-read-only-access.md § The second request
+     route. docs/plans/260827ai-public-read-only-access.md § The second request
      disappears. */
   const read = await loadPublicArticle(slug);
   if (read.kind === "not-shared") return { kind: "not-shared" };
@@ -577,7 +577,7 @@ function ArticlePage({
    * session*, and only for the sign-up offer. Everything else keys on *is this
    * mine*: a signed-in reader on somebody else's shared document sees exactly
    * what a stranger sees, which is the rule the whole read-only chrome follows.
-   * docs/plans/public-read-only-access.md.
+   * docs/plans/260827ai-public-read-only-access.md.
    */
   readerId: string | null;
 }) {
@@ -804,7 +804,7 @@ function OwnedReader({
    * top of it rather than starting from `loading` of its own. Until 2026-08-27
    * it fetched the same URL again, so the panel said "Looking for a glossary…"
    * while the list it wanted was already on screen, underlined, in the prose
-   * behind it. docs/plans/glossary-read-latency.md.
+   * behind it. docs/plans/260827am-glossary-read-latency.md.
    *
    * The band does still *revalidate* when it opens — see `useGlossaryRead` for
    * why it has to — but behind the list, never in front of it.
@@ -1158,7 +1158,7 @@ function Reader({
 
   /**
    * Which mode owns the middle band — see params.ts § modeParam, and
-   * docs/plans/chat-mode.md.
+   * docs/plans/260826a-chat-mode.md.
    *
    * Greg's framing, 2026-08-25: the gist columns are not a fixture with things
    * layered over them, they are *the default mode*, and chat is the second one.
@@ -1248,7 +1248,7 @@ function Reader({
    * that stage 6 writes: a title, a gist and a navLabel are all on `tree.json`
    * already, so the mode is free, instant, and works on any article that has
    * been through the ToC stage. Full depth rather than the default 2, since the
-   * paragraph rung renders leaves' navLabels. See docs/plans/outline-mode.md.
+   * paragraph rung renders leaves' navLabels. See docs/plans/260828aw-outline-mode.md.
    */
   const outlineRoot = useMemo(
     () =>
@@ -1379,7 +1379,7 @@ function Reader({
            have said so. Gating on the summary's `kind` is what `ThreadSummary.kind`
            exists for; a review with no matching summary simply opens nothing,
            which is the same thing a stale id already did. GPT Sol's review of
-           docs/plans/review-mode.md, finding 7. */
+           docs/plans/260827ah-review-mode.md, finding 7. */
         /* **A positive test, not a negative one.** `?.kind !== "review"` was
            the first version and had its default backwards: an *unknown* thread
            — summaries not fetched yet, or a stale id — came out as a chat, so a
@@ -1410,7 +1410,7 @@ function Reader({
    * top of it rather than starting from `loading` of its own. Until 2026-08-27
    * it fetched the same URL again, so the panel said "Looking for a glossary…"
    * while the list it wanted was already on screen, underlined, in the prose
-   * behind it. docs/plans/glossary-read-latency.md.
+   * behind it. docs/plans/260827am-glossary-read-latency.md.
    *
    * The band does still *revalidate* when it opens — see `useGlossaryRead` for
    * why it has to — but behind the list, never in front of it.
@@ -1527,7 +1527,7 @@ function Reader({
    * The outgoing mode tidies up on top of the incoming one, and nothing errors.
    * It does not happen today between glossary and search only because those two
    * clear different state. Two states and one `mode` test below is the whole
-   * fix. Found by GPT Sol reviewing the plan; docs/plans/ideas-mode.md.
+   * fix. Found by GPT Sol reviewing the plan; docs/plans/260826ac-ideas-mode.md.
    */
   const [ideaFound, setIdeaFound] = useState<Found[]>([]);
   const [openOccurrence, setOpenOccurrence] = useState<string | null>(null);
@@ -1593,7 +1593,7 @@ function Reader({
   const hitBlocks = useMemo(() => blockMatches(passages), [passages]);
 
   /**
-   * The bottom drawer — see Dock.tsx, and docs/plans/bottom-bar.md for why the
+   * The bottom drawer — see Dock.tsx, and docs/plans/260825c-bottom-bar.md for why the
    * bottom rather than the left.
    *
    * Note what is *not* here, for the same reason the comment dialog isn't:
@@ -1694,7 +1694,7 @@ function Reader({
    * with no `?at=` beside it therefore opened a dialog about a paragraph that
    * was somewhere off screen, and which one was unguessable. That is exactly the
    * shape of a link you *send someone*, because `?at=` is only ever there if the
-   * sender had scrolled. Recorded as open in docs/plans/metadata-page.md.
+   * sender had scrolled. Recorded as open in docs/plans/260825e-metadata-page.md.
    *
    * **It waits for the fetch, and it has to.** `useComments` loads over the wire,
    * so at the moment the URL is read we know the note's id and not its block.
@@ -2060,7 +2060,7 @@ function Reader({
              call the reader had not asked for; then it opened an ask box; since
              2026-08-28 it opens a *comment* box, where saving is free and the
              model is a tick-box. Greg's call — see
-             docs/plans/comments-and-bookmarks.md. */
+             docs/plans/260828a-comments-and-bookmarks.md. */
           void setNote(null);
           void setThread(null);
           setChatDraft(null);
@@ -2899,7 +2899,7 @@ export function ConversationBand({
    * either: one `useChat(slug)`, one `?thread=`, one focus nonce, one
    * once-per-visit latch. A near-copy would have been a second chat state
    * machine beside the first, which is what GPT Sol's review of
-   * docs/plans/review-mode.md (finding 7) said not to build — and the
+   * docs/plans/260827ah-review-mode.md (finding 7) said not to build — and the
    * unmount/remount path around this one already has a race worth not having
    * twice.
    */
@@ -2950,7 +2950,7 @@ export function ConversationBand({
    * `ChatPanel` is remounted every time the reader switches conversation, and a
    * peer connection that a remount destroys is a connection nothing owns: the
    * microphone stays open, the events go nowhere, and the exchange in flight is
-   * never written down. docs/plans/live-conversation-in-chat.md § 5.
+   * never written down. docs/plans/260831l-live-conversation-in-chat.md § 5.
    *
    * The three things it is given are the three things a live session cannot
    * work out for itself:
@@ -3019,7 +3019,7 @@ export function ConversationBand({
    * The list is shared, so `threads.length` is the wrong count for the latch
    * below: a reader with three chats and no reviews would press Review and be
    * shown three chats, which is not what "start a new one if there are none"
-   * ever meant. GPT Sol's review of docs/plans/review-mode.md, finding 7.
+   * ever meant. GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 7.
    */
   const ownKind = threads.filter((t) => t.kind === kind).length;
 
@@ -3764,7 +3764,7 @@ function SearchBand({
  * and a visitor's `PublicSummaries` from the page payload, both feeding a panel
  * that took an `access` prop. All of that was carrying the generated length
  * ladder; the gists come down inside the article itself, and the two arms
- * collapse into this. docs/plans/gist-only-summaries.md.
+ * collapse into this. docs/plans/260831s-gist-only-summaries.md.
  *
  * See docs/project/summaries.md.
  */

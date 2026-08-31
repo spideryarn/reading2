@@ -58,7 +58,7 @@
  * `passes` counter and the DELETE route at once. What it keeps is `idsByText`,
  * so a reader's `?quote=` links survive a rewrite.
  *
- * See docs/plans/quotes-mode.md and docs/project/quotes.md.
+ * See docs/plans/260831j-quotes-mode.md and docs/project/quotes.md.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";

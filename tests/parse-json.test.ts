@@ -192,7 +192,7 @@ beforeAll(async () => {
        every stage's own private \`parseJson\` does (src/glossary.ts, src/arc.ts,
        src/toc.ts, src/tweets.ts, src/quotes.ts — none of them exports it). It
        used to go through src/summarise.ts, the one that did; that module is
-       gone (docs/plans/gist-only-summaries.md) and this is the same two calls
+       gone (docs/plans/260831s-gist-only-summaries.md) and this is the same two calls
        without the wrapper. */
     await step("glossary-answer", async () =>
       parseJsonFrom(stripFence(${JSON.stringify(corrupt(LEAK.model))}), "the glossary response"),

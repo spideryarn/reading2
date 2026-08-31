@@ -1,5 +1,5 @@
 /**
- * The client half of chat — see docs/plans/chat-mode.md.
+ * The client half of chat — see docs/plans/260826a-chat-mode.md.
  *
  * The sibling of useComments.ts, with one difference that shapes the whole
  * thing: **the POST is a stream, not an answer.** A comment's POST returns the
@@ -13,7 +13,7 @@
  * every access log between here and the server.
  *
  * **The state lives in src/web/chat/, and this file is a façade over it** —
- * docs/plans/chat-operation-model.md. Every asynchronous thing chat does is an
+ * docs/plans/260828v-chat-operation-model.md. Every asynchronous thing chat does is an
  * operation with an id of its own, and every answer to one comes back carrying
  * that id and is admitted or refused at one gate, rather than by a guard
  * written out again at each of ten `await`s from four different vocabularies.
@@ -197,7 +197,7 @@ export interface ChatApi {
      * The link is written *there*, once the real thread id exists, because the
      * id this function returns is minted optimistically and the client only
      * hears about an overrule when there is one. See
-     * docs/plans/comments-and-bookmarks.md § the Save & ask choreography.
+     * docs/plans/260828a-comments-and-bookmarks.md § the Save & ask choreography.
      */
     sourceCommentId?: string,
   ): string;

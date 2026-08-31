@@ -2,13 +2,13 @@
  * The Postgres schema, as TypeScript.
  *
  * Written ahead of the storage contracts (step 3 of
- * docs/plans/postgres-migration.md) because it is the artefact everything else
+ * docs/plans/260825f-postgres-migration.md) because it is the artefact everything else
  * is judged against. **These tables are now live for reads**: src/store/pg.ts
  * serves the reading view and the library out of them when
  * `SPIDERYARN_STORE=postgres`, and src/store/pg-comments.ts writes to them.
  * The pipeline still writes JSON files under `data/<slug>/`, and the two are
  * kept in step by src/store/import.ts. docs/project/database.md says which is
- * true of what today; docs/plans/postgres-storage-implementation.md tracks the
+ * true of what today; docs/plans/260826e-postgres-storage-implementation.md tracks the
  * rest of the cutover.
  *
  * Two rules that outrank convenience, both from docs/project/block-ids.md:
@@ -39,7 +39,7 @@
  * generated migration that drops and recreates one of these tables can lose the
  * Auth FK silently. The guard is tests/db-schema.test.ts, which queries
  * `pg_constraint` and asserts the FKs are still there. See
- * docs/plans/postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth.
+ * docs/plans/260825f-postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth.
  */
 
 import { sql, type SQL } from "drizzle-orm";
@@ -136,7 +136,7 @@ const SPIDERYARN_ID_REGEX = ID_PATTERN.source;
  * because it points at a table declared below this one. It is deliberately NOT
  * deferrable: creation is insert article, insert revision, update pointer, and
  * no intermediate state violates anything. See
- * docs/plans/postgres-migration.md#the-deferrable-fk-we-talked-ourselves-out-of.
+ * docs/plans/260825f-postgres-migration.md#the-deferrable-fk-we-talked-ourselves-out-of.
  */
 export const articles = spideryarn.table("articles", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -158,7 +158,7 @@ export const articles = spideryarn.table("articles", {
    * fact about a string that anybody may later rename.
    *
    * Not null with a default, so every existing row and every future insert
-   * answers the question. Step 13 (docs/plans/postgres-storage-implementation.md)
+   * answers the question. Step 13 (docs/plans/260826e-postgres-storage-implementation.md)
    * is what sets it true for exactly one article.
    */
   fixture: boolean("fixture").notNull().default(false),
@@ -188,13 +188,13 @@ export const articles = spideryarn.table("articles", {
   lastOpenedAt: timestamp("last_opened_at", { withTimezone: true }),
   /**
    * "Why you're reading this one" — the per-article half of
-   * docs/plans/reader-profile.md. The global half ("about you", true on every
+   * docs/plans/260826t-reader-profile.md. The global half ("about you", true on every
    * article) is `reader_profiles` below, keyed by owner rather than by
    * article, because it is not this article's state to lose.
    */
   purpose: text("purpose"),
 
-  /* ---- sharing: may a stranger read this? docs/plans/public-read-only-access.md --
+  /* ---- sharing: may a stranger read this? docs/plans/260827ai-public-read-only-access.md --
 
      On `articles` rather than on `article_revisions`, and that is a decision
      rather than the nearest column: sharing is about the *document*, not about
@@ -255,7 +255,7 @@ export const articles = spideryarn.table("articles", {
  * not history, so it would not be an audit substitute.
  *
  * What it is for is in
- * docs/plans/public-read-only-access.md § Rights and takedown: serving a third
+ * docs/plans/260827ai-public-read-only-access.md § Rights and takedown: serving a third
  * party's full text from our origin is reproduction, and if a complaint ever
  * arrives the question is *who turned this on, when, and did they confirm they
  * had the right*. `public_at` alone cannot answer it.
@@ -389,7 +389,7 @@ export const articleRevisions = spideryarn.table(
      *
      * `fetched_at` above is a real `timestamp` because it is an instant we
      * recorded; this is a claim somebody else published. The two look alike and
-     * are not the same kind of fact — docs/plans/timeline-mode.md
+     * are not the same kind of fact — docs/plans/260831i-timeline-mode.md
      * § There is no publication date until stage 2 is taught to keep one.
      *
      * Null on every revision written before 2026-08-31, and it stays null until
@@ -429,7 +429,7 @@ export const articleRevisions = spideryarn.table(
      * of anything we kept.
      *
      * A column rather than `length(raw_bytes)`, because `raw_bytes` is dropped
-     * at the end of docs/plans/delete-the-importer.md and this number has to
+     * at the end of docs/plans/260827aa-delete-the-importer.md and this number has to
      * outlive it. `raw_sources.bytes` is not a substitute: that describes the
      * object at `raw_source_sha256`, which for any page that was not already
      * UTF-8 is a *different byte string* — `writeRaw` stores the decoded text,
@@ -449,7 +449,7 @@ export const articleRevisions = spideryarn.table(
      * it is reader-facing and there is nowhere else for it: `origin` is
      * derivable from the two URLs being null and `uploadId` is already on
      * `jobs.upload_id`, but this is homeless.
-     * docs/plans/delete-the-importer.md § The raw provenance has nowhere to go.
+     * docs/plans/260827aa-delete-the-importer.md § The raw provenance has nowhere to go.
      *
      * Null for a fetched document, which never had one.
      */
@@ -484,9 +484,9 @@ export const articleRevisions = spideryarn.table(
      *
      * Writing it down as a fact was the same mistake as the comment in
      * src/store/pg.ts that claimed the ToC guard checked what it did not —
-     * docs/postmortems/toc-status-never-checked.md, found the same day. The
+     * docs/postmortems/260827d-toc-status-never-checked.md, found the same day. The
      * rule lands in `reasonsNotToPublish` with the live write path;
-     * docs/plans/delete-the-importer.md § The publication gate has the full
+     * docs/plans/260827aa-delete-the-importer.md § The publication gate has the full
      * truth table, including the failed-fetch case this sentence omits.
      *
      * Note this is **not** `raw_sha256` above. That one is the hash of what the
@@ -502,7 +502,7 @@ export const articleRevisions = spideryarn.table(
      *
      * All six are null for a web page and that is the common case — they exist
      * because a PDF is read by a *model*, and a reader is owed the difference.
-     * docs/plans/pdf-ingestion.md.
+     * docs/plans/260826c-pdf-ingestion.md.
      *
      * `recall` and `pagesChecked` belong together and must be read together: a
      * mean over one page of seventeen is arithmetically fine and means nothing,
@@ -664,7 +664,7 @@ export const articleRevisions = spideryarn.table(
      * per-article folder Greg pictured: content addressing dedups a publisher's
      * logo across forty articles, and a name that IS the hash of its contents
      * can always be re-checked against them.
-     * docs/plans/hosting-the-articles-images.md § Where the bytes go.
+     * docs/plans/260829b-hosting-the-articles-images.md § Where the bytes go.
      *
      * **No foreign key to `raw_sources`, and no row there either**, which is
      * the decision most likely to be undone by somebody tidying. That table
@@ -798,7 +798,7 @@ export const revisionBlocks = spideryarn.table(
      * Only `'footnote'` is written today. The other four are in the constraint
      * because a stored role means *this revision classifies this content as X*,
      * and narrowing the set now would make widening it a migration
-     * (docs/plans/footnotes-stage345-upfront-sol.md, decision 2).
+     * (docs/plans/260828o-footnotes-stage345-upfront-sol.md, decision 2).
      */
     role: text("role"),
     treatment: text("treatment"),
@@ -920,7 +920,7 @@ export const comments = spideryarn.table(
     updatedAt: timestamp("updated_at", { withTimezone: true }),
     /**
      * The conversation this comment started. **No foreign key, on purpose** —
-     * see docs/plans/comments-and-bookmarks.md § There is deliberately no
+     * see docs/plans/260828a-comments-and-bookmarks.md § There is deliberately no
      * foreign key. The short version: the link is advisory, a deleted thread
      * leaves a comment that is still the reader's mark, and a constraint
      * Postgres can keep and the filesystem store cannot is exactly what
@@ -1107,10 +1107,10 @@ export const jobs = spideryarn.table(
      * "the latest draft for this slug" would have picked up *another* job's
      * draft and resurrected exactly what copying-from-published exists to
      * prevent. GPT Sol's review of the step 11 design, 2026-08-26:
-     * docs/plans/postgres-storage-implementation.md § What the review found.
+     * docs/plans/260826e-postgres-storage-implementation.md § What the review found.
      *
      * It is the anchor for the browser-driven advance endpoint too
-     * (docs/plans/job-queue-rethink.md): one request runs one step, and the
+     * (docs/plans/260826q-job-queue-rethink.md): one request runs one step, and the
      * only way the next request knows where to write is this column.
      *
      * `on delete set null` rather than cascade — a draft swept away by
@@ -1144,7 +1144,7 @@ export const jobs = spideryarn.table(
      * closed union in src/messages.ts and it grows; a constraint here would turn
      * the next kind added to the type into a write that fails in production
      * rather than a test that fails on a laptop. Null means nobody said, and
-     * that offers the retry — docs/postmortems/toc-max-tokens.md.
+     * that offers the retry — docs/postmortems/260826a-toc-max-tokens.md.
      */
     failureKind: text("failure_kind"),
 
@@ -1346,7 +1346,7 @@ export const revisionStepRuns = spideryarn.table(
       /**
        * Every name in `StepName` (src/types.ts). `'summary'` was one until
        * 2026-08-31 and came out with stage 5e
-       * (docs/plans/gist-only-summaries.md) — and taking a name *out* is the
+       * (docs/plans/260831s-gist-only-summaries.md) — and taking a name *out* is the
        * direction with a trap in it: Postgres validates a re-added CHECK
        * against the rows already in the table, so the migration has to delete
        * the `summary` step runs before it narrows the constraint. It does, in
@@ -1394,7 +1394,7 @@ export const revisionStepRuns = spideryarn.table(
  * last reference" was *"maybe keep them indefinitely (at least for now)"*, and
  * that removes the question rather than answering it: an object nothing
  * references is a **kept** object, not a leak, so there is no sweeper to race
- * and nothing to recover from. docs/plans/raw-bytes-in-storage.md.
+ * and nothing to recover from. docs/plans/260827o-raw-bytes-in-storage.md.
  *
  * What survived is verification, which was never about deletion:
  * `storeRawSource` (src/store/blobs.ts) reads back and hashes a dedup hit
@@ -1453,7 +1453,7 @@ export const rawSources = spideryarn.table(
  *   row carries `generation_id` instead, which is the handle to ask OpenRouter
  *   about the call afterwards. GPT Sol's call, 2026-08-28, reversing Greg's
  *   earlier "always store, with pruning" — written up in
- *   docs/plans/ai-cost-tracking.md rather than merely done.
+ *   docs/plans/260827q-ai-cost-tracking.md rather than merely done.
  * - **`cost_micros` is gone**, in favour of nano-dollars in a `bigint`. A single
  *   query embedding costs about $0.0000006, which is **less than one
  *   micro-dollar** and rounded to zero — the row read as free.
@@ -1667,7 +1667,7 @@ export const chatThreads = spideryarn.table(
     /**
      * A question about the article, or the reader saying what they took from
      * it — which chooses the system prompt the whole conversation is answered
-     * with. See docs/plans/review-mode.md.
+     * with. See docs/plans/260827ah-review-mode.md.
      *
      * **Written on insert only**, and `upsertThread`'s conflict clause does not
      * name it, for a sharper version of the reason it does not name the anchor
@@ -2049,7 +2049,7 @@ export const glossaryLookups = spideryarn.table(
 /* -------------------------------------------------------- reader profile -- */
 
 /**
- * "About you" — the global half of docs/plans/reader-profile.md, true on
+ * "About you" — the global half of docs/plans/260826t-reader-profile.md, true on
  * every article rather than on one. `ShelfState.purpose` on `articles` above
  * is the other half; src/profile.ts joins the two into one string a prompt
  * can carry.
@@ -2073,7 +2073,7 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
 /**
  * **Work a failed attempt already paid for, so the next attempt does not buy it
  * again.** The Postgres home of `labels-progress.json` and `pdf-chunks/<key>.json`
- * — docs/plans/delete-the-importer.md § B3.
+ * — docs/plans/260827aa-delete-the-importer.md § B3.
  *
  * ## The key is the article and the question, never the revision
  *
@@ -2119,7 +2119,7 @@ export const readerProfiles = spideryarn.table("reader_profiles", {
  * `created_at` cannot tell a hot cache entry from a dead one — an article
  * re-read every week would be swept on its birthday. The sweep is
  * `scripts/checkpoints-sweep.ts`; nothing schedules it yet, and
- * docs/plans/delete-the-importer.md § B3 says why that is safe.
+ * docs/plans/260827aa-delete-the-importer.md § B3 says why that is safe.
  */
 export const checkpoints = spideryarn.table(
   "checkpoints",

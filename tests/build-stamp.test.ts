@@ -9,7 +9,7 @@
  * idea. Every assertion here is written the way docs/reusable/silent-success.md
  * asks for: the broken case first, so the check is seen to fail.
  *
- * See scripts/build-stamp.ts and docs/plans/deploy-pipeline.md.
+ * See scripts/build-stamp.ts and docs/plans/260827v-deploy-pipeline.md.
  */
 import { describe, expect, it } from "vitest";
 

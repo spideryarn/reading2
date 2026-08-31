@@ -1,6 +1,6 @@
 /**
  * **Live conversation mode's session, and the four ways it goes silently
- * wrong.** src/live.ts, docs/plans/live-conversation.md.
+ * wrong.** src/live.ts, docs/plans/260831g-live-conversation.md.
  *
  * Everything expensive about this feature is decided before a single word is
  * spoken — the model is told the article, handed eight tools and given the

@@ -87,7 +87,7 @@ describe("the ladder expands only the branch the reader is in", () => {
   it("adds nothing at rung 3 that rung 2 did not already draw", () => {
     /* The sentence is a property of a row, not a new row — so the skeleton is
        unchanged and only one line grows. That is the churn argument in
-       docs/plans/outline-mode.md, asserted rather than claimed. */
+       docs/plans/260828aw-outline-mode.md, asserted rather than claimed. */
     expect(project(3, 10).rows.map((r) => r.node.id)).toEqual(
       project(2, 10).rows.map((r) => r.node.id),
     );

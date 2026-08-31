@@ -174,7 +174,7 @@ feature rather than a policy applying to everything.
 
 Both OpenAI embedding models pass ZDR, so a project that must have ZDR everywhere has a way out
 that costs nothing measurable — see
-[embedding-endpoints-refused.md](../plans/embedding-endpoints-refused.md) for the eval's numbers and
+[260828z-embedding-endpoints-refused.md](../plans/260828z-embedding-endpoints-refused.md) for the eval's numbers and
 the billing catch.
 
 This is not hypothetical. **Drift, Trail and Force were dead in production from the day they shipped
@@ -186,8 +186,8 @@ and it has to be asked from inside the deployment, because a probe run on a lapt
 `.env.local` and tests the key that works.
 
 The full account, the fix, and the probe that would have caught it:
-[embedding-endpoints-refused.md](../plans/embedding-endpoints-refused.md) and
-[the-deployed-key-was-never-asked-to-do-anything.md](../postmortems/the-deployed-key-was-never-asked-to-do-anything.md).
+[260828z-embedding-endpoints-refused.md](../plans/260828z-embedding-endpoints-refused.md) and
+[260828d-the-deployed-key-was-never-asked-to-do-anything.md](../postmortems/260828d-the-deployed-key-was-never-asked-to-do-anything.md).
 
 `ProviderRefused.kind === "no-endpoints"` in [`src/ai-call.ts`](../../src/ai-call.ts) classifies it
 at the boundary by matching that fixed string, so the classification survives without the provider's
@@ -229,7 +229,7 @@ Its `usage` object carries Anthropic's own counters **and** OpenRouter's cost, t
  "cost":0.00608, "is_byok":false, "cost_details":{…}}
 ```
 
-[The cost-tracking plan](../plans/ai-cost-tracking.md) opens by arguing that the two transports
+[The cost-tracking plan](../plans/260827q-ai-cost-tracking.md) opens by arguing that the two transports
 disagree about what an input token *is* — Anthropic's `input_tokens` **excludes** the cache fields,
 OpenRouter's `prompt_tokens` **includes** them — and that we must therefore choose between a
 provider-reported cost and a token breakdown. On this endpoint that choice does not arise. Both
@@ -292,7 +292,7 @@ somebody else's question, which is what a per-user spend limit is about.
 **And the collector is not a spend limit.** It is accounting — it says what a request spent *after*
 the request. A cap needs a reservation taken before each call and reconciled after, because final
 usage arrives when the money has already gone and two simultaneous requests both pass a `SUM(cost)`
-check. [The plan](../plans/ai-cost-tracking.md) says so at length; it is repeated here because the
+check. [The plan](../plans/260827q-ai-cost-tracking.md) says so at length; it is repeated here because the
 per-request total looks like the harder half and is not.
 
 And the rule that found the first three, worth holding before adding a fourth field to a request:
@@ -340,7 +340,7 @@ Since 2026-08-28 a finished call is not only reported, it is **kept**: one row i
 (Postgres) or one line of `data/_ai-calls.jsonl` (`files` mode), written by an injected sink and
 awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) picks the
 adapter; `npm run cost` reads it back. The reasoning, the column list, and the four decisions taken
-in Greg's absence are in [ai-cost-tracking.md](../plans/ai-cost-tracking.md).
+in Greg's absence are in [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md).
 
 ### `durationMs` is per **call**, and three different ways of adding it up are wrong
 
@@ -420,7 +420,7 @@ test, red, alongside the real files with the wrapper taken back out.
 new tail is one line — `await stageCli(import.meta.url, main)` — which folds the guard,
 `loadEnvLocal()` and `withLedger("cli", …)` together, so the leak above stops being a line somebody
 has to remember to copy (`stageCli` in [`src/cli-ledger.ts`](../../src/cli-ledger.ts);
-docs/plans/simplification-wave-2.md §2.5). Three of the eight are on it; the other five still carry
+docs/plans/260828aj-simplification-wave-2.md §2.5). Three of the eight are on it; the other five still carry
 the old pair, because they were dirty with other agents' work on the day.
 
 The tempting way to accept two tails is to ask something weaker of each, which is the failure this
@@ -493,7 +493,7 @@ than left for somebody to find at the bottom of a table.
   up this report would otherwise have announced that everything writes a row — while a reader could
   be holding a live conversation billing audio by the minute into no total at all. Greg accepted the
   gap knowingly on 2026-08-31; what it would take to close is in
-  [live-conversation.md § What is missing](../plans/live-conversation.md#what-is-missing). The
+  [live-conversation.md § What is missing](../plans/260831g-live-conversation.md#what-is-missing). The
   completeness line now says "every **declared** way", which is the true claim.
 - [`evals/declared-spend.ts`](../../evals/declared-spend.ts) — the wrapper, kept under `evals/` so
   nothing in `src/` can reach a second way of calling a model. `declaredFetch` refuses to run outside
@@ -541,7 +541,7 @@ nobody to ask, so its row carries `cost_source: "computed"` and a `price_version
 what `--reconcile` compares against their own running total, so an estimate must never land in it.
 The report keeps the two apart and says which half it has never checked.
 
-Written up in [ai-spend-outside-the-gateway.md](../plans/ai-spend-outside-the-gateway.md).
+Written up in [260828g-ai-spend-outside-the-gateway.md](../plans/260828g-ai-spend-outside-the-gateway.md).
 
 ## The one thing still open
 
@@ -569,11 +569,11 @@ clause.
 - [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts) — `npm run cost`
 - [`src/spend-declarations.ts`](../../src/spend-declarations.ts) — the calls allowed round the
   outside, and why each one is
-- [ai-cost-tracking.md](../plans/ai-cost-tracking.md) — the plan this came out of, including the
+- [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md) — the plan this came out of, including the
   three probes that changed its mind
-- [ai-spend-outside-the-gateway.md](../plans/ai-spend-outside-the-gateway.md) — the eight sites that
+- [260828g-ai-spend-outside-the-gateway.md](../plans/260828g-ai-spend-outside-the-gateway.md) — the eight sites that
   were spending into no total, and the scan that stops a ninth
-- [openrouter-as-sole-gateway.md](../research/openrouter-as-sole-gateway.md) — the research, with the
+- [260827f-openrouter-as-sole-gateway.md](../research/260827f-openrouter-as-sole-gateway.md) — the research, with the
   catalogue of ways caching breaks silently in other people's projects
 - [prompt-caching.md](prompt-caching.md) — the three caches and how to tell whether they are working
 - [setup-dev.md](setup-dev.md) — which model each job uses

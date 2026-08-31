@@ -439,7 +439,7 @@ describe("anchor edges", () => {
    * here had footnotes, and a cap turns forty meaningless lines into twelve
    * meaningless lines. Since stage 2 stamps the marker and the back-link, and
    * stage 3 marks the note's blocks as apparatus, they can simply be refused —
-   * docs/plans/footnotes.md § the list of ways this passes while broken.
+   * docs/plans/260828o-footnotes.md § the list of ways this passes while broken.
    */
   it("draws no edge for a note marker, even one the cap would have allowed", () => {
     const { root, blocks } = twoParts();

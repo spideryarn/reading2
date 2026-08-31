@@ -14,7 +14,7 @@
  * present, an otherwise-unused `title` becomes the accessible **description**,
  * so a "fixed name, moving tooltip" arrangement rebuilds the same problem one
  * layer down. Found by GPT Sol reviewing
- * docs/research/microphone-library-options.md, which has the reasoning.
+ * docs/research/260827b-microphone-library-options.md, which has the reasoning.
  *
  * That description slot carries something worth saying instead. For one day it
  * was an *"unreliable"* sticker; since 2026-08-27 it is the microphone's one
@@ -24,7 +24,7 @@
  * is the privacy reversal that dictation's second pass required, and it is
  * tested here for the same reason the sticker was: it has to be reachable
  * *from the button*, which is the difference between a promise and a
- * decoration. docs/plans/dictation-two-pass.md.
+ * decoration. docs/plans/260827x-dictation-two-pass.md.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";

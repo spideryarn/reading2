@@ -179,7 +179,7 @@ describe("describeArticle", () => {
 
   it("falls to the root summary when there is no gist", () => {
     /* **The rung nothing tested.** GPT Sol's sixth finding on
-       docs/plans/library-read-latency.md: this chain had cases for its first
+       docs/plans/260828c-library-read-latency.md: this chain had cases for its first
        rung and for its absence, and none for either of the two in between, so a
        change that dropped `root.summary` altogether would have gone green. */
     const noGist = withoutRootField("gist");

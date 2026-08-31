@@ -11,7 +11,7 @@
  * and the server.
  *
  * Since 2026-08-26 the conversation floats over the article
- * (docs/plans/chat-as-gateway.md), so the dialog and the chat are on screen at
+ * (docs/plans/260826ab-chat-as-gateway.md), so the dialog and the chat are on screen at
  * the same time and the reader's follow-up is handed across as a prop. The cell
  * had nothing left to carry.
  *

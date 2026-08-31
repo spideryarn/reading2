@@ -17,7 +17,7 @@
  * code: a test that mocks a response shape the server never sends is a test that
  * passes while production fails. That is not hypothetical here — it is how the
  * `server_tool_use` field name came to be wrong with a green suite. See
- * docs/plans/explain-deeper-answers.md § 2.
+ * docs/plans/260826l-explain-deeper-answers.md § 2.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -197,7 +197,7 @@ describe("a deeper search, when the reader says the answer was not good enough",
        editing a tool definition invalidates all three tiers — so the variant
        that took pains to keep its instruction out of `SYSTEM` was throwing the
        whole cache away one field earlier. The cap is now the same for everyone.
-       docs/research/prompt-caching-anthropic.md, invalidation table. */
+       docs/research/260826b-prompt-caching-anthropic.md, invalidation table. */
     fetchMock.mockResolvedValue(reply({}));
     await explain({ meta, blocks, blockId: "spya-k3m9qt", quote: "alpha", deep: true });
     const deepTools = bodyOf(fetchMock).tools;

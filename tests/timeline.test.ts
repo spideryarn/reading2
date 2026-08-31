@@ -21,7 +21,7 @@
  *    while only 7 of 26 labels were unchanged. Keying on the label — which is
  *    what src/ideas.ts does — would have broken nineteen of them.
  *
- * See docs/plans/timeline-mode.md and docs/project/testing.md.
+ * See docs/plans/260831i-timeline-mode.md and docs/project/testing.md.
  */
 import { describe, expect, it } from "vitest";
 import {

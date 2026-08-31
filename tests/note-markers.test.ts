@@ -197,7 +197,7 @@ describe("the preview fragment", () => {
     expect(html.indexOf("First half")).toBeLessThan(html.indexOf("Second half"));
   });
 
-  /* The trap, stated in docs/plans/footnotes.md before any of this was written:
+  /* The trap, stated in docs/plans/260828o-footnotes.md before any of this was written:
      injecting stored block html duplicates block ids into a document where
      everything addresses text by id — including `internalTarget`'s own `[id="…"]`
      fallback, which takes the first in document order. */

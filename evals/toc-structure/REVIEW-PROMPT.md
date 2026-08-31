@@ -22,7 +22,7 @@ findings you read code for and which you inferred.
   free run.
 - `src/toc.ts` — the stage under evaluation. Its structure call is 163–320s and ~88% of the ingest
   wait. `evals/toc-labels.ts` judges only the *second* pass; nothing judged this one until now.
-- `docs/research/opening-an-article-before-the-toc.md` — the decisions this feeds, and your own
+- `docs/research/260830a-opening-an-article-before-the-toc.md` — the decisions this feeds, and your own
   earlier review of it (`-sol.md` beside it).
 
 ## Context that matters

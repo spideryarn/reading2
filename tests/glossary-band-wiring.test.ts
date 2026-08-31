@@ -14,7 +14,7 @@
  * text; it cannot tell a call in dead code from a call that runs. What it does
  * catch is the specific regression that made this change necessary — two
  * readers of one endpoint — which was invisible for weeks and cost a second on
- * every open of the panel. docs/plans/glossary-read-latency.md.
+ * every open of the panel. docs/plans/260827am-glossary-read-latency.md.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -47,7 +47,7 @@ describe("the reading view's glossary wiring", () => {
        `capability`, so it is `null` for a visitor on a shared document, who has
        no glossary and no endpoint to ask for one. Optional in the pattern, not
        required, so this still fails if the local disappears altogether — which
-       is the regression it is about. docs/plans/public-read-only-access.md. */
+       is the regression it is about. docs/plans/260827ai-public-read-only-access.md. */
     expect(app).toMatch(/glossaryRead\??\.glossary\?\.entries/);
     /* The prop or the call, not the word — the comment in `GlossaryBand`
        explaining why the prop is gone would otherwise fail this. */

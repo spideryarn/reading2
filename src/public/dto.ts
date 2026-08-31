@@ -3,7 +3,7 @@
  * this file, once.
  *
  * The alternative — take today's response and delete the fields that look
- * private — was the first draft of docs/plans/public-read-only-access.md, and
+ * private — was the first draft of docs/plans/260827ai-public-read-only-access.md, and
  * GPT Sol refused it on 2026-08-27:
  *
  * > A recursive key denylist is insufficient: it misses innocently named fields
@@ -401,7 +401,7 @@ function publicTweets(thread: TweetThread): PublicTweets {
  * tagged wire result saying whether the artefact exists; folding them in here
  * makes existence a property of the payload — a key that is present exists —
  * with no second request to be in flight, to fail, or to disagree with the
- * first. docs/plans/public-read-only-access.md § Slice 1b.
+ * first. docs/plans/260827ai-public-read-only-access.md § Slice 1b.
  *
  * `null` in, absent out. The reader hands `null` for a column Postgres had
  * nothing in, and an absent key is what the client reads as *nobody built one*.

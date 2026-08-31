@@ -10,7 +10,7 @@ break without saying so.
 >
 > — Greg, 2026-08-26
 
-The plan behind this is [deploy-and-repo-move.md](../plans/deploy-and-repo-move.md),
+The plan behind this is [260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md),
 which is still the place for *why a new project*. **The domain move happened on
 2026-08-27** — see [The domain](#the-domain). This file is what exists now.
 
@@ -145,7 +145,7 @@ domain lists and both live names afterwards rather than assuming.
 `spideryarn-reading` still runs and still answers on
 `spideryarn-reading.vercel.app` — measured 200, not a login wall. It just has no
 memorable address any more. The plan's kindness for its few non-paying users was
-[`old.spideryarn.com`](../plans/deploy-and-repo-move.md), and **that one does need
+[`old.spideryarn.com`](../plans/260825d-deploy-and-repo-move.md), and **that one does need
 Namecheap**: a new `old` CNAME at the registrar, plus the domain added to the old
 project. Deferred by Greg, not forgotten.
 
@@ -159,7 +159,7 @@ npm run deploy
 commit you are about to push, applies any pending migrations to the remote,
 pushes, waits for Vercel, checks nine things about what came out, and reads that
 deployment's logs. The plan, the nine measurements behind it and GPT Sol's review
-are in [deploy-pipeline.md](../plans/deploy-pipeline.md);
+are in [260827v-deploy-pipeline.md](../plans/260827v-deploy-pipeline.md);
 [`scripts/deploy.ts`](../../scripts/deploy.ts) is the file and its header is the
 short version.
 
@@ -211,7 +211,7 @@ gate still means *"does this commit work against this laptop's declared test
 environment?"*, not *"can a fresh clone reproduce this?"* — and one consequence
 is that `doc-links` will accept a link into gitignored `output/`, which nobody
 else can follow. The debt is a small committed fixture corpus under
-`tests/fixtures/`, noted in [deploy-pipeline.md](../plans/deploy-pipeline.md).
+`tests/fixtures/`, noted in [260827v-deploy-pipeline.md](../plans/260827v-deploy-pipeline.md).
 
 ### Reading the logs is a poll, not a question
 
@@ -472,7 +472,7 @@ a larger one — see [page-titles.md](page-titles.md).
 **Still: do not treat this as private.** `robots.txt` is a request, the gate is
 the enforcement, and the shell of the app is served to anybody who asks.
 
-The real answer is [the beta gate](../plans/deploy-and-repo-move.md#the-beta-gate),
+The real answer is [the beta gate](../plans/260825d-deploy-and-repo-move.md#the-beta-gate),
 which is what the custom domain needs anyway — application-level auth, which no
 plan tier can take away. **It is built**, in [`src/auth.ts`](../../src/auth.ts),
 and it is what made [the domain move](#the-domain) safe to do: `www.spideryarn.com`
@@ -514,7 +514,7 @@ is read by nothing.
 | `NODEJS_HELPERS=0` | see [the request body](#the-request-body) |
 | `OPENROUTER_API_KEY` | **every paid call in the app**, since 2026-08-27 — the pipeline as well as explain, chat, search, PDF reading and embeddings. Without it nothing can be ingested at all. [ai-gateway.md](ai-gateway.md) |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | the gate verifies tokens with these. `SUPABASE_ANON_KEY` is the legacy fallback and is what is set today |
-| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. **Set on Preview too, 2026-08-27** — until then a preview was a blank page for this reason and no other, which looks identical to a build that never ran. Note that Preview builds predating that setting keep the missing values baked in; only a new build picks them up. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [auth-ui-and-production.md § The release fence](../plans/auth-ui-and-production.md#the-release-fence) |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. **Set on Preview too, 2026-08-27** — until then a preview was a blank page for this reason and no other, which looks identical to a build that never ran. Note that Preview builds predating that setting keep the missing values baked in; only a new build picks them up. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [260826ae-auth-ui-and-production.md § The release fence](../plans/260826ae-auth-ui-and-production.md#the-release-fence) |
 | `SPIDERYARN_OWNER_ID` | the uuid in `auth.users` that rows are stamped with **when there is no signed-in reader** — the CLI, the pipeline, `npm run db:import`. Inside a request the session user wins and this is ignored, and that ordering is load-bearing: were it the other way round, setting this here would have handed every signed-in stranger Greg's own shelf and every query would have matched. Unset in production is a thrown error rather than a default. [`src/owner.ts`](../../src/owner.ts), [auth.md](auth.md) |
 | `LOG_LEVEL=info` | [logging.md](logging.md) |
 
@@ -611,7 +611,7 @@ Two further things it changed, both about what a check can honestly claim:
   is not built.
 
 The whole thing is written up in
-[health-check-green-while-uploads-dead.md](../postmortems/health-check-green-while-uploads-dead.md) —
+[260827b-health-check-green-while-uploads-dead.md](../postmortems/260827b-health-check-green-while-uploads-dead.md) —
 including the part that is not about this endpoint at all: four places in this codebase ask "am I in
 production with a development-only fallback?", three of them refuse, and the fourth is the one that
 writes the bytes. One of the three shipped in the *same commit* as the fourth.
@@ -629,7 +629,7 @@ all arrived.
 
 Each reported success while being wrong. The first four were found on 2026-08-26
 by the deployment itself and are written up in
-[first-vercel-deploy-silent-failures.md](../postmortems/first-vercel-deploy-silent-failures.md);
+[260826g-first-vercel-deploy-silent-failures.md](../postmortems/260826g-first-vercel-deploy-silent-failures.md);
 the fifth was found in review before it could bite, which is the only reason it
 is not in there too.
 
@@ -727,7 +727,7 @@ insert into `storage.buckets`.
 in this repo applies the block below to a bucket that is already there, so editing it is not a
 change to any running system. Adding `text/html` on 2026-08-27 left the local bucket PDF-only for
 seven hours, during which every HTML fetch threw a 415 that nobody saw. Read
-[the-config-file-is-not-the-bucket.md](../postmortems/the-config-file-is-not-the-bucket.md) before
+[260828a-the-config-file-is-not-the-bucket.md](../postmortems/260828a-the-config-file-is-not-the-bucket.md) before
 changing a bucket setting, or before trusting one.
 
 **`npx tsx scripts/check-buckets.ts` is what says whether they still agree.** Read-only, one
@@ -797,7 +797,7 @@ writes to a local filesystem, which a serverless host does not have:
   history of a wall that is no longer there.** An article pasted at the live site
   is fetched, extracted, split, ToC'd, published and readable. Production
   `a63a5592`; the plan is
-  [v1-imports-on-vercel.md](../plans/v1-imports-on-vercel.md).
+  [260830d-v1-imports-on-vercel.md](../plans/260830d-v1-imports-on-vercel.md).
 
   Three things made it work, and none of them was the storage rewrite this
   section spent three days pointing at. The root became explicit and **scoped to
@@ -828,7 +828,7 @@ writes to a local filesystem, which a serverless host does not have:
 
   because the stages still write `data/<slug>/` directly and Vercel has no
   writable disk. Nothing is wrong with the upload half — it got all the way to
-  the wall. The wall is [transactional-stage-runner.md](../plans/transactional-stage-runner.md),
+  the wall. The wall is [260827j-transactional-stage-runner.md](../plans/260827j-transactional-stage-runner.md),
   and [database.md § Writes do not](database.md) is the same fact from the
   storage side
 
@@ -847,7 +847,7 @@ writes to a local filesystem, which a serverless host does not have:
   invocation and finds nothing — and on a warm instance it would sometimes find
   a *stale* file and skip real work. GPT Sol's review of the whole question,
   with the interim options and why each is refused, is in
-  [html-ingest-var-data-sol.md](../plans/html-ingest-var-data-sol.md). It also
+  [260828at-html-ingest-var-data-sol.md](../plans/260828at-html-ingest-var-data-sol.md). It also
   names one thing the storage fix does not cover: `articleExists` and
   `urlForSlug` read `data/<slug>/meta.json`
   ([`pipeline.ts`](../../src/pipeline.ts)) on the live enqueue path, so once
@@ -930,7 +930,7 @@ reader is told about it is the only symptom most people will ever report.
    comments, 56 chat messages, and reads verified through the store seam over the
    transaction pooler. `ball-lightning` and `coolabah-memory` have no
    `blocks.json`/`tree.json` yet, so the importer correctly skipped them.
-5. ~~**[The beta gate](../plans/deploy-and-repo-move.md#the-beta-gate)**~~ — built,
+5. ~~**[The beta gate](../plans/260825d-deploy-and-repo-move.md#the-beta-gate)**~~ — built,
    [`src/auth.ts`](../../src/auth.ts), enforcing on the live domain. It is what made
    a stable URL possible, and [the domain move](#the-domain) followed it the same
    day.
@@ -974,7 +974,7 @@ The first successful build in seven hours returned `500` to every request, becau
 [`src/pdf.ts`](../../src/pdf.ts) imported pdf.js at module scope and Vercel's tracer had left
 pdf.js's own optional native dependency out of the bundle — so *loading* the API threw
 `DOMMatrix is not defined`, on every route, PDF or not, and never on a laptop.
-[pdfjs-dommatrix-serverless.md](../postmortems/pdfjs-dommatrix-serverless.md).
+[260827a-pdfjs-dommatrix-serverless.md](../postmortems/260827a-pdfjs-dommatrix-serverless.md).
 
 **The API routes are gated and `/api/health` is not.** An unauthenticated request to `/api/library`
 returns `401 You need to be signed in to do that. [auth-none]`; the health endpoint answers anybody,
@@ -985,7 +985,7 @@ Vercel.
 
 ## See also
 
-- [deploy-and-repo-move.md](../plans/deploy-and-repo-move.md) — the plan, the
+- [260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md) — the plan, the
   domain move, and the beta gate
 - [database.md](database.md) — the roles, the three hosts, and the enforced SSL
 - [architecture.md](architecture.md) — the single-process assumption this runs into

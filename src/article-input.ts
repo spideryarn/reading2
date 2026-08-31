@@ -12,7 +12,7 @@
  * Through a job-scoped `/tmp` on a deployment they are not, and a stage that
  * hashes one article and generates from another is a stale artefact reporting
  * itself current for ever, with nothing about it looking wrong.
- * docs/plans/finish-the-database-move.md; docs/reusable/silent-success.md.
+ * docs/plans/260831b-finish-the-database-move.md; docs/reusable/silent-success.md.
  *
  * So the stage no longer knows where an article comes from. It is given one.
  *

@@ -1,7 +1,7 @@
 # Which transcriber, does telling it the words help, and which words?
 
 Three benchmarks, checked in because GPT Sol's review of
-[the first plan](../../docs/plans/dictation-two-pass.md) asked for it: the numbers in these
+[the first plan](../../docs/plans/260827x-dictation-two-pass.md) asked for it: the numbers in these
 documents chose the model and then chose the vocabulary, and a number nobody can re-run is a number
 nobody can argue with.
 

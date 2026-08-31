@@ -8,7 +8,7 @@
  * met an article long enough to blow through its number and the ingest failed
  * with "Hit max_tokens — the JSON is truncated. Raise it and retry." Retrying
  * made the identical call and failed identically. See
- * docs/postmortems/toc-max-tokens.md.
+ * docs/postmortems/260826a-toc-max-tokens.md.
  *
  * **`max_tokens` is not an output cap. It is an output-plus-reasoning cap.**
  * That is the whole reason a typed-in number is the wrong shape of answer. On
@@ -104,7 +104,7 @@ export class TooLongForOnePass extends Error {
   /**
    * `blocked`, so the job card does not offer a Retry that cannot work.
    *
-   * This is the failure docs/postmortems/toc-max-tokens.md was written about:
+   * This is the failure docs/postmortems/260826a-toc-max-tokens.md was written about:
    * the button was there, Greg pressed it, and it made the identical call.
    * Nothing about the second attempt is different — the block count comes off a
    * `blocks.json` that a completed step already wrote, and Retry never re-runs a
@@ -206,7 +206,7 @@ export function truncatedMessage(
  * really is arithmetic — the same block count gives the same estimate every
  * time — but this is not. The model's output varies between calls, and what we
  * have is two observations on one article
- * (docs/postmortems/toc-max-tokens.md). That is evidence, not a law.
+ * (docs/postmortems/260826a-toc-max-tokens.md). That is evidence, not a law.
  *
  * So the sentence now says *unlikely*, and the button is hidden. Those two have
  * to agree, and the honest way to make them agree is to soften the sentence

@@ -2,7 +2,7 @@
  * The stylesheet entry point. `main.tsx` imports THIS file and nothing else.
  *
  * Four lines, and every one of them is load-bearing. The reasoning is in
- * docs/plans/shadcn-migration.md; the short version:
+ * docs/plans/260825a-shadcn-migration.md; the short version:
  *
  * 1. The `@layer` statement must come FIRST, before the @imports. A layer
  *    statement is one of the few things allowed to precede @import, and it is
@@ -64,7 +64,7 @@
 
    Tailwind v4 auto-detects sources from the project root, which swept in
    docs/ — and since its scanner is a plain text scanner, the `tw:flex` and
-   `tw:rounded-md` written as EXAMPLES in docs/plans/shadcn-migration.md were
+   `tw:rounded-md` written as EXAMPLES in docs/plans/260825a-shadcn-migration.md were
    compiled into the production bundle. Seven utilities shipped, none of them
    used by any component. It also makes verification lie: a utility appears in
    the output because a doc mentioned it, so "the class is in the CSS" stops

@@ -8,7 +8,7 @@
  * exactly `0.0`. The recogniser heard nothing because there was nothing, and
  * the meter drew a flat line because the line was flat — and no part of the
  * page said *which* microphone had produced that zero.
- * docs/plans/microphone-device-and-recording.md.
+ * docs/plans/260827k-microphone-device-and-recording.md.
  *
  * So the properties here are mostly about **not claiming things**:
  *

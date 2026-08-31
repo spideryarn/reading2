@@ -11,7 +11,7 @@
  * and the answer is a sentence you could carry to a different article and use.
  *
  * Full design, the alternatives, and the cross-family review that rewrote half
- * of it: docs/plans/ideas-mode.md.
+ * of it: docs/plans/260826ac-ideas-mode.md.
  *
  * ## The three things here that are not the glossary's
  *
@@ -133,7 +133,7 @@ export function suggestedIdeas(words: number): number {
  * `TITLE:`, `BY:` and `PUBLISHED IN:` at the head of the prompt, and the
  * those fields are stage 2's and move when the page is re-extracted. `arc` had
  * covered all three since 2026-08-29 and this stage had not.
- * docs/plans/finish-the-database-move.md § stage 1.
+ * docs/plans/260831b-finish-the-database-move.md § stage 1.
  */
 export function inputFingerprint(
   blocks: readonly BlockFingerprint[],
@@ -564,7 +564,7 @@ export class IdeasBaselineUnusable extends Error {
  *
  * Until 2026-08-28 this was `readIdeas(opts.dir)` inside `generateIdeas`, whose
  * every failure is `null`. After landing D of
- * docs/plans/delete-the-importer.md that read fails on every run while looking
+ * docs/plans/260827aa-delete-the-importer.md that read fails on every run while looking
  * exactly like a first pass, and every `?idea=` link a reader holds goes dead
  * with nothing anywhere saying so.
  *

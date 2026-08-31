@@ -118,7 +118,7 @@ export const pgCommentStore: CommentStore = {
    * both insert, and the second gets a raw uniqueness error that src/routes.ts
    * turns into a 500. The reader's question fails for a reason that is not
    * about their question. GPT Sol found it in review, 2026-08-26;
-   * docs/plans/postgres-storage-review-sol.md.
+   * docs/plans/260826j-postgres-storage-review-sol.md.
    *
    * `on conflict (article_id, id) do update` is the fix, and it is the same
    * statement for both cases — Postgres serialises the second writer on the

@@ -420,7 +420,7 @@ describe("the sink", () => {
     expect(rows[0]?.job).toBe("toc");
     expect(rows[0]?.creditsUsedNanos).toBe(21_523_500);
     /* Named `credits`, not `cost`. The rename is the decision — see
-       docs/plans/ai-cost-tracking.md Q5 — and a test that only checked the
+       docs/plans/260827q-ai-cost-tracking.md Q5 — and a test that only checked the
        number would let it drift back to a name that promises cash. */
     expect("creditsUsedNanos" in (rows[0] ?? {})).toBe(true);
   });

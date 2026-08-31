@@ -22,11 +22,11 @@
  * archived in October 2025; Supabase's replacement blocks are Next.js only,
  * built on server actions and cookie SSR; shadcn's `login-01…05` are markup
  * with no auth logic in them at all. See
- * docs/plans/auth-supabase.md § Step 5 for the full survey.
+ * docs/plans/260826w-auth-supabase.md § Step 5 for the full survey.
  *
  * So this is a form on our own tokens. No shadcn `Card` — overriding its chrome
  * for one screen is more work than not having it, the same call
- * docs/plans/shadcn-migration.md made about `Dialog`.
+ * docs/plans/260825a-shadcn-migration.md made about `Dialog`.
  */
 import { useState } from "react";
 

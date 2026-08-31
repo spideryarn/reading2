@@ -21,7 +21,7 @@
  * worst of the failure modes around this change, because nothing reports it:
  * every query succeeds and matches nothing. docs/reusable/silent-success.md.
  *
- * GPT Sol raised it reviewing docs/plans/google-sign-in-production.md, and it is
+ * GPT Sol raised it reviewing docs/plans/260827i-google-sign-in-production.md, and it is
  * the one thing in that review that could not be settled by reading a spec.
  *
  * What decides it: Supabase links a new provider identity to an existing user

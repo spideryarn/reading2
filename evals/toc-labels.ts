@@ -6,7 +6,7 @@
  * Reads artefacts that already exist and calls no model, so it is cheap to
  * re-run and can be pointed at an old tree as easily as a new one. See
  * evals/README.md for what each measure is a proxy for, and
- * docs/plans/toc-scaling.md for the design it exists to judge.
+ * docs/plans/260826h-toc-scaling.md for the design it exists to judge.
  *
  * Everything here is mechanical. None of it decides whether a label is *good*;
  * each one is a proxy for a specific way the split could go wrong. The direct
@@ -72,7 +72,7 @@ export interface EvalReport {
    * told: the stage records which blocks it gave up on, and this eval reads
    * them rather than inferring a fault from a number it can no longer interpret
    * on its own. See `LabelRun.dropped` and
-   * docs/plans/faster-ingest-and-concurrency.md § Stage 1b.
+   * docs/plans/260830am-faster-ingest-and-concurrency.md § Stage 1b.
    */
   coverage: number;
   /**

@@ -6,7 +6,7 @@
  * and then read the bytes off the disk itself — `fsLocations(slug)`,
  * `readRaw(dir)`, `readFile(...)` — whatever `SPIDERYARN_STORE` said. It was the
  * one unconditional filesystem read left in that file, found twice
- * independently: by GPT Sol reviewing docs/plans/finish-the-database-move.md,
+ * independently: by GPT Sol reviewing docs/plans/260831b-finish-the-database-move.md,
  * and by the code inventory in that plan (§ *What the inventory found*).
  *
  * Two things were wrong with it, and only one of them is tidiness:
@@ -147,7 +147,7 @@ describe("the filesystem source store", () => {
    * **And what stage 1 leaves changed on 2026-08-31.** It used to write the
    * document beside its manifest; it now puts it in the content-addressed
    * `sources` bucket and the manifest names it by hash
-   * (docs/plans/finish-the-database-move.md § Stage 2c). So `bytes` goes
+   * (docs/plans/260831b-finish-the-database-move.md § Stage 2c). So `bytes` goes
    * through `storeRawSource`, exactly as the stage does, and the manifest gets
    * the `storedSha256` that read-back is addressed by. A fixture that went on
    * writing `raw.pdf` would be describing a state stage 1 can no longer

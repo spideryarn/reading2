@@ -37,9 +37,9 @@
  * One axis could not express that, and the difference matters to this file
  * specifically: without it, "the library may look at `glossary`" and "the
  * library may read `glossary`" are the same sentence, and the projection check
- * below would have to accept either query. docs/plans/library-read-latency.md.
+ * below would have to accept either query. docs/plans/260828c-library-read-latency.md.
  *
- * GPT Sol's review of docs/plans/glossary-read-latency.md is why it is a map
+ * GPT Sol's review of docs/plans/260827am-glossary-read-latency.md is why it is a map
  * and not a union. A test of the form `selected ∪ omitted === all` looks like
  * the same guarantee and is not: if `selected` is still derived from
  * `getTableColumns` by object-rest, a new column enters it automatically and
@@ -160,7 +160,7 @@ describe("the presence flags", () => {
  * `sketch` and `arc` were both checked against the policy by nobody. That is
  * not a coincidence — the bug this file caught (a `metadata` projection missing
  * the sketch column, which is what told an owner their personalised picture was
- * not personalised, docs/postmortems/the-dialog-said-nothing-was-personalised.md)
+ * not personalised, docs/postmortems/260830c-the-dialog-said-nothing-was-personalised.md)
  * was a hand-written list that had fallen behind, and this file had the same
  * defect one level up while catching it. GPT Sol found the list was six once
  * already, and the answer then was to write down eight.
@@ -199,7 +199,7 @@ describe("every projection obeys the policy", () => {
   }
 
   it("lets the shelf ask whether an artefact exists without reading it", () => {
-    /* The second half of docs/plans/library-read-latency.md, as a fact about
+    /* The second half of docs/plans/260828c-library-read-latency.md, as a fact about
        the policy rather than as a diff: the library is granted all four of
        these, and granted none of them by value. */
     for (const column of ["tree", "arc", "tweets", "glossary"] as const) {
@@ -326,7 +326,7 @@ describe("the shelf's own query", () => {
    * `listArticlesQuery` exists as a seam for exactly this. Assembling SQL from
    * `REVISION_PROJECTIONS.library` here would repeat the hole GPT Sol found in
    * the last change: the projection can be perfect while the query says
-   * `.select()`. Its fourth finding on docs/plans/library-read-latency.md said
+   * `.select()`. Its fourth finding on docs/plans/260828c-library-read-latency.md said
    * so before this was built.
    */
   const shelfSql = (archived: boolean): string =>

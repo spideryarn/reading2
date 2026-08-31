@@ -60,7 +60,7 @@
  *   use** and the control is not offered.
  *
  * The four designs this was chosen from, and the two things it is a bet on, are
- * in docs/plans/glossary-prioritised-order.md.
+ * in docs/plans/260826b-glossary-prioritised-order.md.
  */
 import { useState } from "react";
 import {
@@ -496,7 +496,7 @@ export function sortEntries(
 
    > Add a small threshold-slider to the Glossary UI (set to a sensible default)
 
-   The whole design is in docs/plans/glossary-prioritised-order.md. The four
+   The whole design is in docs/plans/260826b-glossary-prioritised-order.md. The four
    things worth having in front of you while reading this code:
 
    1. **The two scores multiply, they do not add.** What the reader wants
@@ -790,7 +790,7 @@ export function rowScores(entry: GlossaryEntry, sort: TermSort | null): RowScore
    > itself clearly […] which bits are/not from the article.
 
    Both halves of that have the same answer, and it is a field split rather
-   than a better badge. See docs/plans/glossary-entries-worth-reading.md. */
+   than a better badge. See docs/plans/260826d-glossary-entries-worth-reading.md. */
 
 /** One labelled section of an open entry. The label IS the provenance. */
 export interface ProseSection {
@@ -1338,7 +1338,7 @@ function Looked({
 
             Unlike chat and explain, no words arrive while this runs: the answer
             appears whole. Making it stream is worth doing and is written up in
-            docs/plans/streaming-the-slow-two.md — it needs a storage seam that
+            docs/plans/260826o-streaming-the-slow-two.md — it needs a storage seam that
             was being rebuilt on the day this was written. */}
         {looking && (
           <p className="gloss-look-wait">

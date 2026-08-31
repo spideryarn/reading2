@@ -114,7 +114,7 @@
    * and looks perfect. There is nothing to see until it is on the phone. To
    * check one, set the token to `40px` here and watch the chrome move — a rule
    * that cannot be made to move that way will not move on the device either.
-   * docs/plans/mobile-screen-real-estate.md § How we will know.
+   * docs/plans/260828av-mobile-screen-real-estate.md § How we will know.
    *
    * The fallback second argument is not decoration: a browser that knows
    * `env()` but not a given keyword resolves to it, and one that knows neither
@@ -139,7 +139,7 @@
    *
    * It is `--bar-h` everywhere except a small device being scrolled down
    * through, where § a small device switches it to `0px`. See
-   * docs/plans/mobile-reading-view.md for why a landscape phone needed the 44px.
+   * docs/plans/260827t-mobile-reading-view.md for why a landscape phone needed the 44px.
    *
    * **Deliberately a plain custom property, and deliberately not animated
    * itself.** The first version of this was a `@property`-registered
@@ -294,7 +294,7 @@
    spine is always the collapsed strip — see Spine.tsx. Mirrors SPINE_W in
    layout.ts; change both together, and `tests/spine-width.test.ts` is what
    notices when you don't. Halved from 24px on 2026-08-28 —
-   docs/plans/spine-rail.md. */
+   docs/plans/260828ay-spine-rail.md. */
 .reader.spine-on { --spine-w: 12px; }
 .reader.spine-off { --spine-w: 0px; }
 
@@ -398,7 +398,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    then in the bottom drawer. It is gone because the panel is — the details are
    a page of their own now, Metadata.tsx, styled with Tailwind utilities like
    the rest of the chrome (web-client.md#tailwind-and-shadcn-components).
-   docs/plans/metadata-page.md. */
+   docs/plans/260825e-metadata-page.md. */
 
 /* How this article was made, when the answer is not "a web page" — see
    Masthead.tsx. Deliberately the same size and colour as `.facts` rather than a
@@ -839,7 +839,7 @@ td.gist.arc.active .gist-text { color: var(--ink-soft); }
    as chrome rather than as prose. "Notes" is a label *about* the article, not a
    compression *of* it, so it must not dress as a gist — a reader who has
    learned the column's grammar reads the difference without being told.
-   docs/plans/footnotes.md § What the reader sees. */
+   docs/plans/260828o-footnotes.md § What the reader sees. */
 .arc-step.arc-supplement {
   color: var(--ink-faint);
   font-weight: 500;
@@ -1355,7 +1355,7 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
    the tint drops so that the eye reads the argument as ending at its top edge.
    Search lanes still paint over it, deliberately: a hit inside a footnote is a
    real hit, and the dimming makes those marks more legible rather than less.
-   docs/plans/footnotes.md § What the reader sees. */
+   docs/plans/260828o-footnotes.md § What the reader sees. */
 .spine-part.supplement::before { opacity: 0.1; }
 .spine-part.supplement.active::before { opacity: 0.4; }
 
@@ -2779,7 +2779,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* ------------------------------------------------------------------ dock --
    The bottom bar and the drawer that rises out of it — Dock.tsx, and
-   docs/plans/bottom-bar.md for why the bottom rather than the left.
+   docs/plans/260825c-bottom-bar.md for why the bottom rather than the left.
 
    The whole point of this edge is that it costs the table nothing. Note what is
    NOT here as a result: no `--dock-w`, no term added to any `calc()` that
@@ -2804,7 +2804,7 @@ td.text.has-hit[data-hues="8"] {
   /* **The bar gets out of the way while you read**, on a small device scrolled
      down through — the same `data-bars="hidden"` switch the controls bar, the
      table head, the spine and the mode band have answered to since
-     docs/plans/mobile-reading-view.md, which this one never joined. § a small device does
+     docs/plans/260827t-mobile-reading-view.md, which this one never joined. § a small device does
      the switching; this turns it into movement, and `--dock-space -
      --dock-bottom` is `0` at rest and a bar's height when hidden.
 
@@ -2852,7 +2852,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* ------------------------------------------------------- the install hint --
    One line above the bar, on an iPhone, once — InstallHint.tsx, and
-   docs/plans/mobile-screen-real-estate.md § 1 for why the advice is "leave the
+   docs/plans/260828av-mobile-screen-real-estate.md § 1 for why the advice is "leave the
    browser" rather than anything this stylesheet could do.
 
    Pinned to the bar's *resting* room (`--dock-space`) rather than to
@@ -3465,7 +3465,7 @@ td.text.has-hit[data-hues="8"] {
 /* --------------------------------------------------------- § mode band ----
    The strip between the spine and the prose when the middle belongs to a mode
    rather than to the table of contents. Chat is the first one; see
-   ChatPanel.tsx and docs/plans/chat-mode.md.
+   ChatPanel.tsx and docs/plans/260826a-chat-mode.md.
 
    THE ONE THING TO UNDERSTAND HERE: the band is `position: fixed`, and the
    room for it is made by `--mode-w` in four rules further up this file —
@@ -3817,7 +3817,7 @@ td.text.has-hit[data-hues="8"] {
 
    `break-word` for the reason the prose has it: a bare URL is one unbroken
    token, and this column is 22rem at its widest. Cited.tsx,
-   docs/plans/chat-web-links.md. */
+   docs/plans/260827ao-chat-web-links.md. */
 .cited-link {
   color: var(--highlight-ink);
   text-decoration-thickness: 1px;
@@ -4840,7 +4840,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* ------------------------------------------------------- footnotes ------
    The apparatus, dressed as apparatus. src/web/notes-view.ts, and
-   docs/plans/footnotes.md § What the reader sees.
+   docs/plans/260828o-footnotes.md § What the reader sees.
 
    A marker is **chrome inside prose** — a superscript that says "there is a
    note here", not a word of the author's sentence — so it takes the UI face and
@@ -5023,7 +5023,7 @@ td.text.has-hit[data-hues="8"] {
 /* ------------------------------------------------------- the mode switch --
    The three things the middle band can be — Hierarchy, Chat, Glossary — drawn
    as one control rather than three buttons that happen to be adjacent. See
-   DockModes in Dock.tsx, and docs/plans/chat-mode.md for what a mode is.
+   DockModes in Dock.tsx, and docs/plans/260826a-chat-mode.md for what a mode is.
 
    The grouping is the entire visual job here. Exactly one of these is on at any
    moment, and three separate-looking buttons where only one ever lights up
@@ -5906,7 +5906,7 @@ td.text.has-hit[data-hues="8"] {
    the reader can jump to and never a section of the piece — the same grammar
    `.arc-step.arc-supplement` and `.spine-part.supplement` use, so a reader who
    has learned it in one panel reads it in this one without being told.
-   docs/plans/footnotes.md. */
+   docs/plans/260828o-footnotes.md. */
 .summ-entry.supplement > .summ-body > .summ-title-row > .summ-title {
   color: var(--ink-faint);
   font-weight: 500;
@@ -6091,14 +6091,14 @@ td.text.has-hit[data-hues="8"] {
    `.summ-hint`, `.summ-error`, `.summ-stale` and `.summ-rung-tag` went on
    2026-08-31 with the generated length ladder: there is no job to report, no
    artefact to be stale, and no shorter rung to fall back to
-   (docs/plans/gist-only-summaries.md). Its run button had gone earlier, on
+   (docs/plans/260831s-gist-only-summaries.md). Its run button had gone earlier, on
    2026-08-26, into the shared src/web/JobProgress.tsx. */
 
 
 /* ------------------------------------ chat: suggestions and cited blocks --
    Two additions from 2026-08-26: what an empty conversation offers, and what a
    citation chip shows on hover. See ChatPanel.tsx § SUGGESTIONS and CitedBlock,
-   and docs/plans/chat-mode.md. */
+   and docs/plans/260826a-chat-mode.md. */
 
 .chat-suggest ul {
   margin: 0.7rem 0 0;
@@ -6173,7 +6173,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* --------------------------------------------- § chat actions and stopping ---
    Copy, retry, edit, stop, and jump-to-latest. Everything a reader does to a
-   turn *after* it has arrived. See ChatPanel.tsx and docs/plans/chat-mode.md.
+   turn *after* it has arrived. See ChatPanel.tsx and docs/plans/260826a-chat-mode.md.
 
    The governing constraint is width: this band is around 400px and the answers
    in it are prose. So the controls are hover-revealed rather than permanent —
@@ -6359,7 +6359,7 @@ td.text.has-hit[data-hues="8"] {
 /* The two free-text boxes in the app about what the reader wants — "about you"
    and "why you're reading this one" — and they share this so they do not look
    like two different mechanisms. There were three until 2026-08-30, when the
-   summary steer went (docs/plans/steer-becomes-the-profile.md) and .summ-steer-box
+   summary steer went (docs/plans/260830o-steer-becomes-the-profile.md) and .summ-steer-box
    with it. The reading face, because this is a sentence somebody writes rather
    than a setting they pick. */
 .prof-box-input {
@@ -6424,7 +6424,7 @@ td.text.has-hit[data-hues="8"] {
    old version rendered *nothing at all* until the first transcript came back —
    a measured several seconds during which the layout was byte-for-byte what it
    had been before the press, so the reader watching the box saw the feature not
-   happen. docs/plans/microphone-level-meter.md. */
+   happen. docs/plans/260827f-microphone-level-meter.md. */
 .prof-listening {
   display: flex;
   align-items: baseline;
@@ -6520,7 +6520,7 @@ td.text.has-hit[data-hues="8"] {
 
 /* ------------------------------------------- the timer and the device -----
    Both live in the strip, and both exist because of what the reader could not
-   tell apart without them. docs/plans/microphone-device-and-recording.md. */
+   tell apart without them. docs/plans/260827k-microphone-device-and-recording.md. */
 
 /* `m:ss`. Tabular figures so the row does not shuffle sideways every time the
    seconds tick over — the one thing a timer must not do is draw attention to
@@ -7290,7 +7290,7 @@ line.diag-now {
 
 
 /* ---------------------------------------------- the floating chat panel -- */
-/* docs/plans/chat-as-gateway.md. Shares the slot and the geometry of
+/* docs/plans/260826ab-chat-as-gateway.md. Shares the slot and the geometry of
    `.cmt-dialog` above — one of the two is ever open, decided by the overlay
    state in App.tsx rather than by either panel noticing the other. */
 
@@ -7321,7 +7321,7 @@ line.diag-now {
    floating chat beside it, on purpose: they occupy the same corner and one
    becomes the other when the reader ticks the box, so a different shape would
    read as the panel jumping rather than continuing.
-   docs/plans/comments-and-bookmarks.md. */
+   docs/plans/260828a-comments-and-bookmarks.md. */
 .annotate-dialog {
   position: fixed;
   /* `--safe-right`: these are `position: fixed` against the physical screen,
@@ -7674,7 +7674,7 @@ tr:hover .block-chat,
    only what an idea has and a term does not: two labelled groups, a name that
    is a sentence rather than a word, and a list of quoted passages.
 
-   docs/plans/ideas-mode.md. */
+   docs/plans/260826ac-ideas-mode.md. */
 
 /* The scroller. `.mode-band` is a fixed column between the controls bar and
    the dock, and its `min-height: 0` exists for exactly this child — without one
@@ -8041,7 +8041,7 @@ tr:hover .block-chat,
  *
  * This does not make the bar right at every width; it makes it *honest* at
  * every width. Whether eleven buttons in one row is the design is Greg's
- * call — see docs/plans/ideas-mode.md § Questions. */
+ * call — see docs/plans/260826ac-ideas-mode.md § Questions. */
 @media (max-width: 1100px) {
   .dock-modes .dock-btn-label { display: none; }
   /* Square-ish once the text is gone, so six icons read as one segmented
@@ -8455,7 +8455,7 @@ tr:hover .block-chat,
  *
  * The two pictures whose axes came out of a model: one dot per paragraph,
  * placed by what the paragraph is *about* (src/web/scatter.ts,
- * docs/plans/embedding-scatter-diagrams.md).
+ * docs/plans/260827g-embedding-scatter-diagrams.md).
  *
  * **They reuse `.diag-dot` rather than growing a shape of their own.** A dot on
  * a spine is what `arc` and `cluster` already draw, and the arrangement those
@@ -8792,7 +8792,7 @@ tr:hover .block-chat,
    bug it was about). The sentence — your voice is sent to be transcribed and is
    not stored — is carried as the button's accessible description and as its
    `title`, and takes no room on screen: it is a fact about how the control
-   works, not a warning about whether it does. docs/plans/dictation-two-pass.md. */
+   works, not a warning about whether it does. docs/plans/260827x-dictation-two-pass.md. */
 /* **Nothing at all, on purpose.** It carries the sentence for screen readers
    and takes no space, because it now sits inside every microphone button
    wherever one appears — including the chat composer, which is a flex row where
@@ -8819,7 +8819,7 @@ tr:hover .block-chat,
 /* A microphone was chosen and could not be opened, so something else is in use.
    Warm rather than red: it is a fact worth knowing, not a failure — dictation is
    working, just not through the device the reader picked.
-   docs/plans/microphone-device-and-recording.md. */
+   docs/plans/260827k-microphone-device-and-recording.md. */
 .prof-mic-warn {
   margin: 0.25rem 0 0;
   color: var(--highlight-ink, var(--highlight));
@@ -8836,7 +8836,7 @@ tr:hover .block-chat,
    Everything here is one of two rules followed further than the desktop needed,
    never a second layout. There is no mobile view to keep in step with this one.
 
-   docs/plans/mobile-reading-view.md has the measurements and the arguments.
+   docs/plans/260827t-mobile-reading-view.md has the measurements and the arguments.
 
    ## The breakpoint is derived, not chosen
 
@@ -9144,7 +9144,7 @@ tr:hover .block-chat,
        to 2.2rem to claw some back, which is the wrong direction for a bar you
        have to hit with a thumb. Now it leaves entirely while you read, and can
        afford to be 52px tall when it is there (§ a coarse pointer).
-       docs/plans/mobile-screen-real-estate.md § 3. */
+       docs/plans/260828av-mobile-screen-real-estate.md § 3. */
     --dock-bottom: 0px;
   }
   /* Each consumer animates its own ordinary property. `top` is animatable on a
@@ -9299,7 +9299,7 @@ tr:hover .block-chat,
    § a narrow window already made it do, with the scrollbar hidden. **What this
    query cannot claim is that a phone reader can see all eleven at once.** The
    two-row bar that would fix that properly is written up in
-   docs/plans/mobile-screen-real-estate.md § Open for Greg; it is a design
+   docs/plans/260828av-mobile-screen-real-estate.md § Open for Greg; it is a design
    change rather than a size change, and his to make.
 
    `flex-grow` therefore does nothing at 390px and everything on a tablet, where
@@ -9622,7 +9622,7 @@ table.only-prose thead { display: none; }
    The whole document as one nested list that never scrolls, in the mode band.
    The shell is `.mode-band` far above; everything here is what goes inside it.
 
-   Read OutlinePanel.tsx and outline.ts first, and docs/plans/outline-mode.md
+   Read OutlinePanel.tsx and outline.ts first, and docs/plans/260828aw-outline-mode.md
    for why the list is shaped this way. Three things here are load-bearing
    rather than decorative:
 
@@ -9981,7 +9981,7 @@ table.only-prose thead { display: none; }
 
 /* ---------------------------------------------------------- § quotes mode ----
    The tenth mode: the lines worth keeping, in the article's own words —
-   docs/project/quotes.md, docs/plans/quotes-mode.md.
+   docs/project/quotes.md, docs/plans/260831j-quotes-mode.md.
 
    **The one rule that shapes all of this: the reader's eye should land on the
    author's sentence and nothing else.** Every other panel in this band is a
@@ -10324,7 +10324,7 @@ table.only-prose thead { display: none; }
    notation on 2026-08-31 and v1 writes the words instead. So there is nothing
    here that draws a bracket, a bar or a ⊘, and adding one is a change to the
    design rather than to this file.
-   docs/plans/timeline-mode.md § Appendix: the visual design, deferred. */
+   docs/plans/260831i-timeline-mode.md § Appendix: the visual design, deferred. */
 
 /* Same three properties as `.ideas-scroll`, `.gloss-list`, `.chat-scroll` and
    `.summ-scroll`, and for the reason the ideas panel had to learn the hard way:

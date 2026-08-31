@@ -6,7 +6,7 @@
  * glossary or tweets at all, and that gap is not academic: the
  * chat-cache bug of 2026-08-26 survived precisely because the one test file
  * that looked at prompts looked at three of the eight
- * (docs/postmortems/chat-cache-automatic-breakpoint.md).
+ * (docs/postmortems/260826h-chat-cache-automatic-breakpoint.md).
  *
  * Two properties per stage, and the second is the one that will break quietly:
  *
@@ -97,7 +97,7 @@ describe("tweets' prompt", () => {
  * **Quotes, which took summaries' place here on 2026-08-31.**
  *
  * This file used to cover glossary, tweets and summaries. Stage 5e is gone
- * (docs/plans/gist-only-summaries.md), and leaving two stages behind would have
+ * (docs/plans/260831s-gist-only-summaries.md), and leaving two stages behind would have
  * made the header's own point — *"the one test file that looked at prompts
  * looked at three of the eight"* — truer than it was before. `quotes` is the
  * batch prompt with the same two properties to check and no coverage of them.

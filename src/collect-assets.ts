@@ -7,7 +7,7 @@
  * in. This file is the network, the budget and the bucket, and it owns nothing
  * that could have lived there.
  *
- * Step 6 of docs/plans/hosting-the-articles-images.md. The reasoning is in the
+ * Step 6 of docs/plans/260829b-hosting-the-articles-images.md. The reasoning is in the
  * plan; five things are worth knowing before editing anything here.
  *
  * ## 1. The URLs come from a DOM, never from the stored string
@@ -113,7 +113,7 @@ export const ASSETS_VERSION = "assets/1" as const;
  * article, 13 images. These are generous guards chosen on purpose, so that a
  * hostile or broken page cannot cost us an unbounded amount, and so that the
  * numbers we actually see clear them by a wide margin rather than sitting near
- * them. docs/plans/hosting-the-articles-images.md#limits--policy-not-measurement.
+ * them. docs/plans/260829b-hosting-the-articles-images.md#limits--policy-not-measurement.
  */
 export const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
 export const MAX_ARTICLE_BYTES = 64 * 1024 * 1024;

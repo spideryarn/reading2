@@ -1,5 +1,5 @@
 {
-  "what": "First-hour bake-off for PDF ingestion \u2014 step 1 of docs/plans/pdf-ingestion.md.",
+  "what": "First-hour bake-off for PDF ingestion \u2014 step 1 of docs/plans/260826c-pdf-ingestion.md.",
   "when": "2026-08-26",
   "readMeFirst": [
     "SCORES ARE NOT A FIDELITY MEASURE. The fold discards case, punctuation and symbols, which the prompt demands exactly; record type, paragraph boundaries, `continues` and `uncertain` are ignored entirely. Treat a score as a catastrophe detector, not a ranking.",

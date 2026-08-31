@@ -12,7 +12,7 @@
  *    insets are width it does not have. Without subtracting them the table is
  *    built to the full screen, `.reader`'s padding pushes it right, and the page
  *    scrolls sideways by exactly the notch. GPT Sol, reviewing the plan for
- *    docs/plans/mobile-screen-real-estate.md, 2026-08-28.
+ *    docs/plans/260828av-mobile-screen-real-estate.md, 2026-08-28.
  *  - `stickyOffset` (scroll.ts) predicts where the controls bar's bottom edge
  *    will be once it is stuck, and that is now `--safe-top` lower than the bar
  *    is tall. Without this, every deep link and every arrow-key step in the

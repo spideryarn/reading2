@@ -1,6 +1,6 @@
 /**
  * Pipeline stage 2, for a PDF — **pass 0: everything the file will tell us for
- * free.** See docs/plans/pdf-ingestion.md.
+ * free.** See docs/plans/260826c-pdf-ingestion.md.
  *
  *   npx tsx src/pdf.ts evals/pdf/easy/source.pdf
  *
@@ -20,7 +20,7 @@
  *     what is on the page can tell.
  *
  * A scan has none of this, which is exactly why a scan is the hard case —
- * see docs/plans/pdf-ingestion.md#a-scan-with-no-text-layer.
+ * see docs/plans/260826c-pdf-ingestion.md#a-scan-with-no-text-layer.
  */
 
 import { readFile } from "node:fs/promises";
@@ -46,7 +46,7 @@ import { isMain } from "./is-main.js";
  * on every request, to every route, PDF or not — and never on a laptop, where
  * `@napi-rs/canvas-darwin-arm64` is sitting in node_modules and supplies
  * `DOMMatrix` happily. A green build, a green deploy, and a dead API.
- * docs/postmortems/pdfjs-dommatrix-serverless.md.
+ * docs/postmortems/260827a-pdfjs-dommatrix-serverless.md.
  *
  * Deferring the import means a route that never opens a PDF never loads pdf.js,
  * so the API comes up whether or not the canvas binary made it into the bundle.
@@ -435,7 +435,7 @@ export async function pass0(
    * That gap was survivable while the only way to reach this parser was a URL
    * we had chosen to fetch. **An upload hands it to a stranger**, which is why
    * this moved rather than being left as a note — see
-   * docs/plans/pdf-upload-and-storage.md and docs/project/security.md.
+   * docs/plans/260826u-pdf-upload-and-storage.md and docs/project/security.md.
    *
    * The limit is passed in rather than imported: this module has no opinion
    * about cost, and `MAX_PAGES` belongs to the stage that pays.

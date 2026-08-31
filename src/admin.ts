@@ -101,7 +101,7 @@ export const ADMIN_USER_ID_PROD = "001bb7a0-7720-4f1b-8b9d-1ee6e63d132a";
  * answered Greg 403 — the exact silent lockout the header above predicts as the
  * *cost* of gating on an id, arriving on the first deploy rather than on some
  * future recreated account.
- * docs/postmortems/admin-id-was-the-local-one.md.
+ * docs/postmortems/260828f-admin-id-was-the-local-one.md.
  *
  * **What the second entry costs.** Not "nothing", which is what this comment
  * said first and which GPT Sol correctly refused: OIDC guarantees uniqueness

@@ -66,13 +66,13 @@ import { randomUUID } from "node:crypto";
 /* No `node:fs` and no `node:path` here, deliberately, and it is worth keeping
    that way: this file's last filesystem read was `sendSource`, and it is now a
    store call. A route reaching for a path is a route that ignores
-   SPIDERYARN_STORE — docs/plans/finish-the-database-move.md. */
+   SPIDERYARN_STORE — docs/plans/260831b-finish-the-database-move.md. */
 import type { IncomingMessage, ServerResponse } from "node:http";
 /* From the store rather than from src/api.ts directly, so that
    SPIDERYARN_STORE=postgres swaps every article read at once and no route has
    to know which store it is talking to. `files` is the default and is exactly
    src/api.ts, so nothing changes for anyone who has not opted in.
-   docs/plans/postgres-storage-implementation.md */
+   docs/plans/260826e-postgres-storage-implementation.md */
 import {
   articleMetadata,
   chatStore,
@@ -243,7 +243,7 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * carries its page number even though v1's reader does not show it, and the raw
  * file is kept, so handing the reader the original costs one route. A second
  * machine's opinion would have cost a page-reconstruction aligner and would
- * still not have been verification. docs/plans/pdf-ingestion.md.
+ * still not have been verification. docs/plans/260826c-pdf-ingestion.md.
  *
  * `inline`, not `attachment`: the browser's own PDF viewer is the point. And
  * `X-Content-Type-Options: nosniff` because this is a stranger's file being
@@ -274,7 +274,7 @@ async function sendSource(res: ServerResponse, slug: string): Promise<void> {
 
      It read `fsLocations(slug)` and `data/<slug>/raw.pdf` whatever
      `SPIDERYARN_STORE` said: the last unconditional filesystem read in this
-     file, found twice independently (docs/plans/finish-the-database-move.md
+     file, found twice independently (docs/plans/260831b-finish-the-database-move.md
      § What the inventory found). Under `postgres` that answered *"this article
      did not come from a PDF"* about a PDF sitting in the `sources` bucket, and
      deployed it was the jobless `dataRoot()` caller that
@@ -586,7 +586,7 @@ const MAX_BODY_CHARS = 4000;
  * bought an explanation, and this route was `answer` below; the two split
  * because a colliding id means opposite things to them (a retry to one,
  * somebody else's comment to the other) and one function could not safely be
- * both. docs/plans/comments-and-bookmarks.md.
+ * both. docs/plans/260828a-comments-and-bookmarks.md.
  *
  * ## The anchor is checked against the article, here
  *
@@ -790,7 +790,7 @@ async function answer(
 /* ----------------------------------------------------------------- chat --
    The one endpoint in this file that does not answer with JSON.
 
-   See docs/plans/chat-mode.md. Everything here mirrors the comment endpoints
+   See docs/plans/260826a-chat-mode.md. Everything here mirrors the comment endpoints
    above — a `pending` row written before the model call, an orphan sweep on
    read, a terminal state written before the reply — with the differences that
    streaming forces, each called out where it happens. */
@@ -882,7 +882,7 @@ const streaming = new Map<string, Live>();
  * thing the queue cannot do.
  *
  * Per process, like everything else here. Two servers on one `data/` directory
- * remains the unfixed problem in docs/plans/chat-mode.md § What is still open.
+ * remains the unfixed problem in docs/plans/260826a-chat-mode.md § What is still open.
  *
  * Exported for its tests and for nothing else. The wiring — that every write in
  * `streamChat` and the thread DELETE go through it — is checked by reading;
@@ -929,7 +929,7 @@ export async function inTurnOrder<T>(key: string, fn: () => Promise<T>): Promise
  * message `error` while the reader is watching the words arrive.
  *
  * A grace period does not make that correct, and nothing short of a lock would:
- * see docs/plans/chat-mode.md § What is still open. What it does is make the
+ * see docs/plans/260826a-chat-mode.md § What is still open. What it does is make the
  * window small enough to matter rarely and recover cleanly — an answer younger
  * than this is assumed to be in flight *somewhere*, and if it really did die,
  * the next read after two minutes releases it. Longer than any answer the
@@ -1014,7 +1014,7 @@ if (SEARCH_ORPHAN_GRACE_MS <= SEARCH_TIMEOUT_MS) {
  *
  * Like `streaming` itself this only knows about **this process**; a second
  * server streaming into the same file is the unfixed problem recorded in
- * docs/plans/chat-mode.md § What is still open, and it is the same problem, not
+ * docs/plans/260826a-chat-mode.md § What is still open, and it is the same problem, not
  * a new one.
  */
 async function settleThread(slug: string, threadId: string): Promise<void> {
@@ -1160,7 +1160,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      could only mean "answer this stored question differently from how it was
      asked", which is a thing a reader might want and is not what a button
      labelled "have another go" does. If it arrives it will be an explicit
-     control with its own name. GPT Sol's review of docs/plans/review-mode.md,
+     control with its own name. GPT Sol's review of docs/plans/260827ah-review-mode.md,
      finding 4. */
   if ((wantsRetry || wantsEdit) && (kind !== undefined || stance !== undefined)) {
     throw httpError(400, "A retry or an edit takes its kind and stance from the conversation");
@@ -1210,7 +1210,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      the link can be written **server-side, with the real thread id** — the
      client mints an optimistic one and only finds out it was overruled if it
      was, so a client-side link is a race it cannot see it has lost.
-     docs/plans/comments-and-bookmarks.md § the Save & ask choreography. */
+     docs/plans/260828a-comments-and-bookmarks.md § the Save & ask choreography. */
   if (sourceCommentId !== undefined && !isSpideryarnId(String(sourceCommentId))) {
     throw httpError(400, "sourceCommentId must be a comment id");
   }
@@ -1302,7 +1302,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        both of those call `settleThread`, which stops a live answer in this
        thread, and a request rejected *after* that has aborted the answer
        another tab's reader was watching and told them they stopped it. That
-       exact bug has been fixed here once already (docs/plans/chat-mode.md).
+       exact bug has been fixed here once already (docs/plans/260826a-chat-mode.md).
 
        `withTurn` refuses it again inside the store's transaction, because
        `inTurnOrder` is per-process and this one is not. Here for the status
@@ -1501,7 +1501,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          function the body has nothing to offer anyway — and for the third,
          `withTurn` has already refused a kind that contradicts the thread. The
          thread is the only thing here that is authoritative about what this
-         conversation is. GPT Sol's review of docs/plans/review-mode.md,
+         conversation is. GPT Sol's review of docs/plans/260827ah-review-mode.md,
          finding 5. */
       kind: thread.kind,
       /* And the stance from the reply row, for the same reason one step down:
@@ -1756,7 +1756,7 @@ async function cancelChat(
  *   that cited nothing. Having no citations is *normal* for a spoken answer —
  *   it points with `show_passage` instead — so without an explicit mark the
  *   `citedBlockIds` number drifts downwards for a reason that is not a
- *   regression. docs/plans/live-conversation-in-chat.md § 1d.
+ *   regression. docs/plans/260831l-live-conversation-in-chat.md § 1d.
  * - every block id in `passages` is checked, because these become pressable
  *   references in the reader's transcript and an id nothing resolves is a
  *   reference that goes nowhere.
@@ -1971,7 +1971,7 @@ function parseSpokenTools(x: unknown): { tools: ToolRun[] } | undefined {
  * also where the block ids come *out*: seeding a voice model with typed history
  * verbatim hands it examples of its own past speech containing `[spya-k3m9qt]`
  * while its instructions forbid saying one aloud. `liveSeedItems` in
- * src/live.ts, and Fable's finding in docs/plans/live-conversation-in-chat.md § 1d.
+ * src/live.ts, and Fable's finding in docs/plans/260831l-live-conversation-in-chat.md § 1d.
  *
  * ## `tailId` and the seed come from one read
  *
@@ -1979,7 +1979,7 @@ function parseSpokenTools(x: unknown): { tools: ToolRun[] } | undefined {
  * read separately from the history it belongs to is a claim about a
  * conversation that never existed. If somebody types a turn between this
  * request and that append, the append is refused — which is exactly right, and
- * is the barrier docs/plans/live-conversation-in-chat.md § 6 asks for.
+ * is the barrier docs/plans/260831l-live-conversation-in-chat.md § 6 asks for.
  *
  * The instructions, the tool list and the article go to **OpenAI**, never to the
  * browser: a client handed the prompt is a client that can be talked into
@@ -2525,7 +2525,7 @@ async function searchTheLibrary(url: string): Promise<LibrarySearchResponse> {
  * `title: null` and `purpose: null` are both meaningful and NOT the same as
  * omitting the key: `title: null` clears the reader's override and restores
  * whatever the extractor last found; `purpose: null` clears "why you're
- * reading this one" (docs/plans/reader-profile.md). So this tests `in`, not
+ * reading this one" (docs/plans/260826t-reader-profile.md). So this tests `in`, not
  * truthiness.
  *
  * **Everything is validated before anything is written, and the write is one
@@ -2670,7 +2670,7 @@ function checkUploadOrigin(
  * document *down*, so accepting it would write a `true` into
  * `article_visibility_changes` for an act about which nobody confirmed
  * anything — and that column is precisely the one a rights complaint would ask
- * about. docs/plans/public-read-only-access.md § Rights and takedown.
+ * about. docs/plans/260827ai-public-read-only-access.md § Rights and takedown.
  *
  * **`=== true`, not truthiness.** `rightsConfirmed: "yes"` and
  * `rightsConfirmed: 1` are shapes a hand-written client produces, and reading
@@ -2764,8 +2764,8 @@ export function parseJobRequest(body: unknown): {
 
      **A `guidance` field used to be a fourth, and is now ignored rather than
      refused.** The summary steer it fed is gone
-     (docs/plans/steer-becomes-the-profile.md), and so is the stage it steered
-     (docs/plans/gist-only-summaries.md); an old tab still sending one should
+     (docs/plans/260830o-steer-becomes-the-profile.md), and so is the stage it steered
+     (docs/plans/260831s-gist-only-summaries.md); an old tab still sending one should
      get its job run rather than a 400 about a box it can still see. Nothing
      reads it. */
   const rest = {
@@ -2833,7 +2833,7 @@ export function parseJobRequest(body: unknown): {
 }
 
 /* ------------------------------------------------------------- uploads --
-   docs/plans/pdf-upload-and-storage.md. Three small handlers, and between them
+   docs/plans/260826u-pdf-upload-and-storage.md. Three small handlers, and between them
    they move no file bytes at all — which is the entire design. Everything this
    server handles is a few hundred bytes of JSON, so the 4.5 MB Vercel body
    limit never applies to anything on the critical path and `MAX_BODY_BYTES`
@@ -3008,7 +3008,7 @@ async function jobForSlug(slug: string): Promise<Job | null> {
  * parameter would make the overlap a caller convention: every route could go on
  * writing `const found = await loadGlossary(at)` and hand over an
  * already-settled promise, and a test of this function would still pass. GPT
- * Sol's fifth finding on docs/plans/library-read-latency.md. Taking the thunk
+ * Sol's fifth finding on docs/plans/260828c-library-read-latency.md. Taking the thunk
  * moves the responsibility in here, where it can be proved.
  *
  * ## Why not `Promise.all`, and why not `allSettled` either
@@ -3198,7 +3198,7 @@ async function resolveProfile(slug: string): Promise<string | null> {
  * needs to show them to the person who wrote them.
  *
  * `GET /api/reader?slug=` answers the profile panel, which prints each box
- * separately with its own way in to edit it (docs/plans/profile-panel.md). It
+ * separately with its own way in to edit it (docs/plans/260830c-profile-panel.md). It
  * cannot use `resolveProfile` above, because the joined string is a prompt
  * fragment: it carries "About the reader:" / "Why they are reading this piece:"
  * prefixes that are ours rather than the reader's, and there is no honest way
@@ -3265,7 +3265,7 @@ async function resolveProfileParts(slug: string): Promise<ProfileParts> {
  * stored, so the rule has to hold for every writer rather than for this one
  * route. (The summary steer was the counter-example — validated at the boundary
  * because it went straight into a prompt and never landed anywhere — and it is
- * gone: docs/plans/steer-becomes-the-profile.md.) src/profile.ts § saveReaderProfile throws with `status: 400`, which
+ * gone: docs/plans/260830o-steer-becomes-the-profile.md.) src/profile.ts § saveReaderProfile throws with `status: 400`, which
  * `httpErrorFrom` below turns into the same answer this would have given.
  */
 async function patchReader(body: unknown): Promise<{ profile: string | null }> {
@@ -3578,7 +3578,7 @@ async function serveApi(
      * visibility change, and with a deployed test that warms the edge, turns the
      * document private, and proves the next anonymous request cannot get the body.
      * A manual global purge is not a privacy control.
-     * docs/plans/public-read-only-access.md.
+     * docs/plans/260827ai-public-read-only-access.md.
      */
     if (isPublicNamespace(path)) {
       res.setHeader("Cache-Control", "no-store");
@@ -3701,7 +3701,7 @@ interface ApiRequest {
  *
  * ## What the split buys, which a boolean parameter would not
  *
- * `docs/plans/public-read-only-access.md` asked for a check that the authenticated
+ * `docs/plans/260827ai-public-read-only-access.md` asked for a check that the authenticated
  * dispatcher cannot be reached without a user, and noted there is no route table to
  * enumerate — only an `if` chain. This is the structural version of that check:
  * the public dispatcher runs *before* `requireUser` and therefore cannot produce
@@ -3804,7 +3804,7 @@ export async function serveAuthenticatedApi(
    *
    * Not a new key on `PATCH /api/library/:slug`: that route edits *shelf state*
    * — the relationship between a reader and a document — and visibility is a
-   * property of *the work*. Stage 3 of docs/plans/public-read-only-access.md
+   * property of *the work*. Stage 3 of docs/plans/260827ai-public-read-only-access.md
    * splits `articles` from `shelf_entries` along exactly that line, so putting
    * them together now would mean moving the API twice. GPT Sol's reasoning.
    *
@@ -3828,7 +3828,7 @@ export async function serveAuthenticatedApi(
      payload would mean every reader of every article downloads a `null` for a
      page almost none of them open. GET only — *writing* a thread is a job, not
      a request, because it is a model call that takes half a minute
-     (docs/plans/tweet-thread-page.md#generation-on-demand-through-the-queue-we-already-have).
+     (docs/plans/260825g-tweet-thread-page.md#generation-on-demand-through-the-queue-we-already-have).
      POST /api/jobs { slug, steps: ["tweets"] } is how you ask for one. */
   const tweets = /^\/api\/tweets\/([\w.%-]+)$/.exec(url);
   /* Same shape and same reasoning as the thread's — most articles have no
@@ -3873,7 +3873,7 @@ export async function serveAuthenticatedApi(
      not a second way to do the same thing — since 2026-08-29 the arc is not built
      by every ingest, so a reader can arrive without one, ask for one, and need to
      collect it when the job lands. Refetching the whole article for that re-reads
-     every block and the whole tree; see docs/plans/glossary-read-latency.md for
+     every block and the whole tree; see docs/plans/260827am-glossary-read-latency.md for
      what that costs on Postgres. */
   const arc = /^\/api\/arc\/([\w.%-]+)$/.exec(url);
   /* Its own endpoint, and unlike every artefact route above it this one is not
@@ -3899,7 +3899,7 @@ export async function serveAuthenticatedApi(
      is the one thing a comment can do that spends money and streams. **There is
      deliberately no route for linking a comment to its conversation**: the only
      place that knows the real thread id is the chat stream itself, so the link
-     is written there. See docs/plans/comments-and-bookmarks.md. */
+     is written there. See docs/plans/260828a-comments-and-bookmarks.md. */
   const commentAnswer = /^\/api\/comments\/([\w.%-]+)\/([\w.%-]+)\/answer$/.exec(url);
   const chat = /^\/api\/chat\/([\w.%-]+)$/.exec(url);
   const oneThread = /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)$/.exec(url);
@@ -4003,7 +4003,7 @@ export async function serveAuthenticatedApi(
          request, right in every state, including the ones with no artefact to
          hang a flag on. GPT Sol's review, 2026-08-26. */
       /* **`purpose` is here for the profile panel**, which prints each box on
-         its own with its own way in to edit it (docs/plans/profile-panel.md).
+         its own with its own way in to edit it (docs/plans/260830c-profile-panel.md).
          It is the reader's own words being shown back to the reader, which is a
          different act from the `useProfile: boolean` a generate request sends —
          that one is still a boolean, because a client that could supply profile
@@ -4134,7 +4134,7 @@ export async function serveAuthenticatedApi(
          the decision rather than an omission: this artefact was never written
          for a profile, so there is no third staleness fact to add.
          `TimelineResponse` in src/types.ts has two fields where the others have
-         three. docs/plans/timeline-mode.md § Freshness. */
+         three. docs/plans/260831i-timeline-mode.md § Freshness. */
       send(res, 200, await loadTimeline(slugPart(timeline, 1)));
       return;
     }
@@ -4252,7 +4252,7 @@ export async function serveAuthenticatedApi(
          this path was `answer`, which spends a model call and streams; the two
          meanings now have two routes, because a colliding id means opposite
          things to them — a retry to one, somebody else's comment to the other.
-         docs/plans/comments-and-bookmarks.md § the store contract. */
+         docs/plans/260828a-comments-and-bookmarks.md § the store contract. */
       send(res, 201, { comment: await createFree(slugPart(comments, 1), await readBody(req)) });
       return;
     }
@@ -4295,7 +4295,7 @@ export async function serveAuthenticatedApi(
          state changes on every streamed token, so holding threads above
          `TableView` would re-render — and re-`annotateHtml` — every paragraph
          of the article, hundreds of times, while an answer arrives. Found by a
-         GPT-5.6 review, 2026-08-26; docs/plans/chat-as-gateway.md § summaries. */
+         GPT-5.6 review, 2026-08-26; docs/plans/260826ab-chat-as-gateway.md § summaries. */
       const url = new URL(req.url ?? "/", "http://localhost");
       if (url.searchParams.get("summary") === "1") {
         send(res, 200, { threads: threads.map(summarise) });
@@ -4510,7 +4510,7 @@ export async function serveAuthenticatedApi(
      * Its own branch rather than a third name in `jobAction` above, because it
      * is the one job action that does not answer with a bare `Job`: the caller
      * is a loop, and a loop needs to be told whether to come back — see
-     * `Advanced` in src/jobs.ts and docs/plans/job-queue-rethink.md.
+     * `Advanced` in src/jobs.ts and docs/plans/260826q-job-queue-rethink.md.
      *
      * **A long request on purpose.** One step can be a minute of model calls,
      * and that is the design: the browser holds the request open so the work

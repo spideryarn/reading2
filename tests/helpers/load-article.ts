@@ -3,7 +3,7 @@
  *
  * ## Why this is not `importArticle`
  *
- * `db:import` is being deleted (docs/plans/delete-the-importer.md § C7), and
+ * `db:import` is being deleted (docs/plans/260827aa-delete-the-importer.md § C7), and
  * three suites used it purely as a fixture loader. The replacement is not a
  * smaller importer — that would be a second files → Postgres implementation,
  * exercised only by tests and therefore free to drift from the path production

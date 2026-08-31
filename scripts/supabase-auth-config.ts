@@ -8,7 +8,7 @@
  * returned `{"msg":"Unsupported provider: provider is not enabled"}` — the
  * remote project had Google switched off, and the last two plans had left that
  * as a dashboard chore nobody had done. See
- * docs/plans/google-sign-in-production.md.
+ * docs/plans/260827i-google-sign-in-production.md.
  *
  * ## Why not the dashboard
  *
@@ -285,7 +285,7 @@ async function main(): Promise<void> {
   if (!clientId || !secret) {
     die(
       "\nNo SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID / _SECRET in .env.local.\n" +
-        "They are the OAuth client shared with the old app — docs/plans/auth-supabase.md.",
+        "They are the OAuth client shared with the old app — docs/plans/260826w-auth-supabase.md.",
     );
   }
 

@@ -13,7 +13,7 @@
  * since 2026-08-27 (docs/project/ai-gateway.md). That is not hypothetical — on
  * 2026-08-26, before this file existed, an anonymous `POST /api/jobs` against
  * the production hostname returned 202 and created a running job. See
- * docs/plans/auth-ui-and-production.md.
+ * docs/plans/260826ae-auth-ui-and-production.md.
  *
  * ## Why `getClaims` and not `getUser`, and never `getSession`
  *
@@ -71,7 +71,7 @@ export interface AuthedUser {
  * enough. What it does is make `VerifiedUser` a type no other file can satisfy:
  * an object literal cannot be given this key, and `as` cannot conjure it.
  *
- * Added on 2026-08-28 for docs/plans/public-read-only-access.md, on GPT Sol's
+ * Added on 2026-08-28 for docs/plans/260827ai-public-read-only-access.md, on GPT Sol's
  * answer 2. Making the authenticated dispatcher take a required `AuthedUser`
  * parameter — the obvious version — prevents *omission* and nothing else: any
  * `{ id, email }` satisfies it, so it does not encode the one fact that
@@ -307,7 +307,7 @@ function isUnavailable(error: { name: string; status?: number } | null | undefin
  * consequence nobody had raised at the time: `currentOwnerId()` in src/owner.ts
  * is still process-wide and the reads do not filter by owner, so every admitted
  * person sees the *same* shelf rather than their own. That is written up in
- * docs/plans/auth-ui-and-production.md § The gate says who you are, and it is
+ * docs/plans/260826ae-auth-ui-and-production.md § The gate says who you are, and it is
  * Greg's call rather than this file's. Until he has made it, this stays as he
  * left it — and the one line that changes it is right here.
  */

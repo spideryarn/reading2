@@ -1,6 +1,6 @@
 /**
  * Pipeline stage 5c — the **thread**: the article as a short numbered sequence
- * of standalone posts. See docs/plans/tweet-thread-page.md.
+ * of standalone posts. See docs/plans/260825g-tweet-thread-page.md.
  *
  *   npm run tweets -- data/writes
  *
@@ -22,7 +22,7 @@
  * are bad: one hides what the model said, the other throws away eleven good
  * posts to punish one long one. We keep everything the model wrote, count the
  * characters ourselves, and record the count so the page can show the overrun.
- * See docs/plans/tweet-thread-page.md#the-character-limit-which-they-fought-about-twice.
+ * See docs/plans/260825g-tweet-thread-page.md#the-character-limit-which-they-fought-about-twice.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -114,7 +114,7 @@ export { hashBlocks };
  * version and the model id to answer the step's `isDone`. Those are three
  * comparisons `sameStamp` makes in one place for every stage, so the step now
  * declares the three values and the function is gone — D0 of
- * docs/plans/delete-the-importer.md. What went with it is a freshness check
+ * docs/plans/260827aa-delete-the-importer.md. What went with it is a freshness check
  * that read `data/<slug>/` directly, which is a second door into the storage
  * the artefact store exists to be the only one of.
  *
@@ -126,7 +126,7 @@ export { hashBlocks };
  * only while the pipeline's artefact reads answer `null` and the step re-runs
  * regardless; the moment they succeed it is a stale artefact that skips.
  * `articleFingerprint` in src/source-hash.ts,
- * docs/plans/finish-the-database-move.md § stage 1.
+ * docs/plans/260831b-finish-the-database-move.md § stage 1.
  */
 export function isStale(
   thread: TweetThread,
@@ -374,7 +374,7 @@ export interface TweetsRun {
  * was given. The blocks, the tree and the metadata arrive together as one
  * `Article` (src/article-input.ts), so the bytes the thread is written from are
  * the bytes its `stamp` fingerprinted.
- * docs/plans/finish-the-database-move.md § Stage 2.
+ * docs/plans/260831b-finish-the-database-move.md § Stage 2.
  *
  * Exported because two callers run this stage and they must not drift —
  * `main()` below, and the ingest queue in the server process (src/pipeline.ts).
@@ -471,7 +471,7 @@ export async function generateTweets(opts: {
       /* Article first, this stage's instructions second — the prefix runs from the
          top of the request, so the article has to precede anything stage-specific
          for the arc, the glossary and this to share one entry.
-         docs/plans/prompt-caching.md. */
+         docs/plans/260826g-prompt-caching.md. */
       system: [
         {
           type: "text" as const,

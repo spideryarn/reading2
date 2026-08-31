@@ -9,7 +9,7 @@
  * **The source line is the reason this file exists.** A thread copied out of
  * here can end up on the internet, and a generated summary with no path back to
  * what it summarises is one of vision.md's anti-goals by name — so the URL
- * being in the copy is a product decision (docs/plans/tweet-thread-page.md),
+ * being in the copy is a product decision (docs/plans/260825g-tweet-thread-page.md),
  * not a formatting detail, and it should break a test if it goes.
  *
  * The write half is tested in tweets.test.ts; the page is src/web/Tweets.tsx.

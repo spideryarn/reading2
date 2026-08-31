@@ -9,7 +9,7 @@
  * match — and it is also what removed `onScreen`, `latest` and `showing` from
  * the hook, three refs that existed only to read current state from outside a
  * render. GPT Sol's third blocker, 2026-08-28;
- * docs/plans/chat-operation-model.md.
+ * docs/plans/260828v-chat-operation-model.md.
  *
  * React sees it through `useSyncExternalStore`, so both derived things are
  * cached: `getSnapshot` is called on every render and must hand back the same
@@ -200,7 +200,7 @@ export class ChatController {
    * second one's `expectedTailId` is the first one's *stored* answer id, which
    * does not exist until the first has landed. So the session has to wait, and
    * the promise is what it waits on. It is also what makes the Send handoff
-   * awaitable, which docs/plans/live-conversation-in-chat.md § 1d asks for by
+   * awaitable, which docs/plans/260831l-live-conversation-in-chat.md § 1d asks for by
    * name: an unawaited flush racing the typed POST turns the tail guard into a
    * 409 we inflicted on ourselves.
    */

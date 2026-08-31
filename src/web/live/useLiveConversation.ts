@@ -1,7 +1,7 @@
 /**
  * **The browser half of live conversation mode.**
- * docs/plans/live-conversation.md for the wire, and
- * docs/plans/live-conversation-in-chat.md for how it became a turn in a
+ * docs/plans/260831g-live-conversation.md for the wire, and
+ * docs/plans/260831l-live-conversation-in-chat.md for how it became a turn in a
  * conversation rather than a mode of its own. src/live.ts is the server half.
  *
  * The audio never touches our server. This hook opens a `RTCPeerConnection`
@@ -154,7 +154,7 @@ export interface LiveApi {
    * **Returns a promise, and Send must await it.** The typed path claims the
    * conversation's tail, and a flush still in flight is about to move it — so
    * an unawaited handoff turns the guard into a 409 we inflicted on ourselves.
-   * docs/plans/live-conversation-in-chat.md § 1d.
+   * docs/plans/260831l-live-conversation-in-chat.md § 1d.
    */
   stop: () => Promise<void>;
   /** Put a typed turn in, as if it had been spoken. */
@@ -572,7 +572,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         /* The stored answer's own pointers. A spoken answer cites nothing in
            its text — it is forbidden to say an id aloud — so without these the
            transcript is an uncited claim, which is the one thing the chat
-           contract exists to prevent. docs/plans/live-conversation-in-chat.md § 1b. */
+           contract exists to prevent. docs/plans/260831l-live-conversation-in-chat.md § 1b. */
         ledger.current.passage(callId, { blockIds: ids, why });
         finish(
           `Showed the reader ${ids.length} passage${ids.length === 1 ? "" : "s"}.`,
@@ -1199,7 +1199,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
                  they are said. That is false: the transcription of a committed
                  item arrives *after* the item, often after the assistant has
                  begun replying. Found by GPT Sol's review of
-                 docs/plans/live-conversation-in-chat.md, finding 7.
+                 docs/plans/260831l-live-conversation-in-chat.md, finding 7.
 
                  **`stop` now honours the promise.** It stops the track and
                  resolves `released` first, so the next claimant waits only for
@@ -1237,7 +1237,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
              answers with amnesia about the last five minutes. A disabled track
              sends silence, so no item can be created but ours — which is also
              what lets the barrier below simply count them.
-             docs/plans/live-conversation-in-chat.md § 6. */
+             docs/plans/260831l-live-conversation-in-chat.md § 6. */
           if (microphone) {
             track.enabled = false;
             micTrack.current = track;

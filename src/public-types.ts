@@ -10,7 +10,7 @@
  *
  * ## Why these are new types rather than the existing ones with fields removed
  *
- * The first draft of docs/plans/public-read-only-access.md proposed serving
+ * The first draft of docs/plans/260827ai-public-read-only-access.md proposed serving
  * today's responses through a recursive key *denylist*. GPT Sol refused it,
  * 2026-08-27:
  *
@@ -47,7 +47,7 @@
  *   whole of `stages`. `PublicMetadata` says which artefacts exist and nothing
  *   whatever about how they were made.
  *
- * See docs/plans/public-read-only-access.md § The payload for the table these
+ * See docs/plans/260827ai-public-read-only-access.md § The payload for the table these
  * came from, and § What a public visitor gets for the product decisions behind
  * it.
  */
@@ -165,7 +165,7 @@ export interface PublicArticle extends PublicArtefactSet {
    *    loading for signed-out and non-owning readers, and those readers can
    *    never reach an authenticated route — so an owner-only design would leave
    *    every public article hot-linking while looking finished from the owner's
-   *    chair (docs/plans/hosting-the-articles-images.md#delivery).
+   *    chair (docs/plans/260829b-hosting-the-articles-images.md#delivery).
    * 2. The reading view takes an `Article`, and a public payload reaches it by
    *    being structurally one. An optional key here would not satisfy that
    *    required one, so this is also what keeps the two projections honest with
@@ -189,7 +189,7 @@ export interface PublicArticle extends PublicArtefactSet {
  * these are JSONB columns on the same `article_revisions` row
  * `GET /api/public/article/:slug` already fetches, so folding them into that one
  * payload removes the second request, the twelve wire states it could be in, and
- * every way the two answers could disagree. docs/plans/public-read-only-access.md
+ * every way the two answers could disagree. docs/plans/260827ai-public-read-only-access.md
  * § Slice 1b.
  *
  * **Absent is the only "no".** Not `null`, not an empty object, not a tagged

@@ -139,7 +139,7 @@ describe("what this rule is known to let in", () => {
      it is admitted only when it sits INSIDE the article container — outside it,
      link density sinks it either way — and the fifteen-page corpus contains no
      real instance of the pattern, so "0 regressions in 15 pages" is silent about
-     it. See docs/plans/readability-repair-pass.md. */
+     it. See docs/plans/260827ab-readability-repair-pass.md. */
   const para = (n: number): string =>
     `<p>${`Sentence ${n} of a real paragraph of article prose, long enough for the extractor to score it properly. `.repeat(5)}</p>`;
   const drawer = `<div aria-hidden="true"><ul>${Array.from(

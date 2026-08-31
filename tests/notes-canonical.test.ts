@@ -1,6 +1,6 @@
 /**
  * Stage 2 canonicalises every footnote shape into one, before Readability —
- * src/notes.ts, and docs/plans/footnotes.md for the measurements it came from.
+ * src/notes.ts, and docs/plans/260828o-footnotes.md for the measurements it came from.
  *
  * **These run the real pipeline over the real fixtures.** `runExtract` (jsdom,
  * Readability, the sanitiser) and then `splitIntoBlocks`, over the committed

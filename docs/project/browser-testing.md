@@ -922,7 +922,7 @@ watched — and "it did not move" is what both a broken animation and a sleeping
 
 **The 2026-08-27 version of that cost half an hour**, and is worth reading as a warning about how
 convincing the wrong diagnosis can get. The profile microphone's level meter
-([microphone-level-meter.md](../plans/microphone-level-meter.md)) read a flat zero from an automation
+([260827f-microphone-level-meter.md](../plans/260827f-microphone-level-meter.md)) read a flat zero from an automation
 tab, and every check on the way down came back clean: the `AnalyserNode` existed, the `AudioContext`
 was `running`, the `MediaStreamTrack` was `live`, unmuted and enabled, and the CSS resolved to the
 right resting transform. On that evidence a whole false theory got built — that Chrome's

@@ -9,7 +9,7 @@
  * ## Why this is not just "remember the last question and the last answer"
  *
  * Because that is wrong, and it is wrong in a way that looks right for the
- * first few turns. GPT Sol's review of docs/plans/live-conversation-in-chat.md
+ * first few turns. GPT Sol's review of docs/plans/260831l-live-conversation-in-chat.md
  * took the first version of this plan apart on exactly this point, and the
  * sequence it gave is worth keeping:
  *
@@ -116,7 +116,7 @@ export interface Exchange {
    * OpenAI truncates the unplayed audio and does **not** hand back a corrected
    * transcript, so this cannot be fixed here — only declared. What must never
    * happen is that it is fed silently into the next turn as if it had been
-   * heard. docs/plans/live-conversation-in-chat.md § 1c.
+   * heard. docs/plans/260831l-live-conversation-in-chat.md § 1c.
    */
   interrupted: boolean;
   /**

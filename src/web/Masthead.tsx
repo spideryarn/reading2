@@ -27,7 +27,7 @@
  *
  * It moved once more the same day, out of the drawer and onto a page of its
  * own — Metadata.tsx, `/read/<slug>/metadata`, reached from the bar's Metadata
- * button (docs/plans/metadata-page.md). So there are two superseded spellings
+ * button (docs/plans/260825e-metadata-page.md). So there are two superseded spellings
  * of it in old links, `?about=1` and `?panel=about`, and main.tsx rewrites both
  * to the page.
  *
@@ -222,7 +222,7 @@ export function Masthead({ article, slug, onRenamed }: Props) {
 
             The link is the part that matters most. A second machine's opinion
             would not be verification; a person looking at the ink is. So the
-            original is one click away. docs/plans/pdf-ingestion.md § A scan
+            original is one click away. docs/plans/260826c-pdf-ingestion.md § A scan
             with no text layer. */}
         {meta.source === "pdf" && (
           <p className="source-note">
@@ -389,7 +389,7 @@ function OriginMark({
  * stage 1 deliberately does not serve it publicly: *"Serving somebody's
  * uploaded bytes to the world is a separate decision from serving the extracted
  * text. Hide the link rather than 404 it."*
- * docs/plans/public-read-only-access.md § What a public visitor gets.
+ * docs/plans/260827ai-public-read-only-access.md § What a public visitor gets.
  *
  * That decision was written down and then not built. Every visitor to a shared
  * **PDF** mounted the control, so pressing it — or tabbing to it and pressing
@@ -400,7 +400,7 @@ function OriginMark({
  * **The sentence stays and only the control goes.** A visitor is entitled to
  * know the article was transcribed from a scan and how much of it was checked
  * — that is a fact about how much to trust what they are reading, and the whole
- * reason the note exists (docs/plans/pdf-ingestion.md § A scan with no text
+ * reason the note exists (docs/plans/260826c-pdf-ingestion.md § A scan with no text
  * layer). What they cannot have is somebody else's uploaded file.
  *
  * `offer` keyed on `onRenamed`, which is this component's existing stand-in for

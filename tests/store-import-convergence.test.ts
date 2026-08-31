@@ -11,7 +11,7 @@
  * deleted a comment. This asserts it on purpose.
  *
  * GPT Sol named the cause in review the same morning:
- * docs/plans/postgres-storage-review-sol.md.
+ * docs/plans/260826j-postgres-storage-review-sol.md.
  *
  * ## The fixture is `_`-prefixed, deliberately
  *
@@ -178,7 +178,7 @@ when("re-importing an article", () => {
      * The importer is the writer that makes "immutable once published" false:
      * when the text has not changed it reuses the current published revision
      * and updates it in place. GPT Sol's second finding on
-     * docs/plans/library-read-latency.md — the plan claimed nothing ever
+     * docs/plans/260828c-library-read-latency.md — the plan claimed nothing ever
      * touches a published revision, and the tool this migration runs on does.
      *
      * So: same ids, same text, different `words` and a different tree. The

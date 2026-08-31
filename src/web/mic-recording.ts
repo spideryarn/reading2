@@ -129,7 +129,7 @@ export interface Attempt {
  *
  * ## Narrower than it first looked, and there is nowhere better to go
  *
- * A spike on 2026-08-27 (docs/research/microphone-library-options.md) pinned
+ * A spike on 2026-08-27 (docs/research/260827b-microphone-library-options.md) pinned
  * the failure to **one channel, 48 kHz, 32 kbps**: the identical control on a
  * *stereo* track produced 38 KB quite happily. Every microphone tested that day
  * was mono, and a `getUserMedia` track normally is, which is why it read as

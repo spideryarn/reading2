@@ -16,7 +16,7 @@
  *
  * What it cannot prove is that iOS emits that sequence, or that the callout
  * menu stays away, or that two fast taps are not a zoom. Those are on the list
- * in docs/plans/touch-glossary-card.md and only a real iPad can settle them.
+ * in docs/plans/260827ak-touch-glossary-card.md and only a real iPad can settle them.
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";

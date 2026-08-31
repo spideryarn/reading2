@@ -147,7 +147,7 @@ function wrap(content: ReactElement, bold: boolean): ReactElement {
  * `isWebUrl` inside `webLinks`; the label and the URL are *strings* that React
  * escapes, never HTML; and `noreferrer` as well as `noopener`, because the
  * article's own URL is a reading history and a model-supplied destination is
- * not owed it. docs/plans/chat-web-links.md.
+ * not owed it. docs/plans/260827ao-chat-web-links.md.
  */
 function link(label: string, url: string, bold: boolean): ReactElement {
   const host = hostOf(url);
@@ -213,7 +213,7 @@ function cited(
  * them decide whether to click at all — and, more to the point, lets them check
  * the model against the article without leaving the sentence they are reading.
  * That check is the whole justification for both features that use this
- * (docs/plans/chat-mode.md § Say the awkward thing first, and
+ * (docs/plans/260826a-chat-mode.md § Say the awkward thing first, and
  * docs/project/summaries.md § A summary is a door), and until it existed it
  * cost a jump and a scroll back.
  *

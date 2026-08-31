@@ -4,7 +4,7 @@
  *
  * What it is protecting is the *baseline*, which is the only thing that can
  * tell a transcribed page from a plausible one. See
- * docs/plans/pdf-ingestion.md and evals/pdf/README.md.
+ * docs/plans/260826c-pdf-ingestion.md and evals/pdf/README.md.
  */
 import { describe, expect, it } from "vitest";
 import { baselineFor, foldLine, pass0, repeatedLines } from "../src/pdf.js";

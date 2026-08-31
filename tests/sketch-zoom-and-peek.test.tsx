@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * **Saying that a part opens, and getting into it** —
- * docs/plans/sketch-zoomable-subsections.md, src/web/SketchView.tsx.
+ * docs/plans/260830ap-sketch-zoomable-subsections.md, src/web/SketchView.tsx.
  *
  * The overview's regions have opened their zoom scenes since
  * `inferRegionOpens` landed, and nothing on the picture said so: a dotted
@@ -328,7 +328,7 @@ describe("the zoom, and the navigation it must never swallow", () => {
  * `data/noema-mythology-of-conscious-ai/sketch.json` has no `opens` on any
  * item: both of the overview's doors exist only because `inferRegionOpens`
  * works them out from the blocks
- * (docs/plans/sketch-diagram.md § The door the model forgot to fit). Every test
+ * (docs/plans/260830j-sketch-diagram.md § The door the model forgot to fit). Every test
  * above uses a hand-written `opens`, so every one of them could pass while the
  * one real artefact went on being a picture with no visible way into it — the
  * corpus-missing-the-field pattern docs/reusable/silent-success.md is about.

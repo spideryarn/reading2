@@ -34,7 +34,7 @@
  * the collision above, one level up), and not the repository root (that is
  * `/var`, unwritable). `GET /api/source/:slug` in src/routes.ts used to be a
  * real caller in that state; it went through `sourceStore` on 2026-08-31 and no
- * longer asks (docs/plans/finish-the-database-move.md, stage 1). These stay,
+ * longer asks (docs/plans/260831b-finish-the-database-move.md, stage 1). These stay,
  * because the state is still reachable by anything that touches a path outside
  * `runInJob()` on a deployment, and both answers available there are wrong —
  * docs/reusable/silent-success.md is the whole argument for making it loud.

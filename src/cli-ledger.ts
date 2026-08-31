@@ -40,7 +40,7 @@ import { costStore } from "./store/ai-calls.js";
  * Three things had to be remembered separately, and the two that were forgotten
  * cost money: the entrypoint guard, `withLedger("cli", …)` around it, and
  * `loadEnvLocal()` before it. `npm run labels` and `npm run pdf` each spent for
- * weeks with no ledger open — docs/plans/simplification-wave-2.md §0.1 — and
+ * weeks with no ledger open — docs/plans/260828aj-simplification-wave-2.md §0.1 — and
  * `npm run pdf` also answered *"OPENROUTER_API_KEY is not set"* with the key
  * sitting unread in `.env.local`. Every one of those is a line somebody did not
  * copy off the stage next door. Folded in here they are not a thing to remember.

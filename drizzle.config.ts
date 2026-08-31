@@ -1,5 +1,5 @@
 /**
- * drizzle-kit configuration. See docs/plans/postgres-migration.md.
+ * drizzle-kit configuration. See docs/plans/260825f-postgres-migration.md.
  *
  * Three settings here are load-bearing, and all three are the kind that look
  * like boilerplate right up until they delete something.

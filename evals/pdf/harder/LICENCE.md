@@ -41,4 +41,4 @@ a colour reproduction of an 1868 drawing, running headers, footnote-size type, n
 At **11.5 MB** it is also, for free, the fixture that proves the upload path cannot go through a
 Vercel function: it is over the 4.5 MB request-body limit on its own. See
 [../README.md](../README.md) and
-[pdf-ingestion.md § Upload](../../../docs/plans/pdf-ingestion.md#upload).
+[260826c-pdf-ingestion.md § Upload](../../../docs/plans/260826c-pdf-ingestion.md#upload).

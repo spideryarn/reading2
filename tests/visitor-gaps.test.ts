@@ -7,7 +7,7 @@
  * visitor learns nothing. The products that get it right name the cause — Loom
  * says *"Due to the privacy settings for this video, it cannot be played here
  * at this time"*; Google Docs pairs *"View only"* with *"Request edit access"*.
- * docs/research/public-access-how-others-do-it.md.
+ * docs/research/260828a-public-access-how-others-do-it.md.
  *
  * They live in the reading view, in the comments drawer and on a page of their
  * own, so no single component renders them all and could be tested for telling
@@ -121,7 +121,7 @@ describe("what a visitor is told, mode by mode", () => {
    * indistinguishable in the code, and this is the first. Greg, 2026-08-31:
    * making it public-readable "could be a follow-up", and wants a general
    * design for every mode rather than a fifth hand-written table.
-   * docs/plans/timeline-mode.md § Making a mode public-readable.
+   * docs/plans/260831i-timeline-mode.md § Making a mode public-readable.
    *
    * Note it is here rather than under the artefact sweep below: there is no
    * `PublicArtefacts` flag for a timeline, so the honest sentence is *this
@@ -202,12 +202,12 @@ describe("what a visitor is told, mode by mode", () => {
        the old behaviour and still right for an article with no artefacts. */
     /* `outline` joins `toc` as a mode a visitor always gets: like the table of
        contents it is drawn from the tree in the payload they already hold and
-       reaches no artefact at all. docs/plans/outline-mode.md.
+       reaches no artefact at all. docs/plans/260828aw-outline-mode.md.
 
        **And `summary` joined them on 2026-08-31.** It used to be gated on a
        `summary.json`; the generated ladder is gone and the panel draws the
        tree's own gists, so there is nothing left for a visitor to be missing.
-       docs/plans/gist-only-summaries.md. */
+       docs/plans/260831s-gist-only-summaries.md. */
     const ALWAYS_FREE: Mode[] = ["hierarchy", "outline", "summary"];
     expect([...markedModes(NOTHING_BUILT).keys()].sort()).toEqual(
       MODES.filter((m: Mode) => !ALWAYS_FREE.includes(m))
@@ -296,7 +296,7 @@ describe("the sentences themselves", () => {
    * **The offer is withheld where it would not be kept.**
    *
    * Comments belong to whoever added the article, and an account does not
-   * change that until docs/plans/public-read-only-access.md § Stage 3. The two
+   * change that until docs/plans/260827ai-public-read-only-access.md § Stage 3. The two
    * entries that used to be withheld for the other reason — *we are the ones
    * who have not shipped it* — went with their union members in slice 1b, which
    * is why there is one `false` here and there were three.
@@ -356,7 +356,7 @@ describe("what the payload says it has", () => {
    * pins behaviour that is insurance against those throws being relaxed, not
    * behaviour any reader reaches — said here because a test whose fixture the
    * pipeline forbids will otherwise read as proof that the state occurs.
-   * docs/plans/public-read-only-access.md § The state that cannot happen.
+   * docs/plans/260827ai-public-read-only-access.md § The state that cannot happen.
    */
   it("counts an empty artefact as built", () => {
     const empty: PublicArticle = { ...BARE, glossary: { entries: [] }, ideas: { ideas: [] } };

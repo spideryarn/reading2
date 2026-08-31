@@ -58,7 +58,7 @@ export interface Block {
    * Why it is kept at all rather than derived from `kind`: `describeBlock` in
    * src/blocks.ts can see that a pull-quote repeats the paragraph above it, and
    * nothing downstream can reconstruct that.
-   * docs/plans/footnotes-stage345-upfront-sol.md, decision 3.
+   * docs/plans/260828o-footnotes-stage345-upfront-sol.md, decision 3.
    */
   gistable: boolean;
   /** Why gistable is false, for debugging the splitter. */
@@ -68,14 +68,14 @@ export interface Block {
    *
    * Two orthogonal closed axes rather than one closed set, because
    * acknowledgments and image credits are supplements while an **appendix may
-   * be real prose worth gisting** — see docs/plans/footnotes.md#the-representation.
+   * be real prose worth gisting** — see docs/plans/260828o-footnotes.md#the-representation.
    *
    * **Only `"footnote"` is ever assigned in v1**, by stage 3 from stage 2's
    * `data-spya-notes` container. The other four are in the union, in the CHECK
    * constraint and in the tests, produced by nothing — deliberately. A stored
    * role means *this revision classifies this content as X*, so narrowing the
    * union now would make widening it a database migration
-   * (docs/plans/footnotes-stage345-upfront-sol.md, decision 2).
+   * (docs/plans/260828o-footnotes-stage345-upfront-sol.md, decision 2).
    */
   role?: "footnote" | "reference" | "acknowledgment" | "credit" | "appendix";
   /** How the argument machinery must treat it. Absent means "body". */
@@ -84,7 +84,7 @@ export interface Block {
    * Which note this block belongs to. **A note is a RANGE of blocks, not one
    * block** — gwern has 34 notes across 41 supplement blocks, and conflating
    * the two counts is the bug this field exists to prevent
-   * (docs/plans/footnotes.md#a-note-is-a-range-of-blocks-not-a-block). Minted
+   * (docs/plans/260828o-footnotes.md#a-note-is-a-range-of-blocks-not-a-block). Minted
    * by stage 2 in src/notes.ts, carried here by an ancestor lookup.
    */
   noteId?: string;
@@ -198,7 +198,7 @@ export interface Arc {
 }
 
 /**
- * One post of the thread — see docs/plans/tweet-thread-page.md.
+ * One post of the thread — see docs/plans/260825g-tweet-thread-page.md.
  *
  * **No post number.** Position is the array's job and the array already does
  * it; a stored `number` is a second copy of the same fact that can only ever
@@ -359,7 +359,7 @@ export interface GlossaryEntry {
    * person simply quoted, a work simply named — the article's use of those is
    * plain once you know what the thing is, and an entry that restates it is a
    * description of a page the reader is looking at. That was the Lamport bug:
-   * see docs/plans/glossary-entries-worth-reading.md.
+   * see docs/plans/260826d-glossary-entries-worth-reading.md.
    *
    * Plain text, never Markdown.
    */
@@ -411,7 +411,7 @@ export interface GlossaryEntry {
    * is from the article, `background` is not, and the labels on those two
    * sections answer "which bits" exactly. Provenance the model **writes into**
    * rather than **reports about** — see
-   * docs/plans/glossary-entries-worth-reading.md § Provenance is structural.
+   * docs/plans/260826d-glossary-entries-worth-reading.md § Provenance is structural.
    */
   fromOutside?: boolean;
   /**
@@ -426,7 +426,7 @@ export interface GlossaryEntry {
    * remembered `background` rather than replacing it — *checked* has to stay
    * visibly different from *remembered*.
    *
-   * See docs/plans/glossary-entries-worth-reading.md § The web.
+   * See docs/plans/260826d-glossary-entries-worth-reading.md § The web.
    */
   lookup?: GlossaryLookup;
   /** Every block that uses this term, in document order. Found by us. Empty is meaningful. */
@@ -539,7 +539,7 @@ export interface GlossaryResponse {
    * not make one single glossary read as stale — the panel went on showing an
    * old list with no banner and no offer to rewrite it, while the plan that
    * bumped the version claimed the opposite. Found in review; see
-   * docs/plans/glossary-entries-worth-reading.md § What review caught.
+   * docs/plans/260826d-glossary-entries-worth-reading.md § What review caught.
    */
   outdated: boolean;
   /**
@@ -580,7 +580,7 @@ export type QuotesFound = Omit<QuotesResponse, "profileChanged">;
 /* ------------------------------------------------------------------ ideas --
    The propositions a reader has to hold to get the piece — `data/<slug>/
    ideas.json`, and a **mode** in the band beside the glossary. Stage 5f.
-   See docs/plans/ideas-mode.md.
+   See docs/plans/260826ac-ideas-mode.md.
 
    The glossary answers *what does this word mean*, on both sides of the
    introduced/assumed line. This answers the other unit: a claim you hold, which
@@ -593,7 +593,7 @@ export type QuotesFound = Omit<QuotesResponse, "profileChanged">;
  * A piece can assume a broad framework and introduce its own refinement of it,
  * and that idea belongs in both groups. The panel draws this the way it draws
  * everything else the model asserts — as a claim, not as a property. See
- * docs/plans/ideas-mode.md § What it looks like.
+ * docs/plans/260826ac-ideas-mode.md § What it looks like.
  */
 export type IdeaProvenance = "assumed" | "introduced";
 
@@ -775,7 +775,7 @@ export interface IdeasResponse {
 /* ----------------------------------------------------------------- quotes --
    The lines worth keeping — `data/<slug>/quotes.json`, and a **mode** in the
    band beside the glossary and the ideas. Stage 5h.
-   See docs/plans/quotes-mode.md.
+   See docs/plans/260831j-quotes-mode.md.
 
    The third question the band answers, and the only one whose answer is
    entirely in the article's own words — *the article's*, because verification can
@@ -827,7 +827,7 @@ export interface Quote {
    * Absent is a real answer. The prompt bans the register the glossary's
    * `senseHere` fell into — describing the page the reader is already looking
    * at — and for this field that register is not merely tempting, it is the
-   * obvious reading of the question. docs/plans/quotes-mode.md.
+   * obvious reading of the question. docs/plans/260831j-quotes-mode.md.
    */
   reason?: string;
   /** 0–1: how much of the article's argument rests on this line. The model's judgment. */
@@ -995,7 +995,7 @@ export const MAX_PROFILE_CHARS = 1_500;
  * paragraph on who you are is a life, a paragraph on why you opened *this* is
  * usually a sentence. It was originally set to match `MAX_GUIDANCE_CHARS` on
  * the summary steer, the two boxes being adjacent in the reader's head — that
- * steer is gone (docs/plans/steer-becomes-the-profile.md), so the number now
+ * steer is gone (docs/plans/260830o-steer-becomes-the-profile.md), so the number now
  * stands on the reasoning above rather than on the pairing.
  */
 export const MAX_PURPOSE_CHARS = 600;
@@ -1017,7 +1017,7 @@ export interface Meta {
    * `fetchedAt` above can be fifteen years later, and a stage that reached for
    * it as a reference frame would date every undated "on July 7" to the day the
    * article happened to be ingested. Timeline needs the year nobody writes down
-   * (docs/plans/timeline-mode.md § The reference frame), and the publication
+   * (docs/plans/260831i-timeline-mode.md § The reference frame), and the publication
    * date is the only thing that supplies it.
    *
    * **Absent on every article ingested before 2026-08-31**, and it stays absent
@@ -1050,7 +1050,7 @@ export interface Meta {
    * this is the field that decides it. It is deliberately not called `verified`
    * with a false value: two machines agreeing would still not be verification,
    * and "verified" is exactly the word a reader would rely on.
-   * docs/plans/pdf-ingestion.md § A scan with no text layer.
+   * docs/plans/260826c-pdf-ingestion.md § A scan with no text layer.
    */
   unverified?: boolean;
   /**
@@ -1110,7 +1110,7 @@ export interface SimilarResponse {
  * Where one passage sits on the plane the embeddings describe.
  *
  * The wire shape of `POST /api/projection/:slug` (src/projection.ts), drawn by
- * the Drift and Trail pictures — docs/plans/embedding-scatter-diagrams.md.
+ * the Drift and Trail pictures — docs/plans/260827g-embedding-scatter-diagrams.md.
  *
  * **There is no row number here on purpose.** The block id is the identity of a
  * passage everywhere else in this app (docs/project/block-ids.md), and a row
@@ -1312,7 +1312,7 @@ export interface ListOptions {
  * Reader state, in the same category as comments and chat rather than in the
  * same category as the article's text — so nothing the pipeline does may
  * overwrite it. See src/shelf.ts for why the renamed title in particular has to
- * live out here, and docs/plans/library-shelf-actions-and-search.md for the
+ * live out here, and docs/plans/260826k-library-shelf-actions-and-search.md for the
  * decisions behind it.
  */
 export interface ShelfState {
@@ -1325,7 +1325,7 @@ export interface ShelfState {
   lastOpenedAt?: string;
   /**
    * "Why you're reading this one" — this article only, in the reader's own
-   * words. The per-article half of docs/plans/reader-profile.md; the global
+   * words. The per-article half of docs/plans/260826t-reader-profile.md; the global
    * half is `data/reader.json` / `reader_profiles`, addressed through a
    * `ReaderStore` rather than through here, because it is true of every
    * article rather than of this one.
@@ -1398,7 +1398,7 @@ export interface LibrarySearchResponse {
  * read at request time by definition, and a stored copy would be the second
  * truth this repo keeps warning about.
  *
- * See docs/plans/metadata-page.md. § What the plan got wrong is why this carries
+ * See docs/plans/260825e-metadata-page.md. § What the plan got wrong is why this carries
  * **no staleness verdict**; § A third pass is why it now carries sizes and
  * timestamps after all, which is a smaller reversal than it sounds — a number
  * is not a verdict, and nothing anywhere compares two of these.
@@ -1457,7 +1457,7 @@ export interface StageState {
  * `article_revisions.status` already has a value spelled `published` and it
  * means *the pipeline finished*, not *anybody may read this*. Two meanings of
  * one word, two tables apart, is how a mistake gets made at three in the
- * morning. docs/plans/public-read-only-access.md.
+ * morning. docs/plans/260827ai-public-read-only-access.md.
  *
  * **Declared here rather than in `src/store/contracts.ts`, which re-exports it**,
  * because since 2026-08-28 it is part of a response the browser reads —
@@ -1543,7 +1543,7 @@ export interface ArticleMetadata {
    * How many questions have been asked about this article.
    *
    * A count and not the comments themselves, and that distinction is the whole
-   * point: the metadata page must NOT fetch the comments (docs/plans/metadata-page.md
+   * point: the metadata page must NOT fetch the comments (docs/plans/260825e-metadata-page.md
    * § The shell — `useComments` fetches on mount, so sharing it would buy a
    * drawer nobody opened). But this endpoint is already walking this article's
    * directory, so one more read answers "7 questions asked" for free, and the
@@ -1551,7 +1551,7 @@ export interface ArticleMetadata {
    */
   comments: number;
   /**
-   * The reader's "about you" and "why this one" boxes — docs/plans/reader-profile.md.
+   * The reader's "about you" and "why this one" boxes — docs/plans/260826t-reader-profile.md.
    *
    * `null` means the box is empty, not that the question was not asked; the
    * Metadata page needs both to fill its own textareas and to show the global
@@ -1578,7 +1578,7 @@ export interface ArticleMetadata {
    */
   archivedAt: string | null;
 
-  /* ---- sharing. docs/plans/public-read-only-access.md § Stage 1 ---- */
+  /* ---- sharing. docs/plans/260827ai-public-read-only-access.md § Stage 1 ---- */
 
   /**
    * **Who may read this and what was written for you — or absent, on a store
@@ -1747,7 +1747,7 @@ export interface Comment {
    * **Absent, never `""`.** The route trims once and drops an empty string, so
    * "they wrote nothing" has one representation rather than two that compare
    * unequal across the two stores. Reader prose: never logged, never in a URL,
-   * rendered as text. docs/plans/comments-and-bookmarks.md.
+   * rendered as text. docs/plans/260828a-comments-and-bookmarks.md.
    */
   body?: string;
   /** ISO. Present only once the body has been edited since it was made. */
@@ -1797,7 +1797,7 @@ export interface Comment {
  * `DEFAULT_INGEST_STEPS` — they are steps you can ask for by name, not ones a
  * plain "add this URL" runs. Each costs model calls over the whole article and
  * each belongs to a page or a mode you have to go to. See
- * docs/plans/tweet-thread-page.md#the-one-real-snag-stated-precisely and
+ * docs/plans/260825g-tweet-thread-page.md#the-one-real-snag-stated-precisely and
  * docs/project/glossary.md.
  */
 export type StepName =
@@ -1930,7 +1930,7 @@ export interface Job {
    * **This is what decides whether the card offers Retry.** Without it, every
    * failure got the button, including the ones that are arithmetic: the article
    * that needs more output tokens than one response holds got a Retry that made
-   * the identical call and failed identically (docs/postmortems/toc-max-tokens.md).
+   * the identical call and failed identically (docs/postmortems/260826a-toc-max-tokens.md).
    *
    * A field on the job rather than a code parsed back out of the sentence,
    * which is what the stored messages in src/messages.ts have to do because
@@ -1957,7 +1957,7 @@ export interface Job {
    * dropped would run the plain prompt, report success, and stamp the artefact
    * with a `profileHash` describing a profile it did not use. (A free-text
    * `guidance` steer used to ride here for the same reasons; it is gone —
-   * docs/plans/steer-becomes-the-profile.md.)
+   * docs/plans/260830o-steer-becomes-the-profile.md.)
    *
    * And a third that is its own: **it is frozen here.** A step can be several
    * batched calls at once; reading the profile inside each one would let a
@@ -1972,7 +1972,7 @@ export interface Job {
    A conversation about one article. Reader state, so it lives beside the
    article in `data/<slug>/chat.json` exactly as comments.json does.
 
-   See docs/plans/chat-mode.md, and note the one rule that separates this from
+   See docs/plans/260826a-chat-mode.md, and note the one rule that separates this from
    the chatbot vision.md names as an anti-goal: **an assistant message must
    carry block ids**, so every claim has a way back to the passage it came
    from. That contract is enforced in the prompt (src/converse.ts) and rendered
@@ -2044,7 +2044,7 @@ export interface ChatMessage {
    * src/web/Cited.tsx makes them pressable. A **spoken** answer must not: read
    * aloud an id is six seconds of gibberish, so the live prompt forbids saying
    * one and gives the model a `show_passage` tool instead
-   * (docs/plans/live-conversation.md).
+   * (docs/plans/260831g-live-conversation.md).
    *
    * That leaves the pointing with nowhere to go, and storing only the
    * transcript would produce **uncited assistant claims** — the exact failure
@@ -2086,7 +2086,7 @@ export interface ChatMessage {
    *
    * Editing a question discards every turn after it and asks again, so this is
    * the only trace that the conversation above once went somewhere else. The
-   * old text is **not** kept — see docs/plans/chat-mode.md § Editing a question.
+   * old text is **not** kept — see docs/plans/260826a-chat-mode.md § Editing a question.
    */
   editedAt?: string;
   /**
@@ -2099,7 +2099,7 @@ export interface ChatMessage {
    * that did arrive — and a retry of that row has to have something to inherit.
    * Writing it in `finishTurn` would leave every one of those rows blank.
    *
-   * See docs/plans/review-mode.md § Where the stance picker's value lives.
+   * See docs/plans/260827ah-review-mode.md § Where the stance picker's value lives.
    */
   stance?: ReviewStance;
 }
@@ -2110,7 +2110,7 @@ export interface ChatMessage {
  *
  * Greg named all four, 2026-08-27. `balanced` is the default and is not an
  * average of the other three: it decides per point, on evidence, and defaults
- * to telling when it cannot tell. docs/plans/review-mode.md § The stance.
+ * to telling when it cannot tell. docs/plans/260827ah-review-mode.md § The stance.
  */
 export type ReviewStance = "balanced" | "respond" | "socratic" | "signposts";
 
@@ -2137,10 +2137,10 @@ export const REVIEW_STANCES: readonly ReviewStance[] = [
  * predates this field. An optional kind means a `?? "chat"` at every read site
  * and one of them will eventually be missed — which is a review thread answered
  * with chat's prompt, and nothing on screen disagreeing. GPT Sol's review of
- * docs/plans/review-mode.md, 2026-08-27.
+ * docs/plans/260827ah-review-mode.md, 2026-08-27.
  *
  * A thread's kind is set on the turn that creates it and never again, exactly
- * like its `anchor`. See docs/plans/review-mode.md § `kind` belongs to the
+ * like its `anchor`. See docs/plans/260827ah-review-mode.md § `kind` belongs to the
  * thread.
  */
 export type ThreadKind = "chat" | "review";
@@ -2178,7 +2178,7 @@ export type ThreadKind = "chat" | "review";
  * because `resolveMark` draws both and a second spelling would mean a second
  * resolver for the two to drift apart in.
  *
- * See docs/plans/chat-as-gateway.md § A thread can have an anchor.
+ * See docs/plans/260826ab-chat-as-gateway.md § A thread can have an anchor.
  */
 export type ChatAnchor =
   | { blockId: BlockId }
@@ -2230,7 +2230,7 @@ export interface ChatThread {
  * answer arrives.
  *
  * So the reading view reads this, and only `ChatDialog` and chat mode hold the
- * real thing. See docs/plans/chat-as-gateway.md § The reading view gets thread
+ * real thing. See docs/plans/260826ab-chat-as-gateway.md § The reading view gets thread
  * summaries.
  */
 export interface ThreadSummary {
@@ -2248,7 +2248,7 @@ export interface ThreadSummary {
    * prompt. A pasted `?mode=toc&thread=<a review>` would therefore continue a
    * review conversation as a chat. The overlay is gated on this instead. See
    * src/web/App.tsx § overlay, and GPT Sol's review of
-   * docs/plans/review-mode.md, finding 7.
+   * docs/plans/260827ah-review-mode.md, finding 7.
    */
   kind: ThreadKind;
   /** How many question-and-answer pairs. What the hover tooltip counts. */
@@ -2366,7 +2366,7 @@ export interface SearchRun {
 
 /* --------------------------------------------------------------- timeline --
    When the piece says these things happened — `data/<slug>/timeline.json`, and
-   a **mode** in the band after the ideas. See docs/plans/timeline-mode.md.
+   a **mode** in the band after the ideas. See docs/plans/260831i-timeline-mode.md.
 
    ## Why these are here and not in src/timeline.ts, where they were written
 
@@ -2518,7 +2518,7 @@ export interface Timeline {
 /**
  * `GET /api/timeline/:slug`. Two staleness facts and no third: the reader
  * profile is **not** in this stage's stamp, because who is reading does not
- * change when something happened. docs/plans/timeline-mode.md § Freshness.
+ * change when something happened. docs/plans/260831i-timeline-mode.md § Freshness.
  */
 export interface TimelineResponse {
   timeline: Timeline;

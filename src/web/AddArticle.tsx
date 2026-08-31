@@ -251,7 +251,7 @@ export function AddArticle({ queue }: { queue: UseJobs }) {
       {/* Under the URL box rather than beside it. They are two ways to start
           the same thing, and the reader will nearly always be doing the first —
           a row of two equal halves would give a rarely-used control half the
-          section. See docs/plans/pdf-upload-and-storage.md for what is behind
+          section. See docs/plans/260826u-pdf-upload-and-storage.md for what is behind
           it, which today is nothing. */}
       <UploadPicker />
 
@@ -385,7 +385,7 @@ export function JobCard({
                 are still in the cache — and a button under one of those is
                 worse than a badly worded sentence, because the reader can act
                 on it. `jobWorthRetrying` is the one place that decides; see
-                src/job-failure.ts and docs/postmortems/toc-max-tokens.md.
+                src/job-failure.ts and docs/postmortems/260826a-toc-max-tokens.md.
 
                 Nothing takes its place when it is hidden. The failed step's own
                 message is already on the card and already says why. */}

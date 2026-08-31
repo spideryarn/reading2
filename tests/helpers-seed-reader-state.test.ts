@@ -4,7 +4,7 @@
  * `tests/helpers/seed-reader-state.ts` puts a reader's comments, chat, searches,
  * lookups and shelf state into Postgres from the files, for the three suites
  * that used to get all of it from `db:import`
- * (docs/plans/delete-the-importer.md § C7). It writes columns directly, and
+ * (docs/plans/260827aa-delete-the-importer.md § C7). It writes columns directly, and
  * says so: `pgShelfStore.patch` cannot set `opens` to 874 or archive with last
  * week's date, and `pgCommentStore.create` makes a current unanswered comment
  * when half the corpus's are answered.

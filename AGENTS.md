@@ -94,7 +94,9 @@ That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enfo
 
 None of those first three is indexed here — there are a lot of files and they keep arriving. List
 the directory and read the file names; they say what each one is about, and the first paragraph of
-the file says the rest.
+the file says the rest. They are named `yyMMdd<letter>-kebab-description.md`, so they sort by the day
+the work started; a plan and its reviews share one letter. Get the name from
+`npx tsx scripts/plan-name.ts` — [write-planning-doc.md](docs/reusable/write-planning-doc.md).
 
 ## The one contract that matters
 

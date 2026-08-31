@@ -597,7 +597,7 @@ export function scrollByScreen(dir: -1 | 1) {
  * opened the dialog, so `/read/<slug>?note=<id>` with no `?at=` beside it —
  * which is exactly the shape of a link somebody *sends* — showed the reader an
  * explanation of a paragraph that was somewhere off screen, with no way to tell
- * where. Recorded as open in docs/plans/metadata-page.md and fixed here.
+ * where. Recorded as open in docs/plans/260825e-metadata-page.md and fixed here.
  *
  * **The note wins**, and the argument is about which parameter anybody meant.
  * `?at=` is written by scrolling: it is debounced, it replaces rather than

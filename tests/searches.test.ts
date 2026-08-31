@@ -288,7 +288,7 @@ describe("saved-search storage", () => {
        at never stopped, and a reload showed an unexplained duplicate beside the
        failure. createComment has had the reset-in-place branch all along; this
        is the same rule for the same reason.
-       docs/postmortems/search-retry-remints-instead-of-resetting.md */
+       docs/postmortems/260826f-search-retry-remints-instead-of-resetting.md */
     const first = await beginRun(SLUG, "arguments against the main claim", "spya-k3m9qt");
     await finishRun(SLUG, first.id, { status: "error", error: "the model timed out" });
 

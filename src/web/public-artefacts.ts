@@ -16,7 +16,7 @@
  * the question it used to ask: **a key that is present exists, and a key that
  * is absent was never built.** The request goes, its swallowed `catch` goes,
  * and the state that hedged it goes with them.
- * docs/plans/public-read-only-access.md § The second request disappears.
+ * docs/plans/260827ai-public-read-only-access.md § The second request disappears.
  *
  * **`GET /api/public/metadata/:slug` itself stays.** It is tested, it is in the
  * route inventory, and it is the honest small answer to *what does this article
@@ -39,7 +39,7 @@
  * about the contents that happens to have the same answer while a throw four
  * files away holds. If that throw is ever relaxed, presence keeps telling the
  * truth and a length test starts reporting a built artefact as never built.
- * docs/plans/public-read-only-access.md § The state that cannot happen.
+ * docs/plans/260827ai-public-read-only-access.md § The state that cannot happen.
  */
 import type { PublicArtefactSet, PublicArtefacts, PublicArticle } from "../public-types.js";
 

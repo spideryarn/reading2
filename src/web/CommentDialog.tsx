@@ -86,7 +86,7 @@ export function CommentDialog({
   /* The other box in this app with an article in scope, and therefore the other
      one whose transcription gets the glossary as its vocabulary — the reader is
      asking about a passage they have just read, and the words in it are the
-     words they are about to say. docs/plans/dictation-two-pass.md.
+     words they are about to say. docs/plans/260827x-dictation-two-pass.md.
 
      **The slug comes from the address rather than from a prop**, which is one
      fewer thing for `App.tsx` to thread through and is exactly as true: this

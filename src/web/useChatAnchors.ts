@@ -1,6 +1,6 @@
 /**
  * Which conversations are anchored to which passage — the reading view's half
- * of chat. See docs/plans/chat-as-gateway.md § The reading view gets thread
+ * of chat. See docs/plans/260826ab-chat-as-gateway.md § The reading view gets thread
  * summaries.
  *
  * ## Why this is not just `useChat`

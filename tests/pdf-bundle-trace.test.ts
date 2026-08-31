@@ -8,7 +8,7 @@
  * through a *variable* — which was still broken after the first fix and was
  * found by review rather than by anything running, because the first bug threw
  * at module scope before pdf.js ever got as far as wanting a worker.
- * docs/postmortems/pdfjs-dommatrix-serverless.md.
+ * docs/postmortems/260827a-pdfjs-dommatrix-serverless.md.
  *
  * Every other test in this repo runs where `node_modules` is complete, so every
  * other test is blind to this by construction. The build is green, the deploy

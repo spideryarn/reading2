@@ -464,7 +464,7 @@ describe("the local edits", () => {
 
 
 /**
- * **The turn, which is what stage 2 of docs/plans/chat-operation-model.md is
+ * **The turn, which is what stage 2 of docs/plans/260828v-chat-operation-model.md is
  * for.** Four of these are the tests that plan names as having to exist before
  * the stage ships; the rest are the transitions they lean on.
  */
@@ -757,7 +757,7 @@ describe("a turn", () => {
    * **A repair is a snapshot, and a snapshot is old the moment it is taken.**
    *
    * These four are GPT Sol's finding 3 on stage 2
-   * (docs/plans/chat-operation-model-stage2-review-sol.md): `repair.succeeded`
+   * (docs/plans/260828v-chat-operation-model-stage2-review-sol.md): `repair.succeeded`
    * used to replace the whole conversation, guarded only against a turn that was
    * live at the instant it landed. Everything that finished in the meantime was
    * overwritten by a copy of the conversation as it stood before it happened.

@@ -62,6 +62,6 @@ so this certificate really does verify Supabase's server, with `rejectUnauthoriz
 warning printed.
 
 Two things that run showed incidentally: the direct IPv6 host resolves from Greg's laptop, and
-[the plan's note](../docs/plans/postgres-migration.md#the-project-we-are-actually-using) that it will
+[the plan's note](../docs/plans/260825f-postgres-migration.md#the-project-we-are-actually-using) that it will
 *not* resolve from an IPv4-only host such as Vercel is still the constraint that decides which
 connection string production uses.

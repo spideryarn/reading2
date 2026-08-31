@@ -1,6 +1,6 @@
 /**
  * **`GET /read/:slug`, served as HTML with its head filled in** — the transport
- * half of stage 2 of docs/plans/public-read-only-access.md.
+ * half of stage 2 of docs/plans/260827ai-public-read-only-access.md.
  *
  * Until now every `/read/` address was rewritten to a static `index.html` whose
  * `<title>` is the bare word *Spideryarn*, and the real title was set by React

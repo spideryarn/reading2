@@ -6,7 +6,7 @@
  * on a second attempt, and neither can a missing source URL, a tree whose root
  * is not in its own node list, or a page Readability has already refused once
  * over bytes that are sitting in the cache. See
- * docs/postmortems/toc-max-tokens.md.
+ * docs/postmortems/260826a-toc-max-tokens.md.
  *
  * **Most of these drive the real stage rather than a stand-in.** A classifier
  * that recognises a failure by a sentence somebody else's file writes is only
@@ -53,7 +53,7 @@ function failed(failureKind?: Job["failureKind"]): Job {
  * The job card as HTML.
  *
  * A real render, not a scan of the source. There is no component test runner
- * here and `docs/plans/chat-mode.md` records that — but `JobCard` is a plain
+ * here and `docs/plans/260826a-chat-mode.md` records that — but `JobCard` is a plain
  * function of its props, so `renderToStaticMarkup` needs neither a DOM nor a
  * JSX transform, and `createElement` keeps this file a `.ts` that
  * vitest.config.ts's `include` will actually pick up.
@@ -189,7 +189,7 @@ describe("the failures a retry cannot change", () => {
     // Not arithmetic, unlike `TooLongForOnePass` — adaptive output varies, so
     // this is "unlikely to differ" rather than "cannot". It is `bug` because
     // the thing that needs changing is a constant in src/token-budget.ts, and
-    // the message says which. See docs/postmortems/toc-max-tokens.md.
+    // the message says which. See docs/postmortems/260826a-toc-max-tokens.md.
     const err = truncationFailure("table of contents", 77_100, 37_100, {
       outputTokens: 77_100,
       answerChars: 40_000,
@@ -266,7 +266,7 @@ describe("the failures a retry cannot change", () => {
          1 leaves nothing in the article's directory: it puts the document in the
          content-addressed `sources` bucket and returns a manifest naming it by
          hash, and stage 2 reads the manifest from the store and the bytes by
-         address (docs/plans/finish-the-database-move.md § Stage 2c). A fixture
+         address (docs/plans/260831b-finish-the-database-move.md § Stage 2c). A fixture
          that wrote `raw.html` would now fail before Readability ever saw the
          page — which is how this test found out, with the wrong sentence. */
       const htmlFile = path.join(dir, "a-slug.html");

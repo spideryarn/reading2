@@ -22,13 +22,13 @@
  * whole stage over the 128,000-token ceiling on a single response. They now live
  * in src/labels.ts, batched along this tree's own section boundaries and run in
  * parallel. `generateToc` still drives both and still returns one set of
- * artefacts, so the pipeline sees one step. docs/plans/toc-scaling.md.
+ * artefacts, so the pipeline sees one step. docs/plans/260826h-toc-scaling.md.
  *
  * **The stage reads no path and writes no file.** It is handed the blocks and
  * hands back the three artefacts in one object; the caller stores them. The
  * pipeline gives that object to the artefact store as a single `parts` map, and
  * `main()` below is the only thing left that turns them into files.
- * docs/plans/finish-the-database-move.md § Stage 2.
+ * docs/plans/260831b-finish-the-database-move.md § Stage 2.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -95,7 +95,7 @@ const PROMPT_VERSION = "toc/2";
  * handed forty of its neighbour's blocks would otherwise look identical.
  * `evals/toc-structure/run.ts` records both.
  *
- * See docs/plans/toc-scaling.md and docs/postmortems/toc-max-tokens.md.
+ * See docs/plans/260826h-toc-scaling.md and docs/postmortems/260826a-toc-max-tokens.md.
  */
 const EFFORT = "medium" as const;
 
@@ -317,7 +317,7 @@ function nameValue(value: unknown): string {
  * So the completeness check lives out here, where the two are distinguishable
  * by how many. This is the guard between a loud failure and the quiet one that
  * would replace it — see docs/reusable/silent-success.md, and the postmortem in
- * docs/postmortems/toc-max-tokens.md for why this stage in particular attracts
+ * docs/postmortems/260826a-toc-max-tokens.md for why this stage in particular attracts
  * partial answers.
  *
  * A label naming a block that isn't in the article fails it too. That is not a
@@ -584,7 +584,7 @@ export function repairedBlockCount(repairs: PartitionRepair[]): number {
  *
  * One, and the number is the evidence rather than a round figure. Every
  * recorded tiling failure — the two in the 2026-08-30 calibration and the two
- * in docs/postmortems/the-article-with-one-heading.md — was a *single* slipped
+ * in docs/postmortems/260830a-the-article-with-one-heading.md — was a *single* slipped
  * boundary. An answer with several independent ones is not the same event
  * observed again; it is a different failure, and mending each of them
  * separately would let a systematically misaligned tree through one block at a
@@ -636,12 +636,12 @@ const MAX_REPAIRED_BOUNDARIES = 1;
  * The argument for repairing at all is measured rather than assumed. A paid
  * calibration of this stage threw on 4 of 13 structure calls, and every tiling
  * failure recorded up to 2026-08-30 — those two, plus the two in
- * docs/postmortems/the-article-with-one-heading.md — was **off by a single
+ * docs/postmortems/260830a-the-article-with-one-heading.md — was **off by a single
  * block**. So the practical choice is not between trusting the model and
  * checking it; it is whether a two-and-a-half-minute call that put one boundary
  * one paragraph out should cost the reader the article. It should not, and a
  * fifth of structure calls were costing exactly that
- * (docs/research/opening-an-article-before-the-toc.md § 7b).
+ * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
  *
  * **Why here, on the model's proposal, rather than in `assertChildrenPartition`.**
  * By the time that check runs, `visit` has already walked the children and
@@ -665,7 +665,7 @@ const MAX_REPAIRED_BOUNDARIES = 1;
  * all from HTML articles with headings** — the half of the corpus where the
  * model has the author's own structure to agree with. PDFs are headingless, they
  * are the half where the model is measured disagreeing with *itself* between
- * runs (docs/research/opening-an-article-before-the-toc.md § 7b), and PDF ingest
+ * runs (docs/research/260830a-opening-an-article-before-the-toc.md § 7b), and PDF ingest
  * reached production on the day this changed. The first thing it did was fail a
  * 9-page arXiv paper on a gap of **three**: one completed call, $0.1617 spent,
  * article lost, and nothing the reader could do about it. Greg, 2026-08-30:
@@ -866,7 +866,7 @@ export function buildTree(
      * contrast, costs the reader the article: four structure calls in four made
      * the same wrong claim on the same document, which makes a refusal not an
      * occasional loss but a guaranteed failure loop for it
-     * (docs/research/opening-an-article-before-the-toc.md § 7b).
+     * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
      *
      * **Read with `sameHeading`, over the same range, so this is a repair and
      * not a second opinion.** `checkTree` asks the identical question later,
@@ -1172,7 +1172,7 @@ export interface TocRun {
   outputTokens: number;
   /* From the label pass only — the structure call is one call per article and
      is deliberately not cached, so there is nothing for it to read. See
-     docs/plans/prompt-caching.md on why a prefix used once is worth 1.25× and
+     docs/plans/260826g-prompt-caching.md on why a prefix used once is worth 1.25× and
      no more. */
   cacheReadTokens: number;
   cacheWriteTokens: number;
@@ -1216,11 +1216,11 @@ async function writeAtomic(file: string, value: unknown): Promise<void> {
  * where either lives.** It used to open a path and write a directory, which
  * meant the pipeline hashed what the *store* held and generated from what the
  * *disk* held — the same defect src/article-input.ts was written to close for
- * the seven article-reading stages. docs/plans/finish-the-database-move.md.
+ * the seven article-reading stages. docs/plans/260831b-finish-the-database-move.md.
  *
  * **Two model passes, one pipeline step, and nothing returned until both are
  * done.** The split exists so the unbounded half can be batched
- * (docs/plans/toc-scaling.md), not so it can be published separately — a tree
+ * (docs/plans/260826h-toc-scaling.md), not so it can be published separately — a tree
  * stored with a third of its labels missing is a valid-looking artefact that
  * quietly describes part of an article, which is
  * docs/reusable/silent-success.md exactly. `TocArtefacts` is what now makes
@@ -1411,7 +1411,7 @@ export async function generateToc(opts: {
      line, so that check is vacuous here and only the later call can make it.
      Two calls, deliberately: this one is a cost guard, the one below is the
      guarantee about the file. `checkTree` is pure and takes microseconds.
-     docs/postmortems/the-article-with-one-heading.md. */
+     docs/postmortems/260830a-the-article-with-one-heading.md. */
   assertTreeSound(blocks, structure);
 
   /* Pass two. The tree has to exist first: the batches are cut along its own

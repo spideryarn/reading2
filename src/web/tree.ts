@@ -442,7 +442,7 @@ export function buildOutline(
 
    **This reads nothing but the tree**, which is the whole of what changed on
    2026-08-31 when the generated length ladder was removed
-   (docs/plans/gist-only-summaries.md). It used to join `summary.json` in as
+   (docs/plans/260831s-gist-only-summaries.md). It used to join `summary.json` in as
    well — by block range and never by node id, the same rule `buildArcColumn`
    above still obeys, because node ids are positional and a re-run of
    `npm run toc` renumbers them. That join, and the two rungs it carried, are

@@ -11,7 +11,7 @@
  * fail with "no connection" instead of relying on everyone remembering not to
  * run it. That is the difference between a rule and a guard rail.
  *
- * See docs/plans/postgres-migration.md and docs/project/supabase-local.md.
+ * See docs/plans/260825f-postgres-migration.md and docs/project/supabase-local.md.
  *
  * A migration connection is a **direct or session** connection, never the
  * transaction pooler on 6543: DDL and the migrator's own bookkeeping want a

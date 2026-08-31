@@ -10,7 +10,7 @@
  * paths, and existence is not the question.
  *
  * So a step declares `produces: ArtifactKind[]`, and a *store* answers the two
- * questions separately (docs/plans/postgres-storage-implementation.md § Step 11,
+ * questions separately (docs/plans/260826e-postgres-storage-implementation.md § Step 11,
  * half B):
  *
  * 1. **Present** — does the store hold every kind this step produces? The store
@@ -21,7 +21,7 @@
  *    `glossaryIsCurrent` / `threadIsCurrent` that used to sit beside each
  *    other — the same three lines written twice over. Both are gone:
  *    `glossaryIsCurrent` on 2026-08-28, `threadIsCurrent` in D0 on 2026-08-29
- *    (docs/plans/delete-the-importer.md).
+ *    (docs/plans/260827aa-delete-the-importer.md).
  *
  * This file is types and one pure function. The file-backed adapter is
  * src/store/artifacts-fs.ts; the Postgres one is src/store/artifacts-pg.ts,
@@ -110,7 +110,7 @@ export interface ArtifactMap {
    * `undefined`. No error anywhere: [silent success](docs/reusable/silent-success.md).
    *
    * **This is not the whole fix**, and the honest note matters more than the
-   * type. GPT Sol's review of docs/plans/transactional-stage-runner.md: a
+   * type. GPT Sol's review of docs/plans/260827j-transactional-stage-runner.md: a
    * manifest names a *file*, and `article_revisions.raw_bytes` needs the bytes
    * themselves, so a Postgres adapter cannot fill that column from this. What
    * `fetch` eventually returns has to carry provenance **and** payload. That is
@@ -129,7 +129,7 @@ export interface ArtifactMap {
    * The **manifest**, never the bytes: those are content-addressed objects in
    * the `sources` bucket, written through `storeRawSource`, and this is the
    * list saying which of them are this article's. That is deliberately not a
-   * folder per article — docs/plans/hosting-the-articles-images.md § Where the
+   * folder per article — docs/plans/260829b-hosting-the-articles-images.md § Where the
    * bytes go.
    */
   assets: Assets;
@@ -255,7 +255,7 @@ export const SHAPE: Record<ArtifactKind, ShapeCheck> = {
      `quotes` directly above and from `sketch` below, so it is worth saying why.
      Most articles are not chronological: an essay about a concept may hold two
      incidental dates and narrate nothing, and a timeline with no events is the
-     correct, expected answer for it (docs/plans/timeline-mode.md § Most
+     correct, expected answer for it (docs/plans/260831i-timeline-mode.md § Most
      articles are not chronological). `buildTimeline` writes one rather than
      throwing, and the panel has a sentence for it. Refusing it here would make
      the commonest correct outcome unstorable, so the step would re-run and pay
@@ -549,7 +549,7 @@ export const NO_INPUT_HASH = "unstamped";
  *
  * Every field is optional and that is the honest shape, not a convenience:
  * `tree.json` and `arc.json` carry no `sourceHash` at all (verified — see
- * docs/plans/postgres-storage-implementation.md § Staleness stays computable),
+ * docs/plans/260826e-postgres-storage-implementation.md § Staleness stays computable),
  * so a stamp read off an arc can only ever answer two of the three questions.
  * Pretending otherwise by giving the field a default would make a stale arc
  * report itself current, which is exactly the
@@ -581,7 +581,7 @@ export interface StepStamp {
    *
    * Harmless only while the pipeline's artefact reads answer `null` and the
    * stage re-runs regardless — which is what made it invisible.
-   * docs/plans/finish-the-database-move.md § stage 1.
+   * docs/plans/260831b-finish-the-database-move.md § stage 1.
    */
   inputHash?: string;
   /**
@@ -874,7 +874,7 @@ export interface ArtifactStore {
    * one of them with a perfectly valid new one and then dies leaves every path
    * present, parsing, and describing two different generations — and `has`
    * cannot tell, because each artefact is individually fine. A review found
-   * exactly that (docs/plans/postgres-storage-implementation.md § What the
+   * exactly that (docs/plans/260826e-postgres-storage-implementation.md § What the
    * review of the *built* seam found).
    *
    * So the store records the *attempt*, not just the output. A marker that is
@@ -892,7 +892,7 @@ export interface ArtifactStore {
    * second's*, the second then dies half-way through its writes, and the step
    * reports done holding two generations with no marker to say so. Ownership is
    * what closes that. It is the same token
-   * `docs/plans/postgres-migration.md#the-traps` fences the Postgres output
+   * `docs/plans/260825f-postgres-migration.md#the-traps` fences the Postgres output
    * write with, and it should end up being literally the same value.
    *
    * **This is not a lock, and must not be read as one.** It does not stop a

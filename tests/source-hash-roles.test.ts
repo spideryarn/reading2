@@ -6,7 +6,7 @@
  * vector set and similarity artefact computed *before* footnotes were
  * classified goes on reporting itself current — the article's summary silently
  * written over its own bibliography, with every freshness check agreeing that
- * nothing needs redoing. docs/plans/footnotes.md § Reclassification must
+ * nothing needs redoing. docs/plans/260828o-footnotes.md § Reclassification must
  * invalidate the caches.
  *
  * The second: today's whole corpus carries no roles, and it must not be
@@ -15,7 +15,7 @@
  * string computed from the code before the change**, not a round trip — a round
  * trip is satisfied by any self-consistent algorithm, including a new one.
  *
- * GPT Sol's decision 5 (docs/plans/footnotes-stage345-upfront-sol.md).
+ * GPT Sol's decision 5 (docs/plans/260828o-footnotes-stage345-upfront-sol.md).
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -157,7 +157,7 @@ describe("the classified framing is a framing, not a rarer delimiter", () => {
      with U+0001 on the reasoning that control codepoints do not occur in prose.
      But a block's text is whatever the page said — none of it is ours — so an
      unescaped separator is a collision waiting for a page that contains one.
-     docs/plans/footnotes-stage3-review-sol.md. */
+     docs/plans/260828o-footnotes-stage3-review-sol.md. */
   const NUL = "\u0000";
   const SOH = "\u0001";
 

@@ -22,7 +22,7 @@
  * held open across a thirty-second model call is a transaction held open across
  * a thirty-second model call, whatever else is true about it.
  *
- * docs/plans/delete-the-importer.md § D1. This file is D1a: the shape, and the
+ * docs/plans/260827aa-delete-the-importer.md § D1. This file is D1a: the shape, and the
  * filesystem session, which holds no transaction and says so. The transactional
  * one is D1b, and everything it needs a place for has a place here.
  */
@@ -52,14 +52,14 @@ import type { Job, JobStep, StepName } from "../types.js";
  * pulling the job row into the artefact transaction for a field nothing decides
  * anything on would widen it for nothing. The **terminal** release and finish
  * are a different matter, and that is what these are —
- * docs/plans/delete-the-importer-d1-design-sol.md, finding 1.
+ * docs/plans/260827aa-delete-the-importer-d1-design-sol.md, finding 1.
  */
 export type JobTransition =
   /**
    * The step is done, the job goes on, and **the claim stays here.**
    *
    * The ordinary case, since the coordinator started walking a whole job on one
-   * claim (docs/plans/v1-imports-on-vercel.md § Stage 3). It writes nothing to
+   * claim (docs/plans/260830d-v1-imports-on-vercel.md § Stage 3). It writes nothing to
    * the `jobs` row at all: the step's completion is in `revision_step_runs`,
    * which is the authority for *is this step done*, and the row the card is
    * rendered from catches up a moment later through `noteProgress` — outside
@@ -96,7 +96,7 @@ export type JobTransition =
  * statement earlier — `releaseStepIn` checks job, attempt and status, and says
  * nothing about which draft the job points at. On the commit path that fence is
  * already proved by `writeArtefacts`; through this door it would not be. GPT
- * Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md finding 4.
+ * Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 4.
  */
 export type JobEndTransition = Extract<JobTransition, { kind: "end" }>;
 
@@ -123,7 +123,7 @@ export type JobSettlingTransition = Exclude<JobTransition, { kind: "keep" }>;
  * while the release failed separately, which is the exact fault the whole seam
  * exists to remove. It calls `releaseStepIn(tx, …)` and `finishIn(tx, …)`
  * instead. GPT Sol, 2026-08-29,
- * docs/plans/delete-the-importer-d1b-design-sol.md critical 2.
+ * docs/plans/260827aa-delete-the-importer-d1b-design-sol.md critical 2.
  */
 export type JobSettles = Pick<JobStore, "releaseStep" | "finish">;
 
@@ -141,7 +141,7 @@ export type JobSettles = Pick<JobStore, "releaseStep" | "finish">;
  *
  * So the two shapes here mirror `JobTransition`'s two, and the mapping between
  * them is not the identity — a `release` can come back as `ended`. GPT Sol,
- * 2026-08-29, docs/plans/delete-the-importer-d1b-design-sol.md critical 1.
+ * 2026-08-29, docs/plans/260827aa-delete-the-importer-d1b-design-sol.md critical 1.
  *
  * `ending` travels with the ending rather than being re-derived by each caller,
  * because src/jobs.ts needs it for the log line and the retention sweep, and a
@@ -324,7 +324,7 @@ export function readsOf(store: ArtifactReads): ArtifactReads {
  * copy**, and is marked done. For `blocks` that commits new stamped HTML beside
  * old block rows: the identity loss this whole migration exists to prevent,
  * arriving through the coordinator meant to prevent it. GPT Sol, 2026-08-29,
- * docs/plans/delete-the-importer-d1-design-sol.md finding 2.
+ * docs/plans/260827aa-delete-the-importer-d1-design-sol.md finding 2.
  *
  * Four rules, and the second is the migration:
  *

@@ -3,7 +3,7 @@
 How the coarse columns became scannable. Four treatments were built side by side as pills you could
 toggle, compared, and cut down to the one described here — there is no control and no URL state
 left, and the pills and their tooltips are gone with them. The plan they were built from, and GPT's
-review of it, is [docs/plans/column-context.md](../plans/column-context.md).
+review of it, is [docs/plans/260825b-column-context.md](../plans/260825b-column-context.md).
 
 ## The problem
 

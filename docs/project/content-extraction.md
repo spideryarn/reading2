@@ -65,7 +65,7 @@ The differences that matter to a reader:
   in the comment above the function.
 
 The whole of it — the model, the prompt, the chunking, the check, and what it cost to decide — is in
-[../plans/pdf-ingestion.md](../plans/pdf-ingestion.md).
+[../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).
 
 **And since 2026-08-27 the PDF need not have been fetched at all.** A reader can upload one, and
 that is a change to stage *1*, not to this stage: the acquisition step verifies the bytes and writes
@@ -124,7 +124,7 @@ notices — the prose around a discarded formula is intact.
 
 The measurements, the five bugs the instrument shipped with, the fifteen committed fixtures, and what
 a model pass would and would not buy are all in
-**[../plans/readability-repair-pass.md](../plans/readability-repair-pass.md)**.
+**[../plans/260827ab-readability-repair-pass.md](../plans/260827ab-readability-repair-pass.md)**.
 
 **And there is a second failure, opposite in direction, found 2026-08-30.** Everything above measures
 what Readability *threw away*. Nothing measured what it *kept* — and Paul Graham's *How to Do Great
@@ -139,7 +139,7 @@ The instrument for it is [`evals/extraction/probe.mts`](../../evals/extraction/p
 this stage **and stage 3's real splitter** and reports what a reader would actually get. What a model
 pass buys, what a four-line regex buys for free, and the two fixtures whose whole article arrives as
 one 67,890-character block are in
-**[../plans/readability-tidy-pass.md](../plans/readability-tidy-pass.md)**.
+**[../plans/260830at-readability-tidy-pass.md](../plans/260830at-readability-tidy-pass.md)**.
 
 ## Where this sits
 

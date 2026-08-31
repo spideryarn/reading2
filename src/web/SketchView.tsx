@@ -191,7 +191,7 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
   const [peek, setPeek] = useState<number | null>(null);
 
   /**
-   * **The zoom, in three refs and a counter**, docs/plans/sketch-zoomable-subsections.md.
+   * **The zoom, in three refs and a counter**, docs/plans/260830ap-sketch-zoomable-subsections.md.
    *
    * `anchor` is the box the reader pressed to get where they are, kept so that
    * going back can be the exact reverse of going in rather than another

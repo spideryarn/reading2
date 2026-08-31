@@ -245,7 +245,7 @@ export function findQuote(
    *   exact string the model was shown. There is no whitespace discrepancy to
    *   forgive, so the forgiving pass buys nothing and costs the guarantee.
    *
-   * Found by GPT Sol's review of docs/plans/quotes-mode.md, 2026-08-31, with a
+   * Found by GPT Sol's review of docs/plans/260831j-quotes-mode.md, 2026-08-31, with a
    * worked case from `data/noema-mythology-of-conscious-ai`.
    *
    * **`validateHits` (src/search.ts) and `validateOccurrences` (src/ideas.ts)

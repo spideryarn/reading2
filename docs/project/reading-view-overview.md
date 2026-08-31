@@ -62,7 +62,7 @@ of compression, down the page for position and across for detail. Read that firs
   Open it for the anchoring, the four store operations and why there are four, and the streaming.
 - **[chat-tools.md](chat-tools.md)** — the six tools chat can reach for and the filter they passed:
   *does it send the reader somewhere they could not otherwise get to?* Chat itself is in the plans:
-  [chat-mode.md](../plans/chat-mode.md), [chat-as-gateway.md](../plans/chat-as-gateway.md).
+  [260826a-chat-mode.md](../plans/260826a-chat-mode.md), [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md).
 - **[review-mode.md](review-mode.md)** — the other direction: the reader says what they took from the
   piece and the model shows them where it comes apart. Four stances, a prompt rewritten after a
   cross-family review said not to ship the first one, and the one mode that cannot be used to avoid

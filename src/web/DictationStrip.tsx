@@ -22,7 +22,7 @@
  * `aria-pressed`. The APG allows either a moving name or a fixed name with the
  * state in `aria-pressed`, and what it does not allow is both at once, which is
  * what was here before. The glyph agrees: a filled square means stop.
- * docs/research/microphone-library-options.md.
+ * docs/research/260827b-microphone-library-options.md.
  *
  * **`MicOff` is the icon for *muted*.** For one round the button wore it during
  * the single moment the microphone was live, which is the glyph for dead on the

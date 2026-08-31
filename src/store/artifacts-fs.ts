@@ -11,7 +11,7 @@
  * quietly isn't where something looked.
  *
  * See docs/project/database.md for the layout itself and
- * docs/plans/postgres-storage-implementation.md § Step 11 for why the seam is
+ * docs/plans/260826e-postgres-storage-implementation.md § Step 11 for why the seam is
  * shaped this way.
  *
  * ## The two things that are easy to get wrong here
@@ -141,7 +141,7 @@ export const PATHS: {
   },
   /* Beside the article, not in a folder of its own: the bytes are
      content-addressed objects in the `sources` bucket and this is only the list
-     saying which of them belong here. docs/plans/hosting-the-articles-images.md. */
+     saying which of them belong here. docs/plans/260829b-hosting-the-articles-images.md. */
   assets: {
     assets: (at) => path.join(at.dir, "assets.json"),
   },
@@ -403,7 +403,7 @@ async function readOne(
  */
 async function writeAtomic(file: string, body: string): Promise<void> {
   /* **The directory, first.** `write` had no production caller until landing D
-     of docs/plans/transactional-stage-runner.md, and every stage `mkdir`s for
+     of docs/plans/260827j-transactional-stage-runner.md, and every stage `mkdir`s for
      itself before its own `writeFile` — src/fetch.ts and src/extract.ts both do.
      So the one method that has to own this is the one that never had to prove
      it could, and writing the first artefact of a new article through the seam
@@ -434,7 +434,7 @@ function serialise(kind: ArtifactKind, value: unknown): string {
  * because the alternative is read-modify-write and this has to stay correct
  * once two processes can be advancing the same article — which is exactly what
  * the browser-driven advance endpoint makes possible
- * (docs/plans/job-queue-rethink.md).
+ * (docs/plans/260826q-job-queue-rethink.md).
  *
  * Under `data/<slug>/` rather than somewhere central so that deleting an
  * article deletes its markers with it. It is not an artefact and has no home in
@@ -680,7 +680,7 @@ export const fsSourceStore: SourceStore = {
     /* **By content address, not `path.join(dir, manifest.file)`.** Since
        2026-08-31 stage 1 leaves nothing on disk: it puts the document in the
        content-addressed `sources` bucket and returns the manifest that names
-       it (docs/plans/finish-the-database-move.md § Stage 2c). So a PDF fetched
+       it (docs/plans/260831b-finish-the-database-move.md § Stage 2c). So a PDF fetched
        after that has no `raw.pdf` beside its manifest and the old read
        404'd — a route quietly failing for new articles while going on working
        for the ones a developer already had, which is the worst way for it to

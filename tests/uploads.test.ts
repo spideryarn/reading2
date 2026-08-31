@@ -3,7 +3,7 @@
  *
  * Worth testing even though the upload path behind it is not built, because
  * this module is the half that will be shared with the server when it is
- * (docs/plans/pdf-upload-and-storage.md), and a browser and a server
+ * (docs/plans/260826u-pdf-upload-and-storage.md), and a browser and a server
  * disagreeing about what counts as a PDF is a bug nobody sees until a file is
  * accepted in one place and refused in the other.
  *

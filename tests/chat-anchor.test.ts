@@ -1,5 +1,5 @@
 /**
- * A conversation tied to a passage — docs/plans/chat-as-gateway.md.
+ * A conversation tied to a passage — docs/plans/260826ab-chat-as-gateway.md.
  *
  * Three legal anchor shapes and one that must not exist:
  *
@@ -407,7 +407,7 @@ when("the anchor, stored", () => {
 
       /* The artefacts through the production write path, the conversation
          seeded beside them — `db:import` did both and is being deleted
-         (docs/plans/delete-the-importer.md § C7). Only the chat is needed here:
+         (docs/plans/260827aa-delete-the-importer.md § C7). Only the chat is needed here:
          seeding state this test never looks at would be slower and no more
          honest. */
       await loadArticleIntoPg(slug);

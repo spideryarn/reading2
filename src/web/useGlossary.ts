@@ -40,7 +40,7 @@ type GlossaryStatus = "loading" | "none" | "ready" | "error";
  * nothing shared. So the panel said *"Looking for a glossary…"* while the list
  * it was looking for was on screen, underlined, in the prose behind it. On the
  * Postgres store that second request reads most of the article out of the
- * database to compute one boolean. docs/plans/glossary-read-latency.md.
+ * database to compute one boolean. docs/plans/260827am-glossary-read-latency.md.
  *
  * The split itself was never about the fetch. `useGlossary`'s docstring gives
  * the reason and it is still good: that hook also mounts `useJobs`, which polls
@@ -397,7 +397,7 @@ export interface UseGlossary {
    * The article this band is about — carried alongside `hasProfile` because
    * the same question needs it. The profile panel shows the *per-article* half
    * ("why you're reading this one") and links to the page that edits it, and
-   * neither is possible without knowing which article. docs/plans/profile-panel.md.
+   * neither is possible without knowing which article. docs/plans/260830c-profile-panel.md.
    */
   slug: string;
   /** A read failure, or the reason the last request could not be started. */
@@ -445,7 +445,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    * a baseline and does not announce a job that had already finished, so a
    * glossary written in another tab while this band was closed has nothing else
    * to bring it in — the band would show the old list for ever. Raised by a GPT
-   * Sol review of docs/plans/glossary-read-latency.md, which is why removing
+   * Sol review of docs/plans/260827am-glossary-read-latency.md, which is why removing
    * this mount fetch entirely was the wrong fix to the duplicate request.
    *
    * `reload` joins a request already in flight, so opening the band while

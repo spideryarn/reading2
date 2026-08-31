@@ -33,7 +33,7 @@
  *
  * Because persisting vectors is somebody else's decision. It needs pgvector, a
  * migration, a re-embed-on-change rule and a place in the pipeline, and all of
- * that is the substance of docs/plans/semantic-search.md. A diagram toggle
+ * that is the substance of docs/plans/260826n-semantic-search.md. A diagram toggle
  * wanting a cache is not a good reason to settle it early, and a memory cache is
  * the version that can be deleted in one line when that plan lands.
  *

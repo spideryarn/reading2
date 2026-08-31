@@ -27,7 +27,7 @@
  *
  * ## The rule
  *
- * From docs/plans/error-boundary.md, which is GPT Sol's:
+ * From docs/plans/260826p-error-boundary.md, which is GPT Sol's:
  *
  * > No arbitrary `Error`, and no arbitrary string, may cross an HTTP, SSE, log,
  * > or persisted-error boundary.
@@ -41,7 +41,7 @@
  *
  * The narrow version — detect `DrizzleQueryError`, translate that, pass the
  * rest through — is the one that keeps needing a fifth round. It is a list, and
- * the whole history in docs/plans/error-boundary.md is of lists that were
+ * the whole history in docs/plans/260826p-error-boundary.md is of lists that were
  * complete when they were written. A store that one day throws
  * `new Error(\`bad row \${JSON.stringify(row)}\`)` is not on anybody's list.
  *
@@ -113,7 +113,7 @@
  * the last two quote query text.
  *
  * See also: docs/project/logging.md, docs/project/copy.md,
- * docs/plans/error-boundary.md.
+ * docs/plans/260826p-error-boundary.md.
  */
 
 import { ChatConflict } from "../chat.js";
@@ -370,7 +370,7 @@ export function isGuardedStore(store: unknown): string | undefined {
  * Wrapping the object rather than each method is the point. A guard you have to
  * remember to apply is a guard that is missing from the method somebody adds
  * next year, and this migration has a written history of exactly that
- * (docs/plans/simplification-audit.md, Rule 1: *grep the genre, not the list*).
+ * (docs/plans/260826m-simplification-audit.md, Rule 1: *grep the genre, not the list*).
  *
  * The two casts inside are the price of doing it once: the wrapper has to take
  * every method shape in `contracts.ts` at the same time, so it is written

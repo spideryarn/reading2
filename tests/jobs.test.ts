@@ -96,7 +96,7 @@ describe("the pipeline", () => {
   it("accepts `tweets` as a step name, so the button can ask for one", () => {
     // Missing from STEP_ORDER, this is rejected as a bad name and
     // POST /api/jobs { steps: ["tweets"] } never works — see
-    // docs/plans/tweet-thread-page.md#the-one-real-snag-stated-precisely.
+    // docs/plans/260825g-tweet-thread-page.md#the-one-real-snag-stated-precisely.
     expect(isStepName("tweets")).toBe(true);
     expect(STEP_ORDER).toContain("tweets");
   });
@@ -255,7 +255,7 @@ describe("cascadeForce", () => {
        `cascadeForce` only names steps already in the job, so a forced
        `{ steps: ["toc"] }` never reached `arc` even then, and the stale arc that
        resulted lost entries in silence. The stamp is what actually closed that.
-       docs/plans/defer-arc-and-rename-hierarchy.md § 2.1. */
+       docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1. */
     expect(FORCE_ONLY_WHEN_NAMED.has("arc")).toBe(true);
     /* `assets` is in the cascade too, and for a third reason again: it *can*
        check itself — it has a stamp over the blocks hash — but a forced
@@ -333,7 +333,7 @@ describe("what a step counts as done", () => {
     // its output — and the stage after it would then consume the missing half.
     //
     // `toc` went from two files to three when the nav labels became a second
-    // model pass (docs/plans/toc-scaling.md). A tree with no labels.json beside
+    // model pass (docs/plans/260826h-toc-scaling.md). A tree with no labels.json beside
     // it is a half-run step, not a finished one, which is also why src/toc.ts
     // writes tree.json last of the three.
     expect(STEPS.extract.outputs(ctx)).toHaveLength(2);
@@ -371,7 +371,7 @@ describe("sweepStopped", () => {
      mark an interrupted job `error` — which was right while one long-lived
      process was the only thing that could run a job, and became wrong the
      moment `advanceJob` could pick one back up. A closed tab is a pause, not a
-     failure. See docs/plans/ingest-resume.md § 2. */
+     failure. See docs/plans/260826s-ingest-resume.md § 2. */
 
   it("leaves a job the server died under waiting, not failed", () => {
     const j = job("running", [
@@ -495,7 +495,7 @@ describe("parseJobRequest", () => {
    * else's tokens by the megabyte. The box that fed it was deleted on
    * 2026-08-30 — it asked the same question the reader profile already asks,
    * and the profile reaches the same prompt
-   * (docs/plans/steer-becomes-the-profile.md).
+   * (docs/plans/260830o-steer-becomes-the-profile.md).
    *
    * So the field is **ignored, not refused**: a tab open since before the
    * deploy should get its summaries written rather than a 400 about a box it
@@ -890,7 +890,7 @@ describe("running a job", () => {
    * not *run* on one article, because publication is last-writer-wins
    * (src/store/pg-revisions.ts § `publishRevisionIn`), but that is a reason to
    * make the second one **wait**, not to throw it away. The refusal moved to the
-   * claim, where it is a `busy` — docs/plans/several-articles-at-once.md.
+   * claim, where it is a `busy` — docs/plans/260830ar-several-articles-at-once.md.
    *
    * **The half that did not change is the half worth keeping.** Renaming was
    * never the alternative: `{slug, steps}` *names* an article, so stepping aside
@@ -902,8 +902,8 @@ describe("running a job", () => {
      Greg asked for and it is not built yet: it must not ship before late steps
      read the published store, because a job queued behind an ingest claims on
      some other instance and opens `blocks.json` in its own empty scratch
-     directory — docs/plans/several-articles-at-once.md § The prerequisite, and
-     docs/plans/late-steps-read-the-store.md, which is another session's.
+     directory — docs/plans/260830ar-several-articles-at-once.md § The prerequisite, and
+     docs/plans/260830aq-late-steps-read-the-store.md, which is another session's.
      Written and watched red first, so that turning it on is a one-word change
      to something already known to fail for the right reason. */
   it.skip("queues rather than renames when a late step lands on a busy article", async () => {
@@ -1059,8 +1059,8 @@ describe("freeSlug", () => {
    `POST /api/jobs/:id/advance` — one step per request, derived from the
    artefacts.
 
-   The browser-driven half of the queue: docs/plans/job-queue-rethink.md
-   § Decided, and docs/plans/ingest-resume.md for the resume it delivers.
+   The browser-driven half of the queue: docs/plans/260826q-job-queue-rethink.md
+   § Decided, and docs/plans/260826s-ingest-resume.md for the resume it delivers.
 
    These run the real runner, so they are built the same way as the suite above
    — around a slug nothing can be fetched for, so a step that gets as far as the
@@ -1169,7 +1169,7 @@ describe("advancing a job one step at a time", () => {
      * again — and two tabs alternating make that a loop. One claim now walks the
      * whole job, inside one invocation, and what bounds it is the claimant's own
      * deadline (`LEASE_MS`) plus `STEP_BUDGET_MS` before each step.
-     * docs/plans/v1-imports-on-vercel.md § Stage 3.
+     * docs/plans/260830d-v1-imports-on-vercel.md § Stage 3.
      */
     const slug = "test-advance-one-step";
     const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
@@ -1229,7 +1229,7 @@ describe("advancing a job one step at a time", () => {
   it("turns the second of two simultaneous callers away rather than running twice", async () => {
     /* Two tabs. Both may ask; one must win. Running the step twice would have
        two runners writing one article's files, which is the fault this whole
-       design is shaped around — docs/plans/job-queue-rethink.md. */
+       design is shaped around — docs/plans/260826q-job-queue-rethink.md. */
     const slug = "test-advance-concurrent";
     const queued = await enqueue({ slug, steps: ["fetch", "extract"] });
     await settle(queued.id);

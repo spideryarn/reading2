@@ -1,6 +1,6 @@
 /**
  * A throwaway page for trying live conversation mode in a real browser.
- * docs/plans/live-conversation.md; the hook is ./live/useLiveConversation.ts.
+ * docs/plans/260831g-live-conversation.md; the hook is ./live/useLiveConversation.ts.
  *
  * Nothing in the app links here and it is not in the router. It talks to
  * `scripts/live-spike.ts` on 127.0.0.1:5399, which has to be running.

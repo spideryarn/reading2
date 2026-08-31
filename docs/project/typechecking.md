@@ -167,7 +167,7 @@ summary lines.
 owned by another session. It had been true when the command was run; a one-line edit afterwards — made
 to satisfy a *different* gate, `tests/fixture-ids.test.ts` — replaced an object literal and dropped a
 required field. Every check run after that edit was a test run, and **vitest does not typecheck**, so
-186 green tests said nothing about the red gate. docs/plans/delete-the-importer.md § *And a green
+186 green tests said nothing about the red gate. docs/plans/260827aa-delete-the-importer.md § *And a green
 report over a red gate* has the whole reconstruction.
 
 > **The gate must be the last thing you run before you report, not the last thing you remember

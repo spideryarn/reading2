@@ -1,5 +1,5 @@
 /**
- * The box a selection opens — see docs/plans/comments-and-bookmarks.md.
+ * The box a selection opens — see docs/plans/260828a-comments-and-bookmarks.md.
  *
  * Select a sentence and this appears over the article: the words you chose, a
  * place to say something about them, and a tick-box if you also want the model

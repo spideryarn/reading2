@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
  * Characterisation tests for `retry` and `edit` in useChat.ts — acceptance net
- * for docs/plans/chat-operation-model.md's stage 2.
+ * for docs/plans/260828v-chat-operation-model.md's stage 2.
  *
  * Two items from the acceptance list
- * (docs/plans/chat-operation-model-acceptance.md) had nothing pinning them:
+ * (docs/plans/260828aa-chat-operation-model-acceptance.md) had nothing pinning them:
  *
  * - `retry` is called in tests/chat-edit-guard.test.ts and
  *   tests/chat-error-scope.test.ts, but both only look at the POST body

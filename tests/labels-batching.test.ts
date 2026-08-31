@@ -492,7 +492,7 @@ describe("parseLabels", () => {
        asked for 58 labels and got 57, missing 4", which reads as an
        inconsistency — 58 minus 57 is one, not four — and sent an investigation
        after arithmetic that was correct all along. "4" was the paragraph
-       number. docs/plans/faster-ingest-and-concurrency.md § Stage 1b. */
+       number. docs/plans/260830am-faster-ingest-and-concurrency.md § Stage 1b. */
     const { tree: t, blocks: b } = fixture(1, 6);
     const one = planBatches(t, b)[0]!;
     const short = JSON.stringify({
@@ -541,7 +541,7 @@ describe("parseLabels", () => {
     // comply: on the two committed articles, 9 of 36 and 3 of 9 heading labels
     // differed from their block — curly apostrophes flattened, authored
     // numbering dropped. The apostrophe half is the same failure as
-    // docs/postmortems/toc-max-tokens.md. A heading's label is knowable without
+    // docs/postmortems/260826a-toc-max-tokens.md. A heading's label is knowable without
     // a model, so it is taken rather than requested.
     const heading = { ...block(0), tag: "h2", text: "2: Claude’s core values" };
     const withHeading = [heading, ...Array.from({ length: 5 }, (_, i) => block(i + 1))];
@@ -962,7 +962,7 @@ describe("batchFingerprint", () => {
   /**
    * **Every real fingerprint is a key the checkpoint store would accept.**
    *
-   * `docs/plans/delete-the-importer.md` § B3 moves this checkpoint into a
+   * `docs/plans/260827aa-delete-the-importer.md` § B3 moves this checkpoint into a
    * `checkpoints` table whose `key` column carries a CHECK constraint,
    * `^[a-z0-9][a-z0-9_-]{0,127}$` — narrower than "any string", because the
    * filesystem adapter turns the key into a file name and macOS is

@@ -10,7 +10,7 @@
  * enough window got a 13rem version carrying part labels in the bands and a
  * header strip naming the current L1 and L2; Greg took that form out, so the
  * rail is always the 12px strip of bands, ticks and marks — halved from 24px
- * on 2026-08-28 (docs/plans/spine-rail.md). What a band is
+ * on 2026-08-28 (docs/plans/260828ay-spine-rail.md). What a band is
  * lives in its hover card, which is where a proportional rail always had to put
  * it — most bands were too thin for a label even at 13rem.
  *
@@ -313,7 +313,7 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
    * input feeds this one value now — a mouse through hover, a keyboard through
    * focus, a finger through the click handler — which is exactly why one shared
    * piece of state serving fifty triggers was able to take the hover cards away
-   * for a day (docs/postmortems/spine-hover-cards.md). `byTouch` is the part
+   * for a day (docs/postmortems/260828g-spine-hover-cards.md). `byTouch` is the part
    * that is still about fingers.
    *
    * **State on this component is not free** — performance.md is largely about
@@ -745,7 +745,7 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
                  one. Both are correct against an uncontrolled tooltip, which
                  clears only its own `useState`; against one shared `armed` they
                  clear the card that just opened.
-                 docs/postmortems/spine-hover-cards.md. */
+                 docs/postmortems/260828g-spine-hover-cards.md. */
               onOpenChange={(v: boolean) =>
                 setArmed((prev) =>
                   v
@@ -877,7 +877,7 @@ const MAX_CHILDREN = 5;
  * text looks like a design, and no test rendered one — the fixtures give their
  * entries `children: []`. GPT Sol found the premise false while reviewing the
  * plan that was about to build a second blank line under each of them;
- * docs/plans/spine-rail.md § 3.
+ * docs/plans/260828ay-spine-rail.md § 3.
  *
  * `navLabel` is allowed here for the reason it is allowed anywhere: this is
  * navigation chrome, and the spine is one of the two places the node shape

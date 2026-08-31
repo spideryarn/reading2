@@ -8,7 +8,7 @@
  * which of them deserve to exist. Wiring them into the reading view first would
  * mean arguing about the URL state, the band, and the layer budget for every one,
  * including the fifteen we throw away. The ideas, their sources and the three
- * disagreements between them: docs/research/decorated-mode-ideas.md.
+ * disagreements between them: docs/research/260828c-decorated-mode-ideas.md.
  *
  * WHERE THE DECORATIONS COME FROM. Everything on the page is real: the article is
  * the stored blocks, and every layer is driven by an artefact the pipeline already

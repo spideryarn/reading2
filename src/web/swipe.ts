@@ -24,7 +24,7 @@
  * line, reversing, flinging. The stepping lives beside it, in the columns whose
  * job is navigation, and you switch between them by moving your hand a couple
  * of centimetres. See docs/project/touch.md and
- * docs/research/ipad-touch-scrolling.md for how that was arrived at.
+ * docs/research/260826f-ipad-touch-scrolling.md for how that was arrived at.
  *
  * **Why a gesture and not `scroll-snap`.** Snapping the document looked much
  * cheaper, and on iOS it very nearly comes free: an open WebKit bug means

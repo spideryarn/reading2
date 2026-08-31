@@ -11,7 +11,7 @@
  * Until 2026-08-27 there was one, and all four fingerprint reads went through
  * it: every block row including `html` and the generated `fts` vector, roughly
  * 370 KB on a 360-block article, put through an 80–180ms jsdom parse, to
- * compute one boolean. docs/plans/glossary-read-latency.md.
+ * compute one boolean. docs/plans/260827am-glossary-read-latency.md.
  *
  * ## Why this reads the generated SQL
  *

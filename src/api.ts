@@ -160,7 +160,7 @@ const FIXTURE_SLUG = "example";
  * was answered with the fixture's prose under the reader's name — an article
  * that does not exist, and an article whose blocks are written but whose tree
  * is not. The second is the one that stopped being hypothetical: the ToC is
- * moving off the critical path (docs/plans/faster-ingest-and-concurrency.md),
+ * moving off the critical path (docs/plans/260830am-faster-ingest-and-concurrency.md),
  * so "blocks yes, tree no" is a normal few seconds of every ingest, and a
  * reader opening their own article early would have read somebody else's.
  *
@@ -171,7 +171,7 @@ const FIXTURE_SLUG = "example";
  * looked at). A 404 is the answer that can be told apart.
  *
  * The fixture itself stays: it is what a fresh clone with no `data/` opens, six
- * test files read it as static data, and docs/plans/postgres-migration.md keeps
+ * test files read it as static data, and docs/plans/260825f-postgres-migration.md keeps
  * it. Only its reach changes.
  */
 function candidateDirs(slug: string): string[] {
@@ -310,7 +310,7 @@ export async function loadArticle(slug: string): Promise<Article> {
  *
  * The read half of stage 5c. `src/tweets.ts` writes `tweets.json`; nothing
  * could get it back out until this existed, which made the generator a write to
- * nowhere — see docs/plans/tweet-thread-page.md.
+ * nowhere — see docs/plans/260825g-tweet-thread-page.md.
  *
  * **`articleDir`, not a directory of its own.** The thread has to come from the
  * same place the article does, or `stale` is computed against somebody else's
@@ -622,7 +622,7 @@ export async function loadSketch(slug: string): Promise<SketchFound> {
  * can open an article that has none, ask for one, and need to collect it when
  * the job finishes. Refetching `/api/article/:slug` for that would re-read every
  * block and the whole tree to pick up one small object — the cost
- * docs/plans/glossary-read-latency.md exists to describe. Modelled on
+ * docs/plans/260827am-glossary-read-latency.md exists to describe. Modelled on
  * `loadIdeas` directly above; the differences are noted where they occur.
  */
 export async function loadArc(slug: string): Promise<ArcFound> {
@@ -745,7 +745,7 @@ export async function deleteGlossary(slug: string): Promise<{ deleted: boolean }
    of the pipeline's stages have actually run for this article.
 
    Kept behind this seam like everything else here, because a directory walk is
-   exactly the sort of thing that has to be. See docs/plans/metadata-page.md. */
+   exactly the sort of thing that has to be. See docs/plans/260825e-metadata-page.md. */
 
 /**
  * Is this file there — **and only that question**.
@@ -905,7 +905,7 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
      endpoint already walks the article's directory, so both are one more read
      rather than a second endpoint. `profile` is global (`data/reader.json`)
      and `purpose` is this article's own (`shelf.json`) — see
-     docs/plans/reader-profile.md. Both default to `null` via
+     docs/plans/260826t-reader-profile.md. Both default to `null` via
      `normaliseProfileText`, which is what `loadReaderProfile` already
      returns and what an absent `shelf.purpose` collapses to here. */
   const [profile, shelf] = await Promise.all([loadReaderProfile(), loadShelf(slug)]);
@@ -1018,7 +1018,7 @@ export function describeArticle(input: {
    * `excerpt` rung of the blurb. It is now one derivation reached from two
    * moments: the filesystem store calls `deriveLibraryScalars` on the artefacts
    * it has just read, and the Postgres store reads the columns the same
-   * function wrote at publish. docs/plans/library-read-latency.md § 2.
+   * function wrote at publish. docs/plans/260828c-library-read-latency.md § 2.
    *
    * That mattered for latency as well as for correctness: on the Postgres side,
    * deriving here meant reading every block row and the whole tree of every

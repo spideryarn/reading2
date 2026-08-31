@@ -22,7 +22,7 @@ export const MODES = [
      that had lasted as long as the list — `toc` was simultaneously this mode and
      the *pipeline step* that builds tree.json (src/pipeline.ts § STEP_ORDER), so
      one word meant two things in one repo. The step keeps the name; the mode
-     gives it up. docs/plans/defer-arc-and-rename-hierarchy.md § 3. */
+     gives it up. docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 3. */
   "hierarchy",
   "chat",
   "glossary",
@@ -33,7 +33,7 @@ export const MODES = [
   /* Review is the seventh, 2026-08-27, and the first mode whose content comes
      from the reader rather than from the article: they say what they took from
      it and the model helps them find where that comes apart. It cost this list
-     one word, like the five before it. docs/plans/review-mode.md.
+     one word, like the five before it. docs/plans/260827ah-review-mode.md.
 
      There is deliberately no `?stance=` beside `?thread=` below. The stance
      governs the next answer and changes nothing on screen, which is the rule
@@ -47,7 +47,7 @@ export const MODES = [
      columns' context panels — rather than a new question. That is deliberate
      and temporary: Greg asked for it as an eighth mode "for now, so that it
      doesn't mess with what we have, and so that I can go back and forth to
-     compare". docs/plans/outline-mode.md § Where it sits, and what happens if
+     compare". docs/plans/260828aw-outline-mode.md § Where it sits, and what happens if
      it wins. */
   "outline",
   /* The tenth, 2026-08-31: the lines worth keeping, in the article's own words.
@@ -69,7 +69,7 @@ export const MODES = [
      It is also the first mode whose content is mostly about **how sure the
      article is**: ten of the test article's twenty-six rows carry no date at
      all, and drawing those like the dated ones would throw away the only thing
-     the piece actually said. docs/plans/timeline-mode.md. */
+     the piece actually said. docs/plans/260831i-timeline-mode.md. */
   "timeline",
 ] as const;
 export type Mode = (typeof MODES)[number];

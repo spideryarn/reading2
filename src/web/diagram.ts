@@ -33,7 +33,7 @@
  * GPT-5.6 Luna was sent to survey the field first, per
  * docs/reusable/third-party-library-selection.md — d3-hierarchy, @visx/hierarchy,
  * @xyflow/react, markmap, Mermaid, cytoscape, elkjs, dagre, G6, Sigma, nivo,
- * react-d3-tree. What it said is summarised in docs/plans/diagram-mode.md —
+ * react-d3-tree. What it said is summarised in docs/plans/260826ah-diagram-mode.md —
  * the answer itself is 38KB of npm metadata with a shelf life of weeks and is
  * deliberately not in git. Its verdict, and ours after checking it:
  *

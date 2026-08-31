@@ -18,7 +18,7 @@
  * they did not depend on the reader's fonts. Plain words need none of that:
  * they are already the sentence. Anyone adding the marks later is adding an
  * enhancement over this, not replacing it.
- * docs/plans/timeline-mode.md § Appendix: the visual design, deferred.
+ * docs/plans/260831i-timeline-mode.md § Appendix: the visual design, deferred.
  *
  * ## The four states are the design, and collapsing any two loses the article
  *
@@ -81,7 +81,7 @@ import { useRenderCount } from "./perf.js";
  * panel overclaiming and the reader cannot tell from the rows alone.
  *
  * A constant with its reasoning beside it rather than a `< 3` inline, which is
- * what docs/plans/timeline-mode.md § Most articles are not chronological asks
+ * what docs/plans/260831i-timeline-mode.md § Most articles are not chronological asks
  * for.
  */
 export const A_CHRONOLOGY = 3;
@@ -97,7 +97,7 @@ export const A_CHRONOLOGY = 3;
  * timezone: `new Date("2026-05-12")` is midnight **UTC**, so west of Greenwich
  * it formats as 11 May. Every date here is an ISO string, split on its hyphens
  * and read as integers, and never becomes a `Date`.
- * docs/plans/timeline-mode.md § The traps, item 3.
+ * docs/plans/260831i-timeline-mode.md § The traps, item 3.
  */
 const MONTHS = [
   "",

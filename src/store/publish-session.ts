@@ -7,7 +7,7 @@
  * > `revisions.ts`, the fixture loader and tests — never from `jobs.ts` or
  * > `pipeline.ts`. Publication today is a human running `npm run db:import`.
  * >
- * > — docs/plans/v1-imports-on-vercel.md § What is broken, measured
+ * > — docs/plans/260830d-v1-imports-on-vercel.md § What is broken, measured
  *
  * That is the last thing standing between a working ingest and today. The
  * pipeline stages run, write their files, the job goes `done`, and
@@ -21,10 +21,10 @@
  * an **empty** unconverted set, so a step that returns no `parts` is refused by
  * name — and all ten steps are still on `LEGACY_UNCONVERTED_STEPS`, writing
  * their own files inside `run`. It becomes the publish path when D3–D5 convert
- * the stages (docs/plans/delete-the-importer.md).
+ * the stages (docs/plans/260827aa-delete-the-importer.md).
  *
  * So this is the vertical slice GPT Sol asked for — *"a small vertical slice of
- * D1b, not the whole artefact conversion"* (docs/plans/v1-imports-review-sol.md
+ * D1b, not the whole artefact conversion"* (docs/plans/260830a-v1-imports-review-sol.md
  * critical 1). The stages go on writing files; when the job is over, the files
  * are copied through `ArtifactStore` into a draft and published. The copy is
  * `copyArtefacts` (src/store/copy-artefacts.ts), the same call
@@ -254,7 +254,7 @@ export function publishingSession(
          (src/store/pg-jobs.ts). Once they have, the sweeper reclaims it on age.
          So the cost of skipping is a draft that lives until the lease lapses,
          not one that lives for ever. GPT Sol, 2026-08-30,
-         docs/plans/v1-publish-finalizer-review-sol.md design answer 3. */
+         docs/plans/260830ad-v1-publish-finalizer-review-sol.md design answer 3. */
       if (!(err instanceof NotTheLiveAttempt) && !(err instanceof StaleAttemptError)) {
         await failRevision({
           slug,
@@ -268,7 +268,7 @@ export function publishingSession(
              title *is* the article's, so interpolating the message put article
              content in a log line, which docs/project/logging.md forbids
              outright. GPT Sol, 2026-08-30,
-             docs/plans/v1-publish-finalizer-review-sol.md critical 1.
+             docs/plans/260830ad-v1-publish-finalizer-review-sol.md critical 1.
 
              Nothing is lost by it: the error itself is rethrown two lines down
              and `guardDbStore` logs its SQLSTATE, table and constraint on the
@@ -351,7 +351,7 @@ export function publishingSession(
      * lease lapses. Every retry until then is told `busy`, and the eventual
      * `failExpired` records a generic interruption rather than what really
      * happened. GPT Sol, 2026-08-30,
-     * docs/plans/v1-publish-finalizer-review-sol.md, the High finding.
+     * docs/plans/260830ad-v1-publish-finalizer-review-sol.md, the High finding.
      *
      * So the ending is made here instead, through the inner session — which is
      * the same statement `endJob` would have made — and *then* the error is

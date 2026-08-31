@@ -34,7 +34,7 @@
  * in this repo — the free-text box above *is* the single global setting its own
  * doc recommended instead); **typography settings** (*"a reader who wants
  * bigger text has a browser zoom"*); **a difficulty score**, for the reason
- * docs/plans/metadata-page.md gives; and **streaks or anything that counts at you**, which
+ * docs/plans/260825e-metadata-page.md gives; and **streaks or anything that counts at you**, which
  * the original's homepage did not have either. This is a reading tool.
  */
 import { useEffect, useState } from "react";

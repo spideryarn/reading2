@@ -13,7 +13,7 @@
  * matches words in them. Under Postgres the same question is one `SELECT`
  * against a `tsvector` (src/store/pg-search.ts); this is the answer for the
  * store we actually run today, and it is deleted at step 13 of
- * docs/plans/postgres-storage-implementation.md along with the rest of the
+ * docs/plans/260826e-postgres-storage-implementation.md along with the rest of the
  * filesystem adapter.
  *
  * **It is a stand-in and it is allowed to be crude.** There are four articles.

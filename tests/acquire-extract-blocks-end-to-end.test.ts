@@ -8,7 +8,7 @@
  * its own; a pair that disagrees about what crosses between them passes on its
  * own too.
  *
- * It exists because stage 2 of docs/plans/finish-the-database-move.md changed
+ * It exists because stage 2 of docs/plans/260831b-finish-the-database-move.md changed
  * what crosses **every** one of those boundaries on the same day — the bytes
  * moved from `data/<slug>/raw.html` to a content-addressed object, the article
  * moved from a file to a return value, and the blocks moved from a file to a
@@ -206,7 +206,7 @@ describe("acquiring, extracting and splitting one article in one sequence", () =
    * place the old ids can come from is the baseline `previousBlocksFrom` reads
    * out of the store, so the assertion has something to be about.
    *
-   * This is also fault 2 of docs/plans/finish-the-database-move.md in miniature:
+   * This is also fault 2 of docs/plans/260831b-finish-the-database-move.md in miniature:
    * in Postgres `extractedHtml` is a separate column that never carries ids, so
    * *every* run is this run, and a baseline that silently answers "first ingest"
    * mints a fresh id for every paragraph and reports success.

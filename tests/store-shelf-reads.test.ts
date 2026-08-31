@@ -15,7 +15,7 @@
  * ```
  *
  * All of it to print a title, a date, a blurb, four numbers and four ticks —
- * every one of which was already a column. docs/plans/library-read-latency.md.
+ * every one of which was already a column. docs/plans/260828c-library-read-latency.md.
  *
  * ## What this file pins, and what it deliberately cannot
  *

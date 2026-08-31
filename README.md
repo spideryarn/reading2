@@ -59,14 +59,14 @@ way, defined from the piece itself ([glossary.md](docs/project/glossary.md)). Se
 or by what a passage says, hits marked in the prose ([search.md](docs/project/search.md)). Summaries
 of the whole piece or any part, at a length you choose ([summaries.md](docs/project/summaries.md)).
 A chat whose every claim carries a block id you can press
-([chat-mode.md](docs/plans/chat-mode.md)). A library of what you have read
+([260826a-chat-mode.md](docs/plans/260826a-chat-mode.md)). A library of what you have read
 ([library.md](docs/project/library.md)).
 
 Chat deserves a flag, because "a chatbot with the article stuffed in the context window" is a named
 anti-goal here ([vision.md § Anti-goals](docs/project/vision.md#anti-goals)). It was built anyway,
 at Greg's request, and the argument that what was built is not the anti-goal — along with an honest
 account of where that argument is weakest — is in
-[chat-mode.md § Say the awkward thing first](docs/plans/chat-mode.md#say-the-awkward-thing-first).
+[260826a-chat-mode.md § Say the awkward thing first](docs/plans/260826a-chat-mode.md#say-the-awkward-thing-first).
 Also not this, ever: "read it in 2 minutes", engagement mechanics, or confident claims with no path
 back to the source.
 

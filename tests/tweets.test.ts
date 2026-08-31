@@ -191,7 +191,7 @@ describe("hashBlocks and isStale", () => {
 
   /* Both red before 2026-08-31, when this compared the blocks alone: the
      sections could be re-cut or the extracted title changed and the thread went on
-     reporting itself current. docs/plans/finish-the-database-move.md § stage 1. */
+     reporting itself current. docs/plans/260831b-finish-the-database-move.md § stage 1. */
   it("says a thread is stale once the sections are re-cut", () => {
     const recut = {
       ...STALE_TREE,
@@ -238,7 +238,7 @@ describe("suggestedLength", () => {
 
 /* ---------------------------------------------------------------------------
    Thread freshness — the difference between a cache and a file that happens to
-   exist, and since D0 (docs/plans/delete-the-importer.md) it is the step's
+   exist, and since D0 (docs/plans/260827aa-delete-the-importer.md) it is the step's
    `stamp` rather than a `threadIsCurrent` of its own. The three comparisons are
    unchanged — the blocks it was written from, the prompt that wrote it, the
    model that ran — but they are now `sameStamp`'s one comparison, so these
@@ -374,7 +374,7 @@ describe("tweets freshness, through the step's stamp", () => {
   /* Both green — wrongly — until 2026-08-31, when this stamp stopped hashing
      the blocks alone. The thread is built from the outline and carries the
      article's name; either could move with every block byte-identical.
-     docs/plans/finish-the-database-move.md § stage 1. */
+     docs/plans/260831b-finish-the-database-move.md § stage 1. */
   it("says not-done once the sections have been re-cut underneath it", async () => {
     const recut = {
       ...STAMP_TREE,

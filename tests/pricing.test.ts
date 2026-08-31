@@ -9,7 +9,7 @@
  * "our function agrees with a bill".
  *
  * The trap those two cases exist to hold shut is in
- * docs/plans/ai-cost-tracking.md § 2 — Anthropic and OpenRouter disagree about
+ * docs/plans/260827q-ai-cost-tracking.md § 2 — Anthropic and OpenRouter disagree about
  * whether "input tokens" includes the cached ones. A single shared cost helper
  * is correct for exactly one of them, and wrong for the other by roughly the
  * size of the cache, which on these calls is 95% of the prompt. If someone

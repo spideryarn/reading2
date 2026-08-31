@@ -103,8 +103,8 @@ I read the committed `a5305a5` implementation, all 21 scorer tests, the producti
 
    The surrounding prose is already drifting:
 
-   - `evals/README.md` and `run.ts` still say roughly 70%, while the corrected research says 88% ([README:189–195](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/README.md:189), [research:317–331](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/research/opening-an-article-before-the-toc.md:317)).
-   - The corrected research says 4/7, but later sections still say 6/9 and 8/10 ([research:514–532](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/research/opening-an-article-before-the-toc.md:514), [research:554–560](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/research/opening-an-article-before-the-toc.md:554)).
+   - `evals/README.md` and `run.ts` still say roughly 70%, while the corrected research says 88% ([README:189–195](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/README.md:189), [research:317–331](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/research/260830a-opening-an-article-before-the-toc.md:317)).
+   - The corrected research says 4/7, but later sections still say 6/9 and 8/10 ([research:514–532](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/research/260830a-opening-an-article-before-the-toc.md:514), [research:554–560](/Users/greg/Dropbox/dev/experim/spideryarn2/docs/research/260830a-opening-an-article-before-the-toc.md:554)).
 
    **Change:** Checkpoint after every call. Preserve raw/generated trees and a manifest containing commit, scorer version, prompt hashes, corpus hashes, resolved arm policy, actual responding model/provider, call order, latency, token/cost fields, errors, and linkage to spend rows. Put the human judgments beside those artifacts.
 

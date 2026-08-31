@@ -604,7 +604,7 @@ when("one owner's article, asked for by another", { timeout: 20_000 }, () => {
    * It used to read *before `fsLocations(slug)`*, because `sendSource` fetched
    * the bytes off the disk itself; it now reads *before
    * `sourceStore.readPdf(slug)`*, because that read went through the store
-   * (docs/plans/finish-the-database-move.md, stage 1). The thing being pinned is
+   * (docs/plans/260831b-finish-the-database-move.md, stage 1). The thing being pinned is
    * unchanged — **authorise, then move bytes** — and it is worth being explicit
    * that this is the same assertion at a new seam rather than a weakened one:
    * the store call is the *only* way this function can now obtain a byte, so

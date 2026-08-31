@@ -11,7 +11,7 @@
  * against our own instruction, whose symptom is a companion spelling out
  * "S P Y A dash K 3 M 9" with no apparent cause and nothing in any log.
  *
- * Found by Fable, 2026-08-31. docs/plans/live-conversation-in-chat.md § 1d.
+ * Found by Fable, 2026-08-31. docs/plans/260831l-live-conversation-in-chat.md § 1d.
  */
 import { describe, expect, it } from "vitest";
 

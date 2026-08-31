@@ -8,7 +8,7 @@
  * wait (labels run concurrently, the arc is deferred — the measured breakdown
  * is in the research doc), and the decisions queued against it (waves, seeding
  * the author's headings, changing model or effort — see
- * docs/research/opening-an-article-before-the-toc.md) need a number to decide
+ * docs/research/260830a-opening-an-article-before-the-toc.md) need a number to decide
  * against. This is the harness for that number. evals/README.md
  * § toc-structure says what each measure is a proxy for.
  *

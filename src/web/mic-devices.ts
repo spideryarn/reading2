@@ -15,7 +15,7 @@
  * recogniser transcribed nothing because there was nothing, and the meter drew
  * a flat line because the line was flat. Both were correct and neither was any
  * use, because nothing on the page said *which* microphone had produced that
- * zero. See docs/plans/microphone-device-and-recording.md for the numbers.
+ * zero. See docs/plans/260827k-microphone-device-and-recording.md for the numbers.
  *
  * So: name the device, and let the reader pick a different one.
  *

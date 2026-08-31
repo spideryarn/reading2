@@ -275,7 +275,7 @@ describe("things the first draft got wrong", () => {
        having selected these words for you* and paints our rail from a
        stranger's document. `data-hit-open` had been forbidden all along, which
        is the asymmetry that gave the gap away. GPT Sol, 2026-08-31, reviewing
-       docs/plans/quotes-mode.md. */
+       docs/plans/260831j-quotes-mode.md. */
     const out = sanitizeHtml(
       `<p><mark class="hit" data-hit="q1" data-hues="3">forged</mark></p>`,
     );

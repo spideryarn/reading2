@@ -18,7 +18,7 @@
  * own** — no sharing, no cross-article list, no server-side ordering. It is a
  * list inside the article's own file, and the article owns it.
  *
- * See docs/plans/chat-mode.md, and docs/project/database.md for what happens to
+ * See docs/plans/260826a-chat-mode.md, and docs/project/database.md for what happens to
  * this file when storage moves to Postgres — the answer is "one table, one row
  * per message", and nothing in this module's interface has to change.
  */
@@ -77,7 +77,7 @@ function serialised<T>(work: () => Promise<T>): Promise<T> {
  * **`ChatThread.kind` is required**, deliberately — an optional field would mean
  * a `?? "chat"` at every read site, and one of those would eventually be missed,
  * which is a review answered with chat's prompt and nothing on screen
- * disagreeing (GPT Sol's review of docs/plans/review-mode.md, finding 5). The
+ * disagreeing (GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 5). The
  * price of "required" is exactly this function, and its twin in
  * src/store/pg-chat.ts. Two places hold the default instead of twenty.
  *
@@ -297,7 +297,7 @@ export function withTurn(
   /* **A thread is one kind for life.** Refused rather than ignored, and refused
      here rather than only in the route, because the route's `inTurnOrder` is a
      per-process convenience and this runs inside the Postgres transaction. See
-     `Turn.kind`, and docs/plans/review-mode.md § `kind` belongs to the thread.
+     `Turn.kind`, and docs/plans/260827ah-review-mode.md § `kind` belongs to the thread.
 
      An *identical* kind passes, so a retried send — the same request arriving
      twice — is harmless rather than a 409 the reader has to understand. Same
@@ -349,7 +349,7 @@ export function withTurn(
        dropped here — that would append a question about passage B to a thread
        the database says is about passage A, with nothing anywhere disagreeing.
        The route refuses it before we are reached. See `answerChat` in
-       src/routes.ts and docs/plans/chat-as-gateway.md § Set once.
+       src/routes.ts and docs/plans/260826ab-chat-as-gateway.md § Set once.
 
        Conditional spread, never `anchor: undefined`: `exactOptionalPropertyTypes`
        is on and the two stores are compared field for field, where an explicit
@@ -439,7 +439,7 @@ export interface SpokenTurn {
  * There is also a concrete obstacle: the Postgres store's `finish` refuses
  * without the attempt token `begin` returned (src/store/pg-chat.ts), so the
  * pair is not two free-function calls. GPT Sol's review of
- * docs/plans/live-conversation-in-chat.md, finding 4.
+ * docs/plans/260831l-live-conversation-in-chat.md, finding 4.
  *
  * ## The rows are ordinary
  *
@@ -639,7 +639,7 @@ export class ChatConflict extends Error {
  * work. Regenerating a turn in the middle leaves every later turn answering a
  * question about words that no longer exist — the conversation reads as a
  * non-sequitur and nothing says why. The products that allow it all pay for it
- * with a message tree and a branch pager; docs/plans/chat-mode.md § What a
+ * with a message tree and a branch pager; docs/plans/260826a-chat-mode.md § What a
  * retry may touch says why we are not buying that for a four-turn conversation
  * in a 400px panel. Retry the last one, or edit the question.
  */
@@ -685,7 +685,7 @@ export function withRetry(
        If it took the reader's current picker instead, moving the picker and
        then pressing retry would silently rewrite the instruction attached to a
        stored turn — a button that says "have another go" changing what was
-       asked. GPT Sol's review of docs/plans/review-mode.md, finding 4. */
+       asked. GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 4. */
     ...(last.stance ? { stance: last.stance } : {}),
   };
   const thread: ChatThread = {
@@ -741,7 +741,7 @@ export async function retryTurn(
  *
  * So the panel warns before it discards — it says how many turns will go — and
  * that warning is the whole safety mechanism. It is deliberately not a modal:
- * see docs/plans/chat-mode.md § Editing a question.
+ * see docs/plans/260826a-chat-mode.md § Editing a question.
  *
  * The old text is not kept either. `editedAt` records only *that* it happened,
  * which is what stops a reader reading an answer that no longer matches the
@@ -800,7 +800,7 @@ export function withEdit(
        `settleThread` before it gets here, so no aborted write can be in flight
        — that path is closed twice over. What is left is the second server on
        the same `data/` directory, which cannot see this one's `streaming` map
-       at all; that is the unfixed problem in docs/plans/chat-mode.md § What was
+       at all; that is the unfixed problem in docs/plans/260826a-chat-mode.md § What was
        deliberately not fixed, and this is one of the few places it is cheap to
        be robust against. Note also that the guarantee is only within one call:
        a discarded id leaves the file, so the *next* mint may hand it back. Ids

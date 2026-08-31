@@ -19,15 +19,15 @@ Why the feature exists and what a gist may and may not be:
 | [`index.html`](../../index.html) + [`src/web/main.tsx`](../../src/web/main.tsx) | Vite entry. `main.tsx` imports **`./tailwind.css`**, not `styles.css` — see below, it matters. It also calls **`enableHistorySync()`**, without which nuqs cannot see our own navigations and router.ts's whole argument is false |
 | [`src/web/App.tsx`](../../src/web/App.tsx) | picks the page from the path, then fetches `/api/article/<slug>` **once for all three of an article's views** — masthead, the granularity controls |
 | [`src/web/router.ts`](../../src/web/router.ts) + [`Link.tsx`](../../src/web/Link.tsx) | `/`, `/read/<slug>`, and its `/metadata` and `/tweets` pages — [library.md](library.md) |
-| [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata`: what the article is, what shape it is, and which pipeline stages have run — [metadata-page.md](../plans/metadata-page.md) |
-| [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) | `/read/<slug>/tweets`: the article as a numbered thread, with the button that writes one and the line that says the thread is out of date — [tweet-thread-page.md](../plans/tweet-thread-page.md) |
+| [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata`: what the article is, what shape it is, and which pipeline stages have run — [260825e-metadata-page.md](../plans/260825e-metadata-page.md) |
+| [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) | `/read/<slug>/tweets`: the article as a numbered thread, with the button that writes one and the line that says the thread is out of date — [260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md) |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage: the shelf of articles — [library.md](library.md) |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) + [`useJobs.ts`](../../src/web/useJobs.ts) | paste a URL, watch the five stages tick over — [ingest-queue.md](ingest-queue.md). The poll is deliberate; the hook's header says why it is not server-sent events. `useJobs` has two ways in: `add(url)` for an ingest, `run({slug, steps})` for a named step on an article already on the shelf — the thread page is the only caller of the second |
 | [`src/web/tree.ts`](../../src/web/tree.ts) | tree → table geometry (`rowSpan` per node range) |
 | [`src/web/TableView.tsx`](../../src/web/TableView.tsx) | the table itself: hover chain, deep links, and the arc column — [granularity-zoom.md § The arc](granularity-zoom.md#the-arc) |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | title, byline, source and counts — everything about the article that does not vary with position. The provenance behind a `▾` used to be here and is now a drawer panel. Beside the title is **one mark saying where the piece came from** — ↗ out to the publisher, or ⬆ meaning it was uploaded and there is nowhere to go back to |
-| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: the five-mode switch, your questions, and the links to the tweets and metadata pages — [bottom-bar.md](../plans/bottom-bar.md). Its buttons are **three** kinds — navigate, open a drawer, switch mode — and the markup says which. The order is Greg's, set by hand; the way home and the dimmed placeholders both left it on 2026-08-26 |
-| [`src/web/HomeLogo.tsx`](../../src/web/HomeLogo.tsx) | the Spideryarn wordmark fixed in the very top-left of the window, and the way home — everywhere except the library, which *is* home. Read its header before resizing anything: the corner is only free because `--spine-w` is wide, and the masthead and controls bar reserve `--logo-w` for it when it is not — [bottom-bar.md § Home left the bar](../plans/bottom-bar.md#home-left-the-bar-and-the-app-got-a-logo) |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar and the drawer that rises out of it: the five-mode switch, your questions, and the links to the tweets and metadata pages — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md). Its buttons are **three** kinds — navigate, open a drawer, switch mode — and the markup says which. The order is Greg's, set by hand; the way home and the dimmed placeholders both left it on 2026-08-26 |
+| [`src/web/HomeLogo.tsx`](../../src/web/HomeLogo.tsx) | the Spideryarn wordmark fixed in the very top-left of the window, and the way home — everywhere except the library, which *is* home. Read its header before resizing anything: the corner is only free because `--spine-w` is wide, and the masthead and controls bar reserve `--logo-w` for it when it is not — [260825c-bottom-bar.md § Home left the bar](../plans/260825c-bottom-bar.md#home-left-the-bar-and-the-app-got-a-logo) |
 | [`src/web/SourceLink.tsx`](../../src/web/SourceLink.tsx) | the way to the reader's own uploaded PDF, and `webSource(meta)` — *does this article have a web address at all?* **A missing address is never evidence of an upload:** for a visitor it may be one `publicSourceUrl` withheld, and even for an owner it may be a lost `meta.json`. Only `meta.source === "pdf"` says "uploaded" |
 | [`src/web/stats.ts`](../../src/web/stats.ts) | word, block, part, section and depth counts, pure — used by the masthead's facts line and the metadata page |
 | [`src/web/Spine.tsx`](../../src/web/Spine.tsx) | the bird's-eye rail down the far left — [granularity-zoom.md](granularity-zoom.md#the-spine-a-birds-eye-rail) |
@@ -41,8 +41,8 @@ Why the feature exists and what a gist may and may not be:
 | [`src/web/selection.ts`](../../src/web/selection.ts) + [`annotate.ts`](../../src/web/annotate.ts) + [`AnnotateDialog.tsx`](../../src/web/AnnotateDialog.tsx) + [`CommentDialog.tsx`](../../src/web/CommentDialog.tsx) | mark a passage, note it, and ask about it if you want — [comments.md](comments.md) |
 | [`src/web/comment-nav.ts`](../../src/web/comment-nav.ts) | comments in reading order, and the panel's prev/next — [comments.md](comments.md#several-at-once) |
 | [`src/web/Cited.tsx`](../../src/web/Cited.tsx) | **model prose with block ids in it**, drawn as chips you can press with the paragraph itself on hover. Shared by chat and the summary panel rather than copied into each — [summaries.md § A summary is a door](summaries.md#a-summary-is-a-door) |
-| [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) + [`useChat.ts`](../../src/web/useChat.ts) | **chat**, in the band between the spine and the prose: threads, the streamed answer, the block-id chips that jump the article, and what a turn can have done to it — copy, retry, edit, **stop** — [chat-mode.md](../plans/chat-mode.md), and [§ What a turn can have done to it](../plans/chat-mode.md#what-a-turn-can-have-done-to-it) for why a stop is a `done` rather than an error |
-| [`src/web/citations.ts`](../../src/web/citations.ts) | the block ids in a model's answer, found and checked against the article — pure, DOM-free, and the piece of chat that carries the contract — [chat-mode.md § The citation contract](../plans/chat-mode.md#the-citation-contract) |
+| [`src/web/ChatPanel.tsx`](../../src/web/ChatPanel.tsx) + [`useChat.ts`](../../src/web/useChat.ts) | **chat**, in the band between the spine and the prose: threads, the streamed answer, the block-id chips that jump the article, and what a turn can have done to it — copy, retry, edit, **stop** — [260826a-chat-mode.md](../plans/260826a-chat-mode.md), and [§ What a turn can have done to it](../plans/260826a-chat-mode.md#what-a-turn-can-have-done-to-it) for why a stop is a `done` rather than an error |
+| [`src/web/citations.ts`](../../src/web/citations.ts) | the block ids in a model's answer, found and checked against the article — pure, DOM-free, and the piece of chat that carries the contract — [260826a-chat-mode.md § The citation contract](../plans/260826a-chat-mode.md#the-citation-contract) |
 | [`src/web/params.ts`](../../src/web/params.ts) | what every URL parameter means — [url-state.md](url-state.md) |
 | [`src/web/position.ts`](../../src/web/position.ts) | reading position → what goes in `?at=`, and the one rule about when the scroll spy may overwrite it |
 | [`src/web/layout.ts`](../../src/web/layout.ts) | which columns fit and how wide — [granularity-zoom.md](granularity-zoom.md#too-many-levels-fit-the-columns-dont-just-scroll-them) — and, since 2026-08-25, how wide the **mode band** is when the middle is something other than the columns |
@@ -60,8 +60,8 @@ too — see [url-state.md](url-state.md) for the full set, for the rule that div
 query, and for why scrolling *replaces* the history entry while toggling a column *pushes* one.
 
 An article has **three pages**, and which one is a third path segment: the reading view itself,
-`/metadata` ([metadata-page.md](../plans/metadata-page.md)) and `/tweets`
-([tweet-thread-page.md](../plans/tweet-thread-page.md)). They share the fetch, the bottom bar and the
+`/metadata` ([260825e-metadata-page.md](../plans/260825e-metadata-page.md)) and `/tweets`
+([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)). They share the fetch, the bottom bar and the
 query string, so moving between them keeps your place and costs no request.
 
 ## The middle is a slot
@@ -90,7 +90,7 @@ in the hierarchy mode and nowhere else, which is what `proseVisible` in
 [`layout.ts`](../../src/web/layout.ts) exists to say once rather than twice.
 
 Chat is the first mode that is not the hierarchy
-([chat-mode.md](../plans/chat-mode.md)). Adding a second — the Glossary in Greg's example — is a
+([260826a-chat-mode.md](../plans/260826a-chat-mode.md)). Adding a second — the Glossary in Greg's example — is a
 value in `MODES`, a component, and a width; it is deliberately not a new negotiation with
 `layout.ts` each time.
 
@@ -101,7 +101,7 @@ value in `MODES`, a component, and a width; it is deliberately not a new negotia
 > — Greg, 2026-08-25
 
 Read that as **adopting shadcn components**, not switching the reading view to shadcn. The plan and
-the full accounting are [shadcn-migration.md](../plans/shadcn-migration.md); this section is
+the full accounting are [260825a-shadcn-migration.md](../plans/260825a-shadcn-migration.md); this section is
 what actually landed and what a future reader would otherwise have to reverse-engineer.
 
 **What shadcn now stands behind:** the granularity pills in [`App.tsx`](../../src/web/App.tsx), a
@@ -120,7 +120,7 @@ flight. What it buys is accessibility we did not have —
 `aria-pressed` on the toggles — and a house style for chrome not yet built.
 
 The masthead's `▾` used to be on this list, over shadcn's `Collapsible`. It went when the article's
-details moved to the bottom drawer ([bottom-bar.md](../plans/bottom-bar.md)), and the drawer that
+details moved to the bottom drawer ([260825c-bottom-bar.md](../plans/260825c-bottom-bar.md)), and the drawer that
 replaced it is hand-written rather than a `Sheet` — worth recording, because a `Sheet` is exactly
 what the migration plan would have predicted here. The reason is the z-index ladder: the drawer has
 to interleave with the spine, the sticky bars, the comment dialog and the tooltip layer at
@@ -662,13 +662,13 @@ loading half already and was missing the failed half.
   not change. And **no jump may change that number while it is travelling**: every path in
   `scroll.ts` that moves the page marks the window it owns, and the bar watcher sits it out — a
   destination is computed once, so chrome that answered to our own scrolling would land every jump
-  44px out. [mobile-reading-view.md](../plans/mobile-reading-view.md).
+  44px out. [260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md).
 - **On a phone the horizontal axis is a switch, not a scroll.** Below 732px `fitView` offers no gist
   columns at all and the prose column *is* the window; a mode band stops taking horizontal room and
   covers the article instead. Both are the same rule — the view would otherwise promise more columns
   than the window has and cut every line of prose mid-word. What a phone loses, and the one thing
   the spine cannot make up for on touch, is in
-  [mobile-reading-view.md](../plans/mobile-reading-view.md).
+  [260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md).
 - **Never substitute generated text for prose silently.** The verbatim column is the author's words;
   a gist stands in for text only where the reader chose that level. See
   [vision.md](vision.md#principles) — "no hidden reformulation".

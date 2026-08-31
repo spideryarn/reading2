@@ -7,7 +7,7 @@
  * the set, and runs every transition twice, because React invokes an updater
  * twice under `StrictMode` and this file's ancestor was bitten by an impure one.
  *
- * See docs/plans/chat-operation-model.md. The shape to keep in mind while
+ * See docs/plans/260828v-chat-operation-model.md. The shape to keep in mind while
  * reading:
  *
  * - an **input** registers an operation, and cannot be gated, because the

@@ -25,7 +25,7 @@
  * ## What is deliberately NOT here
  *
  * A fallback to the filesystem. Nothing in this file may catch an error and
- * call into src/store/fs.ts — see docs/plans/postgres-storage-implementation.md
+ * call into src/store/fs.ts — see docs/plans/260826e-postgres-storage-implementation.md
  * § Rules. It would hide exactly the divergence the parity test is looking for.
  */
 
@@ -244,7 +244,7 @@ export function onTheShelf() {
  * `stamped_html` — the whole article, twice — plus the tree, the labels and the
  * ideas, in order to return a 10 KB glossary. About 508 KB of
  * it on a 360-block article, measured from the artefacts on disk that became
- * those columns. GPT Sol's review of docs/plans/glossary-read-latency.md said a
+ * those columns. GPT Sol's review of docs/plans/260827am-glossary-read-latency.md said a
  * shared *narrow* set would still be the wrong shape, and it was right: the fix
  * is a projection per use.
  *
@@ -261,7 +261,7 @@ export function onTheShelf() {
  * to be in the map because tests/store-revision-columns.test.ts asserts that a
  * query's projection is exactly what the policy grants it, and one axis cannot
  * say that the library may look at `glossary` but not read it.
- * docs/plans/library-read-latency.md § 3.
+ * docs/plans/260828c-library-read-latency.md § 3.
  */
 
 /** By its value, or only by whether it is null. */
@@ -437,7 +437,7 @@ const REVISION_READ_POLICY: Record<
 
      **The library takes all four by presence**, which is the whole of what a
      card shows: four ticks in a tooltip. Reading the documents to compare them
-     with null was the second half of docs/plans/library-read-latency.md. */
+     with null was the second half of docs/plans/260828c-library-read-latency.md. */
   tweets: { metadata: "value", tweets: "value", library: "presence" },
   glossary: { metadata: "value", glossary: "value", library: "presence" },
   /* Its own reader and the metadata page, and **not the library**: a card shows
@@ -451,7 +451,7 @@ const REVISION_READ_POLICY: Record<
   /* Its own reader and the metadata page, and **not the library**: a card shows
      four ticks and a fifth would not fit, and a scene is the widest artefact
      here — up to 46KB of coordinates — so reading it to answer a boolean on a
-     list of forty articles is exactly the cost docs/plans/library-read-latency.md
+     list of forty articles is exactly the cost docs/plans/260828c-library-read-latency.md
      was written about. */
   sketch: { metadata: "value", sketch: "value" },
 
@@ -673,7 +673,7 @@ export const REVISION_PROJECTIONS = {
      would stamp — so a read that cannot see the outline or the title answers a
      narrower question than the one the writer asked, and the two stores
      disagree about the same article. src/source-hash.ts § `articleFingerprint`,
-     docs/plans/finish-the-database-move.md § stage 1. */
+     docs/plans/260831b-finish-the-database-move.md § stage 1. */
   tweets: { id: articleRevisions.id, tweets: articleRevisions.tweets, ...FINGERPRINT_COLUMNS },
   glossary: { id: articleRevisions.id, glossary: articleRevisions.glossary, ...FINGERPRINT_COLUMNS },
   /* `FINGERPRINT_COLUMNS` and not the cited set: `quotes` sends `articleText`,
@@ -939,7 +939,7 @@ function metaFrom(
    * What differs is how each caller finds that heading, because one of them has
    * the blocks in memory and the other must not read them: `loadArticle` scans
    * the array it already has, and `listArticles` asks Postgres for one row.
-   * docs/plans/library-read-latency.md § 5.
+   * docs/plans/260828c-library-read-latency.md § 5.
    */
   headingTitle: string | null,
 ): Meta {
@@ -963,7 +963,7 @@ function metaFrom(
     ...(revision.note === null ? {} : { note: revision.note }),
     /* PDF provenance, so the spread pattern above is load-bearing here too:
        `source: null` in `meta.json` is not the same artefact as no `source`
-       key, and the round-trip test compares them. docs/plans/pdf-ingestion.md.
+       key, and the round-trip test compares them. docs/plans/260826c-pdf-ingestion.md.
 
        **All of these are null on every web page except `raw_sha256`**, which
        used to be the sentence this comment led with. That column is stage 1's
@@ -990,7 +990,7 @@ function metaFrom(
  * cutover the answer is a column, not a path. **This is a deliberate,
  * user-visible divergence between the two stores** — the one place the
  * migration does not preserve behaviour exactly — and it is listed as such in
- * docs/plans/postgres-storage-implementation.md rather than left for somebody
+ * docs/plans/260826e-postgres-storage-implementation.md rather than left for somebody
  * to find on the page.
  *
  * **`Record<StepName, …>`, and no `?? []` at the lookup.** It was
@@ -1306,7 +1306,7 @@ function sketchIsCurrent(
  * The shelf's query, taking its builder, **so a test can read the SQL it sends.**
  *
  * Extracted for the same reason `currentRevisionQuery` and `blockHashQuery`
- * were, and GPT Sol's fourth finding on docs/plans/library-read-latency.md said
+ * were, and GPT Sol's fourth finding on docs/plans/260828c-library-read-latency.md said
  * it before this was built: a test that assembles SQL from
  * `REVISION_PROJECTIONS.library` proves the projection is right and nothing
  * whatever about the query. That is exactly how the last change's projection
@@ -1430,7 +1430,7 @@ async function commentCounts(
  * correct answer, not a missing one — and treating it as missing would send
  * every shelf request for that article back to reading its whole text, for
  * ever, while logging a warning about data that was fine. GPT Sol's first
- * finding on docs/plans/library-read-latency.md, where the rule was written as
+ * finding on docs/plans/260828c-library-read-latency.md, where the rule was written as
  * "any of the five".
  *
  * Not falsiness either, one step further along: `wordCount`, `partCount` and
@@ -1748,7 +1748,7 @@ export const pgArticleReader: Pick<
              receives them, and `deriveLibraryScalars` is the one function that
              produces them: on this side it ran at publish and wrote columns; on
              the filesystem side it runs at read. One derivation, two moments.
-             docs/plans/library-read-latency.md. */
+             docs/plans/260828c-library-read-latency.md. */
           scalars,
           comments: counts.get(row.article.id) ?? 0,
           // The TypeScript half of `ADDED_AT`, and it has to agree with it —
@@ -2015,7 +2015,7 @@ export const pgArticleReader: Pick<
     /* `profile` and `purpose` for the same reason `comments` above is read
        here rather than from a second endpoint. `profile` is global
        (`reader_profiles`) and `purpose` is this article's own (`articles.
-       purpose`, via `shelfFrom`) — docs/plans/reader-profile.md. */
+       purpose`, via `shelfFrom`) — docs/plans/260826t-reader-profile.md. */
     const profile = await pgReaderStore.readProfile();
 
     return {
@@ -2108,7 +2108,7 @@ export const pgArticleReader: Pick<
        overlap — *usually*, because `DATABASE_POOL_MAX=1` or a saturated pool
        serialises them again, in which case this costs nothing and buys nothing.
        GPT Sol was right that the first version of this comment claimed more
-       than it can. docs/plans/glossary-read-latency.md. */
+       than it can. docs/plans/260827am-glossary-read-latency.md. */
     const db = getDb();
     const [blocks, stored] = await Promise.all([
       blockHashInputs(found.revision.id),

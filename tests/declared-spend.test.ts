@@ -14,7 +14,7 @@
  *    makes up to three billable attempts by default;
  * 4. a `fetch` **outside** a declaration must not run at all.
  *
- * See docs/plans/ai-spend-outside-the-gateway.md.
+ * See docs/plans/260828g-ai-spend-outside-the-gateway.md.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";

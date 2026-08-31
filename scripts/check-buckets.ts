@@ -14,7 +14,7 @@
  * silently, and on 2026-08-27 they did: `text/html` was added to the `sources`
  * allowlist, the bucket kept saying `{application/pdf}`, and every HTML fetch
  * threw a 415 for seven hours —
- * docs/postmortems/the-config-file-is-not-the-bucket.md.
+ * docs/postmortems/260828a-the-config-file-is-not-the-bucket.md.
  *
  * Read-only: one `GET /storage/v1/bucket`. Pointing it at production is the
  * intended use, not the accident to prevent. It does **not** repair the drift,
@@ -88,7 +88,7 @@ async function main(): Promise<void> {
   for (const problem of problems) console.error(`  ✗ ${problem}`);
   console.error(
     `\n${problems.length} difference(s). Editing supabase/config.toml does not change a bucket\n` +
-      "that already exists — see docs/postmortems/the-config-file-is-not-the-bucket.md.",
+      "that already exists — see docs/postmortems/260828a-the-config-file-is-not-the-bucket.md.",
   );
   process.exitCode = 1;
 }

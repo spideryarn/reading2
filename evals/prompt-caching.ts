@@ -42,7 +42,7 @@ import { isMain } from "../src/is-main.js";
  * that knows prices — the app does not bill anyone. These are for this eval's
  * arithmetic only, and they are the first thing to go stale: check them against
  * the current pricing page before believing a saving printed below.
- * docs/research/prompt-caching-anthropic.md § Pricing.
+ * docs/research/260826b-prompt-caching-anthropic.md § Pricing.
  */
 const PRICE = {
   input: 2.0,
@@ -133,7 +133,7 @@ async function searchTwice(
  * breakpoint, and that breakpoint marked the final user message — a message
  * carrying the reader's position, which is prepended per call and never stored,
  * so turn two could not reproduce it and paid a cold write of the whole
- * article. docs/postmortems/chat-cache-automatic-breakpoint.md.
+ * article. docs/postmortems/260826h-chat-cache-automatic-breakpoint.md.
  *
  * So turn *two* is the measurement here, not turn one. A single chat call tells
  * you nothing this feature needs to know: the bug was invisible on the first

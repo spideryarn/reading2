@@ -6,7 +6,7 @@
  * `{"msg":"Unsupported provider: provider is not enabled"}` on `supabase.co`,
  * with nothing of ours left on screen. The guard is one `fetch` before the
  * redirect (src/web/lib/supabase.ts, and GPT Sol's suggestion reviewing
- * docs/plans/google-sign-in-production.md).
+ * docs/plans/260827i-google-sign-in-production.md).
  *
  * **Every test here is about failing open**, because that is the half that can
  * do damage. A preflight that returns `false` when it is merely confused —

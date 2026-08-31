@@ -3,7 +3,7 @@
  * on one.
  *
  * Written for chat and moved here unchanged when explanations started streaming
- * too — see docs/plans/explain-deeper-answers.md § 2. It knows nothing about
+ * too — see docs/plans/260826l-explain-deeper-answers.md § 2. It knows nothing about
  * threads, comments or articles: it turns bytes into named frames, and the
  * meaning of the names belongs to the caller.
  *
@@ -80,7 +80,7 @@ export interface ReadEventsOptions {
  * delivers no bytes and no error, and `reader.read()` neither resolves nor
  * rejects — so a `for await` over this generator waits for ever and the caller
  * has no event to hang a failure on. That is not hypothetical; it is
- * docs/plans/chat-mode.md's "dropped SSE stream leaves the panel on thinking…
+ * docs/plans/260826a-chat-mode.md's "dropped SSE stream leaves the panel on thinking…
  * for ever", found in a browser pass on 2026-08-26.
  */
 export async function* readEvents(

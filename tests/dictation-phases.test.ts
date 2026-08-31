@@ -11,7 +11,7 @@
  *
  * So the property under test is that **the phase tracks the microphone rather
  * than the intention**: armed and deaf is a state with a name, and it is not
- * the same state as armed and hearing. docs/plans/microphone-level-meter.md.
+ * the same state as armed and hearing. docs/plans/260827f-microphone-level-meter.md.
  *
  * The rest of the file is the other half of the same bug — the ways a dictation
  * can end that nobody had accounted for. `onEnd` has to fire on all of them,

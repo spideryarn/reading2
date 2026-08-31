@@ -27,7 +27,7 @@
  * wrapped and the arguments recorded: the real filesystem store still does the
  * work, and the spy only watches it go past.
  *
- * See docs/plans/postgres-storage-implementation.md § Step 10 and
+ * See docs/plans/260826e-postgres-storage-implementation.md § Step 10 and
  * `SweepOptions` in src/store/contracts.ts.
  */
 

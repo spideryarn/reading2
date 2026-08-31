@@ -2,7 +2,7 @@
  * MathML through the sanitiser, and the one thing it used to promote into prose.
  *
  * Found on 2026-08-28 while measuring what Readability does to equation-heavy
- * pages (docs/plans/readability-repair-pass.md). A `<math>` carrying a
+ * pages (docs/plans/260827ab-readability-repair-pass.md). A `<math>` carrying a
  * machine-readable TeX copy of itself —
  * `<semantics><mrow>…</mrow><annotation encoding="application/x-tex">…</annotation></semantics>`,
  * which is what Wikipedia and LaTeXML both emit — came out with the wrappers

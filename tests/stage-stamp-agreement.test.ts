@@ -13,7 +13,7 @@
  * no check goes red — the artefact parses, the ids resolve, the reading view
  * shows it. docs/reusable/silent-success.md.
  *
- * That is not hypothetical: stage 2a of docs/plans/finish-the-database-move.md
+ * That is not hypothetical: stage 2a of docs/plans/260831b-finish-the-database-move.md
  * moved exactly the code that gets this right or wrong, in seven places, done
  * by three agents.
  *

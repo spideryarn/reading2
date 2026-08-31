@@ -408,7 +408,7 @@ describe("the whole stage, with the model stubbed out", () => {
      money: a valid entry that stops being read re-buys the call on every run,
      and a corrupt entry that is not tolerated wedges the article for ever,
      because the key is deterministic and nothing in the codebase deletes these
-     files. Both directions get a test. See docs/postmortems/pdf-chunk-cache-corrupt-entry.md. */
+     files. Both directions get a test. See docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md. */
   describe("the chunk cache", () => {
     async function cacheFiles(dir: string): Promise<string[]> {
       const names = await readdir(path.join(dir, "pdf-chunks"));
@@ -418,7 +418,7 @@ describe("the whole stage, with the model stubbed out", () => {
     /**
      * **Every real cache key is one the checkpoint store would accept.**
      *
-     * `docs/plans/delete-the-importer.md` § B3 moves these entries into a
+     * `docs/plans/260827aa-delete-the-importer.md` § B3 moves these entries into a
      * `checkpoints` table whose `key` column carries a CHECK constraint,
      * `^[a-z0-9][a-z0-9_-]{0,127}$` — narrower than "any string", because the
      * filesystem adapter turns the key into a file name and macOS is

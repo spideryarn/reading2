@@ -5,7 +5,7 @@
  * link-preview.ts reads the href and is done in microseconds. This file is the
  * other kind: two lookups that can miss, can be slow, and can arrive after the
  * card is already on screen. Both were named and deferred by the survey on
- * 2026-08-27 (docs/research/link-previews.md); Greg asked for both the next day.
+ * 2026-08-27 (docs/research/260827a-link-previews.md); Greg asked for both the next day.
  *
  * ## The two sources, and why only these two
  *

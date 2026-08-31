@@ -27,7 +27,7 @@
  * shared"* apart from *"the request went wrong"*. So the status is read before
  * the body, and a 404 comes back as a value.
  *
- * See docs/plans/public-read-only-access.md § The seam.
+ * See docs/plans/260827ai-public-read-only-access.md § The seam.
  */
 import type { PublicArticle, PublicMetadata } from "../public-types.js";
 import { readJson } from "./lib/api.js";

@@ -9,7 +9,7 @@
  * **Every check here has been watched go red.** The six invariants are mutated
  * one at a time rather than by deleting the node and watching validation fail,
  * which mostly re-tests the old coverage invariant and proves nothing about any
- * of them (docs/plans/footnotes.md § The tree).
+ * of them (docs/plans/260828o-footnotes.md § The tree).
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
@@ -395,8 +395,8 @@ describe("the summary panel's tree", () => {
    * written by stage 5e and joined onto the tree by block range — and the
    * failure it was written for was that appending a supplement moves exactly
    * one range, the root's, so the article-level entry missed and was dropped
-   * without a word (docs/plans/footnotes.md § The invisible stage-4 failure).
-   * That join is gone with the ladder (docs/plans/gist-only-summaries.md), and
+   * without a word (docs/plans/260828o-footnotes.md § The invisible stage-4 failure).
+   * That join is gone with the ladder (docs/plans/260831s-gist-only-summaries.md), and
    * with it the whole class of bug: there is nothing to match, because the gist
    * is on the node.
    *

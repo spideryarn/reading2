@@ -10,7 +10,7 @@
  * says the jump is over, and `scrollToTop` exists to make it.
  *
  * GPT Sol found this reviewing the fix for a different bug in the same hook
- * (docs/postmortems/the-spy-wrote-a-section-over-the-paragraph.md). It predates
+ * (docs/postmortems/260830b-the-spy-wrote-a-section-over-the-paragraph.md). It predates
  * that fix: the `at === null` branch of the URL → page effect has always
  * scrolled raw.
  *

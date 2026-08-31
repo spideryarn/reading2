@@ -14,7 +14,7 @@
  * card before it (`describeArticle`, server-side), so it cannot quietly drift —
  * a locally-patched title would look right and be a second derivation.
  *
- * See docs/project/library.md and docs/plans/library-shelf-actions-and-search.md.
+ * See docs/project/library.md and docs/plans/260826k-library-shelf-actions-and-search.md.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LibraryEntry } from "../types.js";

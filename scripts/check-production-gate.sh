@@ -8,7 +8,7 @@
 # RUN THIS BEFORE THE GATE EXISTS TOO. It should fail, loudly, on the REFUSED
 # lines — that is what tells you the check can fail at all. A checklist whose
 # lines have only ever been seen to pass is not evidence of anything; see
-# docs/reusable/silent-success.md and docs/plans/auth-ui-and-production.md.
+# docs/reusable/silent-success.md and docs/plans/260826ae-auth-ui-and-production.md.
 #
 # Every line asserts a status or a body. `curl -s host/api/library` printing a
 # JSON blob tells you nothing: 200-with-a-shelf and 401-with-a-refusal look the

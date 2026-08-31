@@ -145,7 +145,7 @@ describe("the public revision read", () => {
        downstream throws; the pictures just carry on coming from Noema's CDN.
        Dropping `assets` from `PUBLIC_PROJECTIONS` is a typecheck error, and
        this is the assertion that says the *query* carries it.
-       docs/plans/hosting-the-articles-images.md#delivery. */
+       docs/plans/260829b-hosting-the-articles-images.md#delivery. */
     expect(article, "assets").toContain('"assets"');
     /* The predicate, restated against this same statement rather than trusted
        from the case above — the two facts are only worth anything together. */
@@ -156,7 +156,7 @@ describe("the public revision read", () => {
   /**
    * The metadata read asks whether an artefact exists, in SQL — not by dragging
    * the JSONB document across the wire to compare it with null. That mistake
-   * was two days of docs/plans/library-read-latency.md on the owner's shelf.
+   * was two days of docs/plans/260828c-library-read-latency.md on the owner's shelf.
    */
   it("asks the metadata question as is-not-nulls rather than documents", () => {
     for (const column of ["tree", "arc", "tweets", "glossary", "ideas"]) {
@@ -175,7 +175,7 @@ describe("the public revision read", () => {
  * bundle loads, so a shared link previews as something. Everything above about
  * the article read applies to it — it is in the visibility loop and the
  * `owner_id` assertion — and these are the things that are true of it alone.
- * docs/plans/public-read-only-access.md § Stage 2.
+ * docs/plans/260827ai-public-read-only-access.md § Stage 2.
  */
 describe("the public head read", () => {
   /**

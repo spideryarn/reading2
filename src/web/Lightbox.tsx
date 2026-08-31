@@ -3,7 +3,7 @@
  *
  * Press the ⤢ on a picture, a table or a code block in the article and it opens
  * here — see `zoomable.ts` for how the button gets there, and
- * docs/plans/figures-in-the-prose.md for why this exists at all (the short
+ * docs/plans/260828az-figures-in-the-prose.md for why this exists at all (the short
  * version: a data table rendered as a 423px-wide image is not readable, and the
  * file behind it is usually twice that).
  *

@@ -4,7 +4,7 @@
  * ## Why a test helper gets its own suite
  *
  * `tests/helpers/load-article.ts` replaces `db:import` as the way an article
- * gets into Postgres for a test (docs/plans/delete-the-importer.md § C7). A
+ * gets into Postgres for a test (docs/plans/260827aa-delete-the-importer.md § C7). A
  * fault in it does not fail loudly; it makes whichever suite is using it fail
  * somewhere unrelated, or — much worse — pass. GPT Sol reviewed the first
  * version and found ten problems, of which the four below are the ones that

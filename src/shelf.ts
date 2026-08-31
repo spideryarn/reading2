@@ -18,7 +18,7 @@
  * Archiving is the same argument in a different coat: `archivedAt` is a flag,
  * never a deletion. Greg, 2026-08-26, chose "archive with an Undo" over a real
  * delete, so nothing here removes anything — see
- * docs/plans/library-shelf-actions-and-search.md.
+ * docs/plans/260826k-library-shelf-actions-and-search.md.
  *
  * **An archived article is still readable by direct link.** Only the shelf
  * filters. That is a decision rather than an oversight: the shelf is a shelf,
@@ -27,7 +27,7 @@
  *
  * `purpose` — "why you're reading this one" — is the newest field and the
  * argument is the same one again: it is the per-article half of
- * docs/plans/reader-profile.md, and a reader's stated reason for reading a
+ * docs/plans/260826t-reader-profile.md, and a reader's stated reason for reading a
  * piece must survive a re-extraction exactly as their rename does. The global
  * half ("about you", true on every article) is NOT here — it lives in its own
  * store, because it is not this article's state.
@@ -142,7 +142,7 @@ async function edit(slug: string, change: (state: ShelfState) => ShelfState): Pr
  * this shape.
  *
  * An absent key means "leave it alone". `title: null` is not absent: it clears
- * the override. Same for `purpose: null` — see docs/plans/reader-profile.md.
+ * the override. Same for `purpose: null` — see docs/plans/260826t-reader-profile.md.
  */
 export async function patchShelf(
   slug: string,

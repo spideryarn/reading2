@@ -11,7 +11,7 @@ Greg, 2026-08-27:
 > etc etc.
 
 Built the same day. The plan, the options weighed and the review are in
-[admin-page.md](../plans/admin-page.md).
+[260827z-admin-page.md](../plans/260827z-admin-page.md).
 
 ## Why this doc is filed under security
 
@@ -99,7 +99,7 @@ It was wrong in production for a day. The id was read off the local database whe
 built on 2026-08-27, the page was checked on a laptop where it worked, and on spideryarn.com the
 Admin link did not draw and `/api/admin/*` answered Greg 403 — the *silent lockout* this design
 names as its own cost, arriving on the first deploy rather than on some future recreated account.
-[admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md).
+[260828f-admin-id-was-the-local-one.md](../postmortems/260828f-admin-id-was-the-local-one.md).
 
 **What the second entry costs**, stated accurately — an earlier version of this said "widens
 nothing", and GPT Sol refused the reason. OIDC guarantees uniqueness for *(issuer, subject)*, not for
@@ -173,7 +173,7 @@ this page was built, says it outright:
 > schema auth` … it is why this reaches for `SUPABASE_SERVICE_ROLE_KEY` from `.env.prod`.
 
 Measured against production, written down, worked around — and nothing connected it to the new page.
-[admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md).
+[260828f-admin-id-was-the-local-one.md](../postmortems/260828f-admin-id-was-the-local-one.md).
 
 ### Why the API rather than a grant
 
@@ -410,7 +410,7 @@ at all.
 What *is* still written down rather than done: **a deploy-time check that the administrator resolves
 to a real account on the project being deployed to.** That is the gap the account-id bug went
 through — the only mitigation for a silent lockout turned out to be unreachable from the failure it
-was written for ([admin-id-was-the-local-one.md](../postmortems/admin-id-was-the-local-one.md)) —
+was written for ([260828f-admin-id-was-the-local-one.md](../postmortems/260828f-admin-id-was-the-local-one.md)) —
 and it is the check that would make the id-versus-email question stop mattering.
 
 ## The page itself
@@ -492,4 +492,4 @@ passes, so the page was right and the picture was a casualty of the reload.
 - [auth.md](auth.md) — the first gate, and whose data is whose
 - [security-map.md](security-map.md) — where every defence physically lives
 - [library.md](library.md) — the shelf, whose table this one copies
-- [admin-page.md](../plans/admin-page.md) — the plan, and the review
+- [260827z-admin-page.md](../plans/260827z-admin-page.md) — the plan, and the review

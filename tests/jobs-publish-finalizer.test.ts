@@ -4,7 +4,7 @@
  * That sentence was false until 2026-08-30. `grep -c publishRevision src/jobs.ts`
  * answered **0**: the stages ran, wrote their files, the job went `done`, and
  * `articles.current_revision_id` never moved. Publication was a human running
- * `npm run db:import` (docs/plans/v1-imports-on-vercel.md § What is broken,
+ * `npm run db:import` (docs/plans/260830d-v1-imports-on-vercel.md § What is broken,
  * measured). `src/store/publish-session.ts` is the finalizer that closes it, and
  * this file is the acceptance test for it.
  *
@@ -860,7 +860,7 @@ when("a job that finishes", () => {
      * only way to prove what a reader's job card ends up saying. GPT Sol asked
      * for exactly this case: the two above call `settleJob` directly, so they
      * establish refusal and rollback but not the coordinator's behaviour around
-     * them (docs/plans/v1-publish-finalizer-review-sol.md, the High finding).
+     * them (docs/plans/260830ad-v1-publish-finalizer-review-sol.md, the High finding).
      *
      * Two things make it happen. The job asks only for `toc`, which is already
      * current on disk, so every step skips and the walk never calls `commit` —

@@ -94,7 +94,7 @@ describe("acquiring an uploaded file", () => {
        1 stopped writing `raw.json` and `raw.pdf` on 2026-08-31: it puts the
        document in the content-addressed bucket and hands the manifest back as
        `parts.raw` for the store to write
-       (docs/plans/finish-the-database-move.md § Stage 2c). Reading a file here
+       (docs/plans/260831b-finish-the-database-move.md § Stage 2c). Reading a file here
        tested the old shape, and the claim in this test's name — that the two
        origins produce the same artefact — is about the artefact rather than
        about where a laptop happens to keep it. */

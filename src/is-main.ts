@@ -17,7 +17,7 @@
  * store into five modules that have no use for any of it. The plan says the
  * same thing in one line: *"Keep a generic `isMain` separate from the metered
  * helper. Not every importable CLI spends money."*
- * (docs/plans/simplification-wave-2.md §0.1.)
+ * (docs/plans/260828aj-simplification-wave-2.md §0.1.)
  *
  * ## The comparison, and the one that six files' comments call wrong
  *

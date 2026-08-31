@@ -670,7 +670,7 @@ export function TableView({
              became the reader's own free mark — and worse, **every "Save & ask"
              now creates this overlap deliberately**, so the old rule would hide
              the reader's own note behind the chat it started, every time. GPT
-             Sol's review of docs/plans/comments-and-bookmarks.md, finding 7.
+             Sol's review of docs/plans/260828a-comments-and-bookmarks.md, finding 7.
 
              So the comment wins when it is *this* conversation's comment — the
              two are linked, the reader made them in one gesture, and the note

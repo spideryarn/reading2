@@ -22,7 +22,7 @@
  * block, keeping every old id, and no leaf covers the new one; reorder the same
  * ids, and every endpoint still resolves while the ranges stop partitioning.
  * The full check was already written here; it simply was not reachable.
- * docs/plans/postgres-storage-implementation.md § What the review found.
+ * docs/plans/260826e-postgres-storage-implementation.md § What the review found.
  *
  * **The asymmetry worth remembering:** a valid tree is never rejected by the
  * stronger check, so the dangerous outcome is acceptance, not rejection.
@@ -277,7 +277,7 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
         if (node.gist)
           fail(
             `${node.id}: supplement carries a gist — the apparatus is shown as written, ` +
-              `never summarised (docs/plans/footnotes.md § The tree)`,
+              `never summarised (docs/plans/260828o-footnotes.md § The tree)`,
           );
       } else if (!node.gist && !tree.provisional) {
         fail(`${node.id}: internal node has no gist — nothing to render at its level`);

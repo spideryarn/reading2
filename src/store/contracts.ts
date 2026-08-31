@@ -9,8 +9,8 @@
  * means the Postgres adapter is a drop-in, and the only variable in the
  * experiment is the storage.
  *
- * See docs/plans/postgres-storage-implementation.md § The seams, and
- * docs/plans/postgres-migration.md for why each shape is what it is.
+ * See docs/plans/260826e-postgres-storage-implementation.md § The seams, and
+ * docs/plans/260825f-postgres-migration.md for why each shape is what it is.
  *
  * ## The three seams are not one seam
  *
@@ -29,7 +29,7 @@
  *    real one, and it has been deleted. Chat and searches belong to this
  *    group and have **no interface here yet**: they still write straight to the
  *    filesystem, which is why `postgres` mode currently serves them from files.
- *    That is item 10 of docs/plans/postgres-storage-implementation.md, not an
+ *    That is item 10 of docs/plans/260826e-postgres-storage-implementation.md, not an
  *    oversight — but this list said `ChatStore` and `SearchStore` were declared
  *    here when they were not, which is worse than saying nothing.
  *
@@ -165,7 +165,7 @@ export interface ArticleReader {
    * reader who has one; this is for the reader who does not, and has just asked
    * for it. Refetching `/api/article/:slug` to collect one small artefact
    * re-reads every block and the whole tree — the cost
-   * docs/plans/glossary-read-latency.md was written about.
+   * docs/plans/260827am-glossary-read-latency.md was written about.
    *
    * Staleness is computed here at read time, like the four above, and against
    * the blocks, the tree **and** the metadata (src/arc.ts § `inputFingerprint`).
@@ -219,7 +219,7 @@ export interface GlossaryStore {
  * | `status`, `answer`, `citations`, `searches`, `model`, `error` | `beginAnswer` and `patch` |
  *
  * Every operation writes a **named allowlist**, never a spread of whatever it
- * was handed. GPT Sol's review of docs/plans/comments-and-bookmarks.md, which
+ * was handed. GPT Sol's review of docs/plans/260828a-comments-and-bookmarks.md, which
  * found that "insert-only" was too blunt a rule to describe three of these.
  */
 export interface CommentStore {
@@ -338,7 +338,7 @@ export interface ShelfStore {
    * An absent key means "leave it alone". `title: null` is not absent — it
    * means clear the override and go back to the extractor's title. `purpose`
    * follows the identical rule: absent leaves it, `null` clears it. `purpose`
-   * is the per-article half of docs/plans/reader-profile.md — see
+   * is the per-article half of docs/plans/260826t-reader-profile.md — see
    * src/shelf.ts for why it lives here rather than being edited in place.
    *
    * Returns the entry as it now stands, so a caller cannot get away with
@@ -378,7 +378,7 @@ export interface ShelfStore {
  * What they DO share is written down and is what a test may hold them to: an
  * exact word that appears verbatim, is not a stop word, and has no inflections
  * in the corpus is found by both, in the same blocks. Ranking is never
- * comparable. See docs/plans/library-shelf-actions-and-search.md.
+ * comparable. See docs/plans/260826k-library-shelf-actions-and-search.md.
  *
  * **`excludeSlug` is the one thing they must agree about exactly**, because it
  * is not a matching rule — it is a promise that a named article is absent. Both
@@ -725,7 +725,7 @@ export interface GlossaryLookupStore {
 
 /**
  * The reader's global profile — "about you", true on every article rather
- * than on one. docs/plans/reader-profile.md is the design; src/profile.ts
+ * than on one. docs/plans/260826t-reader-profile.md is the design; src/profile.ts
  * is where the two boxes (this one and `ShelfState.purpose`) become one string
  * a prompt can carry.
  *
@@ -782,7 +782,7 @@ export interface AdminStore {
  * It exists for one reason, and it is the reason a scan is shown at all: a
  * transcription of a photographed page has nothing to check it against, so the
  * only real verification available is a person looking at the ink
- * (docs/plans/pdf-ingestion.md).
+ * (docs/plans/260826c-pdf-ingestion.md).
  *
  * ## Why it is its own contract rather than a method on `ArticleReader`
  *
@@ -914,7 +914,7 @@ export interface LedgerRead {
  * arithmetic**, rather than a `group by` in one store and a `reduce` in the
  * other quietly disagreeing about what a BYOK call is worth. The table is small
  * enough that this is not a performance question yet, and
- * docs/plans/ai-cost-tracking.md says so out loud so the day it stops being true
+ * docs/plans/260827q-ai-cost-tracking.md says so out loud so the day it stops being true
  * is a decision rather than a surprise.
  */
 export interface CostStore {

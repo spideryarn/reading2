@@ -8,7 +8,7 @@
  * The claim: on a laptop with the flag unset, a job behaves exactly as it did
  * before the finalizer landed. No draft, no publication, no database, nothing
  * new. That is what local development runs, and it must not change under people
- * (docs/plans/v1-imports-on-vercel.md).
+ * (docs/plans/260830d-v1-imports-on-vercel.md).
  *
  * ## How this proves it without a database, and why that matters
  *

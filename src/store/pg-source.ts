@@ -17,11 +17,11 @@
  * about an article whose PDF is sitting in the bucket, and on a deployment it
  * was the **jobless caller of `dataRoot()`** that
  * [data-root.ts](data-root.ts) § *Deployed with no job is an error,
- * deliberately* names by route. docs/plans/finish-the-database-move.md, stage 1.
+ * deliberately* names by route. docs/plans/260831b-finish-the-database-move.md, stage 1.
  *
  * ## Two eras, and both are served
  *
- * Before docs/plans/delete-the-importer.md § C6 the payload was
+ * Before docs/plans/260827aa-delete-the-importer.md § C6 the payload was
  * `article_revisions.raw_bytes`, a `bytea` up to 32 MiB, and there was nothing
  * pointing out of the row. **Every article the importer has ever written is
  * one of those** — src/store/import.ts writes `raw_bytes` and no
@@ -164,7 +164,7 @@ export function createPgSourceStore(sources: () => RawSourceStore = matchingBuck
          says what kind of document it was, and it is checked BEFORE the second
          query so that a web page never drags its whole `raw_bytes` column
          across the wire to be thrown away. Dies with the column in stage 5 of
-         docs/plans/finish-the-database-move.md. */
+         docs/plans/260831b-finish-the-database-move.md. */
       if (row.source !== "pdf") return null;
       const [legacy] = await getDb()
         .select({ rawBytes: articleRevisions.rawBytes })

@@ -8,7 +8,7 @@
          has no rounded corners to avoid, and the space it opens up is handed
          back to the chrome by the `--safe-*` tokens in styles.css § tokens.
          Nothing else may assume the viewport starts at a safe pixel.
-         docs/plans/mobile-screen-real-estate.md § 2. -->
+         docs/plans/260828av-mobile-screen-real-estate.md § 2. -->
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <!-- Only what the tab says between the first byte and React's first paint.
          Every page sets its own from src/web/page-title.ts — see
@@ -21,7 +21,7 @@
          2 serverless function serves a shared `/read/<slug>` link. That is what
          turns a pasted address into a card with the article's own title and
          gist on it, instead of the bare product name below. See
-         docs/plans/public-read-only-access.md § Stage 2.
+         docs/plans/260827ai-public-read-only-access.md § Stage 2.
 
          Two consequences, both easy to get wrong later:
 
@@ -52,7 +52,7 @@
     <!-- spideryarn:managed-head:end -->
     <!-- **No referrer, from any page of this app, to anywhere.**
 
-         Settled in docs/plans/public-read-only-access.md § Stage 1 and then not
+         Settled in docs/plans/260827ai-public-read-only-access.md § Stage 1 and then not
          built until GPT Sol's second pass found it missing, 2026-08-28. It
          matters because a shared article is read by strangers and its own HTML
          carries third-party images and embeds: without this, an image host
@@ -76,7 +76,7 @@
          chrome**, and on iOS that is worth more screen than any CSS: the
          collapsed address strip in portrait and the vertical button strip in
          landscape are both Chrome's, and no page can hide either.
-         docs/plans/mobile-screen-real-estate.md § 1.
+         docs/plans/260828av-mobile-screen-real-estate.md § 1.
 
          iOS 16.4+ reads `display: standalone` out of the manifest, but older
          iOS and several in-app browsers read only the meta tag, so both are

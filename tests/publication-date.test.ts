@@ -5,7 +5,7 @@
  * existed and stage 2 dropped it on the floor. Timeline needs it as the
  * reference frame — the year nobody writes down, which nineteen of the
  * twenty-four temporal expressions on the test article depend on
- * (docs/plans/timeline-mode.md § The reference frame).
+ * (docs/plans/260831i-timeline-mode.md § The reference frame).
  *
  * Three things have to hold, and the second is the one that matters most:
  *

@@ -28,8 +28,8 @@ reader can read the whole thing back a week later. That is the requirement every
 | [`src/web/live/LiveButton.tsx`](../../src/web/live/LiveButton.tsx) | The button and the one control beside it. |
 | [`src/chat.ts`](../../src/chat.ts) `withSpokenTurn` | The write: both rows, both `done`, one transaction. |
 
-The plans are [live-conversation.md](../plans/live-conversation.md) — the wire, proven first as a
-spike — and [live-conversation-in-chat.md](../plans/live-conversation-in-chat.md), which is where it
+The plans are [live-conversation.md](../plans/260831g-live-conversation.md) — the wire, proven first as a
+spike — and [260831l-live-conversation-in-chat.md](../plans/260831l-live-conversation-in-chat.md), which is where it
 became a turn in a conversation. GPT Sol refused the first version of the second one; the design
 that shipped is the one it recommended instead.
 

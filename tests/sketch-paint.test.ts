@@ -8,7 +8,7 @@
  * looking at it, which is not a thing that can be left to run on a machine —
  * hence this file, which is the half of each finding that can.
  *
- * The five, in the order they were found (docs/plans/sketch-diagram.md
+ * The five, in the order they were found (docs/plans/260830j-sketch-diagram.md
  * § Five renderer bugs the first pictures found):
  *
  *  2. a fan of children left sideways instead of descending;
@@ -421,7 +421,7 @@ describe("what is drawn, and in what order", () => {
 
 /* ------------------------------------------------------------------------ */
 /* Saying that a part opens, and showing what is inside it —
-   docs/plans/sketch-zoomable-subsections.md. */
+   docs/plans/260830ap-sketch-zoomable-subsections.md. */
 
 describe("a region that opens a scene is drawn as one", () => {
   const region = (over: Partial<SketchItem> = {}) =>

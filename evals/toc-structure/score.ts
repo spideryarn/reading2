@@ -162,7 +162,7 @@ export interface StructureScore {
    *   cut at, what share start some internal node.
    * - `l1OnHeadings`: the same precision question asked of depth-1 parts only
    *   (the forced first part excluded), which is the row the research table
-   *   counts (docs/research/opening-an-article-before-the-toc.md § 2).
+   *   counts (docs/research/260830a-opening-an-article-before-the-toc.md § 2).
    */
   headings: {
     boundaries: number;

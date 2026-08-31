@@ -18,7 +18,7 @@
  * highlighted nothing. Adding a component test runner to catch that would have
  * been framework churn (AGENTS.md); making the rule a pure function was not.
  *
- * See docs/project/library.md and docs/plans/library-shelf-actions-and-search.md.
+ * See docs/project/library.md and docs/plans/260826k-library-shelf-actions-and-search.md.
  */
 import { readHref } from "./router.js";
 import type { LibraryHit } from "../types.js";

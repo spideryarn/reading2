@@ -1,7 +1,7 @@
 /**
  * The chat client's state, its events, and the operations in between.
  *
- * The reasoning is in docs/plans/chat-operation-model.md, and the one sentence
+ * The reasoning is in docs/plans/260828v-chat-operation-model.md, and the one sentence
  * that produced this directory is GPT Sol's, 2026-08-28:
  *
  * > Every asynchronous action is an operation with its own identity, phase,
@@ -340,7 +340,7 @@ export interface TurnOperation extends Registered {
  * succeeded presents a tail the first attempt has moved, so it conflicts rather
  * than appending twice — which is also what makes the retry in
  * `effects.appendSpoken` safe. `SpokenTurn` in src/chat.ts, and
- * docs/plans/live-conversation-in-chat.md § 1.
+ * docs/plans/260831l-live-conversation-in-chat.md § 1.
  */
 export interface SpokenOperation extends Registered {
   kind: "spoken";
@@ -843,7 +843,7 @@ export type ChatCommand =
    *
    * Emitted either at `intent.started`, when the row already has a name the
    * server can match, or at `turn.began`, which is the instant one that did not
-   * gets one. **Once**, either way — docs/postmortems/cancel-before-begin.md.
+   * gets one. **Once**, either way — docs/postmortems/260828b-cancel-before-begin.md.
    */
   | {
       type: "intent";

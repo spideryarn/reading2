@@ -15,9 +15,9 @@
       docs/project/architecture.md      the pipeline, stage ownership, storage layout
       docs/project/database.md          the Postgres move, roles, poolers, the traps
       docs/project/ingest-queue.md      the queue, the steps, the claim, the failures
-      docs/plans/v1-imports-on-vercel.md        the live plan for making imports work
-      docs/plans/durable-artefacts-on-vercel.md the withdrawn plan, and the measurement
-      docs/plans/delete-the-importer.md          the D-series, the publication gate
+      docs/plans/260830d-v1-imports-on-vercel.md        the live plan for making imports work
+      docs/plans/260829l-durable-artefacts-on-vercel.md the withdrawn plan, and the measurement
+      docs/plans/260827aa-delete-the-importer.md          the D-series, the publication gate
       src/db/schema.ts, src/pipeline.ts, src/jobs.ts, src/store/*.ts
 
     State of the tree when written: v1-imports Stage 0 landed (f3db91e); Stages 1-5
@@ -1223,8 +1223,8 @@ go through. Landed empty on purpose, so the stages can move behind it one at a t
 <li><code>docs/project/database.md</code> — the Postgres move: roles, connections, and the traps that
 turn a five-minute job into an afternoon</li>
 <li><code>docs/project/block-ids.md</code> — the contract everything else depends on</li>
-<li><code>docs/plans/v1-imports-on-vercel.md</code> — the live plan, and its own kill-checks</li>
-<li><code>docs/plans/delete-the-importer.md</code> — the long-term-best end state</li>
+<li><code>docs/plans/260830d-v1-imports-on-vercel.md</code> — the live plan, and its own kill-checks</li>
+<li><code>docs/plans/260827aa-delete-the-importer.md</code> — the long-term-best end state</li>
 <li><code>docs/reusable/silent-success.md</code> — the failure mode this codebase is organised
 around</li>
 </ul>

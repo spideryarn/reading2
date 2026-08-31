@@ -4,7 +4,7 @@
  * `npm run cost` claims to have seen every paid call. That claim was true on the
  * day it was written and had already stopped being true by the next morning:
  * eight sites in `evals/`, on two different accounts, spending real money into
- * no total at all — see docs/plans/ai-spend-outside-the-gateway.md.
+ * no total at all — see docs/plans/260828g-ai-spend-outside-the-gateway.md.
  *
  * Repairing those was a one-off. This is the part that keeps them repaired. It
  * walks every tracked JavaScript and TypeScript file and asks a narrow question
@@ -173,7 +173,7 @@ const ALLOWED: Readonly<Record<string, string>> = {
      "embeddings"`, so there is nowhere to say "OpenAI, over realtime". Widening
      both is part of metering this properly, and metering it is not built —
      src/live.ts § What this does not do says so out loud, and this spike must
-     not be shipped to readers before it is. docs/plans/live-conversation.md. */
+     not be shipped to readers before it is. docs/plans/260831g-live-conversation.md. */
   "src/live.ts":
     "Live conversation mode's session builder — the one file allowed to name OpenAI, because OpenRouter has no realtime API to route to. It mints a short-lived browser token and carries no audio; the spend happens on a wire this server never sees, which is also why it is not yet metered.",
   "scripts/live-spike.ts":

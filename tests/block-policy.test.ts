@@ -7,7 +7,7 @@
  * policy and states none. So every predicate here is checked against a fixture
  * where it must return **false** as well as one where it must return true — a
  * predicate that returns `true` for everything passes every test written the
- * obvious way (docs/plans/footnotes.md).
+ * obvious way (docs/plans/260828o-footnotes.md).
  *
  * The two that carry the whole design are `isSearchable`, which must say
  * **true** for a supplement, and `countsTowardReadingTime`, which must say

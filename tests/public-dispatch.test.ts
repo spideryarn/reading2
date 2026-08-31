@@ -1,7 +1,7 @@
 /**
  * **Which of the two dispatchers answers, and what neither of them will do.**
  *
- * `docs/plans/public-read-only-access.md § How we prove it` asks for a check
+ * `docs/plans/260827ai-public-read-only-access.md § How we prove it` asks for a check
  * that the authenticated dispatcher cannot be reached without a user, and says
  * why the obvious version does not exist:
  *
@@ -451,7 +451,7 @@ describe("the closed public namespace", () => {
   /**
    * **The spellings that are ours to decide, decided.**
    *
-   * `docs/plans/public-read-only-access.md` claimed case variants and doubled
+   * `docs/plans/260827ai-public-read-only-access.md` claimed case variants and doubled
    * slashes "either miss `/api/` entirely or land on the authenticated gate".
    * A black-box spike found that neither happens in dev, and the paragraph has
    * since been corrected — the honest split is that **the `/api/` prefix is the

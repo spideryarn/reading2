@@ -441,7 +441,7 @@ const rawPgJobStore: JobStore = {
            will ever reclaim. The path is ordinary rather than exotic: a step
            releases, the next advance never comes, the lease lapses, and this
            statement is what ends the job. GPT Sol, 2026-08-30,
-           docs/plans/delete-the-importer-d1b-sol.md finding 1. */
+           docs/plans/260827aa-delete-the-importer-d1b-sol.md finding 1. */
         draftRevisionId: null,
         error: INTERRUPTED.message,
         /* `retry`, said out loud rather than left to the absent-means-yes rule.
@@ -524,7 +524,7 @@ const rawPgJobStore: JobStore = {
            cancellation (src/store/pg-session.ts, case 4). The pointer really
            can be set on a queued job: `releaseStepIn` leaves it alone
            deliberately, so the next request continues into the same draft.
-           GPT Sol, 2026-08-30, docs/plans/delete-the-importer-d1b-sol.md
+           GPT Sol, 2026-08-30, docs/plans/260827aa-delete-the-importer-d1b-sol.md
            finding 1. */
         draftRevisionId: sql`case when ${jobs.status} = 'queued' then null else ${jobs.draftRevisionId} end`,
         finishedAt: sql`case when ${jobs.status} = 'queued' then now() else ${jobs.finishedAt} end`,
@@ -582,7 +582,7 @@ const rawPgJobStore: JobStore = {
  * function exported from a module is not covered by it and cannot be.
  *
  * These are exported anyway, because the transactional store session
- * (docs/plans/delete-the-importer.md § D1b) has to settle the job inside the
+ * (docs/plans/260827aa-delete-the-importer.md § D1b) has to settle the job inside the
  * *artefact* transaction, and a method that calls `getDb()` for itself binds to
  * nothing. Injecting the public `JobSettles` capability was the design the
  * review rejected for exactly that reason.
@@ -637,7 +637,7 @@ export async function releaseStepIn(
   /* The **actual** settlement, not the one that was asked for: the `case`
      above may have answered `cancelled`, and a caller that assumed `queued`
      because it called "release" would report the wrong thing to the reader.
-     GPT Sol, 2026-08-29, docs/plans/delete-the-importer-d1b-design-sol.md
+     GPT Sol, 2026-08-29, docs/plans/260827aa-delete-the-importer-d1b-design-sol.md
      finding 1 — which is why this returns the row rather than `void`, and
      always did. */
   return toJob(moved[0]);

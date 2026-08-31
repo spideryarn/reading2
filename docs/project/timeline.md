@@ -10,7 +10,7 @@ The eleventh mode in the band between the spine and the prose, beside
 a `<dl>`. Everything below is about what to do when the piece does not give you one.
 
 The design, the reasoning, the review that stopped the first version and the two spike runs that
-measured the second are in [timeline-mode.md](../plans/timeline-mode.md). This file is what is
+measured the second are in [260831i-timeline-mode.md](../plans/260831i-timeline-mode.md). This file is what is
 built, and where it lives.
 
 ## It is not "when did this happen"
@@ -49,7 +49,7 @@ is found inside `July 11`. Four of the test article's blocks hold two dates each
 and false of the artefact: `phrase` was the model's string and `label` was unread prose, so a
 fabricated *"the summer of twenty nineteen"* or *"4 July: the package manager crashes"* would have
 been displayed verbatim. Both are now sliced out of the block and run through the parser.
-[timeline-mode.md § The claim was true of `when`](../plans/timeline-mode.md#the-claim-was-true-of-when-and-false-of-the-artefact).
+[260831i-timeline-mode.md § The claim was true of `when`](../plans/260831i-timeline-mode.md#the-claim-was-true-of-when-and-false-of-the-artefact).
 
 ## The four dating states, which are the whole panel
 
@@ -104,7 +104,7 @@ complete spoken sentence per row, and the marks drawn as SVG rather than Unicode
 depend on the reader's installed fonts. Plain words need none of that, because they already *are*
 the sentence. The marks, a time-to-scale axis, painting the spine and following the reader down the
 page are all kept in
-[timeline-mode.md § Appendix](../plans/timeline-mode.md#appendix-the-visual-design-deferred).
+[260831i-timeline-mode.md § Appendix](../plans/260831i-timeline-mode.md#appendix-the-visual-design-deferred).
 
 Two smaller decisions in the panel worth knowing before changing them:
 
@@ -204,7 +204,7 @@ face not derived from one declaration?"**
 
 ## See also
 
-- [timeline-mode.md](../plans/timeline-mode.md) — the plan: the review that stopped the first
+- [260831i-timeline-mode.md](../plans/260831i-timeline-mode.md) — the plan: the review that stopped the first
   design, the two spike runs, and everything deferred.
 - [ideas.md](ideas.md) — the sibling this is modelled on, and the source of the validate-every-id
   discipline.

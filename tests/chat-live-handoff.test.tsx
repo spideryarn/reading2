@@ -17,7 +17,7 @@
  * conversation to have** — the box under the thread list starts a new one, and
  * a session there would have nothing to be seeded from and no tail to claim.
  *
- * docs/plans/live-conversation-in-chat.md § 1d and § 4.
+ * docs/plans/260831l-live-conversation-in-chat.md § 1d and § 4.
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";

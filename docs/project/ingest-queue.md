@@ -102,7 +102,7 @@ split, ToC'd and arc'd in 148 seconds, and `GET /api/source/:slug` handed back a
 adapters beside it; [`src/upload-records.ts`](../../src/upload-records.ts) is one attempt's state;
 `acquireUpload` in [`src/pipeline.ts`](../../src/pipeline.ts) is the half of stage 1 that verifies
 bytes instead of fetching them. The design, the measurements behind it and the two cross-family
-reviews are in [pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md).
+reviews are in [260826u-pdf-upload-and-storage.md](../plans/260826u-pdf-upload-and-storage.md).
 
 ### Four things about it that are not obvious
 
@@ -133,7 +133,7 @@ which is what stops somebody adding the obvious `remove` later.
 **An upload never adopts an existing article.** `freeSlug` may adopt one, because `urlKey` can
 prove two addresses are one piece. An upload has no address, so `freeUploadSlug` in
 [`src/jobs.ts`](../../src/jobs.ts) always finds a slug nothing else has — two files called
-`paper.pdf` get two articles, per [Greg's answer](../plans/pdf-upload-and-storage.md#gregs-answers-2026-08-26).
+`paper.pdf` get two articles, per [Greg's answer](../plans/260826u-pdf-upload-and-storage.md#gregs-answers-2026-08-26).
 The existence check is `articleExists` and **not** `urlForSlug`, which is the trap: an uploaded
 article has no URL in its `meta.json`, so the lookup `freeSlug` uses reads `undefined` and calls
 the slug free. Every step would then find an artefact, skip, and show the reader a different
@@ -166,7 +166,7 @@ common and the counters will pile up.
 The plan's alternative is to store under a provisional id, run pass 0, and reserve the final slug
 from the title. That is a **rename**, and [block-ids.md](block-ids.md) is largely about why renames
 here are expensive. Written up as an open question rather than quietly decided:
-[pdf-upload-and-storage.md § Still open](../plans/pdf-upload-and-storage.md).
+[260826u-pdf-upload-and-storage.md § Still open](../plans/260826u-pdf-upload-and-storage.md).
 
 ### The checks are the cheap ones, and they are not the real ones
 
@@ -428,7 +428,7 @@ same machinery given a different sub-list, and none of them needed a special cas
 ### `STEP_ORDER` is not the default list
 
 They were the same array until the sixth step arrived, and separating them is the whole change the
-tweet thread needed in this file ([tweet-thread-page.md](../plans/tweet-thread-page.md#the-one-real-snag-stated-precisely)).
+tweet thread needed in this file ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md#the-one-real-snag-stated-precisely)).
 The constant was quietly doing three jobs:
 
 | Read at | What it means there | Does `tweets` belong? |
@@ -465,7 +465,7 @@ the set. It is worth knowing *why* it needed one: position was never quite the s
 like. `cascadeForce` only names steps already in the job, so a forced `{ steps: ["toc"] }` never
 reached `arc` at all — the tree was re-cut, `arc.json` stayed, and the reading view silently dropped
 every arc entry whose range no longer matched a node, because the join is by exact block range.
-docs/plans/defer-arc-and-rename-hierarchy.md § 2.1.
+docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1.
 
 ### A step can now say whether its artefact is *current*, not just present
 
@@ -497,7 +497,7 @@ a head with a `URL:` line and a synthetic title the other four never send; `asse
 blocks-only hash because the blocks really are all it reads. Nothing was visibly broken, and that is the shape to notice: the
 pipeline's artefact reads return `null` today, so the stage re-runs whatever the stamp says. The
 fault would have arrived with the reads that make skipping work.
-[finish-the-database-move.md](../plans/finish-the-database-move.md) § stage 1.
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1.
 
 The consequence worth stating: a refresh does not force the thread, but it does not strand one
 either. The next time anything asks for `tweets` the hash no longer matches, so the step runs
@@ -695,11 +695,11 @@ timer: there is no scheduler on Vercel, that is the exact moment somebody wants 
 one indexed `UPDATE` over rows that are almost always none. It had **no caller at all** for the first
 day of its life, which meant a killed instance left its job `running` for ever and every advance
 answered `busy` — the in-memory queue had self-healed on restart, so this was a regression rather
-than a gap. GPT Sol found it; see [durable-queue-code-review-sol.md](../plans/durable-queue-code-review-sol.md).
+than a gap. GPT Sol found it; see [260827m-durable-queue-code-review-sol.md](../plans/260827m-durable-queue-code-review-sol.md).
 
 **Taking a job away from a claimant is deliberately not done.** Guessing that an owner is dead is how
 two runners end up writing one article, and it is only safe once every durable write is inside the
-fenced transaction — [transactional-stage-runner.md](../plans/transactional-stage-runner.md), not
+fenced transaction — [260827j-transactional-stage-runner.md](../plans/260827j-transactional-stage-runner.md), not
 built. What makes an expired lease mean something in the meantime is that the claimant sets **its own
 timer**, shorter than the lease, and aborts its own step: so a lapsed lease says *the process is
 gone* rather than *the process is slow*.
@@ -718,7 +718,7 @@ and that used to report its step done. `stepIsDone` takes a store, so the same q
 asked of Postgres columns without the pipeline changing — and the store is now a **required**
 argument rather than one that quietly defaults to the filesystem, since a Postgres caller that
 forgot it used to compile and get a confident answer about the wrong store. See
-[postgres-storage-implementation.md § Step 11](../plans/postgres-storage-implementation.md), half B.
+[260826e-postgres-storage-implementation.md § Step 11](../plans/260826e-postgres-storage-implementation.md), half B.
 
 **One step asks a second question, and only one.** `extract` and `blocks` write to the same path —
 `output/<slug>.html`, first as Readability left it and then with the block ids stamped in — so the
@@ -774,7 +774,7 @@ which looks entirely fine. A [silent success](../reusable/silent-success.md).
 Until 2026-08-26 the button appeared under every failure. That included the ones that are
 arithmetic. Greg pasted a long article, stage 4 worked out that its answer would not fit in one
 model response, said so, and offered him a Retry — which made the identical call and failed
-identically. The whole story is in [toc-max-tokens.md](../postmortems/toc-max-tokens.md).
+identically. The whole story is in [260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md).
 
 **A failure can now say what kind it is**, and the card asks before drawing the button. The kinds
 are the four in [`src/messages.ts`](../../src/messages.ts) — the same four the reader-facing failure
@@ -988,7 +988,7 @@ Four things about it are worth knowing before touching it.
   through two doors: `commit`, when the last step ran, and `settleJob`, when every step skipped. A
   finalizer bolted on after the walk would see only the second — and for the first it would arrive
   *after* the job row already said `done`, which is the crash gap
-  ([v1-imports-review-sol.md](../plans/v1-imports-review-sol.md) critical 2): a kill between the two
+  ([260830a-v1-imports-review-sol.md](../plans/260830a-v1-imports-review-sol.md) critical 2): a kill between the two
   leaves the article published and its job failed, with Retry blocked by a guard that now sees an
   article.
 - **Only `done` publishes.** A job that failed, was cancelled or was interrupted publishes nothing
@@ -1004,7 +1004,7 @@ Four things about it are worth knowing before touching it.
   that half of the claim, and it proves it by taking `DATABASE_URL` away.
 
 This is a stepping stone with a known end: it is the vertical slice of D1b that
-[delete-the-importer.md](../plans/delete-the-importer.md) eventually replaces, at the same seam. When
+[260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md) eventually replaces, at the same seam. When
 D3–D5 convert the stages so they return their products instead of writing their own files,
 [`src/store/pg-session.ts`](../../src/store/pg-session.ts) — already written and tested — becomes the
 session and this decorator is deleted. The copy it performs is
@@ -1018,7 +1018,7 @@ a scalar or a small blob a column could hold. The same discipline `LibraryEntry`
 ([library.md § When this becomes Postgres](library.md#when-this-becomes-postgres)).
 
 **Updated 2026-08-25.** The row that said "pg-boss" is
-[reversed by the Postgres plan](../plans/postgres-migration.md#the-queue), and the row that said
+[reversed by the Postgres plan](../plans/260825f-postgres-migration.md#the-queue), and the row that said
 `LISTEN/NOTIFY` was simply wrong. Both are corrected here rather than left to disagree.
 
 | Today | Then |
@@ -1065,9 +1065,9 @@ function, leave everything else alone — and no stage's behaviour or artefacts 
 ## See also
 
 - [library.md](library.md) — the homepage this box sits on
-- [pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md) — the upload the picker is the
+- [260826u-pdf-upload-and-storage.md](../plans/260826u-pdf-upload-and-storage.md) — the upload the picker is the
   front half of, and the object store under it
-- [pdf-ingestion.md](../plans/pdf-ingestion.md) — how a PDF becomes an article once we have one
+- [260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md) — how a PDF becomes an article once we have one
 - [architecture.md](architecture.md) — the pipeline, the storage layout, and who owns which stage
 - [content-extraction.md](content-extraction.md) — stages 1–2, and what `meta.json` is for
 - [setup-dev.md](setup-dev.md) — the commands, for when you want to run a stage by hand

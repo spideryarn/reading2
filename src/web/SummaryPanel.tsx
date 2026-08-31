@@ -18,7 +18,7 @@
  * What is left is the half that was never paid for — the **tree**, with the
  * one-sentence gist stage 4 already writes onto every internal node — and one
  * control, Depth, which is how many of those rows you want. See
- * docs/plans/gist-only-summaries.md for what went and why.
+ * docs/plans/260831s-gist-only-summaries.md for what went and why.
  *
  * ```
  *  ┌── spine ──┬────── SUMMARY (this panel) ──────┬──── the article ────┐

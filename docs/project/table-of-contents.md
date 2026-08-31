@@ -127,7 +127,7 @@ A paid calibration of this stage on 2026-08-30 threw on **4 of 13** structure ca
 failures were bimodal by kind rather than spread by size: two were partition gaps of **exactly one
 block**, and two were a `sourceHeading` claiming a heading outside its node's range. Every tiling
 failure recorded up to that day — those two, plus the two in
-[the-article-with-one-heading.md](../postmortems/the-article-with-one-heading.md) — was off by one
+[260830a-the-article-with-one-heading.md](../postmortems/260830a-the-article-with-one-heading.md) — was off by one
 block; the one that arrived that evening, from a PDF, was off by three (below). The structure call
 takes about 163 seconds and is 88% of the stage's wall clock, so a refusal costs the reader the whole
 article.
@@ -186,7 +186,7 @@ mistake scores `ok`, so the throw rate alone stopped meaning what it used to.
 blocks. No model, no network, milliseconds — against ~163 seconds and a real bill for the model's.
 
 Measured on 2026-08-30 over seven development documents and five held out
-([the research](../research/opening-an-article-before-the-toc.md)):
+([the research](../research/260830a-opening-an-article-before-the-toc.md)):
 
 - **6 of 7** have enough headings to carve at all;
 - **4 of 7** reproduce the model's depth-one carving *exactly*;
@@ -221,7 +221,7 @@ another, every number under `evals/results/` would describe something nobody rea
 builder, the marker, the exemption and the public boundary are in place, and the publication
 boundary, the tree-replacement seam and the gate on paid work generated *against* a provisional tree
 are not. Those are steps 2–4 in
-[the research](../research/opening-an-article-before-the-toc.md).
+[the research](../research/260830a-opening-an-article-before-the-toc.md).
 
 ## Entry length grows with depth <a id="granularity"></a>
 
@@ -290,7 +290,7 @@ duplicated.
 121 of wikipedia's 335, a third of the labelling bill spent writing navigation for rows nobody
 navigates to. `isStructural` is what refuses them. The tree's **shape** is unchanged: every block
 still gets a leaf, notes included, and the supplement node that gives the apparatus one visible row
-of its own is a later stage. [footnotes.md](../plans/footnotes.md).
+of its own is a later stage. [260828o-footnotes.md](../plans/260828o-footnotes.md).
 
 `validate-tree.ts` turns this into a hard error: a leaf carrying a `navLabel` while anchoring a
 block `isStructural` refuses fails the tree.
@@ -496,7 +496,7 @@ and counted: `LabelRun.dropped`, the `dropped` list in `labels.json`, `labelsDro
 log line and on the progress card, and `evals/toc-labels.ts` reads the artefact rather than inferring
 a fault from a coverage number it can no longer interpret alone. That last one is the *"the eval had
 to be told"* lesson from the R2/R3 build, applied in advance rather than afterwards. The upstream fix
-is item **F** in [opening-an-article-before-the-toc.md](../research/opening-an-article-before-the-toc.md)
+is item **F** in [260830a-opening-an-article-before-the-toc.md](../research/260830a-opening-an-article-before-the-toc.md)
 — stage 3 promoting sentence fragments to blocks — and it is not this stage's to make.
 
 ### Three artefacts, and what survives a failed run
@@ -504,7 +504,7 @@ is item **F** in [opening-an-article-before-the-toc.md](../research/opening-an-a
 Stage 4 produces the tree, the blocks and the labels, and **hands all three back in one object**
 rather than writing them: `generateToc` returns `TocArtefacts`, and its caller stores them together
 in a single write ([`src/toc.ts`](../../src/toc.ts),
-[finish-the-database-move.md](../plans/finish-the-database-move.md) § Stage 2). All three are
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 2). All three are
 required by the type, so a caller cannot store a tree and skip its labels.
 
 It used to write the three files itself, in a fixed order with the tree last. That ordering was
@@ -537,7 +537,7 @@ crumbs, gists, outline and boundaries around them may all have moved. The first 
 aborts every other batch rather than letting a doomed run keep buying answers.
 
 The whole design, the alternatives weighed against it, and what it does not yet do are in
-[docs/plans/toc-scaling.md](../plans/toc-scaling.md).
+[docs/plans/260826h-toc-scaling.md](../plans/260826h-toc-scaling.md).
 
 ## The budget <a id="the-budget"></a>
 
@@ -559,7 +559,7 @@ exactly, and a flat reservation for reasoning, which it cannot.
 77,100 and running it again failed *too*, with about 64,000 of thinking that time: adaptive thinking
 at `effort: "high"` expands into whatever room it is given, so raising the ceiling raises the
 thinking with it and the two never converge. `max_tokens` is a ceiling; `effort` is the leash.
-[docs/postmortems/toc-max-tokens.md](../postmortems/toc-max-tokens.md) has the whole account.
+[docs/postmortems/260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md) has the whole account.
 
 **The reservation is per call, not per stage.** 40,000 was measured on a call that reads a whole
 article and thinks about its structure. A label batch reads one section and writes a dozen labels,
@@ -610,7 +610,7 @@ section is **not yet built**. The [budget](#the-budget) refuses those out loud r
 them.
 
 The shape it should take, from GPT-5.6-sol's review and written up in
-[toc-scaling.md § D](../plans/toc-scaling.md): build the authored-heading skeleton mechanically;
+[260826h-toc-scaling.md § D](../plans/260826h-toc-scaling.md): build the authored-heading skeleton mechanically;
 make bounded, navigational section cards in parallel; run one global pass over the ordered cards to
 assign top-level boundaries and sibling titles; then generate each coarse subtree in parallel with
 the whole global outline in front of it. Never blind subtree calls with independently invented

@@ -4,7 +4,7 @@
  * A small popover, raised from beside the *Use your profile* checkbox and from
  * the *written for you* badge, that says what a profile does, shows both boxes
  * as the reader currently has them, and carries a working link to each editor.
- * docs/plans/profile-panel.md, docs/project/reader-profile.md.
+ * docs/plans/260830c-profile-panel.md, docs/project/reader-profile.md.
  *
  * ## Why this is not a `<Tooltip>`
  *

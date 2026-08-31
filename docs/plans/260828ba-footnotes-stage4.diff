@@ -1,0 +1,2378 @@
+diff --git a/src/arc.ts b/src/arc.ts
+index 13ea505..8128e45 100644
+--- a/src/arc.ts
++++ b/src/arc.ts
+@@ -41,6 +41,7 @@ import type { Arc, ArcEntry, Block, Meta, Tree, TreeNode } from "./types.js";
+ import { parseJsonFrom } from "./parse-json.js";
+ import { articleText } from "./article-prompt.js";
+ import { isBodyEvidence } from "./block-policy.js";
++import { isSupplementNode } from "./supplement.js";
+ import { withLedger } from "./cli-ledger.js";
+ 
+ const PROMPT_VERSION = "arc/2";
+@@ -104,7 +105,28 @@ JSON only, no prose, no code fence:
+ 
+ Exactly one string per part, in order.`;
+ 
+-/** The parts — depth-1 nodes in document order, per the tree's own child list. */
++/**
++ * The parts — depth-1 nodes in document order, per the tree's own child list.
++ *
++ * **A supplement is not a part.** The apparatus is a depth-one child of the
++ * root like every part is (src/supplement.ts), and excluding it here is what
++ * keeps four separate things right at once, because this one function is where
++ * "the parts of the argument" is defined:
++ *
++ *  - `buildArc` **throws** on a parts/sentences length mismatch, so a
++ *    supplement counted as a part would fail the arc stage outright on every
++ *    article with endnotes — the loud failure, and the one that made this
++ *    obvious;
++ *  - `renderPrompt` below, and the skeletons in src/glossary.ts, src/ideas.ts
++ *    and src/tweets.ts, would each show a model a part called "Notes" with no
++ *    gist and invite it to write about the bibliography;
++ *  - the step marker would read "3 / 9" where the argument has seven parts,
++ *    which is the one place the structure states a count out loud.
++ *
++ * The client's own numbering is a separate copy of this rule and cannot import
++ * it — `buildArcColumn` in src/web/tree.ts numbers the cells it is drawing, not
++ * the tree — so both are held by tests.
++ */
+ export function partsOf(tree: Tree): TreeNode[] {
+   const root = tree.nodes[tree.rootId];
+   /* `bug`, so the job card does not offer a Retry that cannot work. The tree
+@@ -114,7 +136,9 @@ export function partsOf(tree: Tree): TreeNode[] {
+      contain is stage 4 having written something malformed, which is a defect
+      here rather than anything the reader can act on. src/job-failure.ts. */
+   if (!root) throw stageFailure("bug", `rootId "${tree.rootId}" is not in nodes`);
+-  return root.children.map((id) => tree.nodes[id]).filter((n): n is TreeNode => !!n);
++  return root.children
++    .map((id) => tree.nodes[id])
++    .filter((n): n is TreeNode => !!n && !isSupplementNode(n));
+ }
+ 
+ /**
+diff --git a/src/library-scalars.ts b/src/library-scalars.ts
+index d123634..362f553 100644
+--- a/src/library-scalars.ts
++++ b/src/library-scalars.ts
+@@ -40,6 +40,7 @@
+  */
+ 
+ import { articleWordCounts, type Treated } from "./block-policy.js";
++import { supplementIndex } from "./supplement.js";
+ import type { Block, Tree } from "./types.js";
+ 
+ /**
+@@ -63,10 +64,11 @@ export interface LibraryScalars {
+    * `articleWordCounts`.
+    *
+    * **Articles published before roles existed keep the old number**, because
+-   * this is stored at publish and their stored blocks carry no `treatment` —
+-   * so recomputing over them would produce the identical figure. It corrects
+-   * itself when the article is re-extracted and republished, and nothing
+-   * cheaper can correct it. docs/plans/260828o-footnotes.md.
++   * this is stored at publish and their stored block rows carry no `treatment`
++   * — so a backfill over the *rows* would produce the identical figure. A
++   * repair from `stamped_html` is possible and is deliberately not built: see
++   * docs/plans/260828o-footnotes.md § The stale cached word count for the option and
++   * why letting it heal on re-extraction was chosen instead.
+    */
+   wordCount: number;
+   blockCount: number;
+@@ -92,7 +94,14 @@ export function deriveLibraryScalars(input: {
+   if (tree) {
+     // One pass rather than two filters: the tree of a long article is thousands
+     // of nodes, and this runs once per article per homepage load.
++    /* The apparatus is a depth-one child of the root and its leaves are at
++       depth two, so counting by depth alone would advertise gwern as having one
++       more part than it argues and forty-one more sections than it has. A card
++       that says "8 parts" about a seven-part piece is a small lie in the one
++       place a reader is deciding whether to start. src/supplement.ts. */
++    const supplement = supplementIndex(tree);
+     for (const node of Object.values(tree.nodes)) {
++      if (supplement.has(node.id)) continue;
+       if (node.depth === 1) partCount++;
+       else if (node.depth === 2) sectionCount++;
+     }
+diff --git a/src/source-hash.ts b/src/source-hash.ts
+index bc7ab14..eee3db0 100644
+--- a/src/source-hash.ts
++++ b/src/source-hash.ts
+@@ -139,40 +139,30 @@ export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
+  * as unchanged. `ideas` is the first stage to fold this in — see
+  * docs/plans/260826ac-ideas-mode.md § Freshness.
+  */
+-/**
+- * A fingerprint of the **tree** — every node's id, parent, range, title and
+- * gist.
+- *
+- * The companion to `hashBlocks`, and here for the identical reason: it began in
+- * src/labels.ts (which re-exports it, so nothing that imported it from there
+- * had to change) and a second stage now needs the same answer. Two modules
+- * computing "the same" structure hash two ways can only ever disagree, and the
+- * day they do, one artefact reports itself current against a different
+- * definition of current.
+- *
+- * **Not `renderOutline`'s text.** The outline is titles and indentation, which
+- * is the right thing to send a model and the wrong thing to compare two trees
+- * by: two structures that cut the article in completely different places print
+- * an identical outline. Walking the nodes means a boundary that moved changes
+- * the hash even when every title stayed put. That correction was GPT-5.6-sol's,
+- * 2026-08-26.
+- *
+- * **Why a second hash exists at all**, which is the thing to read before
+- * ignoring it: `StepStamp` in src/store/artifacts.ts says the late stages
+- * *"all read the tree as well as the blocks"*, and `inputHashFor` in
+- * src/pipeline.ts hashes only the blocks. Section boundaries can move without a
+- * single block changing, and a stage that judges what is load-bearing from the
+- * skeleton is then answering a different question against an input it reports
+- * as unchanged. `ideas` is the first stage to fold this in — see
+- * docs/plans/260826ac-ideas-mode.md § Freshness.
++/*
++ * **A tree with no supplement node hashes byte for byte as it did before**, and
++ * for the same reason `hashBlocks` above has a legacy branch: today's whole
++ * corpus predates the supplement node (2026-08-28), and folding a sixth field
++ * into the canonical form unconditionally would invalidate every `labels.json`,
++ * `ideas.json` and similarity artefact on disk at once — a mass re-run of paid
++ * stages bought for nothing, since not one of those trees has apparatus in it.
++ * `5bb2ef0284bce2cd` over `example/tree.json`, computed before this stage was
++ * written and pinned in tests/supplement.test.ts.
++ *
++ * The supplemented branch is framed the way `hashBlocks` is, and for the
++ * identical reason: `title` and `gist` are model prose, so an unescaped
++ * delimiter is a collision waiting for the article that contains it. Keyed on
++ * the **tree** rather than per node, so one hash never mixes the two forms.
+  */
+ export function structureHash(tree: Tree): string {
+-  const canonical = Object.keys(tree.nodes)
+-    .sort()
+-    .map((id) => {
+-      const n = tree.nodes[id]!;
+-      return [id, n.parent ?? "", n.range.join(".."), n.title ?? "", n.gist ?? ""].join("\u0000");
+-    })
+-    .join("\n");
++  const ids = Object.keys(tree.nodes).sort();
++  const supplemented = ids.some((id) => tree.nodes[id]!.treatment != null);
++  const row = (id: string): string[] => {
++    const n = tree.nodes[id]!;
++    return [id, n.parent ?? "", n.range.join(".."), n.title ?? "", n.gist ?? ""];
++  };
++  const canonical = supplemented
++    ? `spya-tree/2\n${JSON.stringify(ids.map((id) => [...row(id), tree.nodes[id]!.treatment ?? ""]))}`
++    : ids.map((id) => row(id).join("\u0000")).join("\n");
+   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16);
+ }
+diff --git a/src/store/import.ts b/src/store/import.ts
+index 3cf1f2d..5261fac 100644
+--- a/src/store/import.ts
++++ b/src/store/import.ts
+@@ -75,6 +75,7 @@ import {
+   searchRuns,
+ } from "../db/schema.js";
+ import { isSpideryarnId } from "../ids.js";
++import { NOTE_ID_PATTERN } from "../notes.js";
+ import { log } from "../log.js";
+ import { currentOwnerId, type OwnerId } from "../owner.js";
+ import { parseJsonFrom } from "../parse-json.js";
+@@ -226,9 +227,67 @@ const TREATMENTS = new Set(["supplement"]);
+  * violation naming `revision_blocks_role`, from inside a transaction, with no
+  * block id in it. This is the guard; the constraint is the backstop.
+  *
+- * `noteId` has no closed set to check against, so what is checked is that it is
+- * a string: the column is `text`, and a number or an object in that field is a
+- * driver error at insert time rather than an explanation.
++ * ## Each field being legal is not the same as the block being coherent
++ *
++ * The first version checked the three fields **in isolation**, and GPT Sol's
++ * review of stage 3 found that the failure this function exists to prevent
++ * walked straight in through the door that left open. Two shapes, both of which
++ * every value passes on its own:
++ *
++ * - `role: "footnote"` with **no `treatment`**. Legal role, absent treatment,
++ *   and `isBody` reads an absent treatment as body — so the block declares
++ *   itself apparatus in the one column nothing reads and is summarised,
++ *   embedded, labelled and put on the clock as argument. Which is silent
++ *   reclassification, arriving as a *well-formed* import.
++ * - `noteId: "anything at all"`. Stage 2 mints ten hex digits and stage 3
++ *   refuses anything else (`noteFieldsFor` in src/blocks.ts gates on
++ *   `NOTE_ID_PATTERN`), so a value in any other shape did not come from this
++ *   pipeline. Stage 5 resolves a marker to a note by that id; an arbitrary
++ *   string there is a hover card resolving to nothing, or to the wrong note.
++ *
++ * So the cross-field rules are checked too. `NOTE_ID_PATTERN` is imported from
++ * src/notes.ts rather than restated, because two spellings of "what an id looks
++ * like" can only ever disagree — and the day they do, the minting half and the
++ * validating half each look correct.
++ *
++ * **`role: "appendix"` is deliberately allowed without a treatment.** An
++ * appendix may be real prose worth gisting, which is the case one closed set
++ * could not express and the reason there are two axes at all (`Block.role` in
++ * src/types.ts). The implication runs from `"footnote"` only, because that is
++ * the one role v1 assigns and the only one whose meaning is settled.
++ *
++ * **And `treatment: "supplement"` with no role stays legal**, which is the
++ * asymmetry to notice rather than tidy away: apparatus we cannot name the kind
++ * of is still apparatus, and every predicate already treats it correctly. It is
++ * the reverse direction — a claim of apparatus that the predicates read as body
++ * — that is unsafe.
++ *
++ * **A third rule was considered and left out**, and it is worth the paragraph
++ * because it looks like it belongs: `noteId` present ⇒ `treatment:
++ * "supplement"`. It has the same shape as the first rule — a block declaring
++ * membership of a note while every predicate reads it as argument — and
++ * `noteFieldsFor` cannot produce it, since the container check gates all three
++ * fields together. It is not enforced for two reasons found by trying it.
++ * First, it rejects the five-role fixture in tests/block-roles.test.ts, whose
++ * `appendix` block deliberately carries a `noteId` and no treatment; that fixture
++ * is arguably wrong, but it is not this function's place to decide so. Second,
++ * stage 5 has to resolve a marker to its note, and a `noteId` on the *marker's*
++ * block — which is body — is one of the shapes that could be reached for.
++ * Foreclosing it from the import validator, before the stage that needs it has
++ * been built, is the wrong order.
++ *
++ * ## Should a CHECK constraint back this?
++ *
++ * It could: all three are columns of one row, so
++ * `check (role <> 'footnote' or treatment = 'supplement')` is expressible, and
++ * the same is true of the `note_id` shape. **Not added here**, for two reasons.
++ * The first is scope: it needs a migration, and this stage is not applying one.
++ * The second is that a constraint is a *backstop* and this is the *guard* — the
++ * constraint would fail as a violation naming `revision_blocks_role`, inside a
++ * transaction, with no block id in it, which is the position the existing
++ * single-column CHECKs already occupy. The recommendation is that the pair ride
++ * along with the next migration this feature needs rather than becoming one of
++ * their own; recorded in docs/plans/260828o-footnotes.md.
+  */
+ export function checkNoteFields(slug: string, blocks: Block[]): void {
+   for (const [index, b] of blocks.entries()) {
+@@ -244,6 +303,22 @@ export function checkNoteFields(slug: string, blocks: Block[]): void {
+     if (b.noteId !== undefined && typeof b.noteId !== "string") {
+       throw new Error(`${slug}: ${where} has a noteId that is not a string`);
+     }
++
++    /* The cross-field rules. `role` is checked against the closed set above, so
++       by here `"footnote"` means what it says. */
++    if (b.role === "footnote" && b.treatment !== "supplement") {
++      throw new Error(
++        `${slug}: ${where} is a footnote with treatment ${JSON.stringify(b.treatment)} — ` +
++          `a footnote is apparatus, and stored without treatment "supplement" every predicate ` +
++          `would read it as argument`,
++      );
++    }
++    if (b.noteId !== undefined && !NOTE_ID_PATTERN.test(b.noteId)) {
++      throw new Error(
++        `${slug}: ${where} has a noteId ${JSON.stringify(b.noteId)} that stage 2 could not have ` +
++          `minted (${NOTE_ID_PATTERN.source})`,
++      );
++    }
+   }
+ }
+ 
+diff --git a/src/summarise.ts b/src/summarise.ts
+index 08d0583..947d0fa 100644
+--- a/src/summarise.ts
++++ b/src/summarise.ts
+@@ -78,6 +78,7 @@ import { MODEL_REFUSED } from "./messages.js";
+ import { anthropicCallFailed } from "./anthropic-call.js";
+ import { stageFailure } from "./job-failure.js";
+ import { isBodyEvidence } from "./block-policy.js";
++import { isSupplementNode } from "./supplement.js";
+ import { hashBlocks, type BlockFingerprint } from "./source-hash.js";
+ import { budgetFor, truncationFailure } from "./token-budget.js";
+ import { parseJsonFrom } from "./parse-json.js";
+@@ -237,6 +238,14 @@ export function targetsOf(tree: Tree, blocks: Block[]): TreeNode[] {
+   const out: TreeNode[] = [];
+   const visit = (node: TreeNode | undefined) => {
+     if (!node) return;
++    /* **The apparatus earns no summary, at any length.** A supplement node is a
++       depth-one child covering forty endnotes, so it would sail past
++       `MIN_BLOCKS` and buy a paid call to summarise a bibliography — and
++       `textOf` filters by `isBodyEvidence`, so the call would go out with an
++       empty scope and come back with a plausible paragraph about nothing.
++       Returning rather than skipping, because its leaves are not targets
++       either. src/supplement.ts. */
++    if (isSupplementNode(node)) return;
+     const earns =
+       node.depth === 0 || (node.depth <= MAX_DEPTH && spanOf(node, order) >= MIN_BLOCKS);
+     if (earns) out.push(node);
+diff --git a/src/toc.ts b/src/toc.ts
+index 3bf415e..a85eee1 100644
+--- a/src/toc.ts
++++ b/src/toc.ts
+@@ -35,9 +35,10 @@ import { loadEnvLocal } from "./env.js";
+ import { MODEL_REFUSED } from "./messages.js";
+ import { anthropicCallFailed } from "./anthropic-call.js";
+ import { blocksArtefact } from "./blocks.js";
+-import { isStructural } from "./block-policy.js";
++import { isBodyEvidence, isStructural } from "./block-policy.js";
+ import { isSpideryarnId } from "./ids.js";
+ import { generateLabels, mergeLabels } from "./labels.js";
++import { appendSupplement, splitBlocks } from "./supplement.js";
+ import { budgetFor, truncationFailure } from "./token-budget.js";
+ import type { Block, Tree, TreeNode, NodeId } from "./types.js";
+ import { parseJsonFrom } from "./parse-json.js";
+@@ -126,9 +127,28 @@ export interface ModelNode {
+   children?: ModelNode[];
+ }
+ 
++/**
++ * The article, as the structure model sees it.
++ *
++ * **A supplement's prose is withheld, and its id is not.** On the ordinary path
++ * `generateToc` hands this only the body, so the branch never fires — but the
++ * split falls back to the whole article whenever the apparatus is not one
++ * trailing run (src/supplement.ts), and on that path this function is the only
++ * thing between a bibliography and the largest prompt the pipeline sends. A
++ * marker alone was the shape of the original bug: `NOT-GISTABLE` is written from
++ * `gistable`, and a prose footnote *is* gistable, so a note went out unmarked
++ * and in full. Marking it would not have been a fix either — the text is what
++ * must not travel. GPT Sol's review of stage 3, 2026-08-28.
++ *
++ * The **id stays**, because the model's ranges have to tile the whole article
++ * and a block it cannot name is a block no node can cover. `NOT-GISTABLE` is
++ * reused rather than a new marker invented: SYSTEM above already explains it,
++ * and a word the prompt never defines is a word the model gets to interpret.
++ */
+ function renderBlocks(blocks: Block[]): string {
+   return blocks
+     .map((b, i) => {
++      if (!isBodyEvidence(b)) return `[${i}] ${b.id} <${b.tag}> NOT-GISTABLE: (withheld)`;
+       const mark = b.gistable ? "" : " NOT-GISTABLE";
+       return `[${i}] ${b.id} <${b.tag}>${mark}: ${b.text}`;
+     })
+@@ -556,6 +576,22 @@ export interface TocRun {
+    * heavily cited piece the two differ by a third. src/block-policy.ts.
+    */
+   structural: number;
++  /**
++   * How many supplement nodes were appended — one per run of apparatus, and in
++   * v1 that is one or none. src/supplement.ts.
++   */
++  supplementNodes: number;
++  /** Blocks under those nodes: the endnotes and the bibliography. */
++  supplementBlocks: number;
++  /**
++   * **Supplement blocks the split refused to place**, which is the number that
++   * must be looked at rather than assumed zero. Non-zero means the apparatus is
++   * not one trailing run, so no node was built at all and the tree is exactly
++   * what it would have been before this stage — a correct article with the
++   * feature silently absent, which is precisely the shape a run stat exists to
++   * make visible (docs/reusable/silent-success.md).
++   */
++  strandedSupplement: number;
+   labelled: number;
+   internal: number;
+   /**
+@@ -644,10 +680,18 @@ export async function generateToc(opts: {
+   const structural = blocks.filter((b) => isStructural(b)).length;
+   const started = Date.now();
+ 
++  /* **The tree is built from the body alone, and the apparatus is appended
++     afterwards.** That ordering is what makes it impossible for a part gist or
++     the root gist to summarise a footnote: the structure model is never shown
++     one. Everything below this line therefore works over `body`, up to the
++     append — including the token budget, which was being asked to pay for a
++     tree over gwern's forty endnotes. src/supplement.ts. */
++  const { body, groups, stranded } = splitBlocks(blocks);
++
+   /* Before the call, and before a minute of anyone's time is spent: an article
+      whose table of contents cannot fit in one response is refused here rather
+      than discovered six minutes in. `budgetFor` throws for that case. */
+-  const answerTokens = estimateTocTokens(blocks);
++  const answerTokens = estimateTocTokens(body);
+   const maxTokens = budgetFor("table of contents", answerTokens);
+ 
+   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
+@@ -669,7 +713,7 @@ export async function generateToc(opts: {
+       thinking: { type: "adaptive" },
+       output_config: { effort: EFFORT },
+       system: SYSTEM,
+-      messages: [{ role: "user", content: renderBlocks(blocks) }],
++      messages: [{ role: "user", content: renderBlocks(body) }],
+     }, { ...(opts.signal ? { signal: opts.signal } : {}) });
+ 
+     if (opts.onProgress) {
+@@ -714,7 +758,20 @@ export async function generateToc(opts: {
+   }
+ 
+   const { root } = parseJson(raw);
+-  const structure = buildTree(root, {}, blocks, slug);
++  /* `body`, so the root's range ends at the last body block and every check in
++     `buildTree` — the tiling, the "covers the whole article" guard — is asked
++     about the argument the model was actually shown. */
++  const structure = appendSupplement(buildTree(root, {}, body, slug), groups);
++
++  /* **Appended before `generateLabels`, not after.** `labels.json` records
++     `structureHash(opts.tree)` (src/labels.ts), so a supplement added afterwards
++     would make the labels stale at birth — a freshness stamp that is wrong the
++     moment it is written, and nothing would ever say so. There is no later
++     gist-composition pass to worry about: composition is an instruction to the
++     model in SYSTEM above, and `buildTree` copies back what it returns.
++     `planBatches` needs no supplement branch of its own — its `own` filter is
++     `isStructural`, which is false for every supplement block, so the node
++     contributes no sibling set and costs no call. */
+ 
+   /* Pass two. The tree has to exist first: the batches are cut along its own
+      section boundaries, so that every label a reader compares with another was
+@@ -781,6 +838,9 @@ export async function generateToc(opts: {
+     model: CAPABLE_MODEL,
+     blocks: blocks.length,
+     structural,
++    supplementNodes: groups.length,
++    supplementBlocks: blocks.length - body.length,
++    strandedSupplement: stranded,
+     labelled: Object.values(tree.nodes).filter((n) => n.navLabel).length,
+     internal: Object.values(tree.nodes).filter((n) => n.children.length > 0).length,
+     labelBatches: labelRun.batches,
+diff --git a/src/tree-invariants.ts b/src/tree-invariants.ts
+index 34db129..c865c74 100644
+--- a/src/tree-invariants.ts
++++ b/src/tree-invariants.ts
+@@ -32,7 +32,8 @@
+  *   npm run validate-tree -- example
+  *   npm run validate-tree -- data/<slug>
+  */
+-import { isStructural } from "./block-policy.js";
++import { isBody, isStructural } from "./block-policy.js";
++import { isSupplementNode } from "./supplement.js";
+ import type { Block, Tree, TreeNode } from "./types.js";
+ 
+ /**
+@@ -211,7 +212,23 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
+         covered.set(i, node.id);
+       }
+     } else {
+-      if (!node.gist) fail(`${node.id}: internal node has no gist — nothing to render at its level`);
++      /* **The gist rule, stated in both directions**, and that is the whole
++         reason `treatment` exists on a node rather than being read off the
++         absent gist. Keyed on absence alone, a pipeline bug that drops a gist
++         becomes indistinguishable from a deliberate supplement, and the
++         dangerous outcome here is acceptance (see the header). So: an internal
++         node must carry a gist *unless* it is a supplement, **and** a
++         supplement must not carry one. Never infer the role from a missing
++         gist. */
++      if (isSupplementNode(node)) {
++        if (node.gist)
++          fail(
++            `${node.id}: supplement carries a gist — the apparatus is shown as written, ` +
++              `never summarised (docs/plans/260828o-footnotes.md § The tree)`,
++          );
++      } else if (!node.gist) {
++        fail(`${node.id}: internal node has no gist — nothing to render at its level`);
++      }
+ 
+       // Titles stay short at every internal depth; it is navLabel that grows.
+       const t = wordsIn(node.title ?? "");
+@@ -261,6 +278,8 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
+     if (!covered.has(i)) fail(`block ${block.id} (index ${i}) is not covered by any leaf`);
+   });
+ 
++  checkSupplements(blocks, tree, index, fail);
++
+   const byDepth = new Map<number, number>();
+   for (const n of Object.values(tree.nodes)) byDepth.set(n.depth, (byDepth.get(n.depth) ?? 0) + 1);
+ 
+@@ -270,3 +289,109 @@ export function checkTree(blocks: Block[], tree: Tree): TreeCheck {
+ 
+   return { problems: unique(problems), advice: unique(advice), byDepth };
+ }
++
++/**
++ * **The six things a supplement node has to be**, each stated separately.
++ *
++ * The exception the gist rule makes for a supplement (see `checkTree` above)
++ * has to be paid for, or a malformed body node escapes
++ * "every-internal-node-needs-a-gist" simply by calling itself apparatus. Six
++ * checks, not one. A supplement node must:
++ *
++ *  1. be a depth-one child of the root
++ *  2. cover exactly one contiguous range
++ *  3. contain **only** blocks whose `treatment` is `supplement`
++ *  4. contain **every** such block exactly once
++ *  5. have only leaves beneath it
++ *  6. carry no gist, and never be nested or be the root
++ *
++ * Each gets its own message and each is mutated separately in
++ * tests/supplement.test.ts. "Delete the supplement and watch the validator
++ * fail" mostly re-tests the old coverage invariant and proves nothing about any
++ * of these.
++ *
++ * **Invariant 4 is conditional on there being a supplement node at all**, and
++ * that condition is doing real work rather than softening the rule. Every tree
++ * written before 2026-08-28 has notes and no supplement node; so does an
++ * article whose notes are not one trailing run, which `splitBlocks` refuses to
++ * build a node for rather than building an invalid one (src/supplement.ts).
++ * Both must keep publishing. The trigger is the **presence of a node**, which
++ * is explicit — not the absence of a gist, which is the inference this whole
++ * design refuses to make.
++ */
++function checkSupplements(
++  blocks: Block[],
++  tree: Tree,
++  index: Map<string, number>,
++  fail: (msg: string) => void,
++): void {
++  const supplements = Object.values(tree.nodes).filter((n) => isSupplementNode(n));
++  if (supplements.length === 0) return;
++
++  const covers = new Map<number, string>(); // block index -> supplement node id
++
++  for (const node of supplements) {
++    // 1 — a depth-one child of the root, and 6's "never the root".
++    if (node.id === tree.rootId)
++      fail(`${node.id}: the root is the whole article and can never be the supplement`);
++    if (node.depth !== 1 || node.parent !== tree.rootId)
++      fail(
++        `${node.id}: supplement is depth ${node.depth} under ${node.parent ?? "nothing"} — ` +
++          `a supplement is a depth-one child of the root`,
++      );
++    // 6 — never nested. Implied by the parent check above, said in its own
++    // words because "a supplement inside a supplement" is a different mistake
++    // from "a supplement too deep", and the message is what gets read.
++    if (node.parent !== null && isSupplementNode(tree.nodes[node.parent] ?? {}))
++      fail(`${node.id}: supplement nested inside supplement ${node.parent}`);
++
++    // 5 — only leaves beneath it. The apparatus is never given a structure of
++    // its own; one node, then one leaf per block.
++    const deep = node.children
++      .map((id) => tree.nodes[id])
++      .filter((c): c is TreeNode => !!c && c.children.length > 0);
++    if (deep.length > 0)
++      fail(
++        `${node.id}: supplement has ${deep.length} internal child(ren) (${deep[0]!.id}) — ` +
++          `only leaves may sit under a supplement`,
++      );
++
++    const lo = index.get(node.range[0]);
++    const hi = index.get(node.range[1]);
++    // A range whose endpoints do not resolve is already reported by `span`.
++    if (lo === undefined || hi === undefined) continue;
++    // 2 — one contiguous range, read as indices rather than as ids.
++    if (lo > hi) {
++      fail(`${node.id}: supplement range runs backwards (index ${lo} > ${hi})`);
++      continue;
++    }
++
++    for (let i = lo; i <= hi; i++) {
++      // 3 — only supplement blocks inside it. This is the direction that
++      // matters most: a body paragraph swallowed by the supplement disappears
++      // from the argument, from every summary and from the arc, and every other
++      // check in this file would still pass.
++      const block = blocks[i];
++      if (block && isBody(block))
++        fail(
++          `${node.id}: supplement covers ${block.id} (index ${i}), which is body — ` +
++            `a supplement contains only blocks whose treatment is "supplement"`,
++        );
++      const other = covers.get(i);
++      // 2 — two supplements may sit side by side (Notes then References) but
++      // never over one another.
++      if (other) fail(`${node.id}: supplement overlaps supplement ${other} at block index ${i}`);
++      else covers.set(i, node.id);
++    }
++  }
++
++  // 4 — and every supplement block is inside one. See the note above on why
++  // this is asked only of a tree that has a supplement node.
++  const outside = blocks.filter((b, i) => !isBody(b) && !covers.has(i));
++  if (outside.length > 0)
++    fail(
++      `${outside.length} supplement block(s) sit outside every supplement node ` +
++        `(${outside.slice(0, 3).map((b) => b.id).join(", ")}) — a tree with a supplement node ` +
++        `must put every note in one`,
++    );
++}
+diff --git a/src/types.ts b/src/types.ts
+index 5b3d04b..6443034 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -1075,6 +1075,12 @@ export interface LibraryEntry {
+   url?: string;
+   /** ISO. `meta.fetchedAt` where stage 2 recorded one, else the mtime of blocks.json. */
+   addedAt: string;
++  /**
++   * **The body's words, not every block's** — `LibraryScalars.wordCount`, which
++   * is `articleWordCounts(blocks).body` (src/block-policy.ts). Footnotes and
++   * bibliographies are on the page and are not what the card is promising.
++   * Anything that adds these up must not call the total "words in all".
++   */
+   words: number;
+   minutes: number;
+   blocks: number;
+diff --git a/src/web/App.tsx b/src/web/App.tsx
+index c75577b..aa8464b 100644
+--- a/src/web/App.tsx
++++ b/src/web/App.tsx
+@@ -1389,7 +1389,7 @@ function Reader({
+    * afterwards, when you have lost your place.
+    */
+   const nav = useMemo(
+-    () => navPlan(geometry.cells, fit.columns, geometry.leafDepth, proseOn, !!arcCells),
++    () => navPlan(geometry, fit.columns, proseOn, !!arcCells),
+     [geometry, fit.columns, proseOn, arcCells],
+   );
+   const navDepth = useArrowNav(
+diff --git a/src/web/ProfilePage.tsx b/src/web/ProfilePage.tsx
+index 8a8e720..3ca22d8 100644
+--- a/src/web/ProfilePage.tsx
++++ b/src/web/ProfilePage.tsx
+@@ -172,6 +172,12 @@ export function ProfilePage() {
+     .slice(0, RECENT);
+ 
+   const onShelf = entries.filter((a) => !a.archivedAt);
++  /* Each entry's `words` is the **body's** words — footnotes and bibliographies
++     are excluded from the clock (`countsTowardReadingTime` in
++     src/block-policy.ts), and `LibraryEntry.words` says so. So this sum is not
++     "every word on the shelf", and the line below must not claim it is. The
++     other half is not available here to show beside it: the shelf reads stored
++     scalars, and only the body figure is stored. */
+   const words = onShelf.reduce((n, a) => n + (a.words ?? 0), 0);
+ 
+   return (
+@@ -280,7 +286,7 @@ export function ProfilePage() {
+             {onShelf.length > RECENT
+               ? `The ${RECENT} most recent of ${onShelf.length} on the shelf`
+               : `${onShelf.length} on the shelf`}
+-            {words > 0 && ` · ${words.toLocaleString()} words in all`}
++            {words > 0 && ` · ${words.toLocaleString()} words, not counting notes`}
+           </p>
+         )}
+       </Section>
+diff --git a/src/web/Spine.tsx b/src/web/Spine.tsx
+index 3c1495a..601497d 100644
+--- a/src/web/Spine.tsx
++++ b/src/web/Spine.tsx
+@@ -467,7 +467,16 @@ export function Spine({ outline, layoutKey, matches = NO_MATCHES, onJump }: Prop
+           return (
+             <div
+               key={b.entry.node.id}
+-              className={`spine-part${active ? " active" : ""}`}
++              /* The apparatus keeps its true proportional height and is
++                 dimmed. That is the fix for the complaint the rail exists to
++                 answer: on a heavily noted piece you are "60% through" and the
++                 piece ends there, because the rest is endnotes. Shrinking the
++                 band would make the rail lie about pixels; dimming it says
++                 where the argument ends and leaves the notes hittable.
++                 src/supplement.ts. */
++              className={`spine-part${active ? " active" : ""}${
++                b.entry.supplement ? " supplement" : ""
++              }`}
+               style={{ top: pct(b.top), height: pct(b.height) }}
+             />
+           );
+diff --git a/src/web/TableView.tsx b/src/web/TableView.tsx
+index 2722765..0d2758c 100644
+--- a/src/web/TableView.tsx
++++ b/src/web/TableView.tsx
+@@ -240,8 +240,15 @@ export function TableView({
+           items: entries.map(([, a]) => ({
+             node: a.node,
+             blockId: a.node.range[0],
+-            text: a.text ?? "",
+-            step: { index: a.index, total: a.total },
++            /* The apparatus takes no `text`, so the list falls through to its
++               title. `""` on a part is deliberate — it stops the renderer
++               falling back to the part's gist and turning the arc column into a
++               copy of L1 — but on a supplement there is no gist to fall back to
++               and "Notes" is the content. */
++            ...(a.supplement ? { supplement: true } : { text: a.text ?? "" }),
++            ...(a.index !== undefined && a.total !== undefined
++              ? { step: { index: a.index, total: a.total } }
++              : {}),
+           })),
+           starts: entries.map(([row]) => row),
+         });
+@@ -249,7 +256,7 @@ export function TableView({
+       }
+       m.set(
+         d,
+-        itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id),
++        itemsFromCells(geometry.cells[d] ?? [], (row) => blocks[row]?.id, geometry.supplementOf),
+       );
+     }
+     return m;
+@@ -645,9 +652,18 @@ export function TableView({
+                         its content is the panel's current entry. */}
+                     {!panels && (
+                       <div className="sticky">
+-                        <div className="arc-step">
+-                          {arc.index} <span className="of">/ {arc.total}</span>
+-                        </div>
++                        {/* A supplement sits outside the numbering — "3 / 7",
++                            not "3 / 9" — and its title is its content, so it
++                            gets the title where a part gets its marker. Never a
++                            hole: the arc has no sentence for the apparatus and
++                            never will. src/supplement.ts. */}
++                        {arc.supplement ? (
++                          <div className="arc-step arc-supplement">{arc.node.title}</div>
++                        ) : (
++                          <div className="arc-step">
++                            {arc.index} <span className="of">/ {arc.total}</span>
++                          </div>
++                        )}
+                         {/* No fallback if the sentence is missing: an empty cell
+                             is a failure the reader can see, and borrowing the
+                             part's own gist here would quietly turn this column
+diff --git a/src/web/context.ts b/src/web/context.ts
+index 3886eb4..b0d3b0e 100644
+--- a/src/web/context.ts
++++ b/src/web/context.ts
+@@ -32,8 +32,7 @@
+  * in a URL and never by comparing id strings (docs/project/block-ids.md).
+  */
+ import type { BlockId, NodeId, TreeNode } from "../types.js";
+-import type { Cell } from "./tree.js";
+-import { itemStarts } from "./keynav.js";
++import { navigableItems, type Cell } from "./tree.js";
+ 
+ /** How far an entry is from the one the reader is in. Four steps, no gradient. */
+ export type Tier = "cur" | "near" | "mid" | "far";
+@@ -47,6 +46,11 @@ export interface ContextItem {
+   node: TreeNode;
+   /** Where clicking it goes: the first block of the item. */
+   blockId: BlockId;
++  /**
++   * The apparatus, collapsed to one entry. It has no gist and never will, so
++   * the list shows its title — "Notes" — and nothing else.
++   */
++  supplement?: boolean;
+   /** The arc sentence, when this is the arc column. Otherwise the gist is used. */
+   text?: string;
+   /**
+@@ -90,18 +94,24 @@ export interface ContextEntry {
+ export function itemsFromCells(
+   cells: Cell[],
+   blockAt: (row: number) => BlockId | undefined,
++  supplementOf: ReadonlyMap<NodeId, TreeNode>,
+ ): { items: ContextItem[]; starts: number[] } {
+-  const allStarts = itemStarts(cells);
+   const items: ContextItem[] = [];
+   const starts: number[] = [];
+-  cells.forEach((cell, i) => {
+-    if (cell.continuation) return;
+-    const start = allStarts[i] ?? 0;
+-    const blockId = blockAt(start);
+-    if (!blockId) return;
+-    items.push({ node: cell.node, blockId });
+-    starts.push(start);
+-  });
++  /* `navigableItems`, not the cells: at the sections column a note's chain is
++     root → supplement → leaf, so the raw cells give a run of blank leaf entries
++     — one per endnote, none with a title — and one of them becomes the reader's
++     current item. The projection collapses them into a single "Notes". It is
++     shared with keynav, position and the arc's numbering **because a fix here
++     alone is what breaks the anchor invariant**: three panels agreeing depends
++     on all four counting the same items. src/web/tree.ts § navigableItems. */
++  for (const item of navigableItems(cells, supplementOf)) {
++    if (item.continuation) continue;
++    const blockId = blockAt(item.startRow);
++    if (!blockId) continue;
++    items.push({ node: item.node, blockId, ...(item.supplement && { supplement: true }) });
++    starts.push(item.startRow);
++  }
+   return { items, starts };
+ }
+ 
+diff --git a/src/web/keynav.ts b/src/web/keynav.ts
+index d798c7e..0ebaeaf 100644
+--- a/src/web/keynav.ts
++++ b/src/web/keynav.ts
+@@ -50,7 +50,7 @@ import { useEffect, useRef, useState } from "react";
+ import type { Block } from "../types.js";
+ import { activeSectionIndex } from "./position.js";
+ import { SCROLL_MS, scrollToBlock, stickyOffset } from "./scroll.js";
+-import type { Cell } from "./tree.js";
++import { navigableItems, type Cell, type Geometry } from "./tree.js";
+ 
+ /**
+  * The attribute a zone wears to say "arrows here mean this level".
+@@ -150,16 +150,24 @@ export interface NavPlan {
+ }
+ 
+ export function navPlan(
+-  cells: Cell[][],
++  geometry: Geometry,
+   columns: number[],
+-  leafDepth: number,
+   showText: boolean,
+   hasArc: boolean,
+ ): NavPlan {
++  const { cells, leafDepth } = geometry;
++  /* Through `navigableItems`, so ↓ steps over the whole of the apparatus in one
++     press rather than forty times through unlabelled endnote leaves — and, more
++     to the point, so the row the keys land on is the same row the fisheye calls
++     current and the same row `?at=` stores. Four consumers, one projection;
++     src/web/tree.ts § navigableItems for why fixing only the visible list is
++     what breaks them apart. */
++  const startsOf = (column: readonly Cell[]): number[] =>
++    navigableItems(column, geometry.supplementOf).map((item) => item.startRow);
+   // The arc's cells are the parts' cells, by construction — so borrow the row
+   // starts rather than recomputing them, and the two columns cannot drift.
+   const starts: number[][] = cells.map((column, d) =>
+-    itemStarts(d === 0 && hasArc ? (cells[1] ?? column) : column),
++    startsOf(d === 0 && hasArc ? (cells[1] ?? column) : column),
+   );
+   const visible = new Set(columns);
+   // The prose column is the finest granularity there is, and it means the same
+diff --git a/src/web/position.ts b/src/web/position.ts
+index a21efd8..bbc5cea 100644
+--- a/src/web/position.ts
++++ b/src/web/position.ts
+@@ -30,7 +30,7 @@
+  * *block* of the section, never the id of the node.
+  */
+ import type { Block, BlockId, NodeId } from "../types.js";
+-import type { Geometry } from "./tree.js";
++import { navigableItems, type Geometry } from "./tree.js";
+ 
+ export interface Section {
+   /** Index into `blocks` of this section's first row. */
+@@ -68,18 +68,22 @@ export function sectionDepth(geometry: Geometry): number {
+ export function buildSections(geometry: Geometry, blocks: Block[]): Section[] {
+   const column = geometry.cells[sectionDepth(geometry)] ?? [];
+   const sections: Section[] = [];
+-  let row = 0;
+-  for (const cell of column) {
+-    const block = blocks[row];
+-    if (block) {
+-      sections.push({
+-        row,
+-        blockId: block.id,
+-        nodeId: cell.node.id,
+-        title: cell.node.title,
+-      });
+-    }
+-    row += cell.rowSpan;
++  /* `navigableItems`, not the raw cells. At the section depth the apparatus is
++     one leaf cell per endnote, each with an empty title, so a reader who stops
++     in the notes would have `?at=` stepping through forty nameless sections and
++     the panel naming none of them. Collapsed, the notes are one section called
++     "Notes" whose id is its first block — and that is the same item keynav
++     steps to and the fisheye marks current, which is the agreement this
++     projection exists to guarantee. src/web/tree.ts § navigableItems. */
++  for (const item of navigableItems(column, geometry.supplementOf)) {
++    const block = blocks[item.startRow];
++    if (!block) continue;
++    sections.push({
++      row: item.startRow,
++      blockId: block.id,
++      nodeId: item.node.id,
++      title: item.node.title,
++    });
+   }
+   return sections;
+ }
+diff --git a/src/web/styles.css b/src/web/styles.css
+index ea46679..a45a223 100644
+--- a/src/web/styles.css
++++ b/src/web/styles.css
+@@ -691,6 +691,17 @@ td.gist.arc.active .gist-text { color: var(--ink-soft); }
+   font-weight: 600;
+ }
+ .arc-step .of { color: var(--ink-faint); font-weight: 400; opacity: 0.8; }
++/* The apparatus in the arc column: its title where a part has its marker, set
++   as chrome rather than as prose. "Notes" is a label *about* the article, not a
++   compression *of* it, so it must not dress as a gist — a reader who has
++   learned the column's grammar reads the difference without being told.
++   docs/plans/260828o-footnotes.md § What the reader sees. */
++.arc-step.arc-supplement {
++  color: var(--ink-faint);
++  font-weight: 500;
++  letter-spacing: 0.04em;
++  text-transform: uppercase;
++}
+ 
+ td.gist .title::before {
+   content: "";
+@@ -1034,6 +1045,15 @@ td.gist.leaf:hover { background: var(--highlight-wash); }
+ }
+ .spine-part.active::before { opacity: 0.75; }
+ 
++/* The apparatus: **dimmed, at its true proportional height.** The band is the
++   same size it would be as a part — the rail must not lie about pixels — and
++   the tint drops so that the eye reads the argument as ending at its top edge.
++   Search lanes still paint over it, deliberately: a hit inside a footnote is a
++   real hit, and the dimming makes those marks more legible rather than less.
++   docs/plans/260828o-footnotes.md § What the reader sees. */
++.spine-part.supplement::before { opacity: 0.1; }
++.spine-part.supplement.active::before { opacity: 0.4; }
++
+ /* L2 as hairlines: the subdivision of the article stays visible even where
+    there is no room for a word of it. */
+ .spine-tick {
+diff --git a/src/web/tree.ts b/src/web/tree.ts
+index 8f099da..3ad7894 100644
+--- a/src/web/tree.ts
++++ b/src/web/tree.ts
+@@ -14,6 +14,7 @@
+  * the whole feature rests on.
+  */
+ import type { Arc, Block, BlockId, NodeId, Summaries, Tree, TreeNode } from "../types.js";
++import { supplementIndex } from "../supplement.js";
+ import type { Rung } from "./params.js";
+ 
+ export interface Cell {
+@@ -34,6 +35,15 @@ export interface Geometry {
+   cellAt: Map<string, Cell>;
+   /** Root-to-leaf node ids for each row index. */
+   chains: NodeId[][];
++  /**
++   * Node id → the supplement node it sits under, itself included. Empty for
++   * every article with no apparatus, and for every tree written before
++   * 2026-08-28.
++   *
++   * Carried on the geometry because it is what `navigableItems` needs and the
++   * geometry is what every consumer already has. src/supplement.ts.
++   */
++  supplementOf: Map<NodeId, TreeNode>;
+ }
+ 
+ /** Descend from the root, following the child whose range contains each block. */
+@@ -112,7 +122,76 @@ export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
+     cells.push(column);
+   }
+ 
+-  return { columnDepths, leafDepth: maxDepth, cells, cellAt, chains };
++  return {
++    columnDepths,
++    leafDepth: maxDepth,
++    cells,
++    cellAt,
++    chains,
++    supplementOf: supplementIndex(tree),
++  };
++}
++
++/* --------------------------------------------- what a column can navigate --
++
++   **One projection, used by four things.** `itemsFromCells` (context.ts) drives
++   the visible fisheye, and three other consumers read the raw cells: keyboard
++   navigation (keynav.ts), the saved reading position (position.ts) and the
++   arc's numbering (buildArcColumn below). Fixing only the visible list is what
++   *breaks* the anchor invariant that keeps the three panels agreeing — GPT
++   Sol's decision 9, and the part of this stage most likely to be got wrong.
++
++   What it does: every cell under a supplement collapses into **one** item,
++   anchored at the supplement's first block and carrying the supplement node
++   itself. Without it, the sections column of a heavily noted article is a run of
++   forty blank leaf cells — a leaf under a supplement has no title, no gist and
++   no navLabel, because none of it is `isStructural` — and one of those blanks
++   becomes the reader's current item. With it, a reader standing mid-Notes is
++   *in* the "Notes" item: not nowhere (`currentIndex: -1`) and not wrongly in the
++   last part of the argument, which is where `currentIndex` would put them if
++   the blanks were merely filtered out. */
++
++export interface NavItem {
++  /** The supplement node itself where this is collapsed; the cell's node otherwise. */
++  node: TreeNode;
++  /** The row it starts on — its first block. */
++  startRow: number;
++  /** How many rows it covers, summed across the cells it collapsed. */
++  rowSpan: number;
++  /** True only when every cell behind it was one — see `itemsFromCells`. */
++  continuation: boolean;
++  /** The apparatus rather than the argument. Outside the numbering, dimmed. */
++  supplement: boolean;
++}
++
++export function navigableItems(
++  cells: readonly Cell[],
++  supplementOf: ReadonlyMap<NodeId, TreeNode>,
++): NavItem[] {
++  const out: NavItem[] = [];
++  let row = 0;
++  for (const cell of cells) {
++    const supplement = supplementOf.get(cell.node.id);
++    const last = out.at(-1);
++    if (supplement && last?.supplement && last.node.id === supplement.id) {
++      // Same supplement as the cell before: grow it rather than listing a
++      // second entry. A supplement's range is contiguous (tree-invariants.ts),
++      // so its cells are always consecutive and this can never merge across a
++      // part of the argument.
++      last.rowSpan += cell.rowSpan;
++      last.continuation = last.continuation && cell.continuation;
++    } else {
++      out.push({
++        node: supplement ?? cell.node,
++        startRow: row,
++        rowSpan: cell.rowSpan,
++        continuation: cell.continuation,
++        supplement: supplement !== undefined,
++      });
++    }
++    row += cell.rowSpan;
++  }
++  return out;
+ }
+ 
+ /** Human label for a column. `hasArc` renames L0, which stops being the root. */
+@@ -201,9 +280,21 @@ export interface ArcCell {
+   rowSpan: number;
+   /** Absent when no arc entry matched this part — draws empty, never borrowed. */
+   text?: string;
+-  /** 1-based position among the parts, for the step marker. */
+-  index: number;
+-  total: number;
++  /**
++   * 1-based position among the parts, for the step marker — **absent on a
++   * supplement**, which sits outside the numbering.
++   *
++   * If Notes were one of nine depth-1 children, "3 / 9" would tell a reader
++   * there are six parts of argument left when there are four. So the apparatus
++   * is not counted and wears no marker: "3 / 7", and the Notes cell shows its
++   * title instead. `partsOf` in src/arc.ts is the same rule on the generation
++   * side; the two are separate because this one numbers the cells it is
++   * drawing rather than the tree.
++   */
++  index?: number;
++  total?: number;
++  /** The apparatus. Drawn unnumbered and dimmed. */
++  supplement?: boolean;
+ }
+ 
+ /**
+@@ -223,27 +314,35 @@ export function buildArcColumn(
+   geometry: Geometry,
+   arc: Arc | undefined,
+ ): Map<number, ArcCell> | null {
+-  const parts = geometry.cells[1];
+-  if (!arc || !parts?.length) return null;
++  const cells = geometry.cells[1];
++  if (!arc || !cells?.length) return null;
++
++  /* Through the shared projection, so the arc's cells are the same items the
++     fisheye lists and the keys step through. At depth 1 a supplement is already
++     one cell, so this collapses nothing today — it is here so that the four
++     consumers cannot drift, which is the whole point of there being one. */
++  const parts = navigableItems(cells, geometry.supplementOf);
++  const numbered = parts.filter((p) => !p.supplement).length;
+ 
+   const byRange = new Map(arc.entries.map((e) => [`${e.range[0]}|${e.range[1]}`, e.text]));
+   const out = new Map<number, ArcCell>();
+-  let row = 0;
+-  parts.forEach((cell, i) => {
+-    const key = `${cell.node.range[0]}|${cell.node.range[1]}`;
++  let step = 0;
++  for (const part of parts) {
++    const key = `${part.node.range[0]}|${part.node.range[1]}`;
+     // Read once and spread on the value, not on `has`: `text` must be absent
+     // when nothing matched, never present-and-undefined, because "absent" is
+     // what makes the cell draw empty rather than borrow its neighbour's.
++    // A supplement matches nothing by construction — `partsOf` never offered it
++    // to the model — and that is exactly right: the cell shows its title.
+     const text = byRange.get(key);
+-    out.set(row, {
+-      node: cell.node,
+-      rowSpan: cell.rowSpan,
+-      index: i + 1,
+-      total: parts.length,
++    if (!part.supplement) step += 1;
++    out.set(part.startRow, {
++      node: part.node,
++      rowSpan: part.rowSpan,
++      ...(part.supplement ? { supplement: true } : { index: step, total: numbered }),
+       ...(text !== undefined && { text }),
+     });
+-    row += cell.rowSpan;
+-  });
++  }
+   return out;
+ }
+ 
+@@ -268,6 +367,15 @@ export interface OutlineEntry {
+   endRow: number;
+   words: number;
+   children: OutlineEntry[];
++  /**
++   * The apparatus. **A band with its true proportional height, dimmed** — which
++   * is the whole reason the supplement is in the spine rather than hidden from
++   * it. On a heavily noted piece the scrollbar lies: you are "60% through" and
++   * the piece ends there, because the rest is endnotes. The rail must not lie
++   * about pixels either, so the band keeps its real size and the dimming is
++   * what says *the argument ends at this line*. Spine.tsx draws it.
++   */
++  supplement?: boolean;
+ }
+ 
+ /**
+@@ -294,13 +402,18 @@ export function buildOutline(
+     }
+     let words = 0;
+     for (let i = startRow; i <= endRow; i++) words += blocks[i]?.words ?? 0;
++    /* One band for the apparatus, never forty. A supplement's children are one
++       leaf per note, so descending into it would put a hairline segment in the
++       rail per endnote — the phantom-row failure `isStructural` prevents in the
++       ToC, arriving by a different door. */
++    const supplement = node.treatment === "supplement";
+     const children =
+-      node.depth < depthLimit
++      node.depth < depthLimit && !supplement
+         ? node.children
+             .map((id) => entryFor(tree.nodes[id]))
+             .filter((e): e is OutlineEntry => e !== null)
+         : [];
+-    return { node, startRow, endRow, words, children };
++    return { node, startRow, endRow, words, children, ...(supplement && { supplement: true }) };
+   };
+ 
+   const root = tree.nodes[tree.rootId];
+@@ -368,9 +481,38 @@ export function buildSummaryTree(
+   depthLimit = 2,
+ ): SummaryNode | null {
+   const order = new Map<BlockId, number>(blocks.map((b, i) => [b.id, i]));
+-  const byRange = new Map(
+-    (summaries?.entries ?? []).map((e) => [`${e.range[0]}|${e.range[1]}`, e]),
+-  );
++  const entries = summaries?.entries ?? [];
++  const byRange = new Map(entries.map((e) => [`${e.range[0]}|${e.range[1]}`, e]));
++  /**
++   * **The root is matched by depth, not by range** — and this is the one thing
++   * appending a supplement node breaks.
++   *
++   * Every other join here is safe by construction: a supplement changes no body
++   * part's range, so part 3 still runs from the same first block id to the same
++   * last. Exactly one range moves — **the root's**, whose end goes from the last
++   * body block to the last note. Keyed by range, the whole-article summary's
++   * entry then misses and is dropped *without a word*, on every article
++   * summarised before 2026-08-28, with `sourceHash` still current because no
++   * block changed. Green suites, plausible output, and a reader who notices a
++   * missing paragraph months later.
++   *
++   * `SummaryEntry` already carries `depth`, and the root is unique, so keying it
++   * by its full range was precision it never needed. Everything below the root
++   * keeps range-matching, where the ambiguity that rule exists to prevent is
++   * real. docs/plans/260828o-footnotes.md § The invisible stage-4 failure.
++   *
++   * **The start block is still checked, and the plan said not to bother.** The
++   * plan's version — `depth === 0` alone — quietly gives up a guarantee that
++   * was already there and already tested: an entry written against a *different*
++   * article no longer matches anything and is dropped rather than shown
++   * (tests/summarise.test.ts, "drops an entry whose range matches no node").
++   * Only the root's **end** moves when a supplement is appended; its start is
++   * still the article's first block. So keying on `depth === 0` **and** the
++   * start id fixes the supplement case and keeps the stale case dropped, which
++   * is strictly better than either rule alone.
++   */
++  const rootStart = tree.nodes[tree.rootId]?.range[0];
++  const rootEntry = entries.find((e) => e.depth === 0 && e.range[0] === rootStart);
+ 
+   const build = (node: TreeNode | undefined, number: string): SummaryNode | null => {
+     if (!node) return null;
+@@ -379,7 +521,8 @@ export function buildSummaryTree(
+     const endRow = order.get(node.range[1]);
+     if (startRow === undefined || endRow === undefined || startRow > endRow) return null;
+ 
+-    const found = byRange.get(`${node.range[0]}|${node.range[1]}`);
++    const found =
++      node.depth === 0 ? rootEntry : byRange.get(`${node.range[0]}|${node.range[1]}`);
+     const children =
+       node.depth < depthLimit
+         ? node.children
+diff --git a/tests/block-policy-prompts.test.ts b/tests/block-policy-prompts.test.ts
+index d25cb6b..45c2a95 100644
+--- a/tests/block-policy-prompts.test.ts
++++ b/tests/block-policy-prompts.test.ts
+@@ -31,7 +31,8 @@
+  * throws. The three asked ones have exported, pure prompt builders and need no
+  * such thing.
+  */
+-import { cp, readFile, rm, writeFile } from "node:fs/promises";
++import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
+ import path from "node:path";
+ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+ 
+@@ -60,32 +61,60 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
+ });
+ 
+ const ROOT = path.resolve(import.meta.dirname, "..");
+-const SLUG = "test-block-policy-prompts";
+-const DIR = path.join(ROOT, "data", SLUG);
++
++/**
++ * **A temp directory, deliberately not `data/`.**
++ *
++ * The four stages under test take an explicit `dir`, so nothing here needs the
++ * corpus — and living in it was an active hazard rather than a neutral choice.
++ * `store-parity`, `store-roundtrip`, `chat-anchor` and `store-artefact-manifest`
++ * each enumerate *every* directory under `data/` and load what they find through
++ * the real write path; a fixture that is a complete article gets swept into
++ * somebody else's suite, and this one is a copy of `example/`.
++ *
++ * It showed up exactly as `tests/helpers/corpus-lock.ts` describes: clean runs,
++ * then two, then six, then eight failures, all of them a stage throwing before
++ * it built a prompt. Nothing about the policy under test.
++ */
++let DIR: string;
+ 
+ let blocks: Block[];
+ let tree: Tree;
+ let meta: Meta;
+ 
+ beforeAll(async () => {
+-  await rm(DIR, { recursive: true, force: true });
++  DIR = await mkdtemp(path.join(tmpdir(), "block-policy-prompts-"));
+   await cp(path.join(ROOT, "example"), DIR, { recursive: true });
+ 
+   const file = path.join(DIR, "blocks.json");
+   const parsed = JSON.parse(await readFile(file, "utf8")) as { blocks: Block[] };
+   blocks = parsed.blocks;
+ 
+-  /* The **last** block becomes the note, so the root's range still ends on it
+-     and `textOf` still slices over it — which is the case summarise.ts has to
+-     filter for itself, and the one a prompt-builder filter would miss. */
+-  const note = blocks[blocks.length - 1]!;
+-  note.text = `A note about ${NOTE_WORD}, which nobody reads front to back.`;
+-  note.words = note.text.split(/\s+/).length;
+-  note.gistable = true;
+-  note.kind = "text";
+-  note.role = "footnote";
+-  note.treatment = "supplement";
+-  note.noteId = "note-1";
++  /* The **last two** blocks become one note, so the root's range still ends on
++     it and `textOf` still slices over it — which is the case summarise.ts has
++     to filter for itself, and the one a prompt-builder filter would miss.
++
++     **Two rather than one, and that is the difference between this file testing
++     the labels prompt and not testing it.** `renderBatch` prints a context
++     window of `CONTEXT_BLOCKS` — one — either side of a batch's span, and on
++     this fixture the last *labellable* block is index 31. A single note at index
++     33 is two past it: outside the window, absent from the prompt, and the
++     assertion passes on code that sends the whole bibliography. Measured, with
++     the guard removed, before this line was written (`output/labels-probe.mts`).
++     A real article's apparatus is a run of blocks beginning immediately after
++     the body, which is what this now is. */
++  const noteRun = blocks.slice(-2);
++  for (const [i, note] of noteRun.entries()) {
++    note.text = `A note about ${NOTE_WORD}, part ${i + 1}, which nobody reads front to back.`;
++    note.words = note.text.split(/\s+/).length;
++    note.gistable = true;
++    note.kind = "text";
++    note.role = "footnote";
++    note.treatment = "supplement";
++    /* One `noteId` across both, because a note is a RANGE of blocks and not a
++       block — docs/plans/260828o-footnotes.md § A note is a range of blocks. */
++    note.noteId = "note-1";
++  }
+ 
+   /* The control. Its word must be in every prompt the note's word is missing
+      from, or "absent" is a statement about the harness rather than the code. */
+@@ -105,8 +134,21 @@ afterAll(() => rm(DIR, { recursive: true, force: true }));
+ /** Run a stage that is about to fail on the mocked call, and return what it sent. */
+ async function promptOf(run: () => Promise<unknown>): Promise<string> {
+   sent.length = 0;
+-  await run().catch(() => undefined);
+-  expect(sent.length).toBeGreaterThan(0);
++  /* The thrown error is **kept**, not swallowed. Every stage here is expected
++     to throw — the mock does it deliberately — so `.catch(() => undefined)`
++     looks right and is what this had first. Then a stage that failed *before*
++     building a prompt gave `sent.length === 0` and an assertion reading
++     "expected 0 to be greater than 0", which says nothing about the cause. The
++     guard was doing its job and the diagnosis was missing. */
++  const thrown = await run().then(
++    () => null,
++    (err: unknown) => err,
++  );
++  const why = thrown instanceof Error ? thrown.message : String(thrown);
++  expect(
++    sent.length,
++    `the stage sent no request before failing — ${why}`,
++  ).toBeGreaterThan(0);
+   return sent.join("\n");
+ }
+ 
+@@ -143,6 +185,85 @@ describe("the automatic stages never see the note", () => {
+     expect(prompt).not.toContain(NOTE_WORD);
+   });
+ 
++  it("the table of contents — the largest call in the pipeline", async () => {
++    /* **The one the policy's own claim was false for.** `renderBlocks` sends
++       every block's text and marks a block NOT-GISTABLE when `!b.gistable` — and
++       a prose footnote *is* gistable, so a note was not even marked, let alone
++       withheld. The model could then invent sections and gists over the
++       apparatus, and `buildTree` copies those gists straight through into the
++       arc, the tweets, the glossary and the ideas, all of whose own evidence is
++       filtered. GPT Sol's review of stage 3, 2026-08-28.
++       The fix is stage 4's own ordering: the tree is built over the body alone
++       and the supplement node is appended afterwards (src/supplement.ts), so
++       the model is never handed a note at all. Handing it one with a label
++       would not have been a fix. */
++    const { generateToc } = await import("../src/toc.js");
++    const prompt = await promptOf(() =>
++      generateToc({ blocksPath: path.join(DIR, "blocks.json"), outDir: DIR }),
++    );
++    expect(prompt).toContain(BODY_WORD);
++    expect(prompt).not.toContain(NOTE_WORD);
++  });
++
++  it("the table of contents, even for an article the split gives up on", async () => {
++    /* **The hole the first fix left.** Building the tree over the body alone
++       withholds the notes only while `splitBlocks` finds them — and it refuses
++       the whole split when a note is stranded in the middle of the article
++       (src/supplement.ts), handing the model every block again. Zero of the
++       seven committed fixtures are that shape, so nothing would have caught
++       this; `renderBlocks` withholds a supplement's prose itself, and this is
++       the only input that exercises that line. */
++    const dir = await mkdtemp(path.join(tmpdir(), "block-policy-prompts-stranded-"));
++    try {
++      await cp(path.join(ROOT, "example"), dir, { recursive: true });
++      const stranded = blocks.map((b) => ({ ...b }));
++      /* One note in the middle of the argument, which is what a sidenote whose
++         stamp landed mid-prose looks like. */
++      const mid = stranded[5]!;
++      mid.text = `A stranded note about ${NOTE_WORD}, mid-argument.`;
++      mid.words = mid.text.split(/\s+/).length;
++      mid.role = "footnote";
++      mid.treatment = "supplement";
++      mid.noteId = "note-2";
++      await writeFile(path.join(dir, "blocks.json"), JSON.stringify({ blocks: stranded }));
++
++      const { splitBlocks } = await import("../src/supplement.js");
++      // The precondition, asserted rather than assumed: this really is the
++      // fallback path, or the test is about the ordinary one all over again.
++      expect(splitBlocks(stranded).groups).toEqual([]);
++
++      const { generateToc } = await import("../src/toc.js");
++      const prompt = await promptOf(() =>
++        generateToc({ blocksPath: path.join(dir, "blocks.json"), outDir: dir }),
++      );
++      expect(prompt).toContain(BODY_WORD);
++      expect(prompt).not.toContain(NOTE_WORD);
++      // And the block is still nameable, or no node could cover it.
++      expect(prompt).toContain(mid.id);
++    } finally {
++      await rm(dir, { recursive: true, force: true });
++    }
++  });
++
++  it("the nav labels — every batch of them", async () => {
++    /* **The second one, and marking is not hiding.** `renderBatch` prints a
++       context window of `CONTEXT_BLOCKS` either side of the batch, in full, and
++       the last batch of a noted article always reaches into the notes — they
++       sit immediately after the body. Moving the marker to `isStructural` was
++       right and was not enough: the block's own text went out beneath it.
++
++       The tree here is the fixture's own — a *pre*-stage-4 tree, in which the
++       note has an ordinary leaf under a body section. That is the stricter
++       input on purpose: `renderBatch` must refuse the prose whatever shape the
++       tree is in, rather than relying on stage 4 having run. */
++    const { generateLabels } = await import("../src/labels.js");
++    const prompt = await promptOf(() =>
++      generateLabels({ tree, blocks, slug: "block-policy-prompts" }),
++    );
++    expect(prompt).toContain(BODY_WORD);
++    expect(prompt).not.toContain(NOTE_WORD);
++  });
++
+   it("summaries — which build their text by slicing a range, not by calling a builder", async () => {
+     /* `textOf` slices `blocks` over a node's range and filtered only on
+        `b.text`, so the root — whose range ends at the last note — would carry
+diff --git a/tests/block-roles.test.ts b/tests/block-roles.test.ts
+index d8a97ce..f364093 100644
+--- a/tests/block-roles.test.ts
++++ b/tests/block-roles.test.ts
+@@ -417,6 +417,59 @@ describe("all five roles", () => {
+     expect(() => checkNoteFields("roles", wrongType)).toThrow(/noteId that is not a string/);
+   });
+ 
++  /**
++   * **Each field being legal is not the same as the block being coherent.**
++   *
++   * GPT Sol's review of stage 3: the validator checked the three fields in
++   * isolation, so the failure it exists to prevent walked in through the door
++   * that left open. Both shapes below pass every single-field check.
++   */
++  it("refuses a footnote that is not marked as apparatus", () => {
++    /* `role: "footnote"` with no treatment. `isBody` reads an absent treatment
++       as body, so this block declares itself apparatus in the one column
++       nothing reads, and is summarised, embedded, labelled and put on the clock
++       as argument — silent reclassification arriving as a well-formed import. */
++    const { treatment: _dropped, ...orphan } = SYNTHETIC[1]!;
++    expect(orphan.role).toBe("footnote");
++    expect(() => checkNoteFields("roles", [orphan])).toThrow(/is a footnote with treatment/);
++  });
++
++  it("still allows an appendix without one, which is why there are two axes", () => {
++    /* The control for the rule above, and the reason it is stated for
++       `"footnote"` alone rather than for every role: an appendix may be real
++       prose worth gisting. A rule that read "any role implies supplement" would
++       pass the test above and delete the distinction the two axes exist for. */
++    const appendix = SYNTHETIC.find((b) => b.role === "appendix")!;
++    expect(appendix.treatment).toBeUndefined();
++    expect(() => checkNoteFields("roles", [appendix])).not.toThrow();
++  });
++
++  it("refuses a noteId stage 2 could not have minted", () => {
++    /* Stage 2 mints ten hex digits and stage 3 refuses anything else
++       (`noteFieldsFor` gates on `NOTE_ID_PATTERN`), so a value in any other
++       shape did not come from this pipeline. Stage 5 resolves a marker to its
++       note by this id: an arbitrary string is a hover card resolving to
++       nothing, or to the wrong note. */
++    for (const bad of ["note-1", "spya-note-zzzzzzzzzz", "spya-note-00ab12cd3", ""]) {
++      const forged = [{ ...SYNTHETIC[1]!, noteId: bad }];
++      /* The exact message, not an alternation loose enough to also match "not
++         a string" — a test that accepts either error is not testing which one
++         fired. */
++      expect(() => checkNoteFields("roles", forged)).toThrow(/could not have minted/);
++    }
++  });
++
++  it("accepts the two shapes stage 2 really mints", () => {
++    /* The control: `NOTE_ID_PATTERN` allows an optional `-<n>` suffix, and a
++       validator that rejected it would refuse an ordinary Wikipedia article
++       whose one note is cited thirteen times. */
++    for (const good of ["spya-note-00ab12cd34", "spya-note-00ab12cd34-2"]) {
++      expect(NOTE_ID_PATTERN.test(good)).toBe(true);
++      const block = [{ ...SYNTHETIC[1]!, noteId: good }];
++      expect(() => checkNoteFields("roles", block)).not.toThrow();
++    }
++  });
++
+   it("reaches a visitor through the public DTO", () => {
+     const tree: Tree = {
+       version: "1",
+diff --git a/tests/client-imports.test.ts b/tests/client-imports.test.ts
+index b18e2d4..44e7772 100644
+--- a/tests/client-imports.test.ts
++++ b/tests/client-imports.test.ts
+@@ -50,6 +50,15 @@ const SHARED = new Set([
+      had drifted. It imports `types.js` and nothing else.
+      See src/block-policy.ts and docs/plans/260828o-footnotes.md. */
+   "block-policy.js",
++  /* What a supplement node is, and which nodes sit under one. On the list for
++     the same reason `block-policy.js` is, and it imports that file and types
++     and nothing else: the tree is one structure and both sides read it, so the
++     spine's dimmed band, the arc's step marker, the fisheye's "Notes" and the
++     shelf card's part count are four answers that have to come from one
++     definition. The alternative is the client re-deriving "is this the
++     apparatus" from a missing gist, which is the inference this whole design
++     refuses to make. See src/supplement.ts. */
++  "supplement.js",
+   "ingest.js", // slug derivation, so the client can show the same one the server will mint
+   "term-match.js", // where a glossary term appears in a block
+   "quote-match.js",
+diff --git a/tests/context.test.ts b/tests/context.test.ts
+index e12b10b..63eaa71 100644
+--- a/tests/context.test.ts
++++ b/tests/context.test.ts
+@@ -25,14 +25,14 @@ const tree: Tree = JSON.parse(readFileSync("example/tree.json", "utf8"));
+ const geometry = buildGeometry(tree, blocks);
+ const blockAt = (row: number) => blocks[row]?.id;
+ 
+-const parts = itemsFromCells(geometry.cells[1]!, blockAt).items;
+-const sections = itemsFromCells(geometry.cells[2]!, blockAt).items;
++const parts = itemsFromCells(geometry.cells[1]!, blockAt, geometry.supplementOf).items;
++const sections = itemsFromCells(geometry.cells[2]!, blockAt, geometry.supplementOf).items;
+ 
+ describe("itemsFromCells", () => {
+   it("makes one item per cell, pointing at the cell's first block", () => {
+     expect(parts.length).toBe(geometry.cells[1]!.length);
+     expect(parts[0]!.blockId).toBe(blocks[0]!.id);
+-    const { starts } = itemsFromCells(geometry.cells[2]!, blockAt);
++    const { starts } = itemsFromCells(geometry.cells[2]!, blockAt, geometry.supplementOf);
+     expect(starts).toEqual(itemStarts(geometry.cells[2]!)); // balanced tree: no continuations
+     for (const [i, s] of sections.entries()) expect(s.blockId).toBe(blocks[starts[i]!]!.id);
+   });
+@@ -111,7 +111,7 @@ describe("continuation cells", () => {
+     { node: node("b2", 2, "P"), rowSpan: 1, continuation: false },
+   ];
+   const ids = ["r0", "r1", "r2", "r3", "r4", "r5"];
+-  const { items, starts } = itemsFromCells(cells, (row) => ids[row]);
++  const { items, starts } = itemsFromCells(cells, (row) => ids[row], new Map());
+ 
+   it("are not items, and the starts stay paired with the items that remain", () => {
+     expect(items.map((i) => i.node.id)).toEqual(["b1", "b2"]);
+@@ -138,7 +138,7 @@ describe("continuation cells", () => {
+       { node: node("A", 1, "root"), rowSpan: 2, continuation: true },
+       { node: node("b1", 2, "P"), rowSpan: 2, continuation: false },
+     ];
+-    const { starts: st, items: it2 } = itemsFromCells(leading, (row) => ids[row]);
++    const { starts: st, items: it2 } = itemsFromCells(leading, (row) => ids[row], new Map());
+     expect(st).toEqual([2]);
+     const cur = currentIndex(st, 0);
+     expect(cur).toBe(-1);
+diff --git a/tests/keynav.test.ts b/tests/keynav.test.ts
+index 1b35ab9..c501551 100644
+--- a/tests/keynav.test.ts
++++ b/tests/keynav.test.ts
+@@ -114,7 +114,7 @@ describe("stepTarget", () => {
+ describe("navPlan", () => {
+   const leaf = geometry.leafDepth;
+   const ladder = (columns: number[], showText: boolean, hasArc = false) =>
+-    navPlan(geometry.cells, columns, leaf, showText, hasArc).ladder;
++    navPlan(geometry, columns, showText, hasArc).ladder;
+ 
+   it("is the columns on screen, coarsest first", () => {
+     expect(ladder([1, 2], true)).toEqual([1, 2, leaf]);
+@@ -136,10 +136,10 @@ describe("navPlan", () => {
+   // What makes L0 a rung at all: it borrows the parts' boundaries, so ↑ / ↓
+   // over the argument step part to part rather than doing nothing.
+   it("steps the arc column by its parts", () => {
+-    const plan = navPlan(geometry.cells, [0, 1], leaf, false, true);
++    const plan = navPlan(geometry, [0, 1], false, true);
+     expect(plan.starts[0]).toEqual(itemStarts(geometry.cells[1] ?? []));
+     // And without the arc it is the root: one item, nowhere to go.
+-    expect(navPlan(geometry.cells, [0], leaf, false, false).starts[0]).toEqual([0]);
++    expect(navPlan(geometry, [0], false, false).starts[0]).toEqual([0]);
+   });
+ 
+   // Outline mode: the leaf column is in `columns` already, and the prose is off.
+@@ -162,7 +162,7 @@ describe("navPlan", () => {
+   // whether or not the Parts column survived the fit — so the rows are kept for
+   // every level, not just the rungs.
+   it("keeps rows for levels that are off the ladder", () => {
+-    const plan = navPlan(geometry.cells, [], leaf, true, false);
++    const plan = navPlan(geometry, [], true, false);
+     expect(plan.ladder).toEqual([leaf]);
+     expect(plan.starts[1]).toEqual(itemStarts(geometry.cells[1] ?? []));
+   });
+diff --git a/tests/store-block-roles-pg.test.ts b/tests/store-block-roles-pg.test.ts
+new file mode 100644
+index 0000000..b64db7b
+--- /dev/null
++++ b/tests/store-block-roles-pg.test.ts
+@@ -0,0 +1,282 @@
++/**
++ * **`role`, `treatment` and `noteId` through the real Postgres write path.**
++ *
++ * ## The mutation that survived 293 tests
++ *
++ * `writeBlocks` in src/store/artifacts-pg.ts could be changed to write
++ * `treatment: null` unconditionally and `store-roundtrip`, `store-artefacts-pg`,
++ * `block-roles`, `store-parity` and `store-block-reads` all stayed green. The
++ * Postgres path could have dropped the column on every write for ever and
++ * nothing would have said so. GPT Sol's review of stage 3, 2026-08-28.
++ *
++ * The cause is not a missing assertion; it is a **missing input**. Every article
++ * in the committed `data/` and `example/` corpus predates classification, so
++ * every one of those suites round-trips blocks whose three fields are already
++ * absent — and "absent went in, absent came out" is satisfied by a store that
++ * throws the fields away. `tests/block-roles.test.ts` has a synthetic
++ * role-bearing article for exactly this reason, and it drives the **filesystem**
++ * store, the import validator and the public DTO. This is the fourth consumer,
++ * and it is the one that needs a database.
++ *
++ * ## So the fixture is classified before it is loaded
++ *
++ * A copy of `data/writes` under a `test-` slug, with three of its blocks marked
++ * as one note's prose and the rest left as body, written into Postgres by
++ * `loadArticleIntoPg` — the real path: `storeRawSource`, a fenced job,
++ * `openOrBeginJobDraft`, `beginStep`/`write`/`finishStep` per step, then
++ * `publishRevision` with its guards run rather than routed around.
++ *
++ * **Never a real `data/` article**, and `basedOn` is asserted `null`.
++ * `beginDraftIn` carries block rows forward from the published revision, so an
++ * article a previous run published reads back perfectly from columns *this* run
++ * never wrote. That is not hypothetical — it faked a clean parity result on
++ * 2026-08-28.
++ *
++ * **Both copies of `blocks.json` are classified.** The filesystem store keys
++ * paths by `(step, kind)` and `blocks` lands in two places — stage 3's
++ * `output/<slug>.blocks.json` and stage 4's `data/<slug>/blocks.json`
++ * (src/store/artifacts-fs.ts). `copyArtefacts` walks the steps in pipeline
++ * order, so stage 4's copy is the one that writes the rows last. Classifying
++ * only one would leave the assertion depending on which step happened to go
++ * second.
++ */
++
++import { cp, readFile, readdir, rm, writeFile } from "node:fs/promises";
++import path from "node:path";
++
++import { eq } from "drizzle-orm";
++import { afterAll, describe, expect, it } from "vitest";
++
++import { closeDb, getDb } from "../src/db/client.js";
++import { articles, jobs, revisionBlocks } from "../src/db/schema.js";
++import { loadEnvLocal } from "../src/env.js";
++import { NOTE_ID_PATTERN } from "../src/notes.js";
++import { hashBlocks } from "../src/source-hash.js";
++import { pgArticleReader } from "../src/store/pg.js";
++import type { Block } from "../src/types.js";
++import { loadArticleIntoPg } from "./helpers/load-article.js";
++import { pgReady } from "./helpers/pg-ready.js";
++
++loadEnvLocal();
++
++const ROOT = path.resolve(import.meta.dirname, "..");
++const FROM = "writes";
++const SLUG = "test-block-roles-pg";
++
++const { reachable } = await pgReady({
++  suite: "tests/store-block-roles-pg.test.ts",
++  tables: ["spideryarn.revision_blocks"],
++});
++
++const when = reachable ? describe : describe.skip;
++
++/** One note's id, in the shape `mintNoteId` produces — see `NOTE_ID_PATTERN`. */
++const NOTE_ID = "spya-note-00ab12cd34";
++
++/** Which blocks become the note's prose. Indices, so the fixture can be re-read. */
++const NOTE_ROWS = [16, 17, 18];
++
++/**
++ * Copy `data/writes` to `SLUG` and classify three of its blocks as one note.
++ *
++ * Returns the ids, so the assertions name blocks rather than positions — an
++ * assertion by index would still pass if the rows came back in another order,
++ * which is a different bug this file is not about but must not be blind to.
++ */
++async function makeClassifiedFixture(): Promise<{ note: string[]; body: string[] }> {
++  const dir = path.join(ROOT, "data", SLUG);
++  await rm(dir, { recursive: true, force: true });
++  await cp(path.join(ROOT, "data", FROM), dir, { recursive: true });
++
++  for (const name of await readdir(dir)) {
++    if (!name.endsWith(".json")) continue;
++    const at = path.join(dir, name);
++    const value: unknown = JSON.parse(await readFile(at, "utf8"));
++    if (value && typeof value === "object" && (value as { slug?: string }).slug === FROM) {
++      (value as { slug: string }).slug = SLUG;
++      await writeFile(at, JSON.stringify(value, null, 2));
++    }
++  }
++  await cp(path.join(ROOT, "output", `${FROM}.html`), path.join(ROOT, "output", `${SLUG}.html`));
++
++  const note: string[] = [];
++  const body: string[] = [];
++  const classify = (blocks: Block[]): Block[] =>
++    blocks.map((b, i) =>
++      NOTE_ROWS.includes(i)
++        ? { ...b, role: "footnote" as const, treatment: "supplement" as const, noteId: NOTE_ID }
++        : b,
++    );
++
++  // Stage 4's copy, and stage 3's. See the header for why both.
++  let classified: Block[] = [];
++  for (const at of [
++    path.join(dir, "blocks.json"),
++    path.join(ROOT, "output", `${SLUG}.blocks.json`),
++  ]) {
++    if (at.startsWith(path.join(ROOT, "output"))) {
++      await cp(path.join(ROOT, "output", `${FROM}.blocks.json`), at);
++    }
++    const parsed = JSON.parse(await readFile(at, "utf8")) as { blocks: Block[] };
++    const blocks = classify(parsed.blocks);
++    if (note.length === 0) {
++      classified = blocks;
++      for (const [i, b] of blocks.entries()) (NOTE_ROWS.includes(i) ? note : body).push(b.id);
++    }
++    await writeFile(at, JSON.stringify({ ...parsed, blocks }));
++  }
++
++  await makeTreeAndLabelsAgree(dir, classified, new Set(note));
++  return { note, body };
++}
++
++/**
++ * **Make the rest of the article agree that those three blocks are apparatus.**
++ *
++ * Not fixture housekeeping — the publish gate refuses the article without it,
++ * and both of its reasons are correct:
++ *
++ * 1. `validateTree` fails a leaf carrying a `navLabel` while anchoring a block
++ *    `isStructural` refuses, and `writes` labels all eighteen of its gistable
++ *    blocks. Classifying three of them without unlabelling their leaves
++ *    describes an article that stage 4 would never produce.
++ * 2. `reasonsNotToPublish` compares `toc`'s recorded `input_hash` against
++ *    `hashBlocks` of the blocks being published, and `toc`'s stamp comes from
++ *    `labels.json`'s `sourceHash` (`STAMP_SOURCE` in src/store/artifacts.ts).
++ *    Changing a block without restamping says the tree was built from a
++ *    different article, which it was.
++ *
++ * So this does what stage 3 followed by stage 4 does: drops the notes' labels
++ * and restamps. The first version of this test did neither, and the gate caught
++ * it — which is worth recording, because a fixture that had been waved through
++ * would have been testing a shape the pipeline cannot produce.
++ */
++async function makeTreeAndLabelsAgree(
++  dir: string,
++  blocks: Block[],
++  note: ReadonlySet<string>,
++): Promise<void> {
++  const treeAt = path.join(dir, "tree.json");
++  const tree = JSON.parse(await readFile(treeAt, "utf8")) as {
++    nodes: Record<string, { children: string[]; range: [string, string]; navLabel?: string }>;
++  };
++  for (const node of Object.values(tree.nodes)) {
++    if (node.children.length === 0 && note.has(node.range[0])) delete node.navLabel;
++  }
++  await writeFile(treeAt, JSON.stringify(tree));
++
++  const labelsAt = path.join(dir, "labels.json");
++  const labels = JSON.parse(await readFile(labelsAt, "utf8")) as {
++    sourceHash: string;
++    labels: Record<string, string>;
++  };
++  for (const id of note) delete labels.labels[id];
++  labels.sourceHash = hashBlocks(blocks);
++  await writeFile(labelsAt, JSON.stringify(labels));
++}
++
++/** Remove the rows as well as the files — see tests/helpers-load-article.test.ts. */
++async function forget(): Promise<void> {
++  await rm(path.join(ROOT, "data", SLUG), { recursive: true, force: true });
++  await rm(path.join(ROOT, "output", `${SLUG}.html`), { force: true });
++  await rm(path.join(ROOT, "output", `${SLUG}.blocks.json`), { force: true });
++
++  const db = getDb();
++  await db.delete(jobs).where(eq(jobs.slug, SLUG));
++  await db.update(articles).set({ currentRevisionId: null }).where(eq(articles.slug, SLUG));
++  await db.delete(articles).where(eq(articles.slug, SLUG));
++}
++
++when("a classified article through Postgres", () => {
++  afterAll(async () => {
++    await forget();
++    await closeDb();
++  });
++
++  it("carries all three fields into the rows and back out again", async () => {
++    await forget();
++    const { note, body } = await makeClassifiedFixture();
++
++    const loaded = await loadArticleIntoPg(SLUG);
++    expect(loaded.published).toBe(true);
++    /* A genuine first write. Without this the whole suite could be reading
++       columns carried forward from a revision some earlier run published. */
++    expect(loaded.basedOn).toBeNull();
++    expect(loaded.copied).toContain("toc");
++
++    /* **The columns, read directly**, before any projection gets a chance to
++       reconstruct them. The mutation this file exists for is in the *write*, so
++       the rows are what has to be looked at. */
++    const rows = await getDb()
++      .select({
++        id: revisionBlocks.blockId,
++        role: revisionBlocks.role,
++        treatment: revisionBlocks.treatment,
++        noteId: revisionBlocks.noteId,
++      })
++      .from(revisionBlocks)
++      .where(eq(revisionBlocks.revisionId, loaded.revisionId));
++
++    const byId = new Map(rows.map((r) => [r.id, r]));
++    expect(rows).toHaveLength(note.length + body.length);
++
++    for (const id of note) {
++      expect(byId.get(id)).toEqual({
++        id,
++        role: "footnote",
++        treatment: "supplement",
++        noteId: NOTE_ID,
++      });
++    }
++
++    /* The control, and it is not decoration: every one of the five suites this
++       mutation survived was asserting the body case only, which a store that
++       writes `null` to all three satisfies perfectly. */
++    for (const id of body) {
++      expect(byId.get(id)).toEqual({ id, role: null, treatment: null, noteId: null });
++    }
++  }, 180_000);
++
++  it("comes back through the reader with the fields the article was written with", async () => {
++    /* The other half of the round trip. The columns above prove the write; this
++       proves the production read projects them, which is ten hand-written
++       projections' worth of opportunity to drop one. */
++    const blocks = (await pgArticleReader.loadArticle(SLUG)).blocks;
++
++    const notes = blocks.filter((b) => b.treatment === "supplement");
++    expect(notes).toHaveLength(NOTE_ROWS.length);
++    expect(notes.every((b) => b.role === "footnote")).toBe(true);
++    expect(new Set(notes.map((b) => b.noteId))).toEqual(new Set([NOTE_ID]));
++    expect(NOTE_ID_PATTERN.test(NOTE_ID)).toBe(true);
++
++    // And the body is untouched — the same control as above, one layer up.
++    expect(blocks.filter((b) => b.role !== undefined)).toHaveLength(NOTE_ROWS.length);
++  }, 60_000);
++
++  it("gives the same fingerprint as the file it was loaded from", async () => {
++    /**
++     * **The reason this belongs here rather than in a hash suite.**
++     *
++     * `hashBlocks` folds in `role` and `treatment`, and the narrow Postgres
++     * read selects four columns to feed it (src/store/pg.ts `blockHashQuery`).
++     * The filesystem carries an absent key where Postgres carries a null, and
++     * the two must normalise to the same bytes — if they do not, every artefact
++     * reports itself stale against whichever store did not write it, for ever,
++     * and both stores look right on their own.
++     *
++     * Over today's unclassified corpus this holds whatever the code does, which
++     * is why it is asserted over a **classified** article or not at all.
++     */
++    const onDisk = JSON.parse(
++      await readFile(path.join(ROOT, "data", SLUG, "blocks.json"), "utf8"),
++    ) as { blocks: Block[] };
++    const fromPg = (await pgArticleReader.loadArticle(SLUG)).blocks;
++
++    expect(hashBlocks(onDisk.blocks)).toBe(hashBlocks(fromPg));
++    /* And it is the classified fingerprint, not the legacy one — otherwise this
++       passes on a pair of stores that both dropped the fields. */
++    expect(hashBlocks(fromPg)).not.toBe(
++      hashBlocks(onDisk.blocks.map((b) => ({ id: b.id, text: b.text }))),
++    );
++  }, 60_000);
++});
+diff --git a/tests/supplement.test.ts b/tests/supplement.test.ts
+new file mode 100644
+index 0000000..cc153b0
+--- /dev/null
++++ b/tests/supplement.test.ts
+@@ -0,0 +1,556 @@
++/**
++ * **The supplement node** (src/supplement.ts): the apparatus, present in the
++ * structure and absent from the argument.
++ *
++ * Written against the `example/` fixture — 34 blocks, 2 parts, 8 sections —
++ * with synthetic endnotes appended, because that is the shape the real pipeline
++ * produces: `buildTree` over the body alone, then `appendSupplement`.
++ *
++ * **Every check here has been watched go red.** The six invariants are mutated
++ * one at a time rather than by deleting the node and watching validation fail,
++ * which mostly re-tests the old coverage invariant and proves nothing about any
++ * of them (docs/plans/260828o-footnotes.md § The tree).
++ */
++import { readFileSync } from "node:fs";
++import { describe, expect, it } from "vitest";
++import { partsOf, buildArc } from "../src/arc.js";
++import { deriveLibraryScalars } from "../src/library-scalars.js";
++import { structureHash } from "../src/source-hash.js";
++import { targetsOf } from "../src/summarise.js";
++import {
++  appendSupplement,
++  isSupplementNode,
++  splitBlocks,
++  supplementIndex,
++  supplementNodes,
++} from "../src/supplement.js";
++import { checkTree } from "../src/tree-invariants.js";
++import type { Block, NodeId, Summaries, SummaryEntry, Tree, TreeNode } from "../src/types.js";
++import { itemsFromCells, currentIndex } from "../src/web/context.js";
++import { navPlan, stepTarget } from "../src/web/keynav.js";
++import { activeSectionIndex, buildSections, sectionDepth } from "../src/web/position.js";
++import {
++  buildArcColumn,
++  buildGeometry,
++  buildOutline,
++  buildSummaryTree,
++  navigableItems,
++} from "../src/web/tree.js";
++
++const bodyBlocks: Block[] = JSON.parse(readFileSync("example/blocks.json", "utf8")).blocks;
++const bodyTree: Tree = JSON.parse(readFileSync("example/tree.json", "utf8"));
++
++/** A note block, in the shape stage 3 leaves them: body-looking, apparatus-marked. */
++function note(i: number, role: NonNullable<Block["role"]> = "footnote"): Block {
++  return {
++    id: `spya-note${i}`,
++    tag: "p",
++    kind: "text",
++    text: `Note ${i}. Some further reading nobody reads front to back.`,
++    words: 10,
++    html: `<p id="spya-note${i}">Note ${i}.</p>`,
++    gistable: true,
++    role,
++    treatment: "supplement",
++    noteId: `n${i}`,
++  };
++}
++
++/** The article the real pipeline would produce: body tree, then the apparatus. */
++function withNotes(count: number, role: NonNullable<Block["role"]> = "footnote"): { blocks: Block[]; tree: Tree } {
++  const notes = Array.from({ length: count }, (_, i) => note(i + 1, role));
++  const blocks = [...bodyBlocks, ...notes];
++  const split = splitBlocks(blocks);
++  expect(split.stranded).toBe(0);
++  return { blocks, tree: appendSupplement(bodyTree, split.groups) };
++}
++
++/** A deep copy, so a mutation cannot leak into the next test. */
++const clone = (tree: Tree): Tree => JSON.parse(JSON.stringify(tree)) as Tree;
++
++const NOTES = 6;
++const { blocks, tree } = withNotes(NOTES);
++const supplement = supplementNodes(tree)[0]!;
++/** The first row of the apparatus — where a reader "standing mid-Notes" is. */
++const firstNoteRow = bodyBlocks.length;
++const midNoteRow = bodyBlocks.length + 3;
++
++describe("splitBlocks", () => {
++  it("cuts the trailing run off the body and names it", () => {
++    const split = splitBlocks(blocks);
++    expect(split.body.length).toBe(bodyBlocks.length);
++    expect(split.groups.length).toBe(1);
++    expect(split.groups[0]!.title).toBe("Notes");
++    expect(split.groups[0]!.blocks.length).toBe(NOTES);
++  });
++
++  it("leaves an article with no apparatus exactly as it was", () => {
++    const split = splitBlocks(bodyBlocks);
++    expect(split.groups).toEqual([]);
++    expect(split.stranded).toBe(0);
++    expect(appendSupplement(bodyTree, split.groups)).toBe(bodyTree);
++  });
++
++  it("cuts two nodes where the source has Notes and References", () => {
++    // Only `"footnote"` is ever assigned in v1, so this is the shape the second
++    // role has to land in rather than something that happens today.
++    const mixed = [...bodyBlocks, note(1), note(2), note(3, "reference")];
++    const split = splitBlocks(mixed);
++    expect(split.groups.map((g) => g.title)).toEqual(["Notes", "References"]);
++    const two = appendSupplement(bodyTree, split.groups);
++    expect(supplementNodes(two).map((n) => n.title)).toEqual(["Notes", "References"]);
++    expect(checkTree(mixed, two).problems).toEqual([]);
++  });
++
++  it("refuses an article that is nothing but apparatus", () => {
++    // There is no body to build a tree from, so there is nothing to append a
++    // supplement to. Same answer as a stranded note: publish as before, and say
++    // the number out loud.
++    const allNotes = [note(1), note(2), note(3)];
++    const split = splitBlocks(allNotes);
++    expect(split.groups).toEqual([]);
++    expect(split.stranded).toBe(3);
++    expect(split.body.length).toBe(3);
++  });
++
++  it("refuses the whole split when a note is stranded in the body", () => {
++    /* The fallback, and the reason it is total rather than partial: a
++       supplement node that covered only *some* of the apparatus would break
++       invariant 4 the moment it existed, so an article of this shape publishes
++       exactly as it did before this stage — with the count said out loud rather
++       than swallowed. */
++    const stranded = [...bodyBlocks.slice(0, 5), note(99), ...bodyBlocks.slice(5), note(1)];
++    const split = splitBlocks(stranded);
++    expect(split.groups).toEqual([]);
++    expect(split.stranded).toBe(1);
++    expect(split.body.length).toBe(stranded.length);
++  });
++});
++
++describe("the appended tree", () => {
++  it("is one depth-one node with a title, no gist, and a leaf per note", () => {
++    expect(supplement.depth).toBe(1);
++    expect(supplement.parent).toBe(tree.rootId);
++    expect(supplement.title).toBe("Notes");
++    expect(supplement.gist).toBeUndefined();
++    expect(supplement.treatment).toBe("supplement");
++    expect(supplement.children.length).toBe(NOTES);
++    for (const id of supplement.children) {
++      const leaf = tree.nodes[id]!;
++      expect(leaf.children).toEqual([]);
++      expect(leaf.navLabel).toBeUndefined();
++    }
++  });
++
++  it("extends the root's range and changes no body part's", () => {
++    // The half of the join hazard that is safe by construction — and it is only
++    // *because* it is safe that the summary fix below can be this small.
++    expect(tree.nodes[tree.rootId]!.range[1]).toBe(blocks.at(-1)!.id);
++    for (const part of partsOf(bodyTree)) {
++      expect(tree.nodes[part.id]!.range).toEqual(part.range);
++    }
++  });
++
++  it("passes every invariant", () => {
++    expect(checkTree(blocks, tree).problems).toEqual([]);
++  });
++});
++
++/* ------------------------------------------------- the six, one at a time --
++
++   Each mutation below is a separate, plausible way the pipeline could get this
++   wrong, and each must redden a message that names the supplement — not the
++   general coverage rule that would fire anyway. */
++
++describe("the six invariants", () => {
++  const problemsOf = (mutate: (t: Tree) => void, bs: Block[] = blocks): string[] => {
++    const t = clone(tree);
++    mutate(t);
++    return checkTree(bs, t).problems;
++  };
++
++  it("1 — a supplement is a depth-one child of the root", () => {
++    const problems = problemsOf((t) => {
++      const part = partsOf(t)[0]!;
++      const s = t.nodes[supplement.id]!;
++      // Re-parented under the first part, which is how a supplement would land
++      // if it were built from inside the body tree rather than appended to it.
++      t.nodes[t.rootId]!.children = t.nodes[t.rootId]!.children.filter((id) => id !== s.id);
++      t.nodes[part.id]!.children.push(s.id);
++      s.parent = part.id;
++      s.depth = 2;
++    });
++    expect(problems.some((p) => /supplement is depth 2 under/.test(p))).toBe(true);
++  });
++
++  it("2 — it covers exactly one contiguous range", () => {
++    // Two supplements over one range. A second node arriving on an article that
++    // already has one is the shape the References group will one day have.
++    const overlap = problemsOf((t) => {
++      const twin: TreeNode = {
++        ...JSON.parse(JSON.stringify(t.nodes[supplement.id]!)),
++        id: "n9001" as NodeId,
++        children: [],
++      };
++      twin.range = [blocks[firstNoteRow]!.id, blocks.at(-1)!.id];
++      t.nodes[twin.id] = twin;
++      t.nodes[t.rootId]!.children.push(twin.id);
++    });
++    expect(overlap.some((p) => /supplement overlaps supplement/.test(p))).toBe(true);
++
++    const backwards = problemsOf((t) => {
++      t.nodes[supplement.id]!.range = [blocks.at(-1)!.id, blocks[firstNoteRow]!.id];
++    });
++    expect(backwards.some((p) => /supplement range runs backwards/.test(p))).toBe(true);
++  });
++
++  it("3 — it contains only supplement blocks", () => {
++    /* The direction that matters most: a body paragraph swallowed by the
++       apparatus disappears from the argument, from every summary and from the
++       arc, and every other check in the file still passes. */
++    const problems = problemsOf((t) => {
++      const s = t.nodes[supplement.id]!;
++      const swallowed = blocks[firstNoteRow - 1]!;
++      s.range = [swallowed.id, s.range[1]];
++      const leafId = "n9100" as NodeId;
++      t.nodes[leafId] = {
++        id: leafId,
++        depth: 2,
++        parent: s.id,
++        children: [],
++        range: [swallowed.id, swallowed.id],
++        title: "",
++      };
++      s.children.unshift(leafId);
++    });
++    expect(problems.some((p) => /which is body/.test(p))).toBe(true);
++  });
++
++  it("4 — it contains every supplement block", () => {
++    /* The first note handed back to the last body section, which keeps the
++       tiling, the coverage and the root's range all correct — so nothing but
++       the supplement's own rule can catch it. */
++    const problems = problemsOf((t) => {
++      const s = t.nodes[supplement.id]!;
++      const orphanLeaf = t.nodes[s.children[0]!]!;
++      s.children = s.children.slice(1);
++      s.range = [blocks[firstNoteRow + 1]!.id, s.range[1]];
++      const lastPart = partsOf(t).at(-1)!;
++      const lastSection = t.nodes[lastPart.children.at(-1)!]!;
++      lastSection.children.push(orphanLeaf.id);
++      orphanLeaf.parent = lastSection.id;
++      orphanLeaf.depth = lastSection.depth + 1;
++      lastSection.range = [lastSection.range[0], orphanLeaf.range[1]];
++      t.nodes[lastPart.id]!.range = [lastPart.range[0], orphanLeaf.range[1]];
++    });
++    expect(problems.some((p) => /sit outside every supplement node/.test(p))).toBe(true);
++    // And nothing else: this tree tiles, covers and partitions correctly.
++    expect(problems.filter((p) => !/sit outside every supplement node/.test(p))).toEqual([]);
++  });
++
++  it("5 — only leaves sit beneath it", () => {
++    const problems = problemsOf((t) => {
++      const s = t.nodes[supplement.id]!;
++      const wrapped = s.children.slice(0, 2);
++      const groupId = "n9200" as NodeId;
++      t.nodes[groupId] = {
++        id: groupId,
++        depth: 2,
++        parent: s.id,
++        children: wrapped,
++        range: [t.nodes[wrapped[0]!]!.range[0], t.nodes[wrapped[1]!]!.range[1]],
++        title: "First two notes",
++        gist: "A gist, so that only invariant 5 can be what reddens this.",
++      };
++      for (const id of wrapped) {
++        t.nodes[id]!.parent = groupId;
++        t.nodes[id]!.depth = 3;
++      }
++      s.children = [groupId, ...s.children.slice(2)];
++    });
++    expect(problems.some((p) => /only leaves may sit under a supplement/.test(p))).toBe(true);
++  });
++
++  it("6 — no gist, never nested, never the root", () => {
++    const gisted = problemsOf((t) => {
++      t.nodes[supplement.id]!.gist = "Forty endnotes, summarised — which is the promise broken.";
++    });
++    expect(gisted.some((p) => /supplement carries a gist/.test(p))).toBe(true);
++
++    const nested = problemsOf((t) => {
++      const s = t.nodes[supplement.id]!;
++      const inner: TreeNode = {
++        id: "n9300" as NodeId,
++        depth: 2,
++        parent: s.id,
++        children: s.children,
++        range: [...s.range],
++        title: "Notes",
++        treatment: "supplement",
++      };
++      for (const id of s.children) {
++        t.nodes[id]!.parent = inner.id;
++        t.nodes[id]!.depth = 3;
++      }
++      t.nodes[inner.id] = inner;
++      s.children = [inner.id];
++    });
++    expect(nested.some((p) => /supplement nested inside supplement/.test(p))).toBe(true);
++
++    const rooted = problemsOf((t) => {
++      t.nodes[t.rootId]!.treatment = "supplement";
++    });
++    expect(rooted.some((p) => /the root is the whole article/.test(p))).toBe(true);
++  });
++
++  it("states the gist rule in both directions", () => {
++    /* Keyed on the absence of a gist alone, a pipeline bug that drops one would
++       be indistinguishable from a deliberate supplement — and the dangerous
++       outcome here is acceptance, not rejection. So the body direction has to
++       still fail. */
++    const dropped = problemsOf((t) => {
++      const part = partsOf(t)[0]!;
++      delete t.nodes[part.id]!.gist;
++    });
++    expect(dropped.some((p) => /internal node has no gist/.test(p))).toBe(true);
++
++    // And a gistless body node cannot buy the exception by calling itself
++    // apparatus: the other five checks are what it then has to pass.
++    const disguised = problemsOf((t) => {
++      const part = partsOf(t)[0]!;
++      delete t.nodes[part.id]!.gist;
++      t.nodes[part.id]!.treatment = "supplement";
++    });
++    expect(disguised.some((p) => /which is body/.test(p))).toBe(true);
++  });
++});
++
++/* --------------------------------------- the failure invisible everywhere -- */
++
++describe("the whole-article summary", () => {
++  /**
++   * **The required deliverable of this stage.** Both joins key on a pair of
++   * block ids, and appending a supplement changes exactly one range: the
++   * root's. Keyed by range, the article-level summary's entry then misses and
++   * `buildSummaryTree` drops it *without a word* — on every article summarised
++   * before this stage, with `sourceHash` still current because no block
++   * changed. docs/plans/260828o-footnotes.md § The invisible stage-4 failure.
++   */
++  const writtenBefore: SummaryEntry[] = [
++    { range: [...bodyTree.nodes[bodyTree.rootId]!.range], depth: 0, short: "The whole piece." },
++    ...partsOf(bodyTree).map((p) => ({
++      range: [...p.range] as [string, string],
++      depth: 1,
++      short: `About ${p.title}.`,
++    })),
++  ];
++
++  /* A whole `Summaries`, assigned to a variable rather than passed as a literal.
++     `buildSummaryTree` reads nothing but `entries`, and another session is in the
++     middle of narrowing its parameter to exactly that — through a variable this
++     satisfies the wide signature and the narrow one both, where a literal is
++     rejected by whichever is not current. The same trick, and the same reason, as
++     tests/block-roles.test.ts, on the public DTO. */
++  const written = (entries: SummaryEntry[]): Summaries => ({
++    version: "test",
++    generator: "test",
++    slug: "supplement",
++    sourceHash: "0000000000000000",
++    entries,
++    missing: 0,
++    generatedAt: "2026-08-28T00:00:00.000Z",
++    elapsedMs: 0,
++  });
++
++  it("survives the supplement being appended", () => {
++    const before = buildSummaryTree(bodyTree, bodyBlocks, written(writtenBefore));
++    expect(before!.short).toBe("The whole piece.");
++
++    const after = buildSummaryTree(tree, blocks, written(writtenBefore));
++    expect(after!.short).toBe("The whole piece.");
++    // The parts keep theirs by range, which is the join that must not change.
++    const parts = after!.children.filter((c) => !isSupplementNode(c.node));
++    expect(parts.map((c) => c.short)).toEqual(before!.children.map((c) => c.short));
++    // And the apparatus is in the panel, titled, with no rung of any kind —
++    // present in the structure, absent from the argument.
++    const notes = after!.children.find((c) => isSupplementNode(c.node))!;
++    expect(notes.node.title).toBe("Notes");
++    expect([notes.gist, notes.short, notes.long]).toEqual([undefined, undefined, undefined]);
++  });
++
++  it("would be lost if the root were still matched by range", () => {
++    /* The control: without this, "the summary is still there" is a sentence
++       about a test that could never have failed. The root's range genuinely
++       moved, so a range join genuinely misses. */
++    const rootKey = `${tree.nodes[tree.rootId]!.range[0]}|${tree.nodes[tree.rootId]!.range[1]}`;
++    const oldKey = `${writtenBefore[0]!.range[0]}|${writtenBefore[0]!.range[1]}`;
++    expect(rootKey).not.toBe(oldKey);
++  });
++
++  it("is never written for the apparatus", () => {
++    const targets = targetsOf(tree, blocks);
++    expect(targets.some((n) => isSupplementNode(n))).toBe(false);
++    // Nor for anything under it — a note leaf is not a summary target either.
++    const under = supplementIndex(tree);
++    expect(targets.some((n) => under.has(n.id))).toBe(false);
++  });
++});
++
++/* ------------------------------------------------------------- the arc -- */
++
++describe("the arc", () => {
++  it("does not count the apparatus as a part", () => {
++    expect(partsOf(tree).length).toBe(partsOf(bodyTree).length);
++    expect(partsOf(tree).some((p) => isSupplementNode(p))).toBe(false);
++  });
++
++  it("does not throw when the model returns one sentence per real part", () => {
++    const sentences = partsOf(tree).map((_, i) => `Sentence ${i + 1}.`);
++    expect(() => buildArc(sentences, tree, "example")).not.toThrow();
++    // And the reverse: one per depth-1 child, apparatus included, is refused.
++    const tooMany = [...sentences, "A sentence about the endnotes."];
++    expect(() => buildArc(tooMany, tree, "example")).toThrow(/Refusing to guess/);
++  });
++
++  it("numbers the argument only — 3 / 7, never 3 / 9", () => {
++    const geometry = buildGeometry(tree, blocks);
++    const arc = buildArc(
++      partsOf(tree).map((_, i) => `Sentence ${i + 1}.`),
++      tree,
++      "example",
++    );
++    const cells = [...buildArcColumn(geometry, arc)!.values()];
++    const numbered = cells.filter((c) => c.index !== undefined);
++    const parts = partsOf(tree).length;
++    expect(numbered.map((c) => c.index)).toEqual(
++      Array.from({ length: parts }, (_, i) => i + 1),
++    );
++    for (const cell of numbered) expect(cell.total).toBe(parts);
++    // The apparatus gets a cell — a missing <td> shifts every later cell one
++    // column left — but no number and no sentence.
++    const apparatus = cells.filter((c) => c.supplement);
++    expect(apparatus.length).toBe(1);
++    expect(apparatus[0]!.index).toBeUndefined();
++    expect(apparatus[0]!.text).toBeUndefined();
++    expect(apparatus[0]!.node.title).toBe("Notes");
++    // Every row is still covered: the cells tile the article.
++    expect(cells.reduce((n, c) => n + c.rowSpan, 0)).toBe(blocks.length);
++  });
++});
++
++/* ---------------------------------------- the fisheye and its three peers -- */
++
++describe("a reader standing mid-Notes", () => {
++  const geometry = buildGeometry(tree, blocks);
++  const depth = sectionDepth(geometry);
++
++  it("is one item, not one per note, at the sections column", () => {
++    const items = navigableItems(geometry.cells[depth]!, geometry.supplementOf);
++    const collapsed = items.filter((i) => i.supplement);
++    expect(collapsed.length).toBe(1);
++    expect(collapsed[0]!.rowSpan).toBe(NOTES);
++    expect(collapsed[0]!.startRow).toBe(firstNoteRow);
++    expect(collapsed[0]!.node.id).toBe(supplement.id);
++  });
++
++  it("is IN the Notes item in the fisheye", () => {
++    const { items, starts } = itemsFromCells(
++      geometry.cells[depth]!,
++      (row) => blocks[row]?.id,
++      geometry.supplementOf,
++    );
++    const cur = currentIndex(starts, midNoteRow);
++    expect(cur).not.toBe(-1); // not nowhere
++    expect(items[cur]!.node.title).toBe("Notes"); // not the last part of the argument
++    expect(items[cur]!.supplement).toBe(true);
++    expect(items[cur]!.blockId).toBe(blocks[firstNoteRow]!.id);
++    // One entry for the apparatus, not six.
++    expect(items.filter((i) => i.supplement).length).toBe(1);
++  });
++
++  it("is in the same item as far as keyboard navigation is concerned", () => {
++    const plan = navPlan(geometry, [1, depth], false, false);
++    const starts = plan.starts[depth]!;
++    expect(starts.filter((s) => s >= firstNoteRow)).toEqual([firstNoteRow]);
++    // ↑ from inside the notes goes to the top of the notes, not back a note.
++    expect(stepTarget(starts, midNoteRow, -1)).toBe(firstNoteRow);
++    // ↓ from inside them runs off the end of the article rather than stepping
++    // through five more nameless endnote rows.
++    expect(stepTarget(starts, midNoteRow, 1)).toBeNull();
++  });
++
++  it("is in the same item as far as the saved reading position is concerned", () => {
++    const sections = buildSections(geometry, blocks);
++    const inNotes = sections.filter((s) => s.row >= firstNoteRow);
++    expect(inNotes.length).toBe(1);
++    expect(inNotes[0]!.title).toBe("Notes");
++    expect(inNotes[0]!.blockId).toBe(blocks[firstNoteRow]!.id);
++    // `?at=` therefore stores the supplement's first block, whatever note the
++    // reader stopped on.
++    const active = activeSectionIndex(sections.map((s) => s.row), midNoteRow);
++    expect(sections[active]!.title).toBe("Notes");
++  });
++
++  it("and the arc's numbering agrees with all three", () => {
++    const arc = buildArc(partsOf(tree).map(() => "A sentence."), tree, "example");
++    const cells = buildArcColumn(geometry, arc)!;
++    const rows = [...cells.keys()].sort((a, b) => a - b);
++    const startingAtOrBefore = rows.filter((r) => r <= midNoteRow).at(-1)!;
++    expect(cells.get(startingAtOrBefore)!.supplement).toBe(true);
++    expect(startingAtOrBefore).toBe(firstNoteRow);
++  });
++});
++
++/* ------------------------------------------------- the rest of the stage -- */
++
++describe("the spine", () => {
++  it("gives the apparatus one band, dimmed, at its true height", () => {
++    const outline = buildOutline(tree, blocks, 3);
++    const band = outline.find((e) => e.supplement)!;
++    expect(band).toBeDefined();
++    expect(band.node.title).toBe("Notes");
++    // Its real extent — the rail must not lie about pixels.
++    expect(band.startRow).toBe(firstNoteRow);
++    expect(band.endRow).toBe(blocks.length - 1);
++    // And one band, not one per note: the spine never descends into it.
++    expect(band.children).toEqual([]);
++    expect(outline.filter((e) => e.supplement).length).toBe(1);
++  });
++});
++
++describe("the shelf card's counts", () => {
++  it("exclude the supplement and its leaves", () => {
++    const before = deriveLibraryScalars({ blocks: bodyBlocks, tree: bodyTree });
++    const after = deriveLibraryScalars({ blocks, tree });
++    expect(after.partCount).toBe(before.partCount);
++    expect(after.sectionCount).toBe(before.sectionCount);
++    // The control: the tree really did grow, so equal counts are a decision
++    // rather than a fixture that never changed.
++    expect(Object.keys(tree.nodes).length).toBeGreaterThan(
++      Object.keys(bodyTree.nodes).length,
++    );
++  });
++});
++
++describe("structureHash", () => {
++  it("is byte-identical on a supplement-free tree", () => {
++    /* Pinned against a hex string computed before any of this was written, over
++       `example/tree.json`. Today's whole corpus predates the supplement node, so
++       a hash that moved here would invalidate every labels.json, ideas.json and
++       similarity artefact on disk at once. */
++    expect(structureHash(bodyTree)).toBe("5bb2ef0284bce2cd");
++  });
++
++  it("moves when a supplement is appended", () => {
++    expect(structureHash(tree)).not.toBe(structureHash(bodyTree));
++  });
++
++  it("distinguishes a supplement from a body node with the same shape", () => {
++    // The whole reason `treatment` is in the canonical form: without it these
++    // two trees hash the same, and `labels.json` reports itself current against
++    // a tree that changed what the apparatus is.
++    const asBody = clone(tree);
++    delete asBody.nodes[supplement.id]!.treatment;
++    expect(structureHash(asBody)).not.toBe(structureHash(tree));
++  });
++});

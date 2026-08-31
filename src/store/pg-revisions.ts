@@ -6,7 +6,7 @@
  * is a migration tool. So the schema's promise — *the pipeline builds a draft
  * and publishes it in one step, so a reader sees either the previous published
  * revision or the complete new one and never a mixture* — had nothing behind
- * it. This is that path. docs/plans/postgres-storage-implementation.md § Step 11
+ * it. This is that path. docs/plans/260826e-postgres-storage-implementation.md § Step 11
  * half A.
  *
  * ## Why it is `pg-revisions.ts` and not `revisions.ts`
@@ -200,7 +200,7 @@ export const REVISION_CARRY_POLICY: Record<
    * keeps the document it was made from until something actually re-fetches it.
    *
    * Both halves, and the `article_revisions_raw_source_both` CHECK means the
-   * database refuses a copy that takes only one. docs/plans/raw-bytes-in-storage.md.
+   * database refuses a copy that takes only one. docs/plans/260827o-raw-bytes-in-storage.md.
    */
   rawSourceSha256: "carry",
   rawSourceKind: "carry",
@@ -322,7 +322,7 @@ function carriedColumns(): (keyof typeof articleRevisions.$inferSelect)[] {
  *
  * It is re-exported because this is still part of this module's surface:
  * `PublishResult.scalars` is typed from it, and src/store/import.ts is a store
- * module reaching for its neighbour. See docs/plans/library-read-latency.md § 1.
+ * module reaching for its neighbour. See docs/plans/260828c-library-read-latency.md § 1.
  */
 export { deriveLibraryScalars, type LibraryScalars } from "../library-scalars.js";
 
@@ -716,7 +716,7 @@ export interface OpenDraftResult extends BeginRevisionResult {
  *
  * `extract` then looks for a raw document that is sitting in a revision nothing
  * points at any more. GPT Sol found this reviewing
- * docs/plans/transactional-stage-runner.md, and it is worth noticing that the
+ * docs/plans/260827j-transactional-stage-runner.md, and it is worth noticing that the
  * symptom would have been *"extract cannot find the raw document"* on every
  * fresh article — a message pointing at stage 2, from a fault in the runner.
  *
@@ -760,7 +760,7 @@ export async function openOrBeginJobDraft(opts: {
      * replacement job is a different row. D1b needs a single transaction that
      * opens a draft *and* publishes it, so the invariant is now enforceable
      * rather than argued: take the article first and no path can invert them.
-     * GPT Sol, 2026-08-29, docs/plans/delete-the-importer-d1b-design-sol.md.
+     * GPT Sol, 2026-08-29, docs/plans/260827aa-delete-the-importer-d1b-design-sol.md.
      *
      * **`lockOrCreateArticle`, not `lockArticle`, and the difference is the
      * whole point of doing it here.** On a first ingest there is no row yet, so
@@ -881,7 +881,7 @@ export async function openOrBeginJobDraft(opts: {
  * Locked `for update`, so the answer cannot go stale between the check and
  * whatever the caller does next inside the same transaction. Shared by
  * `beginStepRun` and `finishStepRun` rather than written twice, which is the
- * lesson of docs/postmortems/toc-status-never-checked.md: two inline copies of
+ * lesson of docs/postmortems/260827d-toc-status-never-checked.md: two inline copies of
  * "is this row good" drift, and nothing says so.
  *
  * It takes the **job** lock and never the article lock. See the note on
@@ -938,7 +938,7 @@ export async function requireLiveJobOwnsDraft(
  * `publishRevisionIn` and `failRevisionIn` all take the article first. (It was
  * an exception until then — that one took job-then-article, and GPT Sol's
  * finding that the file contradicted its own comment is
- * docs/plans/c1-c2-code-review-sol.md finding 2.) One lock is always safe, so
+ * docs/plans/260827au-c1-c2-code-review-sol.md finding 2.) One lock is always safe, so
  * this function is free to take the job on its own; taking the *article* here,
  * after a caller already holds the job, is what would put the cycle back.
  *
@@ -987,7 +987,7 @@ export async function beginStepRun(
          allowed: that is what a re-run is, and the job lock taken above
          serialises it, so an attempt that gets this far is the live one.
 
-         GPT Sol, 2026-08-27; docs/plans/c1-c2-code-review-sol.md finding 4. */
+         GPT Sol, 2026-08-27; docs/plans/260827au-c1-c2-code-review-sol.md finding 4. */
       setWhere: sql`${revisionStepRuns.status} = 'running' or ${revisionStepRuns.attemptId} is distinct from ${job.attemptId}::uuid`,
     });
 }
@@ -1042,7 +1042,7 @@ export async function finishStepRun(
 
      Found in review of the built code, which is why this repo weights that
      above a plan review: the two row conditions look complete on their own.
-     GPT Sol, 2026-08-27; docs/plans/c1-c2-code-review-sol.md finding 1. */
+     GPT Sol, 2026-08-27; docs/plans/260827au-c1-c2-code-review-sol.md finding 1. */
   await requireLiveJobOwnsDraft(tx, job, revisionId);
 
   const result = await tx
@@ -1133,7 +1133,7 @@ export async function recordStepRun(
  *
  * **Out of the transaction callback on purpose, and it is not only tidiness.**
  * This is the list that grows: the raw-source reference is the next entry
- * (docs/plans/delete-the-importer.md § The publication gate, as a truth table),
+ * (docs/plans/260827aa-delete-the-importer.md § The publication gate, as a truth table),
  * and a guard that lives inline in a hundred-line callback is one that gets
  * added to by whoever is passing rather than reviewed as a set. Everything here
  * is a *reason string*; nothing here writes.
@@ -1270,7 +1270,7 @@ export async function publishRevision(
  * Split out on 2026-08-29 for the same reason `beginDraftIn` was: a job's last
  * step has to write its artefacts, finish the step, publish the revision and
  * end the job **in one transaction**, and a function that opens its own cannot
- * be part of one. docs/plans/delete-the-importer.md § D1b.
+ * be part of one. docs/plans/260827aa-delete-the-importer.md § D1b.
  *
  * ## The order inside the transaction
  *
@@ -1294,7 +1294,7 @@ export async function publishRevision(
  * happened, in a file whose whole subject is a reader seeing either the old
  * revision or the new one and never a mixture. So the caller calls
  * `logPublication` after **its** commit. GPT Sol, 2026-08-29,
- * docs/plans/delete-the-importer-d1b-design-sol.md finding 5.
+ * docs/plans/260827aa-delete-the-importer-d1b-design-sol.md finding 5.
  */
 export async function publishRevisionIn(
   tx: Tx,
@@ -1311,7 +1311,7 @@ export async function publishRevisionIn(
      fields can be checked and the tree read. This used to share one selector
      with every other revision read; since 2026-08-27 each read names its own
      columns, and `publish` wants four. See `REVISION_CARRY_POLICY` in
-     src/store/pg.ts, and docs/plans/glossary-read-latency.md. */
+     src/store/pg.ts, and docs/plans/260827am-glossary-read-latency.md. */
   const found = await tx
     .select(REVISION_PROJECTIONS.publish)
     .from(articleRevisions)

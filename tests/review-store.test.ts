@@ -13,7 +13,7 @@
  *     rewrites the instruction attached to a stored turn.
  *
  * Neither raises an error, and neither is visible on screen. Both were found by
- * GPT Sol's review of docs/plans/review-mode.md (findings 4 and 5) before they
+ * GPT Sol's review of docs/plans/260827ah-review-mode.md (findings 4 and 5) before they
  * were built, which is why they are pinned here rather than in a postmortem.
  *
  * Everything tested is one of the three **pure** functions in src/chat.ts —

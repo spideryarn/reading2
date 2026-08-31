@@ -20,7 +20,7 @@
  *  2. **The fingerprint describes the article it was given.** A stage that hashed
  *     anything other than the three artefacts it generated from is a stale
  *     artefact reporting itself current for ever, in silence — which is the hole
- *     docs/plans/finish-the-database-move.md exists to close, and the one thing
+ *     docs/plans/260831b-finish-the-database-move.md exists to close, and the one thing
  *     this conversion could break without a single error anywhere.
  *  3. **`meta: null` is a state, not a failure.** Both stages tolerate an
  *     article with no metadata on purpose, and both are judged on the head their

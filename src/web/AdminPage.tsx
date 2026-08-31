@@ -50,7 +50,7 @@ const EMPTY: AdminUser[] = [];
  * inline as `rowId: (u) => u.id` this was a new function every render, and
  * `useSortedTable` keys its `ordered` memo on it — so the core and sorted row
  * models were rebuilt every render, which is one half of the ring that froze
- * the shelf (docs/postmortems/shelf-render-loop.md). Found by GPT Sol,
+ * the shelf (docs/postmortems/260827e-shelf-render-loop.md). Found by GPT Sol,
  * 2026-08-27, reviewing the fix for the other half.
  */
 const idOf = (u: AdminUser) => u.id;
@@ -140,7 +140,7 @@ export function AdminUsersPage() {
   /* `rawDir` straight in, `null` and all — absent means "each key goes whichever
      way it naturally goes", which `sortingFromUrl` fills in per column. Do not
      write `rawDir ?? []` here: a fresh array per render is what froze the shelf
-     (docs/postmortems/shelf-render-loop.md). */
+     (docs/postmortems/260827e-shelf-render-loop.md). */
   const sorting = useMemo(
     () => sortingFromUrl(by, rawDir, natural, ADMIN_DEFAULT_BY),
     [by, rawDir, natural],

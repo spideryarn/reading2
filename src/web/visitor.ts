@@ -4,7 +4,7 @@
  *
  * "Visitor" means anyone who does not own the document: signed out, or signed
  * in and reading somebody else's. Keyed on *is this mine*, never on *am I
- * signed in* — docs/plans/public-read-only-access.md.
+ * signed in* — docs/plans/260827ai-public-read-only-access.md.
  *
  * ## Why this is a pure function in its own file
  *
@@ -13,7 +13,7 @@
  * plain *"page could not be found"*, so never existed, was unshared and you may
  * not see it are all answered identically, and the visitor learns nothing. The
  * products that get it right name the cause.
- * docs/research/public-access-how-others-do-it.md.
+ * docs/research/260828a-public-access-how-others-do-it.md.
  *
  * These live in the reading view, in the comments drawer and on a whole page of
  * its own, so there is no single component that renders them all and could be
@@ -160,7 +160,7 @@ const COSTS: Partial<Record<Mode, string>> = {
    * all. The sentence a visitor gets is therefore *this belongs to whoever
    * added the article*, which is true, rather than *nobody has built one*,
    * which we cannot know from here.
-   * docs/plans/timeline-mode.md § Making a mode public-readable.
+   * docs/plans/260831i-timeline-mode.md § Making a mode public-readable.
    */
   timeline: "Timeline",
 };
@@ -193,7 +193,7 @@ export function visitorGap(mode: Mode, available: PublicArtefacts): VisitorGap |
 
   /* And summary, since 2026-08-31. It used to be an `ARTEFACT` mode, gated on a
      `summary.json` a visitor's payload might not carry. The generated ladder is
-     gone (docs/plans/gist-only-summaries.md) and what the panel draws now is the
+     gone (docs/plans/260831s-gist-only-summaries.md) and what the panel draws now is the
      tree's own gists, which are in the payload the visitor already holds — so
      there is nothing left to be missing. */
   if (mode === "summary") return null;
@@ -266,7 +266,7 @@ export function visitorSentence(gap: VisitorGap): string {
  * they could not do — that is the whole placement rule — so it must not appear
  * beside a gap an account does not close. Comments are the one left: they
  * belong to whoever added the article, and until
- * docs/plans/public-read-only-access.md § Stage 3 an account does not change
+ * docs/plans/260827ai-public-read-only-access.md § Stage 3 an account does not change
  * that.
  *
  * The two entries that used to be `false` for the other reason — *we are the

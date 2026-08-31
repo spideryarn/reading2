@@ -13,7 +13,7 @@
  * So this is not an addition alongside the About panel — it *is* that panel,
  * grown into the room it needed, and Dock.tsx no longer has one. The reason a
  * page rather than a column or a drawer: this view's hard problem is horizontal
- * (docs/plans/bottom-bar.md#why-the-bottom), and a page has no such problem
+ * (docs/plans/260825c-bottom-bar.md#why-the-bottom), and a page has no such problem
  * because it is not beside anything.
  *
  * **Nothing here is generated and nothing here is a model call.** This is the
@@ -427,7 +427,7 @@ export function Metadata({
    * day the fallback went. The reason to say so *here* is that the paragraph
    * above now describes a hazard that no longer exists, and a comment arguing
    * for a state the code can no longer reach is how the next person learns
-   * something untrue. docs/plans/faster-ingest-and-concurrency.md § Stage 1.
+   * something untrue. docs/plans/260830am-faster-ingest-and-concurrency.md § Stage 1.
    */
   const showingFixture = provenance?.dir === "example" && slug !== "example";
   /**
@@ -482,7 +482,7 @@ export function Metadata({
           back link at y=56 — 35px of overlap, on every page that is not the
           reader. The reader shell got a top-inset audit and these pages did not.
           GPT Sol, second pass, 2026-08-28.
-          docs/plans/mobile-screen-real-estate.md § 2. */}
+          docs/plans/260828av-mobile-screen-real-estate.md § 2. */}
       <main className={`tw:mx-auto tw:max-w-3xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}>
         <Link
           href={backHref}
@@ -1081,7 +1081,7 @@ function Origin({ meta, slug, owner }: { meta: Meta; slug: string; owner: boolea
  * The masthead already tells the *reader* the shape of this, in a sentence,
  * because they are entitled to know before they trust a line of it
  * (Masthead.tsx). This is the same fact with the numbers attached, on the page
- * you open when you want numbers. docs/plans/pdf-ingestion.md.
+ * you open when you want numbers. docs/plans/260826c-pdf-ingestion.md.
  */
 function CameFrom({ meta }: { meta: Meta }) {
   if (meta.source !== "pdf") return null;
@@ -1102,7 +1102,7 @@ function CameFrom({ meta }: { meta: Meta }) {
               /* Not a number, because there is no number: a scan has no
                  text layer, so nothing compared anything. The sentence is
                  the honest form and a "0%" would be a lie in the other
-                 direction. docs/plans/pdf-ingestion.md § A scan with no
+                 direction. docs/plans/260826c-pdf-ingestion.md § A scan with no
                  text layer. */
               <span>Nothing checked it — a scan, with no text in the file to check against</span>
             ) : meta.recall === undefined ? (

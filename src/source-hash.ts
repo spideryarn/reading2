@@ -42,7 +42,7 @@ import type { Block, Meta, Tree } from "./types.js";
  * generated tsvector — and then throwing all of it away (`blockHashInputs` in
  * src/store/pg.ts). A signature taking the whole `Block` is what let that
  * happen quietly: the narrow row would not typecheck, so the obvious fix was to
- * widen the query. docs/plans/glossary-read-latency.md.
+ * widen the query. docs/plans/260827am-glossary-read-latency.md.
  *
  * ## Four fields since 2026-08-28, and the last two are nullable on purpose
  *
@@ -52,7 +52,7 @@ import type { Block, Meta, Tree } from "./types.js";
  * computed *before* the split would have gone on reporting itself current —
  * with the article's summary silently written over its own bibliography and
  * every freshness check agreeing that nothing needed redoing. That is the
- * finding no earlier review caught; docs/plans/footnotes.md § Reclassification
+ * finding no earlier review caught; docs/plans/260828o-footnotes.md § Reclassification
  * must invalidate the caches.
  *
  * `null` as well as `undefined` because the filesystem store carries an absent
@@ -89,7 +89,7 @@ export type BlockFingerprint = Pick<Block, "id" | "text"> & {
  * builds `id \t text` by hand, so there is nothing to omit *from* and a
  * conditional field would still change the separators. It needs an explicit
  * branch, which is GPT Sol's correction to the plan
- * (docs/plans/footnotes-stage345-upfront-sol.md, decision 5).
+ * (docs/plans/260828o-footnotes-stage345-upfront-sol.md, decision 5).
  *
  * So: every block nullish on both axes ⇒ the legacy algorithm, unchanged, and
  * today's whole corpus keeps its fingerprints rather than being mass-invalidated
@@ -168,7 +168,7 @@ export function hashBlocks(blocks: readonly BlockFingerprint[]): string {
  * single block changing, and a stage that judges what is load-bearing from the
  * skeleton is then answering a different question against an input it reports
  * as unchanged. `ideas` is the first stage to fold this in — see
- * docs/plans/ideas-mode.md § Freshness.
+ * docs/plans/260826ac-ideas-mode.md § Freshness.
  */
 /*
  * **A tree with no supplement node hashes byte for byte as it did before**, and
@@ -285,7 +285,7 @@ export function fallbackHeadTitle(tree: Tree): string {
  *   (`shelf.json`, `articles.title_override`) and no generator reads it —
  *   src/shelf.ts says why it is kept out of `meta.json`. GPT Sol, 2026-08-31.
  *   The metadata half was raised on 2026-08-29;
- *   docs/plans/defer-arc-and-rename-hierarchy.md § 2.1.
+ *   docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1.
  *
  * **The one line it knowingly does not cover.** `articleWithIds` emits a
  * fourth head line, `URL:`, which `articleText` does not — so for `ideas` and
@@ -357,7 +357,7 @@ export function articleWithIdsFingerprint(
  * and `PUBLISHED IN:`; `articleWithIds` prints a `URL:` line as well; and
  * Timeline prints the publication date, *named as the reference frame*, because
  * the year is the thing the piece never writes down
- * (docs/plans/timeline-mode.md § What the model is shown). Folding the date
+ * (docs/plans/260831i-timeline-mode.md § What the model is shown). Folding the date
  * into `MetaFingerprint` would have judged `arc`, `tweets`, `glossary`,
  * `summary` and `quotes` on a line none of their prompts contains — the same
  * mistake as folding in `fetchedAt`, which that type's own note exists to

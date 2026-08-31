@@ -1,8 +1,8 @@
 /**
  * **Talking to the article out loud** — the server half of live conversation.
  * docs/project/live-conversation.md is the feature; the plans behind it are
- * docs/plans/live-conversation.md (the wire, proven first as a spike) and
- * docs/plans/live-conversation-in-chat.md (how it became a turn in a thread).
+ * docs/plans/260831g-live-conversation.md (the wire, proven first as a spike) and
+ * docs/plans/260831l-live-conversation-in-chat.md (how it became a turn in a thread).
  *
  * Dictation (docs/project/dictation.md) is a microphone that fills a text box:
  * press, talk, press, and the words are typed for you. This is the other thing
@@ -364,7 +364,7 @@ export function liveInstructions(opts: {
  * model **examples of its own past speech containing block ids**, while telling
  * it never to say one. That is few-shot pressure against our own instruction,
  * and the symptom is a companion that starts spelling out `spya-k3m9qt` with no
- * apparent cause. Found by Fable, 2026-08-31; docs/plans/live-conversation-in-chat.md.
+ * apparent cause. Found by Fable, 2026-08-31; docs/plans/260831l-live-conversation-in-chat.md.
  *
  * Stripping rather than reformatting, and only on the **assistant** side: the
  * reader's own words are theirs, and if they said something that looks like an

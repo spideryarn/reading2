@@ -19,7 +19,7 @@
  * bugs that comes with an append path (a FORBIDDEN list, `existingFor`, "a
  * stale list is not appended to") does not exist here to be got wrong.
  *
- * See docs/plans/ideas-mode.md and src/ideas.ts.
+ * See docs/plans/260826ac-ideas-mode.md and src/ideas.ts.
  */
 import { useCallback, useEffect, useState } from "react";
 import type { Ideas, IdeasResponse, Job } from "../types.js";
@@ -54,7 +54,7 @@ export interface UseIdeas {
    * The article this band is about — carried alongside `hasProfile` because
    * the same question needs it. The profile panel shows the *per-article* half
    * ("why you're reading this one") and links to the page that edits it, and
-   * neither is possible without knowing which article. docs/plans/profile-panel.md.
+   * neither is possible without knowing which article. docs/plans/260830c-profile-panel.md.
    */
   slug: string;
   error: string | null;

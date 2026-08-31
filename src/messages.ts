@@ -170,7 +170,7 @@ export function kindOfMessage(message: string): FailureKind | null {
  * But the failure that most needs this still carries nothing.
  * `TooLongForOnePass` (src/token-budget.ts) is arithmetic: a second attempt
  * cannot succeed, and the button is offered anyway. See
- * docs/postmortems/toc-max-tokens.md.
+ * docs/postmortems/260826a-toc-max-tokens.md.
  *
  * The fix wants a structured `FailureKind` on the job rather than a code parsed
  * back out of a sentence. A job is a struct with room for a field; the stored
@@ -211,7 +211,7 @@ export function worthRetrying(message: string | null | undefined): boolean {
  * starting again. What it deliberately does not do is *take the job over* by
  * itself. A lease that has expired does not prove the old claimant has stopped
  * — only that it stopped saying so — and two runners writing one article is
- * worse than one click. docs/plans/durable-queue-and-uploads.md § 2.
+ * worse than one click. docs/plans/260827h-durable-queue-and-uploads.md § 2.
  */
 export const INTERRUPTED: ReaderFacingFailure = {
   kind: "retry",
@@ -495,7 +495,7 @@ export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
  * card. So provider prose had a straight path to the screen through six doors,
  * found by review after seven other doors of the same shape had already been
  * closed. The lesson is the one that plan's Rule 1 already stated — **grep the
- * genre, not the list** (docs/plans/simplification-audit.md).
+ * genre, not the list** (docs/plans/260826m-simplification-audit.md).
  *
  * Be honest about the cost, as `ProviderRefused` is: something was lost.
  * `stop_details` is occasionally the fastest explanation of why a stage failed.
@@ -676,7 +676,7 @@ export const STORAGE_BUSY: ReaderFacingFailure = {
     "generally works. [db-busy]",
 };
 
-/* ---- uploading a file. docs/plans/pdf-upload-and-storage.md ------------- */
+/* ---- uploading a file. docs/plans/260826u-pdf-upload-and-storage.md ------------- */
 
 /**
  * Too big, refused before the upload starts rather than after it finishes.
@@ -725,7 +725,7 @@ export const UPLOAD_NOT_A_PDF: ReaderFacingFailure = {
  * re-runs the steps that did not finish, and this step would read the same
  * damaged object out of the same staging key and refuse it again, for ever.
  *
- * The distinction is the whole of docs/postmortems/toc-max-tokens.md — a button
+ * The distinction is the whole of docs/postmortems/260826a-toc-max-tokens.md — a button
  * that cannot work — and it only became visible when the acquisition step was
  * built, because until then nothing could press it. So the sentence says what
  * to do instead, the way `UPLOAD_TOO_BIG` does: a *new upload*, not another go
@@ -1019,7 +1019,7 @@ export function saidNothing(finishReason: string | null): ReaderFacingFailure {
  * `{"msg":"Unsupported provider: provider is not enabled"}` as a bare page of
  * JSON, because `signInWithOAuth` navigates rather than requests and there was
  * nothing of ours left on screen. See `googleSignInAvailable` in
- * src/web/lib/supabase.ts and docs/plans/google-sign-in-production.md.
+ * src/web/lib/supabase.ts and docs/plans/260827i-google-sign-in-production.md.
  *
  * `ours`, not `retry`: pressing the button again will do exactly this again.
  * The sentence has to hand the reader the door that *is* open.
@@ -1112,12 +1112,12 @@ export function authConfirmationSent(email: string): string {
  * that get it right name the cause: Loom says *"Due to the privacy settings for
  * this video, it cannot be played here at this time"*, Google Docs pairs
  * *"View only"* with *"Request edit access"*.
- * docs/research/public-access-how-others-do-it.md.
+ * docs/research/260828a-public-access-how-others-do-it.md.
  *
  * **"Visitor" means anyone who does not own the document** — signed out, or
  * signed in and reading somebody else's. They get the same sentences, which is
  * the point: the question is *is this mine*, never *am I signed in*.
- * docs/plans/public-read-only-access.md.
+ * docs/plans/260827ai-public-read-only-access.md.
  */
 
 /**
@@ -1194,7 +1194,7 @@ export function notBuiltYet(noun: string): string {
  * throws are one refactor away from being relaxed for an article that genuinely
  * has no jargon — and the failure mode if they are is the client calling the
  * owner a liar about their own pipeline.
- * docs/plans/public-read-only-access.md § The state that cannot happen.
+ * docs/plans/260827ai-public-read-only-access.md § The state that cannot happen.
  *
  * `noun` is capitalised and carries its article: `"A glossary"`, `"A summary"`.
  */
@@ -1276,7 +1276,7 @@ export const SHARING_WHAT_VISITORS_SEE =
  * describes revocation purely as the next request being refused. Saying it
  * plainly is going further than the precedent, deliberately, and it is recorded
  * as a decision rather than left to look like a default.
- * docs/research/public-access-how-others-do-it.md.
+ * docs/research/260828a-public-access-how-others-do-it.md.
  */
 export const SHARING_CANNOT_UNRING =
   "Turning this off refuses the next request. It cannot take back a page somebody's browser already " +
@@ -1291,7 +1291,7 @@ export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
  * They are all publishing **the owner's own document**. We are republishing
  * **somebody else's article**, extracted from a page they wrote, so the rights
  * question is ours and not theirs and the norm does not transfer.
- * docs/plans/public-read-only-access.md § Rights.
+ * docs/plans/260827ai-public-read-only-access.md § Rights.
  */
 export function sharingConfirmBody(title: string): string {
   return (
@@ -1459,7 +1459,7 @@ export const SHARING_RIGHTS_CONFIRM =
    Both are sentences about a **negative result rather than a failure**, which
    is the reason they are here beside `builtButEmpty` rather than in the panel:
    the mistake they exist to prevent is the panel drawing them like an error, or
-   drawing two of them the same. docs/plans/timeline-mode.md § Three outcomes.  */
+   drawing two of them the same. docs/plans/260831i-timeline-mode.md § Three outcomes.  */
 
 /**
  * **The date column, when the piece dates an event and we could not read it.**

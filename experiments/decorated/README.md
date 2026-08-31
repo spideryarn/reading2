@@ -65,5 +65,5 @@ Hover anything Spideryarn added and it will say what it is. That is a rule, not 
 
 Three switches are marked *contested* — they are things Greg asked for that the reading-science
 review argued against, and they are on the page so the argument can be had with prose in front of
-it rather than in the abstract. `docs/research/decorated-mode-ideas.md` has the disagreement, the
+it rather than in the abstract. `docs/research/260828c-decorated-mode-ideas.md` has the disagreement, the
 other 168 ideas, and what to build next.

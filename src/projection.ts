@@ -10,7 +10,7 @@
  *
  * Two pictures use this — Drift (down the page is the article, sideways is what
  * it is talking about) and Trail (both axes are meaning, and the line joining
- * the dots is the article). docs/plans/embedding-scatter-diagrams.md is the
+ * the dots is the article). docs/plans/260827g-embedding-scatter-diagrams.md is the
  * design; this file is the arithmetic.
  *
  * ## Everything here happens on the server, and that is the seam

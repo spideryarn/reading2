@@ -3,7 +3,7 @@
  *
  * `labels-progress.json` and `pdf-chunks/<key>.json` exist so that a run which
  * dies eight batches into a book costs one batch rather than eight. Landing D
- * of docs/plans/delete-the-importer.md takes the `data/<slug>/` directory they
+ * of docs/plans/260827aa-delete-the-importer.md takes the `data/<slug>/` directory they
  * live in away, so they need a home that is not a path. This is the interface,
  * and there are two implementations of it — [checkpoints-fs.ts](checkpoints-fs.ts)
  * and [checkpoints-pg.ts](checkpoints-pg.ts).
@@ -18,7 +18,7 @@
  * begins a new draft revision, so a checkpoint keyed on the revision is written
  * on every run and read on none. Nothing errors, nothing warns, every lookup
  * simply misses, and the only symptom is a larger bill —
- * docs/reusable/silent-success.md, and docs/plans/delete-the-importer.md
+ * docs/reusable/silent-success.md, and docs/plans/260827aa-delete-the-importer.md
  * § *B3's key is not the revision, and that would have made the table useless*.
  *
  * `articleId` is stable across every attempt, so the store binds one at
@@ -54,7 +54,7 @@
  * A killed process must not leave an entry that parses into nonsense. In
  * Postgres a row cannot be half-written. On the filesystem it takes a temp file
  * and a `rename`, and the reason it matters is on the record:
- * docs/postmortems/pdf-chunk-cache-corrupt-entry.md, where a half-written chunk
+ * docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md, where a half-written chunk
  * made one article permanently unreadable and nothing could clear it.
  *
  * **Whole is not the same as usable, and a broken entry has to be replaceable.**
@@ -107,7 +107,7 @@
  * attempt — and the mtime bump refreshed its age, so the sweep, the one thing
  * that would eventually have removed it, was taught it was hot instead. It
  * turned the loud permanent failure in
- * docs/postmortems/pdf-chunk-cache-corrupt-entry.md into a quiet permanent
+ * docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md into a quiet permanent
  * charge, which is worse.
  *
  * **And nothing was lost by giving it up**, which is the part that was hardest

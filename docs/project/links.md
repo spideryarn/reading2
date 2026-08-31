@@ -128,7 +128,7 @@ Three things it does differently, and each of them is a decision rather than a d
 - **It shows the whole note, over the note's whole range of blocks.** A note is a *range* — gwern's
   longest is eight blocks — so the fragment gathers every block carrying the same `noteId`, in
   document order, and a long one scrolls rather than being cut. The reasoning is
-  [footnotes.md](../plans/footnotes.md): the preview being good is what makes the jump rare, and the
+  [260828o-footnotes.md](../plans/260828o-footnotes.md): the preview being good is what makes the jump rare, and the
   jump is expensive because it recentres all three panels on "Notes".
 - **It rebuilds the fragment rather than injecting the stored html**, stripping every `id` out of the
   copy. The stored html of a note carries its own block id and, on Wikipedia, a hundred of Parsoid's
@@ -391,14 +391,14 @@ review, 2026-08-27, is why.
 What changed here to allow it was one selector. `useHoverCard` is already one delegated listener for
 the whole document, so the cost of a second customer is naming it — and naming them is itself the
 fix for a wart, because the old selector was a bare `a[href]` and therefore *every* anchor on the
-page. [chat-web-links.md](../plans/chat-web-links.md) has the parsing rules, the ordering constraint
+page. [260827ao-chat-web-links.md](../plans/260827ao-chat-web-links.md) has the parsing rules, the ordering constraint
 against `splitCitations`, and what happens to a URL that is still being streamed.
 
 ## See also
 
 - [tooltips.md](tooltips.md) — the hover machinery, why Floating UI, and why the card is a hook
   rather than one of the component libraries built for exactly this
-- [chat-web-links.md](../plans/chat-web-links.md) — the same card over a link a model wrote, and the
+- [260827ao-chat-web-links.md](../plans/260827ao-chat-web-links.md) — the same card over a link a model wrote, and the
   parsing that had to happen before the citation splitter could see the text
 - [chat-tools.md § The links the prompt does not carry](chat-tools.md#the-links-the-prompt-does-not-carry)
   — the same hyperlinks, read by the model instead of by the reader. It parses `block.html` on the

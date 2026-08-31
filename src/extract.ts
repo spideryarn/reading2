@@ -339,7 +339,7 @@ const ISO_DATE =
  * on 31 December in New York becomes 1 January, and the calendar day is exactly
  * what this field is for — Timeline reads the year off the front of it to date
  * every "on July 7" the article never gives a year for
- * (docs/plans/timeline-mode.md § The reference frame). A day that shifts by
+ * (docs/plans/260831i-timeline-mode.md § The reference frame). A day that shifts by
  * zone is a year that shifts at the boundary. The only normalising done here is
  * of spelling, never of instant: a space separator becomes `T`, and `+0000`
  * becomes `+00:00`.
@@ -383,7 +383,7 @@ export function publicationDate(raw: Maybe): string | undefined {
  * where they land — `output/<slug>.html` plus `data/<slug>/meta.json` on the
  * filesystem, columns on `article_revisions` in Postgres. The two write
  * destinations were the last thing in this stage that assumed a disk.
- * docs/plans/finish-the-database-move.md § Stage 2c.
+ * docs/plans/260831b-finish-the-database-move.md § Stage 2c.
  *
  * `slug` is passed in rather than derived, which is the one call-site change
  * worth noticing. It used to come from the output filename via

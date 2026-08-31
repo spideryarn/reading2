@@ -6,8 +6,8 @@
  * `index.html`, whose `<title>` is the bare word *Spideryarn*, and every page
  * title in the app was set by React after mount (src/web/page-title.ts). No
  * unfurler runs our JavaScript, so **every link anybody shared previewed as
- * nothing**. docs/plans/public-read-only-access.md § Stage 2, and the design is
- * docs/plans/public-read-only-stage2-input-sol.md § 4.
+ * nothing**. docs/plans/260827ai-public-read-only-access.md § Stage 2, and the design is
+ * docs/plans/260828ao-public-read-only-stage2-input-sol.md § 4.
  *
  * ## Pure, and the purity is load-bearing
  *

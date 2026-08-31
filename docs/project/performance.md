@@ -363,7 +363,7 @@ this was one room along.
 
 The cause was a fresh `[]` per render feeding a `useMemo`, feeding TanStack's sorted-row-model memo,
 whose `onChange` queues a page-index reset, which sets React state, which renders again.
-[shelf-render-loop.md](../postmortems/shelf-render-loop.md) has the ring, the fix, and the stack
+[260827e-shelf-render-loop.md](../postmortems/260827e-shelf-render-loop.md) has the ring, the fix, and the stack
 trace that named it.
 
 Three things from it are worth carrying into any future hunt here.
@@ -625,7 +625,7 @@ order, none of it done:
    position is worse than slow position.
 
 And one more, found 2026-08-27 while reviewing the shelf's render loop
-([shelf-render-loop.md](../postmortems/shelf-render-loop.md)) — same class, different room, not
+([260827e-shelf-render-loop.md](../postmortems/260827e-shelf-render-loop.md)) — same class, different room, not
 fixed here because it is another stage's file:
 
 5. **An article with no glossary rebuilds `termSelections` every render.**

@@ -30,7 +30,7 @@
  * So a failed code exchange is invisible here, by construction, and
  * AuthCallback.tsx reads `location.search` itself rather than waiting for an
  * event that never arrives. Found by GPT Sol; confirmed by reading the SDK.
- * docs/plans/auth-ui-and-production.md.
+ * docs/plans/260826ae-auth-ui-and-production.md.
  */
 import { useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";

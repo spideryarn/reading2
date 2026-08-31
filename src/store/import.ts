@@ -8,7 +8,7 @@
  * out. **The exporter is the rollback mechanism**, so the two are written and
  * tested together — an importer with no way back is a one-way door, and this
  * migration is explicitly not one until the cutover has held for a release.
- * See docs/plans/postgres-migration.md § The order of work.
+ * See docs/plans/260825f-postgres-migration.md § The order of work.
  *
  * ## Idempotent, and what that actually means here
  *
@@ -293,7 +293,7 @@ const TREATMENTS = new Set(["supplement"]);
  * block that arrives claiming to be apparatus and is stored as body is
  * *silently reclassified as argument*, which is the exact failure the whole
  * feature exists to prevent — summarised, embedded, and on the clock, with
- * every count still looking plausible (docs/plans/footnotes.md). An import is a
+ * every count still looking plausible (docs/plans/260828o-footnotes.md). An import is a
  * file somebody handed us, so a value we do not recognise means the file was
  * written by something we do not understand, and the honest answer is to stop.
  *
@@ -361,7 +361,7 @@ const TREATMENTS = new Set(["supplement"]);
  * transaction, with no block id in it, which is the position the existing
  * single-column CHECKs already occupy. The recommendation is that the pair ride
  * along with the next migration this feature needs rather than becoming one of
- * their own; recorded in docs/plans/footnotes.md.
+ * their own; recorded in docs/plans/260828o-footnotes.md.
  */
 export function checkNoteFields(slug: string, blocks: Block[]): void {
   for (const [index, b] of blocks.entries()) {
@@ -639,7 +639,7 @@ export interface ImportArticleInOptions {
  * transaction, and a function that opens its own cannot be part of one. The
  * files can be read long before that transaction opens, and should be —
  * `readFile` inside a transaction holds a row lock across a disk.
- * docs/plans/delete-the-importer.md § D1b.
+ * docs/plans/260827aa-delete-the-importer.md § D1b.
  */
 export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
   const dir = path.join(dataRoot(), "data", slug);
@@ -739,7 +739,7 @@ export async function readArticleFiles(slug: string): Promise<ArticleFiles> {
   const shelf = await loadShelf(slug);
 
   /* Whichever file stage 1's manifest names — `raw.html` for a web page,
-     `raw.pdf` for a PDF (docs/plans/pdf-ingestion.md). Articles fetched before
+     `raw.pdf` for a PDF (docs/plans/260826c-pdf-ingestion.md). Articles fetched before
      `raw.json` existed have no manifest and are all HTML, so that is the
      fallback. A manifest also *recovers* the content type and encoding, which
      is why the "unrecoverable" note below is now conditional: for a fetch made
@@ -1098,7 +1098,7 @@ export async function importArticleIn(
     /* PDF provenance — all null for a web page, which is most of them.
        `meta` rather than the manifest: the manifest says what was FETCHED,
        these say how it was READ, and only stage 2 knows that.
-       docs/plans/pdf-ingestion.md. */
+       docs/plans/260826c-pdf-ingestion.md. */
     source: meta?.source ?? null,
     extractMethod: meta?.method ?? null,
     pages: meta?.pages ?? null,
@@ -1183,7 +1183,7 @@ export async function importArticleIn(
      importer would delete every comment written since the last export — the
      database would be made to match a file that is no longer being kept up to
      date. The importer is a migration tool, not a sync; see
-     docs/plans/postgres-storage-implementation.md.
+     docs/plans/260826e-postgres-storage-implementation.md.
 
      Deleted inside the same transaction as the inserts, so there is no moment
      at which a reader sees an article with its questions missing.
@@ -1284,7 +1284,7 @@ export async function importArticleIn(
   /* **Comments last, and that is a rule rather than a tidy-up.**
      `Comment.threadId` names a conversation, so an archive's comments can
      only be read against threads that are already in. There is deliberately
-     no foreign key on that column (docs/plans/comments-and-bookmarks.md § no
+     no foreign key on that column (docs/plans/260828a-comments-and-bookmarks.md § no
      foreign key), so nothing *fails* if this runs first — which is exactly
      why the order is written down here rather than left to a constraint to
      enforce. GPT Sol found this block sitting before the chat inserts,

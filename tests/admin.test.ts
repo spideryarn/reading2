@@ -125,7 +125,7 @@ describe("which refusals are worth a line in the log", () => {
  * administrator — for a day, silently, exactly the lockout `describeAdminMiss`
  * was written to explain (it did fire; nobody was reading the log).
  *
- * docs/postmortems/admin-id-was-the-local-one.md.
+ * docs/postmortems/260828f-admin-id-was-the-local-one.md.
  */
 describe("the administrator has one account per Supabase project", () => {
   /* Spelled out rather than imported. Asserting `isAdmin(ADMIN_USER_ID_PROD)`

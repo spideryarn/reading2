@@ -15,7 +15,7 @@
  * copy in a `catch`. The two guards this file's ancestor lost had both been
  * missing from exactly such a second copy.
  *
- * Lifted out of useChat.ts by docs/plans/chat-operation-model.md's stage 2. The
+ * Lifted out of useChat.ts by docs/plans/260828v-chat-operation-model.md's stage 2. The
  * hook cannot keep them: the controller runs the turn now, the controller is
  * imported *by* the hook, and a module that imports the module importing it is
  * a cycle — `npm run cycles` would have caught it.
@@ -470,7 +470,7 @@ export function stopAnswer(
  * `expectedTailId` is the client naming the answer it believes is last, so the
  * server can refuse if the conversation has moved on since. That refusal is
  * meaningful only because this request is never sent with a name the server
- * invented nothing for — docs/postmortems/cancel-before-begin.md.
+ * invented nothing for — docs/postmortems/260828b-cancel-before-begin.md.
  */
 export function cancelThread(
   slug: string,

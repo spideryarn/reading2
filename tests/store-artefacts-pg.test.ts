@@ -2,7 +2,7 @@
  * Reading artefacts back out of Postgres — the map, and what it reassembles.
  *
  * `src/store/artifacts-pg.ts` is the half of the seam that replaces `db:import`
- * (docs/plans/delete-the-importer.md, landing C3). This file is its read half:
+ * (docs/plans/260827aa-delete-the-importer.md, landing C3). This file is its read half:
  * the kind ↔ storage map, `readArtefact` and `stampForStep`.
  *
  * ## The oracle is written-out fixtures, and the first plan had that wrong

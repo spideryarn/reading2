@@ -8,12 +8,12 @@
  * A reimplementation would be comparing the migration against a fresh set of
  * bugs.
  *
- * It is also the rollback. docs/plans/postgres-migration.md § The order of work
+ * It is also the rollback. docs/plans/260825f-postgres-migration.md § The order of work
  * keeps the filesystem adapter, the importer and the exporter for one release
  * after cutover and then deletes them. This is the first of those three.
  *
  * **This is not where a fallback lives.** Nothing may catch a Postgres error
- * and call into here — see docs/plans/postgres-storage-implementation.md
+ * and call into here — see docs/plans/260826e-postgres-storage-implementation.md
  * § Rules. A silent fallback hides divergence and makes the parity exercise
  * worthless, which is the single most important line in the plan.
  */

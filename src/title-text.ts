@@ -53,7 +53,7 @@
  * arrived. GPT Sol, 2026-08-30.
  *
  * See docs/project/page-titles.md for the rules behind the composition, and
- * docs/plans/public-read-only-access.md § Stage 2 for the server half.
+ * docs/plans/260827ai-public-read-only-access.md § Stage 2 for the server half.
  */
 import { normaliseText } from "./html.js";
 import { DEFAULT_MODE, type Mode } from "./modes.js";

@@ -26,7 +26,7 @@
  * 5m/1h cache split, `service_tier`, `inference_geo` — **and OpenRouter's
  * `cost`, beside them.** So a call reports what it did *and* what it cost, in
  * one shape, with no price table in the middle. See
- * [docs/plans/ai-cost-tracking.md](../docs/plans/ai-cost-tracking.md).
+ * [docs/plans/260827q-ai-cost-tracking.md](../docs/plans/260827q-ai-cost-tracking.md).
  *
  * ## The three things that fail silently here
  *

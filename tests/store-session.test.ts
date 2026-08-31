@@ -2,7 +2,7 @@
  * The seam between a stage and the store: a stage returns a product, and a
  * short commit afterwards writes it, checks it, and finishes the step.
  *
- * docs/plans/delete-the-importer.md § D1 splits in two — this is D1a, the shape
+ * docs/plans/260827aa-delete-the-importer.md § D1 splits in two — this is D1a, the shape
  * on the filesystem, where there is no transaction to hold.
  *
  * ## The bug these were written against
@@ -16,7 +16,7 @@
  * For `blocks` that commits new stamped HTML beside old block rows, which is
  * the identity loss the whole migration exists to prevent, arriving through the
  * coordinator meant to prevent it. Found by GPT Sol reviewing the D1 design,
- * 2026-08-29 (docs/plans/delete-the-importer-d1-design-sol.md, finding 2).
+ * 2026-08-29 (docs/plans/260827aa-delete-the-importer-d1-design-sol.md, finding 2).
  *
  * So `commit` takes the **product**, not a closure, and validates before any
  * write. The test that matters is `refuses over an artefact carried from a

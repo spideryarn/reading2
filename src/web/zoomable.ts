@@ -13,7 +13,7 @@
  * (see `outermost`), which must not end up containing our button. Both are on
  * `ZOOMABLE_SELECTOR` / `outermost` with the reasoning.
  *
- * See docs/plans/figures-in-the-prose.md. Four things here are load-bearing and
+ * See docs/plans/260828az-figures-in-the-prose.md. Four things here are load-bearing and
  * every one of them fails silently:
  *
  * 1. **`<span>` wraps everything, tables included.** A `<div>` inside a `<p>`

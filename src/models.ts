@@ -237,7 +237,7 @@ export const QUICK_MODEL_OPENROUTER = "openai/gpt-5.6-luna";
  * gist, a thread, a glossary. This one is about *reading*, and the two do not
  * predict each other. It was chosen by measurement rather than by argument —
  * ninety-odd calls over three fixture PDFs, in evals/pdf/, with the result and
- * the caveats in docs/plans/pdf-ingestion.md. It is deliberately not
+ * the caveats in docs/plans/260826c-pdf-ingestion.md. It is deliberately not
  * `QUICK_MODEL_OPENROUTER` even though it is currently the same string: they
  * are the same by coincidence, and a future switch of the quick tier must not
  * silently re-decide which model reads PDFs.
@@ -262,7 +262,7 @@ export const PDF_READER_MODEL = "openai/gpt-5.6-luna";
  *
  * A *chat* model rather than one of OpenRouter's nineteen dedicated
  * speech-to-text models, and that is the whole finding of
- * docs/plans/dictation-two-pass.md. Measured on 2026-08-27, one 22-second
+ * docs/plans/260827x-dictation-two-pass.md. Measured on 2026-08-27, one 22-second
  * sample, three runs each:
  *
  * | | latency | word errors |
@@ -316,7 +316,7 @@ export type Task =
      arc, tweets or glossary. */
   | "sketch"
   /* When the piece says things happened, and how sure it is —
-     docs/plans/timeline-mode.md. Article-reading like `ideas`, and like `ideas` it
+     docs/plans/260831i-timeline-mode.md. Article-reading like `ideas`, and like `ideas` it
      names block ids, so it renders with `articleWithIds` and shares its cached
      prefix rather than arc's. It is the one stage that never asks the model for
      a date: src/timeline.ts § the header. */
@@ -445,7 +445,7 @@ function openRouterIdForTier(tier: Tier): string {
  * the seven pipeline stages moved off the Anthropic SDK's own endpoint and onto
  * OpenRouter's Anthropic-compatible one. One member is not a mistake: it is the
  * decision, written where a future reader will trip over it. See
- * docs/plans/ai-cost-tracking.md and src/messages-stream.ts.
+ * docs/plans/260827q-ai-cost-tracking.md and src/messages-stream.ts.
  */
 export type Provider = "openrouter";
 
@@ -776,7 +776,7 @@ export type ArticleStage =
  * It was measured rather than argued: four calls, one identical 7,291-token
  * cached block, only `effort` varying — changing it paid a full write, changing
  * back read the original, and the two prefixes then coexisted. See
- * docs/research/prompt-caching-anthropic.md, which also corrects that doc's
+ * docs/research/260826b-prompt-caching-anthropic.md, which also corrects that doc's
  * earlier claim that generation parameters stay out of the key. `temperature`
  * and `max_tokens` do; this one does not, and nothing about "it's a generation
  * parameter" would have told you which.
@@ -861,7 +861,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      recounts the same three months three times, once per participant, back into
      one order. That is multi-step inference over the whole article at once, and
      it is the ONLY ordering the mode has: Greg's call is that the dates label
-     the rows and never sort them (docs/plans/timeline-mode.md § Ordering), so
+     the rows and never sort them (docs/plans/260831i-timeline-mode.md § Ordering), so
      an `order` the model got wrong is a timeline that is wrong, with nothing
      downstream to correct it. Untested, like every effort choice that has not
      been through evals/results/effort-vs-quality.md. */

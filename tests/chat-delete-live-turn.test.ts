@@ -13,7 +13,7 @@
  *
  * - the DELETE actually leaves the tab. A conversation vanishing from the
  *   screen is not evidence the server heard about it — that is the whole shape
- *   of docs/postmortems/cancel-before-begin.md, where the screen was right and
+ *   of docs/postmortems/260828b-cancel-before-begin.md, where the screen was right and
  *   the request was never sent;
  * - it goes and **stays** gone, however the still-open stream ends. The turn is
  *   still running, and its frames go on arriving for as long as the server keeps
@@ -192,7 +192,7 @@ describe("deleting a conversation an answer is streaming into", () => {
 
     /* **The request left the tab.** Asserted before anything about the screen,
        because the screen being right while the request was never sent is the
-       exact failure docs/postmortems/cancel-before-begin.md is about. */
+       exact failure docs/postmortems/260828b-cancel-before-begin.md is about. */
     expect(sent, "no DELETE went out").toEqual([
       { method: "DELETE", url: `/api/chat/${SLUG}/${THREAD}` },
     ]);
@@ -295,7 +295,7 @@ describe("deleting a conversation an answer is streaming into", () => {
  *
  * The request is therefore **held** until the frame — see `Held` in
  * src/web/chat/model.ts. Asserted here at the hook, on what left the tab, for the
- * reason docs/postmortems/cancel-before-begin.md gives: a conversation vanishing
+ * reason docs/postmortems/260828b-cancel-before-begin.md gives: a conversation vanishing
  * from the screen is not evidence the server heard.
  */
 describe("mutating a conversation before the server has named it", () => {

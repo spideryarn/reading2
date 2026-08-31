@@ -1,7 +1,7 @@
 /**
  * Nothing the app did not write may reach Sentry.
  *
- * This is docs/plans/error-boundary.md's sentinel test,
+ * This is docs/plans/260826p-error-boundary.md's sentinel test,
  * narrowed to one egress. The full version — one unmistakable string pushed
  * into every untrusted input at once, then asserted absent from every channel
  * that does not exist to carry it — is still unbuilt and still the cheap half.

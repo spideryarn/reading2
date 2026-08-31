@@ -16,7 +16,7 @@ Built 2026-08-31. Greg asked for it that day:
 > Prioritised mode. Take inspiration from the Glossary mode.
 
 The design, the alternatives, and the cross-family review that rewrote two of its foundations before
-a line was written are in [quotes-mode.md](../plans/quotes-mode.md). **Read that before changing
+a line was written are in [260831j-quotes-mode.md](../plans/260831j-quotes-mode.md). **Read that before changing
 anything here** — the two exclusions in `authorVoice` and the "store the slice, not the model's
 string" rule look like fussiness until you know what they are answers to.
 

@@ -1,7 +1,7 @@
 # Auth
 
 **Decided 2026-08-25: Supabase Auth.** The working that produced that is in
-[docs/research/auth-options.md](../research/auth-options.md) — this file is the decision and where
+[docs/research/260825a-auth-options.md](../research/260825a-auth-options.md) — this file is the decision and where
 its pieces live.
 
 **Built 2026-08-27, and live on `www.spideryarn.com` the same day.** The server gate refuses
@@ -28,7 +28,7 @@ The variables are set on **Production only**, so a preview deployment still thro
 [§ The domain](deployment.md#the-domain), since the move onto the custom domain is what made a
 blank page matter.
 
-**The build is planned in [auth-supabase.md](../plans/auth-supabase.md)** (2026-08-26) — what to
+**The build is planned in [260826w-auth-supabase.md](../plans/260826w-auth-supabase.md)** (2026-08-26) — what to
 click in Google Cloud and in the Supabase dashboard, the client seam, the gate, the tests, and an
 appendix of the screens that come later. Read that before writing any of this. Two things in it
 that are cheap to get wrong and are measured rather than assumed: both the local and the remote
@@ -147,7 +147,7 @@ Nothing in the sign-in code is wrong. The button built the right authorize URL, 
 `redirect_to` and a PKCE challenge, and handed the browser over; the project answered that Google is
 switched off. Two settings on two dashboards, neither of them in this repo, and **only Greg can make
 the first of them** — Google Cloud Console blocks agents twice over.
-[google-sign-in-production.md](../plans/google-sign-in-production.md) is the whole of it: what is
+[260827i-google-sign-in-production.md](../plans/260827i-google-sign-in-production.md) is the whole of it: what is
 measured, the two scripts, the order, and the check that says whether it took.
 
 **Two things came out of it that are about this app rather than about a dashboard.**
@@ -188,7 +188,7 @@ runs on, not just the pipeline ([ai-gateway.md](ai-gateway.md)). That is not hyp
 created a running job.
 
 The full statement of the problem and Greg's answer in his own words are in
-[deploy-and-repo-move.md § The beta gate](../plans/deploy-and-repo-move.md#the-beta-gate).
+[260825d-deploy-and-repo-move.md § The beta gate](../plans/260825d-deploy-and-repo-move.md#the-beta-gate).
 
 - **It must fail closed.** Session lookup throws, token missing, Supabase unreachable — the answer is
   no. A gate that opens when it is confused is not a gate. The one refinement: "Supabase unreachable"
@@ -338,7 +338,7 @@ and which two are courtesies.
 - **Upload records written before they carried an owner** are accepted from any caller who knows the
   UUID.
 - **No RLS.** The filtering is in the queries, not in the database. RLS is the belt to this pair of
-  braces and is deferred — [§ RLS and realtime](../plans/deploy-and-repo-move.md#rls-and-realtime-not-now).
+  braces and is deferred — [§ RLS and realtime](../plans/260825d-deploy-and-repo-move.md#rls-and-realtime-not-now).
 
 ## Why Supabase Auth
 
@@ -347,11 +347,11 @@ specifically about Better Auth and open-source options. Short version of the ans
 
 - **The schema already decided it.** `owner_id uuid references auth.users(id)` is a foreign key into
   Supabase's own auth table, on every table, from day one — see
-  [postgres-migration.md § Auth](../plans/postgres-migration.md#auth-the-gate-is-someone-elses-plan).
+  [260825f-postgres-migration.md § Auth](../plans/260825f-postgres-migration.md#auth-the-gate-is-someone-elses-plan).
 - **RLS needs it.** Supabase's third-party auth supports exactly five providers — Clerk, Firebase,
   Auth0, Cognito, WorkOS. Only those let an externally-issued JWT drive `auth.uid()`. Better Auth,
   Logto, Ory and Zitadel are not on the list, so any of them strands the RLS path that
-  [§ RLS and realtime](../plans/deploy-and-repo-move.md#rls-and-realtime-not-now) defers but wants
+  [§ RLS and realtime](../plans/260825d-deploy-and-repo-move.md#rls-and-realtime-not-now) defers but wants
   back.
 - **It is the open-source option.** Supabase Auth is itself an open-source, self-hostable auth server.
   The open-source question turned out to be an argument for staying, not for leaving.
@@ -362,7 +362,7 @@ specifically about Better Auth and open-source options. Short version of the ans
 
 The alternatives, what each would cost, and the traps — Lucia is dead, Vercel's password protection
 does not cover a production domain without a $150/month add-on — are all in
-[the research doc](../research/auth-options.md).
+[the research doc](../research/260825a-auth-options.md).
 
 ## The one test that has to exist
 
@@ -401,7 +401,7 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
   needed, and **no scary interstitial either way**: Google's own exception for apps requesting only
   `email`, `profile` and `openid` covers both the unverified-app warning and the seven-day
   authorisation expiry, so staying in Testing costs a listed reader nothing. See
-  [google-sign-in-production.md](../plans/google-sign-in-production.md). Ownership is what stops a
+  [260827i-google-sign-in-production.md](../plans/260827i-google-sign-in-production.md). Ownership is what stops a
   reader who does get in from reading your
   library; nothing stops them making an account and spending your model budget on their own. A spend
   limit is the control for that, and it is the next bullet. If it turns out to be needed sooner,
@@ -409,7 +409,7 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
 - **Whether to put Cloudflare Access in front** as an outer, code-free gate. Free to 50 users, and it
   cannot be opened by a bug in a route handler. Optional, not required; the trade is a second piece of
   infrastructure. See
-  [the research doc](../research/auth-options.md#the-minimal-end-no-auth-library-at-all).
+  [the research doc](../research/260825a-auth-options.md#the-minimal-end-no-auth-library-at-all).
 - **Authenticating against the old app's Supabase project means authenticating against its 9 existing
   users**, on an email provider that is already enabled. Any of them can sign in here. What they
   cannot do is see anybody else's articles — that is what
@@ -418,8 +418,8 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
 
 ## See also
 
-- [auth-options.md](../research/auth-options.md) — the full survey and the sources
+- [260825a-auth-options.md](../research/260825a-auth-options.md) — the full survey and the sources
 - [database.md](database.md) — the store `auth.users` sits beside
 - [security.md](security.md) — the two untrusted parties, and why neither is another user
-- [deploy-and-repo-move.md](../plans/deploy-and-repo-move.md) — the gate's design, in the plan that
+- [260825d-deploy-and-repo-move.md](../plans/260825d-deploy-and-repo-move.md) — the gate's design, in the plan that
   needs it

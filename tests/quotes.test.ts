@@ -18,7 +18,7 @@
  *  - the same for a sentence wholly inside quotation marks in an ordinary
  *    paragraph.
  *
- * See docs/plans/quotes-mode.md § The one safety property, and its review.
+ * See docs/plans/260831j-quotes-mode.md § The one safety property, and its review.
  */
 import { describe, expect, it } from "vitest";
 import {

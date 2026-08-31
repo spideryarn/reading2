@@ -1,7 +1,7 @@
 /**
  * **The seven things that must be true after any sequence of events.**
  *
- * Stage 3 of docs/plans/chat-operation-model.md, and GPT Sol's list from the
+ * Stage 3 of docs/plans/260828v-chat-operation-model.md, and GPT Sol's list from the
  * very first review of the plan — written before any of this existed, on the
  * grounds that a machine like this is worth having only if you can say what it
  * guarantees rather than what it does in the cases somebody thought of.

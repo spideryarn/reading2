@@ -70,7 +70,7 @@ import { stageCli } from "./cli-ledger.js";
  * Bumped whenever the prompt changes in a way that changes what an entry *is*.
  *
  * `glossary/2`, 2026-08-26: one blended `gloss` became `senseHere` and
- * `background` — see docs/plans/glossary-entries-worth-reading.md. Bumping it
+ * `background` — see docs/plans/260826d-glossary-entries-worth-reading.md. Bumping it
  * is what marks every existing glossary stale, which is not a side effect but
  * the migration: the panel says so at the top and offers "Find them again".
  *
@@ -338,7 +338,7 @@ function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
  * under labels that do not describe them. Certified rather than replaced.
  *
  * So: refuse here, and inherit the identity next door. `idsByTerm` is the half
- * that was missing. See docs/plans/glossary-entries-worth-reading.md
+ * that was missing. See docs/plans/260826d-glossary-entries-worth-reading.md
  * § What review caught.
  *
  * **A glossary written from a different reader profile is refused for the same
@@ -349,7 +349,7 @@ function toEntries(raw: RawEntry[], taken: Set<string>): GlossaryEntry[] {
  * stamped with the new hash. A lie about provenance, written by us, into a
  * file. Refusing sends it down the rewrite path instead, where `idsByTerm`
  * keeps the reader's `?term=` links alive across the change. Found by GPT Sol's
- * review of docs/plans/reader-profile.md, 2026-08-26.
+ * review of docs/plans/260826t-reader-profile.md, 2026-08-26.
  *
  * Note this is a stricter test than `profileIsStale`: there, `null` never
  * counts as stale, because a reader who asked for a plain glossary should not
@@ -763,7 +763,7 @@ export class GlossaryBaselineUnusable extends Error {
  *
  * Until 2026-08-28 this was `readGlossary(opts.dir)` inside `generateGlossary`,
  * whose `catch` returns `null` for everything. Landing D of
- * docs/plans/delete-the-importer.md takes the file away, so that read starts
+ * docs/plans/260827aa-delete-the-importer.md takes the file away, so that read starts
  * failing on every run while reporting *first run for this article*: `taken` is
  * empty, every entry id is re-minted, every `?term=` link goes dead and every
  * stored lookup is orphaned. The comment inside `generateGlossary` has
@@ -1040,7 +1040,7 @@ That is a real answer and a better one than padding.
      it, which moved every byte of the article behind it, so each pass
      invalidated the one before it. Glossary is the stage that calls repeatedly
      over one piece, so it was the stage with the most to gain and the ordering
-     that guaranteed it gained nothing. docs/plans/prompt-caching.md. */
+     that guaranteed it gained nothing. docs/plans/260826g-prompt-caching.md. */
   /* Near the top, where it will be read, and before the shape — the reader is
      context for *choosing* the terms, and the choosing is what the rest of this
      prompt is about. The long rules are in SYSTEM, where the profile cannot
@@ -1094,7 +1094,7 @@ export interface GlossaryRun {
  * pipeline through the artefact store, `main()` below to `glossary.json` beside
  * the tree, the arc and the thread. A stage that writes its own file works on a
  * laptop and cannot work through a store that puts the artefact in a Postgres
- * column. docs/plans/finish-the-database-move.md § stage 2.
+ * column. docs/plans/260831b-finish-the-database-move.md § stage 2.
  *
  * **It appends when there is already a current glossary.** That is what makes
  * "Find more terms" a re-run of this step rather than a second mechanism, and
@@ -1182,7 +1182,7 @@ export async function generateGlossary(opts: {
      next run *appends* to this list or starts it again. A fingerprint that
      missed a re-cut tree would go on appending terms to a glossary written
      about a differently-shaped article. src/source-hash.ts §
-     `articleFingerprint`, docs/plans/finish-the-database-move.md § stage 1. */
+     `articleFingerprint`, docs/plans/260831b-finish-the-database-move.md § stage 1. */
   const sourceHash = articleFingerprint(blocks, tree, meta);
   /* **Handed in, not read off a directory** — see `previous` on the options
      above, and `previousGlossaryFrom` for the four states the caller had to
@@ -1286,7 +1286,7 @@ export async function generateGlossary(opts: {
            inside the 5-minute TTL — a question about when somebody clicks, not
            something the code can promise. The reliable win here is cross-stage:
            the arc and the thread send these same bytes, and in one ingest the
-           three share an entry. docs/research/prompt-caching-callsites.md. */
+           three share an entry. docs/research/260826c-prompt-caching-callsites.md. */
         system: [
           {
             type: "text" as const,

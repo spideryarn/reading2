@@ -14,7 +14,7 @@
  * (src/env.ts explains why, and it is a good reason).
  *
  * So the cases below are the local stack and its neighbours, not a survey of
- * malformed strings. See docs/plans/google-sign-in-production.md.
+ * malformed strings. See docs/plans/260827i-google-sign-in-production.md.
  */
 
 import { describe, expect, it } from "vitest";

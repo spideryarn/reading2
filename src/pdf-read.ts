@@ -4,7 +4,7 @@
  *
  *   npx tsx src/pdf-read.ts evals/pdf/easy/source.pdf
  *
- * See docs/plans/pdf-ingestion.md. Pass 0 (src/pdf.ts) has already said how many
+ * See docs/plans/260826c-pdf-ingestion.md. Pass 0 (src/pdf.ts) has already said how many
  * pages there are, what the text layer holds, which lines are furniture and
  * whether this is a scan. This file cuts the file into page-aligned chunks,
  * asks a model to transcribe each one into records, checks every chunk against
@@ -652,7 +652,7 @@ const escapeHtml = (s: string) =>
  * a sentence broken across a page break comes back whole. And a record the
  * model marked `uncertain` keeps its ⟦illegible⟧ markers and gets a class, so
  * the reader can see where the machine could not read the ink rather than
- * having to trust that it could — docs/plans/pdf-ingestion.md § the scan.
+ * having to trust that it could — docs/plans/260826c-pdf-ingestion.md § the scan.
  */
 /** A line that breaks a word: a letter, then a hyphen, then the line ends. */
 const BREAKS_A_WORD = /\p{L}[-‐­]$/u;
@@ -918,7 +918,7 @@ export interface PdfExtractOptions {
   bytes: Uint8Array;
   /**
    * Where this PDF was fetched from. **Absent for one the reader uploaded**,
-   * which has no address at all — see docs/plans/pdf-upload-and-storage.md.
+   * which has no address at all — see docs/plans/260826u-pdf-upload-and-storage.md.
    *
    * Only two things here use it, and neither is the transcription: the last
    * rung of the title ladder, and the `raw.json` this writes when nothing else
@@ -936,7 +936,7 @@ export interface PdfExtractOptions {
    * an artefact — it is money already spent, written *during* a step so a later
    * attempt does not re-buy it, which is the opposite of something committed
    * when a step succeeds. Converting these is somebody else's landing
-   * (docs/plans/finish-the-database-move.md § Stage 2b), and the atomic-write
+   * (docs/plans/260831b-finish-the-database-move.md § Stage 2b), and the atomic-write
    * recipe below is left exactly as it was.
    */
   dataDir: string;
@@ -967,7 +967,7 @@ export interface PdfExtractOptions {
  * every later attempt computed the same key, found the same broken file, and
  * threw the same `SyntaxError` out of the whole extract step. Nothing here ever
  * deletes these files, so Retry could not clear it and the message never said
- * which file to delete. docs/postmortems/pdf-chunk-cache-corrupt-entry.md.
+ * which file to delete. docs/postmortems/260828e-pdf-chunk-cache-corrupt-entry.md.
  *
  * **A miss re-buys a vision-model call**, so this is deliberately the most
  * tolerant test that still means anything: parses, and has the `records` array
@@ -1054,7 +1054,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
       throw stageFailure(
         "blocked",
         `This PDF has ${err.pages} pages and the limit is ${err.limit}. That is a cost cap, ` +
-          `not a technical one — see docs/plans/pdf-ingestion.md.`,
+          `not a technical one — see docs/plans/260826c-pdf-ingestion.md.`,
       );
     }
     throw err;
@@ -1311,7 +1311,7 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
    * and both were refused. The nine-page one was refused over the arXiv margin
    * stamp alone (now handled in `isSideways`); the fourteen-page one over that
    * plus chart axis tick labels and mathematical notation — figure internals
-   * that v1 deliberately does not transcribe (docs/plans/pdf-ingestion.md), and
+   * that v1 deliberately does not transcribe (docs/plans/260826c-pdf-ingestion.md), and
    * maths that the text layer and the model spell differently. So the gate's
    * observed behaviour on real papers was to refuse good work, and a reader who
    * asked for a paper got nothing at all.

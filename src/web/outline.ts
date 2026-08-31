@@ -8,7 +8,7 @@
  * wrote the same rule out separately, and when two copies of a rule disagree
  * nothing errors — the panel scrolls to an element that is not in the DOM, or
  * marks a row nobody can see. See docs/project/summaries.md § Which row is
- * "the relevant one", and docs/plans/outline-mode.md § The code.
+ * "the relevant one", and docs/plans/260828aw-outline-mode.md § The code.
  *
  * Pure, and takes no DOM. The fit — which rung actually fits the band — is
  * decided by OutlinePanel measuring the candidates this builds.

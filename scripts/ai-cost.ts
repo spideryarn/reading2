@@ -263,7 +263,7 @@ function pocket(label: string, rows: readonly AiCallRow[]): void {
 /**
  * **The one hole that is not in `DECLARATIONS`, and cannot be put there.**
  *
- * Live conversation mode (docs/plans/live-conversation.md) spends real money
+ * Live conversation mode (docs/plans/260831g-live-conversation.md) spends real money
  * that nothing in this report can see. It is not an oversight and it is not a
  * bypass that somebody forgot to declare — a `Declaration` for it **cannot be
  * typed**: `ProviderAccount` is `"openrouter" | "anthropic"` with no
@@ -296,7 +296,7 @@ function liveConversationGap(): void {
   console.log(
     "      row is written and no figure above includes it. Accepted 2026-08-31.",
   );
-  console.log("  docs/plans/live-conversation.md says what closing it needs.");
+  console.log("  docs/plans/260831g-live-conversation.md says what closing it needs.");
 }
 
 /**
@@ -376,7 +376,7 @@ async function main(): Promise<void> {
      gets set wrong. Storing eval rows and separating them at the report is the
      right way round: a scope can always be excluded from a total, and a row
      that was never written cannot be recovered. GPT Sol, 2026-08-28, on the
-     open question Greg has not answered (ai-cost-tracking.md, question 4). */
+     open question Greg has not answered (260827q-ai-cost-tracking.md, question 4). */
   const product = rows.filter((r) => r.scopeKind !== "eval");
   const evals = rows.filter((r) => r.scopeKind === "eval");
   /* An empty pocket is not printed as `$0.0000 over 0 call(s)`: a zero with a

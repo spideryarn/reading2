@@ -35,7 +35,7 @@ deliberately does not. Point it at the **app's** credential rather than an admin
 what the connecting role can see, and `information_schema` hides columns the role has no privilege
 on, so a superuser seeing everything proves nothing about what Vercel can select. It is the answer
 to "have the migrations reached the database this code is about to talk to?", which cost production
-two outages on 2026-08-27 — [schema-drift-guard.md](../plans/schema-drift-guard.md).
+two outages on 2026-08-27 — [260827w-schema-drift-guard.md](../plans/260827w-schema-drift-guard.md).
 
 The gate/advisory split is a deliberate design, written up at the top of
 [`scripts/check.ts`](../../scripts/check.ts): a check that always fails is a check nobody runs, so a

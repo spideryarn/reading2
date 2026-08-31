@@ -33,7 +33,7 @@
  * stream itself. Touching `req.body` here — even in a log line — would leave
  * every POST reading an empty body and being told its JSON was fine but empty.
  *
- * docs/plans/deploy-and-repo-move.md § The steps
+ * docs/plans/260825d-deploy-and-repo-move.md § The steps
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";

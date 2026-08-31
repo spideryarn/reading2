@@ -10,7 +10,7 @@
  *
  * `src/routes.ts` imports the article reads from here instead of from
  * `src/api.ts`. That is a one-line change in a file several agents are editing,
- * which is deliberate — see docs/plans/postgres-storage-implementation.md.
+ * which is deliberate — see docs/plans/260826e-postgres-storage-implementation.md.
  *
  * ## The rule this file exists to keep
  *
@@ -18,7 +18,7 @@
  * against the filesystem. A fallback would hide exactly the divergence the
  * parity test is built to find, and would do it in production, silently, where
  * nobody is comparing. From
- * [the order of work](../../docs/plans/postgres-migration.md#the-order-of-work):
+ * [the order of work](../../docs/plans/260825f-postgres-migration.md#the-order-of-work):
  * *"Do not catch a Postgres error and fall back to files."*
  *
  * The corollary is the `notMigrated` helper below. Two glossary **writes** have
@@ -163,7 +163,7 @@ if (STORE === "postgres") {
    * Postgres got `owner_id` filtering on 2026-08-27 (src/store/pg.ts §
    * `ownedSlug`); the filesystem side deliberately did not, because it is the
    * local development store and its replacement is the whole point of
-   * docs/plans/postgres-migration.md.
+   * docs/plans/260825f-postgres-migration.md.
    *
    * So this is a boot-time refusal rather than a per-request one. On Vercel it
    * would have failed anyway — there is no writable disk — but it would have
@@ -257,7 +257,7 @@ export const lookUpTerm = makeLookUpTerm({
  * The SQL is trivial. What is not settled is whether it may run at all: it
  * nulls `article_revisions.glossary` on the *published* revision, and that
  * table says immutable once published. Step 11 of
- * docs/plans/postgres-storage-implementation.md owns that decision, so this
+ * docs/plans/260826e-postgres-storage-implementation.md owns that decision, so this
  * stays refused rather than being quietly made an exception — and the visible
  * cost is that the glossary panel's "start over" does not work in `postgres`
  * mode.
@@ -297,7 +297,7 @@ export const librarySearch: LibrarySearch = guarded("library", pgLibrarySearch, 
  * Follows the same flag as everything above, for the same reason: a profile
  * written to `data/reader.json` while `postgres` mode serves reads out of
  * `reader_profiles` is a write nothing will ever read back — the exact
- * failure `notMigrated` exists to prevent. docs/plans/reader-profile.md.
+ * failure `notMigrated` exists to prevent. docs/plans/260826t-reader-profile.md.
  */
 export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore, fsReaderStore);
 
@@ -310,7 +310,7 @@ export const readerStore: ReaderStore = guarded("reader-profile", pgReaderStore,
  * so under `postgres` it reported *"that article did not come from a PDF"*
  * about a PDF sitting in the `sources` bucket — and on a deployment it was the
  * jobless `dataRoot()` caller that src/store/data-root.ts names by route.
- * docs/plans/finish-the-database-move.md, stage 1.
+ * docs/plans/260831b-finish-the-database-move.md, stage 1.
  *
  * `guarded(...)` like the reads above it, because there really are two
  * implementations: `data/<slug>/` beside the manifest naming the file, and a
@@ -372,7 +372,7 @@ export const adminStore: AdminStore =
  * go straight to src/store/public-reader.ts from src/public/routes.ts, because
  * this module imports the whole read layer and the public import graph is
  * asserted closed against it — tests/public-imports.test.ts.
- * docs/plans/public-read-only-access.md.
+ * docs/plans/260827ai-public-read-only-access.md.
  */
 const visibilityOnFiles: VisibilityStore = {
   set: () => {
@@ -380,7 +380,7 @@ const visibilityOnFiles: VisibilityStore = {
       new Error(
         "Sharing needs Postgres — the filesystem store has no visibility column, so " +
           "there is nowhere to record that a document is shared. Run with " +
-          "SPIDERYARN_STORE=postgres. See docs/plans/public-read-only-access.md.",
+          "SPIDERYARN_STORE=postgres. See docs/plans/260827ai-public-read-only-access.md.",
       ),
       { status: 501 },
     );
@@ -407,6 +407,6 @@ export const visibilityStore: VisibilityStore =
  * warn and carry on when there is no `DATABASE_URL` — would have made the
  * **default** configuration the one that records nothing, with a warn line that
  * becomes background noise inside a week. GPT Sol's call, 2026-08-28; it
- * reversed docs/plans/ai-cost-tracking.md's own recommendation.
+ * reversed docs/plans/260827q-ai-cost-tracking.md's own recommendation.
  */
 export { costStore } from "./ai-calls.js";

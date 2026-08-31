@@ -316,7 +316,7 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
          new cache prefix appears, and the transcript reads as one conversation
          throughout. `withTurn` refuses a contradicting kind before we are
          reached; this is why it would not have mattered if it had not.
-         docs/plans/review-mode.md § `kind` belongs to the thread. */
+         docs/plans/260827ah-review-mode.md § `kind` belongs to the thread. */
       set: { title: thread.title, updatedAt: new Date(thread.updatedAt) },
     });
 }

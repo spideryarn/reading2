@@ -10,7 +10,7 @@
  *
  * That was survivable while the only way in was a URL we chose to fetch. It
  * stops being survivable the moment a reader can upload a file
- * (docs/plans/pdf-upload-and-storage.md), which is why this moved.
+ * (docs/plans/260826u-pdf-upload-and-storage.md), which is why this moved.
  *
  * **The assertion that matters is `getPage` was never called.** A test that
  * only checked "an over-long PDF is refused" would have passed against the old

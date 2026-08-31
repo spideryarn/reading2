@@ -24,7 +24,7 @@
  *
  * The measurement stands; the conclusion drawn from it was wrong, and it was
  * repeated into two source comments, this file, tests/stage-stamp-agreement.ts
- * and docs/plans/finish-the-database-move.md before GPT Sol took it apart.
+ * and docs/plans/260831b-finish-the-database-move.md before GPT Sol took it apart.
  * Adding `byline: "Unknown"` to the stub puts a `BY: Unknown` line in the
  * prompt that no fingerprint anywhere represents, and every one of those five
  * claims — and both of the tests written from them — stays green.

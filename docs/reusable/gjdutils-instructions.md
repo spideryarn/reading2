@@ -17,6 +17,9 @@ rest are one fetch away.
 | [rename-or-move.md](rename-or-move.md) | renaming/moving files and chasing down every reference to them |
 | [write-deep-dive-as-doc.md](write-deep-dive-as-doc.md) | researching a topic on the web and writing it up as a reference doc |
 | [third-party-library-selection.md](third-party-library-selection.md) | choosing a library to depend on |
+| [write-planning-doc.md](write-planning-doc.md) | writing the planning doc for a piece of work, and naming it |
+| [debrief-progress.md](debrief-progress.md) | reporting on how a piece of work is going |
+| [audit-architecture-mode.md](audit-architecture-mode.md) | auditing a feature, an area, or a plan against what was built |
 | [codex-cli-as-subagent.md](codex-cli-as-subagent.md) | (not from gjdutils) dispatching a GPT/Codex subagent |
 
 ## Others worth knowing about
@@ -25,10 +28,10 @@ Not copied here, but frequently the right thing to read — all under
 `https://github.com/gregdetre/gjdutils/blob/main/docs/instructions/`:
 
 - `SOUNDING_BOARD_MODE.md` — think-with-the-user mode; several of the docs above assume it
-- `WRITE_EVERGREEN_DOC.md` / `WRITE_PLANNING_DOC.md` — the two doc formats the others refer to
+- `WRITE_EVERGREEN_DOC.md` — the other doc format the rest refer to (`WRITE_PLANNING_DOC.md` is copied)
 - `DETECTIVE_SCIENTIST_MODE.md` / `SURGEON_MODE.md` — debugging and careful-editing stances
 - `CODING_PRINCIPLES.md`, `GIT_COMMIT_CHANGES.md`, `GIT_WORKTREES.md`, `TASKS_SUBAGENTS.md`
-- `RESEARCH_THIS_TOPIC.md`, `CRITIQUE_OF_PLANNING_DOC.md`, `AUDIT_ARCHITECTURE_MODE.md`
+- `RESEARCH_THIS_TOPIC.md`, `CRITIQUE_OF_PLANNING_DOC.md`
 
 Run `ls` against the directory listing above for the current full set — it grows.
 

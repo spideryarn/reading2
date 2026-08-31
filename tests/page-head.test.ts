@@ -106,7 +106,7 @@ describe("the shell that is not touched", () => {
     expect(above(composed)).toBe(above(SHELL));
     /* Named individually as well, because "the prefix is unchanged" is true of
        a prefix that got shorter too. The referrer policy is the one that would
-       actually hurt: docs/plans/public-read-only-access.md § Stage 1. */
+       actually hurt: docs/plans/260827ai-public-read-only-access.md § Stage 1. */
     expect(metaContent(doc(composed), 'meta[name="referrer"]')).toBe("no-referrer");
     expect(composed).toContain('<script type="module" src="/src/web/boot.tsx"></script>');
   });

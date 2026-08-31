@@ -33,8 +33,8 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `spine` | whether the bird's-eye rail is on screen. **Absent means automatic** — off in outline mode, on wherever there is prose ([granularity-zoom.md § the spine](granularity-zoom.md#the-spine-a-birds-eye-rail)). Present means the reader chose, in either direction. | push | `?spine=0` |
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
-| `panel` | which drawer panel is open, or absent for a shut drawer — [bottom-bar.md](../plans/bottom-bar.md) | **replace** | `?panel=questions` |
-| `mode` | which **mode** owns the band between the spine and the prose, absent for the table-of-contents columns that are the default — [chat-mode.md](../plans/chat-mode.md) | push | `?mode=chat` |
+| `panel` | which drawer panel is open, or absent for a shut drawer — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md) | **replace** | `?panel=questions` |
+| `mode` | which **mode** owns the band between the spine and the prose, absent for the table-of-contents columns that are the default — [260826a-chat-mode.md](../plans/260826a-chat-mode.md) | push | `?mode=chat` |
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
@@ -107,11 +107,11 @@ the boundary was sealed, 2026-08-26. Beyond that: a URL should be readable witho
 page it is for, and a table with two rows called `sort` is a table apologising for itself.
 
 The reasoning, including the three sorting rules that fail silently, is in
-[library-sorting.md](../plans/library-sorting.md).
+[260826y-library-sorting.md](../plans/260826y-library-sorting.md).
 
 **Two superseded spellings, both still working.** `?about=1` was the masthead's details disclosure
 and `?panel=about` was the drawer panel that replaced it. Both are gone: the article's details are a
-page now, `/read/<slug>/metadata` ([metadata-page.md](../plans/metadata-page.md)). Old links carrying
+page now, `/read/<slug>/metadata` ([260825e-metadata-page.md](../plans/260825e-metadata-page.md)). Old links carrying
 either spelling are rewritten to that page before React mounts, by
 [`main.tsx`](../../src/web/main.tsx), keeping every other parameter they arrived with. `about=0` is
 left alone — it meant the panel was shut, which is not a reason to send anybody anywhere.
@@ -150,7 +150,7 @@ already right — and leaving chat mode puts the panel back where the reader lef
 
 A second parameter was drafted for the floating panel and rejected in review: it would have carried
 nothing `mode` does not already carry, and two ids that can disagree is a bug waiting to be written.
-See [chat-as-gateway.md](../plans/chat-as-gateway.md).
+See [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md).
 
 **The passage a *new* conversation is about is not in the URL.** Before the reader sends anything
 there is no conversation to link to, and the quote is the article's words sitting in their selection
@@ -170,7 +170,7 @@ article now has an address rather than a setting. `/` is the shelf; anything tha
 instead of on a 404.
 
 **A mode is a parameter, not a segment.** `?mode=chat`, `?mode=glossary` and `?mode=search` replace
-the middle band between the spine and the prose ([chat-mode.md](../plans/chat-mode.md),
+the middle band between the spine and the prose ([260826a-chat-mode.md](../plans/260826a-chat-mode.md),
 [glossary.md](glossary.md), [search.md](search.md)); the default, `hierarchy`, is the gist columns.
 It was called `toc` until 2026-08-29, and this paragraph used to add "and never appears in a URL",
 which was false — `withMode` in [`Dock.tsx`](../../src/web/Dock.tsx) wrote the parameter for every
@@ -345,7 +345,7 @@ can be watched failing, which is how they were checked
 ([`tests/reading-position.test.ts`](../../tests/reading-position.test.ts)). GPT Sol found the glide
 half of it in review of the first fix, 2026-08-30. The whole story, including the two commits between
 which the assumption stopped being true and why it stayed invisible for five days, is
-[the-spy-wrote-a-section-over-the-paragraph.md](../postmortems/the-spy-wrote-a-section-over-the-paragraph.md).
+[260830b-the-spy-wrote-a-section-over-the-paragraph.md](../postmortems/260830b-the-spy-wrote-a-section-over-the-paragraph.md).
 
 **It is emphatically not a node id.** Node ids (`n0003`) are handed out sequentially when the tree is
 generated and are regenerated whenever `tree.json` is rebuilt, so a URL holding one would silently
@@ -426,7 +426,7 @@ page: `?at=` restored the section, `?note=` opened the dialog, and nothing conne
 `/read/<slug>?note=<id>` **with no `?at=` beside it** opened an explanation of a paragraph that was
 somewhere off screen, with no way to tell where. That is not an edge case — it is the ordinary shape
 of a link somebody *sends*, because `?at=` is only in the URL if the sender happened to have scrolled.
-It was recorded as open in [metadata-page.md](../plans/metadata-page.md) and is fixed now.
+It was recorded as open in [260825e-metadata-page.md](../plans/260825e-metadata-page.md) and is fixed now.
 
 The rule, and the reason for it: **`?at=` is a byproduct and `?note=` is the point.** Position is
 written by scrolling — debounced, replacing rather than pushing, saying where the sender's eye was

@@ -31,10 +31,10 @@
  * **An expired lease is not a takeover.** The job is failed and Retry is the
  * reader's to press. Guessing that an owner is dead is how two runners end up
  * writing one article, and it only becomes safe when the artefact writes are
- * transactional — docs/plans/transactional-stage-runner.md, which is not built.
+ * transactional — docs/plans/260827j-transactional-stage-runner.md, which is not built.
  *
  * See docs/project/ingest-queue.md for the design and the library choice, and
- * docs/plans/durable-queue-and-uploads.md for the review that took the first
+ * docs/plans/260827h-durable-queue-and-uploads.md for the review that took the first
  * version of this apart.
  */
 import { createHash } from "node:crypto";
@@ -202,7 +202,7 @@ export const CONCURRENCY_ENV = "SPIDERYARN_JOB_CONCURRENCY";
  * **Three, asked and answered**, 2026-08-30: enough to ingest one article,
  * ingest a second, and answer a reader asking for a glossary, all at once. It
  * supersedes the "default to 2" recorded earlier the same day in
- * docs/plans/faster-ingest-and-concurrency.md, which was answering a narrower
+ * docs/plans/260830am-faster-ingest-and-concurrency.md, which was answering a narrower
  * question.
  *
  * **What the number is actually rationing is spend and provider rate limits**,
@@ -378,7 +378,7 @@ export function cascadeForce(steps: StepName[], forced: Set<StepName>): Set<Step
  *
  * What kind of failure it was is what decides whether the card offers Retry —
  * `jobWorthRetrying` in src/job-failure.ts, and
- * docs/postmortems/toc-max-tokens.md for the failure that started it.
+ * docs/postmortems/260826a-toc-max-tokens.md for the failure that started it.
  *
  * **Deleted rather than left alone when there is no kind**, so the field always
  * describes *this* failure. A retry is a new job today, so nothing can carry a
@@ -840,7 +840,7 @@ function endingFrom(job: Job, status: JobEnding["status"]): JobEnding {
  * every instance, where p-queue could only speak for this one.
  *
  * The first draft of this exited on `busy`, and
- * [GPT Sol](../docs/plans/durable-queue-and-uploads-review-sol.md) was right
+ * [GPT Sol](../docs/plans/260827h-durable-queue-and-uploads-review-sol.md) was right
  * that a loop which exits on `busy` is not a pump: job A takes the single slot,
  * job B's loop is told `busy` once and stops, and nothing ever restarts it.
  * What "close the tab and it still finishes" means on a laptop is that
@@ -898,8 +898,8 @@ function pump(id: string, owner: OwnerId): void {
 /* ------------------------------------------------------------- advancing --
 
    The other way a job moves: one step per HTTP request, driven by whoever is
-   watching it. Designed in docs/plans/job-queue-rethink.md § Decided, and it is
-   what makes docs/plans/ingest-resume.md work.
+   watching it. Designed in docs/plans/260826q-job-queue-rethink.md § Decided, and it is
+   what makes docs/plans/260826s-ingest-resume.md work.
    -------------------------------------------------------------------------- */
 
 /** What one `POST /api/jobs/:id/advance` did. */
@@ -956,9 +956,9 @@ export interface Advanced {
  * **Take a job away from a claimant whose lease has run out.** The job is
  * failed, with a sentence saying it was interrupted, and Retry is the reader's
  * to press. Guessing that an owner is dead is how two runners end up writing
- * one article — the fault docs/plans/job-queue-rethink.md names in pgmq — and
+ * one article — the fault docs/plans/260826q-job-queue-rethink.md names in pgmq — and
  * the guess is only safe once every durable write is inside the fenced
- * transaction, which is docs/plans/transactional-stage-runner.md and is not
+ * transaction, which is docs/plans/260827j-transactional-stage-runner.md and is not
  * built.
  *
  * What makes an expired lease *mean* something in the meantime is the
@@ -984,7 +984,7 @@ export async function advanceJob(id: string): Promise<Advanced | null> {
  * called a session method directly would be proving something else: the whole
  * point of the first of those is that `stepIsDone` goes through `session.reads`
  * and not through a store the caller happens to have. GPT Sol, 2026-08-29,
- * docs/plans/delete-the-importer-d1b-design-sol.md finding 4.
+ * docs/plans/260827aa-delete-the-importer-d1b-design-sol.md finding 4.
  *
  * ## Narrow means these two and no more
  *
@@ -1104,7 +1104,7 @@ export async function advanceJobWith(
      claimant that held these jobs is gone and logged nothing on its way out, so
      `failed 1 job(s)` is a fact that can be joined to nothing — which job, whose
      article, how far it had got. GPT Sol asked for it by name
-     (docs/plans/v1-imports-review-sol.md § Remaining operational points), and it
+     (docs/plans/260830a-v1-imports-review-sol.md § Remaining operational points), and it
      matters more now that one claim covers a whole ingest: a sweep here is
      up to twelve minutes of somebody's work ending. */
   const swept = await store.failExpired();
@@ -1153,7 +1153,7 @@ export async function advanceJobWith(
    * it**: the bundle had `currentJobId()` and an `AsyncLocalStorage` and no way
    * to fill it, so a deployed step reached `dataRoot()` with no scope and threw
    * before it started. Every import on production failed at step one, in 16ms.
-   * GPT Sol, docs/plans/v1-stages01-review-sol.md critical 1.
+   * GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md critical 1.
    *
    * Here rather than in the route, deliberately: the route is not where the job
    * is known to be *ours*, and a scope opened around a claim that was refused
@@ -1175,7 +1175,7 @@ export async function advanceJobWith(
  * function exists for: every `advanceJob` takes its own claim, so between one
  * call's release and the next call's claim a second tab can take the job, on a
  * second instance, with its own partial scratch — and the two alternate,
- * restarting from their own halves. GPT Sol, docs/plans/v1-imports-review-sol.md
+ * restarting from their own halves. GPT Sol, docs/plans/260830a-v1-imports-review-sol.md
  * critical 3.
  *
  * So the claim is taken once and **kept** across steps: `transitionAfter`
@@ -1205,7 +1205,7 @@ async function walkClaim(
    * job is stale on the second request; one built per step could not carry a
    * draft at all. One per successful claim is the lifetime that matches what a
    * claim *is*, and it is what D1b needs
-   * (docs/plans/delete-the-importer-d1-design-sol.md, finding 3).
+   * (docs/plans/260827aa-delete-the-importer-d1-design-sol.md, finding 3).
    *
    * **A claim is now a whole job rather than one step, and this line did not
    * have to change** — which is the evidence that "one per claim" was the right
@@ -1242,7 +1242,7 @@ async function walkClaim(
    * that is still working, and renewing the lease instead would turn it into a
    * heartbeat — after which an expired lease means *probably dead* rather than
    * *definitely over its own deadline*, and `failExpired` stops being safe.
-   * GPT Sol, docs/plans/v1-stages01-review-sol.md § 3. What bounds a *step* is
+   * GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md § 3. What bounds a *step* is
    * `STEP_BUDGET_MS`, checked before the step starts rather than while it runs.
    */
   let overran = false;
@@ -1277,7 +1277,7 @@ async function walkClaim(
      * step's completion and the job's transition are one act — the boundary D1b
      * makes atomic. It used to be computed here, *after* `runStep` returned, and
      * that is precisely the shape the review said D1b would have to re-cut
-     * (docs/plans/delete-the-importer-d1-design-sol.md, finding 1).
+     * (docs/plans/260827aa-delete-the-importer-d1-design-sol.md, finding 1).
      *
      * Everything it reads is already true by the time it is called: the step is
      * marked `done` in memory, the title is on the job, and the signal is the
@@ -1321,7 +1321,7 @@ async function walkClaim(
          the next request may be somewhere else; `stepIsDone` derives what is
          finished from the artefacts, so a warm instance resumes for free and a
          cold one re-runs. That trade is v1's, and it is stated in
-         docs/plans/v1-imports-on-vercel.md rather than discovered. */
+         docs/plans/260830d-v1-imports-on-vercel.md rather than discovered. */
       return {
         kind: "release",
         jobId: job.id,
@@ -1421,7 +1421,7 @@ async function walkClaim(
        *
        * The cost is that Stop is only honoured at a step boundary — a reader
        * stopping mid-`toc` waits for `toc`. Said out loud in
-       * docs/plans/v1-imports-on-vercel.md § Risks rather than discovered.
+       * docs/plans/260830d-v1-imports-on-vercel.md § Risks rather than discovered.
        */
       const noted = await note();
       if (noted.cancelling) {
@@ -1757,7 +1757,7 @@ async function activeFor(slug: string): Promise<Job | undefined> {
  * counts as the same piece of work" is a decision worth being able to read.
  *
  * **A `guidance` steer used to be compared here and is gone**, with the box that
- * fed it (docs/plans/steer-becomes-the-profile.md). What it was defending
+ * fed it (docs/plans/260830o-steer-becomes-the-profile.md). What it was defending
  * against now lives entirely on `profile` one line down: a reader who changes
  * what they are after and presses the button again is asking for a *different
  * artefact*, and being handed the first job would refresh the panel with
@@ -1954,7 +1954,7 @@ async function slugIsSpokenFor(candidate: string, mine: string): Promise<boolean
   /* **Through the artefact seam, not `readRaw(contextPaths(...).dir)`.** The
      value is the same file today — `PATHS.fetch.raw` is `raw.json` — but from
      2026-08-31 the *writer* is the store rather than the stage
-     (docs/plans/finish-the-database-move.md § Stage 2c), and a reader that
+     (docs/plans/260831b-finish-the-database-move.md § Stage 2c), and a reader that
      names the path itself is a second definition of where the manifest lives.
      Two definitions agree on the day they are written.
 

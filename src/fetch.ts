@@ -101,7 +101,7 @@ export interface FetchedDocument {
  * used to throw away finally survive: the final URL after redirects, the
  * content type the server claimed, the byte length and the hash. Those are the
  * provenance the Postgres migration needs and could not get
- * (docs/plans/postgres-migration.md § raw.html is not raw).
+ * (docs/plans/260825f-postgres-migration.md § raw.html is not raw).
  */
 export interface RawManifest {
   kind: DocumentKind;
@@ -167,7 +167,7 @@ export interface RawManifest {
    *
    * Optional, because every manifest written before 2026-08-27 has no object
    * behind it. Absent means *we have not put this document in the bucket*,
-   * which is a fact rather than a gap. docs/plans/raw-bytes-in-storage.md.
+   * which is a fact rather than a gap. docs/plans/260827o-raw-bytes-in-storage.md.
    */
   storedSha256?: string;
   /**
@@ -183,7 +183,7 @@ export interface RawManifest {
    * Optional, alongside `storedSha256` and for the same reason: every manifest
    * written before 2026-08-27 has no object behind it, and absent is the honest
    * way to say so. GPT Sol, 2026-08-28;
-   * docs/plans/artifacts-pg-has-sol.md.
+   * docs/plans/260828b-artifacts-pg-has-sol.md.
    */
   storedBytes?: number;
   fetchedAt: string;
@@ -217,7 +217,7 @@ export type StoredRawManifest = RawManifest & { storedSha256: string; storedByte
  * `sources` bucket, through a store that is itself selected (`blobs-fs.ts`
  * locally, `blobs-supabase.ts` deployed). Nothing was reading the two byte
  * files except stage 2, which now asks `readRawBytes` below.
- * docs/plans/finish-the-database-move.md § Stage 2c.
+ * docs/plans/260831b-finish-the-database-move.md § Stage 2c.
  *
  * The name is kept deliberately even though the destination changed. It still
  * writes the raw document; it never promised a directory. Renaming it would
@@ -259,7 +259,7 @@ export async function writeRaw(
      HTML those are not the bytes above, because this function stores the
      decoded string. Two different questions, and conflating them puts bytes
      under a name that does not describe them, which is the one thing content
-     addressing must never do. docs/plans/raw-bytes-in-storage.md § The backfill
+     addressing must never do. docs/plans/260827o-raw-bytes-in-storage.md § The backfill
      can put the wrong bytes under a hash is the same mistake found the other
      way round. For a PDF, and for a page that was already UTF-8, the two hashes
      are equal.
@@ -309,7 +309,7 @@ export async function writeRaw(
  * `storedDocumentBytes` — under the name the manifest gives them.
  *
  * All of this dies at stage 4 with the filesystem store, which is the right
- * time for it to die. docs/plans/finish-the-database-move.md § Stage 4.
+ * time for it to die. docs/plans/260831b-finish-the-database-move.md § Stage 4.
  */
 export async function writeRawFiles(
   dir: string,
@@ -338,7 +338,7 @@ export async function writeRawFiles(
  * **None of the three is ever silently downgraded to "assume HTML".** That
  * fallback existed on `readRaw` below and stage 2 relied on it; it is gone, and
  * this class is what replaced it. Greg's decision 4 of
- * docs/plans/finish-the-database-move.md makes refetching the right answer for
+ * docs/plans/260831b-finish-the-database-move.md makes refetching the right answer for
  * an old article — but only if the state says so out loud, which is what a
  * thrown error does and what a quiet default did not.
  */
@@ -367,7 +367,7 @@ export class RawDocumentUnavailable extends Error {
  * inside a job: there is no request owner, and on a fresh ingest there is no
  * current revision at all, so a sibling method there would answer `null` on the
  * ordinary path. That is the shape of the NO-SHIP in
- * docs/plans/finish-the-database-move.md § *The thing Greg asked for that is not
+ * docs/plans/260831b-finish-the-database-move.md § *The thing Greg asked for that is not
  * available* — pointing a fresh ingest's read at the published revision breaks
  * the common case to serve the uncommon one. The content-type argument that
  * makes `readPdf` PDF-only is a separate and also true reason; this one is
@@ -414,7 +414,7 @@ export async function readRawBytes(
       `${about} was fetched before its bytes were kept in the object store, so there is ` +
         "nothing to extract from — its manifest has no storedSha256 (RawManifest in " +
         "src/fetch.ts). Fetch it again; the corpus is expendable and refetching is free " +
-        "(docs/plans/finish-the-database-move.md, decision 4).",
+        "(docs/plans/260831b-finish-the-database-move.md, decision 4).",
     );
   }
   const key = canonicalKey(storedSha256, kind);
@@ -534,7 +534,7 @@ function missingObjectAdvice(key: string): string {
     "process's credentials, so a document stored by a process configured the other way " +
     `is invisible to this one. Here, ${credentialsSeen()}. Refetch the article rather ` +
     "than hunting for the object: the corpus is expendable and refetching is free " +
-    "(docs/plans/finish-the-database-move.md, decision 4)."
+    "(docs/plans/260831b-finish-the-database-move.md, decision 4)."
   );
 }
 
@@ -574,7 +574,7 @@ function credentialsSeen(): string {
  * What still calls this is `slugIsSpokenFor` in src/jobs.ts, which reads a
  * candidate slug's manifest during *enqueue* to decide whether an upload would
  * collide with an article already there. That read is listed as stage 1b of
- * docs/plans/finish-the-database-move.md and is not converted yet, so this
+ * docs/plans/260831b-finish-the-database-move.md and is not converted yet, so this
  * function stays exactly as it was.
  */
 export async function readRaw(dir: string): Promise<RawManifest | null> {
@@ -838,7 +838,7 @@ export function parseTarget(input: string): URL {
  * Fetching an article's own images ended that argument — the URLs come from the
  * page, so a publisher chooses them, and there may be hundreds of them. The
  * connection is now pinned to the address this function approved. GPT Sol,
- * 2026-08-29; docs/plans/hosting-the-articles-images.md.
+ * 2026-08-29; docs/plans/260829b-hosting-the-articles-images.md.
  */
 export function isBlockedAddress(address: string): boolean {
   const kind = isIP(address);
@@ -1241,7 +1241,7 @@ function latin1(bytes: Uint8Array): string {
  *
  * docs/project/fetching.md#the-decoder-is-not-nodes has the measurements and
  * the command to re-run them; the postmortem is
- * docs/postmortems/windows-1252-node-caught-up.md.
+ * docs/postmortems/260826b-windows-1252-node-caught-up.md.
  */
 export function decodeHtml(bytes: Uint8Array, contentType: string | null): { text: string; encoding: string } {
   const label = charsetFromContentType(contentType);
@@ -1810,7 +1810,7 @@ export interface AssetFetchOptions extends FetchOptions {
  * the problem it solves, and all 54 measured URLs answer `200` without one. If a
  * real host ever refuses, send the *origin* only — never the path, the query or
  * the userinfo.
- * docs/plans/hosting-the-articles-images.md#no-referer.
+ * docs/plans/260829b-hosting-the-articles-images.md#no-referer.
  */
 function assetHeaders(opts: Resolved): Record<string, string> {
   return {
@@ -1879,7 +1879,7 @@ export async function fetchHtml(url: string, options: FetchOptions = {}): Promis
       "unsupported-type",
       doc.url,
       "That's a PDF, and this command runs Readability. Add it through the app, or run " +
-        "`npm run pdf -- <file.pdf>` — see docs/plans/pdf-ingestion.md.",
+        "`npm run pdf -- <file.pdf>` — see docs/plans/260826c-pdf-ingestion.md.",
       { status: doc.status },
     );
   }
@@ -1936,7 +1936,7 @@ async function main(): Promise<void> {
      *different storage selection from the server*, which loads it. It then
      writes `raw.json`, the queue counts the fetch step done, and extraction
      dereferences the manifest against the other store and blocks on an object
-     that exists — docs/postmortems/a-write-path-with-no-reader.md, recreated by
+     that exists — docs/postmortems/260831e-a-write-path-with-no-reader.md, recreated by
      the command meant to be the safe way in. GPT Sol found it, 2026-08-31.
 
      Above the argument check rather than beside `writeRaw` so there is no

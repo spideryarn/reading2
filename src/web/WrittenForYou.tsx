@@ -31,7 +31,7 @@
  *
  * Each is a trigger for `<ProfilePanel>` — what your profile currently says,
  * and a working link to each of the two places that edit it
- * (docs/plans/profile-panel.md). That does not break the split above: the rule
+ * (docs/plans/260830c-profile-panel.md). That does not break the split above: the rule
  * was that a *label* must not offer to regenerate the text it describes, and
  * opening an explanation is not that. It is the question the badge was always
  * being pointed at, and until 2026-08-30 it answered it with a link nobody
@@ -115,7 +115,7 @@ export function UseProfile({
           control, and no way to find out what "your profile" even meant. The
           button below is how a first profile gets written, so it is exactly the
           state it must not disappear in. GPT Sol's review of the plan,
-          2026-08-30; docs/plans/profile-panel.md. */}
+          2026-08-30; docs/plans/260830c-profile-panel.md. */}
       {hasProfile && (
         <label className="prof-use">
           <input
@@ -147,7 +147,7 @@ export function UseProfile({
             a reader with no profile — the one who most needs this — has nothing
             telling them it is about them. Measured in the browser, 2026-08-30:
             the no-profile row is an icon and a button with a gap between them.
-            docs/plans/profile-panel.md. */}
+            docs/plans/260830c-profile-panel.md. */}
         {!hasProfile && <span>Your profile</span>}
       </ProfilePanel>
     </span>

@@ -20,7 +20,7 @@
  * stored as an artefact; this reads it. Greg's own fallback was to have a model
  * write and store a term list per article, and stage 6 already writes one, so
  * asking again would pay twice for a worse copy.
- * docs/plans/dictation-vocabulary.md.
+ * docs/plans/260828l-dictation-vocabulary.md.
  *
  * Nothing is cached but the one expensive read — {@link NAMES}, the article's
  * blocks. The other three are single rows, and one of them (`purpose`) is a
@@ -113,7 +113,7 @@ const MAX_VOCABULARY = 2_000;
  * **This source is a hypothesis, not a measurement.** No clip in the eval says
  * anything only the profile could supply, so the one run that isolated it is
  * uninformative rather than positive or negative. It stays because it is cheap
- * and the mechanism is plausible; docs/plans/dictation-vocabulary.md § Open
+ * and the mechanism is plausible; docs/plans/260828l-dictation-vocabulary.md § Open
  * questions has the ten-call experiment that would settle it.
  */
 const MAX_PROFILE_IN_VOCABULARY = 400;
@@ -161,7 +161,7 @@ const MAX_PURPOSE_IN_VOCABULARY = 300;
  * whose terms live only in this box, hard-term recall goes from 5/20 to 20/20 —
  * `Anjali Chaudhuri` against *Angeli Chowdhury* on every run without it, and
  * the reader's own `-ise` spelling kept, which nothing else managed.
- * evals/dictation/; the table is in docs/plans/dictation-vocabulary.md.
+ * evals/dictation/; the table is in docs/plans/260828l-dictation-vocabulary.md.
  *
  * Not cached, deliberately: this is a field the reader edits, and a cache would
  * serve them their own stale sentence.
@@ -273,7 +273,7 @@ function within(work: Promise<readonly string[]>): Promise<readonly string[]> {
  * piece says "Hinton" and "Ex Machina", and neither is a concept the article
  * introduces. They are the reason the `fowler-names` clip stopped losing
  * `Alimentiveness`; the measurement is `evals/dictation/` and the numbers are
- * in docs/plans/dictation-vocabulary.md, so a re-run has one place to update.
+ * in docs/plans/260828l-dictation-vocabulary.md, so a re-run has one place to update.
  *
  * The title and byline are here because **this read is already being made** for
  * the names. docs/project/dictation.md called their absence a cost for one day,
@@ -362,7 +362,7 @@ export const SOURCES: Record<SourceName, (where: Where) => Promise<readonly stri
  * over ten clips and five runs and each one moved hard-term recall; nothing was
  * ever invented at any size, and the one thing that hurt was a vocabulary aimed
  * at the *wrong* article. The table, the noise floor and the caveats are in
- * docs/plans/dictation-vocabulary.md § Results — one place, so a re-run has one
+ * docs/plans/260828l-dictation-vocabulary.md § Results — one place, so a re-run has one
  * place to update. A number copied into a comment outlives the run that
  * produced it.
  *
@@ -399,7 +399,7 @@ export async function vocabularyFor(where: Where): Promise<string> {
  * it is handed non-speech — measured on 2026-08-31, and the thing Greg noticed
  * in the first real conversation. `keywords` is documented as a hint that must
  * only appear if it was actually said, and on noise it invents nothing.
- * evals/live/hallucination-on-noise.mts, docs/plans/live-conversation.md.
+ * evals/live/hallucination-on-noise.mts, docs/plans/260831g-live-conversation.md.
  */
 export async function vocabularyTermsFor(where: Where): Promise<string[]> {
   const wanted = RECIPES[where.kind];

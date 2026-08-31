@@ -98,7 +98,7 @@ export interface ContextEntry {
  * at a coarser level; a supplement item is not that. `navigableItems` has
  * already replaced the cell's node with the supplement node itself, which
  * appears nowhere else in this column, so there is nothing here to repeat.
- * GPT Sol found the shape, 2026-08-29; docs/plans/footnotes.md.
+ * GPT Sol found the shape, 2026-08-29; docs/plans/260828o-footnotes.md.
  *
  * Items and starts are returned together because they must stay paired; a
  * caller that took `itemStarts(cells)` separately would be off by one at

@@ -1,6 +1,6 @@
 /**
  * Stage 3a-i — `role`, `treatment` and `noteId` on a `Block`, and every place
- * that has to carry them. docs/plans/footnotes.md § The representation.
+ * that has to carry them. docs/plans/260828o-footnotes.md § The representation.
  *
  * **Nothing here changes behaviour.** The fields are assigned, persisted and
  * projected; no predicate reads them yet. So what these tests are for is the one
@@ -105,7 +105,7 @@ const classified = (blocks: Block[]): Block[] =>
 /**
  * Measured 2026-08-28 by running this pipeline, not copied from the plan.
  *
- * `total` is two higher than docs/plans/footnotes.md § Stage 3's input records
+ * `total` is two higher than docs/plans/260828o-footnotes.md § Stage 3's input records
  * for each of the four, and the two are the notes container stage 2 appends —
  * the `<section>` and its `<ol>`, which the plan's own stage-2 section counts as
  * "2 minted blocks per article". The plan's table was measured before those

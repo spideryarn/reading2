@@ -1,7 +1,7 @@
 /**
  * **Exactly these keys, and no others** — the allowlist, checked recursively.
  *
- * The first draft of docs/plans/public-read-only-access.md proposed serving
+ * The first draft of docs/plans/260827ai-public-read-only-access.md proposed serving
  * today's responses through a key *denylist*, and GPT Sol refused it:
  *
  * > A recursive key denylist is insufficient: it misses innocently named fields
@@ -17,7 +17,7 @@
  * Sol's own instruction for making this go red: *"add `guidance` to one
  * projection"*. The equivalent for the two endpoints that landed is to put
  * `note` back on a block or `url` back on the meta, and both were watched — see
- * the report on docs/plans/public-read-only-access.md.
+ * the report on docs/plans/260827ai-public-read-only-access.md.
  *
  * The half this cannot do is the query: a projection can be perfectly right
  * while the SQL still says `.select()`. That is
@@ -232,7 +232,7 @@ const ASSETS: Assets = {
 
 /**
  * The whole owner-side row, with every field the payload table in
- * docs/plans/public-read-only-access.md § The payload names as forbidden.
+ * docs/plans/260827ai-public-read-only-access.md § The payload names as forbidden.
  *
  * The DTO takes named arguments rather than a `Meta`, so the private fields
  * cannot even be *passed* — which is the design. They are listed here in the

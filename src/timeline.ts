@@ -5,7 +5,7 @@
  *   npx tsx src/timeline.ts data/openai-huggingface
  *
  * Full design, the two reviews that rewrote it and the spike that measured it:
- * docs/plans/timeline-mode.md.
+ * docs/plans/260831i-timeline-mode.md.
  *
  * ## The one thing that makes this different from every other stage
  *
@@ -60,7 +60,7 @@
  * the same prompt — because in "July 7" the month is stated and the year is
  * derived and one field cannot say both.
  *
- * `extent` is worth a second look, because docs/plans/timeline-mode.md
+ * `extent` is worth a second look, because docs/plans/260831i-timeline-mode.md
  * § The prompt still asks for it: it is the parser's now. "During May" and
  * "from July 13 through July 19" are `extended` because `cueBefore` and
  * `joinsARange` read the block's own words, not because anybody judged it.

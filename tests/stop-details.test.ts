@@ -59,7 +59,7 @@
  *
  * The behavioural half covers the six stages that exist. The source scan at the
  * bottom covers the seventh nobody has written yet: **no code under `src/` may
- * read `stop_details` at all.** Zero, not a count — docs/plans/error-boundary.md
+ * read `stop_details` at all.** Zero, not a count — docs/plans/260826p-error-boundary.md
  * on why a counting test is the wrong shape, having found "three sites, then
  * six, then seven". If a future stage wants `stop_details?.type` in a log, that
  * is a decision worth making on purpose, and the way to make it is to come here

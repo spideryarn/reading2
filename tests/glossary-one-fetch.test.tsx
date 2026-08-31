@@ -13,7 +13,7 @@
  *
  * On the Postgres store that second request is not cheap. It reads most of the
  * article out of the database to compute one boolean — see
- * docs/plans/glossary-read-latency.md for the measurements.
+ * docs/plans/260827am-glossary-read-latency.md for the measurements.
  *
  * **The invariant is not "one request for the page's lifetime".** The band still
  * revalidates when it mounts, and it must: `useJobs` treats its first poll as a

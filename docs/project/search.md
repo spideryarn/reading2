@@ -124,7 +124,7 @@ none in the other, rather than a disabled one that invites you to wonder what yo
 is a place that could go wrong, so it is worth being exact about why it does not:
 
 **Every row is an index into the piece.** Press it and the page goes there. That is the same
-contract chat's citation chips hold ([chat-mode.md](../plans/chat-mode.md#the-citation-contract)),
+contract chat's citation chips hold ([260826a-chat-mode.md](../plans/260826a-chat-mode.md#the-citation-contract)),
 and it is what makes this a way of *getting to* prose rather than a way of avoiding it.
 
 **A hit is a highlight, not a summary.** The model's own words in a result are one sentence of
@@ -142,7 +142,7 @@ capped so that the hover card is enough to *judge* a hit and never enough to *re
 ## The mode band
 
 `?mode=search` is the fourth value in `MODES`, after `toc`, `chat` and `glossary`. Greg's original
-framing of that band, from [chat-mode.md](../plans/chat-mode.md#gregs-reframing-which-is-the-actual-design):
+framing of that band, from [260826a-chat-mode.md](../plans/260826a-chat-mode.md#gregs-reframing-which-is-the-actual-design):
 
 > I'm thinking that this might be a common pattern, that when we switch into a mode (e.g. Chat,
 > Glossary, etc) we'll want to keep the spine and article, but reuse the middle sections.
@@ -153,7 +153,7 @@ This is the third mode to arrive in that slot and it cost the layout **nothing**
 [`layout.ts`](../../src/web/layout.ts), no new term in the arithmetic, one word in `MODES`, one row
 in `MODES_UI`, one component. That is now enough evidence to stop calling the slot an experiment.
 
-The cost is the one chat-mode.md already stated: **the granularity columns are gone while you
+The cost is the one 260826a-chat-mode.md already stated: **the granularity columns are gone while you
 search, not shrunk.** You cannot read the L1 gists and the results list at the same time. It is a
 real loss on a wide screen and it is the deal the band is.
 
@@ -175,7 +175,7 @@ Both placeholders carried a note about what the previous version learned. Neithe
 of the five it once carried, four became buttons and the last one (`Reading time`) turned out to be
 answered by the metadata page already. The convention survives on that page for its own unbuilt
 rows; the bar is all live controls now. See
-[bottom-bar.md](../plans/bottom-bar.md#the-dimmed-placeholders-are-gone).
+[260825c-bottom-bar.md](../plans/260825c-bottom-bar.md#the-dimmed-placeholders-are-gone).
 
 ## Drawing the marks, and the wall that wasn't there
 
@@ -445,7 +445,7 @@ watching a spinner with nothing behind it. `readEvents` now gets the same 60-sec
 uses, and `sse(res)` beats a `: ping` down this route every 15 seconds so that silence means
 something. There is nowhere for a search to *recover* to — unlike chat, which goes and looks for
 the answer the server finished writing — so all this buys is the failure it already knew how to
-show. See [sse-stall-recovery.md](../plans/sse-stall-recovery.md).
+show. See [260826r-sse-stall-recovery.md](../plans/260826r-sse-stall-recovery.md).
 
 ## Saving, and the toy it stops this being
 
@@ -597,7 +597,7 @@ protecting is intact: **what gets stored is a slot number, and nothing outside `
 ever learns what colour it is.**
 
 Three things about it are worth knowing before touching it, and all three are in
-[search-row-colour.md](../plans/search-row-colour.md) in full:
+[260827l-search-row-colour.md](../plans/260827l-search-row-colour.md) in full:
 
 - **The assignment is two passes now.** Every chosen slot is reserved before a single automatic run
   probes, so a pin is a pin rather than a preference. And two searches *may* share a hue if the
@@ -1016,7 +1016,7 @@ third thing again, which is why `LibraryHit` deliberately has no `confidence` an
 field. There is nothing for a text index to be uncertain about and nobody to explain anything.
 
 Meaning-based search across the library — embeddings, pgvector, a blended list — is **deferred**, by
-Greg on 2026-08-26. The research is in [postgres-search.md](../research/postgres-search.md); the
+Greg on 2026-08-26. The research is in [260826e-postgres-search.md](../research/260826e-postgres-search.md); the
 short version is that Supabase gives you `ts_rank` rather than BM25, `pgvector` is available but not
 enabled, and Anthropic has no embeddings API so it would mean a second vendor.
 
@@ -1064,7 +1064,7 @@ a hope.
 
 - **No keyboard shortcut** opens search, and nothing steps between results with the arrow keys. The
   app still has no shortcut map at all — the gap [keyboard.md](keyboard.md) and
-  [bottom-bar.md](../plans/bottom-bar.md#what-is-still-open) both record.
+  [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md#what-is-still-open) both record.
 - **The rail has no scroll-to-next.** Marks in the spine now show where the results are
   ([above](#the-rail-and-the-shape-of-a-search)), and each mark is inside a band you can click — but
   clicking lands on the section, not on the match. Chrome and Firefox put *both* on the scrollbar
@@ -1072,7 +1072,7 @@ a hope.
   the missing keyboard shortcut above, and probably the same piece of work.
 - **A hit that is real but wrong** — the model quotes an adjacent sentence that does not actually
   match — is undetectable from here and uncounted. Only a quote that is not in the block at all is
-  caught. The same residual [chat-mode.md](../plans/chat-mode.md#what-is-still-open) has.
+  caught. The same residual [260826a-chat-mode.md](../plans/260826a-chat-mode.md#what-is-still-open) has.
 - **The two *matchers* still cannot be on at once.** You cannot hold a words-search and a
   meaning-search on screen together — one box, one matcher, and switching clears the other's
   selection. Several *saved* searches together stopped being a limitation on 2026-08-26 (see
@@ -1082,7 +1082,7 @@ a hope.
 - **No re-run of a stale search.** A saved search is answered against the article as it was; if the
   article is re-extracted, hits whose blocks are gone are silently dropped and the rest may have
   moved. Nothing says the run is out of date, where the tweet thread page does say exactly that
-  ([tweet-thread-page.md](../plans/tweet-thread-page.md)). A `sourceHash` on the run would fix it.
+  ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)). A `sourceHash` on the run would fix it.
 - **Words mode has no whole-word or case-sensitive option.** Deliberately: find-on-page has a
   meaning readers already hold, and the reader who wants cleverness has the other toggle. But it is
   the first thing somebody will ask for.
@@ -1109,7 +1109,7 @@ a hope.
 - [glossary.md](glossary.md) — the other mode that marks up the prose, and the rule both follow about
   when the article may acquire marks
 - [comments.md](comments.md) — the older marks-on-prose feature, and where `resolveMark` came from
-- [chat-mode.md](../plans/chat-mode.md) — the mode band this is the fourth tenant of
+- [260826a-chat-mode.md](../plans/260826a-chat-mode.md) — the mode band this is the fourth tenant of
 - [url-state.md](url-state.md) — `?match=`, `?find=`, `?run=` and `?order=` among the rest
 - [design-css-overview.md](design-css-overview.md) — the tokens, and `--hit-rgb` among them
 - [logging.md](logging.md) — what a model call may and may not write down

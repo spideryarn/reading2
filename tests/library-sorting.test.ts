@@ -16,7 +16,7 @@
  * no DOM: `createTable` is framework-agnostic, and nothing here renders a cell.
  *
  * The rules being pinned are the ones that look right in a browser and are
- * wrong — see docs/plans/library-sorting.md § Three rules a browser cannot check.
+ * wrong — see docs/plans/260826y-library-sorting.md § Three rules a browser cannot check.
  */
 import { describe, expect, it } from "vitest";
 import {

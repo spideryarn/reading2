@@ -50,7 +50,7 @@ import type { Block, Tree } from "./types.js";
  * summary and no excerpt has no blurb, and that is a correct answer rather than
  * a missing one. Anything treating "null scalars" as "not computed yet" must
  * therefore look at the four numbers and not at this. GPT Sol's first finding
- * on docs/plans/library-read-latency.md, and the plan had it wrong.
+ * on docs/plans/260828c-library-read-latency.md, and the plan had it wrong.
  */
 export interface LibraryScalars {
   /**
@@ -67,7 +67,7 @@ export interface LibraryScalars {
    * this is stored at publish and their stored block rows carry no `treatment`
    * — so a backfill over the *rows* would produce the identical figure. A
    * repair from `stamped_html` is possible and is deliberately not built: see
-   * docs/plans/footnotes.md § The stale cached word count for the option and
+   * docs/plans/260828o-footnotes.md § The stale cached word count for the option and
    * why letting it heal on re-extraction was chosen instead.
    */
   wordCount: number;

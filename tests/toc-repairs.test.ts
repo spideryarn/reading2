@@ -3,7 +3,7 @@
  *
  * A paid calibration run of stage 4 on 2026-08-30 threw on 4 of 13 structure
  * calls (31%), and the failures were bimodal by *kind* rather than spread by
- * size — see docs/research/opening-an-article-before-the-toc.md § 7b:
+ * size — see docs/research/260830a-opening-an-article-before-the-toc.md § 7b:
  *
  * | family | count | shape |
  * |---|---|---|
@@ -11,7 +11,7 @@
  * | `sourceHeading` | 2 | a heading claimed outside the node's range |
  *
  * Every tiling failure anyone has observed — those two plus the two in
- * docs/postmortems/the-article-with-one-heading.md — is off by one block. So
+ * docs/postmortems/260830a-the-article-with-one-heading.md — is off by one block. So
  * the choice is not "trust the model" against "check the model"; it is whether
  * a two-and-a-half-minute call that got one boundary off by a single paragraph
  * should cost the reader the whole article. It should not.
@@ -380,7 +380,7 @@ describe("a sourceHeading no block backs up is dropped, not thrown on", () => {
   it("keeps a claim that differs only in punctuation, as the invariant does", () => {
     // `sameHeading` normalises curly quotes and dashes — a model quoting a
     // heading back with the wrong apostrophe broke this once already
-    // (docs/postmortems/toc-max-tokens.md).
+    // (docs/postmortems/260826a-toc-max-tokens.md).
     const tree = buildTree(claiming("The First Part"), {}, BLOCKS, "test", report());
     const first = Object.values(tree.nodes).find((n) => n.title === "First");
     expect(first?.sourceHeading).toBe("The First Part");

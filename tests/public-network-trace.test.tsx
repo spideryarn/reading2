@@ -7,7 +7,7 @@
  * `/api/public/` and no POST at all**. That sentence is the whole of slice 1a's
  * client half, and a screenshot cannot see it: the page renders correctly
  * either way, and the difference is a stream of 401s behind it that only a
- * trace or a devtools panel shows. docs/plans/public-read-only-access.md § Stage 1.
+ * trace or a devtools panel shows. docs/plans/260827ai-public-read-only-access.md § Stage 1.
  *
  * ## What this proves, stated narrowly on purpose
  *
@@ -169,7 +169,7 @@ const PDF_META = {
  * The one sentence a visitor's summary band must put on screen — and it is the
  * **tree's own gist**, not an artefact.
  *
- * Stage 5e is gone (docs/plans/gist-only-summaries.md), so summary mode is now
+ * Stage 5e is gone (docs/plans/260831s-gist-only-summaries.md), so summary mode is now
  * free for a visitor the way the table of contents is. That is worth a rendered
  * assertion rather than a unit test: the mode used to be gated on a
  * `summary.json` the payload might not carry, and a gate left behind would show
@@ -464,7 +464,7 @@ describe("a signed-out browser on a shared document", () => {
      * answers that question and the request is gone. The endpoint itself stays
      * — it is still in the route inventory and still tested — which is why this
      * asserts the exact list rather than a prefix.
-     * docs/plans/public-read-only-access.md § The second request disappears.
+     * docs/plans/260827ai-public-read-only-access.md § The second request disappears.
      */
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
   });
@@ -565,7 +565,7 @@ describe("a signed-out browser on a shared document", () => {
    * **What it asserts changed on 2026-08-31, and the change is the point.** It
    * used to prove the band drew the *artefact* — `?len=long`, so the assertion
    * could not be satisfied by the tree's own gist. Stage 5e is gone
-   * (docs/plans/gist-only-summaries.md) and the gist is now the whole of what
+   * (docs/plans/260831s-gist-only-summaries.md) and the gist is now the whole of what
    * this mode shows, so the thing worth proving is the opposite one: a visitor
    * gets summary mode **for free**, on a payload carrying no summary artefact
    * of any kind, with no *"nobody has built"* boundary in the way. A gate left
@@ -590,7 +590,7 @@ describe("a signed-out browser on a shared document", () => {
 
        **A state no article can be in**: all four builders throw rather than
        write an empty result. This pins the fallback, not a screen anybody
-       reaches. docs/plans/public-read-only-access.md § The state that cannot
+       reaches. docs/plans/260827ai-public-read-only-access.md § The state that cannot
        happen. */
     const empty: { mode: string; noun: string; article: () => PublicArticle }[] = [
       {
@@ -948,7 +948,7 @@ describe("when the reader changes underneath the page", () => {
  * **A signed-in reader who does not own the document asks for the same things a
  * stranger does.**
  *
- * This is the row in docs/plans/public-read-only-access.md § How we prove it
+ * This is the row in docs/plans/260827ai-public-read-only-access.md § How we prove it
  * that nothing automated has ever satisfied. The server half was measured by an
  * end-to-end spike — three requests, SHA-256, no header versus a garbage bearer
  * versus the real owner's token, byte-identical bodies — and a browser pass

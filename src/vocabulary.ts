@@ -7,7 +7,7 @@
  * 0% word errors when the terms are in the prompt and 3.6–7.3% when they are
  * not, and every one of those errors is a proper noun or a piece of jargon.
  * Nothing else in the request moves the number that much. The plan is
- * [docs/plans/dictation-vocabulary.md](../docs/plans/dictation-vocabulary.md);
+ * [docs/plans/260828l-dictation-vocabulary.md](../docs/plans/260828l-dictation-vocabulary.md);
  * the caller is [`transcribe.ts`](./transcribe.ts), which owns the store reads
  * this file deliberately does not do.
  *

@@ -5,10 +5,10 @@
  * `tests/jobs.test.ts` owns the queue's arithmetic and the advance endpoint's
  * older properties; this file is about the claims the **walk** adds, and every
  * one of them is a statement about the loop in `advanceJobWith` rather than
- * about a store. Written for docs/plans/v1-imports-on-vercel.md § Stage 3, whose
+ * about a store. Written for docs/plans/260830d-v1-imports-on-vercel.md § Stage 3, whose
  * one-sentence version is GPT Sol's: *"claim once, keep the same attempt while
  * walking the real steps, release only on intentional handoff or terminal
- * settlement"* (docs/plans/v1-imports-review-sol.md critical 3).
+ * settlement"* (docs/plans/260830a-v1-imports-review-sol.md critical 3).
  *
  * ## Why it drives `advanceJobWith` with a fake artefact store
  *
@@ -47,7 +47,7 @@
  *   `transitionAfter`, so every non-final step keeps.
  * - **`runInJob` is in effect**: call `walkClaim` directly rather than through
  *   `runInJob` — which is the state production actually shipped in, and nothing
- *   caught it (docs/plans/v1-stages01-review-sol.md critical 1).
+ *   caught it (docs/plans/260830k-v1-stages01-review-sol.md critical 1).
  */
 import { readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
@@ -419,7 +419,7 @@ describe("one claim walks the whole job", () => {
      * `AsyncLocalStorage` and a `currentJobId()` with no way to fill it, so on a
      * deployed instance `dataRoot()` was asked for a directory with no job in
      * scope and threw before the first step started — every import on production
-     * failing in 16ms. GPT Sol, docs/plans/v1-stages01-review-sol.md critical 1.
+     * failing in 16ms. GPT Sol, docs/plans/260830k-v1-stages01-review-sol.md critical 1.
      *
      * Asserted from **inside** a step and after an `await`, because that is the
      * property: an `AsyncLocalStorage` that survives the awaits between the

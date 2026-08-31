@@ -53,7 +53,7 @@ started. The rule of thumb:
   already drawing correctly. 38 lines of CSS went.
 
 The longer version, with the bugs that made each boundary necessary, is
-[shadcn-migration.md § Which mechanism does what](../plans/shadcn-migration.md#which-mechanism-does-what).
+[260825a-shadcn-migration.md § Which mechanism does what](../plans/260825a-shadcn-migration.md#which-mechanism-does-what).
 
 ## Colour: one source, dark only
 
@@ -67,7 +67,7 @@ from that, and both bite:
   and shadcn's own components walk straight into it. Anything meaning the brand orange says
   `--highlight`. See the token block at the top of
   [`styles.css`](../../src/web/styles.css), and
-  [shadcn-migration.md § Trap A](../plans/shadcn-migration.md#the-token-bridge).
+  [260825a-shadcn-migration.md § Trap A](../plans/260825a-shadcn-migration.md#the-token-bridge).
 
 The semantic layer at the top of `styles.css` (`--ink`, `--page`, `--panel`, `--surface-raised`,
 `--rule`) sits over the brand tokens so the rules below read in reading-view terms rather than in
@@ -219,7 +219,7 @@ display tables, equations. They seem to be being displayed in dark text on a bla
 They were, and **it was not a colour bug.** The block is a `<p>` containing one `<img>`, and all
 seven of that article's images are PNGs with an alpha channel carrying near-black ink — equations
 and data tables, drawn for a white page and served onto ours. The alpha extrema are in
-[figures-in-the-prose.md](../plans/figures-in-the-prose.md).
+[260828az-figures-in-the-prose.md](../plans/260828az-figures-in-the-prose.md).
 
 So `.prose .zoomable > :is(img, svg)` sits on `--figure-sheet`, an off-white, with a small mat of
 padding. Three things about that are worth knowing before changing it:
@@ -421,7 +421,7 @@ Three things worth carrying to whatever is built next:
   under the finger scrolling it is worse than a bar in the way.
 
 The full account, including what the measuring harness cannot see, is
-[docs/plans/mobile-reading-view.md](../plans/mobile-reading-view.md).
+[docs/plans/260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md).
 
 ### The screen is bigger than the window: `env(safe-area-inset-*)`
 
@@ -449,7 +449,7 @@ Three things to know before touching any of it:
   build. So the module measures a probe instead.
 
 The plan, the review that found three of these, and the install path they exist for:
-[docs/plans/mobile-screen-real-estate.md](../plans/mobile-screen-real-estate.md).
+[docs/plans/260828av-mobile-screen-real-estate.md](../plans/260828av-mobile-screen-real-estate.md).
 
 ## What is not written down yet
 
@@ -495,6 +495,6 @@ eventually have to decide whether they are a system or an accident:
   computed in the browser from *resolved* values. Look at it after changing anything in
   `tokens.css`. It catches what tests cannot: a token change where every component still renders,
   nothing throws, and one variant nobody looked at is now unreadable
-- [../plans/shadcn-migration.md](../plans/shadcn-migration.md) — how the Tailwind half got here
+- [../plans/260825a-shadcn-migration.md](../plans/260825a-shadcn-migration.md) — how the Tailwind half got here
 - [../reusable/css-sticky-containing-block.md](../reusable/css-sticky-containing-block.md) —
   `position: sticky` declared correctly and doing nothing

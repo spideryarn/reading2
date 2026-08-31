@@ -24,7 +24,7 @@ Tests: [`review-prompt.test.ts`](../../tests/review-prompt.test.ts),
 [`review-panel.test.tsx`](../../tests/review-panel.test.tsx).
 Eval: [`evals/review-stances.ts`](../../evals/review-stances.ts) — **read this before editing the
 prompt.**
-The plan, the reasoning and the cross-family review: [review-mode.md](../plans/review-mode.md).
+The plan, the reasoning and the cross-family review: [review-mode.md](../plans/260827ah-review-mode.md).
 
 ```
    CHAT                                 REVIEW
@@ -45,8 +45,8 @@ The plan, the reasoning and the cross-family review: [review-mode.md](../plans/r
 ## Why this one is not the anti-goal
 
 [vision.md § Anti-goals](vision.md#anti-goals) names *"a chatbot with the article stuffed in the
-context window"*, and [chat-mode.md § Say the awkward thing
-first](../plans/chat-mode.md#say-the-awkward-thing-first) is a long apology for building one anyway.
+context window"*, and [260826a-chat-mode.md § Say the awkward thing
+first](../plans/260826a-chat-mode.md#say-the-awkward-thing-first) is a long apology for building one anyway.
 Review needs no such apology, and the reason is structural rather than a promise: **the reader has to
 have read the piece before they can use it at all.** There is nothing to say otherwise, and the
 output is a set of paragraphs to go back to. vision.md's *recall* entry is the nearest thing already
@@ -233,7 +233,7 @@ distinguishes nothing.
 
 Everything above the breakpoint must stay byte-identical for the life of a conversation or the whole
 article is written to the cache again every turn — the bug in
-[chat-cache-automatic-breakpoint.md](../postmortems/chat-cache-automatic-breakpoint.md). So:
+[260826h-chat-cache-automatic-breakpoint.md](../postmortems/260826h-chat-cache-automatic-breakpoint.md). So:
 
 - the **stance** goes below it. Switching stance mid-conversation is the *expected* use — ask
   Socratically, get stuck, press Respond — and in the system prompt that gesture would cost a cold
@@ -306,7 +306,7 @@ third claimant — is a keyboard problem nobody needs.
 
 ## See also
 
-- [chat-mode.md](../plans/chat-mode.md) — the mode band, the citation contract, the panel this reuses
+- [260826a-chat-mode.md](../plans/260826a-chat-mode.md) — the mode band, the citation contract, the panel this reuses
 - [chat-tools.md](chat-tools.md) — the tools, and the rule about never claiming one you did not run
 - [dictation.md](dictation.md) — the microphone
 - [prompt-caching.md](prompt-caching.md) — the breakpoint this is careful about

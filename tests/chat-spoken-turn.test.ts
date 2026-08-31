@@ -16,7 +16,7 @@
  *
  * The rows themselves are ordinary. A spoken turn is a turn — same renderer,
  * same retry path, same prompt builder — which is the whole point of putting it
- * in the same thread. docs/plans/live-conversation-in-chat.md.
+ * in the same thread. docs/plans/260831l-live-conversation-in-chat.md.
  */
 import { describe, expect, it } from "vitest";
 

@@ -13,7 +13,7 @@
  *
  * They are independent, so a reader waiting on a panel was waiting for both in
  * series for no reason. `withProfileChanged` now takes a **thunk** and starts
- * both. docs/plans/library-read-latency.md § 8.
+ * both. docs/plans/260828c-library-read-latency.md § 8.
  *
  * ## The four things that can go wrong, and they are what this file is
  *

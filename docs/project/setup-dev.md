@@ -77,7 +77,7 @@ for a reason that has nothing to do with your code.
 **That one key now pays for everything.** Until 2026-08-27 it covered only the calls that happen in
 a request handler — the explain-this-passage call in [`src/explain.ts`](../../src/explain.ts)
 ([comments.md](comments.md)), the chat in [`src/converse.ts`](../../src/converse.ts)
-([chat-mode.md](../plans/chat-mode.md)), and search — while the seven pipeline stages went straight
+([260826a-chat-mode.md](../plans/260826a-chat-mode.md)), and search — while the seven pipeline stages went straight
 to `api.anthropic.com` on an `ANTHROPIC_API_KEY` of their own. Greg's call, 2026-08-27:
 
 > I'm fine with gating everything through OpenRouter. Their reliability is good, and this gives us
@@ -266,7 +266,7 @@ that names every model this app calls. A tier is a choice about how much reasoni
 [the eval](../../evals/results/embedding-retrieval-2026-08-26.md) put four models over this
 project's own articles. It lives in [`src/embeddings.ts`](../../src/embeddings.ts) rather than in
 `src/models.ts` for that reason. Only the Force diagram's dotted links use it today
-([diagram.md](diagram.md)); [semantic-search.md](../plans/semantic-search.md) is the other planned
+([diagram.md](diagram.md)); [260826n-semantic-search.md](../plans/260826n-semantic-search.md) is the other planned
 caller.
 
 **Every job is on the capable tier today.** The quick tier is about a tenth the price and nothing
@@ -360,7 +360,7 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 | `npm run labels -- <dir>` | 4b on its own, against a `tree.json` that already exists ([src/labels.ts](../../src/labels.ts)). The stage to re-run when you have changed the label prompt and do not want to pay for a new tree | `labels.json`, and rewrites `tree.json` |
 | `npm run toc:flatten -- …` | 4, tree → the flat sidebar rows ([table-of-contents.md](table-of-contents.md)) | — |
 | `npm run arc -- <dir>` | 5b, one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | `arc.json` |
-| `npm run tweets -- <dir>` | 5c, the article as a numbered thread ([tweet-thread-page.md](../plans/tweet-thread-page.md)) | `tweets.json` |
+| `npm run tweets -- <dir>` | 5c, the article as a numbered thread ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)) | `tweets.json` |
 | `npm run glossary -- <dir>` | 5d, the terms this piece uses ([glossary.md](glossary.md)). Run it again to add more | `glossary.json` |
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle | `dist/` |
@@ -383,7 +383,7 @@ neither is in its default list, so each is produced only when something asks for
 commands above, or `POST /api/jobs { slug, steps: ["tweets"] }` / `{ steps: ["glossary"] }`. Each
 costs a model call over the whole article and each is somewhere you go — a page, and a mode — rather
 than part of making an article readable
-([tweet-thread-page.md](../plans/tweet-thread-page.md#the-one-real-snag-stated-precisely),
+([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md#the-one-real-snag-stated-precisely),
 [glossary.md](glossary.md)). Read them back with `GET /api/tweets/<slug>` and
 `GET /api/glossary/<slug>`, both of which also say whether what they return still describes the
 article.

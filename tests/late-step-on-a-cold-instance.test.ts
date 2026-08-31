@@ -134,7 +134,7 @@ describe("a single-step job on an instance that never ingested the article", () 
    * They read `.rejects.toThrow(/ENOENT.*blocks\.json/)` for one day — the bug
    * itself, asserted, so that a known-red gate did not train several agents
    * sharing this tree to read past `npm test`. Stage 2a of
-   * docs/plans/finish-the-database-move.md changed what the stage reads: every
+   * docs/plans/260831b-finish-the-database-move.md changed what the stage reads: every
    * article-reading stage now takes an `Article` read from the store
    * (src/article-input.ts) rather than opening `blocks.json` off `ctx.dir`.
    *

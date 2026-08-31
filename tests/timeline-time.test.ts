@@ -1,6 +1,6 @@
 /**
  * The timeline parser — src/timeline-time.ts, stage 1 of
- * docs/plans/timeline-mode.md.
+ * docs/plans/260831i-timeline-mode.md.
  *
  * This is the file that has to hold. The model is never asked for a date, so
  * the *only* route a date has into the artefact is this parser reading the

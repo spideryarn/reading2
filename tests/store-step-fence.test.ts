@@ -18,7 +18,7 @@
  * already fails the **status** half, so deleting the `attempt_id` condition
  * would have changed nothing and the test would have stayed green against the
  * bug it was aimed at. GPT Sol caught it in review;
- * docs/plans/delete-the-importer-review-2-sol.md finding 6. It is this
+ * docs/plans/260827aa-delete-the-importer-review-2-sol.md finding 6. It is this
  * document's own mutation habit failing, which is worth the paragraph.
  *
  * So there are two independent cases, each of which isolates one condition:

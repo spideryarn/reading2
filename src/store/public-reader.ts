@@ -40,7 +40,7 @@
  * that takes no predicate, and `currentOwnerId()` still throwing as the runtime
  * tripwire.
  *
- * See docs/plans/public-read-only-access.md.
+ * See docs/plans/260827ai-public-read-only-access.md.
  */
 
 import { asc, eq, sql } from "drizzle-orm";
@@ -61,7 +61,7 @@ import { publicArticle, publicMetadata } from "../public/dto.js";
  *
  * **Two methods, because two endpoints landed.** Sol's answer 5 sketched six —
  * tweets, glossary and ideas as well — and those are slice 1b of
- * docs/plans/public-read-only-access.md, along with their DTOs and their tests.
+ * docs/plans/260827ai-public-read-only-access.md, along with their DTOs and their tests.
  * Declaring four methods nothing implements would be four shapes nobody has
  * checked against a real row, which is the sort of thing that gets believed.
  */
@@ -227,7 +227,7 @@ const PUBLIC_PROJECTIONS = {
        public article hot-linking to the publisher — the privacy leak this whole
        feature exists to close, happening on exactly the page we invite
        strangers to, while looking finished from the owner's chair.
-       docs/plans/hosting-the-articles-images.md#delivery. */
+       docs/plans/260829b-hosting-the-articles-images.md#delivery. */
     assets: articleRevisions.assets,
     /**
      * **The artefacts slice 1b carries, off the same row.**
@@ -263,7 +263,7 @@ const PUBLIC_PROJECTIONS = {
    * `is not null` in SQL rather than reading the JSONB and comparing it here.
    * The metadata page asks whether a glossary exists, not how many terms are in
    * it, and the owner's shelf spent two days dragging every artefact across the
-   * wire to answer exactly that question — docs/plans/library-read-latency.md.
+   * wire to answer exactly that question — docs/plans/260828c-library-read-latency.md.
    * This one starts on the right side of that.
    */
   metadata: {
@@ -303,7 +303,7 @@ const PUBLIC_PROJECTIONS = {
    * — the moment it produces body HTML we own two reading views — and the
    * cheapest way to hold that line is here: it cannot render a body from this
    * projection because the blocks are not in it.
-   * docs/plans/public-read-only-access.md § Stage 2.
+   * docs/plans/260827ai-public-read-only-access.md § Stage 2.
    *
    * Six values. `title` and `headingTitle` are the same pair the metadata read
    * uses, for the same reason — an article whose `<h1>` is its only title still
@@ -414,7 +414,7 @@ export function publicBlocksQuery(
          preview has to render a note's whole *range*, and without an identity
          it has only "the block the marker landed on" to show. None of the three
          is about a person or about our pipeline — they are what the article
-         is. docs/plans/footnotes.md, the stage-5 trap. */
+         is. docs/plans/260828o-footnotes.md, the stage-5 trap. */
       role: revisionBlocks.role,
       treatment: revisionBlocks.treatment,
       noteId: revisionBlocks.noteId,

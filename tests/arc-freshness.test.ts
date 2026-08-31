@@ -20,7 +20,7 @@
  * an entry matching no node is dropped from the reading view with no error, no log and no gap —
  * `TableView` simply falls back to the root gist. See docs/reusable/silent-success.md.
  *
- * docs/plans/defer-arc-and-rename-hierarchy.md § 2.1.
+ * docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.1.
  */
 import { describe, expect, it } from "vitest";
 import { inputFingerprint, isStale, PROMPT_VERSION } from "../src/arc.js";

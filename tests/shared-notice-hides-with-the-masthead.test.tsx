@@ -30,7 +30,7 @@
  * reads the file rather than the browser, so it proves the rule is written, not
  * that it applies. It is here because deleting it is the likely regression and
  * it is free. The browser measurement is in
- * docs/plans/public-read-only-access.md § The logo sat on the sentence, with the
+ * docs/plans/260827ai-public-read-only-access.md § The logo sat on the sentence, with the
  * numbers either side of the fix.
  */
 import { readFileSync } from "node:fs";

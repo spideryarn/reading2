@@ -5,7 +5,7 @@
  *     npx tsx scripts/checkpoints-sweep.ts --days 30
  *     npx tsx scripts/checkpoints-sweep.ts --delete
  *
- * **Nothing schedules this**, and docs/plans/delete-the-importer.md § B3 says
+ * **Nothing schedules this**, and docs/plans/260827aa-delete-the-importer.md § B3 says
  * why that is safe: every checkpoint row costs a paid model call to create, so
  * the table cannot grow faster than the bill, and the one removal that has a
  * deadline — an article being deleted — is already automatic through

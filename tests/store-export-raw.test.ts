@@ -5,7 +5,7 @@
  *
  * `writeRawDocument` reads `article_revisions.raw_bytes` and returns `[]` when
  * it is null — no `raw.html`, no `raw.json`, no error. That was right while the
- * payload was a `bytea` column. After docs/plans/delete-the-importer.md § C6 it
+ * payload was a `bytea` column. After docs/plans/260827aa-delete-the-importer.md § C6 it
  * is a **reference**: `raw_source_sha256` plus `raw_source_kind`, with the bytes
  * in the `sources` bucket, and `raw_bytes` is null for everything the pipeline
  * writes. So the export silently stops exporting source documents, and the

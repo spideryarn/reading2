@@ -5,7 +5,7 @@
  * and decides both what is drawn and which row is current. This file does the
  * two things that need a DOM: **choosing which rung fits**, and the keyboard.
  *
- * docs/plans/outline-mode.md has the intent, the ladder, and the reasoning.
+ * docs/plans/260828aw-outline-mode.md has the intent, the ladder, and the reasoning.
  */
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
@@ -335,7 +335,7 @@ export function OutlinePanel({
  * shared piece of state: `useDelayGroup` closes every *other* member the moment
  * one opens, and `useHover` schedules a departing trigger's close without
  * checking whether it is still the open one. Both are correct against a tooltip
- * that owns its own state. docs/postmortems/spine-hover-cards.md.
+ * that owns its own state. docs/postmortems/260828g-spine-hover-cards.md.
  */
 function Row({
   row,

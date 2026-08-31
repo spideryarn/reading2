@@ -31,7 +31,7 @@
  *
  * **Above the bottom bar, not at the bottom of the screen** — see the note on
  * the class below for the two ways the original spelling failed once the bar
- * learned to move. docs/plans/mobile-screen-real-estate.md § 3.
+ * learned to move. docs/plans/260828av-mobile-screen-real-estate.md § 3.
  */
 import { useOffline } from "./offline.js";
 

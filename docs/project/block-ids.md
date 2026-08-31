@@ -89,7 +89,7 @@ Until 2026-08-28 the read was a `readFile` inside a `try/catch` whose `catch` sa
 this article"*. That is one branch doing two jobs, and the moment the pipeline's artefacts leave the
 filesystem it takes the second one for every article at once: the read fails, every article looks
 new, every id is re-minted, and the step reports success
-([delete-the-importer.md](../plans/delete-the-importer.md)). So the three cases are now separate and
+([260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md)). So the three cases are now separate and
 only one of them mints:
 
 | | what it means | what happens |
@@ -238,7 +238,7 @@ to a different claim.
 **What this still does not promise.** NFKC folds compatibility characters, so an edit from `x²` to
 `x2` carries the old id onto changed text. That is the trade for folding `ﬁ` to `fi`, which is real
 extraction drift and about to be much more common — see
-[pdf-ingestion.md](../plans/pdf-ingestion.md). And an id already in the document is trusted, except
+[260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md). And an id already in the document is trusted, except
 that a *duplicate* of one is not: the second element carrying it mints, because two blocks with one
 id corrupts every artefact keyed on it.
 
@@ -246,7 +246,7 @@ Until 2026-08-26 there was one pass, the fold deleted every character outside `a
 ambiguous bucket was handed out first-come. In English that stripped punctuation; in Cyrillic, Greek,
 Chinese, Arabic or Devanagari it stripped the paragraph, and two of its five failure modes dropped
 paragraphs from the article outright while reporting success. The cause, the measured blast radius
-and the fix are in [the postmortem](../postmortems/block-id-matching-non-latin.md).
+and the fix are in [the postmortem](../postmortems/260826d-block-id-matching-non-latin.md).
 
 Measured on the test article, re-extracted *and* with a new paragraph inserted above everything:
 **138 of 139 ids survive.** The one casualty is an `<hr>`, which has neither text nor a `src` to
@@ -258,7 +258,7 @@ the *same PDF with the same model and the same prompt*, then stage 3, keeps **32
 the same page produces one more record than last time and a comma in a different place. The matcher
 is doing exactly what it says here — refusing to guess when the words have changed — and the cost is
 real. What to do about it is being decided in
-[pdf-ingestion.md § What a re-read costs](../plans/pdf-ingestion.md#what-a-re-read-costs-measured-11-block-ids-of-43),
+[260826c-pdf-ingestion.md § What a re-read costs](../plans/260826c-pdf-ingestion.md#what-a-re-read-costs-measured-11-block-ids-of-43),
 and it wants deciding before anything a reader owns is anchored to an id.
 
 Two honest limits:
@@ -303,7 +303,7 @@ phantom rows quoting text it had already listed.
 ### A bare `<svg>` gets no id, and the ToC cannot point at a diagram
 
 **Known hole, found 2026-08-28** while measuring extraction
-([readability-repair-pass.md](../plans/readability-repair-pass.md)). The sentence above says the ToC
+([260827ab-readability-repair-pass.md](../plans/260827ab-readability-repair-pass.md)). The sentence above says the ToC
 may well want to point at a diagram. For a `<figure>`-wrapped one it can. For a bare inline `<svg>`
 it cannot, and nothing says so:
 
@@ -405,7 +405,7 @@ Two things it deliberately leaves alone, and one it cannot reach:
 - And the one it cannot: **a page that links to itself the long way round**,
   `href="https://this.article/#section"` or `/article#section`. Those still point at the overwritten
   name. Stage 3 is not told the article's own address, and no page we have ingested does this — see
-  [internal-anchor-links.md](../plans/internal-anchor-links.md).
+  [260826af-internal-anchor-links.md](../plans/260826af-internal-anchor-links.md).
 
 On a re-run there is nothing to do: every href already says `#spya-…`, no stamp is written for an id
 of ours, and the map comes out empty. It survives a re-extraction too, where the author's ids come

@@ -12,7 +12,7 @@
  * The glossary next door answers *what does this word mean*; the ideas answer
  * *what do I have to hold*. This answers *which lines are worth carrying out of
  * here* — and it is the only one of the three whose list is **the article
- * itself**. Full design in docs/plans/quotes-mode.md.
+ * itself**. Full design in docs/plans/260831j-quotes-mode.md.
  *
  * ## Everything in the list is the article's, except two numbers
  *

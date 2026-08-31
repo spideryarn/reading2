@@ -10,7 +10,7 @@
 That is the whole reason, and it is the same one [vision.md](vision.md#one-the-database) gives for
 reversing *"filesystem over database"*: a single writable disk is the thing serverless hosting does
 not have, so the choice is a database or no deploy. The work is
-[postgres-migration.md](../plans/postgres-migration.md); there are 27 migrations under `drizzle/` and
+[260825f-postgres-migration.md](../plans/260825f-postgres-migration.md); there are 27 migrations under `drizzle/` and
 the schema is [`src/db/schema.ts`](../../src/db/schema.ts).
 
 **This file opened by saying "there is no database" until 2026-08-28**, which was true when it was
@@ -24,7 +24,7 @@ changes for anyone who has not opted in. But [`src/store/index.ts`](../../src/st
 filesystem store has **no owner column**, so it has no second reader, and a store with no second
 reader cannot express "somebody who is not the owner". That is why
 [auth.md](auth.md#whose-data-is-it) is a Postgres story, and why
-[public-read-only-access.md](../plans/public-read-only-access.md#postgres-is-the-destination-and-this-feature-cannot-work-without-it)
+[260827ai-public-read-only-access.md](../plans/260827ai-public-read-only-access.md#postgres-is-the-destination-and-this-feature-cannot-work-without-it)
 is Postgres-only by nature rather than by preference — `data/` is one directory per slug and there is
 nowhere in it to record who may read what.
 
@@ -74,11 +74,11 @@ So there are now **two** stores under the filesystem era, and the seam between t
 [`src/store/blobs.ts`](../../src/store/blobs.ts). That is early rather than premature: the eventual
 design has *every* raw document — fetched or uploaded, HTML or PDF — as an object with the row
 holding a key and a checksum, which is
-[the appendix of pdf-upload-and-storage.md](../plans/pdf-upload-and-storage.md#appendix-where-the-bytes-should-eventually-live),
+[the appendix of 260826u-pdf-upload-and-storage.md](../plans/260826u-pdf-upload-and-storage.md#appendix-where-the-bytes-should-eventually-live),
 and the seam is what makes that a follow-on rather than a rewrite.
 
 **Since 2026-08-27 that follow-on is planned rather than merely intended** —
-[raw-bytes-in-storage.md](../plans/raw-bytes-in-storage.md), which answers the question it turns on
+[260827o-raw-bytes-in-storage.md](../plans/260827o-raw-bytes-in-storage.md), which answers the question it turns on
 (*should everything large go to Storage, for consistency?*) with a measured no. The line it draws is
 not size but **immutability**: content-addressed and immutable goes to Storage, revision-scoped and
 rewritable stays in Postgres. Raw source is 86% of every byte here and the only thing on the first
@@ -106,7 +106,7 @@ adapter's cleverest piece of machinery disappear. `tests/store-uploads-parity.te
 two-simultaneous-claims race against both.
 
 **And the queue has not moved**, so this is not yet a deployable upload — see
-[durable-queue-and-uploads.md](../plans/durable-queue-and-uploads.md), whose first line is about why
+[260827h-durable-queue-and-uploads.md](../plans/260827h-durable-queue-and-uploads.md), whose first line is about why
 a durable record for one part of an ingest does not make the ingest durable.
 
 **Reads** all go through [`src/api.ts`](../../src/api.ts) — `loadArticle`, `loadTweets`,
@@ -140,7 +140,7 @@ rather than widening one of these — which is what `timeline` did when it neede
 date. The stages that hashed less than that were harmless only because the
 pipeline's artefact reads return `null` today and the stage re-runs regardless; the moment those
 reads succeed, an incomplete stamp lets a **stale artefact skip**.
-[finish-the-database-move.md](../plans/finish-the-database-move.md) § stage 1. `assets` keeps the
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1. `assets` keeps the
 narrow blocks-only hash, honestly: it fetches the images the blocks name and has no prompt.
 
 `toc` still uses `stepIsDone`, an
@@ -186,7 +186,7 @@ nothing.
 **Reads now come out of Postgres when you ask them to.** `SPIDERYARN_STORE=postgres npm run dev`
 serves every article, the library, the metadata page and the reader's comments from the database
 instead of from disk; `files` remains the default. The work, and what is still missing, is in
-[postgres-storage-implementation.md](../plans/postgres-storage-implementation.md).
+[260826e-postgres-storage-implementation.md](../plans/260826e-postgres-storage-implementation.md).
 
 **Writes still go to disk first, and since 2026-08-30 they are carried across at the end.** Every
 pipeline stage still writes `data/<slug>/*.json` directly. What changed is what happens when the job
@@ -199,8 +199,8 @@ refused, and the reader's shelf stayed empty.
 That is a carry-across, not the end state: an ingest still needs a writable disk for the length of
 the job, so the host question is unchanged and only the *publication* has moved. The plan for the
 other half — stages that return their products instead of writing files — is
-[delete-the-importer.md](../plans/delete-the-importer.md) § D3–D5, and
-[transactional-stage-runner.md](../plans/transactional-stage-runner.md) is the design it came from.
+[260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md) § D3–D5, and
+[260827j-transactional-stage-runner.md](../plans/260827j-transactional-stage-runner.md) is the design it came from.
 
 **`ArtifactStore.write()` has one caller and most of the pipeline now reaches it.** Since 2026-08-29
 a step returns a *product* — `{ detail, parts?, stamp? }` — and the commit after it
@@ -210,8 +210,8 @@ time; since 2026-08-31 every stage that *reads* an article and writes something 
 `LEGACY_UNCONVERTED_STEPS` in [`src/pipeline.ts`](../../src/pipeline.ts) is the list of the ones that
 have not, and each conversion deletes a name from it. A step **off** that list must return `parts` —
 the type says so as well as the commit, so a new stage is converted by default and the exemption has
-to be asked for. [delete-the-importer.md § D1](../plans/delete-the-importer.md),
-[finish-the-database-move.md § Stage 2](../plans/finish-the-database-move.md).
+to be asked for. [260827aa-delete-the-importer.md § D1](../plans/260827aa-delete-the-importer.md),
+[260831b-finish-the-database-move.md § Stage 2](../plans/260831b-finish-the-database-move.md).
 
 ```bash
 npm run db:seed-owner   # the one auth.users row every owner_id points at
@@ -232,7 +232,7 @@ not**, in the one command anybody runs after losing something. The refusal lives
 `postgresBlobStore` in [`src/store/blobs.ts`](../../src/store/blobs.ts), which is also what
 `src/store/index.ts` checks the pair with at boot: one pair, constructed in one place rather than
 checked in two. [silent-success.md](../reusable/silent-success.md) ·
-[delete-the-importer.md](../plans/delete-the-importer.md).
+[260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md).
 
 | File | What it is |
 |---|---|
@@ -261,10 +261,10 @@ Three rules that outrank convenience, all learned the expensive way:
   on the homepage. Every Postgres store is now wrapped **at its export**, so there is no unguarded
   spelling left to import, and [`tests/store-guarded.test.ts`](../../tests/store-guarded.test.ts)
   asks the objects rather than the source. See
-  [the postmortem](../postmortems/unguarded-job-store-and-the-migration-that-migrated-the-laptop.md).
+  [the postmortem](../postmortems/260827c-unguarded-job-store-and-the-migration-that-migrated-the-laptop.md).
 
 Everything below is still planned, not built. The whole design — the schema, the reasoning, and the things that break quietly —
-is in [postgres-migration.md](../plans/postgres-migration.md). The parts worth knowing before you
+is in [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md). The parts worth knowing before you
 touch anything storage-shaped:
 
 - **A block id is an identity; its text is a revision.** Foreign-keying comments to the current block
@@ -285,9 +285,9 @@ touch anything storage-shaped:
   pooler. Greg reversed the original `supabase-js` choice once he decided the API layer, not RLS, is
   the security boundary: without RLS, PostgREST contributes only its restrictions, and every
   transaction would have had to become a PL/pgSQL function to work around it. See
-  [§ The client](../plans/postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth).
+  [§ The client](../plans/260825f-postgres-migration.md#the-client-drizzle-for-data-supabase-for-auth).
 - **RLS is deferred**, so grants carry the whole weight —
-  [§ RLS and realtime](../plans/deploy-and-repo-move.md#rls-and-realtime-not-now). The answer is
+  [§ RLS and realtime](../plans/260825d-deploy-and-repo-move.md#rls-and-realtime-not-now). The answer is
   structural rather than careful: **don't expose the `spideryarn` schema through the Data API at
   all**, and give the runtime a dedicated least-privilege role. PostgREST then cannot see the schema
   whatever the keys are.
@@ -337,7 +337,7 @@ Applying migrations from drizzle …
 poolers and only one of them is what Vercel uses; a migration that succeeds for `postgres` and a
 table the app cannot see look identical from the migrator's side. The check that settles it is
 running the query that failed. The full story is in
-[the postmortem](../postmortems/unguarded-job-store-and-the-migration-that-migrated-the-laptop.md).
+[the postmortem](../postmortems/260827c-unguarded-job-store-and-the-migration-that-migrated-the-laptop.md).
 
 The facts below are the ones that turn a five-minute job into an afternoon, and each fails in a way
 that misdirects you.
@@ -368,7 +368,7 @@ looks identical from the outside. [tests/db-tls.test.ts](../../tests/db-tls.test
 and nothing else; a migration role with DDL; and the browser's publishable key, which reaches Auth
 only because `spideryarn` is not an exposed schema. The `postgres` password must not go near Vercel.
 Creating those roles is the one genuinely manual step — it needs passwords, which do not belong in a
-migration file — and it is [step 1](../plans/postgres-migration.md#the-order-of-work).
+migration file — and it is [step 1](../plans/260825f-postgres-migration.md#the-order-of-work).
 
 ## Roles
 
@@ -452,7 +452,7 @@ grant usage on schema auth to spideryarn_migrator;
 -- `vector_cosine_ops` fully unqualified with no way to schema-qualify them, so
 -- the first migration that adds a vector column fails on the real project with
 -- `type "vector" does not exist` — while passing on a laptop, where we connect
--- as `postgres` and inherit its search_path. See docs/plans/semantic-search.md.
+-- as `postgres` and inherit its search_path. See docs/plans/260826n-semantic-search.md.
 grant usage on schema extensions to spideryarn_migrator, spideryarn_app;
 alter role spideryarn_migrator set search_path = "$user", public, extensions;
 alter role spideryarn_app      set search_path = "$user", public, extensions;
@@ -578,7 +578,7 @@ entire subject of this section.
   The right answer is `PGRST106 — Only the following schemas are exposed: public, graphql_public`.
   This is the whole reason deferring RLS is survivable: PostgREST cannot serve a schema it cannot
   see, whatever key is presented. See
-  [§ RLS and realtime](../plans/deploy-and-repo-move.md#rls-and-realtime-not-now).
+  [§ RLS and realtime](../plans/260825d-deploy-and-repo-move.md#rls-and-realtime-not-now).
   GPT Sol pointed out that [`tests/db-schema.test.ts`](../../tests/db-schema.test.ts) checks only
   `anon`'s table privilege, which is a different fact and would still pass if the schema *were*
   exposed.
@@ -662,7 +662,7 @@ because the type system will not.
   about, and it knows about none of ours. Never run it against a project that matters. Same for
   `drizzle-kit push`, which introspects a live database and computes a diff; only `generate` and
   `migrate` are safe. See
-  [§ A new project](../plans/postgres-migration.md#a-new-project-and-what-that-deletes).
+  [§ A new project](../plans/260825f-postgres-migration.md#a-new-project-and-what-that-deletes).
 - **The grant block in the Supabase custom-schemas guide opens the database.** Granting to `anon`
   plus permissive-or-absent RLS means the public key reads everything, and nothing errors.
 - **Block ids are unique only *within* an article.** The primary key is `(article_id, block_id)`,
@@ -685,7 +685,7 @@ eight, and these are the expensive calls.
 
 They live behind [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts) since 2026-08-29 —
 `checkpoints-fs.ts` for the layout above, `checkpoints-pg.ts` for the `checkpoints` table — because
-landing D of [delete-the-importer.md](../plans/delete-the-importer.md) takes `data/<slug>/` away.
+landing D of [260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md) takes `data/<slug>/` away.
 **Nothing calls the store yet**; the two stages still write their own files. The plan's § B3 has the
 three decisions and the reasoning. What to know before touching any of it:
 
@@ -737,7 +737,7 @@ adapter uses `getDb()` and takes no `tx`.
 - [supabase-local.md](supabase-local.md) — the Docker stack the schema is developed against
 - [certs/README.md](../../certs/README.md) — the CA certificate, why it is committed, and what
   quietly stops being checked without it
-- [postgres-migration.md](../plans/postgres-migration.md) — the plan, the schema, the honest risks
+- [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md) — the plan, the schema, the honest risks
 - [auth.md](auth.md) — why the auth provider and the database are the same decision
 - [library.md](library.md) — the homepage, and the one file a move to Postgres goes behind
 - [block-ids.md](block-ids.md) — the spine every table keys on

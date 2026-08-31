@@ -7,7 +7,7 @@
  * deterministic and whose quality is a reading judgement — the same line
  * testing.md draws everywhere else.
  *
- * See docs/plans/chat-mode.md.
+ * See docs/plans/260826a-chat-mode.md.
  */
 import { describe, expect, it } from "vitest";
 import { ChatConflict, titleFrom, withEdit, withRetry } from "../src/chat.js";

@@ -30,7 +30,7 @@
  * the page simply scrolls. `fitView` never hears about this file.
  *
  * Full reasoning, and the right-hand edge that was offered and turned down:
- * docs/plans/bottom-bar.md.
+ * docs/plans/260825c-bottom-bar.md.
  *
  * ## The three things that had to move over
  *
@@ -69,7 +69,7 @@
  * > We can get rid of the panel, and move all its contents into the new page.
  *
  * So there is no About panel here any more, and the markup it used to render
- * lives in Metadata.tsx. See docs/plans/metadata-page.md.
+ * lives in Metadata.tsx. See docs/plans/260825e-metadata-page.md.
  *
  * ## The order, which Greg set by hand
  *
@@ -137,7 +137,7 @@ interface Props {
   view: ArticleView;
   /**
    * Which mode owns the middle band, and how to change it — the reading view
-   * only. See params.ts § modeParam and docs/plans/chat-mode.md.
+   * only. See params.ts § modeParam and docs/plans/260826a-chat-mode.md.
    *
    * Optional for the same reason `drawer` is: the metadata and thread pages
    * have no middle band to put a mode in, so their Chat button is a link back
@@ -169,7 +169,7 @@ interface Props {
    * So pressing a marked mode opens its band and the band carries the sentence
    * in visible text — see `VisitorBand` in PublicChrome.tsx. The dimming and
    * the tooltip line below are the supplement, never the message.
-   * docs/research/public-access-how-others-do-it.md § 2.
+   * docs/research/260828a-public-access-how-others-do-it.md § 2.
    */
   marked?: ReadonlyMap<Mode, string> | undefined;
   /**
@@ -217,7 +217,7 @@ interface Props {
      * there is no `comments: []` for a later edit to read and no `loaded`
      * for it to test. The five that are missing are missing because there is
      * nothing to fetch — `useComments` is not mounted anywhere on a shared
-     * document. docs/plans/public-read-only-access.md.
+     * document. docs/plans/260827ai-public-read-only-access.md.
      *
      * The alternative was passing no drawer at all, which degrades the
      * Comments button to a link back to the page it is already on. A control
@@ -264,8 +264,8 @@ interface Props {
  * own docs single it out as the one to be most suspicious of, and it sits
  * closest to our anti-goals (vision.md). Neither objection was waved away;
  * both are answered at length, in
- * docs/plans/tweet-thread-page.md#say-the-awkward-thing-first and in
- * docs/plans/chat-mode.md#say-the-awkward-thing-first. The chat that was built
+ * docs/plans/260825g-tweet-thread-page.md#say-the-awkward-thing-first and in
+ * docs/plans/260826a-chat-mode.md#say-the-awkward-thing-first. The chat that was built
  * is not the one that was refused: every claim it makes carries a block id and
  * the article stays on screen beside it.
  */
@@ -300,7 +300,7 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
      is this piece, and where am I in it — with one nested list instead of
      columns you read across. Greg set this order by hand and it runs from the
      article's own words outwards, so the two structural views belong together
-     at the near end. docs/plans/outline-mode.md. */
+     at the near end. docs/plans/260828aw-outline-mode.md. */
   {
     mode: "outline",
     icon: Focus,
@@ -351,7 +351,7 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
      dimension of this piece pulled out" — rather than an array index. It is
      further from the article's own words than either of those, and further than
      Quotes, so it goes at the far end of that group.
-     docs/plans/timeline-mode.md § 3. */
+     docs/plans/260831i-timeline-mode.md § 3. */
   {
     mode: "timeline",
     icon: Clock,
@@ -395,7 +395,7 @@ const MODES_UI: { mode: Mode; icon: typeof Info; label: string; blurb: string }[
      restated, through the ways into it, to the conversation about it. Review is
      the only mode whose content comes from the READER — it cannot be used at
      all until they have read the piece — so it belongs past the point where the
-     article's own words run out. docs/plans/review-mode.md. */
+     article's own words run out. docs/plans/260827ah-review-mode.md. */
   {
     mode: "review",
     icon: Speech,

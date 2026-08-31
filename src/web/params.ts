@@ -167,11 +167,11 @@ export const noteParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
  * Which drawer panel is open, or nothing — see Dock.tsx and
- * docs/plans/bottom-bar.md.
+ * docs/plans/260825c-bottom-bar.md.
  *
  * **One value, where there were two.** `about` is gone: the article's details
  * outgrew a drawer and became a page, `/read/<slug>/metadata`
- * (docs/plans/metadata-page.md). So this parameter now has exactly one legal
+ * (docs/plans/260825e-metadata-page.md). So this parameter now has exactly one legal
  * value, and it stays a parameter rather than becoming a flag because the next
  * panel will want the same shape.
  *
@@ -405,7 +405,7 @@ export const rankParam = createParser<QuoteRank>({
  * the glossary's two scores are factors of one quantity (the cost of not
  * knowing a term), where these two are separate reasons to keep a line. A
  * product would push the essay's thesis sentence below the fold for being
- * plainly written. docs/plans/quotes-mode.md § Two scores.
+ * plainly written. docs/plans/260831j-quotes-mode.md § Two scores.
  *
  * **No default, deliberately** — the same call `gateParam` and `confParam` make
  * above, for the same reason. Absent means *nobody has touched this*, and the
@@ -441,7 +441,7 @@ export const barParam = createParser<number>({
  * build: the two scores only decide which of two groups an entry is in, and
  * *inside* a group the order is still first use, so the model chooses nothing
  * there. The divider names the rule and both scores are shown on every row —
- * see docs/plans/glossary-prioritised-order.md for the four designs and
+ * see docs/plans/260826b-glossary-prioritised-order.md for the four designs and
  * `groupEntries` in GlossaryPanel.tsx for what it actually does.
  *
  * It is also **self-cancelling**: when the gate does not split the list (no
@@ -784,7 +784,7 @@ export const confParam = createParser<number>({
    One control now: `deep`, how far down the tree the panel goes. There was a
    second, `len`, which chose between three generated lengths — it went on
    2026-08-31 along with the stage that wrote the two paid ones
-   (docs/plans/gist-only-summaries.md). What is left is free and on the tree.
+   (docs/plans/260831s-gist-only-summaries.md). What is left is free and on the tree.
 
    **What is NOT in the URL, and why.** The panel also lets you open and close
    individual sections — including opening one part's sections *past* the depth

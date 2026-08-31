@@ -14,7 +14,7 @@
  * takes the ceiling from about 55,000 words to about 125,000, and it is what
  * lets the structure call think as hard as it should.
  *
- * See docs/plans/toc-scaling.md for the full design and the alternatives that
+ * See docs/plans/260826h-toc-scaling.md for the full design and the alternatives that
  * were weighed against it.
  *
  * **The one rule that decides whether this works:**
@@ -179,7 +179,7 @@ export function cameBackShort(err: unknown): err is BatchCameBackShort {
  *
  * The postmortem's lesson cuts the other way here too: adaptive thinking expands
  * into whatever room it is given, so a small batch with a small reservation is
- * the shape that keeps it honest. See docs/postmortems/toc-max-tokens.md.
+ * the shape that keeps it honest. See docs/postmortems/260826a-toc-max-tokens.md.
  */
 const EFFORT = "low" as const;
 
@@ -588,7 +588,7 @@ export function planBatches(
  * We do not refuse it, because refusing would fail an article that will probably
  * label fine. We say it out loud, because the fix is upstream — the structure
  * prompt asking for boundaries every ~9 blocks, and the variable tree depth in
- * docs/plans/toc-scaling.md § J.
+ * docs/plans/260826h-toc-scaling.md § J.
  */
 export function oversizedSets(batches: Batch[], max = MAX_BATCH): SiblingSet[] {
   return batches.flatMap((b) => b.sets).filter((s) => s.blocks.length > max);
@@ -1002,7 +1002,7 @@ function describeShape(value: unknown): string {
  * where there is one of them, and the truncation to five carries the total —
  * "five names and nothing else" has exactly the same ambiguity in its other
  * direction, because nothing in it says whether five is all of them.
- * docs/plans/faster-ingest-and-concurrency.md § Stage 1b.
+ * docs/plans/260830am-faster-ingest-and-concurrency.md § Stage 1b.
  *
  * Ordinals are safe to interpolate. They are integers this file generated from
  * the batch's own length, never a value read out of the model's response as
@@ -1037,7 +1037,7 @@ function paragraphList(ns: number[]): string {
  * the right length, in the right place, and not the heading.
  *
  * The apostrophe half of that is the *same failure* as the one in
- * docs/postmortems/toc-max-tokens.md, where a model quoting eleven headings back
+ * docs/postmortems/260826a-toc-max-tokens.md, where a model quoting eleven headings back
  * with the wrong apostrophe broke `sourceHeading` validation. That was patched
  * by comparing more loosely. This one is patched by not asking: the label for a
  * heading is knowable without a model, so it is taken rather than requested, and
@@ -1797,7 +1797,7 @@ async function repairShortfall(
   /* `LABEL_HEADROOM`, not double it. The reservation is for the model's
      reasoning about *this answer*, and this answer is a handful of labels —
      doubling it here would be inheriting a number from a failure this one is
-     not (see the constant's own comment, and docs/postmortems/toc-max-tokens.md
+     not (see the constant's own comment, and docs/postmortems/260826a-toc-max-tokens.md
      on what a roomy reservation does to adaptive thinking). */
   const again = await runBatch(
     batch,
@@ -1874,7 +1874,7 @@ export const COVERAGE_FLOOR = 0.95;
  * How many labels one batch may lose before the batch is a failure.
  *
  * **Per batch, not per article**, which is the same shape the R2 repair budget
- * took after review (docs/plans/toc-repairs-and-heading-tree.md): a bound spread
+ * took after review (docs/plans/260830ak-toc-repairs-and-heading-tree.md): a bound spread
  * over a whole article lets one pathological section spend everybody else's
  * allowance, and the thing being bounded is a model's behaviour on one call.
  *
@@ -2175,7 +2175,7 @@ export async function generateLabels(opts: {
      pointed out that the first name promised a distinction it could not make on
      its own. A zero is *also* expected when every batch resumed or only one
      fresh call ran, so `calls` comes back beside it. GPT-5.6-sol, 2026-08-26.
-     See docs/research/prompt-caching-anthropic.md § Concurrency and
+     See docs/research/260826b-prompt-caching-anthropic.md § Concurrency and
      docs/project/prompt-caching.md § The floor. */
   const prefix = batches[0] ? batchParts(batches[0], opts.blocks, outline).shared : "";
   const estimatedCacheable = prefixIsCacheable(prefix);

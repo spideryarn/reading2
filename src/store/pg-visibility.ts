@@ -9,7 +9,7 @@
  *
  * That route edits **shelf state** — the relationship between a reader and a
  * document: their rename, their purpose, whether it is archived. Visibility is
- * a property of **the work**. Stage 3 of docs/plans/public-read-only-access.md
+ * a property of **the work**. Stage 3 of docs/plans/260827ai-public-read-only-access.md
  * splits `articles` from `shelf_entries` along exactly that line, so putting
  * them together now would mean moving the API twice. GPT Sol's reasoning,
  * adopted.

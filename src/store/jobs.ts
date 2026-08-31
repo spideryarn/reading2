@@ -36,7 +36,7 @@
  * comment says it is not a lock. Auto-takeover becomes available the day the
  * artefact writes are transactional and not before.
  *
- * See docs/plans/durable-queue-and-uploads.md.
+ * See docs/plans/260827h-durable-queue-and-uploads.md.
  */
 
 import { randomUUID } from "node:crypto";
@@ -210,7 +210,7 @@ export interface JobStore {
    * logged nothing on its way out — and `failed 1 job(s)` cannot be joined to
    * anything. Both stores already have the ids in hand: the `UPDATE` returns
    * them, and the filesystem adapter is looping over them. GPT Sol, 2026-08-30,
-   * docs/plans/v1-imports-review-sol.md § Remaining operational points.
+   * docs/plans/260830a-v1-imports-review-sol.md § Remaining operational points.
    */
   failExpired(now?: Date): Promise<string[]>;
 

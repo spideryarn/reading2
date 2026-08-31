@@ -21,7 +21,7 @@
  * have. This file imports the schema and `drizzle-orm` and nothing else. There
  * is no owner in its import graph to reach for.
  *
- * `docs/plans/public-read-only-access.md` proposed putting it in `pg.ts`; Sol
+ * `docs/plans/260827ai-public-read-only-access.md` proposed putting it in `pg.ts`; Sol
  * showed that would *weaken* the guard rather than extend it, because the test
  * exempts the whole of that file.
  *

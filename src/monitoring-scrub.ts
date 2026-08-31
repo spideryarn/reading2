@@ -10,7 +10,7 @@
  * The reasoning for all of it — why an event is rebuilt rather than cleaned,
  * why a message is withheld unless it is provably one of ours, what a stack
  * frame is allowed to carry — is in monitoring.ts's header and in the doc
- * comments below. Read docs/plans/error-boundary.md
+ * comments below. Read docs/plans/260826p-error-boundary.md
  * first if you are wondering why an error tracker needs a file like this at
  * all: four times now, an `Error.message` in this codebase has turned out to
  * contain the article.

@@ -271,7 +271,7 @@ describe("buildTree", () => {
  *
  * These are the tests for the guard between the loud failure this stage now has
  * and the quiet one that would replace it. See
- * docs/postmortems/toc-max-tokens.md.
+ * docs/postmortems/260826a-toc-max-tokens.md.
  */
 describe("checkCoverage", () => {
   /** Twenty gistable blocks, tiled by one internal node. */
@@ -325,7 +325,7 @@ describe("checkCoverage", () => {
    * unlabelled. There is one now: src/labels.ts may accept a batch that came
    * back short after a re-ask for the gap alone also failed, within a per-batch
    * budget, and it names every block it dropped. That path is
-   * docs/plans/faster-ingest-and-concurrency.md § Stage 1b, and this floor is
+   * docs/plans/260830am-faster-ingest-and-concurrency.md § Stage 1b, and this floor is
    * its article-level backstop rather than its bound.
    */
   it("tolerates the bounded gap the label pass is now allowed to leave", () => {

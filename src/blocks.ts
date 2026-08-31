@@ -91,7 +91,7 @@ const BOILERPLATE_LABEL = /^(credits?|sources?|notes?|references?|photo credits?
  * "punctuation" only if the only text you have ever looked at is English. In
  * Cyrillic, Greek, Chinese, Arabic or Devanagari it deleted the paragraph, and
  * every one of the five resulting failures reported success — see
- * docs/postmortems/block-id-matching-non-latin.md.
+ * docs/postmortems/260826d-block-id-matching-non-latin.md.
  *
  * `NFKC` first is load-bearing rather than tidy: `\p{M}` is kept so Devanagari
  * matras and Arabic diacritics survive, which means NFD `café` (e + U+0301)
@@ -240,7 +240,7 @@ type NoteFields = Pick<Block, "role" | "treatment" | "noteId">;
  * block-level elements inside the notes container, so classifying only the
  * elements carrying `data-spya-note` would leave 84 blocks of footnote prose
  * classified as argument — summarised, embedded, and on the clock — with every
- * count still looking plausible. Measured, docs/plans/footnotes.md.
+ * count still looking plausible. Measured, docs/plans/260828o-footnotes.md.
  *
  * A block is a supplement because it is **inside the container**; it belongs to
  * a note because a `[data-spya-note]` ancestor says which. The container is
@@ -922,7 +922,7 @@ function blockFor(
  *    page and must stay one. That also means a page that links to *itself* the
  *    long way round — `href="https://this.article/#section"` — is not repaired,
  *    because stage 3 is not told what the article's own address is. No article
- *    we have ingested does that; see docs/plans/internal-anchor-links.md.
+ *    we have ingested does that; see docs/plans/260826af-internal-anchor-links.md.
  *  - **Fragments no element answers to.** A dead link stays dead rather than
  *    being pointed somewhere plausible.
  *
@@ -1214,7 +1214,7 @@ export function blocksArtefact(blocks: Block[]): { sanitizer: number; blocks: Bl
  *
  * ## There is no fallback to `stampedHtml`, and the review asked for one
  *
- * GPT Sol's review (docs/plans/blocks-carry-forward-sol.md, question 1) said:
+ * GPT Sol's review (docs/plans/260828an-blocks-carry-forward-sol.md, question 1) said:
  * *"prefer `extractedHtml`, falling back to `stampedHtml` for legacy/blocks-only
  * cases"*. That fallback is deliberately **not** here, and this is the paragraph
  * that says why, because the next person will meet both columns and have to work

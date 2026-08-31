@@ -22,7 +22,7 @@
  * but it does not change when something happened, so the reader profile is not
  * in this stage's stamp at all. That is a decision rather than an omission, and
  * it means one fewer reason to spend a model call again.
- * docs/plans/timeline-mode.md § Freshness.
+ * docs/plans/260831i-timeline-mode.md § Freshness.
  *
  * **What `stale` covers here is wider than anywhere else**: blocks, sections
  * *and the publication date*. Nineteen of the test article's twenty-four
@@ -30,7 +30,7 @@
  * almost every row and not one word in any other artefact — which is why
  * Timeline has a fingerprint of its own rather than widening the shared one.
  *
- * See docs/plans/timeline-mode.md and src/timeline.ts.
+ * See docs/plans/260831i-timeline-mode.md and src/timeline.ts.
  */
 import { useCallback, useEffect, useState } from "react";
 import type { Job, Timeline, TimelineResponse } from "../types.js";

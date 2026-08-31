@@ -7,7 +7,7 @@
  * a check constraint dropped because it was in the way. Prose cannot stop that;
  * a failing test can.
  *
- * See docs/plans/postgres-migration.md and docs/project/supabase-local.md.
+ * See docs/plans/260825f-postgres-migration.md and docs/project/supabase-local.md.
  *
  * **These skip when there is no database**, so `npm test` still passes on a
  * fresh clone with no Docker. That is a deliberate trade and it has a cost:
@@ -138,7 +138,7 @@ describe("the schema keeps the promises the plan makes", () => {
     await inRollback(async (c) => {
       await seed(c);
       // The whole reason the primary key is composite. `spya-` ids collide
-      // across a library at ~100 articles (postgres-migration.md), and every id
+      // across a library at ~100 articles (260825f-postgres-migration.md), and every id
       // is resolved inside one article, so this MUST be allowed.
       await c.query(
         `insert into spideryarn.block_identities (article_id, block_id)
@@ -491,7 +491,7 @@ describe("the schema keeps the promises the plan makes", () => {
      * object name — so a row that is not a digest, or is half a pointer, names
      * an object that cannot exist, and nothing downstream would say so. It
      * would read as "this article has no source document", which is a thing
-     * that legitimately happens. docs/plans/raw-bytes-in-storage.md.
+     * that legitimately happens. docs/plans/260827o-raw-bytes-in-storage.md.
      */
     const SHA = "a".repeat(64);
 

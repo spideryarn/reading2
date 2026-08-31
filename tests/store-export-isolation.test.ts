@@ -20,7 +20,7 @@
  * collide, and every query that touches one has to carry the article with it.
  *
  * The exporter filtered messages on `thread_id` alone. GPT Sol found it in
- * review on 2026-08-26; docs/plans/postgres-storage-review-sol.md. The symptom
+ * review on 2026-08-26; docs/plans/260826j-postgres-storage-review-sol.md. The symptom
  * would have been a rollback file containing a conversation from a different
  * article — one reader's private text under someone else's piece — with nothing
  * anywhere reporting it.

@@ -17,7 +17,7 @@
  *
  * The verdict and its caveats are written up in
  * evals/results/embedding-retrieval-2026-08-26.md; docs/project/search.md § the
- * whole library at once records the decision, and docs/research/postgres-search.md
+ * whole library at once records the decision, and docs/research/260826e-postgres-search.md
  * is why library-wide meaning search was deferred in the first place.
  *
  * ## What it does

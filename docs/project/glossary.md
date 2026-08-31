@@ -62,7 +62,7 @@ until you know what they are for.
  └─────────────────────────────────────────────────────────────┘
 
  The bar's five modes, with Glossary lit. Questions, Tweets and Metadata sit
- off the right of this box and are elided — see ../plans/bottom-bar.md.
+ off the right of this box and are elided — see ../plans/260825c-bottom-bar.md.
 
  The two headings are the whole of "prioritised": difficulty × centrality
  decides which side of the divider a term is on, and NOTHING else. Inside
@@ -118,7 +118,7 @@ was built:
 > bottom-bar (the default).
 
 So the glossary is the third implementation of the slot described in
-[chat-mode.md](../plans/chat-mode.md), and it needed **no new layout arithmetic at all**. `fitView`
+[260826a-chat-mode.md](../plans/260826a-chat-mode.md), and it needed **no new layout arithmetic at all**. `fitView`
 in [`layout.ts`](../../src/web/layout.ts) already knew about the slot rather than about chat; the
 whole change there was one line in [`App.tsx`](../../src/web/App.tsx) — `chatting` became
 `mode !== "hierarchy"` (`toc` until the mode was renamed on 2026-08-29). That is the evidence that the reframing was right, and it is worth recording
@@ -296,7 +296,7 @@ opened. Four things follow, and three of them are the interesting part:
   that was already on screen, underlined, in the prose behind it — and on the Postgres store that
   second request read most of the article out of the database to compute one boolean. Since
   2026-08-27 `Reader` owns the read and the band takes it as a prop.
-  [glossary-read-latency.md](../plans/glossary-read-latency.md) has the measurements.
+  [260827am-glossary-read-latency.md](../plans/260827am-glossary-read-latency.md) has the measurements.
 
   The band still **revalidates** when it opens, behind the list already showing, and that is not
   optional: `useJobs` treats its first poll as a baseline and does not announce a job that had
@@ -331,7 +331,7 @@ Three details worth knowing before changing it:
   rather than from a click, with the compatibility events that follow swallowed so a term inside a
   link does not navigate. A card a finger opened closes on a scroll; one a pointer opened follows
   the words as it always did. [touch.md](touch.md) and
-  [touch-glossary-card.md](../plans/touch-glossary-card.md).
+  [260827ak-touch-glossary-card.md](../plans/260827ak-touch-glossary-card.md).
 - **The mouse click stays inert.** Pressing a mark with a pointer does what pressing prose has
   always done, which is select it. The way to the full entry is the button in the card's foot, which
   opens the band on that term — and on a finger, tapping the words again.
@@ -427,7 +427,7 @@ the entire product. The panel still reserves alarm for an actual failed check �
 do not appear in the article"* — which is where it belongs.
 
 **Inline marking was rejected**, and it was Greg's own suggestion, so the reasons are written out in
-full in [the plan](../plans/glossary-entries-worth-reading.md#rejected-marking-the-outside-bits-inline):
+full in [the plan](../plans/260826d-glossary-entries-worth-reading.md#rejected-marking-the-outside-bits-inline):
 a model tagging its own sentences will misattribute some and a wrong inline tag is uncheckable;
 markup inside a stored string would reverse the plain-text stance below; and stippled two-colour text
 in an 18rem band is noise. Field granularity *forces* the separation that sentence granularity would
@@ -471,7 +471,7 @@ POST /api/glossary/:slug/:id/lookup   →  { entry }   (~10s, one model call)
 **The answer does not stream, and that is not because it cannot.** The lookup drains `explain()` and
 appears whole, behind a spinner that says so. What it would take, and why it is waiting on the
 Postgres store seam rather than on the streaming, is in
-[streaming-the-slow-two.md](../plans/streaming-the-slow-two.md) — **whoever finishes the glossary
+[260826o-streaming-the-slow-two.md](../plans/260826o-streaming-the-slow-two.md) — **whoever finishes the glossary
 store should do it then**, which is why this note is here rather than only in the plan.
 
 **Its answers live in their own file**, `data/<slug>/glossary-lookups.json`, keyed by entry id
@@ -497,7 +497,7 @@ Three decisions inside it:
   choosing per entry could serialise a dozen searches, on a call that is already capped and
   paginated *because output tokens caused 504s in the previous version*, and its citations would not
   map onto entries anyway: annotations attach to spans of the response, and the response is one JSON
-  blob. [The plan](../plans/glossary-entries-worth-reading.md#3-the-web-on-demand-per-entry-never-in-the-batch)
+  blob. [The plan](../plans/260826d-glossary-entries-worth-reading.md#3-the-web-on-demand-per-entry-never-in-the-batch)
   has the full argument, including the one that decided it — searching would not have fixed the entry
   that prompted all this.
 - **The answer sits beside `background`, never merged into it.** A reader who cannot tell the checked
@@ -553,7 +553,7 @@ to *append* (`existingFor`) and whose ids to *inherit* (`idsByTerm`). Until then
 `readGlossary(dir)` inside the stage, whose every failure is one `null` — and the moment the
 pipeline's artefacts leave the filesystem that read fails on every run while looking exactly like a
 first pass, so *Find more terms* silently becomes *replace the glossary*, `passes` resets to 1, and
-every `?term=` link goes dead ([delete-the-importer.md](../plans/delete-the-importer.md)).
+every `?term=` link goes dead ([260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md)).
 
 | | what it means | what happens |
 |---|---|---|
@@ -603,7 +603,7 @@ The first clause of that condition — *the list arrives in document order* — 
 
 It is the second of those two sketches, with one substitution. The whole argument, the four designs
 it was chosen from and the two things it is a bet on are in
-[glossary-prioritised-order.md](../plans/glossary-prioritised-order.md); the three things to know
+[260826b-glossary-prioritised-order.md](../plans/260826b-glossary-prioritised-order.md); the three things to know
 here:
 
 **The two scores multiply. They do not add.** What is worth ordering by is the cost of *not* knowing
@@ -708,7 +708,7 @@ which is a third of what this prompt reads: `renderPrompt` builds the skeleton o
 sharp edge is not the wasted model call — it is that this same hash decides, through `existingFor`,
 whether the next run **appends** to the list or starts it again, so a fingerprint that missed a
 re-cut tree would go on adding terms to a glossary written about a differently-shaped article.
-[finish-the-database-move.md](../plans/finish-the-database-move.md) § stage 1.
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1.
 
 Until 2026-08-28 this was a hand-written `glossaryIsCurrent` in `src/glossary.ts` doing the same
 three comparisons. `stamp` replaced it, the function kept only its own tests alive, and a comment in
@@ -816,7 +816,7 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
 
 - [original-version/glossary.md](original-version/glossary.md) — theirs: the prompt, the two bugs,
   and what we said we would do differently
-- [chat-mode.md](../plans/chat-mode.md) — the mode band this reuses, and the reframing that made it a
+- [260826a-chat-mode.md](../plans/260826a-chat-mode.md) — the mode band this reuses, and the reframing that made it a
   slot
 - [comments.md](comments.md) — the other way to ask what something means, rooted in a selection
 - [block-ids.md](block-ids.md) — why an occurrence is a block id and never an offset

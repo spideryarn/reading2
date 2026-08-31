@@ -1,7 +1,7 @@
 /**
  * **Where an article's raw document came from, and how an upload becomes one.**
  *
- * Step 0 of docs/plans/pdf-upload-and-storage.md — the model, before any route
+ * Step 0 of docs/plans/260826u-pdf-upload-and-storage.md — the model, before any route
  * or adapter exists, because the review of that plan was blunt that routes
  * cannot be built before the invariant is settled.
  *
@@ -48,7 +48,7 @@
  * canonical object cannot be substituted, because its name is a statement about
  * its contents: swapping the bytes would change the key.
  *
- * See docs/plans/pdf-upload-and-storage.md § What was measured, not read.
+ * See docs/plans/260826u-pdf-upload-and-storage.md § What was measured, not read.
  */
 import type { AssetExt } from "./assets.js";
 import type { DocumentKind } from "./fetch.js";
@@ -133,7 +133,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * minter is what keeps the invariant the plan calls load-bearing — a grant is
  * only ever minted for a `staging/<uuid>` key, a canonical key is never
  * writable by one, and the bytes at a canonical name can always be re-checked
- * against the name (docs/plans/hosting-the-articles-images.md).
+ * against the name (docs/plans/260829b-hosting-the-articles-images.md).
  *
  * **An image gets no `raw_sources` row**, and that is a separate decision from
  * this one. That table exists so `article_revisions` can foreign-key to *the
@@ -348,7 +348,7 @@ export function cleanFilename(raw: string): string | null {
  * It nearly mattered. These four codes were not in `CODE_KINDS`, and an
  * unrecognised code means *offer another go* — so "that file isn't a PDF" would
  * have arrived with a Retry button that could not possibly work, which is the
- * failure docs/postmortems/toc-max-tokens.md exists about. Found by the
+ * failure docs/postmortems/260826a-toc-max-tokens.md exists about. Found by the
  * cross-family review.
  */
 export type RejectReason = "too-big" | "not-a-pdf" | "checksum-mismatch" | "missing";

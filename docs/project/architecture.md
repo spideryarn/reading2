@@ -31,7 +31,7 @@ constraint, not an apology — keep it boring while the ideas are still moving.
  ┌──────────┐   HTML → Mozilla Readability (NOT a sanitiser — security.md)
  │ 2 extract│   PDF  → a model reads the pages, and the transcription is
  │          │          CHECKED against the PDF's own text layer, per page
- │          │          (pdf-ingestion.md; the branch is on raw.json, never
+ │          │          (260826c-pdf-ingestion.md; the branch is on raw.json, never
  │          │           on the URL)
  │          │──────────────►  data/<slug>/article.html   + meta.json
  └──────────┘                 (title, byline, siteName, lang, url)
@@ -97,13 +97,13 @@ model call read it, may it be embedded, may the ToC write a row about it, does i
 are named predicates in [`src/block-policy.ts`](../../src/block-policy.ts), which is `gistable`'s
 only policy-reading consumer. They are **not** five spellings of one formula: a footnote is
 searchable and is not on the clock, and a pull-quote is on the clock and gets no row.
-See [footnotes.md § `gistable: false` is not the switch](../plans/footnotes.md).
+See [260828o-footnotes.md § `gistable: false` is not the switch](../plans/260828o-footnotes.md).
 
 Stage 3 also reads back the footnote stamps stage 2 left in the DOM and writes `role`, `treatment`
 and `noteId` onto the blocks inside the notes container — apparatus rather than argument, and which
 note each block belongs to, since **a note is a range of blocks and not one block**. Nothing reads
 those fields yet; the predicates that will are the next stage.
-[docs/plans/footnotes.md](../plans/footnotes.md).
+[docs/plans/260828o-footnotes.md](../plans/260828o-footnotes.md).
 
 ## Stage ownership
 
@@ -113,12 +113,12 @@ artefacts on disk, not by reaching into another stage's code.
 | # | Stage | Owner | Artefact |
 |---|-------|-------|----------|
 | 1 | fetch — see [fetching.md](fetching.md) | **fetch agent** ([`src/fetch.ts`](../../src/fetch.ts)); run as a step of the ingest queue, [ingest-queue.md](ingest-queue.md) | `raw.html` or `raw.pdf`, plus `raw.json` |
-| 2 | extract — **two extractors, one artefact**: Readability for a page ([content-extraction.md](content-extraction.md)), a model reading the pages for a PDF ([../plans/pdf-ingestion.md](../plans/pdf-ingestion.md)) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
+| 2 | extract — **two extractors, one artefact**: Readability for a page ([content-extraction.md](content-extraction.md)), a model reading the pages for a PDF ([../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md)) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
 | 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + ToC agent** | `blocks.json` |
 | 4 | table of contents (deeply nested) — see [table-of-contents.md](table-of-contents.md) | **blocks + ToC agent** | `tree.json` (structure) |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
-| 5c | the thread — the article as numbered posts ([tweet-thread-page.md](../plans/tweet-thread-page.md)). **Not run by a plain add**: in `STEP_ORDER`, out of `DEFAULT_INGEST_STEPS` | **tweet thread** ([`src/tweets.ts`](../../src/tweets.ts)) | `tweets.json` |
+| 5c | the thread — the article as numbered posts ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)). **Not run by a plain add**: in `STEP_ORDER`, out of `DEFAULT_INGEST_STEPS` | **tweet thread** ([`src/tweets.ts`](../../src/tweets.ts)) | `tweets.json` |
 | 5d | the glossary — the terms this piece uses, defined from it ([glossary.md](glossary.md)). **Not run by a plain add**, same as 5c | **glossary** ([`src/glossary.ts`](../../src/glossary.ts)) | `glossary.json` |
 | 5f | the **ideas** — the propositions the piece needs you to hold, the ones it assumes and the ones it adds ([ideas.md](ideas.md)). **Not run by a plain add**, same as 5c–5d. The first stage whose freshness covers the *tree* as well as the blocks, and the first that lets the model name block ids — so every one it names is checked against `blocks.json` | **ideas** ([`src/ideas.ts`](../../src/ideas.ts)) | `ideas.json` |
 | 6 | server + client — see [granularity-zoom.md § The tabular view](granularity-zoom.md#the-tabular-view). **Sanitises again at ingress** ([security.md](security.md#sanitised-twice-on-purpose)) — stage 3 used jsdom's parser, this one uses the browser's | **granularity zoom** | `src/api.ts`, `src/routes.ts`, `src/web/` |
@@ -152,8 +152,8 @@ which is what production runs; the *pipeline* still writes the filesystem layout
 [`src/jobs.ts`](../../src/jobs.ts) imports `fsArtifacts` directly and never joins that selection. The
 gap between the two halves is not cosmetic — it is where three live faults came from, including one
 that mints new block ids over an article that already had them. Finishing it is
-[finish-the-database-move.md](../plans/finish-the-database-move.md); the reasoning is
-[delete-the-importer.md](../plans/delete-the-importer.md).
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md); the reasoning is
+[260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md).
 
 The layout the pipeline writes, one directory per article:
 
@@ -168,10 +168,10 @@ The layout the pipeline writes, one directory per article:
                     and "whichever exists" then picks the stale one silently
     pdf-chunks/     PDFs only: one cached model response per page range, keyed
                     on the bytes + the prompt version + the reader, so fixing
-                    the renderer costs nothing (pdf-ingestion.md). Written
+                    the renderer costs nothing (260826c-pdf-ingestion.md). Written
                     atomically, and an entry that will not parse is discarded
                     and re-read rather than thrown
-                    (../postmortems/pdf-chunk-cache-corrupt-entry.md)
+                    (../postmortems/260828e-pdf-chunk-cache-corrupt-entry.md)
     article.html    extracted — NOT yet sanitised (security.md)
     meta.json       title, byline, site, lang, url, fetchedAt
     blocks.json     the block sequence with stable ids   ← the spine
@@ -180,14 +180,14 @@ The layout the pipeline writes, one directory per article:
     arc.json        one sentence per part: where the argument stands there
                     (stage 5b — joined to the tree by RANGE, never by node id)
     tweets.json     the article as a numbered thread (stage 5c, on demand only —
-                    docs/plans/tweet-thread-page.md). Carries a sourceHash, so a
+                    docs/plans/260825g-tweet-thread-page.md). Carries a sourceHash, so a
                     thread that has gone stale can say so.
     glossary.json   the terms the piece uses, and which blocks use them (stage 5d,
                     on demand only — glossary.md). Carries a sourceHash too, and
                     a `passes` count, because the list grows a batch at a time.
     summary.json    GONE 2026-08-31, along with stage 5e that wrote it and the
                     `article_revisions.summary` column that held it
-                    (../plans/gist-only-summaries.md, drizzle/0036). Summary
+                    (../plans/260831s-gist-only-summaries.md, drizzle/0036). Summary
                     mode now draws the gists that were always on the tree. Files
                     left in a `data/` directory are orphans and nothing reads
                     them.
@@ -228,7 +228,7 @@ both halves, 2026-08-31.
 
 That was harmless only while the pipeline's artefact reads answered `null` and the step re-ran
 regardless; the failure arrives with the reads that make it work.
-[finish-the-database-move.md](../plans/finish-the-database-move.md) § stage 1.
+[260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1.
 
 `assets.json` keeps the narrow hash — the blocks and nothing else — because that is genuinely all it
 is built from: a list of images to fetch, no prompt and no head.
@@ -283,7 +283,7 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   `sweepOrphaned` makes for comments.
 - LLM calls happen in the pipeline, not in request handlers — with **two deliberate exceptions**,
   [`src/explain.ts`](../../src/explain.ts) and [`src/converse.ts`](../../src/converse.ts) (chat,
-  added 2026-08-25 — [chat-mode.md](../plans/chat-mode.md)). Both take input that does not exist
+  added 2026-08-25 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md)). Both take input that does not exist
   until the reader produces it, so there is nothing to precompute; chat additionally *streams*,
   which is the first response in this app that is not a single JSON body. A reader's text selection
   cannot be precomputed or
@@ -312,7 +312,7 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   [`src/toc.ts`](../../src/toc.ts), [`src/labels.ts`](../../src/labels.ts),
   [`src/pdf-read.ts`](../../src/pdf-read.ts)); treat an entry that will not parse as a miss and say so
   in the log. It wedged one article's PDF extract permanently —
-  [pdf-chunk-cache-corrupt-entry.md](../postmortems/pdf-chunk-cache-corrupt-entry.md).
+  [260828e-pdf-chunk-cache-corrupt-entry.md](../postmortems/260828e-pdf-chunk-cache-corrupt-entry.md).
 - What the model calls cost, and the three prompt caches that stop us paying for the article twice,
   are in [prompt-caching.md](prompt-caching.md).
 - **Where the calls actually go** is [ai-gateway.md](ai-gateway.md): every paid call goes through

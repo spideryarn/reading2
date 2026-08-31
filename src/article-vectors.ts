@@ -49,7 +49,7 @@
  *
  * Same answer `similar.ts` gives and it has not changed: persisting vectors
  * needs pgvector, a migration, a re-embed-on-change rule and a place in the
- * pipeline, which is the substance of docs/plans/semantic-search.md. A diagram
+ * pipeline, which is the substance of docs/plans/260826n-semantic-search.md. A diagram
  * toggle wanting a cache is not a good reason to settle it early. **When that
  * plan lands, this is the one file that changes.**
  *
