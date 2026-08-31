@@ -1,3 +1,79 @@
+# Review the timeline generator (Stage 2 of docs/plans/timeline-mode.md)
+
+You are reviewing NEW CODE, not a plan. Repo: /Users/greg/Dropbox/dev/experim/spideryarn2
+(read any file you like; `src/timeline-time.ts`, `src/ideas.ts`, `src/quote-match.ts` and
+`docs/plans/timeline-mode.md` are the relevant neighbours).
+
+## The mode, in one paragraph
+
+A reading app builds a "timeline" panel for an article: an ordered list of the events the
+piece narrates, each with a short label, a mark showing how bounded the date is, and a way
+back to the paragraph. The rule the whole feature lives or dies by is **nothing is dated
+unless the article dates it** — a hallucinated date is invisible, because `12 June 2019`
+looks exactly like `12 June 2019`.
+
+## The architecture, which is the thing to attack
+
+**The model returns evidence. Code returns dates.** The model is asked ONLY for:
+label, order, modality ("happened"|"predicted"|"hypothetical"), `phrase` (the article's own
+temporal words, copied, or null), and occurrences (blockId + verbatim quote). It is NOT asked
+for a date, earliest/latest, extent, or basis.
+
+`readWhen` in `src/timeline-time.ts` (already committed, reviewed separately) then scans the
+BLOCK's own characters for date expressions, scans the phrase for the same, and matches by
+PARSED VALUE rather than by substring. It returns a `When` (earliest/latest independently
+nullable, extent, phrase = the block's own slice, at = offsets, yearFilled) or a refusal:
+`noDateInPhrase` | `unparseablePhrase` | `phraseNotInOccurrence` | `noYearFrame`.
+
+An earlier design asked the model for a date and checked the words were in the block with
+`findQuote`. That failed BOTH ways and both were proved: it rejected a correct date (an
+editorial `[F]rom` bracket in a quoted excerpt) and it accepted a wrong one (`findQuote` is
+substring matching, so `July 1` is found inside `July 11`, and four of the test article's
+blocks hold two distinct dates each).
+
+## What I want from you
+
+Attack these in particular, in this order:
+
+1. **Can a date the article does not contain reach the reader?** Trace every route. Note in
+   particular `TimelineEvent.phrase`, which carries the MODEL's own string to the panel when
+   the parser refused with `noDateInPhrase` (i.e. the parser scanned those words and found no
+   date expression). Is "the parser found no date in this string" a sufficient guarantee, or
+   is there a string that renders as a date to a human and not to `scanDates`? Give a concrete
+   example if so.
+
+2. **`within` is the occurrence's quote span.** `dateEvent` requires the temporal phrase to sit
+   inside one of the event's own validated quotes, and the prompt tells the model to choose a
+   quote that contains the time. Is that the right strictness? What does it do to an article
+   whose date and event description are in different sentences of one block? (On the real run
+   it cost nothing: 0 `phraseNotInOccurrence` across 57 events over two runs.)
+
+3. **Id inheritance on `evidenceKey`** — the cited block set plus `earliest..latest`. Both
+   sides drop ambiguous keys rather than guessing. Measured: 26 of 27 ids survived a second
+   run while only 7 of 26 labels were unchanged. What breaks this? Consider a re-extraction, a
+   block id that moves, two events on one block with the same date.
+
+4. **The counters.** `Dropped` counts and never carries prose or quotes. Is there a failure
+   that is currently SILENT — something that can go wrong and increment nothing? I am
+   especially worried about the `dateEvent` loop: it tries every occurrence and keeps the most
+   informative refusal (`REFUSAL_RANK`), counting exactly one per event.
+
+5. **The empty case.** `buildTimeline` writes a zero-event artefact when the model returned
+   zero, and THROWS when the model named events and every one was dropped. Is that split right,
+   and is the boundary detectable? (`ideas` throws on empty because every article has ideas;
+   most articles are not chronological.)
+
+6. **Anything in the prompt that is now dead or contradictory** — it was cut down from a spike
+   prompt that asked for dates, bounds, extent and basis.
+
+Say plainly which findings are certain and which are speculative. If you think a check is
+useless — a gate that cannot go red — say so; that failure mode has bitten this repo repeatedly.
+
+## The code
+
+### src/timeline.ts (new, the thing under review)
+
+```typescript
 /**
  * Pipeline stage 5h — the **timeline**: when the piece says these things
  * happened, in what order, and how sure it actually is.
@@ -14,9 +90,9 @@
  * words — `"By the next morning, July 11"` — and `readWhen` in
  * src/timeline-time.ts reads the date out of the **block's own characters**.
  *
- * So a date the article does not contain has no way into `when`, because there
- * is nowhere for one to come from. That is structural rather than checked, and
- * it is the fix for the safety hole the first design had: the
+ * So a date the article does not contain has no way into the artefact, because
+ * there is nowhere for one to come from. That is structural rather than
+ * checked, and it is the fix for the safety hole the first design had: the
  * plan's original phrase-check failed in *both* directions — it rejected the
  * one correctly-stated span on the test article (an editorial `[F]rom` bracket)
  * and it accepted `July 1` found inside `July 11`. Both proved rather than
@@ -25,25 +101,6 @@
  * A hallucinated date is the highest-consequence thing this app could ship: a
  * wrong glossary entry looks wrong, and `12 June 2019` looks exactly like
  * `12 June 2019`.
- *
- * ## "The model cannot state a date" is a claim about the whole artefact
- *
- * The parser secures `when`, and that is not the same thing, which GPT Sol
- * demonstrated rather than argued on 2026-08-31: the model also writes a
- * `label` and a `phrase`, both of them prose, and `"06/12/19"` is a date to
- * every reader and to no pattern in `scanDates`. Two of the three ways in were
- * open, so all three are shut here rather than in the prompt:
- *
- * - **`when`** — parsed out of the block. Structural, and it always was.
- * - **`phrase`** — never the model's string. It is the article's own characters,
- *   sliced out of the block at the offsets `findQuote` located, exactly as
- *   `When.phrase` is. Words we cannot find in the quoted passage are not shown.
- * - **`label`** — checked with the same parser: a date expression in a label
- *   must be one the cited passage carries, or the event is dropped and counted.
- *   See `labelStatesAnUncitedDate`.
- *
- * So the sentence that is true of the finished artefact is: **every date and
- * every temporal word a reader sees came out of the article's own characters.**
  *
  * ## What the model is asked for, and what it is not
  *
@@ -190,20 +247,16 @@ export interface TimelineEvent {
    */
   dateRejected: boolean;
   /**
-   * The article's temporal words, when the parser could not turn them into a
-   * date — "another month later", "within a few hours", or "On July 7" on an
-   * article with no publication date to take the year from. Shown in the date
-   * column where a date would otherwise be.
+   * The article's temporal words when they carry **no date at all** — "another
+   * month later", "within a few hours". Shown in the date column where a date
+   * would otherwise be.
    *
-   * **The block's own characters, never the model's copy of them.** The first
-   * version of this field stored the model's string on the grounds that the
-   * parser had proved it carried no date; GPT Sol showed that proof is worth
-   * less than it sounds — `scanDates` has no pattern for `"06/12/19"` or for
-   * `"the summer of twenty nineteen"`, so both would have been displayed
-   * unchallenged. Now the words are located in the quoted passage with
-   * `findQuote` and **sliced out of the block**, so a string that reaches the
-   * reader here is the article's, character for character. Words we cannot
-   * locate are not shown at all — `Dropped.phraseNotFound`.
+   * Only ever set when `readWhen` refused with `noDateInPhrase`, which means
+   * the parser scanned these words and found no date expression in them. That
+   * is the safety property: a string that reaches the reader through this field
+   * has been proved not to contain a date, so the mode's one rule — nothing is
+   * dated unless the article dates it — cannot be got round by putting a date
+   * in here.
    */
   phrase?: string;
   /**
@@ -211,13 +264,8 @@ export interface TimelineEvent {
    * key** — Greg's call, 2026-08-31: the dates do not move anything. An event
    * known only to be "by 4 July" may have happened on the 1st, and sorting it
    * to the 4th would assert otherwise.
-   *
-   * `null` when the model did not number the event. Nullable rather than `NaN`
-   * because `JSON.stringify` writes `NaN` as `null` regardless, so a field
-   * typed `number` would have described the artefact wrongly the moment it was
-   * read back — and `orderKey` sorts either of them last within the partition.
    */
-  order: number | null;
+  order: number;
   modality: TimelineModality;
   occurrences: TimelineOccurrence[];
 }
@@ -310,16 +358,6 @@ export interface Dropped {
   overCap: number;
   /** Events with no label, or an unusable modality. Dropped. */
   malformed: number;
-  /**
-   * Events whose **label** states a date the cited passage does not carry.
-   * Dropped, because a label is prose the panel prints beside a date column and
-   * a date smuggled into it is indistinguishable from one the article gave.
-   *
-   * The prompt bans this and a ban relocates a register rather than deleting
-   * one — docs/project/glossary.md — so it is also checked, with the same
-   * parser that reads `when`. See `labelStatesAnUncitedDate`.
-   */
-  datedLabel: number;
   /** Events that lost **every** occurrence and were therefore dropped whole. */
   unanchored: number;
   /**
@@ -355,22 +393,6 @@ export interface Dropped {
    */
   noYearFrame: number;
   /**
-   * Temporal words we could not find in the quoted passage, so they are not
-   * shown. The event survives with its order and its occurrences; only the
-   * words are withheld, because a phrase we cannot locate is the model's
-   * writing rather than the article's.
-   */
-  phraseNotFound: number;
-  /**
-   * Events sharing an `order` with another event. **Not a drop, and not
-   * necessarily wrong** — two things can happen at once. It is here because the
-   * failure it detects has no other tell: a model that gives every event
-   * `order: 1` has stopped doing the one judgement the sort depends on, and the
-   * panel would then quietly show the order the events arrived in.
-   * `countOrderConflicts` cannot see it, because ties prove nothing.
-   */
-  duplicateOrders: number;
-  /**
    * Pairs where the dates prove an order and the model's `order` says the
    * opposite — `countOrderConflicts`. Not a drop at all; it lives here because
    * this is the object the counts are reported from.
@@ -385,15 +407,12 @@ export function emptyDropped(): Dropped {
     truncated: 0,
     overCap: 0,
     malformed: 0,
-    datedLabel: 0,
     unanchored: 0,
     unordered: 0,
     unparseablePhrase: 0,
     phraseNotInOccurrence: 0,
     noDateInPhrase: 0,
     noYearFrame: 0,
-    phraseNotFound: 0,
-    duplicateOrders: 0,
     orderConflicts: 0,
   };
 }
@@ -490,92 +509,14 @@ interface Dating {
 }
 
 /**
- * The article's own characters for a phrase the parser could not date.
- *
- * `findQuote`, then a **slice of the block** — never the model's string. The
- * phrase reaches the reader in the date column, so it is held to the same rule
- * as everything else on the row: it has to be in the article. See
- * `TimelineEvent.phrase` for the demonstration that made this necessary.
- *
- * The located words must sit inside the occurrence's own quote, which is the
- * same window the date is read from. `near` biases the search to that quote, so
- * a phrase the article repeats is found at the occurrence rather than at the
- * first repeat in the block.
- */
-function locatePhrase(phrase: string, occurrences: readonly PlacedOccurrence[]): string | null {
-  for (const o of occurrences) {
-    const span = findQuote(o.text, phrase, o.start, "spaced");
-    if (span && span.start >= o.start && span.end <= o.end) {
-      return o.text.slice(span.start, span.end);
-    }
-  }
-  return null;
-}
-
-/**
- * Does the **label** state a date the cited passage does not carry?
- *
- * The third route a fabricated date had into the artefact, and the one that
- * would have looked most like the article's own words: `label` is prose, the
- * panel prints it beside the date column, and nothing read it. A model that
- * writes `"4 July: the package manager crashes"` puts a date in front of the
- * reader whatever the parser does with `phrase`.
- *
- * It is checked with `readWhen` rather than with a second date scanner, so the
- * label is held to exactly the rule the date column is held to and there is one
- * definition of "is this date in this passage" rather than two.
- *
- * Three of the four refusals are innocent and only one is an offence:
- *
- * | refusal | what it means for a label | verdict |
- * |---|---|---|
- * | `noDateInPhrase` | no date in the label at all — the ordinary case | fine |
- * | `noYearFrame` | the date IS in the passage; only the year was missing | fine |
- * | `phraseNotInOccurrence` | the label names a date the passage does not carry | **offence** |
- * | `unparseablePhrase` | over the phrase cap, or several dates that are not a range | **offence** |
- *
- * `unparseablePhrase` counts as an offence partly because a label long enough
- * to pass `MAX_PHRASE_CHARS` is not a handle in the first place.
- */
-export function labelStatesAnUncitedDate(
-  label: string,
-  occurrences: readonly PlacedOccurrence[],
-  frame: string | null,
-): boolean {
-  let offence = false;
-  for (const o of occurrences) {
-    const result = readWhen({
-      text: o.text,
-      phrase: label,
-      blockId: o.blockId,
-      frame,
-      within: { start: o.start, end: o.end },
-    });
-    /* Any occurrence that vindicates the label settles it. `noDateInPhrase` is
-       decided from the label alone, before the block is looked at, so the first
-       occurrence answers for all of them. */
-    if (result.ok) return false;
-    if (result.reason === "noDateInPhrase" || result.reason === "noYearFrame") return false;
-    offence = true;
-  }
-  return offence;
-}
-
-/**
  * Read the date out of the article, or say why not.
  *
  * **The phrase must sit inside one of the event's own quotes**, which is why
- * `within` is passed. That is a stricter rule than "somewhere in the block":
- * four of the test article's blocks hold two distinct dates each, and a
- * block-wide window would let an event borrow its neighbour's date whenever the
- * two differ by a component the phrase does not state.
- *
- * It is strictness about **which date is selected**, and not, despite how it
- * reads, a rule that the whole phrase is inside the quote — the words that
- * govern the date are looked for in the block, so a quote holding `"July 12,
- * agents acted"` can still be dated `"By July 12"` if the block says "By".
- * That is correct: the cue genuinely governs that date in the article. GPT Sol,
- * 2026-08-31, who found the comment claiming more than the code did.
+ * `within` is passed. That is a stricter rule than "somewhere in the block",
+ * and it is a rule the prompt states rather than one the model has to guess:
+ * four of this article's blocks hold two distinct dates each, and a block-wide
+ * window would let an event borrow its neighbour's date whenever the two
+ * differ by a component the phrase does not state.
  *
  * Every occurrence is tried, because a multi-occurrence event is dated by one
  * of its passages and mentioned again in the others.
@@ -607,20 +548,13 @@ export function dateEvent(
   }
 
   dropped[worst]++;
-  /* The article's words go in the row either way, because on an article with no
-     publication date EVERY dated event lands here — the field arrives only by
-     re-extraction, so that is the common path on this shelf — and a row reading
-     "we could not read the date" with no words beside it tells the reader
-     nothing they can check. */
-  const located = locatePhrase(phrase, occurrences);
-  if (located === null) dropped.phraseNotFound++;
   /* `noDateInPhrase` is the relative case and is not a rejection: "another
      month later" is the article declining to date something, and a row drawn
      with the ⊘ glyph here would be accusing the piece of something it never
      did. Every other refusal IS a rejection — the piece dates this and we could
      not read it — and the panel has to say so. */
-  const dateRejected = worst !== "noDateInPhrase";
-  return { when: null, dateRejected, ...(located === null ? {} : { phrase: located }) };
+  if (worst === "noDateInPhrase") return { when: null, dateRejected: false, phrase };
+  return { when: null, dateRejected: true };
 }
 
 /**
@@ -659,19 +593,12 @@ export function toEvents(
       dropped.unanchored++;
       continue;
     }
-    /* After the occurrences, because the check reads the passages the event
-       cites — a label naming a date is only an offence against the passage it
-       claims to be about. */
-    if (labelStatesAnUncitedDate(label, occurrences, frame)) {
-      dropped.datedLabel++;
-      continue;
-    }
-    /* A number or `null` — never a coerced 0. `Number("")` is 0 and a missing
-       order is not "first"; `orderKey` in src/timeline-time.ts sorts a null
-       order last within its partition, deliberately, because a row the model
-       could not place has no claim on the top of the list. */
-    const order = typeof r.order === "number" && Number.isFinite(r.order) ? r.order : null;
-    if (order === null) dropped.unordered++;
+    /* A number, or NaN — never a coerced 0. `Number("")` is 0 and a missing
+       order is not "first"; `orderKey` in src/timeline-time.ts sorts a
+       non-finite order last within its partition, deliberately, because a row
+       the model could not place has no claim on the top of the list. */
+    const order = typeof r.order === "number" && Number.isFinite(r.order) ? r.order : Number.NaN;
+    if (!Number.isFinite(order)) dropped.unordered++;
 
     const dating = dateEvent(text(r.phrase), occurrences, frame, modality, dropped);
     out.push({
@@ -785,26 +712,12 @@ export function buildTimeline(
     dropped: Dropped;
   },
 ): Timeline {
-  /* **The shape of the answer, before the shape of anything in it.** `events`
-     absent, `null`, or an object rather than an array all used to reach
-     `toEvents`, come back as `[]`, and be written as a perfectly ordinary
-     empty timeline with every counter at zero — a model that answered `{}`
-     reported as an article with no chronology. That is the exact failure
-     docs/reusable/silent-success.md is about, and the empty case being
-     legitimate here is what hid it. GPT Sol, 2026-08-31. */
-  if (!Array.isArray(parsed.events)) {
-    throw new Error(
-      "The model's answer has no `events` array in it, so there is nothing to read. " +
-        "An article with no chronology comes back as `{\"events\": []}`; this came back " +
-        "as something else, which is a failed answer rather than an empty one.",
-    );
-  }
   const taken = new Set<string>(opts.inherit?.values() ?? []);
   const fresh = inheritIds(
     toEvents(parsed.events, opts.blocks, opts.frame, taken, opts.dropped),
     opts.inherit ?? null,
   );
-  const raws = parsed.events.length;
+  const raws = Array.isArray(parsed.events) ? parsed.events.length : 0;
 
   /* **Zero events is a legitimate artefact here, and it is the only stage where
      that is true.** `buildIdeas` throws on an empty list because an article
@@ -828,10 +741,6 @@ export function buildTimeline(
 
   const events = orderEvents(fresh);
   opts.dropped.orderConflicts = countOrderConflicts(events);
-  /* Nulls do not count as a repeat: `unordered` already has them, and two
-     events the model failed to number are not two events it placed together. */
-  const numbered = events.map((e) => e.order).filter((o): o is number => o !== null);
-  opts.dropped.duplicateOrders = numbered.length - new Set(numbered).size;
 
   return {
     version: PROMPT_VERSION,
@@ -886,21 +795,15 @@ export interface TimelineRun {
 const SYSTEM = `You are building a TIMELINE of the events an article narrates: what happened,
 in what order, and what the piece itself says about when.
 
-NEVER A DATE OF YOUR OWN
+DO NOT GIVE DATES
 
-This is the rule everything else here serves. Copy; do not compute, and do not
-remember.
+This is the rule everything else here serves. Do not write a date anywhere in
+your answer. Not in "phrase", not in "label", not in any field.
 
-Every temporal word in your answer must be COPIED from the paragraph you are
-citing. If the article writes "By the next morning, July 11", that whole string
-goes in "phrase" — the date in it is the article's and it belongs there. What
-must never appear is a date you worked out or already knew: not in "phrase",
-not in "label", not anywhere.
-
-You do not need to resolve anything. We read the date out of the article's own
-characters ourselves, so a date that is not in the paragraph is of no use to us
-and will be thrown away — and an event whose LABEL states a date the paragraph
-does not carry is thrown away whole.
+Instead, copy the article's OWN temporal words — "By the next morning, July 11"
+— into "phrase", and stop. We read the date out of those words ourselves, out
+of the article's own characters. A date you write down cannot be used and will
+be thrown away; a date the article does not contain has no way in at all.
 
 So there is nothing to be gained by working one out, and nothing lost by
 leaving an event undated. An undated event is a CORRECT answer and is often the
@@ -913,7 +816,6 @@ that governs it.
 
   GOOD  "by July 4"          BAD  "July 4"
   GOOD  "During May"         BAD  "May"
-  GOOD  "on May 26"          BAD  "2026-05-26"
   GOOD  "from July 13 through July 19"
   GOOD  "At some point on July 12"
   GOOD  "By the next morning, July 11"
@@ -942,12 +844,13 @@ it wrongly puts a false date in front of a reader.
 
 WHERE THE PHRASE HAS TO BE
 
-Inside one of this event's own quotes. We look for it there and nowhere else.
+The phrase must appear INSIDE one of this event's own quotes, in the same
+words. We look for it there and nowhere else.
 
 So when an event has a time, choose a quote that contains the time. If the
 article says "By May 12, some agents had figured out how to talk to each other",
-the quote is that sentence, not the clause after the comma. When we cannot find
-the phrase in any of the event's quotes, the row says out loud that the piece
+the quote is that sentence, not the clause after the comma. A phrase we cannot
+find inside a quote is dropped, and the row then says out loud that the piece
 dated this and we could not read the date — which is worse for the reader than
 an honest "phrase": null.
 
@@ -1077,11 +980,9 @@ export function renderPrompt(opts: { tree: Tree; frame: string | null }): string
     ? `This article was published on ${opts.frame}. Almost every date in a piece like this is\n` +
       "written without a year, and we fill the year in from that date ourselves. You do not\n" +
       "need to think about years at all — copy the words as the article writes them."
-    : "We do not know when this article was published. A date written without a year cannot\n" +
-      "be resolved, so those rows will show the article's words and no date. Nothing changes\n" +
-      "for you: copy the words as the article writes them and let us worry about it. Do NOT\n" +
-      "supply the year yourself — a year you are confident about is exactly the thing this\n" +
-      "asks you not to write.";
+    : "We do not know when this article was published. That means a date written without a\n" +
+      "year cannot be resolved and the event will show without one. Nothing changes for you:\n" +
+      "copy the article's words as it writes them and let us worry about it.";
 
   return `Build the timeline of this article.
 
@@ -1275,10 +1176,7 @@ export async function generateTimeline(opts: {
 /** One row, in the notation the panel will draw — see `markFor`. */
 function line(event: TimelineEvent): string {
   const when = event.when;
-  /* A rejected row keeps its words where it has them — on an article with no
-     publication date every dated event lands here, and "⊘" alone would tell the
-     reader nothing they could go and check. */
-  if (event.dateRejected) return event.phrase ? `  ⊘  “${event.phrase}”` : "  ⊘  ";
+  if (event.dateRejected) return "  ⊘  ";
   if (!when) return event.phrase ? `“${event.phrase}”` : "  ·  ";
   const body = when.extent === "extended" ? "▬▬" : " ● ";
   return `${when.earliest === null ? "⋯" : "│"}${body}${when.latest === null ? "⋯" : "│"} ` +
@@ -1325,20 +1223,15 @@ async function main(): Promise<void> {
   console.log(
     `Dropped: ${dropped.unanchored} unanchored, ${dropped.unknownIds} bad ids, ` +
       `${dropped.unquoted} unquoted, ${dropped.malformed} malformed, ` +
-      `${dropped.datedLabel} with a date in the label, ` +
-      `${dropped.truncated} occurrences over the cap, ${dropped.overCap} events over the cap`,
+      `${dropped.truncated} occurrences over the cap, ${dropped.overCap} events over the cap, ` +
+      `${dropped.unordered} without an order`,
   );
   console.log(
     `Dates:   ${dropped.noDateInPhrase} phrases with no date in them (fine), ` +
       `${dropped.unparseablePhrase} unparseable, ` +
       `${dropped.phraseNotInOccurrence} not in the quoted passage, ` +
       `${dropped.noYearFrame} with no year to fill in, ` +
-      `${dropped.phraseNotFound} phrases we could not locate and so did not show`,
-  );
-  console.log(
-    `Order:   ${dropped.unordered} without an order, ` +
-      `${dropped.duplicateOrders} sharing one with another event, ` +
-      `${dropped.orderConflicts} conflicts with the article's own dates`,
+      `${dropped.orderConflicts} order conflicts`,
   );
   console.log(`\nWrote ${run.outFile}`);
 }
@@ -1348,3 +1241,562 @@ async function main(): Promise<void> {
    command finishing rather than something the process might exit before doing.
    src/cli-ledger.ts says what the one line replaces and why it is one line. */
 await stageCli(import.meta.url, main);
+```
+
+### tests/timeline.test.ts (new)
+
+```typescript
+/**
+ * The deterministic half of the timeline stage — src/timeline.ts.
+ *
+ * Nothing here calls a model. The arithmetic is tested next door in
+ * tests/timeline-time.test.ts; what is pinned here is everything either side of
+ * the call, and three of those are things no other stage has to get right.
+ *
+ * 1. **The publication date is in the freshness stamp**, and no other stage's.
+ *    It is the reference frame for nineteen of the twenty-four temporal
+ *    expressions on the test article, so a publisher re-dating a post changes
+ *    almost every row here — and the change is **invisible while the field is
+ *    absent**, which is exactly the shape of bug that detonates months later on
+ *    one article at a time. So it is asserted rather than assumed.
+ *
+ * 2. **Three outcomes, not two.** A date we could not read must not render as
+ *    an article that never gave one. That distinction lives in `dateRejected`,
+ *    and if it were ever collapsed the counters would still look perfect.
+ *
+ * 3. **Ids inherit on the evidence, not on the label.** Measured: across two
+ *    real runs of this file on the test article, 26 of 27 ids carried over
+ *    while only 7 of 26 labels were unchanged. Keying on the label — which is
+ *    what src/ideas.ts does — would have broken nineteen of them.
+ *
+ * See docs/plans/timeline-mode.md and docs/project/testing.md.
+ */
+import { describe, expect, it } from "vitest";
+import {
+  buildTimeline,
+  dateEvent,
+  type Dropped,
+  emptyDropped,
+  evidenceKey,
+  idsByEvidence,
+  inheritIds,
+  inputFingerprint,
+  isStale,
+  MAX_EVENTS,
+  MAX_OCCURRENCES,
+  PROMPT_VERSION,
+  renderPrompt,
+  type Timeline,
+  type TimelineEvent,
+  toEvents,
+  validateOccurrences,
+} from "../src/timeline.js";
+import { articleWithIdsFingerprint } from "../src/source-hash.js";
+import type { Block, Meta, Tree, TreeNode } from "../src/types.js";
+
+function block(id: string, text: string): Block {
+  return {
+    id,
+    tag: "p",
+    kind: "text",
+    text,
+    words: text.split(/\s+/).length,
+    html: `<p>${text}</p>`,
+    gistable: true,
+  };
+}
+
+/**
+ * Two blocks lifted from the test article's shape rather than invented: the
+ * first holds **two dates**, which is the case that broke the design the plan
+ * started with, and four of that article's blocks are like it.
+ */
+const BLOCKS: Block[] = [
+  block(
+    "spya-aaaaaa",
+    "By May 12, some agents had figured out how to talk. Two weeks later, on May 26, " +
+      "the agents successfully exploited a vulnerability.",
+  ),
+  block("spya-bbbbbb", "Another month later, some AIs found an exploit of their own."),
+  block("spya-cccccc", "During May, OpenAI was training a model that would go on to matter."),
+];
+
+function node(over: Partial<TreeNode> & { id: string }): TreeNode {
+  return {
+    depth: 1,
+    parent: "n0",
+    children: [],
+    range: ["spya-aaaaaa", "spya-cccccc"],
+    title: "A part",
+    ...over,
+  } as TreeNode;
+}
+
+function tree(): Tree {
+  const part = node({ id: "n1", title: "All of it", gist: "A gist." });
+  return {
+    version: "toc/1",
+    generator: "test",
+    slug: "test",
+    rootId: "n0",
+    nodes: {
+      n0: {
+        id: "n0",
+        depth: 0,
+        parent: null,
+        children: ["n1"],
+        range: ["spya-aaaaaa", "spya-cccccc"],
+        title: "The whole thing",
+      },
+      n1: part,
+    },
+  } as Tree;
+}
+
+const META = {
+  title: "The Rise and Fall of Agent Civilizations",
+  byline: "Dwarkesh Patel",
+  siteName: "Dwarkesh Podcast",
+  url: "https://example.com/a",
+  publishedAt: "2026-08-29T22:47:53+00:00",
+} as Meta;
+
+const FRAME = "2026-08-29";
+
+/** A well-formed event as the model returns one. */
+function raw(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    label: "Agents learn to talk",
+    order: 1,
+    modality: "happened",
+    phrase: "By May 12",
+    occurrences: [
+      { blockId: "spya-aaaaaa", quote: "By May 12, some agents had figured out how to talk." },
+    ],
+    ...over,
+  };
+}
+
+function build(events: unknown[], dropped: Dropped = emptyDropped()): Timeline {
+  return buildTimeline(
+    { events },
+    { slug: "test", blocks: BLOCKS, sourceHash: "h", frame: FRAME, elapsedMs: 1, dropped },
+  );
+}
+
+function event(over: Partial<TimelineEvent> = {}): TimelineEvent {
+  return {
+    id: "spya-000001",
+    label: "A thing",
+    when: null,
+    dateRejected: false,
+    order: 1,
+    modality: "happened",
+    occurrences: [{ blockId: "spya-aaaaaa", quote: "By May 12", start: 0 }],
+    ...over,
+  } as TimelineEvent;
+}
+
+describe("the freshness stamp carries the publication date", () => {
+  it("moves when the publication date moves, and nothing else changed", () => {
+    const before = inputFingerprint(BLOCKS, tree(), META);
+    const after = inputFingerprint(BLOCKS, tree(), { ...META, publishedAt: "2026-08-30" } as Meta);
+    expect(after).not.toBe(before);
+  });
+
+  it("is not the fingerprint the other id-citing stages use", () => {
+    /* `ideas` and `sketch` send the same bytes and hash them with
+       `articleWithIdsFingerprint`, which has no room for a date. Using theirs
+       here would compile, produce a plausible hash, and be wrong only on the
+       first article whose publisher re-dates it — months later, one article at
+       a time, silently. */
+    expect(inputFingerprint(BLOCKS, tree(), META)).not.toBe(
+      articleWithIdsFingerprint(BLOCKS, tree(), META),
+    );
+  });
+
+  it("treats an absent date as a real state rather than a missing one", () => {
+    /* Almost every article on the shelf predates the field, so this is the
+       common path and it must be stable: two reads of the same undated article
+       have to agree, or the stage reports stale for ever while looking well. */
+    /* The key removed, not set to `undefined`: `exactOptionalPropertyTypes` is
+       on, and an article that predates the field has no key at all — which is
+       the state this branch is about. */
+    const { publishedAt: _parked, ...rest } = META;
+    const undated = rest as Meta;
+    expect(inputFingerprint(BLOCKS, tree(), undated)).toBe(
+      inputFingerprint(BLOCKS, tree(), undated),
+    );
+    expect(inputFingerprint(BLOCKS, tree(), undated)).not.toBe(
+      inputFingerprint(BLOCKS, tree(), META),
+    );
+  });
+
+  it("reports a timeline written against a different date as stale", () => {
+    const timeline = build([raw()]);
+    const written = { ...timeline, sourceHash: inputFingerprint(BLOCKS, tree(), META) };
+    expect(isStale(written, BLOCKS, tree(), META)).toBe(false);
+    expect(isStale(written, BLOCKS, tree(), { ...META, publishedAt: "2026-01-01" } as Meta)).toBe(
+      true,
+    );
+  });
+});
+
+describe("occurrences are believed only when the article backs them up", () => {
+  it("drops a block id that is not in the article, and counts it", () => {
+    const dropped = emptyDropped();
+    const out = validateOccurrences(
+      [{ blockId: "spya-zzzzzz", quote: "By May 12" }],
+      BLOCKS,
+      dropped,
+    );
+    expect(out).toEqual([]);
+    expect(dropped.unknownIds).toBe(1);
+  });
+
+  it("drops a quote that is not in the block it names, and counts it", () => {
+    const dropped = emptyDropped();
+    const out = validateOccurrences(
+      [{ blockId: "spya-bbbbbb", quote: "By May 12" }],
+      BLOCKS,
+      dropped,
+    );
+    expect(out).toEqual([]);
+    expect(dropped.unquoted).toBe(1);
+  });
+
+  it("survives a null in the array rather than losing the whole event to it", () => {
+    const dropped = emptyDropped();
+    const out = validateOccurrences(
+      [null, { blockId: "spya-aaaaaa", quote: "By May 12" }],
+      BLOCKS,
+      dropped,
+    );
+    expect(out).toHaveLength(1);
+    expect(dropped.malformed).toBe(1);
+  });
+
+  it("caps the occurrences on one event", () => {
+    const dropped = emptyDropped();
+    const many = Array.from({ length: MAX_OCCURRENCES + 2 }, () => ({
+      blockId: "spya-aaaaaa",
+      quote: "By May 12",
+    }));
+    expect(validateOccurrences(many, BLOCKS, dropped)).toHaveLength(MAX_OCCURRENCES);
+    expect(dropped.truncated).toBe(2);
+  });
+});
+
+describe("three outcomes, not two", () => {
+  const occurrence = (quote: string, blockId = "spya-aaaaaa") =>
+    validateOccurrences([{ blockId, quote }], BLOCKS, emptyDropped());
+
+  it("dates an event from the block's own characters", () => {
+    const dropped = emptyDropped();
+    const out = dateEvent(
+      "By May 12",
+      occurrence("By May 12, some agents had figured out how to talk."),
+      FRAME,
+      "happened",
+      dropped,
+    );
+    expect(out.when?.latest).toBe("2026-05-12");
+    /* The bound survives. "by" is at-or-before, and a stage that flattened it
+       to a point would be claiming a day the article never claimed — five of
+       the twenty-four expressions on the test article are this shape. */
+    expect(out.when?.earliest).toBeNull();
+    expect(out.dateRejected).toBe(false);
+  });
+
+  it("shows the article's words, and draws no rejection, when they carry no date", () => {
+    const dropped = emptyDropped();
+    const out = dateEvent(
+      "Another month later",
+      occurrence("Another month later, some AIs found an exploit", "spya-bbbbbb"),
+      FRAME,
+      "happened",
+      dropped,
+    );
+    expect(out.when).toBeNull();
+    /* Not a ⊘. The article declined to date this, and a row accusing it of a
+       date we could not read would be accusing it of something it never did. */
+    expect(out.dateRejected).toBe(false);
+    expect(out.phrase).toBe("Another month later");
+    expect(dropped.noDateInPhrase).toBe(1);
+  });
+
+  it("rejects visibly when the date is not in the quoted passage", () => {
+    const dropped = emptyDropped();
+    const out = dateEvent(
+      "By May 12",
+      occurrence("Another month later, some AIs found an exploit", "spya-bbbbbb"),
+      FRAME,
+      "happened",
+      dropped,
+    );
+    expect(out.when).toBeNull();
+    expect(out.dateRejected).toBe(true);
+    /* And the model's words do NOT travel to the reader on a rejection. This is
+       the one route a fabricated date could take into the panel, and it is shut
+       structurally: `phrase` is set only when the parser proved the words carry
+       no date at all. */
+    expect(out.phrase).toBeUndefined();
+    expect(dropped.phraseNotInOccurrence).toBe(1);
+  });
+
+  it("refuses to guess a year when there is no publication date", () => {
+    const dropped = emptyDropped();
+    const out = dateEvent(
+      "By May 12",
+      occurrence("By May 12, some agents had figured out how to talk."),
+      null,
+      "happened",
+      dropped,
+    );
+    expect(out.when).toBeNull();
+    expect(out.dateRejected).toBe(true);
+    expect(dropped.noYearFrame).toBe(1);
+  });
+
+  it("gives no phrase at all when the model gave none, and counts nothing", () => {
+    const dropped = emptyDropped();
+    const out = dateEvent("", occurrence("By May 12"), FRAME, "happened", dropped);
+    expect(out).toEqual({ when: null, dateRejected: false });
+    expect(dropped).toEqual(emptyDropped());
+  });
+
+  it("reads a prediction's year forwards rather than backwards", () => {
+    /* The one case where the default is wrong: a piece published in August
+       saying "in December we expect…" means the coming December, not last
+       one. The direction hint is the whole reason `modality` reaches the
+       parser. */
+    const blocks = [block("spya-dddddd", "We expect the next wave in December.")];
+    const dropped = emptyDropped();
+    const occ = validateOccurrences(
+      [{ blockId: "spya-dddddd", quote: "We expect the next wave in December." }],
+      blocks,
+      dropped,
+    );
+    expect(dateEvent("in December", occ, FRAME, "predicted", dropped).when?.earliest).toBe(
+      "2026-12-01",
+    );
+    expect(dateEvent("in December", occ, FRAME, "happened", dropped).when?.earliest).toBe(
+      "2025-12-01",
+    );
+  });
+});
+
+describe("what the model says, believed as little as possible", () => {
+  it("drops an event with no label and one with an unusable modality", () => {
+    const dropped = emptyDropped();
+    const out = toEvents(
+      [raw({ label: "" }), raw({ modality: "maybe" }), raw()],
+      BLOCKS,
+      FRAME,
+      new Set(),
+      dropped,
+    );
+    expect(out).toHaveLength(1);
+    expect(dropped.malformed).toBe(2);
+  });
+
+  it("drops an event that lost every occurrence", () => {
+    const dropped = emptyDropped();
+    const out = toEvents(
+      [raw({ occurrences: [{ blockId: "spya-zzzzzz", quote: "nope" }] })],
+      BLOCKS,
+      FRAME,
+      new Set(),
+      dropped,
+    );
+    expect(out).toEqual([]);
+    expect(dropped.unanchored).toBe(1);
+  });
+
+  it("keeps an event whose order is unusable, and does not read it as first", () => {
+    const dropped = emptyDropped();
+    const out = toEvents([raw({ order: "third" })], BLOCKS, FRAME, new Set(), dropped);
+    expect(out).toHaveLength(1);
+    /* `Number("third")` is NaN and `Number("")` is 0 — and a missing order read
+       as 0 would sort the row the model could not place to the very top. */
+    expect(Number.isFinite(out[0]?.order)).toBe(false);
+    expect(dropped.unordered).toBe(1);
+  });
+
+  it("enforces the cap here rather than merely asking for it in the prompt", () => {
+    const dropped = emptyDropped();
+    const many = Array.from({ length: MAX_EVENTS + 3 }, (_, i) => raw({ order: i }));
+    const out = toEvents(many, BLOCKS, FRAME, new Set(), dropped);
+    expect(out).toHaveLength(MAX_EVENTS);
+    expect(dropped.overCap).toBe(3);
+  });
+
+  it("keeps the parser's working out of the artefact", () => {
+    const out = toEvents([raw()], BLOCKS, FRAME, new Set(), emptyDropped());
+    /* The block's text is handed to the parser and must not be written down: an
+       artefact carrying a copy of the article is a second copy nothing keeps in
+       step. */
+    expect(Object.keys(out[0]?.occurrences[0] ?? {})).toEqual(["blockId", "quote", "start"]);
+  });
+});
+
+describe("ids inherit on the evidence, never on the label", () => {
+  it("carries an id across a run that paraphrased the label", () => {
+    const before = event({ id: "spya-old001", label: "Message volume crashes package manager" });
+    const after = event({ id: "spya-new001", label: "Agents crash the package manager" });
+    expect(inheritIds([after], idsByEvidence({ events: [before] } as Timeline))[0]?.id).toBe(
+      "spya-old001",
+    );
+  });
+
+  it("does not carry an id when the date moved", () => {
+    const before = event({ id: "spya-old001" });
+    const after = event({
+      id: "spya-new001",
+      when: {
+        earliest: null,
+        latest: "2026-05-12",
+        extent: "instant",
+        phrase: "By May 12",
+        at: { blockId: "spya-aaaaaa", start: 0, end: 9 },
+        yearFilled: true,
+      },
+    });
+    expect(inheritIds([after], idsByEvidence({ events: [before] } as Timeline))[0]?.id).toBe(
+      "spya-new001",
+    );
+  });
+
+  it("mints rather than guessing when two old events shared the evidence", () => {
+    /* The test article has blocks holding two events each, so this is the
+       ordinary case. An id handed to the wrong one of them is a dead end that
+       looks like it worked, which is worse than a dead end the reader can see. */
+    const inherit = idsByEvidence({
+      events: [event({ id: "spya-old001" }), event({ id: "spya-old002" })],
+    } as Timeline);
+    expect(inherit.size).toBe(0);
+    expect(inheritIds([event({ id: "spya-new001" })], inherit)[0]?.id).toBe("spya-new001");
+  });
+
+  it("mints rather than guessing when two fresh events share the evidence", () => {
+    const inherit = idsByEvidence({ events: [event({ id: "spya-old001" })] } as Timeline);
+    const out = inheritIds([event({ id: "spya-new001" }), event({ id: "spya-new002" })], inherit);
+    expect(out.map((e) => e.id)).toEqual(["spya-new001", "spya-new002"]);
+  });
+
+  it("keys on the cited block set and the date, and on nothing else", () => {
+    expect(evidenceKey(event({ label: "one" }))).toBe(evidenceKey(event({ label: "two" })));
+  });
+});
+
+describe("the artefact", () => {
+  it("writes an empty timeline when the article tells no story in time", () => {
+    /* The one stage where zero is a real answer. `buildIdeas` throws on an
+       empty list because every article has ideas; most articles are not
+       chronological, and "this piece has no chronology" is what the reader
+       asked. */
+    const timeline = build([]);
+    expect(timeline.events).toEqual([]);
+    expect(timeline.version).toBe(PROMPT_VERSION);
+  });
+
+  it("throws when the model named events and every one was thrown away", () => {
+    /* A failure wearing the empty case's clothes. Writing it would make the
+       step report done for ever after. */
+    expect(() => build([raw({ occurrences: [{ blockId: "spya-zzzzzz", quote: "x" }] })])).toThrow(
+      /named 1 events and none of them could be anchored/,
+    );
+  });
+
+  it("sorts by modality partition and then the model's order, never by date", () => {
+    const timeline = build([
+      raw({ label: "a prediction", order: 1, modality: "predicted", phrase: null }),
+      raw({ label: "later", order: 3, phrase: null }),
+      raw({ label: "earlier", order: 2, phrase: null }),
+    ]);
+    expect(timeline.events.map((e) => e.label)).toEqual(["earlier", "later", "a prediction"]);
+  });
+
+  it("counts an order conflict the article's own dates prove", () => {
+    const dropped = emptyDropped();
+    const timeline = build(
+      [
+        raw({ label: "the later one first", order: 1, phrase: "on May 26" }),
+        raw({ label: "the earlier one second", order: 2, phrase: "By May 12" }),
+      ],
+      dropped,
+    );
+    /* "By May 12" is an upper bound and proves nothing against a point on the
+       26th — an open interval can never prove an order, which is the case that
+       stopped the counter being vacuous on the test article. */
+    expect(timeline.orderConflicts).toBe(0);
+    expect(dropped.orderConflicts).toBe(0);
+  });
+});
+
+describe("the prompt", () => {
+  it("names the publication date as the reference frame when there is one", () => {
+    expect(renderPrompt({ tree: tree(), frame: FRAME })).toContain(FRAME);
+  });
+
+  it("says so plainly when there is not, rather than leaving the model to guess", () => {
+    const prompt = renderPrompt({ tree: tree(), frame: null });
+    expect(prompt).toContain("do not know when this article was published");
+    /* The common path on this shelf: `publishedAt` arrives only by
+       re-extraction, so almost every article takes this branch. */
+    expect(prompt).not.toContain("undefined");
+  });
+
+  it("shows the shape of the argument before anything else", () => {
+    expect(renderPrompt({ tree: tree(), frame: FRAME })).toContain("All of it");
+  });
+});
+```
+
+## What the two real runs produced
+
+Article: dwarkesh.com/p/openai-huggingface, 95 blocks, 4,089 body words, published 2026-08-29.
+The plan tabulates 24 temporal expressions in it; 19 of them are year-less.
+
+Run 1 (MAX_EVENTS was 30): 30 events kept, 17 dated, 1 event dropped by the cap.
+Run 2 (MAX_EVENTS 40): 27 events, 18 dated, nothing over the cap.
+
+Counters, both runs: 0 unknown block ids, 0 unquoted, 0 malformed, 0 unanchored, 0 without an
+order, 0 unparseablePhrase, 0 phraseNotInOccurrence, 0 noYearFrame, 0 orderConflicts.
+noDateInPhrase (the relative-expression rows): 5 then 4.
+
+Run 2's rows, as `[earliest..latest] extent :: "the phrase the parser read"`:
+
+order 1 happened :: [2026-05-01..2026-05-31] extended yearFilled=true "During May" :: OpenAI trains persistent, collaborative model :: spya-ekhrbu
+order 2 happened :: no time given :: Agents try to hack out of sandboxes :: spya-fcu0cb
+order 3 happened :: [-..2026-05-12] instant yearFilled=true "By May 12" :: Agents learn to talk via Artifactory :: spya-v9detz
+order 4 happened :: [2026-05-26..2026-05-26] instant yearFilled=true "on May 26" :: Agents exploit Artifactory to reach internet :: spya-v9detz
+order 5 happened :: [2026-06-26..2026-06-26] instant yearFilled=true "on June 26" :: Agents gain full admin access to Artifactory :: spya-g9tjds
+order 6 happened :: [-..2026-07-04] instant yearFilled=true "by July 4" :: Message volume crashes package manager :: spya-g9tjds
+order 7 happened :: no time given :: OpenAI patches vulnerability, wipes board :: spya-g9tjds
+order 8 happened :: [2026-07-07..2026-07-07] instant yearFilled=true "On July 7" :: OpenAI launches ExploitGym evaluation :: spya-pfkdk4
+order 9 happened :: relative "Within a few hours" :: Desperate agents start abusing Artifactory again :: spya-dk4gcf
+order 10 happened :: [-..2026-07-08] instant yearFilled=true "By the night of July 8" :: PHASEONE10841 sends first coded message :: spya-ugwnw2
+order 11 happened :: no time given :: Message board grows to ~1,200 agents :: spya-cbv8uf
+order 12 happened :: relative "Within a few hours of the board being created" :: Agent reverse-engineers scorer's formula :: spya-m24kgb
+order 13 happened :: no time given :: Leadership passes to PHASEONE[big] :: spya-vqvmhz
+order 14 happened :: [-..2026-07-10] instant yearFilled=true "by July 10" :: Collective launches three cover-up workstreams :: spya-xvkm3j
+order 15 happened :: [2026-07-10..2026-07-10] instant yearFilled=true "On the morning of July 10" :: Agent finds exposed Hugging Face credentials :: spya-sjjbur
+order 16 happened :: [-..2026-07-11] instant yearFilled=true "By the next morning, July 11" :: Agent reads internal Hugging Face data :: spya-sjjbur
+order 17 happened :: no time given :: Agent achieves remote code execution on HF :: spya-sjjbur
+order 18 happened :: [2026-07-11..2026-07-11] instant yearFilled=true "On July 11" :: More agents join the Hugging Face attack :: spya-wtguds
+order 19 happened :: relative "over the course of the next day" :: Swarm crawls deep into HF infrastructure :: spya-m4gku9
+order 20 happened :: [2026-07-12..2026-07-12] instant yearFilled=true "At some point on July 12" :: Agents die off mysteriously :: spya-r4jn5b
+order 21 happened :: [-..2026-07-13] instant yearFilled=true "By July 13" :: Hugging Face locks down credentials :: spya-jauf7s
+order 22 happened :: [2026-07-14..-] instant yearFilled=true "after July 13th" :: Later agents rediscover the message board :: spya-matth4
+order 23 happened :: [2026-07-13..-] instant yearFilled=true "After July 12" :: Persistent-Astra evaluations kicked off, finds board :: spya-c2bkgz
+order 24 happened :: [2026-07-13..2026-07-19] extended yearFilled=true "July 13 through July 19" :: Persistent-Astra targets OpenAI's own networks :: spya-ebtbnm
+order 25 happened :: [2026-07-19..2026-07-19] instant yearFilled=false "2026-07-19" :: Agents seize cluster-admin, control eval infrastructure :: spya-khwx0h
+order 26 hypothetical :: [2026-07-13..-] instant yearFilled=true "at some point after July 12" :: Possible rogue deployment or weight exfiltration :: spya-chdu2z
+order 27 predicted :: relative "over the next six months" :: Cotra predicts rapid capability advances :: spya-g5mja3
+
+The two expressions the model missed, both runs: "Over the course of three months at OpenAI"
+(block spya-gb7ze2 — the span containing every other row) and "I don't think this is the final
+warning shot we'll get" (future, no time in it). All three of the piece's own dates ("a couple
+weeks ago, I interviewed…", "the six-day sprint", "just six months ago") stayed out, which the
+plan predicted would leak in.

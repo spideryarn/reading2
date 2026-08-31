@@ -34,6 +34,7 @@ import {
   inheritIds,
   inputFingerprint,
   isStale,
+  labelStatesAnUncitedDate,
   MAX_EVENTS,
   MAX_OCCURRENCES,
   PROMPT_VERSION,
@@ -277,6 +278,42 @@ describe("three outcomes, not two", () => {
     expect(dropped.noDateInPhrase).toBe(1);
   });
 
+  it("shows the BLOCK's characters, not the model's copy of them", () => {
+    /* The model tidies, lowercases and re-spaces as any reader would, and the
+       words go in the date column where a date would otherwise be. So what is
+       shown is sliced out of the block at the offsets `findQuote` located —
+       which is what makes "everything the reader sees came out of the article"
+       true of this field rather than merely likely. */
+    const dropped = emptyDropped();
+    const out = dateEvent(
+      "another   month  LATER",
+      occurrence("Another month later, some AIs found an exploit", "spya-bbbbbb"),
+      FRAME,
+      "happened",
+      dropped,
+    );
+    expect(out.phrase).toBe("Another month later");
+  });
+
+  it("shows nothing at all when the words are not in the quoted passage", () => {
+    /* GPT Sol's case, 2026-08-31: `scanDates` has no pattern for "06/12/19", so
+       the parser calls it `noDateInPhrase` — it carries no date it can read —
+       and every human reader calls it a date. The old code displayed the
+       model's string on the strength of that refusal. Now the words have to be
+       IN the article to be shown, so this one is simply withheld. */
+    const dropped = emptyDropped();
+    const out = dateEvent(
+      "06/12/19",
+      occurrence("Another month later, some AIs found an exploit", "spya-bbbbbb"),
+      FRAME,
+      "happened",
+      dropped,
+    );
+    expect(out.phrase).toBeUndefined();
+    expect(out.dateRejected).toBe(false);
+    expect(dropped.phraseNotFound).toBe(1);
+  });
+
   it("rejects visibly when the date is not in the quoted passage", () => {
     const dropped = emptyDropped();
     const out = dateEvent(
@@ -308,6 +345,11 @@ describe("three outcomes, not two", () => {
     expect(out.when).toBeNull();
     expect(out.dateRejected).toBe(true);
     expect(dropped.noYearFrame).toBe(1);
+    /* And the row still says what the article said. This is the COMMON path —
+       `publishedAt` arrives only by re-extraction, so almost every article on
+       the shelf has no frame — and a ⊘ with no words beside it would leave the
+       reader nothing to check. */
+    expect(out.phrase).toBe("By May 12");
   });
 
   it("gives no phrase at all when the model gave none, and counts nothing", () => {
@@ -335,6 +377,63 @@ describe("three outcomes, not two", () => {
     expect(dateEvent("in December", occ, FRAME, "happened", dropped).when?.earliest).toBe(
       "2025-12-01",
     );
+  });
+});
+
+describe("a date in the label is a date too", () => {
+  const occurrence = (quote: string, blockId = "spya-aaaaaa") =>
+    validateOccurrences([{ blockId, quote }], BLOCKS, emptyDropped());
+
+  it("drops an event whose label states a date the passage does not carry", () => {
+    /* The third way in, and the one that would have looked most like the
+       article's own words: `label` is prose, the panel prints it beside the
+       date column, and until GPT Sol's review nothing read it. */
+    const dropped = emptyDropped();
+    const out = toEvents(
+      [raw({ label: "4 July: the package manager crashes" })],
+      BLOCKS,
+      FRAME,
+      new Set(),
+      dropped,
+    );
+    expect(out).toEqual([]);
+    expect(dropped.datedLabel).toBe(1);
+  });
+
+  it("keeps a label whose date the passage does carry", () => {
+    /* Redundant with the date column, and true. Dropping it would be punishing
+       the model for agreeing with the article. */
+    expect(
+      labelStatesAnUncitedDate(
+        "May 12: agents learn to talk",
+        occurrence("By May 12, some agents had figured out how to talk."),
+        FRAME,
+      ),
+    ).toBe(false);
+  });
+
+  it("keeps an ordinary label, which is every label", () => {
+    expect(
+      labelStatesAnUncitedDate(
+        "Agents learn to talk",
+        occurrence("By May 12, some agents had figured out how to talk."),
+        FRAME,
+      ),
+    ).toBe(false);
+  });
+
+  it("does not punish a label for the year we could not fill in", () => {
+    /* With no publication date the passage's own "May 12" cannot be resolved —
+       but it IS the passage's, which is the only question being asked here.
+       Treating `noYearFrame` as an offence would have dropped good events on
+       every article that has no publication date, which is most of them. */
+    expect(
+      labelStatesAnUncitedDate(
+        "May 12: agents learn to talk",
+        occurrence("By May 12, some agents had figured out how to talk."),
+        null,
+      ),
+    ).toBe(false);
   });
 });
 
@@ -370,8 +469,11 @@ describe("what the model says, believed as little as possible", () => {
     const out = toEvents([raw({ order: "third" })], BLOCKS, FRAME, new Set(), dropped);
     expect(out).toHaveLength(1);
     /* `Number("third")` is NaN and `Number("")` is 0 — and a missing order read
-       as 0 would sort the row the model could not place to the very top. */
-    expect(Number.isFinite(out[0]?.order)).toBe(false);
+       as 0 would sort the row the model could not place to the very top.
+       `null` rather than NaN because that is what survives the write: JSON has
+       no NaN, so a field typed `number` would have been a lie on disk. */
+    expect(out[0]?.order).toBeNull();
+    expect(JSON.parse(JSON.stringify(out[0])).order).toBeNull();
     expect(dropped.unordered).toBe(1);
   });
 
@@ -469,6 +571,31 @@ describe("the artefact", () => {
     expect(timeline.events.map((e) => e.label)).toEqual(["earlier", "later", "a prediction"]);
   });
 
+  it("counts two events that share an order, which nothing else can see", () => {
+    /* A model that numbers every event 1 has stopped doing the judgement the
+       whole sort rests on, and the panel would then quietly show the order the
+       events happened to arrive in. `countOrderConflicts` is structurally blind
+       to it: a tie proves nothing, so it never fires. GPT Sol, 2026-08-31. */
+    const dropped = emptyDropped();
+    build(
+      [
+        raw({ label: "one", order: 1, phrase: null }),
+        raw({ label: "two", order: 1, phrase: null }),
+        raw({ label: "three", order: 1, phrase: null }),
+      ],
+      dropped,
+    );
+    expect(dropped.duplicateOrders).toBe(2);
+    expect(dropped.orderConflicts).toBe(0);
+  });
+
+  it("does not read two unnumbered events as sharing an order", () => {
+    const dropped = emptyDropped();
+    build([raw({ order: null, phrase: null }), raw({ order: null, phrase: null })], dropped);
+    expect(dropped.unordered).toBe(2);
+    expect(dropped.duplicateOrders).toBe(0);
+  });
+
   it("counts an order conflict the article's own dates prove", () => {
     const dropped = emptyDropped();
     const timeline = build(
@@ -486,6 +613,32 @@ describe("the artefact", () => {
   });
 });
 
+describe("the answer's shape is read before anything in it", () => {
+  for (const [name, answer] of [
+    ["an object where the array should be", { events: {} }],
+    ["an explicit null", { events: null }],
+    ["no events key at all", {}],
+  ] as const) {
+    it(`throws on ${name} rather than writing an empty timeline`, () => {
+      /* All three used to come back as `[]` and be written as a perfectly
+         ordinary "this article has no chronology", with every counter at zero.
+         The empty case being legitimate here is what hid it — this is the only
+         stage where zero events is a real answer, so it is the only stage where
+         a failed answer can wear the empty one's clothes. */
+      expect(() =>
+        buildTimeline(answer, {
+          slug: "test",
+          blocks: BLOCKS,
+          sourceHash: "h",
+          frame: FRAME,
+          elapsedMs: 1,
+          dropped: emptyDropped(),
+        }),
+      ).toThrow(/no `events` array/);
+    });
+  }
+});
+
 describe("the prompt", () => {
   it("names the publication date as the reference frame when there is one", () => {
     expect(renderPrompt({ tree: tree(), frame: FRAME })).toContain(FRAME);
@@ -499,7 +652,13 @@ describe("the prompt", () => {
     expect(prompt).not.toContain("undefined");
   });
 
-  it("shows the shape of the argument before anything else", () => {
-    expect(renderPrompt({ tree: tree(), frame: FRAME })).toContain("All of it");
+  it("puts the reference frame ahead of the article's shape", () => {
+    /* Ordering, not presence: `toContain` on each would stay green whatever
+       order they came in, and the frame is the thing the model has to read
+       before it judges anything else. (The article itself is ahead of both, in
+       the system block — see `generateTimeline`.) */
+    const prompt = renderPrompt({ tree: tree(), frame: FRAME });
+    expect(prompt.indexOf(FRAME)).toBeGreaterThan(-1);
+    expect(prompt.indexOf(FRAME)).toBeLessThan(prompt.indexOf("All of it"));
   });
 });

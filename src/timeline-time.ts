@@ -765,9 +765,15 @@ const MODALITY_RANK: Record<TimelineModality, number> = {
  * An unusable `order` sorts last within its partition rather than first. A row
  * the model could not place has no claim on the top of the list, and index
  * breaks the tie so the result is still deterministic.
+ *
+ * **`null` is in the type because it is what reaches disk.** The stage stores
+ * `null` for an event the model did not number — `NaN` would be the obvious
+ * in-memory choice and `JSON.stringify` writes it as `null` anyway, so a field
+ * typed `number` would have been a lie the moment the artefact was read back.
+ * GPT Sol found it in the artefact rather than in the code, 2026-08-31.
  */
-function orderKey(order: number): number {
-  return Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
+function orderKey(order: number | null): number {
+  return typeof order === "number" && Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER;
 }
 
 /**
@@ -780,7 +786,7 @@ function orderKey(order: number): number {
  * still compared, by `countOrderConflicts`, as a check on the model rather than
  * as a sort key.
  */
-export function orderEvents<T extends { order: number; modality: TimelineModality }>(
+export function orderEvents<T extends { order: number | null; modality: TimelineModality }>(
   events: readonly T[],
 ): T[] {
   return events
@@ -815,7 +821,7 @@ export function orderEvents<T extends { order: number; modality: TimelineModalit
  * prove nothing and are not counted.
  */
 export function countOrderConflicts<
-  T extends { order: number; modality: TimelineModality; when: When | null },
+  T extends { order: number | null; modality: TimelineModality; when: When | null },
 >(events: readonly T[]): number {
   let conflicts = 0;
   for (let i = 0; i < events.length; i++) {
