@@ -5,7 +5,7 @@ behind it, so the next agent does not redo the survey.
 
 This doc is about **which machine**. How you reach it from iTerm and keep sessions alive across a
 sleeping laptop is [260831c-remote-server-tmux-mosh.md](260831c-remote-server-tmux-mosh.md); driving a browser once
-you are on it is [260831b-playwright-browser-control.md](260831b-playwright-browser-control.md).
+you are on it is [playwright-browser-control.md](../reusable/playwright-browser-control.md).
 
 The ask, from Greg (2026-08-30):
 

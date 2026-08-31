@@ -3,16 +3,17 @@
 A cheatsheet for **controlling a real browser from a script** — open a page, click things, read
 state back — aimed at an agent that cannot see the screen and has to work from artefacts.
 
-**Playwright is not installed in this repo**, and nothing here is a description of our setup. Browser
-work here goes through the Chrome extension —
-[browser-testing.md](../project/browser-testing.md) is the doc that matters for that, and
-[claude-in-chrome.md](../project/claude-in-chrome.md) is where to start when the extension is not
-connected. This file exists so that the day someone wants scripted, repeatable browser control, the
-research is already done and the traps are already written down.
+**Playwright is not installed in this repo, and on the laptop you do not want it** — browser work
+there goes through the Chrome extension. Which mechanism belongs on which machine is one page:
+[browser-control.md](../project/browser-control.md). Read that first if you are not already sure
+you want this one.
 
-That day is closest on the **remote box**, where the Chrome extension cannot follow —
-[260831a-remote-server-for-claude-code.md](260831a-remote-server-for-claude-code.md) is which machine, and
-[260831c-remote-server-tmux-mosh.md](260831c-remote-server-tmux-mosh.md) is how you reach it.
+**On the remote box this is the live mechanism**, not a someday — the Chrome extension cannot follow
+you there, so scripts and the Playwright MCP are all there is.
+[`scripts/remote-smoke-browser.mjs`](../../scripts/remote-smoke-browser.mjs) is the working example,
+run on every `gjd-remote doctor`.
+[260831a-remote-server-for-claude-code.md](../research/260831a-remote-server-for-claude-code.md) is which machine, and
+[260831c-remote-server-tmux-mosh.md](../research/260831c-remote-server-tmux-mosh.md) is how you reach it.
 
 Researched 2026-08-31 against `playwright@1.62.1` and `@playwright/mcp@0.0.79`, from
 [playwright.dev](https://playwright.dev) plus issue trackers. Claims are marked where the source is a
@@ -372,7 +373,7 @@ client JS has hydrated and bound its handlers. A click immediately afterwards pa
 actionability check — the element is there, visible, stable, enabled — and does nothing, because
 nothing is listening yet. Or the input is filled and then wiped by the hydration pass.
 
-This is a [silent success](../reusable/silent-success.md): the action reports that it worked, and it
+This is a [silent success](silent-success.md): the action reports that it worked, and it
 did press the right pixel. Wait for a signal the app itself sets — an element that only exists once
 interactive, a response, a data attribute — not for `goto` and not for a sleep. [community]
 

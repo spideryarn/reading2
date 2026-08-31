@@ -65,6 +65,9 @@ you read those two *before* you measure something, not after.
   settings.
 - **[static-analysis.md](static-analysis.md)** — Knip, cycles, complexity, dupes; the gate/advisory
   split; and the tools that look perfect for this repo and are quietly wrong about it.
+- **[browser-control.md](browser-control.md)** — two ways to drive a browser, and the machine you
+  are on decides which. The extension on the laptop; Playwright on the remote box, where it cannot
+  follow. Open this before either of the two below.
 - **[browser-testing.md](browser-testing.md)** — driving the reading view in a real browser, and the
   ways it lies to you: colour in a screenshot, a hidden tab that fires no scroll events, hovering by
   pixel rather than by element. Open this before any UI check.

@@ -59,7 +59,8 @@ listed here; the names under each are files in `docs/project/`.
 - **[code-quality-overview.md](docs/project/code-quality-overview.md)** — the commands that tell you
   whether what you just did works, and which of them are gates.
   <br>↳ `testing.md` · `typechecking.md` · `linting.md` · `static-analysis.md` (`npm run check`) ·
-  `browser-testing.md` · `claude-in-chrome.md` (nothing connected? start here) · `performance.md` ·
+  `browser-control.md` (laptop or remote box? start here) · `browser-testing.md` ·
+  `claude-in-chrome.md` (nothing connected?) · `performance.md` ·
   `counting-lines.md` (how big the repo is)
 - **[dev-and-deployment-overview.md](docs/project/dev-and-deployment-overview.md)** — running it on
   your laptop, the command for each pipeline stage, and shipping it to Vercel.

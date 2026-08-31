@@ -4,7 +4,7 @@ How to **connect from iTerm to the always-on server** and find your Claude Code 
 running. The server itself — which machine, what it costs, how it is provisioned — is
 [260831a-remote-server-for-claude-code.md](260831a-remote-server-for-claude-code.md) and
 [`infra/hetzner/`](../../infra/hetzner/README.md). Browser work on the box, once you are in, is
-[260831b-playwright-browser-control.md](260831b-playwright-browser-control.md), because Claude in Chrome cannot
+[playwright-browser-control.md](../reusable/playwright-browser-control.md), because Claude in Chrome cannot
 follow us to a headless machine.
 
 The ask, from Greg (2026-08-31):
