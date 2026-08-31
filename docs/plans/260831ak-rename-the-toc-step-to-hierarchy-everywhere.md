@@ -214,7 +214,15 @@ path embeds the step name — `steps/<step>.running`
 ([`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts):431), read at :637. **There are two
 `toc.running` markers locally**, both on articles that have all three outputs. After the rename
 `interrupted("hierarchy")` sees no marker, `stepIsDone` sees every output, and — because this step
-deliberately has no freshness stamp — **returns true for work explicitly marked interrupted**. Rename
+deliberately has no freshness stamp — **returns true for work explicitly marked interrupted**.
+
+**And the ordering is what makes it silent rather than loud**, spotted independently by the session
+holding the bottom bar: `store.interrupted(...)` is the **first** line of `stepIsDone`
+([`src/pipeline.ts`](../../src/pipeline.ts):840), before `has`, before the stamp. It is the guard that
+runs first — so renaming the step does not break it, it makes it **stop guarding while still
+returning an answer**. Nothing fails; a step marked interrupted is simply reported done and skipped.
+That is the shape to look for in the rest of stage C, and the reason the whole stage is a rollout
+design rather than a rename. Rename
 the markers or accept both names for a while. (Artefacts themselves are safe: the `toc` map key points
 at stable `tree.json`/`labels.json`/`blocks.json` paths, so renaming the key orphans nothing.)
 
