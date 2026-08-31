@@ -618,10 +618,13 @@ Written down now so the review can add to them and the build can be checked agai
 5. **The year-inference boundary.** A piece published on 3 January mentioning "December" means the
    December two years back is wrong and last December is right; the rule is written down above and
    will be got wrong by anyone implementing it from intuition.
-6. **Ids must survive a re-run**, like every other artefact here, or a reader's link to an event dies
-   on the next re-extraction. Inherit by label match the way `ideas` does, and know that the promise
-   is weaker than the glossary's because a label can be rewritten.
-7. **The legend is a picture made of characters.** Six glyphs at small sizes in a proportional font,
+6. **Ids must survive a re-run**, or a reader's link to an event dies on the next re-extraction —
+   and **inheriting by label, which is what `ideas` does, will not work here.** Measured: the spike
+   reran the same prompt on the same article and the labels paraphrased every time ("Message volume
+   crashes package manager" became "Agents crash the package manager"). Sol reached the same
+   conclusion from the other direction. Inherit on the **cited block set plus the date** — the two
+   things that were actually validated — and mint a new id where that is ambiguous.
+7. **The legend is a picture made of characters.** Five marks at small sizes in a proportional font,
    in both themes, is a rendering problem and not a design one. It gets looked at in a browser, not
    asserted in a test.
 8. **The empty state is the common case** and will be the least-tested path.
@@ -969,6 +972,32 @@ Much better than this plan assumed. Two runs, same prompt, same article.
 So the two failures this plan was most shaped against — flattened bounds and invented block ids —
 barely happened, and the arithmetic ban held perfectly. The design's caution was aimed at the wrong
 places.
+
+### Two runs, and what moved between them
+
+The rest of the spike's numbers, because "it worked" is not a measurement.
+
+Of 21 events matched across both runs: `extent` flipped **0/21**, block ids **0/21**, bounds
+**1/21**, `basis` **12/21**. Event count was 25 then 23 — the four that vanished were all *undated
+connective steps*, which run 2 folded into their neighbours.
+
+**Labels paraphrased freely on every run.** That is the finding with a consequence: id inheritance by
+label, which is how `ideas` does it, cannot work here. Inherit on the cited block set plus the date.
+
+**One order-vs-dates conflict, and the model was right.** "By July 13, Hugging Face locked down the
+credentials" against "After July 12, more evaluations were kicked off" — an upper bound against a
+lower bound, which prove nothing about each other. So `countOrderConflicts` must only fire where the
+intervals *prove* an order and never where either side is open. It is also the case that stops the
+counter being vacuous: on this article the right answer is zero.
+
+**One pass, not two.** Every field except `basis` was stable and correct in the same call, and the
+one bad field would have been just as unstable alone — so a verifier pass costs $0.15 and buys
+nothing. Size the answer budget at 20k tokens; the runs produced 12k and 19.6k.
+
+**Known limitation, accepted:** with no granularity field, "During May" and a span stated as 1–31 May
+are indistinguishable in the artefact. Both are `2026-05-01 .. 2026-05-31, extended`, which is what
+they mean; what is lost is only that the article said it one way rather than the other, and `phrase`
+still carries the article's actual words.
 
 ### `basis` is a coin toss, and that is the field to cut
 
