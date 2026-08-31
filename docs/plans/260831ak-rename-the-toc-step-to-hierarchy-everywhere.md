@@ -259,6 +259,29 @@ as a historical protocol identifier, or migrate it — but say which.**
 **What Sol cleared:** no other `toc` enum, generated column, trigger, view, partial index or seeded row
 exists, and the primary key containing `step_name` updates automatically.
 
+### The marker that turns a rename into a skipped step — read this before the inventory
+
+Ninth of nine persisted homes below is `steps/toc.running`, and burying it there
+under-billed it. The database agent's framing is better and is adopted here:
+
+> An unrenamed marker making `stepIsDone` report an interrupted step as done, and skip it, is not a
+> rename bug — it's the same class as tonight's `db:migrate`: **a step that never ran, reported as
+> complete, with nothing saying so.**
+
+The mechanism, verified: the marker's path embeds the step name
+([`src/store/artifacts-fs.ts`](../../src/store/artifacts-fs.ts):431), and
+`store.interrupted(...)` is the **opening line** of `stepIsDone`
+([`src/pipeline.ts`](../../src/pipeline.ts):840) — before `has`, before the stamp. Rename the step and
+that first guard stops finding anything. It does not fail; it returns "not interrupted" and falls
+through to `has`, which sees all three outputs, and then to a step that **deliberately has no
+freshness stamp** — so the answer is *done*. **Two such markers exist on this laptop right now**, both
+on articles with complete outputs.
+
+So the rename does not break the guard. It makes the guard keep answering while no longer asking the
+question, which is the failure this repo has met three times in one day. **Rename the markers in the
+same change, or accept both names for a while — and prove it with a marker present, not with a clean
+tree, because a clean tree passes either way.**
+
 ### The complete inventory of `"toc"` as a persisted value
 
 Assembled from three independent sweeps — GPT Sol's review, the database agent probing the live
