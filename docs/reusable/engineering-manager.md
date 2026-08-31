@@ -71,6 +71,18 @@ evidence. Send one to run the thing, read the logs, or reproduce it.
 handing it to a different model — not doing its work yourself. Several failures in a row is the
 environment being broken; stop and ask rather than taking the whole job back.
 
+## What the work turns up
+
+A cleanup the change exposed, a bug you tripped over, an abstraction in the way, two paths that
+should be one — **default to doing them now**, folded into a stage or added as one. The machinery is
+already open, and rediscovering it later costs more. Dropping something non-trivial wants a reason
+from someone other than you — a reviewer who says it isn't worth it.
+
+The test is whether it leaves the codebase long-term-best — straightforward, and easy to change
+later — which is usually *fewer* moving parts, not more. Anything that adds machinery is a proposal
+for the plan rather than something to slip in, and the licence is for the engineering, not the
+product: features still take the simplest version first.
+
 ## Along the way
 
 - **Docs.** Update them in the same stage as the change, and write a doc where one is missing.
