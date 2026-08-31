@@ -114,10 +114,20 @@ function articleDirs(entries: Awaited<ReturnType<typeof corpusRoot>>): string[] 
  * `test-` fixtures. Each of those reads exactly like a clean run.
  *
  * `writes` is the named must-have because it is already this repo's ground
- * truth for "a healthy fixture set": `scripts/deploy-checks.ts` hardcodes
- * `data/writes/*` as the deploy gate's sentinels and
+ * truth for "a healthy fixture set": `GATE_FIXTURES` in
+ * `scripts/deploy-checks.ts` names it as the deploy gate's sentinel slug, and
  * `tests/artefact-copy.test.ts` hardcodes it as `SLUG`. It is sixteen files and
  * 148 KB — the most artefact names in one directory anywhere.
+ *
+ * **The gate names a different copy of it, and that is worth knowing rather
+ * than smoothing over.** Since 2026-09-01 `GATE_FIXTURES` names
+ * `tests/fixtures/data-root/data/writes/…`, the tracked corpus, while this scan
+ * reads `data/` — the working store, gitignored, whatever the machine happens to
+ * hold. The slug is the same and the requirement is the same; the two paths are
+ * not, and until the corpus seam lands for tests as well as for the gate, a
+ * green here says nothing about the tracked copy being present. That is ranked
+ * silent failure 1 in docs/plans/260901b-committed-fixture-corpus.md — some
+ * readers on the tracked corpus, others still on laptop `data/`.
  */
 const FLOOR_SLUG = "writes";
 
@@ -309,9 +319,11 @@ describe("the artefact manifest", () => {
 
     expect(
       articles,
-      `${FLOOR_SLUG} is the sentinel scripts/deploy-checks.ts and tests/artefact-copy.test.ts ` +
-        `both hardcode, and the richest article in the corpus. Without it this scan can be ` +
-        `green over a corpus too thin to catch anything.`,
+      `${FLOOR_SLUG} is the sentinel slug GATE_FIXTURES in scripts/deploy-checks.ts and ` +
+        `tests/artefact-copy.test.ts both name, and the richest article in the corpus. ` +
+        `Without it this scan can be green over a corpus too thin to catch anything. ` +
+        `(The gate names the tracked copy under tests/fixtures/data-root/; this scan reads ` +
+        `data/ — see FLOOR_SLUG above.)`,
     ).toContain(FLOOR_SLUG);
 
     const missing = FLOOR_FILES.filter((file) => !seen.has(file));
