@@ -42,14 +42,30 @@ screenshots are large and the reasoning is small.
 Two things about that box will catch you out:
 
 - **There is one browser on that box, and it is system Chrome.** Both MCPs launch
-  `/opt/google/chrome/chrome`, and the smoke test names it in `executablePath`. Set it yourself in
-  any script you write. A bare `chromium.launch()` asks for Playwright's *bundled* chromium at
-  whatever revision your client version wants, and dies with "Executable doesn't exist" — measured
-  on 2026-08-31, when `~/.cache/ms-playwright` held revision 1234 and the MCP's client wanted 1237.
+  `/opt/google/chrome/chrome` — the Playwright one is given `--browser chrome` explicitly — and the
+  smoke test names it in `executablePath`. Set it yourself in any script you write. A bare
+  `chromium.launch()` asks for Playwright's *bundled* chromium, which provisioning no longer
+  downloads, and dies with "Executable doesn't exist". The old 651MB is still in
+  `~/.cache/ms-playwright` on the live box and **a rebuild will not clear it** — that path is under
+  `/home`, which is the persistent volume — so it sits there until someone deletes it. If you do
+  need Playwright's own browser, install it **version-matched** to the client you are about to run
+  (`npx playwright@1.62.1 install chromium`); a bare `npx playwright install` fetches `@latest` and
+  reproduces the revision mismatch.
 - **`playwright-core` is a pinned devDependency of this repo**, so a checkout that has run `npm ci`
   has the version our lockfile names. On a box with no checkout the smoke test falls back to
   borrowing a copy from the npx cache, at whatever version the MCPs bundled; it prints which root it
   used, so a run on the fallback tells you so. See `PLAYWRIGHT_ROOTS` in the script.
+
+### The known hole, on the box
+
+**Nothing yet drives the MCPs as a check.** `gjd-remote doctor` imports `playwright-core` and
+launches Chrome itself, so it proves *ad-hoc* Playwright works and says nothing about the two MCP
+servers — which is what an agent there actually reaches for. Provisioning only asserts that the
+registration text is right, which passes even if the package cannot install or the server starts and
+crashes. `claude mcp list` saying **✔ Connected** is the MCP handshake, not a browser: on 2026-08-31
+both said Connected while one of them was, on the evidence available at the time, expected to be
+unable to launch. Driving them over stdio is the check that would close it. Until it exists, if you
+depend on an MCP there, open one page with it before you trust it.
 
 ## The trap both halves share
 

@@ -325,6 +325,14 @@ const context = await browser.newContext({
 **Both video and HAR are written on `context.close()`, not before.** Kill the process and you get
 nothing at all.
 
+**`recordVideo` will not work on the Spideryarn remote box**, and that is a deliberate trade. Video
+encoding needs Playwright's *own* bundled ffmpeg, which arrives with `playwright install` — a step
+that box dropped on 2026-08-31 along with the 651MB chromium nothing was launching
+([browser-control.md](../project/browser-control.md)). Driving system Chrome does not bring an
+ffmpeg with it. Screenshots, tracing and HAR are all unaffected; only video needs the binary. If you
+need it there, install it version-matched to your client. Caught by GPT Sol reviewing that removal:
+the measurement proved the *browser* was unused and said nothing about the other files beside it.
+
 ### The debug tools that need a human
 
 `PWDEBUG=1`, `--debug`, `page.pause()`, `npx playwright codegen`, `--ui` mode, the VS Code extension

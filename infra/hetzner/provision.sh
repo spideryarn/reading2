@@ -199,10 +199,13 @@ run 180 "apt update" bash -c 'apt-get -o DPkg::Lock::Timeout=600 --error-on=any 
 run 300 "install chrome" bash -c 'apt-get -o DPkg::Lock::Timeout=600 -y install google-chrome-stable'
 
 echo "=== playwright ==="
-# The SHARED LIBRARIES headless Chrome needs, and nothing else. There is one
-# browser on this box and it is the google-chrome-stable installed above:
-# @playwright/mcp is given --browser chrome below, chrome-devtools-mcp wants
-# real Chrome by design, and scripts/remote-smoke-browser.mjs names
+# The SYSTEM PACKAGES a browser needs -- shared libraries, and also Playwright's
+# `tools` group, which is fonts and Xvfb. Not "libraries and nothing else": that
+# wording was wrong, and Xvfb in particular is what start-vnc depends on.
+#
+# There is one browser on this box and it is the google-chrome-stable installed
+# above: @playwright/mcp is given --browser chrome below, chrome-devtools-mcp
+# wants real Chrome by design, and scripts/remote-smoke-browser.mjs names
 # /usr/bin/google-chrome-stable in executablePath.
 #
 # `playwright install chromium` used to run here and was removed on 2026-08-31.
@@ -217,9 +220,39 @@ echo "=== playwright ==="
 # "expected executable at /tmp/pw-empty/chromium-1237/...", which is what proves
 # the empty cache was genuinely in effect rather than the variable ignored.
 #
-# If you ever do need Playwright's own chromium here, `npx playwright install
-# chromium` fetches it on demand; it does not need to be a provisioning step.
+# If you ever do need Playwright's own chromium here, fetch it on demand with
+# the VERSION-MATCHED CLI -- `npx playwright@1.62.1 install chromium`, matching
+# whatever client you are about to run. A bare `npx playwright install` pulls
+# @latest and downloads the revision *that* wants, which is how the 1234/1237
+# mismatch above happened in the first place.
 run 420 "playwright system deps" npx --yes playwright@latest install-deps chromium
+
+# A pinned playwright-core FOR THE AGENT USER, with no browsers attached.
+#
+# Removing `install chromium` above took something with it that was never its
+# job: that command ran as $USER_NAME, so it incidentally left a playwright-core
+# in ~/.npm/_npx, and scripts/remote-smoke-browser.mjs had been borrowing it.
+# `install-deps` runs as root, so it seeds root's cache and not the user's, and
+# `claude mcp add` only records a command -- it installs nothing. On a genuinely
+# clean /home with no checkout yet, the smoke test would therefore have failed
+# at playwright-resolve. A rebuild would NOT have shown this, because /home is
+# the volume and both caches survive it; only a new volume would. Found by GPT
+# Sol reviewing the removal, not by any check we run.
+#
+# Global, so it does not depend on a repo being cloned. THIS LINE is the fix,
+# not the /usr/lib entry added to the smoke test's search list beside it: with
+# this package removed and HOME pointed at an empty directory, the smoke test
+# fails at playwright-resolve with or without that entry, and passes with or
+# without it once this is installed. Node finds a global package on its own.
+#
+# playwright-core, not playwright: the client only, no browser download, which
+# is the whole point on a box that drives system Chrome.
+#
+# Pinned, and it should match the playwright-core in this repo's package.json --
+# they are separate copies for separate consumers (this one so the BOX can be
+# checked with no checkout; that one so REPO scripts resolve), and letting them
+# drift means the smoke test stops testing the version repo scripts get.
+run 300 "playwright-core (client only, no browsers)" npm install -g playwright-core@1.62.1
 
 echo "=== docker ==="
 # Docker's OWN apt repo, deliberately:
@@ -336,6 +369,25 @@ TMUX
   chown "$USER_NAME":"$USER_NAME" /home/"$USER_NAME"/.tmux.conf
 fi
 
+# escape-time is APPENDED separately, not folded into the block above, because
+# that block only runs when there is no config at all -- and on any box that has
+# ever been provisioned there already is one, so a line added up there would
+# never reach the machine that needs it. Same reasoning as the jq merge for
+# settings.json below: on a rebuild the volume carries the old file back.
+#
+# tmux waits escape-time milliseconds after a bare Escape to see whether more
+# bytes follow, because Alt+key arrives as ESC+key. Ubuntu 24.04 ships tmux 3.4,
+# whose default is 500ms; tmux 3.5 cut it to 10ms for exactly this reason.
+# Claude Code uses Escape constantly -- interrupt, clear the box, leave a mode --
+# so 500ms is half a second of dead air on the key you press most.
+#
+# 10 rather than 0: at 0 tmux cannot separate Alt+key from Escape-then-key at
+# all, which breaks Meta bindings. 10ms is the smallest value that still can.
+if ! grep -q '^set -sg escape-time' /home/"$USER_NAME"/.tmux.conf; then
+  printf 'set -sg escape-time 10\n' >> /home/"$USER_NAME"/.tmux.conf
+  chown "$USER_NAME":"$USER_NAME" /home/"$USER_NAME"/.tmux.conf
+fi
+
 echo "=== claude settings ==="
 # One line per mouse-wheel notch, instead of the three Claude Code picks by
 # default on this terminal stack. Three overshoots badly when you are scrolling
@@ -406,7 +458,11 @@ add_mcp() {
 # It is the current default too, but a default is not a decision -- leaving it
 # implicit means a future pin of @playwright/mcp could move it and take the
 # browser away with no line of ours changing.
-add_mcp playwright "npx -y @playwright/mcp@$PW_MCP --headless --isolated --browser chrome"
+# --executable-path as well as --browser: the channel flag still asks Playwright's
+# channel registry to go and FIND Chrome, and naming the binary removes that
+# lookup. Both together were measured working on 0.0.79, with
+# PLAYWRIGHT_BROWSERS_PATH pointed at an empty directory.
+add_mcp playwright "npx -y @playwright/mcp@$PW_MCP --headless --isolated --browser chrome --executable-path /usr/bin/google-chrome-stable"
 add_mcp chrome-devtools "npx -y chrome-devtools-mcp@$CDT_MCP --headless"
 
 echo "=== ssh ==="
@@ -491,10 +547,18 @@ check "chrome runs"              'timeout 30 su - '"$USER_NAME"' -c "google-chro
 # the strong half only ran once the weak one had already failed. And the strong
 # half looked for a chromium download this box no longer has.
 #
-# What matters now is that the MCP is pointed at the system Chrome that check
-# above just proved runs. This asserts CONFIGURATION; capability is asserted by
-# scripts/remote-smoke-browser.mjs, which `gjd-remote doctor` runs on the box and
-# which drives a real browser. Two different questions, deliberately.
+# What matters now is that the MCP is REGISTERED pointing at system Chrome. Read
+# it narrowly: it proves Claude stored that text, and nothing more. It passes if
+# the package cannot install, if this pinned version rejects the option, or if
+# the server starts and crashes.
+#
+# Nothing here or in `gjd-remote doctor` yet drives the MCP itself.
+# scripts/remote-smoke-browser.mjs imports playwright-core and supplies
+# executablePath directly, so it asserts AD-HOC Playwright capability and says
+# nothing about the MCPs -- an earlier version of this comment claimed
+# otherwise, and GPT Sol was right that it overclaimed. Closing that gap wants
+# an MCP-over-stdio navigation check; docs/project/browser-control.md records it
+# as the known hole.
 check "playwright mcp uses system chrome" 'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q -- "--browser chrome"'
 check "playwright mcp"           'timeout 30 su - '"$USER_NAME"' -c "claude mcp get playwright" | grep -q max-old-space-size'
 check "devtools mcp"             'timeout 30 su - '"$USER_NAME"' -c "claude mcp get chrome-devtools" | grep -q max-old-space-size'

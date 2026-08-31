@@ -62,10 +62,18 @@ const PLAYWRIGHT_ROOTS = () => {
   const home = homedir();
   const roots = [];
   if (process.env.GJD_SMOKE_PLAYWRIGHT) roots.push(process.env.GJD_SMOKE_PLAYWRIGHT);
-  // /usr/lib resolves /usr/lib/node_modules/playwright-core, the pinned global
-  // that provision.sh installs. It is the floor: it works on a box with no
-  // checkout, which the repo root cannot. The checkout still wins when present,
-  // because that is the copy repo scripts themselves get.
+  // /usr/lib finds /usr/lib/node_modules/playwright-core, the pinned global that
+  // provision.sh installs, and that global is the floor: it is what makes this
+  // work on a box with no checkout. Measured, with the global removed and HOME
+  // pointed at an empty directory, this script fails at playwright-resolve.
+  //
+  // The entry is belt-and-braces rather than the mechanism. Node's own global
+  // resolution finds a globally-installed package anyway -- the version of this
+  // list WITHOUT /usr/lib resolved it too, in the same test. It is here so the
+  // lookup is explicit and the printed path is deterministic, instead of resting
+  // on a legacy fallback nothing here would notice losing.
+  //
+  // The checkout still wins when present: that is the copy repo scripts get.
   roots.push(path.join(home, "code/spideryarn2"), process.cwd(), "/usr/lib");
   const npx = path.join(home, ".npm/_npx");
   try {

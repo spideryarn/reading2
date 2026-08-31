@@ -68,6 +68,22 @@ build number and fails with "Executable doesn't exist" until `npx playwright ins
 run. Either run that per-project, or launch with `executablePath: "/usr/bin/google-chrome-stable"`
 as the smoke test does.
 
+> **Correction, 2026-08-31 (same day, later).** The attribution above is wrong, and the conclusion
+> it led to was the opposite of the truth. `chromium-1234` was **not** downloaded by
+> `@playwright/mcp` — it was downloaded by this file's own provisioning step,
+> `npx --yes playwright@latest install chromium`, and 1234 is the revision `playwright@1.62.1`
+> wants. The MCP bundles `playwright-core@1.63.0-alpha`, which wants **1237**, and that revision was
+> never on the box at all.
+>
+> Which raised the obvious question of how the MCP worked, and the answer is that it never used
+> either: reading `/proc/<pid>/exe` during a live MCP navigation showed `/opt/google/chrome/chrome`.
+> Both MCPs default to the system Chrome channel. So the 651MB the provisioning step downloaded was
+> launched by nothing, and its build number floated with the date of the provisioning run.
+>
+> The step has been removed and the MCP registration now says `--browser chrome` explicitly. The
+> advice in the paragraph above — pass `executablePath` — is still right, and is now the only thing
+> that works. [browser-control.md](../project/browser-control.md).
+
 ## What is genuinely at risk, given "no backups"
 
 Greg chose no backups because the code is all pushed to a remote. **That premise is not true today.**
