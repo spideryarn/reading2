@@ -386,6 +386,37 @@ function cmdNew(
 }
 
 /**
+ * A tmux session running a plain shell — no Claude Code.
+ *
+ * Distinct from `gjd-remote ssh` on purpose, and the difference is the whole
+ * point of the box: this one keeps running when you close the lid, and `resume`
+ * gets you back into it. `ssh` is a throwaway connection that dies with the
+ * terminal, which is what you want for a quick look and never for real work.
+ */
+function cmdShell(given: string | undefined, opts: { dir?: string | undefined; transport?: string | undefined }): void {
+  const name = given ?? `sh-${new Date().toISOString().slice(5, 16).replace(/[-T:]/g, "").replace(/(\d{4})(\d{4})/, "$1-$2")}`;
+  if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
+
+  const live = sessions();
+  if (live.some((x) => x.name === name)) {
+    console.log(dim(`'${name}' already exists — attaching`));
+    attach(name, opts.transport);
+  }
+
+  const dir = opts.dir ?? `/home/${USER}`;
+  if (/[\r\n]/.test(dir)) die("--dir may not contain newlines");
+  if (spawnSync("ssh", [...SSH_OPTS, HOST(), `test -d ${shq(dir)}`]).status !== 0) {
+    die(`no such directory on the box: ${dir}`);
+  }
+
+  // GJD_PROVISIONAL=0: a shell has no Claude conversation and so will never
+  // have a title to adopt. Marking it settled stops `ls` looking every time.
+  ssh(`tmux new-session -d -s ${name} -c ${shq(dir)} -e GJD_PROVISIONAL=0`);
+  console.log(green(`✓ shell '${name}'`));
+  attach(name, opts.transport);
+}
+
+/**
  * Everything that can be checked from here, in one command — because Claude
  * Code's own shell cannot reach port 22, so an agent cannot run any of this
  * itself. Run `gjd-remote doctor` and paste the output.
@@ -456,27 +487,51 @@ function cmdDoctor(): void {
 
 // ---------------------------------------------------------------- main
 
-const HELP = `${bold("gjd-remote")} — Claude Code sessions on the Hetzner server
+const HELP = `${bold("gjd-remote")} — Claude Code sessions on a server that never sleeps
 
-  gjd-remote                      list sessions
-  gjd-remote new [name]           start a session, and attach to it
-                                  without a name, it takes Claude's own title
-       -p, --prompt TEXT          give Claude a first prompt
-       -d, --dir DIR              working directory on the box
-           --no-attach            create it but stay here
-  gjd-remote resume [name]        reattach; no name means the newest
-       --ssh                      skip mosh (satellite, or any UDP-hostile net)
-  gjd-remote kill <name>          end a session
-  gjd-remote doctor               check the box and print what is wrong
-  gjd-remote forget-key           after a rebuild: accept the new host key
-  gjd-remote ssh                  a plain shell, no tmux
-  gjd-remote tunnel               forward noVNC to http://localhost:6080/vnc.html
+${bold("SESSIONS")}
+  ls, (no args)           list sessions, each with Claude's own title for it
+  new [name]              start Claude Code and attach
+      -p, --prompt TEXT     give it a first prompt
+      -d, --dir DIR         working directory on the box
+          --no-attach       create it, but stay here
+  shell [name]            a persistent shell, no Claude Code
+      -d, --dir DIR         working directory on the box
+  resume [name]           reattach; with no name, the most recent session
+  kill <name>             end a session
 
-Sessions survive your laptop sleeping, losing wifi, or rebooting — tmux keeps
-them, and mosh reconnects. They do not survive the server rebooting.
+${bold("THE BOX")}
+  doctor                  check everything, and say what is wrong
+  ssh                     a throwaway connection — no tmux, dies with the terminal
+  tunnel                  forward noVNC to http://localhost:6080/vnc.html
+  forget-key              after a rebuild: accept the machine's new host key
 
-The address is read from Terraform state, so it is never stale. Override with
-GJD_REMOTE_HOST=<ip>. Force the transport with GJD_REMOTE_TRANSPORT=ssh|mosh.`;
+${bold("ANYWHERE")}
+  --ssh                   skip mosh, for satellite or UDP-blocked networks
+
+${bold("WHAT SURVIVES WHAT")}
+  laptop sleeps, roams, loses wifi     mosh reconnects; do nothing
+  laptop reboots, terminal dies        tmux kept it — ${dim("gjd-remote resume")}
+  the server reboots                   nothing does; ${dim("claude --resume")} by hand
+
+${bold("EXAMPLES")}
+  gjd-remote new -p "fix the ToC ordering bug"
+      starts a session, and names it after whatever Claude decides the work is
+  gjd-remote new -d /home/greg/spideryarn2
+      an unnamed session in a repo; it takes a name once Claude has a title
+  gjd-remote shell
+      a plain shell that is still running tomorrow
+  gjd-remote resume --ssh
+      back into the most recent session, without trying mosh first
+
+${bold("ENVIRONMENT")}
+  GJD_REMOTE_HOST         override the address (default: read from Terraform state,
+                          so it is never stale after a rebuild)
+  GJD_REMOTE_TRANSPORT    ssh | mosh | auto (default: auto, which probes mosh once)
+
+Names are optional everywhere. An unnamed session starts under a placeholder and
+adopts Claude Code's own title for the work at the next ${dim("gjd-remote ls")}. A name you
+choose is never changed for you.`;
 
 function main(): void {
   const [cmd, ...rest] = process.argv.slice(2);
@@ -530,6 +585,18 @@ function main(): void {
       return;
     }
 
+    case "shell": {
+      const { values, positionals } = parseArgs({
+        args: rest,
+        allowPositionals: true,
+        options: { dir: { type: "string", short: "d" }, ssh: { type: "boolean", default: false } },
+      });
+      return cmdShell(positionals[0], {
+        dir: values.dir,
+        transport: values.ssh ? "ssh" : undefined,
+      });
+    }
+
     case "doctor":
       return cmdDoctor();
 
@@ -558,10 +625,18 @@ function main(): void {
 
     case "-h":
     case "--help":
+    case "help":
       return console.log(HELP);
 
-    default:
-      die(`unknown command '${cmd}'\n\n${HELP}`);
+    default: {
+      const known = ["ls", "new", "shell", "resume", "kill", "doctor", "ssh", "tunnel", "forget-key"];
+      const near = known.filter((k) => k.startsWith(cmd.slice(0, 2)) || cmd.startsWith(k.slice(0, 2)));
+      die(
+        `unknown command '${cmd}'` +
+          (near.length ? `\n  did you mean: ${near.join(", ")}?` : "") +
+          `\n  gjd-remote --help  for the full list`,
+      );
+    }
   }
 }
 

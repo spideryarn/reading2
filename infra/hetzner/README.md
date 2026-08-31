@@ -237,11 +237,25 @@ interpolation inside the comment warning about unescaped interpolations, and `fi
 
 **Every session runs as one account with passwordless sudo, sharing one set of Claude credentials
 and one browser profile.** One prompt injection, one malicious repo script, or one bad `npx`
-release compromises the box and every session on it. The fixes are structural — a separate admin
-account, dropping unrestricted sudo after provisioning, running autonomous sessions inside the
-sandbox runtime — and they change how the box is used, so they are Greg's call rather than
-something to slip in. Anthropic's own guidance is that bypassing permissions offers no
-prompt-injection protection and belongs only in an isolated environment.
+release compromises the box and every session on it. Anthropic's own guidance is that bypassing
+permissions offers no prompt-injection protection and belongs only in an isolated environment.
+
+> It's fine for them to run as one account with passwordless sudo for now. … We can always
+> optimise/improve the setup later.
+>
+> — Greg, 2026-08-31
+
+**Decided, not overlooked.** The structural fixes — a separate admin account, dropping unrestricted
+sudo after provisioning, running autonomous sessions inside the sandbox runtime — change how the box
+is used, and are worth doing when the box is doing work worth protecting. The AppArmor profile below
+is the piece that has already been paid for, so that day costs less.
+
+**On the AppArmor profile**, since it looks like an unfinished job and is not one: it grants
+`bubblewrap` permission to create user namespaces, which Ubuntu 24.04's default policy denies. It
+isolates nothing by itself and is inert today. Its only purpose is that when we *do* run sessions
+inside Claude Code's sandbox runtime, that runtime starts instead of failing with no useful
+explanation — a silent failure we would otherwise have debugged from scratch on the day we could
+least afford it. It costs nothing to carry.
 
 Related: swap bounds nothing. It softens the OOM killer but N sessions x M MCP servers is still
 unbounded, and swap thrashing can make SSH unusable. Per-session memory and process limits are the
