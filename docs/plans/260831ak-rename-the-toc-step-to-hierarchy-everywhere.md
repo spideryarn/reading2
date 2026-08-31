@@ -194,7 +194,10 @@ expand/migrate/contract rollout that accepts both names for a while, which canno
 `e = '"toc"'::jsonb` and `steps @> '["toc"]'` are both false for every real row. **It would have run,
 reported success, and done nothing** — [silent-success.md](../reusable/silent-success.md) again, in the
 statement written to guard against exactly that. A correct rewrite reads `element->>'name'`, uses
-`jsonb_set`, and aggregates *with ordinality* to keep order. And `jobs.work_key` hashes the ordered
+`jsonb_set`, and aggregates *with ordinality* to keep order. **This finding has been written into
+[sql.md § Migrating data inside a JSONB column](../project/sql.md), with the working statement and the
+`@>` semantics spelled out**, because the next person writing a jsonb data migration in this repo will
+reach for exactly that operator and a plan doc is not where they will look. And `jobs.work_key` hashes the ordered
 step names ([`src/jobs.ts`](../../src/jobs.ts):1708) and is compared for dedup
 ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts):161), so rewriting a live job's steps without
 recomputing its work key makes one request look like two. Eight filesystem job files locally hold

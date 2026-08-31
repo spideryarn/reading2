@@ -72,6 +72,54 @@ blob, or a check on it, that sentence has stopped being true.
 `data/reader.json` and its neighbours are not counter-examples: the filesystem store is a JSON file
 by construction, and [architecture.md](architecture.md) is where that split lives.
 
+## Migrating data *inside* a JSONB column, and the operator that lies
+
+**`@>` asks about containment of a whole element, not of a value somewhere inside one.** This is the
+trap, and it is the shape of a statement that runs, reports success, and changes nothing.
+
+`jobs.steps` is a `JobStep[]` — its elements are **objects**, `{"name":"toc", …}`, not bare strings
+([`src/db/schema.ts`](../../src/db/schema.ts) § `jobs`). A migration written to rename a step reached
+for the obvious thing:
+
+```sql
+-- WRONG. Matches no row that has ever existed in this table.
+UPDATE jobs SET steps = … WHERE steps @> '["toc"]'::jsonb;
+```
+
+`'["toc"]'` asks *does this array contain the string `"toc"`*. It contains objects, so the answer is
+always no — the `UPDATE` succeeds, touches nothing, and the deploy carries on. Nobody finds out until
+a job fails a constraint days later. The version that works reads the field:
+
+```sql
+UPDATE jobs SET steps = (
+  SELECT jsonb_agg(CASE WHEN e->>'name' = 'toc'
+                        THEN jsonb_set(e, '{name}', '"hierarchy"')
+                        ELSE e END ORDER BY ord)
+  FROM jsonb_array_elements(steps) WITH ORDINALITY AS t(e, ord)
+) WHERE steps @> '[{"name":"toc"}]'::jsonb;
+```
+
+Three things to copy from it, not just the idea:
+
+- **`e->>'name'`**, because the value is inside the element.
+- **`WITH ORDINALITY` and `ORDER BY`**, because `jsonb_agg` over `jsonb_array_elements` does not
+  otherwise promise the original order back, and for `steps` the order *is* the meaning.
+- **A containment test that matches the real shape** — `'[{"name":"toc"}]'` — if you want one at all.
+
+**And check what else was derived from the blob.** `jobs.work_key` is
+[`workKeyFor`](../../src/jobs.ts)'s hash of the step names *and four other things*, and it is what
+active-job de-duplication compares. Rewriting the steps without recomputing the key makes one request
+look like two. Worse, that function's own comment says it must hash exactly what `sameWork` reads
+"or there are two rules for one question and they drift" — so a migration that edits the steps behind
+the key breaks an invariant a test is actively holding together. **A JSONB column with something
+downstream keyed off it is two things to migrate, and the second one has no constraint to catch you.**
+
+**Before you trust any of it: run the `SELECT` half first and count the rows.** A data migration that
+matched nothing looks exactly like one that worked —
+[silent-success.md](../reusable/silent-success.md), and
+[260831ak](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md) is where this one was
+caught, in review, in a statement written specifically to prevent that failure.
+
 ## See also
 
 - [database.md](database.md) — the store, the migrations, and the traps.
