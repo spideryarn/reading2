@@ -506,8 +506,8 @@ describe("the one title rule, applied by both sides", () => {
    * `MODES` is read from src/modes.ts rather than listed here, so an eleventh
    * mode arrives in this loop without anybody remembering to add it.
    */
-  it("agrees with the client in every one of the ten modes", () => {
-    expect(MODES.length, "a mode was added or removed; check this still covers them").toBe(10);
+  it("agrees with the client in every one of the eleven modes", () => {
+    expect(MODES.length, "a mode was added or removed; check this still covers them").toBe(11);
     for (const mode of MODES) {
       const d = doc(composeShell(SHELL, head({ title: "A shared piece" }), mode));
       const client = pageTitle({ kind: "read", title: "A shared piece", view: "article", mode });

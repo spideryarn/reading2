@@ -28,7 +28,13 @@
  */
 import { renderedText, type Mark } from "./annotate.js";
 import { findQuote, snippet } from "../quote-match.js";
-import type { Block, BlockId, IdeaOccurrence, SearchHit } from "../types.js";
+import type {
+  Block,
+  BlockId,
+  IdeaOccurrence,
+  SearchHit,
+  TimelineOccurrence,
+} from "../types.js";
 import type { HitOrder } from "./params.js";
 
 /**
@@ -535,6 +541,54 @@ export function resolveQuote(
     reasoning: quote.reason ?? "",
   });
   return one ? [one] : [];
+}
+
+/**
+ * One timeline event's occurrences, resolved into the same `Found[]` the ideas
+ * and the search hits become.
+ *
+ * `resolveIdea` with two fields removed, and both removals are the artefact
+ * being honest rather than this being a lesser version of it:
+ *
+ * - **No `reasoning`.** A timeline occurrence is `{ blockId, quote, start }` and
+ *   nothing else — the model is asked where the event is mentioned, never for a
+ *   line about why. The row shows the article's words; there is no commentary to
+ *   caption them with, and inventing an empty string here would put a blank
+ *   caption slot into the prose hover card.
+ * - **`slot: 0`.** Timeline paints no lane down the rail — that is on the
+ *   deferred list with the marks (docs/plans/timeline-mode.md § Appendix), so
+ *   there is no palette to assign from. Zero is the value `assignSlots` would
+ *   give the first row anyway, so the wash in the prose is the ordinary one.
+ *
+ * **`start` is passed**, unlike `resolveQuote` next door, and for the reason
+ * that one gives: these offsets come from a model naming a block, so the first
+ * rendered occurrence is not necessarily the one meant. Same call as
+ * `resolveIdea`, which has the same provenance.
+ */
+export function resolveTimelineEvent(
+  blocks: Block[],
+  event: { id: string; occurrences: TimelineOccurrence[] },
+): Found[] {
+  const at = page(blocks);
+  const out: Found[] = [];
+  for (const [n, o] of event.occurrences.entries()) {
+    const one = resolveOne(at, {
+      /* The same three-part key as a hit, an occurrence and a quote. One event
+         really can be mentioned twice in the same paragraph — the test article
+         recounts the same three months once per civilisation — so `blockId:n`
+         alone is not an identity. */
+      key: `${event.id}:${o.blockId}:${n}`,
+      blockId: o.blockId,
+      runId: event.id,
+      slot: 0,
+      quote: o.quote,
+      start: o.start,
+      confidence: null,
+      reasoning: null,
+    });
+    if (one) out.push(one);
+  }
+  return out;
 }
 
 export function resolveHits(blocks: Block[], runs: ActiveRun[]): Found[] {

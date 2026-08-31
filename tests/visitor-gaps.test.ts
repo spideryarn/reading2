@@ -112,8 +112,24 @@ describe("what a visitor is told, mode by mode", () => {
     });
   });
 
+  /**
+   * **`timeline` is in this list deliberately, not by falling through.**
+   *
+   * `visitorGap`'s fall-through is fail-closed, so a mode nobody names is
+   * owners-only anyway — which is exactly why naming it matters: *private
+   * because somebody decided* and *private because somebody forgot* are
+   * indistinguishable in the code, and this is the first. Greg, 2026-08-31:
+   * making it public-readable "could be a follow-up", and wants a general
+   * design for every mode rather than a fifth hand-written table.
+   * docs/plans/timeline-mode.md § Making a mode public-readable.
+   *
+   * Note it is here rather than under the artefact sweep below: there is no
+   * `PublicArtefacts` flag for a timeline, so the honest sentence is *this
+   * belongs to whoever added the article*, never *nobody built one* — which we
+   * could not know from a payload that carries no timeline either way.
+   */
   it("names the modes that spend as the owner's, whatever the flags say", () => {
-    for (const mode of ["chat", "search", "review", "diagram"] as const) {
+    for (const mode of ["chat", "search", "review", "diagram", "timeline"] as const) {
       for (const flags of [NOTHING_BUILT, EVERYTHING_BUILT]) {
         expect(visitorGap(mode, flags)).toEqual({
           kind: "owners-only",
@@ -199,9 +215,11 @@ describe("what a visitor is told, mode by mode", () => {
         .sort(),
     );
     /* Everything built: the artefact modes drop out, and what is left is
-       the four that spend a model call. */
+       the five that spend a model call. `timeline` is the fifth since
+       2026-08-31 — it has no `PublicArtefacts` flag to drop out on, so it stays
+       marked however much has been built. */
     expect([...markedModes(EVERYTHING_BUILT).keys()].sort()).toEqual(
-      ["chat", "diagram", "review", "search"].sort(),
+      ["chat", "diagram", "review", "search", "timeline"].sort(),
     );
     /* And one at a time, so a mode reading the wrong flag shows up. */
     for (const built of ["glossary", "ideas", "quotes"] as const) {

@@ -1,5 +1,5 @@
 /**
- * **The reader's ten middle-band modes, named once, in a module that imports
+ * **The reader's eleven middle-band modes, named once, in a module that imports
  * nothing.**
  *
  * This vocabulary was in src/web/params.ts, which is where it is used and where
@@ -56,6 +56,21 @@ export const MODES = [
      reader something a model wrote about the piece, where this one shows the
      piece, chosen. docs/project/quotes.md. */
   "quotes",
+  /* The eleventh, 2026-08-31: when the piece says these things happened, in the
+     order it says they happened, with the article's own hedges kept. It costs
+     this list one word like the nine before it.
+
+     In the bar it sits **after Ideas and before Search** — Greg's placement,
+     and the bar's order is his rather than this list's, which is only a
+     vocabulary. It belongs with Glossary and Ideas as a third "here is one
+     dimension of this piece pulled out", and it is further from the article's
+     own words than either.
+
+     It is also the first mode whose content is mostly about **how sure the
+     article is**: ten of the test article's twenty-six rows carry no date at
+     all, and drawing those like the dated ones would throw away the only thing
+     the piece actually said. docs/plans/timeline-mode.md. */
+  "timeline",
 ] as const;
 export type Mode = (typeof MODES)[number];
 
