@@ -101,6 +101,87 @@ export function buildSessionScript(): string {
     echo ${SESSION_SENTINEL}`;
 }
 
+/**
+ * Ask the box how many keys tmux binds — the remote half of `doctor`'s `tmux`
+ * check. Two numbers, because they can disagree and the disagreement is the
+ * interesting state.
+ *
+ * `conf` is what a FRESH tmux server makes of `~/.tmux.conf`, on a throwaway
+ * socket. `live` is what the server actually holding the sessions is doing
+ * right now. They come apart because **a tmux server reads its config once, at
+ * start**, and this one outlives provisioning by weeks: re-provisioning a live
+ * box rewrites the file and changes nothing about the keyboard until somebody
+ * runs `source-file`. That is a silent success — every visible check passes and
+ * Ctrl-B is still eaten — so it gets its own number rather than an assumption.
+ *
+ * `live=none` rather than `live=0` when no server is running, and that is the
+ * whole reason this is not one `grep -c`. `tmux list-keys` with no server prints
+ * its complaint to stderr and nothing to stdout, so `grep -c` says 0 — which is
+ * exactly the answer a perfectly configured box gives. The good state and the
+ * "there was nothing to ask" state would be the same byte. Same shape as the
+ * sentinel in buildSessionScript, for the same reason.
+ *
+ * The socket carries the shell's pid so two `doctor` runs cannot kill each
+ * other's probe server halfway through counting.
+ */
+export function buildBindingsScript(): string {
+  return `
+    command -v tmux >/dev/null 2>&1 || { echo 'GJDERR tmux is not on this box'; exit 3; }
+    if tmux ls >/dev/null 2>&1; then
+      live=$(tmux list-keys 2>/dev/null | grep -c bind-key || true)
+    else
+      live=none
+    fi
+    sock=gjddoctor$$
+    tmux -L "$sock" kill-server 2>/dev/null || true
+    tmux -f "$HOME/.tmux.conf" -L "$sock" new-session -d 'sleep 10' >/dev/null 2>&1 || {
+      echo 'GJDERR ~/.tmux.conf would not start a tmux server'; exit 3; }
+    conf=$(tmux -L "$sock" list-keys 2>/dev/null | grep -c bind-key || true)
+    tmux -L "$sock" kill-server 2>/dev/null || true
+    printf 'live=%s conf=%s\\n' "$live" "$conf"
+    echo ${SESSION_SENTINEL}`;
+}
+
+/**
+ * The two numbers into a verdict, or an explanation of why there isn't one.
+ *
+ * FAILS CLOSED. Anything that is not the exact record this asked for is a
+ * failure, not a pass — an unparsed reply and a clean box otherwise look alike,
+ * which is the bug this whole module keeps being written around.
+ */
+export function bindingsVerdict(out: string): { ok: boolean; why: string } {
+  const lines = out
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const errLine = lines.find((l) => l.startsWith("GJDERR"));
+  if (errLine) return { ok: false, why: errLine.slice("GJDERR".length).trim() };
+  if (!lines.includes(SESSION_SENTINEL)) {
+    return { ok: false, why: "the box did not finish counting its key bindings, so the answer may be short" };
+  }
+
+  const m = lines.map((l) => /^live=(none|0|[1-9]\d*) conf=(0|[1-9]\d*)$/.exec(l)).find(Boolean);
+  if (!m) return { ok: false, why: "could not read the binding counts out of the reply" };
+  const live = m[1]!;
+  const conf = Number(m[2]!);
+
+  // The file first: it is what every future tmux server on this box will read,
+  // so it being wrong outlasts any one server.
+  if (conf !== 0) {
+    return { ok: false, why: `~/.tmux.conf binds ${conf} keys — re-provision, or see infra/hetzner/provision.sh` };
+  }
+  if (live !== "none" && Number(live) !== 0) {
+    return {
+      ok: false,
+      // Not "re-provision": provisioning rewrites the file, which is already
+      // right. Only source-file reaches a server that is already running.
+      why: `the running tmux server still binds ${live} keys — tmux source-file ~/.tmux.conf`,
+    };
+  }
+  return { ok: true, why: live === "none" ? "nothing bound (no server running)" : "nothing bound, file and server agree" };
+}
+
 /** base64 back to text, or null if it is not valid base64 of valid UTF-8. */
 function decode(b64: string): string | null {
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) return null;

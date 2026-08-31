@@ -450,6 +450,44 @@ TMUX
 chown "$USER_NAME":"$USER_NAME" "$TMUX_CONF"
 chmod 0644 "$TMUX_CONF"
 
+# Writing the file is not changing the keyboard. A tmux server reads its config
+# ONCE, when it starts, and this box's server outlives provisioning by weeks
+# with every session in it -- so re-provisioning a live box would leave the file
+# saying one thing and Ctrl-B still being eaten, with this script's own check
+# green because it counts a fresh server rather than the running one.
+#
+# The pane_in_mode guard is not politeness. Sourcing this into a server while a
+# pane is IN copy-mode unbinds copy-mode out from under it, and with no prefix
+# left to press there is no key that gets that pane back to its shell. Skip and
+# say so; the next provision, or one command by hand, picks it up.
+cat > /tmp/provision-tmux-reload.sh <<'RELOAD'
+set -u
+tmux ls >/dev/null 2>&1 || { echo "no tmux server running; the file is enough"; exit 0; }
+inmode=$(tmux list-panes -a -F '#{pane_in_mode}' 2>/dev/null | grep -c '^1$')
+if [ "$inmode" != 0 ]; then
+  echo "WARNING: $inmode pane(s) in copy-mode -- leaving the running server alone."
+  echo "         once they are out:  tmux source-file ~/.tmux.conf"
+  exit 0
+fi
+before=$(tmux list-keys 2>/dev/null | grep -c bind-key)
+tmux source-file "$HOME/.tmux.conf" || { echo "source-file failed" >&2; exit 1; }
+after=$(tmux list-keys 2>/dev/null | grep -c bind-key)
+echo "running tmux server reloaded: $before bindings -> $after"
+RELOAD
+chmod 0644 /tmp/provision-tmux-reload.sh
+# NOT fatal, unlike every other `run` in this file, and the asymmetry is the
+# point: the durable artefact is the file, and it is already written. Aborting a
+# whole provisioning run -- leaving the box half-built -- because one live tmux
+# server would not take a reload trades a large failure for a small one.
+#
+# That leaves the failure uncaught here, because the "tmux binds nothing" check
+# below counts a FRESH server started from the file and so cannot see a running
+# one that ignored it. `gjd-remote doctor` is what covers it: its `tmux keys`
+# check counts both, and it runs daily where this runs almost never.
+run 60 "reload running tmux" su - "$USER_NAME" -c "bash /tmp/provision-tmux-reload.sh" \
+  || echo "WARNING: could not reload the running tmux server; the file is correct. Check: gjd-remote doctor"
+rm -f /tmp/provision-tmux-reload.sh
+
 echo "=== claude settings ==="
 # One line per mouse-wheel notch, instead of the three Claude Code picks by
 # default on this terminal stack. Three overshoots badly when you are scrolling
