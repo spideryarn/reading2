@@ -94,9 +94,10 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { partsOf } from "./arc.js";
+import { type Article, readArticleFromDir } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
 import { streamMessage, wasRefused } from "./messages-stream.js";
 import { CAPABLE_MODEL, effortFor } from "./models.js";
@@ -164,7 +165,11 @@ export type TimelineEventId = string;
 /** Where in the article this event is mentioned. The same shape `ideas` uses. */
 export interface TimelineOccurrence {
   blockId: BlockId;
-  /** Copied verbatim by the model, and located by us — never trusted unlocated. */
+  /**
+   * **The article's own characters** — the block sliced at the offsets
+   * `findQuote` located, not the model's copy of them. See
+   * `validateOccurrences`; the panel shows this as what the article says.
+   */
   quote: string;
   /**
    * A disambiguator between repeats, never the anchor: the client re-finds the
@@ -174,38 +179,79 @@ export interface TimelineOccurrence {
   start: number;
 }
 
+/**
+ * **Which of the four things happened to this event's date**, as one field the
+ * panel can switch on.
+ *
+ * A union rather than `when: When | null` plus two flags, because the four cases
+ * draw four different rows and three of the combinations those flags allow do
+ * not exist: a parsed date with no `When`, a rejection carrying a date, a
+ * words-shown row with no words. `AGENTS.md` § Writing code — let the types
+ * carry it rather than a comment.
+ *
+ * | kind | the row draws |
+ * |---|---|
+ * | `dated` | the date and its marks |
+ * | `words` | **the article's own words**, in the date column |
+ * | `untimed` | nothing — the row is placed by `order` alone |
+ * | `rejected` | **⊘**, and "the piece dates this and we could not read it" |
+ *
+ * The middle two are the pair most easily collapsed and must not be: a piece
+ * that said "another month later" has dated the event as far as it ever will,
+ * and drawing a blank there loses the only thing it told us. The last is the
+ * one the review caught — demoting it to an ordinary blank makes "fails
+ * visibly" true only inside a counter.
+ */
+export type Dating =
+  /** The parser read a date out of the article's own characters. */
+  | { kind: "dated"; when: When }
+  /**
+   * The article's temporal words, which carry no date we can read out of them —
+   * "another month later", "within a few hours". Located in the quoted passage
+   * and **sliced out of the block**, so these are the article's characters.
+   */
+  | { kind: "words"; phrase: string }
+  /** The article puts no time on this at all. A correct answer, and a common one. */
+  | { kind: "untimed" }
+  /**
+   * The piece dates this and we could not read the date.
+   *
+   * `reason` is carried rather than dropped because the panel has something
+   * different to say for each, and one of them is the majority case on this
+   * shelf: `noYearFrame` means the article stated a day and a month and we had
+   * no publication date to take the year from, which is true of every article
+   * ingested before 2026-08-31. "We don't know which year" and "that date is
+   * not in the passage you quoted" are not the same sentence.
+   *
+   * `phrase` is the article's words where we could locate them, and explicitly
+   * `null` where we could not — a required nullable rather than an optional,
+   * so a caller cannot forget the case exists.
+   */
+  | {
+      kind: "rejected";
+      reason: Exclude<WhenRefusal, "noDateInPhrase">;
+      phrase: string | null;
+    };
+
+/**
+ * The date, for the callers that only want that.
+ *
+ * Tolerates an event with no `dating` at all, which is not paranoia: the one
+ * caller that reads events this code did not write is `idsByEvidence`, and it
+ * reads the artefact **on disk** — written by whatever version of this file was
+ * current when the article was last run. A shape change is a reason to mint
+ * fresh ids, never a reason for the stage to throw.
+ */
+export function whenOf(event: Pick<TimelineEvent, "dating">): When | null {
+  return event.dating?.kind === "dated" ? event.dating.when : null;
+}
+
 export interface TimelineEvent {
   id: TimelineEventId;
   /** A handle, not a retelling. Under about ten words. */
   label: string;
-  /** What the parser read out of the article, or null when there is no date. */
-  when: When | null;
-  /**
-   * **The third outcome** (plan § Three outcomes, not two): the piece dates
-   * this and we could not read the date. It must not render as an ordinary
-   * undated row, or "fails visibly" is true only inside a counter.
-   *
-   * `false` with `when: null` means the piece never dated it — which is a
-   * correct answer and often the right one.
-   */
-  dateRejected: boolean;
-  /**
-   * The article's temporal words, when the parser could not turn them into a
-   * date — "another month later", "within a few hours", or "On July 7" on an
-   * article with no publication date to take the year from. Shown in the date
-   * column where a date would otherwise be.
-   *
-   * **The block's own characters, never the model's copy of them.** The first
-   * version of this field stored the model's string on the grounds that the
-   * parser had proved it carried no date; GPT Sol showed that proof is worth
-   * less than it sounds — `scanDates` has no pattern for `"06/12/19"` or for
-   * `"the summer of twenty nineteen"`, so both would have been displayed
-   * unchallenged. Now the words are located in the quoted passage with
-   * `findQuote` and **sliced out of the block**, so a string that reaches the
-   * reader here is the article's, character for character. Words we cannot
-   * locate are not shown at all — `Dropped.phraseNotFound`.
-   */
-  phrase?: string;
+  /** What the article said about when, and what we could make of it. */
+  dating: Dating;
   /**
    * The model's reading of where this sits in the sequence, and **the sort
    * key** — Greg's call, 2026-08-31: the dates do not move anything. An event
@@ -442,12 +488,22 @@ export function validateOccurrences(
       dropped.unknownIds++;
       continue;
     }
-    const quote = text(o.quote);
-    const span = quote ? findQuote(block.text, quote, undefined, "spaced") : null;
+    const typed = text(o.quote);
+    const span = typed ? findQuote(block.text, typed, undefined, "spaced") : null;
     if (!span) {
       dropped.unquoted++;
       continue;
     }
+    /* **The block's characters, not the model's typing.** The panel puts this
+       under "the article says", so it has to be what the article says — and
+       `findQuote` is deliberately forgiving about case and whitespace, which
+       means a match is not a promise that the two strings are equal. GPT Sol,
+       2026-08-31, who also demonstrated that `"spaced"` still finds `"July 1"`
+       inside `"July 11"`: with the slice stored, a mislocated quote at least
+       shows the reader what was actually matched rather than what was typed.
+       `ideas` and `search` still store the model's string; converging them is a
+       separate landing with artefacts to migrate, and this stage has none. */
+    const quote = block.text.slice(span.start, span.end);
     out.push({ blockId, quote, start: span.start, end: span.end, text: block.text });
   }
   if (out.length > MAX_OCCURRENCES) {
@@ -462,9 +518,20 @@ export function validateOccurrences(
  *
  * Only a prediction reads forwards, and that is the one case where the default
  * is backwards: a January piece saying "in December we expect…" means the
- * coming December. A **hypothetical** stays `"past"` — a counterfactual is
- * usually about something that did not happen *then* ("if they had caught it in
- * July"), and the two share a sort partition without sharing a tense.
+ * coming December.
+ *
+ * **A hypothetical stays `"past"`, and that is measured rather than reasoned.**
+ * `predicted` and `hypothetical` share a sort partition — the panel draws one
+ * divider between history and what the piece expects — and it is tempting to
+ * give them one tense as well. On the test article that is wrong by a year:
+ * its single hypothetical row is *"at some point after July 12"*, a
+ * counterfactual about something that nearly happened **in the past**, and
+ * resolving it forwards dates it 2027-07-13. Its single prediction, meanwhile,
+ * says *"over the next six months"* — a relative phrase carrying no date at
+ * all, so the direction never reaches it. Every other row on that article is
+ * `happened`, and all sixteen dated ones move by a year if the direction flips.
+ *
+ * So the two modalities differ in tense and the partition does not care.
  */
 function directionFor(modality: TimelineModality): WhenDirection {
   return modality === "predicted" ? "future" : "past";
@@ -482,12 +549,6 @@ const REFUSAL_RANK: Record<WhenRefusal, number> = {
   phraseNotInOccurrence: 2,
   noDateInPhrase: 3,
 };
-
-interface Dating {
-  when: When | null;
-  dateRejected: boolean;
-  phrase?: string;
-}
 
 /**
  * The article's own characters for a phrase the parser could not date.
@@ -589,7 +650,7 @@ export function dateEvent(
 ): Dating {
   /* No phrase is not a refusal. The article gives this event no time at all,
      which the prompt calls a correct answer and often the right one. */
-  if (!phrase) return { when: null, dateRejected: false };
+  if (!phrase) return { kind: "untimed" };
 
   const direction = directionFor(modality);
   let worst: WhenRefusal = "noDateInPhrase";
@@ -602,7 +663,7 @@ export function dateEvent(
       within: { start: o.start, end: o.end },
       direction,
     });
-    if (result.ok) return { when: result.when, dateRejected: false };
+    if (result.ok) return { kind: "dated", when: result.when };
     if (REFUSAL_RANK[result.reason] < REFUSAL_RANK[worst]) worst = result.reason;
   }
 
@@ -619,8 +680,12 @@ export function dateEvent(
      with the ⊘ glyph here would be accusing the piece of something it never
      did. Every other refusal IS a rejection — the piece dates this and we could
      not read it — and the panel has to say so. */
-  const dateRejected = worst !== "noDateInPhrase";
-  return { when: null, dateRejected, ...(located === null ? {} : { phrase: located }) };
+  if (worst === "noDateInPhrase") {
+    /* Words we could not find in the passage are not the article's, so there is
+       nothing honest to show and the row falls back to its order. */
+    return located === null ? { kind: "untimed" } : { kind: "words", phrase: located };
+  }
+  return { kind: "rejected", reason: worst, phrase: located };
 }
 
 /**
@@ -673,13 +738,10 @@ export function toEvents(
     const order = typeof r.order === "number" && Number.isFinite(r.order) ? r.order : null;
     if (order === null) dropped.unordered++;
 
-    const dating = dateEvent(text(r.phrase), occurrences, frame, modality, dropped);
     out.push({
       id: mintUniqueId(taken),
       label,
-      when: dating.when,
-      dateRejected: dating.dateRejected,
-      ...(dating.phrase ? { phrase: dating.phrase } : {}),
+      dating: dateEvent(text(r.phrase), occurrences, frame, modality, dropped),
       order,
       modality,
       /* The parser's working — `text` and `end` — stays out of the artefact.
@@ -718,10 +780,10 @@ export function toEvents(
  * offsets into a block, and a block whose text shifted by one character would
  * break every id on the page for no reason a reader could see.
  */
-export function evidenceKey(event: Pick<TimelineEvent, "when" | "occurrences">): string {
+export function evidenceKey(event: Pick<TimelineEvent, "dating" | "occurrences">): string {
   const blocks = [...new Set(event.occurrences.map((o) => o.blockId))].sort().join(",");
-  const when = event.when ? `${event.when.earliest ?? ""}..${event.when.latest ?? ""}` : "";
-  return `${blocks}|${when}`;
+  const when = whenOf(event);
+  return `${blocks}|${when ? `${when.earliest ?? ""}..${when.latest ?? ""}` : ""}`;
 }
 
 /**
@@ -738,6 +800,14 @@ export function idsByEvidence(onDisk: Timeline | null): Map<string, TimelineEven
   const seen = new Map<string, TimelineEventId>();
   const ambiguous = new Set<string>();
   for (const event of onDisk?.events ?? []) {
+    /* **The previous artefact is untrusted input, not a value of this type.**
+       It was written by whichever version of this file was current when the
+       article last ran, and the shape has already changed once — `when` +
+       `dateRejected` + `phrase` became `dating` on 2026-08-31. An event this
+       version cannot key is one whose id cannot be carried, which costs a
+       reader's `?event=` link and is the correct outcome; throwing here would
+       fail the whole stage on an artefact it is about to replace. */
+    if (!event || typeof event.id !== "string" || !Array.isArray(event.occurrences)) continue;
     const key = evidenceKey(event);
     if (seen.has(key)) {
       ambiguous.add(key);
@@ -827,7 +897,11 @@ export function buildTimeline(
   }
 
   const events = orderEvents(fresh);
-  opts.dropped.orderConflicts = countOrderConflicts(events);
+  /* Projected rather than passed whole: `countOrderConflicts` compares dates,
+     and the union is where a date now lives. */
+  opts.dropped.orderConflicts = countOrderConflicts(
+    events.map((e) => ({ order: e.order, modality: e.modality, when: whenOf(e) })),
+  );
   /* Nulls do not count as a repeat: `unordered` already has them, and two
      events the model failed to number are not two events it placed together. */
   const numbered = events.map((e) => e.order).filter((o): o is number => o !== null);
@@ -869,7 +943,6 @@ export async function readTimeline(dir: string): Promise<Timeline | null> {
 
 export interface TimelineRun {
   timeline: Timeline;
-  outFile: string;
   blocks: number;
   words: number;
   /** The publication day the dates were read against, or null. */
@@ -1114,7 +1187,27 @@ function parseJson(raw: string): { events?: unknown } {
 export const ANSWER_TOKENS = 20_000;
 
 export async function generateTimeline(opts: {
-  dir: string;
+  /**
+   * **The article, handed in — never a directory to open.**
+   *
+   * The eighth stage of this shape and the first born converted
+   * (src/article-input.ts). The reason is not tidiness: a stage's `stamp` asks
+   * the *store* for blocks, tree and metadata, and every stage that also opened
+   * its own files hashed one article and generated from another. On a laptop
+   * those are the same bytes; through a job-scoped `/tmp` on a deployment they
+   * are not, and the result is a stale artefact reporting itself current for
+   * ever with nothing about it looking wrong. Taking the article as an argument
+   * makes that unrepresentable, so **do not reach for `fs` in here**.
+   *
+   * **For Stage 4, and written down here so it is not lost:** `stamp` and `run`
+   * must read the article through *different* helpers. `run` cannot proceed
+   * without one, so it takes `readArticle`, which refuses. `stamp` asks what
+   * stamp this step *would* write, and an unreadable article there means we
+   * cannot tell — so it takes `tryReadArticle` and returns `null`, which
+   * `stepIsDone` turns into a re-run. That is the safe way to be wrong; a throw
+   * is a failed job.
+   */
+  article: Article;
   onProgress?: (detail: string) => void;
   signal?: AbortSignal;
   /** Mark the article as a cache breakpoint — see src/glossary.ts for the note. */
@@ -1131,32 +1224,34 @@ export async function generateTimeline(opts: {
    */
   previous: Timeline | null;
 }): Promise<TimelineRun> {
-  /* `parseJsonFrom`, not `JSON.parse`: blocks.json *is* the article, and V8's
-     own parse error quotes the first characters of what it was handed. */
-  const { blocks } = parseJsonFrom<{ blocks: Block[] }>(
-    await readFile(path.join(opts.dir, "blocks.json"), "utf-8"),
-    "blocks.json",
-  );
-  const tree = parseJsonFrom<Tree>(
-    await readFile(path.join(opts.dir, "tree.json"), "utf-8"),
-    "tree.json",
-  );
-  const onDiskMeta: Meta | null = await readFile(path.join(opts.dir, "meta.json"), "utf-8")
-    .then((raw) => JSON.parse(raw) as Meta)
-    .catch(() => null);
-  /* A stub with a title in it is enough for the prompt head — it is context for
-     the model, not something the answer cites — and it keeps a missing
-     meta.json from failing a run that has everything else it needs. The
-     fingerprint below uses `onDiskMeta` and never this: hashing the stub would
-     write a fingerprint the pipeline's stamp can never reproduce, and the
-     article would report stale for ever while looking healthy. src/ideas.ts
-     says the same thing at greater length. */
-  const meta: Meta = onDiskMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
+  const { blocks, tree, meta: articleMeta } = opts.article;
 
-  const sourceHash = inputFingerprint(blocks, tree, onDiskMeta);
+  /* **Two values, deliberately, and the difference is the whole thing.**
+     `articleWithIds` needs a head to write its `TITLE:` line, so an article
+     with no metadata gets a stub — and the stub is for the PROMPT and stops
+     there. The fingerprint below is handed the real `articleMeta`, `null` and
+     all, because the pipeline's `stamp` reads the article and sees `null`:
+     hash the stub instead and this stage writes a fingerprint the stamp can
+     never reproduce, so every article without metadata reports stale for ever,
+     on every run, with nothing red anywhere.
+
+     It matters more here than for `ideas` or `sketch`. An article with no
+     metadata is not an edge case for this stage — it is every article ingested
+     before 2026-08-31, because the publication date only arrives on
+     re-extraction.
+
+     **And a green suite is not evidence this is right.** Applying the mutation
+     — hash the stub — reddens nothing today, because `articleWithIdsFingerprint`
+     resolves `fallbackHeadTitle` itself and the stub carries that one field and
+     nothing else, so the two hashes are identical. The rule protects the day
+     that stops being true. docs/reusable/silent-success.md, with a case where
+     even the mutation agrees with the bug. */
+  const meta: Meta = articleMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
+  const sourceHash = inputFingerprint(blocks, tree, articleMeta);
+
   /* The publisher's own string, day precision, timezone untouched —
      `dayFrame` in src/timeline-time.ts takes the front ten characters. */
-  const frame = onDiskMeta?.publishedAt ?? null;
+  const frame = articleMeta?.publishedAt ?? null;
 
   /* Ids are inherited only when the artefact describes the same article: one
      inherited across a re-extraction would carry a reader's link onto an event
@@ -1244,7 +1339,7 @@ export async function generateTimeline(opts: {
 
   const dropped = emptyDropped();
   const timeline = buildTimeline(parseJson(raw), {
-    slug: tree.slug,
+    slug: opts.article.slug,
     blocks,
     sourceHash,
     frame,
@@ -1253,12 +1348,12 @@ export async function generateTimeline(opts: {
     dropped,
   });
 
-  const outFile = path.join(opts.dir, "timeline.json");
-  await writeFile(outFile, JSON.stringify(timeline, null, 2), "utf-8");
-
+  /* **The file is written by the caller, not here.** Stage 4 returns `parts`
+     for the transaction to write, the way `sketch` already does, and this is
+     the seam where that happens — a generator that also writes is a generator
+     that cannot be made transactional without being taken apart first. */
   return {
     timeline,
-    outFile,
     blocks: blocks.length,
     words,
     frame,
@@ -1274,12 +1369,14 @@ export async function generateTimeline(opts: {
 
 /** One row, in the notation the panel will draw — see `markFor`. */
 function line(event: TimelineEvent): string {
-  const when = event.when;
+  const d = event.dating;
   /* A rejected row keeps its words where it has them — on an article with no
      publication date every dated event lands here, and "⊘" alone would tell the
      reader nothing they could go and check. */
-  if (event.dateRejected) return event.phrase ? `  ⊘  “${event.phrase}”` : "  ⊘  ";
-  if (!when) return event.phrase ? `“${event.phrase}”` : "  ·  ";
+  if (d.kind === "rejected") return d.phrase ? `  ⊘  “${d.phrase}”` : "  ⊘  ";
+  if (d.kind === "words") return `“${d.phrase}”`;
+  if (d.kind === "untimed") return "  ·  ";
+  const when = d.when;
   const body = when.extent === "extended" ? "▬▬" : " ● ";
   return `${when.earliest === null ? "⋯" : "│"}${body}${when.latest === null ? "⋯" : "│"} ` +
     `${when.earliest ?? ""}${when.earliest !== when.latest ? `…${when.latest ?? ""}` : ""}`;
@@ -1297,11 +1394,15 @@ async function main(): Promise<void> {
      be a no-op there and an import of `node:fs` into a path that does not need
      one. `tests/paid-cli-ledger.test.ts` holds this rule for every stage CLI. */
   loadEnvLocal();
+  /* **The last filesystem read in this half of the pipeline lives in ONE
+     place** — src/article-input.ts — and this is a caller that has a folder and
+     no store. The generator is handed the result; it never opens anything. */
+  const article = await readArticleFromDir(dir);
   // Before the call, not after: this is the only thing on screen while the
   // model works, and printing it afterwards makes the command look hung.
   console.log(`Building the timeline with ${CAPABLE_MODEL}…`);
   const run = await generateTimeline({
-    dir,
+    article,
     /* The CLI has files and no store, so it reads the file — and `readTimeline`
        gives one `null` for every kind of failure. Acceptable here: a person is
        watching, and the worst case is a re-run that mints fresh ids in a
@@ -1309,9 +1410,13 @@ async function main(): Promise<void> {
     previous: await readTimeline(dir),
     onProgress: (detail) => process.stdout.write(`\r  ${detail}          `),
   });
+  /* Written here rather than in the generator — see the note on the return
+     value. Stage 4 hands `parts` to the transaction instead. */
+  const outFile = path.join(dir, "timeline.json");
+  await writeFile(outFile, JSON.stringify(run.timeline, null, 2), "utf-8");
 
   const { timeline, dropped } = run;
-  const dated = timeline.events.filter((e) => e.when !== null).length;
+  const dated = timeline.events.filter((e) => e.dating.kind === "dated").length;
   console.log(
     `\n${run.blocks} blocks, ${run.words} words → ${timeline.events.length} events ` +
       `(${dated} dated), frame ${run.frame ?? "none"}`,
@@ -1340,7 +1445,7 @@ async function main(): Promise<void> {
       `${dropped.duplicateOrders} sharing one with another event, ` +
       `${dropped.orderConflicts} conflicts with the article's own dates`,
   );
-  console.log(`\nWrote ${run.outFile}`);
+  console.log(`\nWrote ${outFile}`);
 }
 
 /* **`stageCli`, which is the guard and the ledger together.** Awaited rather

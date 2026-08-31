@@ -141,8 +141,7 @@ function event(over: Partial<TimelineEvent> = {}): TimelineEvent {
   return {
     id: "spya-000001",
     label: "A thing",
-    when: null,
-    dateRejected: false,
+    dating: { kind: "untimed" },
     order: 1,
     modality: "happened",
     occurrences: [{ blockId: "spya-aaaaaa", quote: "By May 12", start: 0 }],
@@ -229,6 +228,18 @@ describe("occurrences are believed only when the article backs them up", () => {
     expect(dropped.malformed).toBe(1);
   });
 
+  it("stores the block's characters rather than the model's copy of them", () => {
+    /* `findQuote` is forgiving about case and whitespace, so a located quote is
+       not a promise that the two strings are equal — and the panel presents
+       this as what the article says. */
+    const out = validateOccurrences(
+      [{ blockId: "spya-aaaaaa", quote: "by  may 12, SOME agents had figured out how to talk." }],
+      BLOCKS,
+      emptyDropped(),
+    );
+    expect(out[0]?.quote).toBe("By May 12, some agents had figured out how to talk.");
+  });
+
   it("caps the occurrences on one event", () => {
     const dropped = emptyDropped();
     const many = Array.from({ length: MAX_OCCURRENCES + 2 }, () => ({
@@ -253,12 +264,12 @@ describe("three outcomes, not two", () => {
       "happened",
       dropped,
     );
-    expect(out.when?.latest).toBe("2026-05-12");
+    expect(out.kind).toBe("dated");
+    expect(out.kind === "dated" && out.when.latest).toBe("2026-05-12");
     /* The bound survives. "by" is at-or-before, and a stage that flattened it
        to a point would be claiming a day the article never claimed — five of
        the twenty-four expressions on the test article are this shape. */
-    expect(out.when?.earliest).toBeNull();
-    expect(out.dateRejected).toBe(false);
+    expect(out.kind === "dated" && out.when.earliest).toBeNull();
   });
 
   it("shows the article's words, and draws no rejection, when they carry no date", () => {
@@ -270,11 +281,10 @@ describe("three outcomes, not two", () => {
       "happened",
       dropped,
     );
-    expect(out.when).toBeNull();
     /* Not a ⊘. The article declined to date this, and a row accusing it of a
-       date we could not read would be accusing it of something it never did. */
-    expect(out.dateRejected).toBe(false);
-    expect(out.phrase).toBe("Another month later");
+       date we could not read would be accusing it of something it never did —
+       and not `untimed` either, which would throw the words away. */
+    expect(out).toEqual({ kind: "words", phrase: "Another month later" });
     expect(dropped.noDateInPhrase).toBe(1);
   });
 
@@ -292,7 +302,7 @@ describe("three outcomes, not two", () => {
       "happened",
       dropped,
     );
-    expect(out.phrase).toBe("Another month later");
+    expect(out).toEqual({ kind: "words", phrase: "Another month later" });
   });
 
   it("shows nothing at all when the words are not in the quoted passage", () => {
@@ -309,8 +319,7 @@ describe("three outcomes, not two", () => {
       "happened",
       dropped,
     );
-    expect(out.phrase).toBeUndefined();
-    expect(out.dateRejected).toBe(false);
+    expect(out).toEqual({ kind: "untimed" });
     expect(dropped.phraseNotFound).toBe(1);
   });
 
@@ -323,13 +332,10 @@ describe("three outcomes, not two", () => {
       "happened",
       dropped,
     );
-    expect(out.when).toBeNull();
-    expect(out.dateRejected).toBe(true);
-    /* And the model's words do NOT travel to the reader on a rejection. This is
-       the one route a fabricated date could take into the panel, and it is shut
-       structurally: `phrase` is set only when the parser proved the words carry
-       no date at all. */
-    expect(out.phrase).toBeUndefined();
+    /* And the model's words do NOT travel to the reader on a rejection: they
+       named a date this passage does not carry, so there is nothing here the
+       article said. */
+    expect(out).toEqual({ kind: "rejected", reason: "phraseNotInOccurrence", phrase: null });
     expect(dropped.phraseNotInOccurrence).toBe(1);
   });
 
@@ -342,20 +348,18 @@ describe("three outcomes, not two", () => {
       "happened",
       dropped,
     );
-    expect(out.when).toBeNull();
-    expect(out.dateRejected).toBe(true);
+    /* A ⊘ row that still says what the article said, and carries WHY. This is
+       the COMMON path — `publishedAt` arrives only by re-extraction, so almost
+       every article on the shelf has no frame — and "we don't know which year"
+       is a different sentence from "that date is not in the passage". */
+    expect(out).toEqual({ kind: "rejected", reason: "noYearFrame", phrase: "By May 12" });
     expect(dropped.noYearFrame).toBe(1);
-    /* And the row still says what the article said. This is the COMMON path —
-       `publishedAt` arrives only by re-extraction, so almost every article on
-       the shelf has no frame — and a ⊘ with no words beside it would leave the
-       reader nothing to check. */
-    expect(out.phrase).toBe("By May 12");
   });
 
   it("gives no phrase at all when the model gave none, and counts nothing", () => {
     const dropped = emptyDropped();
     const out = dateEvent("", occurrence("By May 12"), FRAME, "happened", dropped);
-    expect(out).toEqual({ when: null, dateRejected: false });
+    expect(out).toEqual({ kind: "untimed" });
     expect(dropped).toEqual(emptyDropped());
   });
 
@@ -371,12 +375,18 @@ describe("three outcomes, not two", () => {
       blocks,
       dropped,
     );
-    expect(dateEvent("in December", occ, FRAME, "predicted", dropped).when?.earliest).toBe(
-      "2026-12-01",
-    );
-    expect(dateEvent("in December", occ, FRAME, "happened", dropped).when?.earliest).toBe(
-      "2025-12-01",
-    );
+    const at = (m: "predicted" | "happened" | "hypothetical") => {
+      const d = dateEvent("in December", occ, FRAME, m, dropped);
+      return d.kind === "dated" ? d.when.earliest : null;
+    };
+    expect(at("predicted")).toBe("2026-12-01");
+    expect(at("happened")).toBe("2025-12-01");
+    /* **A hypothetical reads backwards with `happened`, not forwards with
+       `predicted`.** They share a sort partition and not a tense: the test
+       article's only hypothetical is "at some point after July 12", a
+       counterfactual about the past, and resolving it forwards dates it a year
+       late. Measured on the real artefact, 2026-08-31. */
+    expect(at("hypothetical")).toBe("2025-12-01");
   });
 });
 
@@ -507,13 +517,16 @@ describe("ids inherit on the evidence, never on the label", () => {
     const before = event({ id: "spya-old001" });
     const after = event({
       id: "spya-new001",
-      when: {
-        earliest: null,
-        latest: "2026-05-12",
-        extent: "instant",
-        phrase: "By May 12",
-        at: { blockId: "spya-aaaaaa", start: 0, end: 9 },
-        yearFilled: true,
+      dating: {
+        kind: "dated",
+        when: {
+          earliest: null,
+          latest: "2026-05-12",
+          extent: "instant",
+          phrase: "By May 12",
+          at: { blockId: "spya-aaaaaa", start: 0, end: 9 },
+          yearFilled: true,
+        },
       },
     });
     expect(inheritIds([after], idsByEvidence({ events: [before] } as Timeline))[0]?.id).toBe(
@@ -536,6 +549,20 @@ describe("ids inherit on the evidence, never on the label", () => {
     const inherit = idsByEvidence({ events: [event({ id: "spya-old001" })] } as Timeline);
     const out = inheritIds([event({ id: "spya-new001" }), event({ id: "spya-new002" })], inherit);
     expect(out.map((e) => e.id)).toEqual(["spya-new001", "spya-new002"]);
+  });
+
+  it("skips an event from an older shape rather than throwing on it", () => {
+    /* The artefact on disk was written by whatever version of this file was
+       current when the article last ran, and the shape has changed once
+       already. An id that cannot be keyed is an id that cannot be carried —
+       which costs a `?event=` link — and that is the right cost. Failing the
+       whole stage on an artefact it is about to replace is not. */
+    const older = { events: [{ id: "spya-old001", when: null, occurrences: [] }] } as unknown;
+    expect(() => idsByEvidence(older as Timeline)).not.toThrow();
+    const inherit = idsByEvidence({
+      events: [{ id: "spya-old001", label: "x" } as unknown as TimelineEvent, event()],
+    } as Timeline);
+    expect(inherit.size).toBe(1);
   });
 
   it("keys on the cited block set and the date, and on nothing else", () => {
