@@ -753,41 +753,22 @@ export function SketchView({ slug, blocks, atRow, onJump }: Props) {
                     type="button"
                     role="radio"
                     aria-checked={on}
-                    tabIndex={on ? 0 : -1}
+                    /* **A tab stop each, and no arrow keys.** The roving
+                       tabindex and its arrow handler went on 2026-08-31 with
+                       the other four switchers in this app. On this page the
+                       arrows belong to the article — ↑ / ↓ step it and ← / →
+                       choose the stride (docs/project/keyboard.md) — and every
+                       one of these handlers called `stopPropagation` to win
+                       that collision, so all four keys died wherever one of
+                       these held focus. Greg met it as a bug and asked for the
+                       behaviour removed. Dock.tsx § the mode switch has the
+                       full reasoning and what the extra tab stops cost;
+                       tests/arrows-belong-to-the-article.test.tsx sweeps for a
+                       sixth one coming back. */
+                    tabIndex={0}
                     className={`sk-scene${on ? " on" : ""}`}
                     data-sk-scene={sc.id}
                     onClick={() => goTo(i === 0 ? null : sc.id, null)}
-                    onKeyDown={(e) => {
-                      const d =
-                        e.key === "ArrowRight" || e.key === "ArrowDown"
-                          ? 1
-                          : e.key === "ArrowLeft" || e.key === "ArrowUp"
-                            ? -1
-                            : 0;
-                      if (d === 0) return;
-                      /* The picture below is its own tab stop with its own
-                         arrow handling, and `keynav.ts` steps the article on
-                         these keys too — so saying "this press was mine" is
-                         what stops one arrow moving three things. */
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // Wraps, as the radio pattern specifies.
-                      const at = (i + d + sketch.scenes.length) % sketch.scenes.length;
-                      const next = sketch.scenes[at];
-                      if (!next) return;
-                      goTo(at === 0 ? null : next.id, null);
-                      /* **And focus follows**, or the newly-checked radio is
-                         the tab stop while the old one still has focus, and the
-                         next press steps from the same place — you reach the
-                         neighbour and never anything past it. `Choice` in
-                         DiagramPanel.tsx carries the longer version. Scoped
-                         with `closest`, not the document, because the overlay
-                         mounts a second copy of this row. */
-                      e.currentTarget
-                        .closest(".sk-scenes")
-                        ?.querySelector<HTMLElement>(`[data-sk-scene="${next.id}"]`)
-                        ?.focus();
-                    }}
                   >
                     {i === 0 ? sketch.title : sc.title}
                   </button>

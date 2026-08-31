@@ -11,7 +11,6 @@
  */
 import { describe, expect, it } from "vitest";
 import { ChatConflict, titleFrom, withEdit, withRetry } from "../src/chat.js";
-import { nextModeIndex } from "../src/web/Dock.js";
 import { recentHistory, unknownCitedIds } from "../src/converse.js";
 import { snippet, splitCitations, unknownIds } from "../src/web/citations.js";
 import { SUGGESTIONS } from "../src/web/ChatPanel.js";
@@ -446,62 +445,15 @@ describe("splitCitations — the bug the space-eating pattern had", () => {
    it. Its cases live on as DOM assertions in
    tests/chat-markdown-render.test.tsx. docs/plans/chat-markdown.md. */
 
-describe("nextModeIndex — the mode switch's keyboard, without a browser", () => {
-  /* A count, not the real one. `nextModeIndex` is pure index arithmetic and
-     knows nothing about which modes exist, so pinning this to `MODES_UI.length`
-     would only mean the test changes shape every time a mode is added or the
-     bar is reordered — which happened twice in two days. The bar is Contents,
-     Summary, Glossary, Search, Chat today (Dock.tsx § MODES_UI); the wrapping
-     is checked at other counts below. */
-  const N = 3;
-
-  it("moves forward on Right and Down", () => {
-    expect(nextModeIndex("ArrowRight", 0, N)).toBe(1);
-    expect(nextModeIndex("ArrowDown", 0, N)).toBe(1);
-  });
-
-  it("moves backward on Left and Up", () => {
-    expect(nextModeIndex("ArrowLeft", 2, N)).toBe(1);
-    expect(nextModeIndex("ArrowUp", 2, N)).toBe(1);
-  });
-
-  it("wraps forward off the end", () => {
-    expect(nextModeIndex("ArrowRight", N - 1, N)).toBe(0);
-  });
-
-  /* JavaScript's `%` keeps the sign of its left operand, so the naive
-     `(index - 1) % count` returns -1 here — a valid-looking array index that
-     reads back as `undefined`, and an arrow key that silently does nothing. */
-  it("wraps backward off the start rather than landing on -1", () => {
-    expect(nextModeIndex("ArrowLeft", 0, N)).toBe(N - 1);
-  });
-
-  it("jumps to the ends on Home and End", () => {
-    expect(nextModeIndex("Home", 2, N)).toBe(0);
-    expect(nextModeIndex("End", 0, N)).toBe(N - 1);
-  });
-
-  /* Anything else must come back null so the handler returns WITHOUT calling
-     preventDefault or stopPropagation — otherwise the group would swallow Tab,
-     Enter and every printed character while it happens to hold focus. */
-  it("declines keys that are not its own", () => {
-    for (const key of ["Tab", "Enter", " ", "a", "Escape", "PageDown"]) {
-      expect(nextModeIndex(key, 0, N)).toBeNull();
-    }
-  });
-
-  it("declines everything when there are no modes to move between", () => {
-    expect(nextModeIndex("ArrowRight", 0, 0)).toBeNull();
-  });
-
-  /* Adding a fourth mode is a row in MODES_UI and nothing else — the arithmetic
-     must not have three baked into it anywhere. */
-  it("works for any number of modes", () => {
-    expect(nextModeIndex("ArrowRight", 3, 4)).toBe(0);
-    expect(nextModeIndex("End", 0, 4)).toBe(3);
-    expect(nextModeIndex("ArrowRight", 0, 1)).toBe(0);
-  });
-});
+/* `nextModeIndex` was here — the mode switch's keyboard arithmetic, tested
+   without a browser because that is the only place an off-by-one in a wrapping
+   index can be caught cheaply. It went on 2026-08-31 with the arrow keys
+   themselves: the bottom bar, the diagram chips and the search matchers all
+   stopped selecting on arrow presses, because on this page the arrows belong to
+   the article and because selecting a mode now starts a paid model call.
+   What replaced these cases is tests/arrows-belong-to-the-article.test.tsx,
+   which asserts the absence rather than the arithmetic. Dock.tsx § the mode
+   switch, and docs/plans/260831ai-which-modes-are-ready-in-the-bottom-bar-and-running-one-by-clicking-it.md. */
 
 describe("splitCitations — prose inside brackets, and duplicates", () => {
   const known = new Set(["spya-k3m9qt", "spya-p7w2dn"]);

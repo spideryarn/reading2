@@ -1330,7 +1330,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
           is one gesture rather than four waits. */}
       <div className="diag-kinds" role="radiogroup" aria-label="Which diagram">
         <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-          {DIAGRAMS.map((k, i) => {
+          {DIAGRAMS.map((k) => {
             const ui = KIND_UI[k];
             const Icon = ui.icon;
             return (
@@ -1352,35 +1352,25 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
                   type="button"
                   role="radio"
                   aria-checked={k === kind}
-                  tabIndex={k === kind ? 0 : -1}
+                  /* **Every chip its own tab stop, and no arrow keys** — the
+                     roving tabindex and its arrow handler went on 2026-08-31.
+                     The arrows belong to the article on this page (↑ / ↓ step
+                     it, ← / → choose the stride: keyboard.md), and this handler
+                     called `preventDefault` inside a group that also
+                     `stopPropagation`s, so all four went dead while a chip had
+                     focus. Greg met it as a bug.
+
+                     It matters more here than in the bottom bar, and that is
+                     the reason this one is written up rather than just deleted:
+                     the third chip is the **sketch**, and selecting it now
+                     starts a job on its own (docs/plans/260831ai-…) — 121–194
+                     seconds and about $0.20. An arrow press must not be able to
+                     buy that. Dock.tsx § DockModes has the full reasoning and
+                     the cost of the tab stops;
+                     tests/arrows-belong-to-the-article.test.tsx holds it. */
+                  tabIndex={0}
                   className={`diag-kind${k === kind ? " on" : ""}`}
                   onClick={() => onKind(k)}
-                  onKeyDown={(e) => {
-                    const d =
-                      e.key === "ArrowRight" || e.key === "ArrowDown"
-                        ? 1
-                        : e.key === "ArrowLeft" || e.key === "ArrowUp"
-                          ? -1
-                          : 0;
-                    if (d === 0) return;
-                    e.preventDefault();
-                    // Wraps, as the radio pattern specifies.
-                    const at = (i + d + DIAGRAMS.length) % DIAGRAMS.length;
-                    const next = DIAGRAMS[at];
-                    if (!next) return;
-                    onKind(next);
-                    /* The newly-checked button is the new tab stop, so focus has
-                       to follow it or the next arrow press goes nowhere. Found
-                       by id rather than by walking the parent's children, which
-                       is what this did before the buttons grew a `<Tooltip>`
-                       wrapper — the wrapper clones its child rather than adding
-                       an element, so the walk still worked, and relying on that
-                       is one refactor away from a control that silently stops
-                       moving. */
-                    document
-                      .querySelector<HTMLElement>(`.diag-kinds [data-diag-kind="${next}"]`)
-                      ?.focus();
-                  }}
                   data-diag-kind={k}
                 >
                   <Icon size={12} />
@@ -1604,7 +1594,7 @@ export function DiagramPanel({ slug, root, kind, onKind, atRow, onJump, blocks, 
       <div className="diag-scroll" ref={attachScroller}>
         {root === null ? (
           <p className="diag-quiet">
-            This article has no usable tree, so there is nothing to draw. Run <code>npm run toc</code>{" "}
+            This article has no usable tree, so there is nothing to draw. Run <code>npm run hierarchy</code>{" "}
             for it and the picture appears.
           </p>
         ) : box === null || box.w === 0 ? (
@@ -2057,7 +2047,7 @@ function Choice<T extends string>({
           reading along the row is one gesture. */}
       <div className="diag-opt-set" role="radiogroup" aria-label={label}>
         <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {options.map((o, i) => (
+        {options.map((o) => (
         <Tooltip
           key={o.value}
           placement="bottom"
@@ -2074,46 +2064,15 @@ function Choice<T extends string>({
           type="button"
           role="radio"
           aria-checked={o.value === value}
-          tabIndex={o.value === value ? 0 : -1}
+          /* **A tab stop each, and no arrow keys** — the roving tabindex and
+             its arrow handler went on 2026-08-31 with the four other switchers
+             in this app. The kind chips above carry the reasoning; Dock.tsx
+             § the mode switch carries all of it. Short version: on this page
+             the arrows belong to the article, and every one of these handlers
+             called `stopPropagation` to take them. */
+          tabIndex={0}
           className={`diag-opt-btn${o.value === value ? " on" : ""}`}
           onClick={() => onChange(o.value)}
-          onKeyDown={(e) => {
-            const d =
-              e.key === "ArrowRight" || e.key === "ArrowDown"
-                ? 1
-                : e.key === "ArrowLeft" || e.key === "ArrowUp"
-                  ? -1
-                  : 0;
-            if (d === 0) return;
-            e.preventDefault();
-            // Wraps, as the radio pattern specifies.
-            const at = (i + d + options.length) % options.length;
-            const next = options[at];
-            if (!next) return;
-            onChange(next.value);
-            /* **And focus follows.** The newly-checked radio is the new tab
-               stop, so leaving focus behind means the next arrow press runs the
-               *old* button's handler and steps from the same place — you can
-               reach the neighbour and never anything past it. Tab then also
-               lands back inside the group instead of leaving it. The kind
-               switcher above already does this; this one did not until GPT Sol
-               read it, and the failure is one press away from looking fine. */
-            /* **By value, not by walking the parent's children.** Each button
-               is now wrapped in a `<Tooltip>`, and although the wrapper clones
-               its child rather than adding an element — so the walk still
-               happens to work — relying on that is one refactor away from a
-               control that silently stops moving. The kind switcher above was
-               changed the same way and for the same reason. */
-            /* Scoped to *this* group with `closest`, not to the document:
-               there are two of these rows on screen at once, and a value name
-               shared between them would otherwise move focus into the other
-               one. Nothing collides today, which is what would make that bug
-               arrive later and look like nothing to do with this line. */
-            e.currentTarget
-              .closest(".diag-opt-set")
-              ?.querySelector<HTMLElement>(`[data-diag-opt="${next.value}"]`)
-              ?.focus();
-          }}
           data-diag-opt={o.value}
           >
             {o.label}
