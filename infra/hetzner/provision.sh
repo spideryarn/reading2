@@ -152,41 +152,26 @@ command -v claude >/dev/null || { echo "FATAL: npm reported success but claude i
 
 echo "=== codex cli ==="
 # OpenAI's agent CLI, so scripts/run-codex.ts works here as it does on the
-# laptop -- the cross-family review that docs/reusable/codex-cli-as-subagent.md
-# makes a standing rule. Without it, every plan built on this box would have to
-# go back to the laptop to be reviewed.
+# laptop — the cross-family review docs/reusable/codex-cli-as-subagent.md makes
+# a standing rule. Unpinned, like claude-code above and unlike the two MCP
+# servers below: the wrapper passes model, effort, sandbox and approval policy
+# on every invocation, so a floating version steers nothing.
 #
-# Unpinned, deliberately, exactly like claude-code above and unlike the two MCP
-# servers below. Both agent CLIs move fast and are steered by explicit flags on
-# every invocation (the wrapper passes model, effort, sandbox and approval
-# policy itself), so a floating version costs little; an MCP server is picked up
-# implicitly by whatever session happens to start, which is why those are pinned.
-#
-# @openai/codex ships a prebuilt platform binary rather than JS, so this is the
+# @openai/codex ships a prebuilt platform binary rather than JS, so it is the
 # one npm global here that can install "successfully" with nothing runnable for
-# this architecture. The version assertion below is what catches that -- npm's
-# exit code would not.
+# this architecture. Hence running it rather than looking for the file.
 run 300 "install codex cli" npm install -g @openai/codex
-command -v codex >/dev/null || { echo "FATAL: npm reported success but codex is not on PATH" >&2; exit 1; }
-# Run it, do not just look for the file. See above: the failure mode is a
-# binary that exists and cannot execute.
 CODEX_V=$(timeout 60 codex --version 2>/dev/null || echo none)
 case "$CODEX_V" in
   codex-cli\ *) echo "$CODEX_V" ;;
-  *) echo "FATAL: codex is on PATH but '--version' printed '$CODEX_V'" >&2; exit 1 ;;
+  *) echo "FATAL: npm reported success but 'codex --version' printed '$CODEX_V'" >&2; exit 1 ;;
 esac
-# No ~/.codex/config.toml is written, on purpose. run-codex.ts passes model,
-# effort, sandbox and -c approval_policy=never on every invocation precisely
-# because a local config file silently overrides codex's own safe defaults --
-# see the approval-policy trap in docs/reusable/codex-cli-as-subagent.md. A
-# config here would be a second source of truth for settings the wrapper
-# already owns.
-#
-# Auth is a human step and is NOT done here, the same as claude's /login: the
-# box reads CODEX_API_KEY out of the repo's .env.local (gjd-remote push-env
-# allowlists it), and `codex login --device-auth` adds the ChatGPT subscription
-# if Greg wants the wrapper's default subscription-first path to have something
-# to spend. infra/hetzner/README.md has the ceremony.
+# No ~/.codex/config.toml is written on purpose: run-codex.ts passes
+# -c approval_policy=never itself precisely BECAUSE a local config file
+# silently overrides codex's safe default (the approval-policy trap in that
+# doc). A config here would be a second source of truth for what the wrapper
+# already owns. Auth is a human step, like claude's /login — see
+# infra/hetzner/README.md.
 
 echo "=== chrome ==="
 # chrome-devtools-mcp needs real Chrome stable, not Playwright's Chromium.

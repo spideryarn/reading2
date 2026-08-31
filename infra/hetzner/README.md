@@ -107,6 +107,28 @@ evidence any of it happened; cloud-init reporting success is not.
 Use `/login`, never `claude setup-token` — a token session is model-requests-only and loses
 Remote Control, claude.ai connectors and `/schedule`.
 
+### Codex, for cross-family review
+
+`provision.sh` installs `@openai/codex` alongside Claude Code, so
+[`scripts/run-codex.ts`](../../scripts/run-codex.ts) runs here exactly as it does on the laptop and
+a plan written on the box can be reviewed on the box —
+[codex-cli-as-subagent.md](../../docs/reusable/codex-cli-as-subagent.md) is the standing rule.
+Installing it is the whole change; the interesting part is the credential.
+
+**It already works with no login**, because `CODEX_API_KEY` is on `gjd-remote push-env`'s allowlist
+and the wrapper reads it out of the repo's `.env.local`. But the wrapper spends the ChatGPT
+subscription *first* by default, and with no `~/.codex/auth.json` that attempt fails and falls back
+— about 12 seconds of tax on every run, for a credential that is already paid for. So log in once.
+Use the **device flow**: plain `codex login` wants to open a browser on the box.
+
+```
+ssh greg@<ip>
+codex login --device-auth     # prints a URL and a one-time code; enter both on your laptop
+codex login status            # must not say "Not logged in"
+```
+
+Until that is done, `--auth key-first` skips the failed attempt.
+
 ## Rebuilding
 
 ```
