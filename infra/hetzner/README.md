@@ -57,11 +57,11 @@ Then, in this order, from the repo root on the laptop:
 4. **Send the environment.** `npx tsx scripts/gjd-remote.ts push-env` — allowlisted key names only,
    rebuilt on the box rather than copied, and it prints what it skipped. It writes *into the
    checkout*, so it has to come after the clone and not before it.
-5. **Build it, on the box.** `npm ci`, then `npm run db:start` (first run pulls ~2GB of Docker
-   images), `npm run db:migrate`, and **`npm run db:seed-owner`** — all four, in that order.
-   The last one is the one everybody misses; see
-   [What a fresh clone cannot do](#what-a-fresh-clone-cannot-do) and
-   [supabase-local.md](../../docs/project/supabase-local.md).
+5. **Build it, on the box.** `npm ci`, then **`npm run setup`**
+   ([`scripts/setup-local.ts`](../../scripts/setup-local.ts)), which runs the local Supabase stack,
+   the migrations and the owner seed in the one order that works. The first run pulls ~2GB of Docker
+   images. `npm ci` stays outside it on purpose — you cannot run the script before installing.
+   It is the same command on the laptop, which is why it is the one that gets exercised.
 6. **Copy the article fixtures**, which git does not carry — same section.
 7. ⚑ **Authenticate the MCP servers** that need it — [MCP servers](#mcp-servers).
 8. **Check the lot:** `npx tsx scripts/gjd-remote.ts doctor`. It exits non-zero if anything failed,
@@ -407,6 +407,67 @@ start-vnc                                 # on the box
 Then open <http://localhost:6080/vnc.html>. Nothing listens on a public port for this — Xvfb,
 x11vnc and websockify are all bound to localhost and reached through the tunnel.
 
+## MCP servers
+
+Four kinds, and only one of them needs anything from a human.
+
+**Greg's account brings its own.** Canva, Zapier, Google Calendar, Gmail, Drive, Notion arrive on
+any machine he logs into and need nothing per-box. Do not register them here and do not count them
+when someone says the list is too long.
+
+**The two browser servers are provisioned.** `playwright` and `chrome-devtools`, at *user* scope,
+pinned and heap-capped by [`provision.sh`](provision.sh) — see its `=== mcp servers ===` block, and
+[browser-control.md](../../docs/project/browser-control.md) for what they can and cannot prove.
+
+**The three service servers travel in git**, in [`.mcp.json`](../../.mcp.json) at the repo root, so a
+new box gets them from `gjd-remote clone` and no provisioning code has to know about them:
+
+| | url | credential |
+|---|---|---|
+| `supabase` | `http://127.0.0.1:54361/mcp` | none — it is the local stack |
+| `vercel` | `https://mcp.vercel.com` | OAuth, in a browser |
+| `sentry` | `https://mcp.sentry.dev/mcp` | OAuth, in a browser |
+
+A project-scope server normally makes every session sit at `⏸ Pending approval` until someone
+approves it interactively. `enabledMcpjsonServers` in
+[`.claude/settings.json`](../../.claude/settings.json) pre-approves these three by name, which is
+why nobody gets a modal. That file is also where the deny list lives, and JSON cannot hold a comment
+saying why, so it is here instead: **Vercel's MCP can spend money** — `buy_pro`, `buy_domain`,
+`buy_credits` — and an autonomous agent must never reach them. The matcher is
+`mcp__<server>__<tool>` for one tool, **`mcp__<server>` with no trailing wildcard** for a whole
+server, and `mcp__*` for all of them; `mcp__vercel__*` is not the syntax, however much it looks like
+it. `deploy_to_vercel`, `pause_project` and `update_project_deployment_protection` are deliberately
+*not* denied — they are real work, and sessions here run in normal permission mode (there is no
+`--dangerously-skip-permissions` anywhere in `gjd-remote`), so they prompt.
+
+### ⚑ The one manual step, per box
+
+```
+ssh -t greg@<ip>
+cd ~/code/spideryarn2
+claude mcp login vercel     # prints a URL; open it on the laptop, approve, come back
+claude mcp login sentry
+claude mcp list             # both must now say ✔ Connected, not ! Needs authentication
+```
+
+**A rebuild does not undo this.** The tokens are in `~/.claude/.credentials.json` and
+`~/.claude.json`, `/home` is the volume (`findmnt /home` says `/dev/sdb`), and the volume outlives
+the server. So this is a once-per-*box* ceremony, not a once-per-`apply` one.
+
+### Why Supabase needs no credential, and what that buys
+
+It is the **local** stack's own MCP on a loopback address, not Supabase's hosted one, so it is
+structurally incapable of reaching production — there is no production Supabase credential on the
+box at all, which is what lets `push-env`'s allowlist leave `SUPABASE_ACCESS_TOKEN` behind
+([`scripts/gjd-remote-env.ts`](../../scripts/gjd-remote-env.ts)). It serves 11 tools, verified by a
+`tools/list` call on 2026-08-31: `search_docs`, `list_tables`, `list_extensions`, `list_migrations`,
+`apply_migration`, `execute_sql`, `query_logs`, `get_advisors`, `get_project_url`,
+`get_publishable_keys`, `generate_typescript_types`.
+
+Two of those write. They cannot touch production, but the box runs one Supabase stack shared by
+every session on it, so `execute_sql` there is somebody else's data as well as yours —
+[supabase-local.md](../../docs/project/supabase-local.md).
+
 ## What a fresh clone cannot do
 
 Two things a green `git clone` does not give you. Both were found by running the suite on a new box,
@@ -415,7 +476,8 @@ not by reading anything, and both fail in ways that do not name the cause — th
 
 **`npm run db:seed-owner`.** A freshly migrated database has no owner row, so every insert carrying
 an `owner_id` dies on a foreign key. It cost 18 failing test files and the error names neither the
-constraint nor the fix.
+constraint nor the fix. **`npm run setup` now runs it for you** — that script exists because of this
+— so this one is only a trap if you assemble the steps by hand.
 
 **The article fixtures.** `data/` and `output/` are gitignored — about 62MB and 11MB — and roughly
 19 test files need an article with both `blocks.json` and `tree.json`. Only two of the nineteen say
@@ -466,12 +528,15 @@ deploy gate's worktree, a new contributor. Worth fixing at the source.
   process, and this box exists to run sessions in parallel. The cost is that the browser does not
   stay signed in to anything.
 - **There is one browser here, and it is `google-chrome-stable`.** Both MCPs launch it — the
-  Playwright one is given `--browser chrome` explicitly — and
-  [`scripts/remote-smoke-browser.mjs`](../../scripts/remote-smoke-browser.mjs) names it in
-  `executablePath`. Playwright's own chromium download was removed from provisioning on 2026-08-31
-  after 651MB of it turned out to be launched by nothing. So **a bare `chromium.launch()` fails
-  here** with "Executable doesn't exist"; pass the path. `npx playwright install chromium` fetches
-  one on demand if you genuinely need it.
+  Playwright one is given `--browser chrome --executable-path /usr/bin/google-chrome-stable`, the
+  channel flag to choose Chrome and the path so nothing depends on Playwright's channel lookup — and
+  [`scripts/remote-smoke-browser.mjs`](../../scripts/remote-smoke-browser.mjs) names the same binary
+  in `executablePath`. Playwright's own chromium download was removed from provisioning on
+  2026-08-31 after 651MB of it turned out to be launched by nothing. So **a bare `chromium.launch()`
+  fails here** with "Executable doesn't exist"; pass the path. If you genuinely need Playwright's own
+  browser, install it **version-matched to the client you are about to run**
+  (`npx playwright@1.62.1 install chromium`) — the bare `npx playwright install chromium` pulls
+  `@latest` and recreates the very revision mismatch this box was cleaned up to remove.
 - **The MCP list is deliberately two.** N sessions × M MCP servers spawns unbounded Node processes;
   that, not RAM, is what falls over first. Argue before adding a third.
 - **There is no backup.** By choice — the code lives in remote git. Anything on this box that is

@@ -42,7 +42,8 @@ screenshots are large and the reasoning is small.
 Two things about that box will catch you out:
 
 - **There is one browser on that box, and it is system Chrome.** Both MCPs launch
-  `/opt/google/chrome/chrome` — the Playwright one is given `--browser chrome` explicitly — and the
+  `/opt/google/chrome/chrome` — the Playwright one is given
+  `--browser chrome --executable-path /usr/bin/google-chrome-stable` explicitly — and the
   smoke test names it in `executablePath`. Set it yourself in any script you write. A bare
   `chromium.launch()` asks for Playwright's *bundled* chromium, which provisioning no longer
   downloads, and dies with "Executable doesn't exist". The old 651MB is still in
