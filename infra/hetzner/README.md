@@ -54,6 +54,13 @@ means removing both deliberately, in their own commit. Note that `prevent_destro
 whole-module `terraform destroy` fail at plan time rather than sparing the volume — that is the
 intended behaviour, not a bug to work around.
 
+## mosh does not carry the tunnel
+
+mosh deliberately carries a terminal and nothing else — no port forwarding, no agent forwarding,
+no X11. So the noVNC tunnel below must be a plain `ssh -L`, and `ssh-agent` forwarding for git
+pushes needs SSH too. The sane pairing is **SSH + tmux as the primary**, with mosh as a second
+attach point onto the same tmux session for phone or flaky wifi — they coexist fine.
+
 ## Watching the browser
 
 ```
@@ -76,6 +83,15 @@ x11vnc and websockify are all bound to localhost and reached through the tunnel.
   commands from `/usr/local/sbin/provision.sh`.
 - **Both MCP servers are pinned** to whatever version was current at provision time, not `@latest`
   at each launch. Re-provision to move them.
+- **Each MCP server's heap is capped** at 512MB via `NODE_OPTIONS`, because N sessions x M servers
+  spawns node processes with no cap each and that is the documented way this box dies. Anthropic
+  closed the issue "not planned", so the cap is ours to keep.
+- **An AppArmor profile for bubblewrap is installed** even though nothing uses it yet. On Ubuntu
+  24.04+ the default policy stops bubblewrap making user namespaces, so Claude Code's sandbox
+  runtime fails to start and says nothing useful about why. It is here for the day we isolate
+  sessions.
+- **Node matches the laptop (26), not LTS (24).** A major-version gap between laptop and box is
+  where "works on my machine" comes from.
 - **Playwright runs `--isolated`.** One persistent browser profile supports exactly one browser
   process, and this box exists to run sessions in parallel. The cost is that the browser does not
   stay signed in to anything.

@@ -61,17 +61,29 @@ variable "volume_size_gb" {
 
 variable "swap_gb" {
   description = <<-TXT
-    Swap is the cheap insurance against the known failure mode: N sessions x M
-    MCP servers spawns unbounded Node processes, and the OOM killer takes the
-    box out. Swap turns a hard kill into a slowdown you can notice and act on.
+    Insurance against the known failure mode: N sessions x M MCP servers spawns
+    unbounded Node processes and the OOM killer takes the box out. Swap turns a
+    hard kill into a slowdown you can notice and act on. Greg has hit OOM on
+    this workload before, so this is set generously; it costs only boot-disk
+    space, of which there is 320GB.
+
+    It bounds nothing, though. Swap thrashing can still make SSH unusable, and
+    the real answer if that happens is a per-session memory limit, not more swap.
+    vm.swappiness is set to 10 so this stays a safety net rather than routine.
   TXT
   type        = number
-  default     = 8
+  default     = 16
 }
 
 variable "node_major" {
-  type    = number
-  default = 22
+  description = <<-TXT
+    Matches Greg's laptop (26) rather than tracking LTS (24). This box exists to
+    do what the laptop does, and a major-version gap between the two is where
+    "works on my machine" comes from. Both NodeSource lines exist; switch to 24
+    if the Current line ever churns too much.
+  TXT
+  type        = number
+  default     = 26
 }
 
 variable "timezone" {

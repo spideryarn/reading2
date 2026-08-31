@@ -23,6 +23,7 @@ users:
       - ${ssh_public_key}
 
 packages:
+  - bubblewrap
   - build-essential
   - ca-certificates
   - curl
@@ -35,6 +36,7 @@ packages:
   - novnc
   - rsync
   - ripgrep
+  - socat
   - tmux
   - unattended-upgrades
   - unzip
@@ -82,6 +84,19 @@ write_files:
   - path: /etc/profile.d/display.sh
     content: |
       export DISPLAY=:99
+
+  # Ubuntu 24.04+ ships an AppArmor policy that stops bubblewrap creating the
+  # user namespaces it needs, so Claude Code's sandbox runtime fails to start
+  # and says nothing useful about why. Written now so the option is there the
+  # day we decide to isolate sessions; harmless until then.
+  - path: /etc/apparmor.d/bwrap
+    content: |
+      abi <abi/4.0>,
+      include <tunables/global>
+      profile bwrap /usr/bin/bwrap flags=(unconfined) {
+        userns,
+        include if exists <local/bwrap>
+      }
 
   # One script, fail-fast, verified at the end. The previous version was twelve
   # loose runcmd entries with no `set -e` and several `|| true`, so a failed npm
@@ -160,6 +175,23 @@ write_files:
       npx --yes playwright@latest install-deps chromium
       su - "$USER_NAME" -c 'npx --yes playwright@latest install chromium'
 
+      echo "=== apparmor ==="
+      systemctl reload apparmor || true
+
+      echo "=== tmux ==="
+      # Straight from the official terminal-config page. Without allow-passthrough
+      # the progress bar and desktop notifications never escape tmux; without
+      # extended-keys, Shift+Enter submits instead of inserting a newline.
+      # Never clobber an existing config on rebuild.
+      if [ ! -f /home/"$USER_NAME"/.tmux.conf ]; then
+        cat > /home/"$USER_NAME"/.tmux.conf <<'TMUX'
+      set -g allow-passthrough on
+      set -s extended-keys on
+      set -as terminal-features 'xterm*:extkeys'
+      TMUX
+        chown "$USER_NAME":"$USER_NAME" /home/"$USER_NAME"/.tmux.conf
+      fi
+
       echo "=== mcp servers ==="
       # Pin at provision time rather than resolving @latest on every session
       # launch: that is a supply-chain surface and makes two sessions able to run
@@ -167,12 +199,26 @@ write_files:
       PW_MCP=$(npm view @playwright/mcp version)
       CDT_MCP=$(npm view chrome-devtools-mcp version)
       echo "pinning @playwright/mcp@$PW_MCP and chrome-devtools-mcp@$CDT_MCP"
+
       # --scope user, or they register against /home as a "project" and vanish
       # the moment you cd into a repository.
       # --isolated, because one persistent profile supports exactly one browser
       # process and the whole point of this box is parallel sessions.
-      su - "$USER_NAME" -c "claude mcp add --scope user playwright -- npx -y @playwright/mcp@$PW_MCP --headless --isolated"
-      su - "$USER_NAME" -c "claude mcp add --scope user chrome-devtools -- npx -y chrome-devtools-mcp@$CDT_MCP --headless"
+      # --env caps each MCP server's heap: N sessions x M servers spawns node
+      # processes with no memory cap each, which is the documented way this box
+      # dies (anthropics/claude-code#45880, closed "not planned").
+      # The docs warn the server NAME must not directly follow --env or the CLI
+      # reads it as another KEY=value pair, hence --scope sitting between them.
+      CAP="NODE_OPTIONS=--max-old-space-size=512"
+      add_mcp() {
+        name=$1; shift
+        if ! su - "$USER_NAME" -c "claude mcp add --env '$CAP' --scope user $name -- $*"; then
+          echo "WARN: --env rejected for $name; retrying uncapped" >&2
+          su - "$USER_NAME" -c "claude mcp add --scope user $name -- $*"
+        fi
+      }
+      add_mcp playwright "npx -y @playwright/mcp@$PW_MCP --headless --isolated"
+      add_mcp chrome-devtools "npx -y chrome-devtools-mcp@$CDT_MCP --headless"
 
       echo "=== ssh ==="
       sshd -t
@@ -190,6 +236,7 @@ write_files:
       check "playwright chromium"      'su - '"$USER_NAME"' -c "ls ~/.cache/ms-playwright" | grep -q chromium'
       check "playwright mcp"           'su - '"$USER_NAME"' -c "claude mcp list" | grep -q playwright'
       check "devtools mcp"             'su - '"$USER_NAME"' -c "claude mcp list" | grep -q chrome-devtools'
+      check "tmux config"              'test -f /home/'"$USER_NAME"'/.tmux.conf'
       check "sshd config valid"        'sshd -t'
       check "password auth off"        'sshd -T | grep -qi "^passwordauthentication no"'
       check "root login off"           'sshd -T | grep -qi "^permitrootlogin no"'
