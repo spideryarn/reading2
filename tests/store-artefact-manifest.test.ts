@@ -45,6 +45,86 @@ import { describe, expect, it } from "vitest";
 const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
+ * A corpus root, read out loud.
+ *
+ * **This used to be `readdir(...).catch(() => [])`, three times.** An absent
+ * `data/` yielded `[]`, the scan below saw no files, `unaccounted` was empty
+ * and the suite whose entire job is to notice a new artefact filename passed
+ * having examined nothing — green, in 5ms, on a fresh clone where `data/` is
+ * gitignored and therefore not there. Verified 2026-09-01 by running this file
+ * against an empty tree: "covers every file present in data/" passed.
+ *
+ * An absent corpus is a broken checkout, not an empty set.
+ * docs/plans/260901b-committed-fixture-corpus.md · docs/reusable/silent-success.md.
+ */
+async function corpusRoot(root: string) {
+  try {
+    return await readdir(root, { withFileTypes: true });
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code ?? "unknown";
+    throw new Error(
+      `${root} could not be read (${code}), so this scan has nothing to scan.\n` +
+        `That is a broken checkout rather than an empty set: this file reads the corpus to ` +
+        `notice an artefact filename the manifest below does not know about, and with no ` +
+        `corpus it can only ever pass.\n` +
+        `See docs/plans/260901b-committed-fixture-corpus.md for where the corpus is supposed ` +
+        `to come from.`,
+    );
+  }
+}
+
+/**
+ * One article's filenames.
+ *
+ * `ENOENT` alone is swallowed, and only here: `data/` is shared mutable state
+ * during a run, so a directory listed a millisecond ago can be another suite's
+ * fixture on its way out. Every other error — a permission, an I/O fault — is a
+ * reason the scan is not seeing what is there, and is thrown rather than read
+ * as "this article has no files".
+ */
+async function articleFiles(dir: string): Promise<string[]> {
+  try {
+    return await readdir(dir);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw err;
+  }
+}
+
+/**
+ * The article directories in a corpus root.
+ *
+ * `_jobs` is the queue's, not an article's. `test-` directories are other test
+ * files' fixtures, created and removed concurrently.
+ */
+function articleDirs(entries: Awaited<ReturnType<typeof corpusRoot>>): string[] {
+  return entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith("_") && !e.name.startsWith("test-"))
+    .map((e) => e.name);
+}
+
+/**
+ * The floor beneath the enumeration, and why it is a floor rather than a cage.
+ *
+ * The scan has to stay an enumeration — its whole value is catching a filename
+ * **nobody wrote down**, which a fixed list cannot do, and its comments record
+ * two real catches (`assets.json`, `quotes.json`). But an enumeration with no
+ * floor is satisfied by zero, and by a corpus thinned to two metadata-only
+ * directories, and by a `data/` holding nothing but another suite's leftover
+ * `test-` fixtures. Each of those reads exactly like a clean run.
+ *
+ * `writes` is the named must-have because it is already this repo's ground
+ * truth for "a healthy fixture set": `scripts/deploy-checks.ts` hardcodes
+ * `data/writes/*` as the deploy gate's sentinels and
+ * `tests/artefact-copy.test.ts` hardcodes it as `SLUG`. It is sixteen files and
+ * 148 KB — the most artefact names in one directory anywhere.
+ */
+const FLOOR_SLUG = "writes";
+
+/** What every complete article in the corpus has, so a scan seeing none of them is broken. */
+const FLOOR_FILES = ["blocks.json", "meta.json", "tree.json", "labels.json"];
+
+/**
  * Every artefact, and where it lives once it is in Postgres.
  *
  * The value is documentation rather than something the test parses — the test
@@ -199,22 +279,55 @@ const NOT_YET_WRITTEN: Record<string, string> = {
      go on excusing a name that had arrived. docs/project/quotes.md. */
 };
 
-describe("the artefact manifest", () => {
-  it("covers every file present in data/", async () => {
-    const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true }).catch(
-      () => [],
-    );
+/** The scan both tests below run: every filename beside an article in `data/`. */
+async function scanData(): Promise<{ articles: string[]; seen: Set<string> }> {
+  const data = path.join(ROOT, "data");
+  const articles = articleDirs(await corpusRoot(data));
+  const seen = new Set<string>();
+  for (const slug of articles) {
+    for (const file of await articleFiles(path.join(data, slug))) seen.add(file);
+  }
+  return { articles, seen };
+}
 
-    const seen = new Set<string>();
-    for (const entry of entries) {
-      // `_jobs` is the queue's, not an article's. `test-` directories are other
-      // test files' fixtures, created and removed concurrently.
-      if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith("test-")) {
-        continue;
-      }
-      const files = await readdir(path.join(ROOT, "data", entry.name)).catch(() => []);
-      for (const file of files) seen.add(file);
-    }
+describe("the artefact manifest", () => {
+  /**
+   * **The floor, and it is the point of this pair.** The test below can only
+   * fail on a filename it has actually read, so everything that quietly reduces
+   * what it reads — a missing corpus, a thinned one, one holding nothing but a
+   * peer's leftovers — turns it green rather than red. That is the failure
+   * mode, so it gets its own red rather than a clause hidden inside the scan.
+   */
+  it("has a corpus rich enough for that to mean anything", async () => {
+    const { articles, seen } = await scanData();
+
+    expect(
+      articles.length,
+      `no article directories under ${path.join(ROOT, "data")} — only \`_\`-prefixed and ` +
+        `\`test-\` ones, which are the queue's and other suites' fixtures`,
+    ).toBeGreaterThan(0);
+
+    expect(
+      articles,
+      `${FLOOR_SLUG} is the sentinel scripts/deploy-checks.ts and tests/artefact-copy.test.ts ` +
+        `both hardcode, and the richest article in the corpus. Without it this scan can be ` +
+        `green over a corpus too thin to catch anything.`,
+    ).toContain(FLOOR_SLUG);
+
+    const missing = FLOOR_FILES.filter((file) => !seen.has(file));
+    expect(
+      missing,
+      missing.length
+        ? `The scan read ${articles.length} article directories and did not see:\n` +
+            `  ${missing.join("\n  ")}\n` +
+            `Every complete article has all of these, so either the corpus is not one or the ` +
+            `scan is walking the wrong tree.`
+        : "",
+    ).toEqual([]);
+  });
+
+  it("covers every file present in data/", async () => {
+    const { seen } = await scanData();
 
     const known = new Set([...Object.keys(HOMES), ...Object.keys(NOT_MIGRATED)]);
     const unaccounted = [...seen].filter((file) => !known.has(file)).sort();
@@ -253,7 +366,11 @@ describe("the artefact manifest", () => {
     const outsideFixtures = new Set<string>();
     const roots = [path.join(ROOT, "data"), path.join(ROOT, "example")];
     for (const root of roots) {
-      const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+      /* Both roots read out loud. `example/` is committed, so its absence is a
+         broken checkout; `data/`'s absence used to make the assertion below
+         report every artefact in `HOMES` as one "nothing writes any more",
+         which is a red that blames the manifest for the corpus being gone. */
+      const entries = await corpusRoot(root);
       if (entries.some((e) => e.isFile())) {
         for (const entry of entries) {
           if (entry.isFile()) {
@@ -264,7 +381,7 @@ describe("the artefact manifest", () => {
       }
       for (const entry of entries) {
         if (!entry.isDirectory() || entry.name.startsWith("_")) continue;
-        const files = await readdir(path.join(root, entry.name)).catch(() => []);
+        const files = await articleFiles(path.join(root, entry.name));
         for (const file of files) {
           seen.add(file);
           if (!entry.name.startsWith("test-")) outsideFixtures.add(file);

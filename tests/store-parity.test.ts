@@ -176,8 +176,17 @@ async function completeArticles(): Promise<string[]> {
        alone — the least useful kind of red. Excluded by name, the same way
        `_jobs` is, rather than left to fail the artefact check by luck. */
     if (entry.name.startsWith("test-")) continue;
+    /* **`ENOENT` only.** A directory listed a millisecond ago can be a peer
+       suite's fixture on its way out, and that is the one error worth reading
+       as "no files". Every other error — a permission, an I/O fault — means the
+       scan is not seeing what is there, and an article silently leaving the
+       corpus is how a parity suite quietly stops comparing the thing it was
+       written for. Same rule, same reason, in tests/store-artefact-manifest.test.ts. */
     const files: string[] = await readdir(path.join(ROOT, "data", entry.name)).catch(
-      () => [] as string[],
+      (err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT") return [] as string[];
+        throw err;
+      },
     );
     if (files.includes("blocks.json") && files.includes("tree.json")) slugs.push(entry.name);
   }
@@ -249,6 +258,25 @@ when("the filesystem and Postgres stores agree", () => {
   it("has something to compare", () => {
     // A parity suite over zero articles passes perfectly and proves nothing.
     expect(slugs.length).toBeGreaterThan(0);
+
+    /* **And a count is satisfied by one, which is not what this file needs.**
+       Two of the corpus's articles are named up top and carry a `describe` each
+       — the legacy one the gate refuses, and the one with no stage 1. Neither
+       block says anything useful about an article that is not there: the
+       missing-fixture red arrives inside whichever assertion happens to touch
+       it first, blaming the store. So the corpus is asked for them by name,
+       here, before any of that runs.
+       docs/plans/260901b-committed-fixture-corpus.md § "Named slugs are not coverage". */
+    expect(
+      onDiskSlugs,
+      `data/${LEGACY_SLUG} is the article whose labels.json predates sourceHash — the whole ` +
+        `case for the publication gate. Without it the block below tests nothing.`,
+    ).toContain(LEGACY_SLUG);
+    expect(
+      slugs,
+      `data/${NO_FETCH_SLUG} is the article with no stage 1, and the only one that proves ` +
+        `Postgres refuses to write url and fetchedAt from the extract step.`,
+    ).toContain(NO_FETCH_SLUG);
   });
 
   it("built every article from nothing, rather than carrying one forward", () => {

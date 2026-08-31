@@ -68,43 +68,62 @@ const SELECTION: ChatAnchor = { blockId: BLOCK, quote: "qualia realism", start: 
 const WHOLE_BLOCK: ChatAnchor = { blockId: BLOCK };
 
 /**
- * The smallest article in `data/` that the fixture loader will accept.
+ * The article this test clones.
  *
- * Smallest so the copy is cheap; real so the import does not fail on something
- * unrelated to what is being tested. `_`-prefixed is the queue's, `test-`-
- * prefixed is another test's scratch directory.
+ * **Named, and it used to be searched for — "the smallest article in `data/`
+ * the loader will accept", which is nondeterminism wearing a search's clothes.**
+ * `data/` is gitignored working state, so the winner was whatever each machine
+ * happened to have: on this laptop on 2026-09-01 it was `data/todo`, a personal
+ * scratch article that will never be in any committed corpus, and the same run
+ * on another machine exercised a different article of a different shape. When a
+ * test fails, "which article was it?" should not be a question.
+ *
+ * `writes` because it is already this repo's ground truth for a healthy
+ * fixture: `scripts/deploy-checks.ts` uses `data/writes/*` as the deploy gate's
+ * sentinels and `tests/artefact-copy.test.ts` hardcodes it. It is 10 KB of
+ * blocks, so the copy stays cheap — which is what "smallest" was for.
+ * docs/plans/260901b-committed-fixture-corpus.md.
  */
-async function smallestLoadableArticle(): Promise<string | null> {
-  const entries = await readdir(path.join(ROOT, "data"), { withFileTypes: true });
-  const found: { slug: string; size: number }[] = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name.startsWith("_") || entry.name.startsWith("test-")) continue;
-    const files = await readdir(path.join(ROOT, "data", entry.name)).catch(() => [] as string[]);
-    if (!files.includes("blocks.json") || !files.includes("tree.json")) continue;
-    /* **Three more conditions than "it has blocks", and each one is a way the
-       copy below fails for a reason that is nothing to do with anchors.**
+const SOURCE_SLUG = "writes";
 
-       `output/<slug>.html` is the other half of the `extract` step, and
-       `copyArtefacts` refuses a step whose products are only half present. A
-       `labels.json` with no `sourceHash` predates stage 4 recording one, and
-       the publication gate correctly refuses such an article — `constitution`
-       is that article, and it is the smallest one here. `db:import` accepted
-       both, which is what made them invisible. */
-    const outputs = await Promise.all(
-      outputPairs(entry.name, entry.name).map(([file]) => stat(file).catch(() => null)),
+/**
+ * That the named article is really loadable, said out loud, one reason at a time.
+ *
+ * **Four conditions, and each one is a way the clone below fails for a reason
+ * that is nothing to do with anchors.** `output/<slug>.html` is the other half
+ * of the `extract` step, and `copyArtefacts` refuses a step whose products are
+ * only half present. A `labels.json` with no `sourceHash` predates stage 4
+ * recording one, and the publication gate correctly refuses such an article.
+ * `db:import` accepted both, which is what made them invisible.
+ *
+ * The search this replaced expressed the same four conditions as `continue`s,
+ * so an article that lost one silently dropped out of the running and something
+ * else was tested instead. Here each one names itself.
+ */
+async function requireCloneSource(slug: string): Promise<void> {
+  const dir = path.join(ROOT, "data", slug);
+  const files = await readdir(dir).catch((err: NodeJS.ErrnoException) => {
+    throw new Error(
+      `${dir} is not there (${err.code}). This test clones a real article, and ` +
+        `docs/plans/260901b-committed-fixture-corpus.md is where that corpus comes from.`,
     );
-    if (outputs.some((found) => !found)) continue;
-    if (!files.includes("labels.json")) continue;
-    const labels = JSON.parse(
-      await readFile(path.join(ROOT, "data", entry.name, "labels.json"), "utf8"),
-    ) as { sourceHash?: string };
-    if (!labels.sourceHash) continue;
-
-    const blocks = await readFile(path.join(ROOT, "data", entry.name, "blocks.json"), "utf8");
-    found.push({ slug: entry.name, size: blocks.length });
+  });
+  for (const file of ["blocks.json", "tree.json", "labels.json"]) {
+    expect(files, `data/${slug}/${file} is missing, so it cannot be cloned`).toContain(file);
   }
-  found.sort((a, b) => a.size - b.size);
-  return found[0]?.slug ?? null;
+  for (const [file] of outputPairs(slug, slug)) {
+    expect(
+      await stat(file).catch(() => null),
+      `${path.relative(ROOT, file)} is missing — half an extract step, which copyArtefacts refuses`,
+    ).not.toBeNull();
+  }
+  const labels = JSON.parse(await readFile(path.join(dir, "labels.json"), "utf8")) as {
+    sourceHash?: string;
+  };
+  expect(
+    labels.sourceHash,
+    `data/${slug}/labels.json has no sourceHash, so the publication gate will refuse it`,
+  ).toBeTruthy();
 }
 
 /**
@@ -328,18 +347,12 @@ when("the anchor, stored", () => {
    */
   it("survives an export and an import, for a block this revision no longer has", async () => {
     /* **Loud, not a silent return.** This used to `return` when nothing in
-       `data/` was copyable, which reads as a pass. The selector now asks for
-       four things rather than two — see its own note — so "nothing qualifies"
-       became a great deal more likely at exactly the moment it became a great
-       deal less obvious. */
-    const source = await smallestLoadableArticle();
-    if (!source) {
-      throw new Error(
-        "no article in data/ can be cloned for this test: it needs blocks.json, tree.json, " +
-          "a labels.json with a sourceHash, and both output/<slug>.html and " +
-          "output/<slug>.blocks.json. Run the pipeline over something.",
-      );
-    }
+       `data/` was copyable, which reads as a pass — and then to pick whichever
+       article happened to qualify, which reads as a different test on every
+       machine. Now it names one and says which of its four preconditions is
+       missing. */
+    const source = SOURCE_SLUG;
+    await requireCloneSource(source);
 
     const slug = "test-anchor-roundtrip";
     const dir = path.join(ROOT, "data", slug);
