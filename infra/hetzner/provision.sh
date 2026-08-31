@@ -504,24 +504,190 @@ echo "=== claude settings ==="
 # step idempotent, which re-running provision.sh on a live box depends on.
 # jq exits non-zero on a settings.json that is not valid JSON, and the `mv`
 # never happens, so a broken file fails the step rather than being replaced.
+# The status line under the prompt: model, directory, git branch, and -- the
+# reason this is here -- how much of the context window is gone, as a ten-cell
+# bar that turns yellow at 70% and red at 90%. Auto-compaction lands around 80%,
+# so the bar is the warning that a long session is about to lose its middle.
+# Same script Greg runs on the laptop, so the two boxes read alike.
+#
+# It lives HERE, in provision.sh, rather than in its own file injected through
+# cloud-init like the credential helper. That is deliberate: provision.sh is the
+# thing you re-run on a live box, and a second copy in cloud-init.yaml would be
+# the copy that goes stale. tests/statusline.test.ts extracts this heredoc and
+# runs it, so it is covered even though it is not a standalone file.
+#
+# `context_window.used_percentage` is computed by Claude Code and arrives on
+# stdin. Older CLIs do not send it, and neither does a session before its first
+# API call -- in both the segment is simply omitted rather than showing a wrong
+# zero.
+CLAUDE_STATUSLINE_SH=$(mktemp)
+cat > "$CLAUDE_STATUSLINE_SH" <<'STATUSLINE'
+#!/bin/bash
+
+# Read JSON input from Claude Code
+input=$(cat)
+
+# Extract data from JSON input - use default model display behavior
+model=""
+if command -v jq >/dev/null 2>&1; then
+    # Use display_name if available, otherwise fall back to id
+    model_display=$(echo "$input" | jq -r '.model.display_name // empty' 2>/dev/null)
+
+    if [ -n "$model_display" ] && [ "$model_display" != "null" ]; then
+        model="$model_display"
+    else
+        # Fallback to model ID if display name is not available
+        model_id=$(echo "$input" | jq -r '.model.id // empty' 2>/dev/null)
+        if [ -n "$model_id" ] && [ "$model_id" != "null" ]; then
+            model="$model_id"
+        else
+            model="Claude"
+        fi
+    fi
+else
+    # Fallback if jq is not available
+    model="Claude"
+fi
+
+# Extract current directory from JSON
+cwd=$(echo "$input" | jq -r '.workspace.current_dir // ""' 2>/dev/null || echo "$(pwd)")
+
+# Get the last 2 directory levels to match %2~ from PS1
+if [ -n "$cwd" ]; then
+    # Convert full path to last 2 levels like zsh %2~
+    if [ "$cwd" = "$HOME" ]; then
+        dir_display="~"
+    elif [[ "$cwd" == "$HOME"/* ]]; then
+        # Replace home with ~ and get last 2 levels
+        relative_path="${cwd#$HOME/}"
+        IFS='/' read -ra PATH_PARTS <<< "$relative_path"
+        num_parts=${#PATH_PARTS[@]}
+        if [ $num_parts -le 1 ]; then
+            dir_display="~/$relative_path"
+        else
+            # Take last 2 parts without ~ prefix for deeper paths
+            second_last_idx=$((num_parts - 2))
+            last_idx=$((num_parts - 1))
+            dir_display="${PATH_PARTS[$second_last_idx]}/${PATH_PARTS[$last_idx]}"
+        fi
+    else
+        # Not in home directory, get last 2 levels
+        IFS='/' read -ra PATH_PARTS <<< "$cwd"
+        num_parts=${#PATH_PARTS[@]}
+        if [ $num_parts -le 2 ]; then
+            dir_display="$cwd"
+        else
+            # Take last 2 parts
+            second_last_idx=$((num_parts - 2))
+            last_idx=$((num_parts - 1))
+            dir_display="${PATH_PARTS[$second_last_idx]}/${PATH_PARTS[$last_idx]}"
+        fi
+    fi
+else
+    dir_display="$(basename "$(pwd)")"
+fi
+
+# Get git information (similar to git_prompt_info)
+git_info=""
+worktree_info=""
+if git rev-parse --git-dir >/dev/null 2>&1; then
+    branch=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)
+    if [ -n "$branch" ]; then
+        # Check for uncommitted changes
+        if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+            git_info="($branch*)"
+        else
+            git_info="($branch)"
+        fi
+    fi
+    # Show the worktree name when we're in a linked worktree (not the main checkout).
+    # A linked worktree has --git-dir != --git-common-dir; the toplevel basename is
+    # the worktree name.
+    git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null)
+    common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    if [ -n "$git_dir" ] && [ -n "$common_dir" ] && [ "$git_dir" != "$common_dir" ]; then
+        toplevel=$(git rev-parse --show-toplevel 2>/dev/null)
+        [ -n "$toplevel" ] && worktree_info="⑂ $(basename "$toplevel")"
+    fi
+fi
+
+# Get context window usage (% of context used) and render a threshold-colored bar.
+# context_window.used_percentage is pre-computed by Claude Code (0-100, input tokens only).
+# Absent on older CLI versions / before the first API call -> the segment is simply omitted.
+context_info=""
+if command -v jq >/dev/null 2>&1; then
+    ctx_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty' 2>/dev/null)
+    if [ -n "$ctx_pct" ] && [ "$ctx_pct" != "null" ]; then
+        # Truncate to an integer and harden against non-numeric values
+        pct=${ctx_pct%.*}
+        case "$pct" in ''|*[!0-9]*) pct=0 ;; esac
+        [ "$pct" -gt 100 ] && pct=100
+        # Threshold colors aligned with auto-compaction (~80%):
+        #   green <70  |  yellow 70-89 (heads-up)  |  red 90+ (compaction imminent)
+        if [ "$pct" -ge 90 ]; then ctx_color='\033[1;31m'
+        elif [ "$pct" -ge 70 ]; then ctx_color='\033[1;33m'
+        else ctx_color='\033[1;32m'; fi
+        # Build a 10-char bar: filled (█) + empty (░)
+        filled=$((pct / 10))
+        [ "$filled" -gt 10 ] && filled=10
+        empty=$((10 - filled))
+        bar=""
+        [ "$filled" -gt 0 ] && printf -v fill "%${filled}s" && bar="${fill// /█}"
+        [ "$empty" -gt 0 ] && printf -v pad "%${empty}s" && bar="${bar}${pad// /░}"
+        context_info=$(printf " \033[2m·\033[0m ${ctx_color}%s %s%%\033[0m" "$bar" "$pct")
+    fi
+fi
+
+# Create status line matching PS1 format but with model + context info
+# Format: [Model] directory git_info · <context bar> NN%
+# Use printf with ANSI colors (will be dimmed by terminal)
+line=$(printf "\033[1;32m[%s]\033[0m \033[1;32m%s\033[0m" "$model" "$dir_display")
+[ -n "$git_info" ] && line="$line $git_info"
+[ -n "$worktree_info" ] && line="$line $(printf "\033[1;36m%s\033[0m" "$worktree_info")"
+[ -n "$context_info" ] && line="$line$context_info"
+printf "%s" "$line"
+STATUSLINE
+
+# MERGED with jq, never written whole. On a rebuild the volume already carries
+# this file with theme, tui and notification preferences in it, and a `cat >`
+# here would silently throw all of them away. Merging is also what makes the
+# step idempotent, which re-running provision.sh on a live box depends on.
+# jq exits non-zero on a settings.json that is not valid JSON, and the `mv`
+# never happens, so a broken file fails the step rather than being replaced.
 CLAUDE_SETTINGS_SH=$(mktemp)
 cat > "$CLAUDE_SETTINGS_SH" <<'SETTINGS'
 set -eu
 f="$HOME/.claude/settings.json"
 mkdir -p "$(dirname "$f")"
 [ -f "$f" ] || printf '{}\n' > "$f"
+# $1 is the status line script, handed over as an argument because this script
+# runs as the user and that one was written by root. `install` sets the mode in
+# the same step, so there is no window where the file exists and will not run.
+sl="$HOME/.claude/statusline-script.sh"
+install -m 0755 "$1" "$sl"
 tmp="$f.provision.$$"
 # Without this, a settings.json that will not parse leaves its half-written
 # temp file beside it -- one more on every re-run, all of them looking like
 # a settings file to whoever finds them next.
 trap 'rm -f "$tmp"' EXIT
-jq '.env.CLAUDE_CODE_SCROLL_SPEED = "1"' "$f" > "$tmp"
+# An ABSOLUTE path, resolved here from $HOME, rather than the "~/..." the docs
+# use. Claude Code runs the command through a shell, so a tilde would expand
+# too -- but it would expand in whatever shell and whatever HOME that process
+# gets, and a path that does not resolve fails by printing NOTHING, which looks
+# exactly like a status line that is working and has nothing to say.
+# `+` onto whatever is already there, not `=`. `statusLine` also carries
+# padding, refreshInterval and hideVimModeIndicator, which are Greg's to set and
+# not ours to delete on the next provisioning run. We own two keys of it.
+jq --arg sl "$sl" '
+  .env.CLAUDE_CODE_SCROLL_SPEED = "1"
+  | .statusLine = ((.statusLine // {}) + { type: "command", command: $sl })
+' "$f" > "$tmp"
 mv "$tmp" "$f"
 SETTINGS
-# 0644: the script is written by root in /tmp and read by $USER_NAME's shell.
-chmod 0644 "$CLAUDE_SETTINGS_SH"
-run 30 "claude scroll speed" su - "$USER_NAME" -c "bash $CLAUDE_SETTINGS_SH"
-rm -f "$CLAUDE_SETTINGS_SH"
+# 0644: the scripts are written by root in /tmp and read by $USER_NAME's shell.
+chmod 0644 "$CLAUDE_SETTINGS_SH" "$CLAUDE_STATUSLINE_SH"
+run 30 "claude settings" su - "$USER_NAME" -c "bash $CLAUDE_SETTINGS_SH $CLAUDE_STATUSLINE_SH"
+rm -f "$CLAUDE_SETTINGS_SH" "$CLAUDE_STATUSLINE_SH"
 
 echo "=== mcp servers ==="
 # Pin at provision time rather than resolving @latest on every session
@@ -635,6 +801,23 @@ check "claude runs"              'timeout 30 su - '"$USER_NAME"' -c "claude --ve
 # key name: a merge that landed the key with the wrong value, or under the wrong
 # parent, looks identical to a working one under grep.
 check "claude scroll speed is 1" 'jq -er ".env.CLAUDE_CODE_SCROLL_SPEED" /home/'"$USER_NAME"'/.claude/settings.json | grep -qx "1"'
+# Two facts, and they come apart: the key can name a path that is absent,
+# unreadable, or not executable. So one check reads the path back out of the
+# JSON and insists the file at it is runnable BY THE USER -- root's `test -x`
+# passes on any execute bit at all, including a file only root can run.
+check "claude statusline is wired up" 'jq -er ".statusLine.command" /home/'"$USER_NAME"'/.claude/settings.json | grep -qx "/home/'"$USER_NAME"'/.claude/statusline-script.sh" && su - '"$USER_NAME"' -c "test -x /home/'"$USER_NAME"'/.claude/statusline-script.sh"'
+# ...and the other RUNS it, as the user, on the JSON Claude Code would send, and
+# demands the number back. A status line that fails prints nothing, and nothing
+# is indistinguishable from a status line that is working and quiet -- so the
+# only check worth having is one that names a percentage and finds it.
+#
+# Invoked as a BARE PATH, not `bash <path>`, so the shebang and the execute bit
+# are part of what is being tested rather than worked around. And captured
+# rather than piped, so a script that prints 42% and then dies still fails:
+# through a pipe the status would be grep's, and check() runs without pipefail.
+# The path is written out rather than read from settings.json because the check
+# above has already insisted the two are the same string.
+check "claude statusline shows context %" 'out=$(printf %s "{\"model\":{\"display_name\":\"M\"},\"workspace\":{\"current_dir\":\"/tmp\"},\"context_window\":{\"used_percentage\":42}}" | su - '"$USER_NAME"' -c /home/'"$USER_NAME"'/.claude/statusline-script.sh) && case "$out" in *42%*) true ;; *) false ;; esac'
 # Asserts the OUTPUT, not just the exit status. @openai/codex installs a
 # prebuilt platform binary, so the interesting failure is one that exists and
 # does not run -- and it is the login shell that has to find it, which is where

@@ -97,6 +97,37 @@ It is mutation-tested — break the file any of those five ways and it goes red 
 than passes if its own parser stops finding things, because a preflight that quietly checks zero
 things is worse than none.
 
+### The preflight now says `user_data` is too big, and it is right
+
+`user_data` reaches the Hetzner API as one field with a hard cap — *"This field is limited to
+32KiB"*, enforced as `Length must be between 0 and 32768` — and both scripts ride inside it
+base64-encoded, which costs a third on top. As of 2026-09-01 the rendered file is **78.7 KiB**, so
+`tofu apply` would be rejected the moment it tried to create a server.
+
+**This is not new and nothing is currently broken.** The live box was built when `provision.sh` still
+lived inside `cloud-init.yaml` and the whole thing was about 18 KiB; it went over the line when the
+script was extracted, and no apply has run since — see the replacement warning below. Every other
+path stayed green because re-running `provision.sh` on a live box does not go through `user_data` at
+all, and Terraform stores only a *hash* of the field, so `tofu plan` cannot see the size either. It
+would have been discovered by a rebuild, which is the worst moment to discover it.
+
+Adding the status line made it about 11 KiB worse, which is why the guard exists now rather than
+later. What it does **not** do is fix it. The options, none of them started:
+
+- **Gzip `user_data`.** cloud-init decompresses gzipped user-data in the guest, and shell compresses
+  hard. But `user_data` is a JSON string, so the gzip has to be base64'd, which gives a third of the
+  win straight back, and the 32 KiB is measured on the base64. Probably still enough; not measured.
+  Cheapest, and the thing to try first. Note this is a **cloud-init** feature — neither Hetzner nor
+  the hcloud provider documents it as a supported workaround, and the provider sends `user_data`
+  through untouched.
+- **Fetch `provision.sh` instead of embedding it** — a tiny cloud-init that curls the script from a
+  URL. Removes the ceiling entirely, adds a network dependency to first boot and a place for the
+  script to live.
+- **Shrink it.** It is mostly comments, and the comments are the point.
+
+Until one of those lands, **a rebuild will fail at the API**, and the preflight says so before you
+spend a box on finding out.
+
 Not covered: anything that needs the machine to actually boot. The next step up, if this stops being
 enough, is `multipass launch --cloud-init` locally before touching Hetzner.
 
@@ -249,7 +280,7 @@ evidence any of it happened; cloud-init reporting success is not.
 Use `/login`, never `claude setup-token` — a token session is model-requests-only and loses
 Remote Control, claude.ai connectors and `/schedule`.
 
-### Scroll speed, the one TUI setting provisioning owns
+### Scroll speed
 
 `provision.sh` merges a single key into `~/.claude/settings.json`:
 
@@ -268,6 +299,37 @@ The TUI's own `/config → Scroll speed` writes the same key in the same file, s
 changes the live box — but a later provisioning run puts it back to `1`, and a session already
 running keeps the speed it started with, because the value is read at launch. To move the number for
 good, change it in [`provision.sh`](provision.sh).
+
+### The status line
+
+The same status line Greg runs on the laptop, so the two machines read alike: model, directory, git
+branch, and a ten-cell bar for how much of the context window is gone — green, yellow from 70%, red
+from 90%. Auto-compaction lands around 80%, so the colour is a warning that a long session is about
+to lose its middle rather than a report that it already has.
+
+The script is a heredoc **inside [`provision.sh`](provision.sh)**, installed to
+`~/.claude/statusline-script.sh`, with `.statusLine.command` in `settings.json` pointing at it by
+absolute path. It is not a file of its own beside this README, deliberately: `provision.sh` is the
+thing you re-run on a live box, and a second copy injected through `cloud-init.yaml` would be the
+copy that goes stale.
+
+Two things follow from that, and both bit during the change that added it:
+
+- **`bash -n` cannot see an unterminated heredoc.** Splicing in a script with no trailing newline
+  produced `printf "%s" "$line"STATUSLINE`, which swallowed the last forty lines of `provision.sh`
+  into the heredoc — and the syntax check, the preflight and every `check` line still passed.
+  `scripts/check-cloud-init.ts` now counts delimiters itself.
+- **The script is invisible to every other check**, being a string as far as bash is concerned. So
+  [`tests/statusline.test.ts`](../../tests/statusline.test.ts) carves the heredoc back out and
+  *runs* it on the JSON Claude Code sends. That matters more than usual here, because a status line
+  that fails prints nothing, and nothing is what a working one prints when it has nothing to say.
+
+`provision.sh` verifies both halves on the box: that `settings.json` names a file that exists and is
+executable, and that running it on a payload saying 42% gets `42%` back.
+
+`context_window.used_percentage` needs Claude Code **2.1.6** or newer, and is absent before a
+session's first API call and null for a moment after `/compact`. In all three the segment is simply
+left off, rather than showing a wrong `0%`.
 
 ### Codex, for cross-family review
 

@@ -105,6 +105,23 @@ iTerm 3.6.6 has no tab-colour property in its dictionary at all.
 The reasoning, the options passed over, and how it was checked against a live terminal are in
 [../plans/260831ae-gjd-remote-iterm-tab-colour.md](../plans/260831ae-gjd-remote-iterm-tab-colour.md).
 
+## The status line
+
+The box shows the same status line as the laptop — model, directory, git branch, and a ten-cell bar
+for how much of the context window is gone, yellow from 70% and red from 90%. Auto-compaction lands
+around 80%, so the colour arrives before the loss does.
+
+The script is a heredoc inside [`infra/hetzner/provision.sh`](../../infra/hetzner/provision.sh)
+rather than a file of its own, because that is the file you re-run on a live box; a second copy is
+the copy that goes stale. Being a heredoc makes it invisible to `bash -n`, so
+[`tests/statusline.test.ts`](../../tests/statusline.test.ts) carves it back out and runs it, and
+`provision.sh` re-runs it on the box itself. Why it is arranged that way, and the unterminated
+heredoc that ate forty lines while every check stayed green, are in
+[infra/hetzner/README.md § The status line](../../infra/hetzner/README.md#the-status-line).
+
+A session already running keeps the status line it started with — settings are read at launch — so
+an existing tmux session needs a restart to pick it up.
+
 ## Starting a session with a prompt
 
 `-p` takes the prompt as an argument; `-p -` reads it from stdin, which is what you want for prose,
@@ -329,8 +346,16 @@ written before the keys turned out to be the problem, and it is superseded here.
   runs could otherwise start each other's job. `cmdNew` in
   [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) says why.
 
-## Known hole
+## Known holes
 
 `confirmStarted()` proves that tmux still has a session, not that Claude is running in it. An
 immediate Claude failure — a bad option, an auth problem — leaves a live login shell and still
 prints `✓ started`. Undecided; raised with Greg 2026-08-31.
+
+**A rebuild would currently fail at the Hetzner API.** `user_data` is capped at 32 KiB and ours
+renders to about 79, because `provision.sh` rides inside it base64-encoded and has grown for weeks
+along a path — re-running it on the live box — that has no size limit. Nothing is broken today and
+nothing else could have seen it: Terraform keeps only a hash of the field, so `tofu plan` cannot
+either. `scripts/check-cloud-init.ts` now measures it and fails; the options for fixing it are in
+[infra/hetzner/README.md § The preflight now says `user_data` is too big](../../infra/hetzner/README.md#the-preflight-now-says-user_data-is-too-big-and-it-is-right).
+Raised with Greg 2026-09-01.
