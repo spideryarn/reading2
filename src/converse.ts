@@ -1031,8 +1031,24 @@ ${anchor.quote}
  * than nothing.
  */
 export function recentHistory(history: ChatMessage[], turns = HISTORY_TURNS): ChatMessage[] {
+  /**
+   * **`interrupted` is excluded, and that is the opposite of what `stopped`
+   * gets.**
+   *
+   * A stopped answer's text is what the reader read, so it belongs in history.
+   * An interrupted one's is not: the realtime server truncates the audio the
+   * reader never heard and keeps the transcript whole, so its tail is words
+   * that were generated and never spoken to anybody.
+   *
+   * The pair is **dropped**, not transformed. A synthetic "the reader
+   * interrupted here" line would be assistant text the model never said, which
+   * is the fabrication `stopped`'s own rule exists to avoid — and the cost of
+   * dropping is small, because a reader interrupts precisely when an answer had
+   * stopped being useful to them. Recommended by Fable, 2026-08-31;
+   * `ChatMessage.interrupted` in src/types.ts.
+   */
   const usable = (m: ChatMessage | undefined): m is ChatMessage =>
-    m !== undefined && m.status === "done" && m.text.trim() !== "";
+    m !== undefined && m.status === "done" && m.text.trim() !== "" && m.interrupted !== true;
 
   const pairs: ChatMessage[][] = [];
   for (let i = 0; i < history.length; i++) {

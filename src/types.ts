@@ -695,6 +695,8 @@ export type SummariesFound = Omit<SummariesResponse, "profileChanged">;
 /** As `ThreadFound`, for the ideas. */
 export type IdeasFound = Omit<IdeasResponse, "profileChanged">;
 export type SketchFound = Omit<SketchResponse, "profileChanged">;
+/** As `ThreadFound`, for the quotes. */
+export type QuotesFound = Omit<QuotesResponse, "profileChanged">;
 
 
 /* ------------------------------------------------------------------ ideas --
@@ -892,6 +894,172 @@ export interface IdeasResponse {
   profileChanged: boolean;
 }
 
+/* ----------------------------------------------------------------- quotes --
+   The lines worth keeping — `data/<slug>/quotes.json`, and a **mode** in the
+   band beside the glossary and the ideas. Stage 5h.
+   See docs/plans/quotes-mode.md.
+
+   The third question the band answers, and the only one whose answer is
+   entirely in the author's own words. The glossary answers *what does this word
+   mean*; the ideas answer *what do I have to hold*; this answers *which lines
+   is it worth carrying out of here* — and every one of them is a sentence the
+   author wrote, found in the article rather than composed. */
+
+/**
+ * One quote, and where it sits.
+ *
+ * **`blockId` is ours, not the model's.** The model returns the words and
+ * nothing else; `locate` in src/quotes.ts searches every block for them. That
+ * is the glossary's rule (`findOccurrences`) rather than the ideas' rule, and
+ * it is what makes the whole `unknownIds` class of failure — a model naming a
+ * block that does not exist — impossible here rather than merely counted.
+ *
+ * The invariant this type is arranged around: **`text` is in the article.**
+ * A quote `findQuote` cannot locate is dropped before an object of this shape
+ * exists, because a plausible paraphrase in quotation marks beside the real
+ * prose is the one failure this feature must not have.
+ */
+export interface Quote {
+  /** `mintUniqueId`, so it is block-id shaped and `?quote=` validates for free. */
+  id: string;
+  /** The block the words were found in. Ours, from `findQuote` — see above. */
+  blockId: BlockId;
+  /**
+   * The exact words, as the model returned them.
+   *
+   * Stored as the model typed them rather than as the article spells them, and
+   * the difference is real: `findQuote` folds curly quotes and dashes to match,
+   * so a quote located by pass one may differ from `block.text` by a character
+   * or two. `start` plus this string's length is **not** a span — the client
+   * re-finds the words in the rendered text, which is a third offset space
+   * again. src/web/search-hits.ts § the header.
+   */
+  text: string;
+  /** Where the words sat in `block.text` — a disambiguator between repeats, never the anchor. */
+  start?: number;
+  /**
+   * One line on why this one, shown as a **tooltip** and never as body text.
+   *
+   * Greg, 2026-08-31: *"with reason as a tooltip"*. The list a reader scans is
+   * the author's prose and nothing else; the model's contribution is one hover
+   * or one Tab away rather than competing with the sentence above it.
+   *
+   * Absent is a real answer. The prompt bans the register the glossary's
+   * `senseHere` fell into — describing the page the reader is already looking
+   * at — and for this field that register is not merely tempting, it is the
+   * obvious reading of the question. docs/plans/quotes-mode.md.
+   */
+  reason?: string;
+  /** 0–1: how much of the article's argument rests on this line. The model's judgment. */
+  importance?: number;
+  /** 0–1: how memorable, quotable, well-put it is. The model's judgment. */
+  striking?: number;
+}
+
+/**
+ * What was thrown away, and why. **Every one of these is invisible from
+ * outside** — a dropped quote looks exactly like a line the model chose not to
+ * offer — which is the whole reason they are counted and logged.
+ *
+ * **It rides on the artefact**, not only in a log line. A count in a log is
+ * invisible to the person the drop happened to — the reader, who is looking at
+ * a list quietly shorter than the model offered — so `Quotes.discarded` carries
+ * these and the panel says so in a sentence. GPT Sol, 2026-08-31.
+ *
+ * Counts only. Never the quote, never the reason, never the raw parse error:
+ * this file does not log, but a step that throws is logged by src/jobs.ts with
+ * `errorFields`, and an error is a value that travels. Article prose must not
+ * ride in one — docs/project/logging.md.
+ */
+export interface QuoteDrops {
+  /**
+   * `findQuote` could not locate the words in any block. **The one to watch.**
+   *
+   * It counts the model paraphrasing rather than copying, which is the single
+   * failure this feature is not allowed to have. A run that starts returning
+   * several is the prompt having drifted, and nothing else would report it.
+   */
+  unfound: number;
+  /**
+   * Found in the article, and **not in the author's voice** — see `authorVoice`.
+   *
+   * Its own counter rather than folded into `unfound`, because it is the
+   * opposite fact: `unfound` is the model inventing words, and this is the model
+   * copying words correctly out of somebody else's mouth. A run with a high
+   * `otherVoice` is an article with a lot of quotation in it, which is not a
+   * fault at all; a run with a high `unfound` is a prompt that has drifted.
+   */
+  otherVoice: number;
+  /** Outside `MIN_QUOTE_CHARS`–`MAX_QUOTE_CHARS`. A phrase, or a whole paragraph. */
+  wrongLength: number;
+  /** Located, but overlapping a span already kept — see `dedupeOverlaps`. */
+  overlapping: number;
+  /** Quotes past `MAX_QUOTES`, discarded whole. */
+  overCap: number;
+  /** Not an object, or with no `text` at all. */
+  malformed: number;
+}
+
+/**
+ * The artefact. `data/<slug>/quotes.json`, stage 5h.
+ *
+ * **No `passes` and no append**, like `Ideas` and unlike `Glossary`. A piece has
+ * a dozen quotable lines rather than an encyclopaedia of terms, so running the
+ * step again replaces — which removes the FORBIDDEN checklist, `existingFor`,
+ * the "a stale list is not appended to" rule and the DELETE route all at once.
+ */
+export interface Quotes {
+  version: string;
+  generator: string;
+  slug: string;
+  /** `articleFingerprint` — the blocks, the tree and the metadata head. */
+  sourceHash: string;
+  /**
+   * As `Glossary.profileHash`, and **not** in the freshness stamp.
+   *
+   * The profile changes *which* lines a reader is shown, the way it changes
+   * which terms get an entry — so the read path raises a banner and the reader
+   * decides. It is the glossary's position rather than the ideas', and the
+   * difference is that a profile cannot change what the author wrote.
+   */
+  profileHash?: string | null;
+  /**
+   * **Document order**, fixed at write time.
+   *
+   * Stored in the article's own order rather than in any ranked one, for the
+   * reason glossary.md § Five ways to break this quietly gives as its second:
+   * sorting on write makes `?rank=document` mean whatever the last writer felt
+   * like, and the panel's fallback order silently becomes a ranking.
+   */
+  quotes: Quote[];
+  /**
+   * What the model offered and this stage would not store.
+   *
+   * On the artefact rather than only in the log, so the panel can tell the
+   * reader. A list that is quietly shorter than the model produced is exactly
+   * the shape of failure docs/reusable/silent-success.md keeps catching, and
+   * `unfound` in particular is a fact about *this* list the reader is entitled
+   * to: it means the model offered words that are not in the piece.
+   */
+  discarded: QuoteDrops;
+  generatedAt: string;
+  elapsedMs: number;
+}
+
+/**
+ * `GET /api/quotes/:slug`. The same three staleness facts the glossary and the
+ * ideas carry, for the same three reasons, computed at read time.
+ */
+export interface QuotesResponse {
+  quotes: Quotes;
+  /** The article moved underneath these quotes. The words may no longer be in it. */
+  stale: boolean;
+  /** The article is the same and we would choose differently now. */
+  outdated: boolean;
+  /** You are not who you were when we chose them. */
+  profileChanged: boolean;
+}
+
 /**
  * The Sketch diagram as the panel receives it — docs/project/diagram.md § Sketch.
  *
@@ -961,6 +1129,26 @@ export interface Meta {
   url?: string;
   /** When stage 2 fetched the page, ISO. The library sorts on it. */
   fetchedAt?: string;
+  /**
+   * **When the publisher says the piece was published**, ISO, in the
+   * publisher's own frame — not when we downloaded it.
+   *
+   * That distinction is the whole point of the field and it is not a nicety:
+   * `fetchedAt` above can be fifteen years later, and a stage that reached for
+   * it as a reference frame would date every undated "on July 7" to the day the
+   * article happened to be ingested. Timeline needs the year nobody writes down
+   * (docs/plans/timeline-mode.md § The reference frame), and the publication
+   * date is the only thing that supplies it.
+   *
+   * **Absent on every article ingested before 2026-08-31**, and it stays absent
+   * until that article is re-extracted — so the no-frame path is the common one
+   * and is the one that has to work. Absent also whenever the page carried no
+   * date, or carried one this stage would have had to guess at.
+   *
+   * It is the publisher's claim, verbatim, not a verified fact: a page can say
+   * anything, and re-dating an old post is a thing publishers do.
+   */
+  publishedAt?: string;
   /** Readability's own one-or-two-sentence excerpt. A last-resort card blurb. */
   excerpt?: string;
   note?: string;
@@ -1699,7 +1887,12 @@ export interface Comment {
  * docs/project/glossary.md and docs/project/summaries.md.
  */
 export type StepName =
-  | "fetch" | "extract" | "blocks" | "toc" | "assets" | "arc" | "tweets" | "glossary" | "summary" | "ideas"
+  | "fetch" | "extract" | "blocks" | "toc" | "assets" | "arc" | "tweets" | "glossary"
+  /* The lines worth keeping, in the author's own words — docs/project/quotes.md.
+     Beside `glossary` because the two send byte-identical article bytes at the
+     same effort and share one cached prefix. */
+  | "quotes"
+  | "summary" | "ideas"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
      Last in the list and last in `STEP_ORDER`: nothing reads what it writes. */
   | "sketch";
@@ -1924,6 +2117,51 @@ export interface ChatMessage {
    * a way that offers the retry. See docs/project/chat-tools.md.
    */
   truncated?: boolean;
+  /**
+   * **Passages the model pointed at instead of citing in its words.** Assistant
+   * turns only, and in practice live-conversation turns only.
+   *
+   * A typed answer puts block ids in its text — `[spya-k3m9qt]` — and
+   * src/web/Cited.tsx makes them pressable. A **spoken** answer must not: read
+   * aloud an id is six seconds of gibberish, so the live prompt forbids saying
+   * one and gives the model a `show_passage` tool instead
+   * (docs/plans/live-conversation.md).
+   *
+   * That leaves the pointing with nowhere to go, and storing only the
+   * transcript would produce **uncited assistant claims** — the exact failure
+   * chat's citation contract exists to prevent. So the pointers become a field.
+   *
+   * **Not folded into `citations`**, which is a *web* citation and is shared
+   * with `Comment.citations`: widening it to "maybe a url, maybe block ids"
+   * hands every consumer a branch. And **not spliced into `text`**, which is
+   * both the transcript and the model's history — ids in there would stop the
+   * transcript being what was said, and would then be fed back to a voice model
+   * as examples of itself doing the one thing it is told never to do.
+   * Recommended by Fable, 2026-08-31.
+   *
+   * **Absent, not `[]`, on an answer that pointed at nothing** — the same rule
+   * `tools` gives above, and what `tests/store-roundtrip.test.ts` compares.
+   */
+  passages?: { blockIds: string[]; why: string }[];
+  /**
+   * **The reader talked over this answer, so it may contain words they never
+   * heard.** Assistant turns only.
+   *
+   * A second flag beside `stopped` rather than a fourth `status`, for the
+   * reason `stopped` gives: nothing failed, the words were generated, some of
+   * them were heard. It must not render as an error, be swept, or be retried.
+   *
+   * **It is the inverse of `stopped` in the one way that matters.** A stopped
+   * answer's stored text *is* what the reader read, so it is kept as model
+   * history. An interrupted answer's is not: the realtime server truncates the
+   * unplayed audio and does **not** hand back a corrected transcript, so the
+   * tail of this string is words nobody heard. `recentHistory` in
+   * src/converse.ts therefore drops the pair rather than transforming it —
+   * feeding unheard words into the next turn is the one outcome to refuse, and
+   * a synthetic "the reader interrupted here" marker would be assistant text
+   * the model never said.
+   */
+  interrupted?: boolean;
   /**
    * When the reader last rewrote this message. User turns only.
    *

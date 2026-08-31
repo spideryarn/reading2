@@ -39,9 +39,11 @@
  * are real options; neither is written.
  */
 
-import type { Block, Meta } from "./types.js";
+import type { Block, ChatMessage, Meta } from "./types.js";
 import { articleWithIds } from "./article-prompt.js";
 import { CHAT_TOOLS } from "./chat-tools.js";
+import { recentHistory } from "./converse.js";
+import { webLinks } from "./urls.js";
 
 /**
  * **The model, and it is a 2.1 for a reason that will expire.**
@@ -298,6 +300,95 @@ export function liveInstructions(opts: {
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/**
+ * **The thread so far, as items for the new session to be seeded with — with
+ * every block id taken out of the assistant's words.**
+ *
+ * ## Why seeding is server-side, and why it is not in `instructions`
+ *
+ * Not in `instructions`, because the article there is byte-stable for the life
+ * of an article and cached at a tenth the price; appending the conversation to
+ * it would mint a different prefix per session and pay full price every time.
+ * So the history is replayed over the data channel as `conversation.item.create`
+ * instead.
+ *
+ * But it is *built* here, not in the browser, so that `recentHistory` stays the
+ * one thing that decides what a model is allowed to see. A second window in the
+ * client would be a second set of rules about interrupted answers, failed
+ * turns and how far back to go — and those rules have already been got wrong
+ * twice (see that function's own notes).
+ *
+ * ## The ids have to come out, and this is the subtle one
+ *
+ * Written chat cites by putting `[spya-k3m9qt]` in the answer. Live conversation
+ * forbids saying an id aloud and gives the model `show_passage` instead.
+ *
+ * Seed a live session with typed history verbatim and you have handed the voice
+ * model **examples of its own past speech containing block ids**, while telling
+ * it never to say one. That is few-shot pressure against our own instruction,
+ * and the symptom is a companion that starts spelling out `spya-k3m9qt` with no
+ * apparent cause. Found by Fable, 2026-08-31; docs/plans/live-conversation-in-chat.md.
+ *
+ * Stripping rather than reformatting, and only on the **assistant** side: the
+ * reader's own words are theirs, and if they said something that looks like an
+ * id we have no business editing it.
+ */
+export function liveSeedItems(history: ChatMessage[]): { role: "user" | "assistant"; text: string }[] {
+  return recentHistory(history).map((m) => ({
+    role: m.role,
+    text: m.role === "assistant" ? withoutBlockIds(m.text) : m.text,
+  }));
+}
+
+/**
+ * Take our block ids out of a line of prose, leaving it readable.
+ *
+ * **Not `splitCitations` from src/web/citations.ts**, and the difference is the
+ * job rather than the pattern. That one has to know *where* each citation sits
+ * so the renderer can put a chip there; this one only has to make the text
+ * safe to say out loud, and deleting is strictly simpler than locating. Sharing
+ * the harder function to get the easier answer would drag the client's
+ * rendering rules onto the server for nothing.
+ *
+ * **Links are protected**, for the reason `citedBlockIds` gives: a URL a model
+ * found on the web can contain something id-shaped, and mangling somebody's
+ * link is worse than leaving an id in a place nobody reads aloud. That was a
+ * real bug in the first version of this function and the test that caught it is
+ * `leaves an id inside a URL alone`.
+ */
+export function withoutBlockIds(text: string): string {
+  /* **Links are held out of the way first, and this was a bug before it was a
+     comment.** The first version stripped ids from the raw string, so
+     `https://example.com/notes/spya-k3m9qt` came back as
+     `https://example.com/notes/` — a stranger's URL quietly broken, in an
+     answer the reader might follow. `webLinks` is the SAME matcher the renderer
+     and the citation counters use (src/urls.ts), so the three agree about what
+     a link is rather than each deciding for itself.
+
+     Spans are collected and skipped rather than blanked-then-restored, because
+     `withoutWebLinks` replaces a link with spaces of equal length — right for
+     counting offsets, useless when the text has to survive. */
+  const spans = webLinks(text).map((l) => [l.index, l.end] as const);
+  const insideLink = (at: number): boolean => spans.some(([from, to]) => at >= from && at < to);
+
+  const stripped = text.replace(
+    /* A bracketed citation, or a bare id. One pass, so a bracket cannot be
+       eaten by the first rule and its contents by the second. */
+    /\[\s*(?:spya-[a-z0-9]{6}[\s,;]*)+\]|spya-[a-z0-9]{6}/g,
+    (match, offset: number) => (insideLink(offset) ? match : ""),
+  );
+
+  return (
+    stripped
+      /* Tidy the holes. A stripped citation otherwise leaves a double space and
+         a space before the full stop — and a text-to-speech pass does hear the
+         difference. */
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\s+([.,;:!?])/g, "$1")
+      .trim()
+  );
 }
 
 /** What the browser is handed. Deliberately not the session — see `mintLiveToken`. */
