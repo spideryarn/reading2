@@ -16,14 +16,22 @@
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { parseArgs, styleText } from "node:util";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertPushableName, buildEnvPayload, diffKeys, parseEnv } from "./gjd-remote-env.js";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const USER = "greg";
+
+/** Where the repo checkout lives on the box. Overridable so the push can be
+ *  exercised against a scratch directory without a real checkout. */
+const REMOTE_REPO = () => process.env.GJD_REMOTE_REPO ?? `/home/${USER}/code/spideryarn2`;
+
+/** Everything gjd-remote leaves on the box lives under here. */
+const REMOTE_WORK = `/home/${USER}/gjd-remote`;
 
 /** tmux session names travel through shell commands across an ssh boundary, so
  *  nothing surprising may ever reach a shell. Same slug rule as the fleet. */
@@ -81,13 +89,27 @@ function host(): string {
 
 const HOST = () => `${USER}@${host()}`;
 
-/** Run a command on the box over ssh and return stdout. */
-function ssh(remote: string, opts: { check?: boolean } = {}): string {
+/**
+ * Run a command on the box over ssh and return stdout.
+ *
+ * `raw` keeps the bytes exactly as they came back. Everything else here wants
+ * the trim; reading a file to compare it against its source does not, because
+ * the trim would quietly make two different files look identical.
+ */
+function ssh(remote: string, opts: { check?: boolean; raw?: boolean } = {}): string {
   const r = spawnSync("ssh", [...SSH_OPTS, HOST(), remote], { encoding: "utf8" });
   if (opts.check !== false && r.status !== 0) {
     die(`ssh failed (${r.status}): ${(r.stderr || "").trim() || "no output"}`);
   }
-  return (r.stdout || "").trim();
+  const out = r.stdout || "";
+  return opts.raw ? out : out.trim();
+}
+
+/** Copy one file to the box. Dies on failure — a silent scp is how you get a
+ *  box running yesterday's script and a green check that means nothing. */
+function scpTo(local: string, remote: string): void {
+  const r = spawnSync("scp", ["-q", ...SSH_OPTS, local, `${HOST()}:${remote}`], { encoding: "utf8" });
+  if (r.status !== 0) die(`scp to ${remote} failed: ${(r.stderr || "").trim()}`);
 }
 
 /**
@@ -327,15 +349,11 @@ function cmdNew(
   ssh(`mkdir -p /home/${USER}/gjd-remote/prompts /home/${USER}/gjd-remote/jobs`);
 
   const stage = mkdtempSync(path.join(tmpdir(), "gjd-remote-"));
-  const scp = (local: string, remote: string) => {
-    const r = spawnSync("scp", ["-q", ...SSH_OPTS, local, `${HOST()}:${remote}`], { encoding: "utf8" });
-    if (r.status !== 0) die(`scp to ${remote} failed: ${(r.stderr || "").trim()}`);
-  };
 
   if (opts.prompt) {
     const f = path.join(stage, `${name}.md`);
     writeFileSync(f, opts.prompt, "utf8");
-    scp(f, promptPath);
+    scpTo(f, promptPath);
   }
 
   // Non-interactive ssh sources NEITHER .bashrc NOR .bash_profile, so the job
@@ -370,7 +388,7 @@ function cmdNew(
 
   const jobLocal = path.join(stage, `${name}.sh`);
   writeFileSync(jobLocal, job, "utf8");
-  scp(jobLocal, jobPath);
+  scpTo(jobLocal, jobPath);
   ssh(`chmod +x ${jobPath}`);
   // The id and the provisional flag live in the tmux session's own environment,
   // so they survive the rename that `ls` may later perform — a mapping file
@@ -417,13 +435,229 @@ function cmdShell(given: string | undefined, opts: { dir?: string | undefined; t
 }
 
 /**
+ * Copy the laptop's `.env.local` to the repo checkout on the box.
+ *
+ * Three rules, and each exists because of a specific way this could go wrong:
+ *
+ *  ALLOWLIST  The file written on the box is BUILT from the keys named in
+ *             scripts/gjd-remote-env.ts, not copied wholesale. Greg's
+ *             .env.local holds a Hetzner token that can delete this box and a
+ *             Supabase management PAT that can delete the production project;
+ *             neither is on the list. A blocklist would have shipped whatever
+ *             he adds next.
+ *  ATOMIC     Written to a temp file beside the destination and renamed over
+ *             it. A half-copied .env.local still parses — it just silently
+ *             lacks its last few keys — which is precisely the silent success
+ *             this project keeps being bitten by.
+ *  VERIFIED   The file is read back off the box and re-parsed before this
+ *             command claims anything. scp's exit code says a transfer
+ *             finished, not that the right bytes are in the right file.
+ *
+ * Reports which KEYS changed. Never a value, and never a hash of one: a short
+ * value shown as a hash is a value shown.
+ */
+function cmdPushEnv(opts: { file?: string | undefined }): void {
+  const local = path.resolve(opts.file ?? path.join(REPO, ".env.local"));
+  const refusal = assertPushableName(path.basename(local));
+  if (refusal) die(refusal);
+  if (!existsSync(local)) die(`no such file: ${local}`);
+
+  const payload = buildEnvPayload(readFileSync(local, "utf8"));
+  if (payload.pushed.size === 0) {
+    die(
+      `${local} has none of the allowlisted keys — refusing to write an empty env file.\n` +
+        `  The allowlist is in scripts/gjd-remote-env.ts.`,
+    );
+  }
+
+  const dir = REMOTE_REPO();
+  const dest = `${dir}/.env.local`;
+  // Not created for you, on purpose: an env file beside no repo is a box that
+  // looks set up and is not, and you would find out at the first npm command.
+  if (ssh(`test -d ${shq(dir)} && echo yes || echo no`, { check: false }) !== "yes") {
+    die(
+      `no checkout at ${dir} on the box, so there is nowhere to put .env.local.\n` +
+        `  Create it first, then run this again:\n` +
+        `    gjd-remote ssh\n` +
+        // HTTPS, not the ssh remote the laptop uses. The box authenticates with
+        // per-owner fine-grained PATs through a git credential helper, which only
+        // sees a request it can route when the URL is https.
+        `    mkdir -p ~/code && git clone https://github.com/spideryarn/reading2.git ${dir}\n` +
+        `  (or set GJD_REMOTE_REPO to a checkout that already exists)`,
+    );
+  }
+
+  console.log(bold(`gjd-remote push-env → ${HOST()}:${dest}`));
+  const before = parseEnv(ssh(`cat ${shq(dest)} 2>/dev/null || true`, { check: false, raw: true }));
+  const diff = diffKeys(before, payload.pushed);
+  for (const k of diff.added) console.log(green(`  + ${k}`) + dim("  added"));
+  for (const k of diff.removed) console.log(red(`  - ${k}`) + dim("  removed"));
+  for (const k of diff.changed) console.log(`  ${bold("~")} ${k}` + dim("  changed"));
+  console.log(dim(`  = ${diff.unchanged} unchanged`));
+  if (payload.skipped.length) {
+    console.log(dim(`  skipped ${payload.skipped.length} keys not on the allowlist: ${payload.skipped.join(", ")}`));
+  }
+  if (payload.missing.length) {
+    console.log(dim(`  ${payload.missing.length} allowlisted keys absent locally: ${payload.missing.join(", ")}`));
+  }
+
+  const stage = mkdtempSync(path.join(tmpdir(), "gjd-remote-env-"));
+  const staged = path.join(stage, ".env.local");
+  writeFileSync(staged, payload.text, { encoding: "utf8", mode: 0o600 });
+
+  const tmp = `${dir}/.env.local.push-${randomUUID()}`;
+  // Pre-create the temp file under umask 077. scp only applies a mode when it
+  // CREATES the file, so writing into an existing 0600 file leaves it 0600 —
+  // whereas chmod-after-scp leaves a window in which a world-readable copy of
+  // every credential is sitting in the repo. The chmod after the copy is belt
+  // and braces, not the mechanism.
+  ssh(`umask 077 && : > ${shq(tmp)}`);
+  const sent = spawnSync("scp", ["-q", ...SSH_OPTS, staged, `${HOST()}:${tmp}`], { encoding: "utf8" });
+  if (sent.status !== 0) {
+    ssh(`rm -f ${shq(tmp)}`, { check: false });
+    die(`scp failed: ${(sent.stderr || "").trim()}`);
+  }
+  // One command: chmod, then rename over the destination. rename(2) within a
+  // directory is atomic, so a reader on the box sees the old file or the new
+  // one and never a half-written one.
+  ssh(`chmod 600 ${shq(tmp)} && mv -f ${shq(tmp)} ${shq(dest)}`);
+
+  const back = parseEnv(ssh(`cat ${shq(dest)}`, { raw: true }));
+  const wrong = [...payload.pushed].filter(([k, v]) => back.get(k) !== v).map(([k]) => k);
+  const extra = [...back.keys()].filter((k) => !payload.pushed.has(k));
+  if (wrong.length || extra.length || back.size !== payload.pushed.size) {
+    die(
+      `the file on the box does not match what was sent — leaving it for you to look at.\n` +
+        (wrong.length ? `  wrong or missing: ${wrong.join(", ")}\n` : "") +
+        (extra.length ? `  unexpected keys: ${extra.join(", ")}\n` : "") +
+        `  sent ${payload.pushed.size} keys, read back ${back.size}`,
+    );
+  }
+  const mode = ssh(`stat -c '%a %U' ${shq(dest)}`, { check: false });
+  if (mode !== `600 ${USER}`) die(`written, but the mode is '${mode}' and should be '600 ${USER}'`);
+
+  console.log(green(`✓ ${payload.pushed.size} keys, 0600 ${USER}, read back and verified`));
+}
+
+/**
+ * Tools the box must have, each exercised rather than merely located.
+ *
+ * `command -v jq` proves a file exists on PATH. Running it and checking what
+ * came out proves the thing works — which is the difference that matters after
+ * a rebuild installs a broken package or a half-extracted binary.
+ */
+const TOOLS: { name: string; run: string; want?: string }[] = [
+  { name: "claude", run: "claude --version" },
+  { name: "tmux", run: "tmux -V" },
+  { name: "mosh-server", run: "mosh-server --version 2>&1" },
+  { name: "node", run: "node --version" },
+  { name: "google-chrome", run: "google-chrome --version" },
+  { name: "gh", run: "gh --version" },
+  { name: "jq", run: `echo '{"a":42}' | jq -r .a`, want: "42" },
+  { name: "file", run: "file -b /bin/sh" },
+  { name: "rg", run: "rg --count PATH /etc/environment" },
+  { name: "unzip", run: "unzip -v" },
+];
+
+/** Did the tool run, and if not, what is the shortest true thing to say? */
+function toolVerdict(
+  tool: (typeof TOOLS)[number],
+  got: { status: number; detail: string } | undefined,
+): { ok: boolean; why: string } {
+  if (!got) return { ok: false, why: "no answer from the box" };
+  if (got.status === 127) return { ok: false, why: "not installed" };
+  if (got.status !== 0) return { ok: false, why: `exit ${got.status}: ${got.detail}` };
+  if (tool.want !== undefined && got.detail !== tool.want) {
+    return { ok: false, why: `ran, but said '${got.detail}' where '${tool.want}' was expected` };
+  }
+  return { ok: true, why: got.detail };
+}
+
+/**
+ * Is mosh usable from here?
+ *
+ * Three outcomes, not two. The probe needs a real terminal, and under an agent
+ * or a pipe there isn't one — calling that a failure would make doctor
+ * permanently red for every caller who cannot see a tty, so it is a named skip.
+ */
+function moshState(): { state: "ok" | "fail" | "skip"; note: string } {
+  if (spawnSync("sh", ["-c", "command -v mosh"], { encoding: "utf8" }).status !== 0) {
+    return { state: "fail", note: "not installed on THIS Mac (brew install mosh)" };
+  }
+  const probe = moshProbe();
+  if (probe.ok) return { state: "ok", note: "" };
+  if (!process.stdin.isTTY) return { state: "skip", note: "no terminal (run doctor from a shell to check it)" };
+  // Say what happened rather than offering a theory. "UDP blocked?" was a
+  // guess, and a guess in an error message gets believed.
+  return { state: "fail", note: `installed both ends, but the probe failed: ${probe.detail}` };
+}
+
+/** name|exit|first line of output, one tool per line, in one round trip. */
+function probeTools(): Map<string, { status: number; detail: string }> {
+  const script = TOOLS.map(
+    (t) =>
+      `printf %s ${shq(`${t.name}|`)}; if out=$(${t.run} 2>&1); then st=0; else st=$?; fi; ` +
+      `printf '%s|%s\\n' "$st" "$(printf %s "$out" | head -1)"`,
+  ).join("\n");
+  const out = new Map<string, { status: number; detail: string }>();
+  for (const line of ssh(script, { check: false }).split("\n")) {
+    const [name, status, ...rest] = line.split("|");
+    if (!name) continue;
+    out.set(name, { status: Number(status), detail: rest.join("|").trim() });
+  }
+  return out;
+}
+
+/**
  * Everything that can be checked from here, in one command — because Claude
  * Code's own shell cannot reach port 22, so an agent cannot run any of this
  * itself. Run `gjd-remote doctor` and paste the output.
+ *
+ * It EXITS NON-ZERO if anything failed. It printed red crosses and exited 0
+ * until 2026-08-31, which made every "doctor is green" claim worth nothing —
+ * including the one at the end of the rebuild drill this command exists for.
+ *
+ * And it asserts, positively, that every check it means to run actually ran.
+ * A doctor that quietly ran nothing at all otherwise looks exactly like a pass.
  */
 function cmdDoctor(): void {
   const ip = host();
   console.log(bold(`gjd-remote → ${ip}`));
+
+  // Every name here must be recorded exactly once before the run ends. The
+  // count is derived from this list rather than written down, so adding a check
+  // cannot leave the two out of step.
+  const EXPECTED = ["ssh", "mosh", ...TOOLS.map((t) => t.name), "browser", "provisioning"];
+  const seen = new Map<string, "ok" | "fail" | "skip">();
+  const record = (name: string, state: "ok" | "fail" | "skip") => {
+    if (seen.has(name)) die(`doctor recorded '${name}' twice — that is a bug in doctor, not in the box`);
+    seen.set(name, state);
+  };
+  /** Everything that can fail ends up here, so nothing is reported by print
+   *  alone. A red cross that does not reach the exit code is decoration. */
+  const check = (name: string, ok: boolean, note = "") => {
+    record(name, ok ? "ok" : "fail");
+    console.log((ok ? green(`✓ ${name}`) : red(`✗ ${name}`)) + (note ? dim(`  ${note}`) : ""));
+  };
+
+  const finish = (): never => {
+    const missing = EXPECTED.filter((n) => !seen.has(n));
+    const failed = [...seen].filter(([, s]) => s === "fail").map(([n]) => n);
+    const skipped = [...seen].filter(([, s]) => s === "skip").map(([n]) => n);
+    console.log("");
+    if (missing.length) {
+      // The positive assertion. A doctor that ran nothing at all otherwise
+      // prints a clean screen and exits 0, which is the worst possible pass.
+      const n = missing.length;
+      console.log(red(`✗ ${n} check${n === 1 ? "" : "s"} never ran: ${missing.join(", ")}`));
+    }
+    if (failed.length) console.log(red(`✗ ${failed.length} of ${EXPECTED.length} checks failed: ${failed.join(", ")}`));
+    if (skipped.length) console.log(dim(`  skipped: ${skipped.join(", ")}`));
+    if (!missing.length && !failed.length) {
+      console.log(green(`✓ ${seen.size - skipped.length} of ${EXPECTED.length} checks passed`));
+    }
+    process.exit(missing.length || failed.length ? 1 : 0);
+  };
 
   const reach = spawnSync("ssh", [...SSH_OPTS, HOST(), "true"], { encoding: "utf8" });
   if (reach.status !== 0) {
@@ -436,53 +670,90 @@ function cmdDoctor(): void {
       console.log(red("✗ ssh: the host key changed"));
       console.log(dim("  expected after a rebuild — a new machine on the same address."));
       console.log(dim("  if you just rebuilt:  gjd-remote forget-key"));
-      return;
-    }
-    console.log(red("✗ ssh: cannot connect"));
-    console.log(dim("  still booting? `hcloud server list` shows its state"));
-    console.log(dim(`  ${err.trim().split("\n").slice(-2).join(" ")}`));
-    return;
-  }
-  console.log(green("✓ ssh"));
-
-  const localMosh = spawnSync("sh", ["-c", "command -v mosh"], { encoding: "utf8" }).status === 0;
-  if (!localMosh) {
-    console.log(red("✗ mosh: not installed on THIS Mac") + dim("  (brew install mosh)"));
-  } else {
-    const probe = moshProbe();
-    if (probe.ok) {
-      console.log(green("✓ mosh"));
     } else {
-      // Say what happened rather than offering a theory. "UDP blocked?" was a
-      // guess, and a guess in an error message gets believed.
-      console.log(red("✗ mosh: installed both ends, but the probe failed"));
-      console.log(dim(`  ${probe.detail}`));
+      console.log(red("✗ ssh: cannot connect"));
+      console.log(dim("  still booting? `hcloud server list` shows its state"));
+      console.log(dim(`  ${err.trim().split("\n").slice(-2).join(" ")}`));
     }
+    // Nothing below this line can run without ssh, so the rest is genuinely
+    // unknown rather than fine — finish() says so and exits non-zero.
+    record("ssh", "fail");
+    finish();
+  }
+  check("ssh", true);
+
+  const mosh = moshState();
+  if (mosh.state === "skip") {
+    record("mosh", "skip");
+    console.log(dim(`· mosh  not probed: ${mosh.note}`));
+  } else {
+    check("mosh", mosh.state === "ok", mosh.note);
   }
 
+  const probes = probeTools();
+  for (const tool of TOOLS) {
+    const verdict = toolVerdict(tool, probes.get(tool.name));
+    check(tool.name, verdict.ok, verdict.why);
+  }
+
+  const smoke = runBrowserSmoke();
+  check("browser", smoke.ok, smoke.detail);
+
+  // cloud-init's own status is genuinely informational: it reports the FIRST
+  // boot and never changes afterwards, so on a box that has been re-provisioned
+  // since, it is history rather than news.
   const status = ssh(`cloud-init status 2>/dev/null; true`, { check: false });
   const word = /status:\s*(\S+)/.exec(status)?.[1] ?? "unknown";
-  const colour = word === "done" ? green : word === "error" ? red : dim;
-  console.log(`  cloud-init: ${colour(word)}`);
+  console.log(dim(`\ncloud-init: ${word} ${dim("(first boot only — see provisioning below)")}`));
 
-  for (const tool of ["claude", "tmux", "mosh", "node", "google-chrome"]) {
-    const found = ssh(`command -v ${tool} >/dev/null && echo yes || echo no`, { check: false });
-    console.log(found === "yes" ? green(`✓ ${tool}`) : red(`✗ ${tool}`));
-  }
-
-  const provision = ssh(`sudo grep -E '^(ok|FAIL|PROVISION)' /var/log/provision.log 2>/dev/null || true`, {
-    check: false,
-  });
-  console.log(bold("\nprovisioning:"));
-  console.log(provision ? provision : red("  no verification lines — provisioning did not finish"));
-  if (!provision) {
-    const tail = ssh(`sudo tail -5 /var/log/provision.log 2>/dev/null || echo '(no log)'`, { check: false });
-    console.log(dim("  last lines of the log:"));
-    console.log(dim(tail.split("\n").map((l) => "    " + l).join("\n")));
-  }
+  // Provisioning IS a check, and it reads the status file that provision.sh
+  // rewrites on every run — not /var/log/provision.log, which cloud-init tees
+  // once at build time and never touches again.
+  //
+  // This used to be informational, with a comment saying its two FAIL lines were
+  // a false alarm. They were: `grep -q` was killing `sshd -T` with SIGPIPE and
+  // pipefail was reporting the corpse (docs/postmortems/the-match-that-still-failed.md).
+  // But "known false alarm" is not a state a check may sit in — it is how a
+  // report stops being read. The bug is fixed, so this counts again.
+  const report = ssh(`sudo cat /var/log/gjd-provision-status 2>/dev/null || true`, { check: false });
+  const ranAt = /^ran:\s*(\S+)/m.exec(report)?.[1];
+  const provisionOk = /^PROVISION OK$/m.test(report);
+  const failedLines = report.split("\n").filter((l) => l.startsWith("FAIL"));
+  check(
+    "provisioning",
+    provisionOk && failedLines.length === 0,
+    report.trim() === ""
+      ? "no status file — provision.sh has never completed on this box"
+      : provisionOk && failedLines.length === 0
+        ? `all checks ok, last run ${ranAt ?? "unknown"}`
+        : `${failedLines.length} failed: ${failedLines.map((l) => l.replace(/^FAIL\s+/, "")).join(", ")}`,
+  );
+  if (failedLines.length) console.log(dim(report.trim()));
 
   const list = sessions();
   console.log(bold(`\nsessions: ${list.length}`));
+  finish();
+}
+
+/**
+ * Run the committed browser smoke test on the box.
+ *
+ * Copied on every run rather than trusted to be there. A stale copy is a check
+ * that passes for a version of the script nobody has, and it would go on
+ * passing after the real one broke.
+ */
+function runBrowserSmoke(): { ok: boolean; detail: string } {
+  const local = path.join(REPO, "scripts/remote-smoke-browser.mjs");
+  if (!existsSync(local)) return { ok: false, detail: `missing locally: ${local}` };
+  const remote = `${REMOTE_WORK}/remote-smoke-browser.mjs`;
+  ssh(`mkdir -p ${shq(REMOTE_WORK)}`);
+  scpTo(local, remote);
+  // Chrome starting, two page loads and two screenshots. 20s is the normal
+  // shape; the cap is for a browser that has hung rather than failed.
+  const r = spawnSync("ssh", [...SSH_OPTS, HOST(), `node ${shq(remote)}`], { encoding: "utf8", timeout: 120_000 });
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").filter(Boolean);
+  if (r.status === 0) return { ok: true, detail: out.at(-1)?.replace(/^ok\s+/, "") ?? "" };
+  return { ok: false, detail: out.at(-1) ?? `no output (exit ${r.status}, signal ${r.signal})` };
 }
 
 // ---------------------------------------------------------------- main
@@ -502,9 +773,21 @@ ${bold("SESSIONS")}
 
 ${bold("THE BOX")}
   doctor                  check everything, and say what is wrong
+                          exits non-zero if any check failed
+  push-env                send .env.local to the repo checkout on the box
+      --file PATH           a different .env.local — the basename must be exactly that
   ssh                     a throwaway connection — no tmux, dies with the terminal
   tunnel                  forward noVNC to http://localhost:6080/vnc.html
   forget-key              after a rebuild: accept the machine's new host key
+
+${bold("WHAT push-env WILL AND WILL NOT SEND")}
+  It BUILDS the file on the box from an allowlist of key names — it does not copy
+  yours across. Anything not on the list is skipped and named in the output, so a
+  new key stays on the laptop until somebody puts it on the list on purpose.
+  ${dim("HETZNER_CLOUD_API_TOKEN")} (can delete this box) and ${dim("SUPABASE_ACCESS_TOKEN")} (can delete the
+  production Supabase project) are deliberately off it. The list, and the reasons,
+  are at the top of ${dim("scripts/gjd-remote-env.ts")}.
+  It reports which KEYS changed. Never a value, and never a hash of one.
 
 ${bold("ANYWHERE")}
   --ssh                   skip mosh, for satellite or UDP-blocked networks
@@ -523,11 +806,20 @@ ${bold("EXAMPLES")}
       a plain shell that is still running tomorrow
   gjd-remote resume --ssh
       back into the most recent session, without trying mosh first
+  gjd-remote push-env
+      ${dim("gjd-remote push-env → greg@1.2.3.4:/home/greg/code/spideryarn2/.env.local")}
+      ${dim("  + OPENROUTER_API_KEY  added")}
+      ${dim("  ~ DATABASE_URL  changed")}
+      ${dim("  = 10 unchanged")}
+      ${dim("  skipped 2 keys not on the allowlist: HETZNER_CLOUD_API_TOKEN, SUPABASE_ACCESS_TOKEN")}
+      ${dim("✓ 12 keys, 0600 greg, read back and verified")}
 
 ${bold("ENVIRONMENT")}
   GJD_REMOTE_HOST         override the address (default: read from Terraform state,
                           so it is never stale after a rebuild)
   GJD_REMOTE_TRANSPORT    ssh | mosh | auto (default: auto, which probes mosh once)
+  GJD_REMOTE_REPO         where the checkout lives on the box, for push-env
+                          (default: /home/greg/code/spideryarn2)
 
 Names are optional everywhere. An unnamed session starts under a placeholder and
 adopts Claude Code's own title for the work at the next ${dim("gjd-remote ls")}. A name you
@@ -600,6 +892,11 @@ function main(): void {
     case "doctor":
       return cmdDoctor();
 
+    case "push-env": {
+      const { values } = parseArgs({ args: rest, options: { file: { type: "string" } } });
+      return cmdPushEnv({ file: values.file });
+    }
+
     case "forget-key": {
       // A rebuild puts a new machine on the old address, so ssh refuses with a
       // warning about a possible attack. That warning is correct and worth
@@ -629,7 +926,7 @@ function main(): void {
       return console.log(HELP);
 
     default: {
-      const known = ["ls", "new", "shell", "resume", "kill", "doctor", "ssh", "tunnel", "forget-key"];
+      const known = ["ls", "new", "shell", "resume", "kill", "doctor", "push-env", "ssh", "tunnel", "forget-key"];
       const near = known.filter((k) => k.startsWith(cmd.slice(0, 2)) || cmd.startsWith(k.slice(0, 2)));
       die(
         `unknown command '${cmd}'` +

@@ -128,6 +128,10 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "src/log-redaction.ts":
     "Knows the credential names precisely so it can keep them out of logs.",
   "src/vercel-health.ts": "Reports which credentials are configured, never their values.",
+  "scripts/gjd-remote-env.ts":
+    "The allowlist of which .env.local keys may travel to the remote box. It exists precisely to name credentials — an allowlist that could not write them down would be a blocklist — and it copies a file over scp. It never reads a value and never speaks to a provider.",
+  "scripts/gjd-remote.ts":
+    "The remote-box CLI. Names a credential only in help text and in the error it prints when the box lacks one. No transport of any kind.",
   "scripts/ai-cost.ts":
     "Reads GET /api/v1/key to reconcile. Costs nothing and buys no inference.",
   "evals/toc-structure/verify-costs.ts":

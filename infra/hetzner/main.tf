@@ -104,6 +104,12 @@ resource "hcloud_server" "box" {
     node_major     = var.node_major
     swap_gb        = var.swap_gb
     ssh_public_key = trimspace(file(pathexpand(var.ssh_public_key_path)))
+
+    # filebase64, deliberately, not file() and never templatefile(). The script is
+    # injected byte-for-byte; Terraform never parses its contents, so shell syntax
+    # in it cannot break a plan. Base64 also sidesteps every YAML indentation and
+    # special-character question at the same time.
+    provision_b64 = filebase64("${path.module}/provision.sh")
   })
 
   public_net {

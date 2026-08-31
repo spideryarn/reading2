@@ -1,6 +1,7 @@
 #!/usr/bin/env -S npx tsx
 /**
- * Preflight for infra/hetzner/cloud-init.yaml — run it before every apply.
+ * Preflight for infra/hetzner/cloud-init.yaml and infra/hetzner/provision.sh —
+ * run it before every apply.
  *
  * Every bug that cost us a rebuild was findable here, in seconds, on this
  * laptop:
@@ -10,10 +11,18 @@
  *     never actually running
  *   - a bash syntax error, which costs a whole boot to discover
  *
+ * provision.sh used to live inside a heredoc in the YAML and had to be carved
+ * back out of it. It is a real file now, so it is simply read — but that means
+ * this script could happily check a file the box never runs. Section 0 is what
+ * stops that: it asserts the wiring that makes the file on disk the file that
+ * boots.
+ *
  * Deliberately has NO dependencies — not even a YAML parser. It parses the one
- * structure we control. The important consequence is the guard at the bottom:
+ * structure we control. The important consequence is the guards at the bottom:
  * if this script extracts nothing, that is a FAILURE, not a pass. A preflight
  * that quietly checks zero things is worse than none, because you trust it.
+ * That guard has already caught a bug in this file: a regex that terminated at
+ * the first blank line inside provision.sh and silently found zero checks.
  */
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -22,6 +31,9 @@ import { fileURLToPath } from "node:url";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const FILE = process.argv[2] ?? path.join(REPO, "infra/hetzner/cloud-init.yaml");
+const INFRA = path.dirname(FILE);
+const PROVISION = path.join(INFRA, "provision.sh");
+const MAIN_TF = path.join(INFRA, "main.tf");
 
 /** Must match the templatefile() call in main.tf. */
 const TEMPLATE_VARS: Record<string, string> = {
@@ -31,7 +43,19 @@ const TEMPLATE_VARS: Record<string, string> = {
   node_major: "26",
   swap_gb: "16",
   ssh_public_key: "ssh-ed25519 AAAAC3Nz test@example",
+  // filebase64(provision.sh). Its value is irrelevant here — what matters is
+  // that the variable is declared, because Terraform errors at plan time on
+  // one that is not.
+  provision_b64: "IyEvYmluL2Jhc2gK",
 };
+
+/**
+ * The values provision.sh's own `check` lines are allowed to interpolate at
+ * the moment the check string is built. Kept in step with the script by
+ * section 4, which expands under `set -u`: an unset name there is an error
+ * rather than an empty string spliced into a check that then tests nothing.
+ */
+const CHECK_ENV = 'USER_NAME=greg; GJD_NODE_MAJOR=26; SUPABASE_VERSION=2.115.0;';
 
 /**
  * Things the finished box must be proven to have. Each earned its place by
@@ -39,6 +63,11 @@ const TEMPLATE_VARS: Record<string, string> = {
  * no npm beside it, and everything downstream of that never ran.
  */
 const REQUIRED_CHECKS = [
+  // The two canaries that test the checking machinery itself — see
+  // docs/postmortems/the-match-that-still-failed.md. They are first because
+  // without them every other name on this list is a claim nothing verifies.
+  "self-test: a check that must pass",
+  "self-test: a check that must fail",
   "/home is the volume",
   "swap",
   "node",
@@ -47,6 +76,9 @@ const REQUIRED_CHECKS = [
   "chrome",
   "playwright",
   "mcp",
+  "docker daemon",
+  "docker run as",
+  "supabase",
   "sshd",
   "password auth",
 ];
@@ -59,6 +91,31 @@ const fail = (s: string) => {
 };
 
 const raw = readFileSync(FILE, "utf8");
+const provision = readFileSync(PROVISION, "utf8");
+const mainTf = readFileSync(MAIN_TF, "utf8");
+
+// 0. The wiring, first: everything below checks provision.sh as it sits on
+//    disk, and that is only meaningful while that file is the one the box
+//    boots. Two links, and both have a wrong version that still "works":
+//    injecting it through templatefile() (which would put every ${...} in the
+//    shell script back in front of Terraform's parser — the exact trap that
+//    broke a previous build), or the YAML quietly writing something else to
+//    /usr/local/sbin/provision.sh.
+if (!/provision_b64\s*=\s*filebase64\([^)]*provision\.sh"?\)/.test(mainTf)) {
+  fail("main.tf does not inject provision.sh via filebase64() — the file checked here may not be the file that boots");
+}
+if (/templatefile\([^)]*provision\.sh/.test(mainTf)) {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: it is Terraform's syntax being described, in a plain string, on purpose
+  fail("main.tf passes provision.sh through templatefile() — every ${...} in the shell script would be Terraform's, which is the trap that broke a previous build");
+}
+if (!/- path: \/usr\/local\/sbin\/provision\.sh\n\s+permissions: "0700"\n\s+encoding: b64\n\s+content: \$\{provision_b64\}/.test(raw)) {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: it is Terraform's syntax being described, in a plain string, on purpose
+  fail("cloud-init.yaml does not write ${provision_b64} to /usr/local/sbin/provision.sh with encoding: b64 and mode 0700");
+}
+if (!raw.includes("bash /usr/local/sbin/provision.sh")) {
+  fail("cloud-init.yaml's runcmd never runs /usr/local/sbin/provision.sh");
+}
+note("provision.sh on disk is the file cloud-init injects and runs");
 
 // 1. Every ${...} must name a declared variable. Terraform errors at plan time
 //    on an unknown one, and templatefile() reads comments too.
@@ -86,8 +143,7 @@ const bashOk = (script: string, label: string) => {
 
 // 3. Pull each `content: |` block out of write_files and syntax-check the ones
 //    that are scripts. A line scan, not a regex: the regex version terminated
-//    at the first blank line inside provision.sh and silently found zero
-//    checks. The count guard at the bottom is what caught that.
+//    at the first blank line inside a script body and silently found nothing.
 type Block = { path: string; body: string };
 const blocks: Block[] = [];
 {
@@ -114,45 +170,56 @@ const blocks: Block[] = [];
   if (cur) blocks.push({ path: cur.path, body: cur.body.join("\n") });
 }
 
-let scripts = 0;
+let embeddedScripts = 0;
 for (const b of blocks) {
   if (!b.body.trimStart().startsWith("#!")) continue;
-  scripts++;
+  embeddedScripts++;
   if (bashOk(b.body, `${b.path} syntax`)) note(`✓ ${b.path} parses`);
+}
 
-  if (b.path.endsWith("provision.sh")) {
-    // 4. Every check must be runnable shell. Nested quoting here is where a
-    //    check silently stops testing anything while still reporting ok.
-    const checks = b.body.split("\n").filter((l) => l.trim().startsWith("check "));
-    for (const line of checks) {
-      const m = /^\s*check\s+"([^"]+)"\s+(.*)$/.exec(line);
-      if (!m) {
-        fail(`unparseable check: ${line.trim().slice(0, 60)}`);
-        continue;
-      }
-      const expand = spawnSync(
-        "bash",
-        ["-c", `USER_NAME=greg; node_major=26; printf "%s" ${m[2]}`],
-        { encoding: "utf8" },
-      );
-      if (expand.status !== 0) {
-        fail(`check "${m[1]}": its own argument will not parse`);
-        continue;
-      }
-      bashOk(expand.stdout, `check "${m[1]}"`);
-    }
-    note(`${checks.length} verification checks are runnable shell`);
+// 4. provision.sh, read straight from disk. `bash -n` on the whole file, then
+//    every `check` line individually: nested quoting is where a check silently
+//    stops testing anything while still reporting ok.
+if (bashOk(provision, "provision.sh syntax")) note("✓ infra/hetzner/provision.sh parses");
 
-    // A COUNT is the wrong guard: deleting one check still leaves plenty, and
-    // the build would go green having stopped verifying the thing that broke
-    // last time. Name what must be verified, so removing one is a deliberate
-    // act that edits this list.
-    const names = checks.map((l) => /check\s+"([^"]+)"/.exec(l)?.[1] ?? "");
-    for (const required of REQUIRED_CHECKS) {
-      if (!names.some((n) => n.includes(required))) {
-        fail(`no check covers "${required}" — the box could provision without it and still report OK`);
-      }
-    }
+const checkLines = provision.split("\n").filter((l) => l.trim().startsWith("check "));
+for (const line of checkLines) {
+  const m = /^\s*check\s+"([^"]+)"\s+(.*)$/.exec(line);
+  if (!m) {
+    fail(`unparseable check: ${line.trim().slice(0, 60)}`);
+    continue;
+  }
+  // -u, so a name the check splices in but nothing sets is an error here
+  // rather than an empty string in an assertion that then proves nothing
+  // (`grep -qx ""` matches a blank line and parses perfectly).
+  const expand = spawnSync("bash", ["-u", "-c", `${CHECK_ENV} printf "%s" ${m[2]}`], { encoding: "utf8" });
+  if (expand.status !== 0) {
+    fail(`check "${m[1]}": its own argument will not parse (${(expand.stderr || "").trim().split("\n")[0]})`);
+    continue;
+  }
+  bashOk(expand.stdout, `check "${m[1]}"`);
+}
+note(`${checkLines.length} verification checks are runnable shell`);
+
+// A COUNT is the wrong guard for COVERAGE: deleting one check still leaves
+// plenty, and the build would go green having stopped verifying the thing that
+// broke last time. Name what must be verified, so removing one is a deliberate
+// act that edits this list.
+// Names come from two places. Most are `check "..."` lines; the must-FAIL
+// canary is deliberately NOT a check() call (inverting the flag inside the
+// helper would make the helper the thing under test), so its name is only ever
+// seen in the ok/FAIL line it prints itself.
+const names = [
+  ...checkLines.map((l) => /check\s+"([^"]+)"/.exec(l)?.[1] ?? ""),
+  // `echo` or `say` — provision.sh routes report lines through say() so they
+  // reach the status file as well as stdout. Matching only `echo` silently
+  // stopped finding the longhand canary the moment that landed, which is
+  // exactly what this guard is for, and it did catch it.
+  ...[...provision.matchAll(/(?:echo|say) "(?:ok {3}|FAIL )([^"]+)"/g)].map((m) => (m[1] ?? "").trim()),
+];
+for (const required of REQUIRED_CHECKS) {
+  if (!names.some((n) => n.includes(required))) {
+    fail(`no check covers "${required}" — the box could provision without it and still report OK`);
   }
 }
 
@@ -167,8 +234,12 @@ for (const c of runcmd) {
 }
 note(`${runcmd.length} runcmd entries checked`);
 
-// 6. The guard that makes the rest mean anything.
-if (scripts < 2) fail(`only extracted ${scripts} scripts — the parser has drifted from the file, so nothing above was really checked`);
+// 6. The guards that make the rest mean anything. Each one is "the parser
+//    found less than it must have", not "the box has less than it should" —
+//    they catch this file drifting away from the files it reads.
+if (embeddedScripts < 1) fail(`extracted ${embeddedScripts} embedded scripts from the YAML — the block parser has drifted, so nothing in section 3 was really checked`);
+if (checkLines.length < 10) fail(`found only ${checkLines.length} check lines in provision.sh — the parser has drifted from the file, so nothing in section 4 was really checked`);
+if (runcmd.length < 1) fail(`found ${runcmd.length} runcmd entries — parser drift`);
 if (interpolations < 5) fail(`only found ${interpolations} interpolations — parser drift`);
 
 console.log(problems.length === 0 ? "\n✓ cloud-init preflight passed" : `\n✗ ${problems.length} problem(s)`);

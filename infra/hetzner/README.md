@@ -34,6 +34,21 @@ things is worse than none.
 Not covered: anything that needs the machine to actually boot. The next step up, if this stops being
 enough, is `multipass launch --cloud-init` locally before touching Hetzner.
 
+**Then read the plan, and read it for a replacement.** As of 2026-08-31 `tofu plan` reports
+`hcloud_server.box must be replaced`, because the live box was built before a round of cloud-init
+fixes and the `user_data` hash in state no longer matches the repo. That is expected and will stay
+true until we deliberately rebuild — but it means **any apply, for any reason, destroys and recreates
+the box.** `/home` survives (delete protection, and it is bind-mounted back) and `gjd-remote` follows
+the new IP because it reads `tofu output` rather than a constant. Running tmux sessions do not
+survive.
+
+Do not silence this with `ignore_changes = [user_data]`. We want cloud-init edits to take effect on
+the next build. Check what the plan says before you apply, every time:
+
+```
+tofu plan | grep -E "must be replaced|Plan:"
+```
+
 ## The account and project
 
 **Use the personal account, and a project of its own inside it.**
@@ -83,10 +98,11 @@ sudo tail -20 /var/log/provision.log    # must end with PROVISION OK
 claude                                   # press c, open the URL on your laptop, paste the code back
 ```
 
-**Read that log before trusting the box.** Provisioning ends with ten explicit checks — volume
-mounted, swap on, claude and chrome installed, both MCP servers registered, sshd config valid and
-password auth actually off. A green `PROVISION OK` is the only evidence any of it happened;
-cloud-init reporting success is not.
+**Read that log before trusting the box.** Provisioning ends with a block of explicit checks —
+volume mounted, swap on, claude and chrome and docker actually running, both MCP servers registered,
+password auth actually off. The list is at the bottom of
+[`provision.sh`](provision.sh); do not restate it here, it grows. A green `PROVISION OK` is the only
+evidence any of it happened; cloud-init reporting success is not.
 
 Use `/login`, never `claude setup-token` — a token session is model-requests-only and loses
 Remote Control, claude.ai connectors and `/schedule`.
@@ -130,17 +146,86 @@ The token lives in `.env.local` as `HETZNER_CLOUD_API_TOKEN` (gitignored). Terra
 export HCLOUD_TOKEN=$(python3 -c "import pathlib;[print(l.split('=',1)[1].strip().strip('\"').strip(\"'\")) for l in pathlib.Path('.env.local').read_text().splitlines() if l.strip().startswith('HETZNER_CLOUD_API_TOKEN=')]")
 ```
 
-## An agent cannot SSH here
+## Giving the box GitHub access
 
-**Claude Code's Bash tool has no outbound port 22** — not to this box, not to github.com. It reaches
-HTTPS fine, so `tofu`, `hcloud` and `curl` all work, and the block is easy to mistake for the
-server being down. It is not: check `hcloud server list` before believing otherwise.
+**Two tokens, because one cannot do it.** A GitHub fine-grained PAT has exactly one resource owner,
+and the box's repos live under two: the `spideryarn` org and `gregdetre`. So there is a token per
+owner, and [`github-owner-credential-helper.sh`](github-owner-credential-helper.sh) picks between
+them by reading the owner out of the URL git is asking about.
 
-The practical consequence is that **an agent cannot verify its own provisioning, or operate the box
-directly.** Anything needing a shell on the server has to be run by Greg (the `!` prefix in Claude
-Code puts the output back in the conversation), or triggered from the box itself. Worth designing
-around rather than rediscovering: prefer things that report over HTTPS, or that Terraform can
-assert, over things that need someone to log in and look.
+Greg, 2026-08-31, on what it should reach:
+
+> I would like to restrict access to certain repos, and then for it to have pretty much full
+> permissions for those.
+
+### The ceremony (Greg, once, on github.com)
+
+1. **Check the org policy first.** Organization settings → Personal access tokens → Fine-grained
+   tokens → **Allow access via personal access tokens**. If this says *Restrict*, every clone of an
+   org repo fails as `Repository not found` — indistinguishable from a typo. Do this before
+   anything else so you never see that error.
+2. **Personal token.** Settings → Developer settings → Personal access tokens → Fine-grained tokens
+   → Generate new token. **Resource owner: `gregdetre`.** Only select repositories: `gjdutils`,
+   `healthyselfjournal`, `healthyselfapp`. Permissions: **Contents: Read and write**, Metadata: Read
+   (mandatory and automatic), and Pull requests: Read and write if agents should open PRs. Set an
+   expiry — 90 days makes rotation a habit rather than an incident.
+3. **Org token.** The same flow with **Resource owner: `spideryarn`**, repositories `reading2`,
+   `hellozenno`, `reading`, `spideryarn`. Tokens created by an org owner need no separate approval;
+   tokens created by anyone else sit pending, and while pending they can read only public repos —
+   which looks exactly like failure mode 1.
+4. **Put them on the box**, one file per owner, never pasted into a command (which would put them in
+   `~/.bash_history`):
+
+   ```
+   ssh greg@<ip> 'sudo install -d -m 0700 -o greg -g greg /etc/github-tokens'
+   ssh greg@<ip> 'umask 077; cat > /etc/github-tokens/gregdetre.token'   # paste, then Ctrl-D
+   ssh greg@<ip> 'umask 077; cat > /etc/github-tokens/spideryarn.token'  # paste, then Ctrl-D
+   ```
+
+**Adding a repo later** under an owner that already has a token is a click on github.com and no
+change on the box at all. Adding a repo under a *new* owner is one new `<owner>.token` file — no
+code change, no config change, no restart.
+
+### Why not the simpler-looking options
+
+- **Not `gh auth login`.** On a headless box with no Secret Service, `gh` falls back to a plaintext,
+  non-expiring, account-wide OAuth token in `~/.config/gh/hosts.yml`. Broader blast radius and no
+  expiry, for no convenience gain over pasting a token once.
+- **Not `GH_TOKEN` in a shell profile.** `gjd-remote` starts agents over non-interactive ssh, which
+  sources neither `.bashrc` nor `.bash_profile` — see the comment at `scripts/gjd-remote.ts:341`.
+  An exported token works when a human tests it in a login shell and is missing inside every real
+  agent session. Test it the easy way and you test the wrong thing.
+- **Not per-owner `credential.<url>.helper` sections.** They do prefix-match on git 2.50.0, but
+  `gitcredentials(5)` says a path in the pattern must match *exactly*, so that is undocumented
+  behaviour one upgrade away from changing. And matching sections fire in **config-file order**, not
+  most-specific-first, so a broader section above a narrower one silently shadows it.
+- **Not SSH deploy keys.** They are per-repository, so seven repos means seven keypairs, and adding
+  a repo means generating and registering another. That is the opposite of what Greg asked for.
+
+## Can an agent SSH here? Check, do not assume
+
+**On 2026-08-30 Claude Code's Bash tool had no outbound port 22** — not to this box, not to
+github.com — and the whole of that day's work was designed around it: an agent could drive the
+Hetzner API over HTTPS but could not run anything on the machine, so `gjd-remote doctor` exists to
+package every question into one command Greg runs.
+
+**On 2026-08-31 it worked.** Same tool, same box, no change at either end that we made. So the block
+is a property of the sandbox an agent happens to be running in, not a fact about this repo, and both
+the old rule and its opposite are wrong as standing assumptions.
+
+Test it in one line rather than believing either:
+
+```
+nc -vz $(tofu -chdir=infra/hetzner output -raw ipv4) 22
+```
+
+If it connects, work on the box directly. If it does not, the block is easy to mistake for the
+server being down — it is not; check `hcloud server list` before concluding otherwise, and fall back
+to `gjd-remote doctor` and asking Greg to run things with the `!` prefix.
+
+Either way the design rule still earns its place: **prefer things that report over HTTPS, or that
+Terraform can assert, over things that need someone to log in and look.** That is what made the box
+recoverable on the day nobody could reach it.
 
 ## mosh does not carry the tunnel
 
