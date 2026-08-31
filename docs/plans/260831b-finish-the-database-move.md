@@ -75,6 +75,27 @@ average 38 reported 65 failures, and the same twelve files passed 142/142 as a s
 - **Ask Greg before anything that writes to a database**, every time, including a migration that
   looks routine. Local is a lower bar but still ask before wiping.
 
+**A second piece of work wants the same four files, and it is deliberately going first.**
+[260831ah-toc-on-request-and-the-tree-that-costs-nothing.md](260831ah-toc-on-request-and-the-tree-that-costs-nothing.md)
+takes the 320-second `toc` step off the ingest path: the reader lands on a free tree built from the
+author's own headings, and the model call happens when somebody opens Hierarchy. It is the other
+half of the same 2026-08-30 ask this plan came from — Greg ordered it *latency first, then
+concurrency, then the database move* — so it is a sibling, not a competitor.
+
+**The one contract it has to loosen is yours.** [`src/article-input.ts`](../../src/article-input.ts)
+says *"The blocks and the tree are not optional: a stage with neither has nothing to be about"*, and
+`tree: Tree` is required there and in the public payload. Deferring `toc` makes a tree-less article a
+real, ordinary state, so that field becomes optional and the seven article-reading stages learn to
+refuse politely instead of throwing. That is a change to the file this plan calls *"the shortest
+statement of what this migration is about"*, so read it before stage 3 rather than after.
+
+**It also touches** `src/pipeline.ts` (the `toc` step's registration and `DEFAULT_INGEST_STEPS`) and
+`src/jobs.ts` — which this plan declares one-agent-at-a-time, and that rule holds for both of us.
+**The sequencing agreed with Greg, 2026-08-31:** the ToC work uses the gap before stage 2.5 starts to
+land the contract change while these files are clean, so the flip is built on top of it rather than
+colliding with it mid-flight. If you reach `claimSession` and `Article.tree` is already optional,
+that is expected and nothing has gone wrong.
+
 ## Why now
 
 Three live faults, and they are **one defect wearing three costumes**: the pipeline's artefact reads

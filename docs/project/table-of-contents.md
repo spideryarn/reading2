@@ -448,11 +448,19 @@ knowable without a model, so `parseLabels` overwrites it from `block.text` and a
 cannot bring it back. The model is still asked for one, so that a batch skipping its headings still
 fails the paragraph-number check.
 
-Two things this bought beyond the ceiling. `effort` went **back to `"high"`** on the structure call —
-the postmortem had forced it down to `"medium"`, which was a real quality concession on the one part
-of the work where reasoning matters. And `COVERAGE_FLOOR` went from 0.95 to **1**: each batch is
-asked for an exact set of numbered paragraphs and refuses any other set, so there is no longer a path
-by which a block is legitimately unlabelled.
+Two things this bought beyond the ceiling, **and both have since been reversed — read the constants,
+not this paragraph.** `effort` went back to `"high"` on the structure call, undoing a concession the
+postmortem had forced; a second production truncation (Wolfram, *Towards a Theory of Bugs*) forced it
+down again on 2026-08-30 in `fb82dc8`, and
+[`src/toc.ts`](../../src/toc.ts) § `EFFORT` is the current value with the reason beside it — including
+that `high` has still never been measured against `medium` here. And `COVERAGE_FLOOR` went from 0.95
+to 1, so that each batch was asked for an exact set of numbered paragraphs and refused any other;
+stage 1 of [260830am](../plans/260830am-faster-ingest-and-concurrency.md) took it back to 0.95 and
+renamed its job — the article-level backstop, not the per-batch bound — and
+[`src/labels.ts`](../../src/labels.ts) § `COVERAGE_FLOOR` carries that argument.
+
+*(Both lines said the opposite of the code from 2026-08-30 until 2026-08-31, which is the drift
+CLAUDE.md warns about: a doc that restates a constant is a second copy that nothing keeps in step.)*
 
 ### The path that turned out to exist anyway
 
