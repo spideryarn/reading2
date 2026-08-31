@@ -219,9 +219,9 @@ Three consequences, and the third is a correction:
   under a product. A maximum over a subset can only be *lower* than the maximum over both, so a
   quote scored on one axis can be under-promoted and never over-promoted, which is the direction an
   honest default has to fail in.
-- **The bar starts at `0.70`, not the glossary's `0.30`**, because a product of two 0–1 scores
-  clusters low and a maximum clusters high. It is a guess with no measurement behind it, exactly as
-  `0.30` was; the slider under it is the feedback loop.
+- **The bar starts at `0.80`, not the glossary's `0.30`**, because a product of two 0–1 scores
+  clusters low and a maximum clusters high. It started at `0.70` and the first real run moved it —
+  see below.
 - **The right-hand end promotes "all the top-scored quotes", not "exactly one".** The plan claimed
   the glossary's promise and it does not carry: under `max` either score can produce a top value, so
   ties at the top are common. GPT Sol showed it false with a five-quote example.
@@ -370,12 +370,29 @@ caught it. It is still a constraint: moving either stage's effort ends the compa
    and the panel, the count, the track end and the groups all call it. A second copy is how the bar
    comes to say `5 of 14` over a list of six.
 
+## The first real run, and what it said
+
+`data/openai-huggingface`, 4,192 words, 2026-08-31. Five quotes kept in 11.9 seconds.
+
+**`unfound: 0`.** Not one line the model offered was missing from the article — which is the number
+this whole stage is arranged around, and the best answer it could have given. `otherVoice: 2`, which
+on a piece that quotes agent transcripts at length is the check doing its job rather than a fault.
+
+**It moved the bar.** The five `max(importance, striking)` values came back `0.70`, `0.75`, `0.75`,
+`0.85`, `0.90` — clustered high, exactly as the argument for `max` predicts — so a starting bar of
+`0.70` promoted **every quote** and the panel opened on a note apologising for having divided
+nothing. `PROMOTE_BAR` is `0.80`, which promotes two of those five. One article is a better-supported
+guess and not a measurement, and the slider is still the feedback loop.
+
+**And 11.9 seconds against a 120-second budget**, which is a `STEP_BUDGET_MS` guess with an order of
+magnitude of headroom in it. Worth leaving alone — one sample, and being under is the cheap way to be
+wrong — but worth knowing.
+
 ## What is still open
 
-- **Nothing has run this stage against a real article.** So `0.70`, `4–16`, `medium` and the whole
-  `unfound` rate are guesses, `data/writes/quotes.json` does not exist, and `quotes.json` sits in
-  `NOT_YET_WRITTEN` in `tests/store-artefact-manifest.test.ts` and off `GATE_FIXTURES`. The first
-  real run is the thing that would tell us most.
+- **One article is one article.** `0.80`, the `4–16` count and `medium` effort all rest on that
+  single run. `data/writes/quotes.json` still does not exist, so `quotes.json` is off `GATE_FIXTURES`
+  and the filesystem-to-Postgres round trip is still asserting that an absent artefact stays absent.
 - **`validateHits` (search) and `validateOccurrences` (ideas) have the same two bugs** this stage was
   fixed for: both call `findQuote` with the forgiving pass and both store the model's string. Their
   quotes are shown in a results list rather than presented as the author's chosen lines, so the harm

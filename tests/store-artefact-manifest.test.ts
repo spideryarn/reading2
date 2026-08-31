@@ -187,12 +187,11 @@ const NOT_YET_WRITTEN: Record<string, string> = {
      the line. It has a home in `HOMES` and always did.
      docs/plans/hosting-the-articles-images.md, stage B. */
 
-  /* Stage 5h landed on 2026-08-31 and nothing has run it against a real article
-     yet, so there is no `quotes.json` anywhere on this disk. Its home in
-     `HOMES` is real — the column exists, drizzle/0033_quotes.sql — and this
-     line clears itself the moment somebody runs `npm run quotes`, which is the
-     whole design of this pair of lists. docs/plans/quotes-mode.md. */
-  "quotes.json": "no real run yet — stage 5h landed 2026-08-31",
+  /* `quotes.json` sat here for a few hours on 2026-08-31 and is gone again,
+     which is this pair of lists working exactly as `assets.json` did before it:
+     a real run against `data/openai-huggingface` produced one, the assertion
+     below duly failed, and the exemption had to be deleted rather than left to
+     go on excusing a name that had arrived. docs/project/quotes.md. */
 };
 
 describe("the artefact manifest", () => {

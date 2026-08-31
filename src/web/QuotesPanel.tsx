@@ -137,15 +137,28 @@ interface Props {
  * 0.70 under a maximum, so a bar copied across from the glossary would promote
  * nearly everything and the divider would say nothing.
  *
- * **It is a guess and there is no measurement behind it**, which GPT Sol was
- * right to press on: nobody has looked at a real distribution of these two
- * scores, because nothing has run this stage against a real article yet. What
- * makes shipping a guess defensible is the same thing that made `0.30`
- * defensible — the slider under it is the feedback loop, `?bar=` carries
- * wherever the reader moves it, and the number is on screen with its effect
- * beside it. docs/plans/quotes-mode.md § What is still open.
+ * **`0.70` was a guess with nothing behind it**, which GPT Sol was right to
+ * press on. There is now one measurement, and it moved the number.
+ *
+ * The first real run — `data/openai-huggingface`, 4,192 words, five quotes kept
+ * — came back with `max(importance, striking)` of `0.70`, `0.75`, `0.75`,
+ * `0.85` and `0.90`. At `0.70` **every quote cleared the bar**, so the default
+ * divided nothing and the panel opened on a `barNote` apologising for it. The
+ * clustering is exactly what the argument above predicts and the starting
+ * position was simply too low for it.
+ *
+ * `0.80` promotes two of those five, which is the size of top group this is
+ * for. **It is one article**, so this is a better-supported guess rather than a
+ * measurement — and it stays a guess in the same way `0.30` next door does,
+ * because the slider under it is the feedback loop. What is no longer true is
+ * that nothing had ever been looked at.
+ *
+ * `snapToStop` resolves a tie **downwards**, towards the lower score and so
+ * towards promoting more. That is the safer direction for a reference list: a
+ * slightly generous top group costs a reader a glance, where an empty one costs
+ * them the feature.
  */
-export const PROMOTE_BAR = 0.7;
+export const PROMOTE_BAR = 0.8;
 
 /**
  * **The positions the bar can take: nothing, then every score the list actually
