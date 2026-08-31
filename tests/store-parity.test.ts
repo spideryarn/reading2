@@ -120,6 +120,64 @@ const ROOT = path.resolve(import.meta.dirname, "..");
  */
 const LEGACY_SLUG = "constitution";
 
+/**
+ * **It is out of the two library comparisons as well, and both stores are
+ * right about it.**
+ *
+ * The filesystem store knows nothing about publication: the article has blocks
+ * and a tree on disk, so `src/api.ts` describes it and puts it on the shelf.
+ * Postgres refuses to publish it — the `describe` block below — and
+ * `onTheShelf` (src/store/pg.ts) drops any article with no current revision, so
+ * it is never in that library at all. That is the legacy article being legacy in
+ * the one place a library can see it, and it is not a parity failure any more
+ * than the refusal itself is.
+ *
+ * **This did not surface until the committed corpus did, and that is the
+ * finding rather than a regression.** On a laptop `data/constitution/shelf.json`
+ * says `archivedAt` — Greg archived it on 2026-08-27, after 199 opens — and
+ * `src/api.ts` filters the library on `!!e.archivedAt === !!opts.archived`. So
+ * the filesystem never listed it, the comparison never met it, and both tests
+ * passed on one machine's reader state rather than on their own property. The
+ * corpus carries no reader state, deliberately, because it is a real reader's
+ * words (tests/fixtures/data-root/README.md) — so there the article is
+ * unarchived, the difference appears, and the tests go red for something that
+ * was always true. docs/plans/260901b-committed-fixture-corpus.md § Ranked
+ * silent failures, 2.
+ *
+ * Excluded by the same constant that keeps it out of `slugs`, and **asserted
+ * rather than merely subtracted** — see `expectPostgresOmitsTheLegacyArticle`.
+ */
+
+/**
+ * Postgres must not be listing the article it refused to publish.
+ *
+ * The exclusion above removes a known difference, and a subtraction that is
+ * never checked is how a real difference hides behind a permitted one. This is
+ * the other half: the day the gate stops refusing `constitution`, or the day
+ * `onTheShelf` starts listing drafts, the slug appears on the Postgres side and
+ * this fails instead of being quietly filtered out.
+ *
+ * True on a laptop and in the gate worktree alike — unlike the filesystem side,
+ * which depends on whether the reader archived it.
+ *
+ * Scoped to `onDisk` for the reason the comparisons themselves are: a row left
+ * behind by a suite whose directory has since gone is a known gap, not a
+ * finding, and letting it red here would teach the next reader to distrust
+ * this. `it("has something to compare")` is what catches the article going
+ * missing from disk altogether.
+ */
+function expectPostgresOmitsTheLegacyArticle(
+  fromPg: readonly LibraryEntry[],
+  onDisk: ReadonlySet<string>,
+): void {
+  expect(
+    fromPg.filter((e) => onDisk.has(e.slug)).map((e) => e.slug),
+    `Postgres listed ${LEGACY_SLUG}, which never published. Either the publication gate ` +
+      "stopped refusing an unstamped labels file, or the library started listing drafts. " +
+      "Both are real changes and neither should be absorbed by the exclusion below.",
+  ).not.toContain(LEGACY_SLUG);
+}
+
 /** The article with no stage 1, and therefore no `url` and no `fetchedAt`. */
 const NO_FETCH_SLUG = "noema-mythology-of-conscious-ai";
 
@@ -544,7 +602,13 @@ when("the filesystem and Postgres stores agree", () => {
        scoped to articles that exist on disk right now. An extra article that
        DOES have a directory still fails, which is the property worth keeping. */
     const onDisk = new Set(await completeArticles());
-    const present = (entries: LibraryEntry[]) => entries.filter((e) => onDisk.has(e.slug));
+    /* `LEGACY_SLUG` comes out here for the reason written beside its
+       declaration: the filesystem lists an article it can serve, Postgres does
+       not list one it refused to publish, and both are correct. Asserted on the
+       Postgres side rather than left to the filter. */
+    expectPostgresOmitsTheLegacyArticle(fromPg, onDisk);
+    const present = (entries: LibraryEntry[]) =>
+      entries.filter((e) => onDisk.has(e.slug) && e.slug !== LEGACY_SLUG);
 
     /* **A comment whose anchor is not a block id is counted by the files and
        cannot exist in Postgres.**
@@ -553,10 +617,12 @@ when("the filesystem and Postgres stores agree", () => {
        at it; `comments.json` has none, and something wrote a comment on
        `data/writes` anchored to `zzzz00`. The seeder drops it by that rule
        (tests/helpers/seed-reader-state.ts), so the filesystem count is one
-       higher. That is a permitted difference and it is the ONLY permitted one,
-       so it is subtracted here by the same rule rather than by a hardcoded
-       number — the day the corrupt row is deleted, this becomes a no-op instead
-       of becoming wrong. */
+       higher. That is a permitted difference and it is the only one *within* a
+       card, so it is subtracted here by the same rule rather than by a
+       hardcoded number — the day the corrupt row is deleted, this becomes a
+       no-op instead of becoming wrong. (The other permitted difference is about
+       which cards there are rather than what is on one: `LEGACY_SLUG`, excluded
+       just above.) */
     const skipped = new Map<string, number>();
     for (const slug of onDisk) {
       const bad = (await fsCommentStore.load(slug)).filter((c) => !isSpideryarnId(c.blockId));
@@ -724,8 +790,11 @@ when("the filesystem and Postgres stores agree", () => {
       pgArticleReader.listArticles(),
     ]);
     const onDisk = new Set(await completeArticles());
+    /* Same exclusion, same reason, and the same positive assertion — see
+       `expectPostgresOmitsTheLegacyArticle` and the note by `LEGACY_SLUG`. */
+    expectPostgresOmitsTheLegacyArticle(fromPg, onDisk);
     const mine = (entries: LibraryEntry[]) =>
-      entries.filter((e) => !e.fixture && onDisk.has(e.slug));
+      entries.filter((e) => !e.fixture && onDisk.has(e.slug) && e.slug !== LEGACY_SLUG);
 
     // Same articles. Sorted by slug, because the ORDER is the next assertion
     // and comparing both at once reports either failure as the other.
