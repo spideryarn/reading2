@@ -740,7 +740,7 @@ Both existing checkpoints already say what the key is, and neither is the revisi
 
 | checkpoint | what gates reuse at all | what identifies one entry | what losing it costs |
 |---|---|---|---|
-| `labels-progress.json` — [`src/labels.ts:650`, `667-694`](../../src/labels.ts) | `version`, `generator`, `slug` and `sourceHash`, all four exact | a per-batch `fingerprint` — the prompt that asked the question | one paid labelling call per batch; the comment at [`src/toc.ts:717-722`](../../src/toc.ts) puts it as "a 429 eight batches into a book costs the one batch rather than the eight" |
+| `labels-progress.json` — [`src/labels.ts:650`, `667-694`](../../src/labels.ts) | `version`, `generator`, `slug` and `sourceHash`, all four exact | a per-batch `fingerprint` — the prompt that asked the question | one paid labelling call per batch; the comment at [`src/toc.ts:717-722`](../../src/hierarchy.ts) puts it as "a 429 eight batches into a book costs the one batch rather than the eight" |
 | `pdf-chunks/<key>.json` — [`src/pdf-read.ts:753`, `774-787`](../../src/pdf-read.ts) | nothing outside the key | a sha256 over `rawSha256`, the chunk's pages, its context, the prompt fingerprint, the reader id and `maxTokens` | one paid page-reading call per chunk, and these are the expensive ones |
 
 Both are addressed by **what the work was about**, never by which attempt happened to be running.
@@ -2269,7 +2269,7 @@ lookups and the reader profile all build their own `data/` paths and never touch
 `data/` does not disappear at the end of D, and this plan should stop implying that it does.
 
 **One hazard to name rather than discover.** Three CLI `main()`s default `dataDir` to
-`data/<slug>` ([`src/fetch.ts:1286`](../../src/fetch.ts), [`src/toc.ts:675`](../../src/toc.ts),
+`data/<slug>` ([`src/fetch.ts:1286`](../../src/fetch.ts), [`src/toc.ts:675`](../../src/hierarchy.ts),
 [`src/pdf-read.ts:1329`](../../src/pdf-read.ts), and `src/extract.ts`'s
 `opts.dataDir ?? path.join("data", slug)`). That default is the dangerous shape: forget to pass a
 store and you get a *working filesystem write* rather than an error — the same hazard the required
@@ -2435,7 +2435,7 @@ there is no per-artefact JSON column, and `writeBlocks` takes `value.blocks` and
 beside it. `sanitizer` already disappears through that path and gets away with it only because it is a
 global constant the exporter re-stamps. A per-run hash is not reconstructible, so it would not.
 `blocksArtefact` is also a choke point called from three sites, and two of them — stage 4's copy at
-[`src/toc.ts:836`](../../src/toc.ts) and the exporter at
+[`src/toc.ts:836`](../../src/hierarchy.ts) and the exporter at
 [`src/store/export.ts:439`](../../src/store/export.ts) — have no value to supply and today silently
 drop fields they do not name. Stage 3 would write the field and stage 4 would lose it on the next run,
 with nothing going red.

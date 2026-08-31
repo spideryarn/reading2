@@ -161,7 +161,7 @@ describe("the card the reader actually sees", () => {
       steps: [
         {
           name: "toc",
-          label: "Building the table of contents",
+          label: "Building the hierarchy",
           status: "error",
           error: "This article has to be processed in sections, which is not built yet.",
         },

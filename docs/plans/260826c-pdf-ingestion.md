@@ -231,7 +231,7 @@ hallucination-specific benchmark — because a general model faced with a damage
 plausible one, which is exactly what it is built to do. That difference is what makes it useful
 here: see [the scan question](#a-scan-with-no-text-layer).
 
-**Model settings, so nobody copies the ToC's.** [`src/toc.ts`](../../src/toc.ts) asks for adaptive
+**Model settings, so nobody copies the ToC's.** [`src/toc.ts`](../../src/hierarchy.ts) asks for adaptive
 thinking, which is right for Sonnet 5 and **wrong for Haiku 4.5** — Haiku takes only manual
 `budget_tokens` thinking, and transcription doesn't want any. Omit `thinking`. Stream, set
 `max_tokens` generously, check `stop_reason`. Don't count on a prompt-cache hit from the shared
@@ -1804,7 +1804,7 @@ One call, completed, returning a structurally invalid tree — nothing to do wit
 It matters beyond this article for two reasons, both from the session working on ToC repairs:
 
 - **Every previously observed tiling failure was off by one block**, and the R2 repair
-  ([`src/toc.ts`](../../src/toc.ts)) is deliberately sized to exactly that. A gap of **three** is
+  ([`src/toc.ts`](../../src/hierarchy.ts)) is deliberately sized to exactly that. A gap of **three** is
   outside the repair envelope by design, so the claim that the repairs recover every measured
   structure failure — which was the stated reason a fallback tree was judged unnecessary — has a
   counterexample now.
@@ -1830,7 +1830,7 @@ It matters beyond this article for two reasons, both from the session working on
 > > — Greg, 2026-08-30
 >
 > That is the intent, which is what this doc is for. **What it became is in
-> [`src/toc.ts`](../../src/toc.ts)** — read it there rather than trusting a description here, which
+> [`src/toc.ts`](../../src/hierarchy.ts)** — read it there rather than trusting a description here, which
 > is how `token-budget.ts` came to state as fact a change nobody had made.
 
 ### The gate refused both papers, and both were right

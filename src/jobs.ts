@@ -169,7 +169,7 @@ const aborts = new Map<string, AbortController>();
  * The arithmetic it has to satisfy, measured rather than assumed —
  * `tests/jobs-lease-budget.test.ts` pins it:
  *
- *     fetch ~10s + extract ~5s + blocks ~5s + toc 320.4s + assets ≤180s ≈ 520s
+ *     fetch ~10s + extract ~5s + blocks ~5s + hierarchy 320.4s + assets ≤180s ≈ 520s
  *     520s  <  740s self-abort  <  800s platform kill
  *
  * 420s was right for the one-step-per-request shape this replaces, where every

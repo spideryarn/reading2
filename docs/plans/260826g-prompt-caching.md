@@ -269,7 +269,7 @@ quietly stopped matching, both look exactly like success
 ([silent-success.md](../reusable/silent-success.md)). An eval, not a test: it calls a model,
 costs money, and its results are committed so the next change is compared against a number
 rather than somebody's memory ([testing.md](../project/testing.md#evals-are-not-tests-and-live-in-their-own-folder)).
-It follows [`evals/toc-labels.ts`](../../evals/toc-labels.ts)'s shape and runs against the same
+It follows [`evals/toc-labels.ts`](../../evals/hierarchy-labels.ts)'s shape and runs against the same
 two committed texts — `data/constitution` (360 blocks, ~35.4k tokens) and
 `data/noema-mythology-of-conscious-ai` (141 blocks, ~13.1k tokens) — with one honest difference
 from its sibling: toc-labels measures artefacts that already exist, and this one has to spend.

@@ -5,7 +5,7 @@
 of `<p>`? They built it, twice, reversing a decision in between, and then found a real bug in the
 version that shipped. All three stages are written down.
 
-Read this before touching [table-of-contents.md § Building the tree over a flat article](../table-of-contents.md#building-the-tree-over-a-flat-article).
+Read this before touching [hierarchy.md § Building the tree over a flat article](../hierarchy.md#building-the-tree-over-a-flat-article).
 
 ## What it does
 
@@ -123,7 +123,7 @@ round, and every round made things worse.
 1. **One-shot structuring of a long unstructured article was not good enough.** That is the finding
    underneath the whole saga, and it is direct evidence about our
    [Q1](../open-questions.md#q1). They ended on iterate-with-a-cap and a human deciding when to
-   stop. Our stage 4 currently does a single pass ([`src/toc.ts`](../../../src/toc.ts)) — if the
+   stop. Our stage 4 currently does a single pass ([`src/toc.ts`](../../../src/hierarchy.ts)) — if the
    trees come back with arbitrary-feeling boundaries, this is the known next move rather than a
    surprise.
 2. **The ~200-words-between-headings figure is a usable target, once verified.** Our tree aims at a
@@ -150,7 +150,7 @@ the mutations framework, the reversibility, the id churn, and the duplicate-id a
 Our tree is a *separate artefact* over an immutable block list — `tree.json` beside `blocks.json`
 ([architecture.md § Pipeline](../architecture.md#pipeline)) — and headings we invent are node
 `title`s, not elements inserted into the prose
-([table-of-contents.md](../table-of-contents.md#headings-verbatim-unless-genuinely-uninformative)).
+([hierarchy.md](../hierarchy.md#headings-verbatim-unless-genuinely-uninformative)).
 Regenerating is `npm run toc`, which rewrites one file wholesale. The entire class of bug they hit
 cannot occur here, and it cost us nothing to avoid — it fell out of the pipeline being stages over
 artefacts.
@@ -162,6 +162,6 @@ boring architecture.
 
 - [overview.md](overview.md) — the map to that codebase
 - [structure-panel.md](structure-panel.md) — how the resulting tree was *displayed*, which is the closer cousin to our zoom
-- [../table-of-contents.md](../table-of-contents.md) — our tree, its schema and its generation prompt
+- [../hierarchy.md](../hierarchy.md) — our tree, its schema and its generation prompt
 - [../open-questions.md#q1](../open-questions.md#q1) — where our hierarchy comes from, still open
 - [borrow-list.md](borrow-list.md) — where this sits in the priority order

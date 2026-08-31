@@ -48,8 +48,8 @@ constraint, not an apology — keep it boring while the ideas are still moving.
    ├─────────────────────┐
    ▼                     ▼
  ┌──────────┐        ┌──────────────┐
- │ 4 toc    │        │ 5 summarize  │   gist per node, bottom-up
- │ (tree)   │───────►│              │──►  data/<slug>/tree.json
+ │ 4 hier-  │        │ 5 summarize  │   gist per node, bottom-up
+ │ archy    │───────►│              │──►  data/<slug>/tree.json
  └──────────┘        └──────────────┘
    │
    ▼
@@ -60,7 +60,7 @@ constraint, not an apology — keep it boring while the ideas are still moving.
 
 Stages 4 and 5 are drawn separately but produce **one structure**. See
 [the tree](granularity-zoom.md#the-tree): a deeply-nested table of contents that goes "all the way
-down to a paragraph level" *is* the granularity-zoom tree. The ToC is that tree rendered as
+down to a paragraph level" *is* the granularity-zoom tree. Hierarchy is that tree rendered as
 navigation; the zoom view is that tree rendered as text. They must not diverge into two trees.
 
 ## What a block is <a id="what-a-block-is"></a>
@@ -78,7 +78,7 @@ framing (2026-08-24):
 
 If the `<ul>` is one block, the second case is simply unreachable — no id exists to point at an
 individual item, and no later stage can recover one. Making blocks the finest unit costs nothing and
-turns that judgement into a choice the ToC makes per list: a node covering the whole list is one
+turns that judgement into a choice the hierarchy makes per list: a node covering the whole list is one
 row, the leaves beneath it are a row each. Both are just depths of a tree that already exists.
 
 The same logic applies to an `<li>` containing a nested list: the item's own text and the sub-items
@@ -87,13 +87,13 @@ descended into. Blocks in the flat sequence must never contain one another's tex
 ranges would overlap.
 
 Not every block gets summarised. Images, rules, and pull-quotes that repeat body text carry
-`gistable: false` — addressable, so the ToC can point at a diagram, but never the subject of a row
+`gistable: false` — addressable, so Hierarchy can point at a diagram, but never the subject of a row
 of their own. See [block-ids.md § What gets an id](block-ids.md#what-gets-an-id).
 
 **`gistable` is not the policy, and since 2026-08-28 it does not pretend to be.** It is the
 splitter's intrinsic "this block has independently describable prose" fact, and nothing else.
 The five questions the rest of the pipeline actually asks — may this be searched, may an automatic
-model call read it, may it be embedded, may the ToC write a row about it, does it go on the clock —
+model call read it, may it be embedded, may Hierarchy write a row about it, does it go on the clock —
 are named predicates in [`src/block-policy.ts`](../../src/block-policy.ts), which is `gistable`'s
 only policy-reading consumer. They are **not** five spellings of one formula: a footnote is
 searchable and is not on the clock, and a pull-quote is on the clock and gets no row.
@@ -114,8 +114,8 @@ artefacts on disk, not by reaching into another stage's code.
 |---|-------|-------|----------|
 | 1 | fetch — see [fetching.md](fetching.md) | **fetch agent** ([`src/fetch.ts`](../../src/fetch.ts)); run as a step of the ingest queue, [ingest-queue.md](ingest-queue.md) | `raw.html` or `raw.pdf`, plus `raw.json` |
 | 2 | extract — **two extractors, one artefact**: Readability for a page ([content-extraction.md](content-extraction.md)), a model reading the pages for a PDF ([../plans/260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md)) | **extraction agent** | `article.html`, `meta.json` (the article's identity — [library.md](library.md#metajson-and-the-articles-identity)) |
-| 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + ToC agent** | `blocks.json` |
-| 4 | table of contents (deeply nested) — see [table-of-contents.md](table-of-contents.md) | **blocks + ToC agent** | `tree.json` (structure) |
+| 3 | **sanitize** + blocks + stable ids — see [security.md](security.md), [block-ids.md](block-ids.md) | **blocks + hierarchy agent** | `blocks.json` |
+| 4 | hierarchy — the deeply-nested table of contents, see [hierarchy.md](hierarchy.md) | **blocks + hierarchy agent** | `tree.json` (structure) |
 | 5 | summarize (gists per node) | granularity zoom | `tree.json` (gists) |
 | 5b | the arc — one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | **granularity zoom** | `arc.json` |
 | 5c | the thread — the article as numbered posts ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)). **Not run by a plain add**: in `STEP_ORDER`, out of `DEFAULT_INGEST_STEPS` | **tweet thread** ([`src/tweets.ts`](../../src/tweets.ts)) | `tweets.json` |
@@ -125,8 +125,8 @@ artefacts on disk, not by reaching into another stage's code.
 | 6b | ingest queue — runs stages 1–5b on demand ([ingest-queue.md](ingest-queue.md)) | **granularity zoom** | `data/_jobs/`, `src/jobs.ts`, `src/pipeline.ts` |
 | 7 | reading assistant: comments — see [comments.md](comments.md) | **granularity zoom** | `comments.json`, `src/explain.ts` |
 
-Stage 3 was previously unassigned. Greg settled it on 2026-08-24: it belongs with the ToC, since the
-ToC is the first thing that has to address blocks and would otherwise be built on someone else's
+Stage 3 was previously unassigned. Greg settled it on 2026-08-24: it belongs with the hierarchy,
+since the hierarchy is the first thing that has to address blocks and would otherwise be built on someone else's
 assumptions about what a block is.
 
 Current code: [`src/extract.ts`](../../src/extract.ts) (documented in
@@ -237,7 +237,7 @@ is built from: a list of images to fetch, no prompt and no head.
 
 `tree.json` still carries no hash, so for it "cached" still means "the file is
 there" and it still relies on the force-cascade to notice that something upstream moved — see
-[`src/pipeline.ts`](../../src/pipeline.ts) § `toc`, where a stamp was written and withdrawn because
+[`src/pipeline.ts`](../../src/pipeline.ts) § `hierarchy`, where a stamp was written and withdrawn because
 it needs consumer invalidation first.
 
 `blocks.json` is the exception: it is a **source artefact, not a cache**. It is the only place the
@@ -311,7 +311,7 @@ every id permanently, and orphans every note, highlight and gist that pointed at
   are one rule. `writeFile` truncates before it writes, so a killed process leaves a file that exists
   and does not parse; the key does not change between runs, so every later run finds that same file
   and fails the same way, for ever. Write beside the target and `rename` (`writeAtomic` in
-  [`src/toc.ts`](../../src/toc.ts), [`src/labels.ts`](../../src/labels.ts),
+  [`src/hierarchy.ts`](../../src/hierarchy.ts), [`src/labels.ts`](../../src/labels.ts),
   [`src/pdf-read.ts`](../../src/pdf-read.ts)); treat an entry that will not parse as a miss and say so
   in the log. It wedged one article's PDF extract permanently —
   [260828e-pdf-chunk-cache-corrupt-entry.md](../postmortems/260828e-pdf-chunk-cache-corrupt-entry.md).

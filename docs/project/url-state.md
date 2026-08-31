@@ -62,7 +62,7 @@ line.
 
 **Diagram mode's one exception, and it is deliberate**: which sections the
 reader has *collapsed* is not in the URL at all. Node ids are positional and a
-re-run of `npm run toc` renumbers them ([block-ids.md](block-ids.md)), so a
+re-run of `npm run hierarchy` renumbers them ([block-ids.md](block-ids.md)), so a
 pasted link would open the wrong sections on an article that had been
 re-ingested. `dx` and `dhue` are safe for exactly the reason that one is not —
 they are stable words rather than ids, so no amount of re-ingesting can make

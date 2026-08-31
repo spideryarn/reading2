@@ -389,7 +389,7 @@ async function readOne(
 /**
  * Write, then move into place.
  *
- * The same recipe as `writeAtomic` in src/toc.ts and src/labels.ts, which is
+ * The same recipe as `writeAtomic` in src/hierarchy.ts and src/labels.ts, which is
  * where it was written first — copied rather than reinvented, and the reason
  * this file exists is so it stops being copied a third time. `rename` within a
  * directory is atomic on every filesystem we care about, so a reader sees

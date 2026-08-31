@@ -795,7 +795,7 @@ writes to a local filesystem, which a serverless host does not have:
 
 - **adding an article** — **fixed on 2026-08-30, and everything below it is the
   history of a wall that is no longer there.** An article pasted at the live site
-  is fetched, extracted, split, ToC'd, published and readable. Production
+  is fetched, extracted, split, given its hierarchy, published and readable. Production
   `a63a5592`; the plan is
   [260830d-v1-imports-on-vercel.md](../plans/260830d-v1-imports-on-vercel.md).
 

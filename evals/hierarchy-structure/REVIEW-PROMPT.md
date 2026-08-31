@@ -12,16 +12,16 @@ findings you read code for and which you inferred.
 
 - `evals/README.md` — the conventions an eval here follows. Note especially that an eval is not a
   test, and that its results are committed so the next change is compared against a number.
-- `evals/toc-structure/score.ts` — the deterministic scorer, `(blocks, tree) -> measures`, plus
+- `evals/hierarchy-structure/score.ts` — the deterministic scorer, `(blocks, tree) -> measures`, plus
   `compareTrees` for cut-point agreement.
 - `src/heading-tree.ts` — **arm zero**, the free denominator.
-- `evals/toc-structure/arms.ts` — all nine arms declared as data.
-- `evals/toc-structure/run.ts` — the runner.
-- `tests/toc-structure-eval.test.ts` — 21 tests over the scorer.
-- `evals/results/toc-structure-headings+incumbent-disk-2026-08-30-07-58-02.json` — the committed
+- `evals/hierarchy-structure/arms.ts` — all nine arms declared as data.
+- `evals/hierarchy-structure/run.ts` — the runner.
+- `tests/hierarchy-structure-eval.test.ts` — 21 tests over the scorer.
+- `evals/results/hierarchy-structure-headings+incumbent-disk-2026-08-30-07-58-02.json` — the committed
   free run.
-- `src/toc.ts` — the stage under evaluation. Its structure call is 163–320s and ~88% of the ingest
-  wait. `evals/toc-labels.ts` judges only the *second* pass; nothing judged this one until now.
+- `src/hierarchy.ts` — the stage under evaluation. Its structure call is 163–320s and ~88% of the ingest
+  wait. `evals/hierarchy-labels.ts` judges only the *second* pass; nothing judged this one until now.
 - `docs/research/260830a-opening-an-article-before-the-toc.md` — the decisions this feeds, and your own
   earlier review of it (`-sol.md` beside it).
 
@@ -52,7 +52,7 @@ so every denominator is 7, not 9. That dedupe is being applied now.)
    on every scalar plus `compareTrees` between the two runs, and print that *before* any arm
    comparison. A third run on the two long articles is approved to get a variance rather than a
    range. **Is 2–3 runs over 7 documents enough to establish a floor that the arm comparisons can
-   then be read against, and if not, what is the cheapest design that is?** `evals/toc-labels.ts`
+   then be read against, and if not, what is the cheapest design that is?** `evals/hierarchy-labels.ts`
    saw ~4-point run-to-run vocabulary variance, so a non-trivial floor is expected.
 
 3. **The heading rule in `src/heading-tree.ts`.** It is two rules: section level = shallowest heading
@@ -69,7 +69,7 @@ so every denominator is 7, not 9. That dedupe is being applied now.)
    What is the honest claim a reader of the results file may draw from an arm-zero comparison?
 
 5. **The phase-2 executor.** The env levers do not reach this stage: `MODEL_ENV_VAR.toc` is null,
-   `effortFor` covers only arc/tweets/glossary/ideas, and `EFFORT` is hardcoded in `src/toc.ts`. So
+   `effortFor` covers only arc/tweets/glossary/ideas, and `EFFORT` is hardcoded in `src/hierarchy.ts`. So
    the eval will make the structure calls itself, on both wires (one candidate model speaks only
    chat/completions), routed through the existing `evals/declared-spend.ts` DECLARATIONS so the
    no-undeclared-spend test still holds. **What does an eval that re-implements the call risk

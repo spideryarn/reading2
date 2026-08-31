@@ -692,7 +692,7 @@ when("a job that finishes", () => {
           attempt,
           ending: {
             status: "done",
-            steps: [{ name: "toc", label: "Building the table of contents", status: "done" }],
+            steps: [{ name: "toc", label: "Building the hierarchy", status: "done" }],
             /**
              * **The injection lives in `error`, and the position is deliberate.**
              *

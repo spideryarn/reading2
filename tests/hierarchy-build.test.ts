@@ -2,7 +2,7 @@
  * `buildTree` is where the model's proposal becomes the stored artefact, and
  * it is the one place in stage 4 that can silently produce a wrong article.
  * The model only ever proposes INTERNAL nodes — every leaf is grown here, one
- * per block (docs/project/table-of-contents.md). If that growth is off by one,
+ * per block (docs/project/hierarchy.md). If that growth is off by one,
  * or attaches a label to the wrong block, nothing throws: the sidebar just
  * quietly describes the wrong paragraph.
  *
@@ -10,7 +10,7 @@
  * docs/project/testing.md.
  */
 import { describe, expect, it } from "vitest";
-import { buildTree, checkCoverage, type ModelNode } from "../src/toc.js";
+import { buildTree, checkCoverage, type ModelNode } from "../src/hierarchy.js";
 import type { Block } from "../src/types.js";
 
 function block(id: string, text: string, gistable = true): Block {
@@ -142,7 +142,7 @@ describe("buildTree", () => {
      * not.** They used to assert that a misaligned partition is *refused*; a
      * misaligned partition is now *snapped shut* at any size, because a
      * headingless PDF lost its whole ToC to a gap of three
-     * (src/toc.ts § `repairedChildRanges`, and Greg's ruling quoted there).
+     * (src/hierarchy.ts § `planChildRanges`, and Greg's ruling quoted there).
      *
      * The thing worth testing was never the refusal. It is that no block ends up
      * with two leaves and none with zero — the fault the adversarial review
@@ -371,7 +371,7 @@ describe("checkCoverage", () => {
  * **An error thrown here is a value that travels.** A pipeline step that throws
  * is logged by src/jobs.ts through `errorFields(err)`, and src/log.ts's error
  * serialiser keeps the `message` *and* the `stack` — which contains the message
- * again. So anything interpolated into a message in src/toc.ts is written into
+ * again. So anything interpolated into a message in src/hierarchy.ts is written into
  * the log twice, from a file that never calls the logger at all, and `redact`
  * matches paths in the object rather than text in a string, so it can reach
  * neither copy. See docs/project/logging.md § An error is not a safe thing to

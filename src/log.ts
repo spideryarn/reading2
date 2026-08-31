@@ -9,7 +9,7 @@
  *
  * **Logging is what the server says to whoever is running it.** The `console.log`
  * calls in the pipeline stages' `main()` functions are a *user interface* — a
- * person at a terminal watching `npm run toc` — and they are staying exactly as
+ * person at a terminal watching `npm run hierarchy` — and they are staying exactly as
  * they are. Do not convert them. See logging.md § The CLI output is not logging.
  *
  * ## The rules that are load-bearing

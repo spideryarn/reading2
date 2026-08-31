@@ -374,7 +374,7 @@ mostly re-tests the old coverage invariant and proves nothing about any of these
 **The body tree is generated from body blocks only, and the supplement node is appended
 mechanically afterwards, extending the root's range.** That ordering is load-bearing: it is what
 makes it impossible for a part gist or the root gist to accidentally summarise a footnote. Today the
-ToC model is shown every block's text regardless of `gistable` ([`toc.ts:75`](../../src/toc.ts)). The
+ToC model is shown every block's text regardless of `gistable` ([`toc.ts:75`](../../src/hierarchy.ts)). The
 gist-composition pass is the one that matters — parents are written from their children's gists, so
 the root's must never see "Notes".
 
@@ -596,8 +596,8 @@ to a reader as a missing sentence.
 - **Append the supplement before `generateLabels`, not after.** `labels.json` records
   `structureHash(opts.tree)` ([`labels.ts:1475`](../../src/labels.ts)); appending afterwards makes
   the labels stale at birth. There is no later gist-composition pass to worry about — composition
-  is an instruction to the ToC model ([`toc.ts:105`](../../src/toc.ts)) and `buildTree` merely copies
-  what comes back ([`toc.ts:442`](../../src/toc.ts)) — so the plan's ordering worry was misplaced
+  is an instruction to the ToC model ([`toc.ts:105`](../../src/hierarchy.ts)) and `buildTree` merely copies
+  what comes back ([`toc.ts:442`](../../src/hierarchy.ts)) — so the plan's ordering worry was misplaced
   and a different one takes its place.
 - **The fisheye fix cannot live in `itemsFromCells`.** Three other consumers read the raw cells:
   keyboard navigation ([`keynav.ts:152`](../../src/web/keynav.ts)), saved reading position
@@ -1138,7 +1138,7 @@ suite. Every claim below I reproduced myself before acting on it.
 The stage's own commit message says notes are out of automatic model work. **That was false for the
 two largest calls in the pipeline.**
 
-- [`toc.ts` `renderBlocks`](../../src/toc.ts) sends every block's text, marking a block
+- [`toc.ts` `renderBlocks`](../../src/hierarchy.ts) sends every block's text, marking a block
   `NOT-GISTABLE` only when `!b.gistable` — and a prose footnote *is* gistable, so a note was not even
   marked. The model could invent sections and gists over the apparatus, and `buildTree` copies them
   through. That contaminates arc, tweets, glossary, ideas and summaries *indirectly*, because all of

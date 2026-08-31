@@ -79,7 +79,7 @@ describe("counting a real article's comments", () => {
 describe("a half-built directory", () => {
   it("is skipped, not listed as an article that fails to open", async () => {
     // Extracted but never given a tree — which is exactly what `data/<slug>/`
-    // looks like between `npm run extract` and `npm run toc`.
+    // looks like between `npm run extract` and `npm run hierarchy`.
     await cp(EXAMPLE, DIR, { recursive: true });
     await rm(path.join(DIR, "tree.json"));
     expect((await listArticles()).some((a) => a.slug === SLUG)).toBe(false);

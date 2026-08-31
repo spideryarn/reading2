@@ -1057,7 +1057,7 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 class RollBack extends Error {}
 
 const JOB_STEPS: JobStep[] = [
-  { name: "toc", label: "Building the table of contents", status: "pending" },
+  { name: "toc", label: "Building the hierarchy", status: "pending" },
 ];
 
 /**

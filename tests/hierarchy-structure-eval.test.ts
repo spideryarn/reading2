@@ -1,6 +1,6 @@
 /**
  * The deterministic half of the ToC structure eval — the scoring in
- * evals/toc-structure/score.ts and the free heading-tree arm in
+ * evals/hierarchy-structure/score.ts and the free heading-tree arm in
  * src/heading-tree.ts. Same split as extraction: the part that
  * is cheap and deterministic is pinned here; the part that spends money is not
  * a test.
@@ -14,8 +14,8 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ARMS, armByName } from "../evals/toc-structure/arms.js";
-import { CORPUS, defaultCorpus } from "../evals/toc-structure/corpus.js";
+import { ARMS, armByName } from "../evals/hierarchy-structure/arms.js";
+import { CORPUS, defaultCorpus } from "../evals/hierarchy-structure/corpus.js";
 import { buildHeadingTree, PREAMBLE_TITLE } from "../src/heading-tree.js";
 import {
   assertCallAccounted,
@@ -24,8 +24,8 @@ import {
   renderHeadingList,
   renderSeedProposal,
   runModelArm,
-} from "../evals/toc-structure/model-arms.js";
-import { compareTrees, scoreTree } from "../evals/toc-structure/score.js";
+} from "../evals/hierarchy-structure/model-arms.js";
+import { compareTrees, scoreTree } from "../evals/hierarchy-structure/score.js";
 import type { Block, NodeId, Tree, TreeNode } from "../src/types.js";
 
 let blockCounter = 0;
@@ -56,7 +56,7 @@ function heading(level: number, text: string, over: Partial<Block> = {}): Block 
 
 /**
  * A tree from a nested spec of internal nodes, leaves grown mechanically —
- * the same shape src/toc.ts § buildTree produces. One builder for every
+ * the same shape src/hierarchy.ts § buildTree produces. One builder for every
  * fixture, so a test cannot quietly hand the scorer a shape the pipeline
  * never writes.
  */
@@ -352,23 +352,22 @@ describe("parseStructureResponse", () => {
     expect(score.validity.gistProblems).toBe(0); // this answer wrote its gists
   });
 
-  it("refuses an answer whose children do not tile - the arm is judged on the pipeline's rules", () => {
-    /* **Two independent slips, not one wide one**, and the difference is the
-       point of the test. A single misaligned boundary of any size is now snapped
-       shut rather than refused (src/toc.ts § `repairedChildRanges`, 2026-08-30),
-       so the old fixture — one overlap of two blocks — stopped being refused by
-       the pipeline and therefore stopped being refused here, which is the eval
-       agreeing with the pipeline exactly as it should.
-       What still throws is an answer with slips at two different boundaries:
-       `MAX_REPAIRED_BOUNDARIES` spends its one repair on the first and the
-       second reaches `assertChildrenPartition`. Keeping a refusal in this file
-       matters because the claim under test is that the arm is judged on the
-       pipeline's rules, and a test that could no longer fail would stop making
-       it. */
+  it("refuses an answer the pipeline refuses - the arm is judged on the pipeline's rules", () => {
+    /* **The fixture has been walked back twice, by the same argument each
+       time**, and the claim under test survived both: an arm is judged on
+       whatever the pipeline would accept, so this test has to fail on whatever
+       the pipeline still refuses rather than on any particular fault.
+
+       It was one overlap of two blocks until 2026-08-30, when the size bound
+       went; then two independent slips until 2026-08-31, when the count bound
+       went with it. Nothing about the *tiling* refuses an answer now
+       (src/hierarchy.ts § `planChildRanges`) — the partition is derived rather than
+       checked. What is left is a fault in what the model said, and a range
+       running backwards is the plainest of them. */
     const blocks = Array.from({ length: 6 }, () => block());
     expect(() =>
-      parseStructureResponse(answer(blocks, [[0, 0], [2, 3], [5, 5]]), blocks, "two-slips"),
-    ).toThrow(/tile/);
+      parseStructureResponse(answer(blocks, [[0, 2], [5, 3]]), blocks, "backwards"),
+    ).toThrow(/backwards/);
   });
 });
 
@@ -774,7 +773,7 @@ describe("buildHeadingTree", () => {
 
 describe("throwAnatomy", () => {
   it("pulls kind, size and depth out of the tiling messages verbatim", async () => {
-    const { throwAnatomy } = await import("../evals/toc-structure/floor.js");
+    const { throwAnatomy } = await import("../evals/hierarchy-structure/floor.js");
     expect(
       throwAnatomy(
         "The children of the node at root > child 2 do not tile it: child 1 leaves a gap of 1 block(s). Children must cover…",
@@ -794,7 +793,7 @@ describe("throwAnatomy", () => {
     // The control: if assertChildrenPartition's wording drifts, the count must
     // move to `unparsed` rather than to "no tiling failures" - a parser going
     // quiet is the exact shape this repo keeps writing postmortems about.
-    const { throwAnatomy } = await import("../evals/toc-structure/floor.js");
+    const { throwAnatomy } = await import("../evals/hierarchy-structure/floor.js");
     const reworded =
       "The node at root > child 2 is not tiled by its children: a gap of 1 block was left by child 1.";
     expect(throwAnatomy(reworded)).toEqual({ kind: "unparsed", size: null, depth: null });

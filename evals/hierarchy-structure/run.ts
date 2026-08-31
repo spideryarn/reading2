@@ -1,16 +1,16 @@
 /**
  * Eval — how good is the ToC *structure* pass, and against what?
  *
- *   npm run eval:toc-structure -- --arm headings
- *   npm run eval:toc-structure -- --arm headings --arm incumbent-disk data/constitution
+ *   npm run eval:hierarchy-structure -- --arm headings
+ *   npm run eval:hierarchy-structure -- --arm headings --arm incumbent-disk data/constitution
  *
- * The structure call in src/toc.ts is 163–320 seconds and 88% of the ingest
+ * The structure call in src/hierarchy.ts is 163–320 seconds and 88% of the ingest
  * wait (labels run concurrently, the arc is deferred — the measured breakdown
  * is in the research doc), and the decisions queued against it (waves, seeding
  * the author's headings, changing model or effort — see
  * docs/research/260830a-opening-an-article-before-the-toc.md) need a number to decide
  * against. This is the harness for that number. evals/README.md
- * § toc-structure says what each measure is a proxy for.
+ * § hierarchy-structure says what each measure is a proxy for.
  *
  * **The free arms run today; the model arms are declared but refuse to run**
  * until the phase-2 executor lands — loudly, so a run that produced nothing
@@ -19,7 +19,7 @@
  * nothing and are the baseline every paid arm must beat to justify its bill.
  *
  * Scoring lives in score.ts and is unit-tested in
- * tests/toc-structure-eval.test.ts; this file only chooses what to score and
+ * tests/hierarchy-structure-eval.test.ts; this file only chooses what to score and
  * writes the result — the same split as evals/extraction/.
  */
 
@@ -36,7 +36,7 @@ import { ARMS, armByName, type ArmSpec, type Comparison } from "./arms.js";
 import { defaultCorpus, entryForDir } from "./corpus.js";
 import { buildHeadingTree } from "../../src/heading-tree.js";
 import { ArmFailure, runModelArm, type CallStats } from "./model-arms.js";
-import { repairedBlockCount, type BuildReport } from "../../src/toc.js";
+import { repairedBlockCount, type BuildReport } from "../../src/hierarchy.js";
 import { compareTrees, scoreTree, type StructureScore, type TreeAgreement } from "./score.js";
 
 interface Article {
@@ -86,7 +86,7 @@ interface ArmResult {
    * **What the pipeline mended in this arm's answer**, and why an `outcome` of
    * `"ok"` is no longer the whole story. Since 2026-08-30 `buildTree` snaps a
    * one-block partition slip shut and drops a `sourceHeading` claim no block
-   * backs up (src/toc.ts) — which are exactly the two families this eval's
+   * backs up (src/hierarchy.ts) — which are exactly the two families this eval's
    * throw rate was measuring. Without this field an arm that made either
    * mistake would score `ok` with nothing recorded, and `sourceHeadingValid`
    * would read a necessary 1 for every paid arm. Absent on a free arm, which
@@ -98,6 +98,14 @@ interface ArmResult {
     blocks: number;
     largest: number;
     where: string[];
+    /**
+     * **Sections this arm proposed that were not stored**, because two of its
+     * children started in the same place. The only figure here that means the
+     * arm's answer *lost* something rather than shifted it — an arm that scores
+     * `ok` with a non-zero count produced a tree with fewer parts than it asked
+     * for, and `parts.count` alone will not say so.
+     */
+    droppedChildren: string[];
     droppedHeadings: string[];
   };
   /** How differently this arm cut the article from the tree on disk. Descriptive, not a verdict. */
@@ -217,7 +225,11 @@ async function treeFor(
         return { tree: run.tree, calls: run.calls, built: run.built };
       } catch (err) {
         if (err instanceof ArmFailure) {
-          return { threw: err.message, calls: err.calls };
+          /* `built` too: an answer can mend a boundary at depth one and then
+             throw at depth three, and a row that recorded only the throw lost
+             the repair figures for exactly the answers a reader would go
+             looking at. GPT Sol, finding 5. */
+          return { threw: err.message, calls: err.calls, ...(err.built ? { built: err.built } : {}) };
         }
         throw err;
       }
@@ -269,11 +281,17 @@ function print(r: ArmResult): void {
      pipeline produced rather than one the model did.** A repaired answer is a
      success worth having and a fault worth knowing about, and the line that
      says "valid" cannot say both. */
-  if (r.repaired && (r.repaired.ranges > 0 || r.repaired.droppedHeadings.length > 0)) {
+  if (
+    r.repaired &&
+    (r.repaired.ranges > 0 ||
+      r.repaired.droppedChildren.length > 0 ||
+      r.repaired.droppedHeadings.length > 0)
+  ) {
     console.log(
-      `  repaired      ${r.repaired.ranges} misaligned range(s) moving ` +
+      `  repaired      ${r.repaired.ranges} misaligned boundary(ies) moving ` +
         `${r.repaired.blocks} block(s), largest ${r.repaired.largest}` +
         `${r.repaired.where.length ? ` [${r.repaired.where.join("; ")}]` : ""}, ` +
+        `${r.repaired.droppedChildren.length} dropped section(s), ` +
         `${r.repaired.droppedHeadings.length} unbacked heading claim(s) — ` +
         `this answer was NOT valid as written`,
     );
@@ -405,7 +423,7 @@ async function main(): Promise<void> {
   }
   if (armNames.length === 0 && !wantSensitivity) {
     console.error(
-      "Usage: npm run eval:toc-structure -- --arm <name> [--arm <name>…] [--repeat <n>] [--sensitivity] [dir…]\n" +
+      "Usage: npm run eval:hierarchy-structure -- --arm <name> [--arm <name>…] [--repeat <n>] [--sensitivity] [dir…]\n" +
         `Arms: ${ARMS.map((a) => a.name).join(", ")}   (--list to see kinds)\n` +
         "With no dirs, the committed corpus manifest (corpus.ts) decides what is scored.",
     );
@@ -427,13 +445,13 @@ async function main(): Promise<void> {
      spend-ledger entry with nothing to show for it; and the trees are what a
      later blinded judgment reads, since data/ regenerates under old results
      (REVIEW-SOL.md, 9). Stamped to the second — the same collision
-     evals/toc-labels.ts documents losing two runs to. */
+     evals/hierarchy-labels.ts documents losing two runs to. */
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   const runDir = path.join(
     import.meta.dirname,
     "..",
     "results",
-    "toc-structure",
+    "hierarchy-structure",
     `${stamp}-${armNames.length > 0 ? armNames.join("+") : "sensitivity"}`,
   );
   await mkdir(path.join(runDir, "trees"), { recursive: true });
@@ -484,7 +502,7 @@ async function main(): Promise<void> {
                 repaired: {
                   ranges: chose.built.repairs.length,
                   /* The size, since the repair stopped being bounded at one
-                     block (src/toc.ts § `repairedChildRanges`). Without it an
+                     block (src/hierarchy.ts § `planChildRanges`). Without it an
                      arm that put a boundary a paragraph out and an arm that
                      handed a section forty of its neighbour's blocks both
                      record "1 range repaired" and both score `ok` — the repair
@@ -492,7 +510,7 @@ async function main(): Promise<void> {
                      measurement, which is the mistake this eval already had to
                      be told about once. */
                   /* Through `repairedBlockCount`, which is the same function
-                     `generateToc` reports with — a cascade is one boundary
+                     `generateHierarchy` reports with — a cascade is one boundary
                      recorded once per depth, and summing the entries counted an
                      arm's 40-block movement as 120 if the tree happened to be
                      three deep there. An eval that measures a repair differently
@@ -500,6 +518,11 @@ async function main(): Promise<void> {
                   blocks: repairedBlockCount(chose.built.repairs),
                   largest: chose.built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
                   where: chose.built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`),
+                  /* Since the tiling stopped being checked and started being
+                     derived, this is the only way an arm's answer loses a
+                     section — and it is invisible in every other measure here,
+                     because the tree it produced is perfectly valid. */
+                  droppedChildren: chose.built.droppedChildren,
                   droppedHeadings: chose.built.droppedHeadings,
                 },
               }

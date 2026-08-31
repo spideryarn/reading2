@@ -1,5 +1,5 @@
 /**
- * **Run a CLI command with the ledger open**, so that `npm run toc` is money
+ * **Run a CLI command with the ledger open**, so that `npm run hierarchy` is money
  * that appears in `npm run cost` rather than money that vanishes.
  *
  * One line at each stage's `isMain`, rather than a `collectSpend` folded into

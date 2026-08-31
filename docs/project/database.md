@@ -52,7 +52,7 @@ data/writes/
   raw.html      fetched bytes          (stage 1)
   meta.json     title, url, fetched-at
   blocks.json   the sanitised blocks   (stage 3)
-  tree.json     the ToC / zoom tree    (stages 4-5)
+  tree.json     the hierarchy / zoom tree (stages 4-5)
   arc.json
   comments.json
   tweets.json
@@ -121,7 +121,7 @@ through it, and [glossary.md](glossary.md) says why it has to.) [library.md](lib
 **Writes do not.** This doc used to say "`src/api.ts` is the one file the store lives behind", and
 that is only half true — it is the *read* seam. The write path is
 `PipelineStep.outputs(ctx): string[]`, an interface that returns **file paths**, implemented across
-seven stage modules (`fetch`, `extract`, `blocks`, `toc`, `arc`, `tweets`, `glossary`). Any estimate that treats
+seven stage modules (`fetch`, `extract`, `blocks`, `hierarchy`, `arc`, `tweets`, `glossary`). Any estimate that treats
 the Postgres move as a one-file change is wrong, and this is where that mistake starts.
 
 Why files at all: *"Prefer boring: filesystem over database, one server process"* —
@@ -148,10 +148,10 @@ reads succeed, an incomplete stamp lets a **stale artefact skip**.
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1. `assets` keeps the
 narrow blocks-only hash, honestly: it fetches the images the blocks name and has no prompt.
 
-`toc` still uses `stepIsDone`, an
+`hierarchy` still uses `stepIsDone`, an
 `access()` existence check — a file exists, therefore the step is done, whatever it was generated
 from. That is deliberate rather than pending, and
-[`src/pipeline.ts`](../../src/pipeline.ts) § `toc` explains at length why a stamp there needs
+[`src/pipeline.ts`](../../src/pipeline.ts) § `hierarchy` explains at length why a stamp there needs
 consumer invalidation first. When it comes to generalising this, copy their choice of **hash input**, not just the idea:
 `hashBlocks` hashes `id \t text` per block, deliberately *not* the bytes of `blocks.json`, because
 those bytes change when an unread field is recomputed and *don't* change when two blocks swap ids —
@@ -766,7 +766,7 @@ because the type system will not.
 
 ## Checkpoints — work a failed attempt already paid for
 
-Two stages keep working state that has to **survive their own failure**: `toc` writes a batch of nav
+Two stages keep working state that has to **survive their own failure**: `hierarchy` writes a batch of nav
 labels to `labels-progress.json` as each one comes back, and the PDF reader writes each transcribed
 chunk to `pdf-chunks/<key>.json`. A 429 eight batches into a book then costs one batch rather than
 eight, and these are the expensive calls.

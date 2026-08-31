@@ -230,7 +230,7 @@ say that nothing else in the app can.
 > `tree.json` predates its `blocks.json` is showing gists for paragraphs that have moved, so *"if a
 > later artefact is older than an earlier one, say so on the page, loudly"*. That check was built,
 > and then cut. A **successful** toc run writes `tree.json` and then copies `blocks.json` beside it
-> ([`src/toc.ts`](../../src/toc.ts)), so the comparison marks every correct run stale — and mtimes
+> ([`src/toc.ts`](../../src/hierarchy.ts)), so the comparison marks every correct run stale — and mtimes
 > cannot prove provenance in any case: they record when a file was written, not what it was written
 > *from*. A `touch`, a copy or a checkout reorders them.
 >

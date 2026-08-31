@@ -25,6 +25,9 @@ import { isMain } from "./is-main.js";
 import { BACK_ATTR, CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN, REF_ATTR } from "./notes.js";
 /* Stage 2's other stamp, from the file that writes it. See describeBlock. */
 import { CALLOUT_ATTR } from "./callouts.js";
+/* The namespace and the one template-aware scrub, shared with stage 2 — see
+   src/reserved.ts, which is the only file allowed to name one of these. */
+import { CONTEXT_ID_PATTERN, RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeInPlace, sanitizeStoredBlocks } from "./sanitize.js";
 import { SANITIZER_VERSION } from "./sanitize-policy.js";
 /* `Block` and `BlockKind` come from types.ts rather than being declared here.
@@ -37,7 +40,7 @@ import { SANITIZER_VERSION } from "./sanitize-policy.js";
 
    An `import type` is erased, so this does not put jsdom in anyone's bundle —
    the reason types.ts gives for staying declaration-only still holds. */
-import type { Block, BlockKind } from "./types.js";
+import type { Block, BlockContext, BlockKind } from "./types.js";
 /* Types only, so nothing runtime crosses from the store into stage 3. Stage 3
    asks the store two questions and does not care which store answers. */
 import type { ArtifactKind, ArtifactReads } from "./store/artifacts.js";
@@ -47,7 +50,7 @@ import type { ArtifactKind, ArtifactReads } from "./store/artifacts.js";
  * block and the `<ul>` around it is not. Containers become nodes in the tree
  * instead, which is what lets the ToC choose its own granularity: one row for a
  * list of terse bullets, one row per item for a list of real arguments.
- * See docs/project/table-of-contents.md#granularity.
+ * See docs/project/hierarchy.md#granularity.
  */
 const LEAF_BLOCKS = new Set([
   "P", "H1", "H2", "H3", "H4", "H5", "H6",
@@ -193,7 +196,13 @@ function describeBlock(
   el: Element,
   text: string,
   proseText: string[],
-): { kind: BlockKind; level: number | undefined; gistable: boolean; note: string | undefined } {
+): {
+  kind: BlockKind;
+  level: number | undefined;
+  gistable: boolean;
+  note: string | undefined;
+  context: BlockContext | undefined;
+} {
   let { kind, level } = classify(el);
   let gistable = true;
   let note: string | undefined;
@@ -217,25 +226,12 @@ function describeBlock(
     note = "boilerplate label";
   }
 
-  /* **The box an author drew round this, read off stage 2's stamp**
-     (src/callouts.ts) — the class that said so is gone by now, deleted with the
-     `<div>` it was on before Readability handed us the page.
-
-     `closest` rather than `hasAttribute`, because the stamp is on the container
-     *and* on the block-level elements inside it, and which of the two survives
-     Readability depends on the page.
-
-     **Only where the block would otherwise be `text`.** A heading inside a
-     callout stays a heading with its level, a `<blockquote>` inside one stays a
-     quote, a figure stays media. The tree is built from heading levels and the
-     figure rules are somebody else's; a box drawn round any of them changes how
-     it is set, not what it is. */
-  if (kind === "text" && el.closest(`[${CALLOUT_ATTR}]`)) kind = "callout";
+  const context = contextFor(el);
 
   // Pull-quotes repeat a sentence that is already in the prose. Giving them
   // gists would put the same claim in the ToC twice. A callout repeating the
   // paragraph above it is a pull-quote whatever its class said.
-  if (gistable && (kind === "quote" || kind === "callout" || el.closest("figure"))) {
+  if (gistable && (kind === "quote" || context !== undefined || el.closest("figure"))) {
     const probe = normalize(text).slice(0, 60);
     if (probe.length >= 30 && proseText.some((p) => p.includes(probe))) {
       gistable = false;
@@ -243,7 +239,35 @@ function describeBlock(
     }
   }
 
-  return { kind, level, gistable, note };
+  return { kind, level, gistable, note, context };
+}
+
+/**
+ * **The box the author drew round this block, read off stage 2's stamp**
+ * (src/callouts.ts) — the class that said so is gone by now, deleted with the
+ * `<div>` it was on before Readability handed us the page.
+ *
+ * **A context, not a `kind`, and that distinction is the whole point.** `kind`
+ * is what this block *is* — the granularity tree is built from heading levels,
+ * and a `<blockquote>` in a box is still a quotation — while a context is the
+ * authored grouping it *belongs to*. `kind: "callout"` was shipped first and was
+ * wrong in a way that showed immediately: a heading inside a callout has to keep
+ * `kind: "heading"`, and so lost the box altogether.
+ * docs/plans/260831af-carrying-markup-facts-past-readability.md.
+ *
+ * `closest` rather than `hasAttribute`, because the stamp is on the container
+ * *and* on the block-level elements inside it, and which of the two survives
+ * Readability depends on the page.
+ *
+ * The id is re-validated here even though we minted it a stage ago: this is the
+ * seam where a string stops being a DOM attribute and becomes a value in
+ * `blocks.json`, Postgres and the public payload, and the scrub at stage 2 is
+ * the only thing standing between those and a page that wrote its own.
+ */
+function contextFor(el: Element): BlockContext | undefined {
+  const id = el.closest(`[${CALLOUT_ATTR}]`)?.getAttribute(CALLOUT_ATTR);
+  if (!id || !CONTEXT_ID_PATTERN.test(id)) return undefined;
+  return { id, type: "callout" };
 }
 
 /** What `noteFieldsFor` can add to a block. All three absent for body prose. */
@@ -764,8 +788,9 @@ function carryOverIds(
  * single block's html is serialised. Nothing with these attributes on it has
  * ever reached `blocks.json`, and tests/blocks.test.ts pins that.
  */
-const WAS_ID = "data-spya-was-id";
-const WAS_NAME = "data-spya-was-name";
+const WAS_ID = RESERVED_ATTRS.wasId;
+const WAS_NAME = RESERVED_ATTRS.wasName;
+/** Both of them as a selector, for reading them back. The scrub is shared. */
 const STAMPS = `[${WAS_ID}], [${WAS_NAME}]`;
 
 /**
@@ -779,13 +804,7 @@ const STAMPS = `[${WAS_ID}], [${WAS_NAME}]`;
  * worse than one nobody claimed. Found by GPT Sol's review, 2026-08-26.
  */
 function scrubStamps(root: ParentNode): void {
-  for (const el of Array.from(root.querySelectorAll(STAMPS))) {
-    el.removeAttribute(WAS_ID);
-    el.removeAttribute(WAS_NAME);
-  }
-  for (const t of Array.from(root.querySelectorAll("template"))) {
-    scrubStamps((t as HTMLTemplateElement).content);
-  }
+  scrubReserved(root, [WAS_ID, WAS_NAME]);
 }
 
 /**
@@ -1110,7 +1129,7 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
        half of that we knew about. */
     const content = ownContent(el);
 
-    const { kind, level, gistable, note } = describeBlock(el, text, proseText);
+    const { kind, level, gistable, note, context } = describeBlock(el, text, proseText);
     return {
       id,
       tag: el.tagName.toLowerCase(),
@@ -1121,6 +1140,7 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
       html: content.outerHTML,
       gistable,
       ...(note ? { note } : {}),
+      ...(context ? { context } : {}),
       /* Read from `el`, which is still in the document: the note stamps are
          `data-*`, so neither the sanitiser nor `scrubStamps` (which only takes
          WAS_ID/WAS_NAME off) has touched them. */
@@ -1172,7 +1192,7 @@ export interface BlocksRun extends SplitResult {
 /**
  * The contents of a `blocks.json`, cleaned and then stamped. **Every writer of
  * that file must go through this**, and there are three of them: stage 3 here,
- * stage 4 in src/toc.ts, and the Postgres export in src/store/export.ts.
+ * stage 4 in src/hierarchy.ts, and the Postgres export in src/store/export.ts.
  *
  * The stamp is what lets the read seam tell an artefact cleaned by the current
  * policy from one cleaned by nothing (`sanitizeStoredBlocks` in

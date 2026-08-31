@@ -5,7 +5,7 @@ STOP. Do not build the stages as written. The core block-id premise survives ins
 The load-bearing part is true: `toc` does not change block text, IDs, order, roles, or treatments.
 
 - [`pipeline.ts`](/home/greg/code/spideryarn2/src/pipeline.ts:1710) passes the blocks step’s artifact directly to `generateToc`.
-- [`toc.ts`](/home/greg/code/spideryarn2/src/toc.ts:1516) returns `blocksArtefact(blocks)`.
+- [`toc.ts`](/home/greg/code/spideryarn2/src/hierarchy.ts:1516) returns `blocksArtefact(blocks)`.
 - [`sanitize.ts`](/home/greg/code/spideryarn2/src/sanitize.ts:147) can rewrite only `block.html`; it cannot change `text`, IDs, order, roles, or treatments.
 - I re-applied `blocksArtefact` to all 21 current `output/*.blocks.json` artifacts: none changed.
 

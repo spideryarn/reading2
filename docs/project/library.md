@@ -621,7 +621,7 @@ which is where it was always meant to be
 Two details worth knowing, both in [`src/extract.ts`](../../src/extract.ts):
 
 - **The slug comes from the output filename, not from the URL.** Stage 3 names its blocks file after
-  the HTML file and stage 4 names the data directory after *that* ([`src/toc.ts`](../../src/toc.ts)),
+  the HTML file and stage 4 names the data directory after *that* ([`src/hierarchy.ts`](../../src/hierarchy.ts)),
   so the basename is what the rest of the pipeline will call this article. Deriving it from the URL a
   second time would be right for `npm run extract <url>` and wrong the moment anyone passed an
   explicit filename — and the only symptom would be an article with no byline.

@@ -80,7 +80,7 @@ and is not.
 **Both artefacts are produced by the same function, from the same array.** The `blocks` step returns
 `blocksArtefact(run.blocks)` ([`src/pipeline.ts`](../../src/pipeline.ts):1644); `toc` reads that
 artefact at :1710 and returns `blocksArtefact(blocks)` over it
-([`src/toc.ts`](../../src/toc.ts):1469). `blocksArtefact`
+([`src/toc.ts`](../../src/hierarchy.ts):1469). `blocksArtefact`
 ([`src/blocks.ts`](../../src/blocks.ts):1230) is sanitise-plus-stamp, and its comment at
 [`src/pipeline.ts`](../../src/pipeline.ts):1637 says so outright — *"Every writer of this artefact
 goes through it — stage 3 here, stage 4 in src/toc.ts, the Postgres export."* **So `toc`'s copy is
@@ -269,7 +269,7 @@ built until it is.
 ## The simpler option passed over
 
 **Leave `toc` in the ingest and only make it faster** — `medium` is already the effort
-([`src/toc.ts`](../../src/toc.ts):100, forced down twice after truncation bugs), so the remaining
+([`src/toc.ts`](../../src/hierarchy.ts):100, forced down twice after truncation bugs), so the remaining
 levers are prompt size and the structure/label split, which
 [260826h](260826h-toc-scaling.md) already took. The split moved the constitution from 421s to ~370s
 and put the **cost up ~26%**. There is no version of this that gets 320 seconds to 20, and the reader
@@ -343,8 +343,8 @@ reader of that plan cannot check against.
 
 ## Two stale lines found while writing this
 
-[table-of-contents.md](../project/table-of-contents.md):451-452 says effort *"went back to `high`"*
-and `COVERAGE_FLOOR` *"went from 0.95 to 1"*. Neither is true: [`src/toc.ts`](../../src/toc.ts):100 is
+[hierarchy.md](../project/hierarchy.md):451-452 says effort *"went back to `high`"*
+and `COVERAGE_FLOOR` *"went from 0.95 to 1"*. Neither is true: [`src/toc.ts`](../../src/hierarchy.ts):100 is
 `medium` and [`src/labels.ts`](../../src/labels.ts):1871 is `0.95`. Both were correct when written and
 were overtaken by `fb82dc8` and by stage 1 of 260830am. Fix them with stage 1 of this plan, in the
 same commit as anything else that touches that doc.

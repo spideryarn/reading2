@@ -365,16 +365,16 @@ Each stage runs on its own against a slug, so any one can be re-run without the 
 | `npm run pdf:pass0 -- <file.pdf>` | 2, what a PDF says for free: pages, words, scan or not, running headers. No model, no network | nothing — it prints |
 | `npm run pdf -- <file.pdf> [slug]` | 2, **the other extractor**: a model reads the pages, the transcription is checked against the PDF's own text, and the result is the same `article.html` Readability would have made ([content-extraction.md § Two extractors](content-extraction.md#two-extractors-one-artefact)) | `output/<slug>.html`, `data/<slug>/meta.json`, `data/<slug>/pdf-chunks/` |
 | `npm run blocks -- <article.html>` | 3, split into blocks and mint stable ids ([block-ids.md](block-ids.md)) | `<article>.blocks.json` |
-| `npm run toc -- <blocks.json> [dir]` | 4, the tree **and** its nav labels ([table-of-contents.md](table-of-contents.md)). Two model passes — the structure in one call, the labels in parallel batches — but one command, and nothing is written until both finish | `tree.json`, `labels.json`, `blocks.json` |
+| `npm run hierarchy -- <blocks.json> [dir]` | 4, the tree **and** its nav labels ([hierarchy.md](hierarchy.md)). Two model passes — the structure in one call, the labels in parallel batches — but one command, and nothing is written until both finish | `tree.json`, `labels.json`, `blocks.json` |
 | `npm run labels -- <dir>` | 4b on its own, against a `tree.json` that already exists ([src/labels.ts](../../src/labels.ts)). The stage to re-run when you have changed the label prompt and do not want to pay for a new tree | `labels.json`, and rewrites `tree.json` |
-| `npm run toc:flatten -- …` | 4, tree → the flat sidebar rows ([table-of-contents.md](table-of-contents.md)) | — |
+| `npm run hierarchy:flatten -- …` | 4, tree → the flat sidebar rows ([hierarchy.md](hierarchy.md)) | — |
 | `npm run arc -- <dir>` | 5b, one article-level sentence per part ([granularity-zoom.md § The arc](granularity-zoom.md#the-arc)) | `arc.json` |
 | `npm run tweets -- <dir>` | 5c, the article as a numbered thread ([260825g-tweet-thread-page.md](../plans/260825g-tweet-thread-page.md)) | `tweets.json` |
 | `npm run glossary -- <dir>` | 5d, the terms this piece uses ([glossary.md](glossary.md)). Run it again to add more | `glossary.json` |
 | `npm run validate-tree -- <dir>` | checks a `tree.json` against the invariants in [granularity-zoom.md § The tree](granularity-zoom.md#the-tree) | — |
 | `npm run build` | production bundle | `dist/` |
 | `npm test` | the deterministic unit tests ([testing.md](testing.md)) | — |
-| `npm run eval:toc -- <dir>…` | not a test — measures nav-label quality against committed artefacts ([evals/README.md](../../evals/README.md)). Calls no model; run it after any change to stage 4 | `evals/results/<slug>-<date>.json` |
+| `npm run eval:hierarchy -- <dir>…` | not a test — measures nav-label quality against committed artefacts ([evals/README.md](../../evals/README.md)). Calls no model; run it after any change to stage 4 | `evals/results/<slug>-<date>.json` |
 | `npm run typecheck` | every tsconfig, plus the guards that the checking happened ([typechecking.md](typechecking.md)) | — |
 | `npm run lint` | Biome over `src/`, `tests/`, `scripts/` ([linting.md](linting.md)) | — |
 

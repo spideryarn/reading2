@@ -167,7 +167,7 @@ back-compat machinery goes with it:
 
 **The pipeline step keeps the name.** `toc` is simultaneously the old mode name and the *step* that
 builds `tree.json` (`src/pipeline.ts` § `STEP_ORDER`, `src/toc.ts`,
-`docs/project/table-of-contents.md`). That collision is what the 2026-08-29 rename ended, by giving
+`docs/project/hierarchy.md`). That collision is what the 2026-08-29 rename ended, by giving
 the word to the step. Nothing here touches it.
 
 ## 3. The way out of a mode: an × in the controls bar

@@ -203,7 +203,7 @@ describe("the checkpoint store, on the filesystem", () => {
     spent = 0;
 
     /* Attempt one dies after two of the three batches — the 429 eight batches
-       into a book that src/toc.ts's comment is about. */
+       into a book that src/hierarchy.ts's comment is about. */
     await expect(attempt(store(), slug, KEYS, 2)).rejects.toThrow("the attempt died here");
     expect(spent).toBe(2);
 

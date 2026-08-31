@@ -41,7 +41,12 @@ export const MODES = [
      that had lasted as long as the list — `toc` was simultaneously this mode and
      the *pipeline step* that builds tree.json (src/pipeline.ts § STEP_ORDER), so
      one word meant two things in one repo. The step keeps the name; the mode
-     gives it up. docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 3. */
+     gives it up. docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 3.
+
+     Superseded on 2026-08-31: Greg reversed the second half, and the pipeline
+     step is being renamed `toc` → `hierarchy` too, so the UI, the code and the
+     database all say one word. The collision is gone rather than resolved in
+     the mode's favour. docs/plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md. */
   "hierarchy",
   "chat",
   "glossary",

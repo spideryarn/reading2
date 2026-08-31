@@ -37,7 +37,7 @@
  * ## Built from the body only, then appended
  *
  * The ordering is load-bearing and it is the whole reason a footnote can never
- * be summarised into the argument: `generateToc` builds the tree from the
+ * be summarised into the argument: `generateHierarchy` builds the tree from the
  * **body blocks alone**, so the structure model never sees a note and no part
  * gist and no root gist can be written about one. The supplement node is then
  * appended mechanically, extending the root's range to the end of the article.

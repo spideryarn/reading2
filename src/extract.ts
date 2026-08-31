@@ -146,7 +146,7 @@ export function defaultOutFile(url: string): string {
  * long way round given `defaultOutFile` just derived the filename from the URL
  * — but it is the only spelling that cannot drift. Stage 3 names its blocks
  * file after the HTML file, and stage 4 names the data directory after *that*
- * (src/toc.ts). So the basename here is what the rest of the pipeline will call
+ * (src/hierarchy.ts). So the basename here is what the rest of the pipeline will call
  * this article, whether it was chosen by us or passed in on the command line.
  * Deriving it from the URL a second time would put meta.json in the
  * right-looking directory for `npm run extract <url>` and in the wrong one the

@@ -334,7 +334,7 @@ describe("what a step counts as done", () => {
     //
     // `toc` went from two files to three when the nav labels became a second
     // model pass (docs/plans/260826h-toc-scaling.md). A tree with no labels.json beside
-    // it is a half-run step, not a finished one, which is also why src/toc.ts
+    // it is a half-run step, not a finished one, which is also why src/hierarchy.ts
     // writes tree.json last of the three.
     expect(STEPS.extract.outputs(ctx)).toHaveLength(2);
     expect(STEPS.toc.outputs(ctx)).toHaveLength(3);
@@ -458,7 +458,7 @@ describe("parseJobRequest", () => {
        the whole raw URL came back in as `reason`, credentials and all, at warn.
        A source URL is untrusted input and can carry a token or basic-auth
        credentials — docs/project/logging.md, and it is the same shape as the
-       toc.ts title and the chat.ts `reason` field.
+       hierarchy.ts title and the chat.ts `reason` field.
 
        Nothing is lost by dropping it: the caller sent the URL, so quoting it
        back tells them nothing they do not have.

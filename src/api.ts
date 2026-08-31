@@ -864,8 +864,8 @@ async function articleDir(slug: string): Promise<string | null> {
  *
  * **Whether an artefact is stale.** The obvious check — is `tree.json` older
  * than the `blocks.json` it was built from — is wrong here, and wrong in the
- * direction that matters: a *successful* toc run writes `tree.json` first and
- * copies `blocks.json` second (src/toc.ts), so every correct run would come
+ * direction that matters: a *successful* hierarchy run writes `tree.json` first and
+ * copies `blocks.json` second (src/hierarchy.ts), so every correct run would come
  * back marked stale. An earlier version of this function shipped that check.
  *
  * The deeper problem is that mtimes cannot prove provenance at all. They record
@@ -1027,7 +1027,7 @@ export async function articleMetadata(slug: string): Promise<ArticleMetadata> {
  * When these files were last written, and what they weigh together.
  *
  * The newest mtime rather than the oldest or the first: a stage writes its
- * files in whatever order suits it (src/toc.ts writes the tree last on purpose),
+ * files in whatever order suits it (src/hierarchy.ts writes the tree last on purpose),
  * so the only one that answers "when did this stage last run" is the last one
  * written.
  *
@@ -1343,7 +1343,7 @@ export async function listArticles(opts: ListOptions = {}): Promise<LibraryEntry
   }
 
   // debug rather than warn: a run in progress hits this legitimately on every
-  // homepage load until its toc lands, so at warn the shelf would cry wolf
+  // homepage load until its hierarchy lands, so at warn the shelf would cry wolf
   // through every ingest. It becomes interesting only when it doesn't go away.
   //
   // A count, and at most five names. The names are what make it actionable —

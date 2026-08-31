@@ -182,7 +182,7 @@ I found four important undercounts in the current shared tree:
 
 - **Paid CLI:** `npm run pdf`, described above.
 - **Readiness probes:** I count **34 test files**, not 29, containing a `Pool` plus conditional Postgres readiness/skip logic. The three 2-second and five silent counts appear right, but the extraction inventory is five files short.
-- **Atomic writers:** there are three copies, not two: [toc.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:586), [labels.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/labels.ts:1572), and [artifacts-fs.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/artifacts-fs.ts:305). The comments claiming two copies are themselves stale.
+- **Atomic writers:** there are three copies, not two: [toc.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:586), [labels.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/labels.ts:1572), and [artifacts-fs.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/store/artifacts-fs.ts:305). The comments claiming two copies are themselves stale.
 - **Bad suffix entrypoint guards:** besides `fetch.ts` and `toc-flatten.ts`, the same genre appears in [backfill-raw-manifests.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/scripts/backfill-raw-manifests.ts:292) and an even weaker form in [inventory.mts](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/extraction/inventory.mts:630).
 
 Also include test consumers when moving `partsOf`: [arc.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/arc.test.ts:17) and [job-failure.test.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/tests/job-failure.test.ts:22) import it from `arc.ts`.

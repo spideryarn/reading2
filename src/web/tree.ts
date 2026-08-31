@@ -320,7 +320,7 @@ export interface ArcCell {
  * column left, so the whole view would silently misalign.
  *
  * Entries are matched to parts by block range, never by node id — ids are
- * positional and a re-run of `npm run toc` renumbers them, which would quietly
+ * positional and a re-run of `npm run hierarchy` renumbers them, which would quietly
  * hand each sentence to its neighbour. An unmatched entry is dropped.
  */
 export function buildArcColumn(
@@ -445,7 +445,7 @@ export function buildOutline(
    (docs/plans/260831s-gist-only-summaries.md). It used to join `summary.json` in as
    well — by block range and never by node id, the same rule `buildArcColumn`
    above still obeys, because node ids are positional and a re-run of
-   `npm run toc` renumbers them. That join, and the two rungs it carried, are
+   `npm run hierarchy` renumbers them. That join, and the two rungs it carried, are
    gone; the gists were always the part nobody had to pay for. */
 
 export interface SummaryNode {

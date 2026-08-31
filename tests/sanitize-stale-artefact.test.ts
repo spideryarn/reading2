@@ -155,7 +155,7 @@ describe("every writer of a blocks.json stamps it", () => {
      * `blocksArtefact(...)` and a literal `sanitizer:` are the two ways to
      * build the payload at the write itself. `parts.blocks` is the third, and
      * it arrived when stage 4 stopped writing its own files (2026-08-31): the
-     * stage returns `TocArtefacts`, whose `blocks` field is typed
+     * stage returns `HierarchyArtefacts`, whose `blocks` field is typed
      * `ReturnType<typeof blocksArtefact>`, and `main()` writes that field out.
      * The value provably went through `blocksArtefact` — one function away, in
      * the same file — and a line-by-line reading of the source cannot see it.
@@ -164,7 +164,7 @@ describe("every writer of a blocks.json stamps it", () => {
      * will not assign to that field, and the only other way to satisfy it is an
      * object literal carrying `sanitizer`, which this expression already
      * catches wherever it is written. What would be a hole is a field named
-     * `parts.blocks` on something that is not `TocArtefacts` — so if a second
+     * `parts.blocks` on something that is not `HierarchyArtefacts` — so if a second
      * one is ever introduced, narrow this.
      */
     const stamped = /blocksArtefact|sanitizer|parts\.blocks/;
@@ -214,7 +214,7 @@ describe("every writer of a blocks.json stamps it", () => {
     // The control. The assertion above passes trivially against a regex that
     // matches nothing, which is precisely how it would come to be believed.
     const { readFileSync } = await import("node:fs");
-    const source = readFileSync(new URL("../src/toc.ts", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../src/hierarchy.ts", import.meta.url), "utf8");
     expect(writers(source).length).toBeGreaterThan(0);
   });
 });

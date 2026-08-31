@@ -1495,8 +1495,8 @@ glossary, and three consequences follow from it rather than from taste:
   [`tests/sketch-view-drawing.test.tsx`](../../tests/sketch-view-drawing.test.tsx).
 - **It is in `FORCE_ONLY_WHEN_NAMED` for a third reason the others do not have**,
   and it is about the clock rather than the money: every step self-aborts at 400s
-  inside an 800s invocation that must also fit a `toc` measured at 320s. A
-  positional cascade that swept this in beside `toc` would not waste a call, it
+  inside an 800s invocation that must also fit a `hierarchy` measured at 320s. A
+  positional cascade that swept this in beside `hierarchy` would not waste a call, it
   would run the invocation out of time — and that fails as a platform kill that
   takes the whole job rather than as a recorded failure.
 
@@ -1679,7 +1679,7 @@ that prompt.
   [§ There were eight](#there-were-eight-and-five-are-gone). The spine still is.
 - **Collapse state is not in the URL.** Everything else about the view is
   ([url-state.md](url-state.md)), and this is the exception: node ids are
-  positional and a re-run of `npm run toc` renumbers them
+  positional and a re-run of `npm run hierarchy` renumbers them
   ([block-ids.md](block-ids.md)), so a pasted link would open the wrong sections
   on an article that had been re-ingested. A link that is quietly wrong is worse
   than a link that carries less.

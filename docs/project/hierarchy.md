@@ -1,7 +1,7 @@
-# Table of contents
+# Hierarchy
 
-Pipeline stage 4. Builds the nested structure that the Hierarchy sidebar and the
-[granularity zoom](granularity-zoom.md) view both render. Read
+Pipeline stage 4 — `hierarchy`, `npm run hierarchy`. Builds the nested structure that the Hierarchy
+sidebar and the [granularity zoom](granularity-zoom.md) view both render. Read
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
 
@@ -10,8 +10,16 @@ Stage 4 builds the *structure* — ranges, hierarchy, titles — and, in a secon
 `gist` on each internal node, which [architecture.md](architecture.md#pipeline) draws as stage 5:
 they were never split into two model calls, because a tree without gists has nothing to render at
 its coarse levels and fails validation, and both would write the same artefact. The live prompt in
-[`src/toc.ts`](../../src/toc.ts) is the authority; this line used to say stage 5 filled them, and
+[`src/hierarchy.ts`](../../src/hierarchy.ts) is the authority; this line used to say stage 5 filled them, and
 had not been true for some time.
+
+**The step was called `toc` until 2026-08-31**, and this file was `table-of-contents.md`. The
+reading-view mode gave that name up on 2026-08-29 and the step deliberately kept it, which left one
+concept wearing two names across the UI, the code and the database; Greg reversed that half so all
+three say the same word —
+[260831ak-rename-the-toc-step-to-hierarchy-everywhere.md](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md).
+"Table of contents" still appears below wherever it means the artefact or the ordinary English idea,
+rather than the step.
 
 ## Intent
 
@@ -51,7 +59,7 @@ section owns so it can replace them with one gist. That's a range query, and a s
 answer it.
 
 So `tree.json` stores `range: [firstBlockId, lastBlockId]` and explicit `children`. Greg's flat row
-list is then *derived* — see [`src/toc-flatten.ts`](../../src/toc-flatten.ts). This direction
+list is then *derived* — see [`src/hierarchy-flatten.ts`](../../src/hierarchy-flatten.ts). This direction
 matters: **flattening a tree into document-order rows is lossless and trivial; reconstructing a tree
 from flat rows is neither.** Store the richer thing, render the simpler one.
 
@@ -89,7 +97,7 @@ interface TreeNode {
   range: [BlockId, BlockId];   // inclusive; children exactly partition it
   title: string;               // 2–6 words. Internal nodes.
   gist?: string;               // ONE sentence, stage 5. Never on leaves.
-  navLabel?: string;           // leaves only — the ToC row's text
+  navLabel?: string;           // leaves only — the Hierarchy row's text
   summary?: string;
   sourceHeading?: string;
 }
@@ -121,64 +129,93 @@ Contiguity is in `blocks.json` **array order**, not in the id string; random ids
 [`src/validate-tree.ts`](../../src/validate-tree.ts) enforces all of it. Run it on every generated
 tree — it is what stops a model quietly inventing a block id that doesn't exist.
 
-### Two slips are mended rather than refused
+### The partition is derived, not checked <a id="derived-partition"></a>
 
-A paid calibration of this stage on 2026-08-30 threw on **4 of 13** structure calls, and the
-failures were bimodal by kind rather than spread by size: two were partition gaps of **exactly one
-block**, and two were a `sourceHeading` claiming a heading outside its node's range. Every tiling
-failure recorded up to that day — those two, plus the two in
-[260830a-the-article-with-one-heading.md](../postmortems/260830a-the-article-with-one-heading.md) — was off by one
-block; the one that arrived that evening, from a PDF, was off by three (below). The structure call
-takes about 163 seconds and is 88% of the stage's wall clock, so a refusal costs the reader the whole
-article.
+**Nothing about the tiling can refuse an answer any more.** Since 2026-08-31
+[`src/hierarchy.ts`](../../src/hierarchy.ts) does not check whether the model's children tile their parent; it
+**derives a tiling from them**. A child's *start* is believed, and every end is computed:
 
-So [`src/toc.ts`](../../src/toc.ts) mends both, on the model's proposal before anything is built:
+- the first child starts where its parent starts, because nothing else can supply that block;
+- every later child starts where the model said it starts, clamped inside the parent and required
+  to be strictly after the previous child's start;
+- every child ends one block before the next one starts, and the last ends at its parent's end.
 
-- **a misaligned boundary is snapped shut** — a gap, an overlap and a last child that stops short are
-  the three shapes, and they are one fix;
-- **a `sourceHeading` no heading in the node's range backs up is dropped.** It is provenance, not
-  structure: its only consumer is the `§` badge meaning "the author wrote this". An unbacked claim
-  is a badge that would lie; dropping it costs one mark, and throwing costs the article.
+That is the whole rule. A gap, an overlap, a last child that stops short and children that run past
+their parent were four faults to detect and mend; they are now **not expressible** — a list of
+ordered split points tiles its parent by construction. `assertChildrenPartition` still runs
+afterwards and should never fire on a planned node. It is the standing proof that the derivation is
+total, not a second chance to reject the answer.
 
-#### The size bound is gone, and it was overridden rather than refuted
+**Starts and not ends, and this decides where an orphan lands.** A start is a claim the model has a
+reason for: it is where the section begins, where its heading is, and what `sourceHeading` names. An
+end is the same boundary stated a second time from the other side — a redundant field, and redundant
+fields are where inconsistency lives. So when the two disagree, the start wins, and a gap's orphaned
+paragraph joins the section **before** it rather than the one after. The cursor walk this replaced
+did the opposite, and on the fixture in `tests/hierarchy-repairs.test.ts` that filed "Body of the first
+part" under "Second".
 
-That first repair was bounded at **one block** until 2026-08-30, on the argument that two blocks out
-is not a slip but a different reading of the article. The bound was fitted to four observations, and
-all four were off by one **and from HTML articles with headings** — the half of the corpus where the
-model has the author's own structure to agree with. PDF ingest reached production that day, PDFs are
-headingless, and the first thing that happened was a 9-page arXiv paper losing its whole ToC to a gap
-of three: one completed call, $0.1617, nothing the reader could do. Greg, 2026-08-30:
+#### What this cost, and how we got here
+
+Three shapes in three days, each one bought by an article somebody lost:
+
+| | what it did | what it cost |
+|---|---|---|
+| until 2026-08-30 | refused any tiling fault | 4 structure calls in 13 |
+| 2026-08-30 | snapped boundaries; bounded by size, then by count | an article with two slips |
+| 2026-08-31 | derives the tiling; nothing about it refuses | a dropped section, rarely |
+
+A paid calibration on 2026-08-30 threw on **4 of 13** structure calls, bimodal by kind: two partition
+gaps and two `sourceHeading` claims outside their node's range. The structure call takes about 163
+seconds and most of the stage's bill, so every refusal cost a reader a whole article after the money
+was spent.
+
+The first fix snapped a boundary shut, bounded at one block. That bound was fitted to four
+observations that were **all off by one and all from HTML articles with headings** — the half of the
+corpus where the model has the author's own structure to agree with. PDF ingest reached production
+the same day, PDFs are headingless, and a 9-page arXiv paper lost its ToC to a gap of three. Greg,
+2026-08-30:
 
 > I think for now, we should allow gaps. It's not ideal, but it's not the end of the world, and
 > better than things failing fatally. Perhaps in future, it should trigger a re-run of the LLM, where
 > we feed in the previous output, with information about the gaps and ask it to adjust. But that's
 > for later.
 
-**That re-ask is the proper fix and this is not it.** Snapping hands the orphaned blocks to the
-section beside them, which is a guess: a paragraph filed under a heading that may not describe it.
-What it buys is that every block stays reachable — a block in no node cannot be addressed by
-granularity zoom at all — and an article that opens rather than one that does not.
+So the size bound went, leaving a count: **one distinct boundary per answer**. That was fitted to the
+same four observations, and the code comment said in as many words that a headingless PDF with two
+independent slips would still lose its whole ToC. On 2026-08-31 one did — a Princeton memory paper,
+one gap of a block at depth two and one overlap of two at depth one. Fixing that by raising the
+number would have been the third guess at a threshold nobody had evidence for, so instead the
+question it answered was removed. See
+[260831ai-hierarchy-tiling-normalisation.md](../plans/260831ai-hierarchy-tiling-normalisation.md).
 
-**So what stands where the bound was is the reporting**: every repair's *size* is recorded, summed
-and maxed into `TocRun`, and the largest is the number to watch, because six one-block snaps and one
-six-block snap add up the same.
+#### The one thing it loses, and what still throws
 
-**The other bound stays, and it is now the only one.** The budget is **one distinct boundary per
-answer**: several independent slips are a different event from the one we measured, and mending each
-separately would walk a misaligned tree past the check one block at a time with every step looking
-defensible. A cascade of the *same* boundary down through nested nodes is free, because it is one
-mistake seen at several depths. It is fitted to the same four observations the size bound was, so a
-headingless article with two independent slips **still loses its ToC** — a known gap, left open
-because moving both bounds on one new specimen is the mistake the old bound was fitted by. A
-backwards range, an invented id, a root that misses the article's ends and children that run past
-their parent all still throw.
+**A child whose start is not strictly after the previous child's start is dropped**, with its whole
+subtree. There is no split point there — the model proposed two sections beginning in the same place,
+which is one section — and the alternatives are worse: refusing costs the reader the article, and
+squeezing the child into one borrowed block writes a boundary nobody proposed. This is the only way
+a tiling fault still costs anything, so it is **counted on its own** rather than as another kind of
+repair: a moved boundary keeps every section the model named, and this does not.
 
-**Both are counted, every run, including at zero** — into `TocRun`, onto the CLI's `Repaired:` line
-and into the queue's log, the way `strandedSupplement` already is. A repair nobody is told about is
-the same shape as the bug it repaired ([silent-success.md](../reusable/silent-success.md)); if these
-numbers start climbing, the prompt has drifted and the repairs are hiding it. `evals/toc-structure`
-records them per result for the same reason: since the repairs landed, an arm that makes either
-mistake scores `ok`, so the throw rate alone stopped meaning what it used to.
+Still refused, because these are faults in what the model *said* rather than in how its sections line
+up, and each has an exact message: a range that runs backwards, an endpoint that is not a block id,
+and a root that misses the article's ends. One unresolvable child leaves its whole sibling set
+underived, so the precise error survives instead of being buried by a tree built as though that child
+had never been proposed.
+
+#### Measurement is what stands where the bounds stood
+
+Every boundary the model got wrong is recorded with its position, direction and size; dropped
+sections and unbacked heading claims are counted beside them. All of it reaches `HierarchyRun`, the CLI's
+`Repaired:` line **every run including at zero**, the queue's log, and `evals/hierarchy-structure` per
+result — the way `strandedSupplement` already is. A repair nobody is told about is the same shape as
+the bug it repaired ([silent-success.md](../reusable/silent-success.md)).
+
+`repairedBlocks` against `blocks` is the fraction of the article that changed hands, and it is the
+number to read first. **It is also the trigger the re-ask will use**: Greg's re-run is still the
+right long-term answer, and deriving the tiling is the step toward it rather than a detour, because
+the re-ask needs both a fallback for when the second call is also wrong and a number to decide when a
+second call is worth buying. The plan says what remains.
 
 ## The tree the author's headings give us for free <a id="heading-tree"></a>
 
@@ -267,9 +304,9 @@ covered by some leaf. That is what keeps coverage machine-checkable: if rows cou
 each other, a silently dropped paragraph would be undetectable.
 
 **Selectivity lives in `navLabel`, not in the ranges.** A leaf that should not appear in the sidebar
-simply carries no `navLabel`. [`toc-flatten.ts`](../../src/toc-flatten.ts) emits a row only for
+simply carries no `navLabel`. [`hierarchy-flatten.ts`](../../src/hierarchy-flatten.ts) emits a row only for
 nodes that have a label, so an unlabelled leaf is tiled by the tree, rendered verbatim in the
-reading view, addressable by its id — and invisible in the ToC. Nothing is lost; nothing is
+reading view, addressable by its id — and invisible in Hierarchy. Nothing is lost; nothing is
 duplicated.
 
 **Never labelled:** any block `isStructural` says no to — `src/block-policy.ts`, which is
@@ -279,7 +316,7 @@ duplicated.
 
 - **Media** — figures, bare images, horizontal rules.
 - **Pull-quotes.** All 11 in the test article are word-for-word repeats of body sentences; giving
-  them rows would print the same claim in the ToC twice.
+  them rows would print the same claim in Hierarchy twice.
 - **Figure captions** — `kind: "caption"`, matched on an explicit `^(Figure|Fig\.|Table|…)\s*\d*\s*[:.]`
   marker and **never on length**, because `"Given all this, what should we do?"` is seven words of
   real argument. The test article has five.
@@ -297,7 +334,7 @@ block `isStructural` refuses fails the tree.
 
 > [!NOTE]
 > Two of the five captions are substantial — `Figure 2` runs to 94 words and `Figure 4` to 36,
-> and both explain a diagram rather than merely name it. We accepted losing them from the ToC
+> and both explain a diagram rather than merely name it. We accepted losing them from Hierarchy
 > anyway, on the grounds that a caption belongs to its image and not to the argument: a reader who
 > wants it descends to the figure. This is a deliberate trade, not an oversight, and it is a
 > reasonable thing to revisit if the sidebar feels like it is hiding content.
@@ -412,7 +449,7 @@ length the stage simply could not work.
 
 So it is two passes now, and one pipeline step:
 
-1. **The structure**, in one whole-document call ([`src/toc.ts`](../../src/toc.ts)) — the internal
+1. **The structure**, in one whole-document call ([`src/hierarchy.ts`](../../src/hierarchy.ts)) — the internal
    nodes, their titles, their gists, their ranges, `sourceHeading`. Roughly 7,000 tokens of answer on
    a 360-block article, and it grows at about one node per seven blocks rather than one per block.
 2. **The nav labels**, in parallel batches ([`src/labels.ts`](../../src/labels.ts)), cut along the
@@ -452,7 +489,7 @@ Two things this bought beyond the ceiling, **and both have since been reversed �
 not this paragraph.** `effort` went back to `"high"` on the structure call, undoing a concession the
 postmortem had forced; a second production truncation (Wolfram, *Towards a Theory of Bugs*) forced it
 down again on 2026-08-30 in `fb82dc8`, and
-[`src/toc.ts`](../../src/toc.ts) § `EFFORT` is the current value with the reason beside it — including
+[`src/hierarchy.ts`](../../src/hierarchy.ts) § `EFFORT` is the current value with the reason beside it — including
 that `high` has still never been measured against `medium` here. And `COVERAGE_FLOOR` went from 0.95
 to 1, so that each batch was asked for an exact set of numbered paragraphs and refused any other;
 stage 1 of [260830am](../plans/260830am-faster-ingest-and-concurrency.md) took it back to 0.95 and
@@ -495,13 +532,13 @@ So the stage now does three things instead of dying, in rising order of risk:
   bound, not a second copy of it: the batching is invisible from `checkCoverage`, so small sections
   each spending their floor of one would stay inside budget and still cost the article a fifth of its
   rows. It now lives in [`src/labels.ts`](../../src/labels.ts) and is applied at the end of
-  `generateLabels`, so `npm run labels` gets it too — it used to be enforced only by `generateToc`,
+  `generateLabels`, so `npm run labels` gets it too — it used to be enforced only by `generateHierarchy`,
   which made the backstop depend on which command you typed.
 
 **The risk in the third one is silent success.** An unlabelled leaf renders as *nothing* — the
 outline skips the row, the spine draws an empty string, and nothing is red. So every drop is named
 and counted: `LabelRun.dropped`, the `dropped` list in `labels.json`, `labelsDropped` on the step's
-log line and on the progress card, and `evals/toc-labels.ts` reads the artefact rather than inferring
+log line and on the progress card, and `evals/hierarchy-labels.ts` reads the artefact rather than inferring
 a fault from a coverage number it can no longer interpret alone. That last one is the *"the eval had
 to be told"* lesson from the R2/R3 build, applied in advance rather than afterwards. The upstream fix
 is item **F** in [260830a-opening-an-article-before-the-toc.md](../research/260830a-opening-an-article-before-the-toc.md)
@@ -510,8 +547,8 @@ is item **F** in [260830a-opening-an-article-before-the-toc.md](../research/2608
 ### Three artefacts, and what survives a failed run
 
 Stage 4 produces the tree, the blocks and the labels, and **hands all three back in one object**
-rather than writing them: `generateToc` returns `TocArtefacts`, and its caller stores them together
-in a single write ([`src/toc.ts`](../../src/toc.ts),
+rather than writing them: `generateHierarchy` returns `TocArtefacts`, and its caller stores them together
+in a single write ([`src/hierarchy.ts`](../../src/hierarchy.ts),
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § Stage 2). All three are
 required by the type, so a caller cannot store a tree and skip its labels.
 
@@ -519,7 +556,7 @@ It used to write the three files itself, in a fixed order with the tree last. Th
 about three *separate* writes: `writeFile` truncates before it has anything to put there, and
 *existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is done", so a
 kill mid-write left a present, truncated tree that a retry skipped. One write for all three removes
-both halves of that, and the ordering survives only in `npm run toc`'s own `main()`, which really
+both halves of that, and the ordering survives only in `npm run hierarchy`'s own `main()`, which really
 does write three files into a directory.
 
 `labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because a
@@ -528,11 +565,11 @@ for an article that has since been re-extracted, or re-structured, looks exactly
 The structure hash is the one that earns its place: boundaries can move without a single block
 changing, so it is taken over every node's range, parent, title and gist rather than over the outline
 the prompt shows the model, which is titles alone. **Nothing reads the structure hash yet** — the
-`toc` step still has no freshness check — so today it is evidence in the file rather than a guard.
+`hierarchy` step still has no freshness check — so today it is evidence in the file rather than a guard.
 
 `sourceHash` is not in that category. `STAMP_SOURCE` points stage 4's stamp at `labels.json` rather
 than at the tree, which carries no such field, so that hash is what the store compares a declared
-stamp against and what `generateToc` reports as the step's input hash. It has to be recorded: the
+stamp against and what `generateHierarchy` reports as the step's input hash. It has to be recorded: the
 publish guard compares it with the stored blocks and refuses to publish an article whose tree was
 built from something else.
 
@@ -550,7 +587,7 @@ The whole design, the alternatives weighed against it, and what it does not yet 
 ## The budget <a id="the-budget"></a>
 
 `max_tokens` is still computed from `blocks.json` rather than typed in — the split moved the ceiling,
-it did not remove the need to know where it is. [`estimateTocTokens`](../../src/toc.ts) does the
+it did not remove the need to know where it is. [`estimateHierarchyTokens`](../../src/hierarchy.ts) does the
 structure call's estimate; [`src/labels.ts`](../../src/labels.ts) does a batch's. The arithmetic on
 top of both — and the reason most of the number is not the answer at all — is in
 [`src/token-budget.ts`](../../src/token-budget.ts):
@@ -712,7 +749,7 @@ its `tree.json` is **hand-authored** to this schema as a stand-in until stage 4 
 model-generated, and its labels are what we want the prompt to produce, not proof that it does.
 
 Collapsed to the heading outline, which is the sidebar's default state
-(`npx tsx src/toc-flatten.ts example/tree.json 2`):
+(`npx tsx src/hierarchy-flatten.ts example/tree.json 2`):
 
 ```
 ▸ The Mythology Of Conscious AI  [spya-tgnssb…spya-gxdsbh]
@@ -730,7 +767,7 @@ Collapsed to the heading outline, which is the sidebar's default state
 11 rows
 ```
 
-Expanded to paragraph level (`npx tsx src/toc-flatten.ts example/tree.json`), the same two sections
+Expanded to paragraph level (`npx tsx src/hierarchy-flatten.ts example/tree.json`), the same two sections
 become:
 
 ```
@@ -763,4 +800,4 @@ four siblings, and would be useless at telling five adjacent paragraphs apart.
 - [granularity-zoom.md](granularity-zoom.md) — the same tree, rendered as text instead of navigation
 - [architecture.md](architecture.md) — where stage 4 sits in the pipeline
 - [`src/types.ts`](../../src/types.ts) — the canonical schema
-- [`src/validate-tree.ts`](../../src/validate-tree.ts), [`src/toc-flatten.ts`](../../src/toc-flatten.ts)
+- [`src/validate-tree.ts`](../../src/validate-tree.ts), [`src/hierarchy-flatten.ts`](../../src/hierarchy-flatten.ts)

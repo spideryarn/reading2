@@ -50,7 +50,7 @@ Worth noting that it **self-corrects skipped levels** — an `h1` followed by an
 with no special case. Real articles skip levels constantly, and this is the cheapest correct
 handling of it. Our tree comes from the model rather than from source headings, but the same
 tolerance is needed wherever we read an author's heading levels
-([table-of-contents.md](../table-of-contents.md#building-the-tree-over-a-flat-article)).
+([hierarchy.md](../hierarchy.md#building-the-tree-over-a-flat-article)).
 
 A node is `{ id, text, level, elementId, children }`, and `elementId` is the `syr-*` id — commented
 in their source as being there "for reliable lookup". Same instinct as
@@ -181,6 +181,6 @@ is still true and still defended.
 - [../summaries.md](../summaries.md) — the mode that took the badge, the cut-off and the two-variable rule
 - [overview.md](overview.md) — the map to that codebase
 - [../granularity-zoom.md](../granularity-zoom.md) — our version of this idea, taken much further
-- [../table-of-contents.md](../table-of-contents.md) — our tree and what a row is for
+- [../hierarchy.md](../hierarchy.md) — our tree and what a row is for
 - [reading-view-ui.md](reading-view-ui.md) — the pane this panel lived in, and what consolidating panes cost
 - [summaries.md](summaries.md) — the summaries its tooltips were fetching

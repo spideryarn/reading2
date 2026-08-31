@@ -22,7 +22,7 @@ But `gistable: false` is not “outside the machinery”:
 - Every block, including non-gistable media, must have exactly one leaf. [tree-invariants.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/tree-invariants.ts:174)
 - The root must span the complete `blocks` array. [tree-invariants.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/tree-invariants.ts:143)
 - Every block must be covered. [tree-invariants.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/tree-invariants.ts:257)
-- `buildTree` already grows leaves for non-gistable blocks; they merely lack `navLabel`. [toc.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:489)
+- `buildTree` already grows leaves for non-gistable blocks; they merely lack `navLabel`. [toc.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:489)
 
 Therefore:
 
@@ -32,7 +32,7 @@ Therefore:
 
 I would add something like `presentation?: "supplement"` to `TreeNode`. The node covers the complete Notes range, has an authored title such as “Notes”, carries no generated gist, and displays something fixed such as “Notes · 40”. The validator’s “every internal node needs a gist” rule would gain this one explicit exception.
 
-The body tree should be generated from body blocks only. Then mechanically append the supplement node to the root and extend the root’s range. This preserves exact partitioning while ensuring root and section gists cannot accidentally summarise footnotes. Currently the ToC model sees every non-gistable block’s text and must still produce gists for internal nodes covering it. [toc.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:75)
+The body tree should be generated from body blocks only. Then mechanically append the supplement node to the root and extend the root’s range. This preserves exact partitioning while ensuring root and section gists cannot accidentally summarise footnotes. Currently the ToC model sees every non-gistable block’s text and must still produce gists for internal nodes covering it. [toc.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:75)
 
 A shallow supplement branch is acceptable: the renderer already repeats a branch’s deepest node across deeper columns. [tree.ts](/Users/greg/Dropbox/dev/experim/spideryarn2/src/web/tree.ts:88)
 

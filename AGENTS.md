@@ -30,7 +30,7 @@ listed here; the names under each are files in `docs/project/`.
 - **[architecture.md](docs/project/architecture.md)** — the pipeline stage by stage, what a block
   is, who owns which stage, where the data lives.
   <br>↳ `block-ids.md` · `fetching.md` (stage 1) · `content-extraction.md` (stage 2, and there are
-  two) · `table-of-contents.md` · `ingest-queue.md` (paste a URL, get an article) ·
+  two) · `hierarchy.md` · `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter) · `prompt-caching.md` ·
   `database.md` · `sql.md` (columns over JSON, keys over good intentions)
 - **[reading-view-overview.md](docs/project/reading-view-overview.md)** — everything the reader
@@ -103,7 +103,7 @@ the work started; a plan and its reviews share one letter. Get the name from
 
 ## The one contract that matters
 
-Every block of the article gets a **stable id** (`spya-k3m9qt`), and every feature — ToC, summaries,
+Every block of the article gets a **stable id** (`spya-k3m9qt`), and every feature — Hierarchy, summaries,
 scroll position, highlights, notes, questions — addresses text by that id, never by character offset
 or CSS selector. Ids are minted once and preserved on every later run, so they survive re-extraction.
 
@@ -135,7 +135,7 @@ the other docs and to the code. Not descriptions of code, which the code already
   (e.g. [`src/blocks.ts`](src/blocks.ts)). **One source of truth.** Where a fact lives in the code —
   a constant, a setting, what another module does — name the file and let the reader look, rather
   than restating the value. A restatement is a second copy that nothing keeps in step, and it goes
-  wrong by waiting: a comment in [`src/token-budget.ts`](src/token-budget.ts) said `src/toc.ts` had
+  wrong by waiting: a comment in [`src/token-budget.ts`](src/token-budget.ts) said `src/hierarchy.ts` had
   moved to `"medium"` when it had not, and two agents believed it.
 - **Record decisions where they belong.** When something in
   [open-questions.md](docs/project/open-questions.md) gets decided, write it into the relevant doc
@@ -280,7 +280,7 @@ puts nothing back ([supabase-local.md](docs/project/supabase-local.md)).
 - **Every stage stays runnable on its own** against a slug, so any one can be re-run without the
   others. Cache anything expensive on a content hash — two stages of seven do; copy *their* choice
   of hash input rather than only the idea ([architecture.md](docs/project/architecture.md#conventions)).
-- **The deeply-nested ToC and the granularity-zoom tree are
+- **Hierarchy — the deeply-nested table of contents — and the granularity-zoom tree are
   [the same structure](docs/project/granularity-zoom.md#the-tree)**, produced by stages 4 and 5
   together. They must not diverge into two trees.
 - **Log from the server, `console.log` from the CLI** — the rule is the destination, not the

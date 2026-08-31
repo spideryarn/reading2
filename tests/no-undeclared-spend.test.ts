@@ -134,7 +134,7 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "The remote-box CLI. Names a credential only in help text and in the error it prints when the box lacks one. No transport of any kind.",
   "scripts/ai-cost.ts":
     "Reads GET /api/v1/key to reconcile. Costs nothing and buys no inference.",
-  "evals/toc-structure/verify-costs.ts":
+  "evals/hierarchy-structure/verify-costs.ts":
     "Reads GET /api/v1/generation to reconcile a finished eval run's stored ids against the provider's own cost figures. Costs nothing and buys no inference — and it cannot live in the declared file, because a metered declaration covers only what declaredFetch guards.",
   "evals/declared-spend.ts":
     "The bypass wrapper itself, and the guarded fetch that makes one safe.",

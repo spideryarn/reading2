@@ -1,16 +1,16 @@
 /**
  * The executor for the arms that spend money.
  *
- * **The prompt is production's own**: `structureRequest` in src/toc.ts is the
- * one assembly point, called by `generateToc` itself, so the incumbent arm's
+ * **The prompt is production's own**: `structureRequest` in src/hierarchy.ts is the
+ * one assembly point, called by `generateHierarchy` itself, so the incumbent arm's
  * bytes cannot drift from what ships — parity by construction, pinned (and
- * seen red under perturbation) by tests/toc-structure-request-parity.test.ts.
+ * seen red under perturbation) by tests/hierarchy-structure-request-parity.test.ts.
  * The answer comes back through the pipeline's own `buildTree` +
  * `appendSupplement` + `assertTreeSound`, so an arm is judged on the
  * pipeline's rules, not this file's.
  *
- * **The transports are declared bypasses** — `toc-structure-messages` and
- * `toc-structure-chat` in src/spend-declarations.ts name this file — because
+ * **The transports are declared bypasses** — `hierarchy-structure-messages` and
+ * `hierarchy-structure-chat` in src/spend-declarations.ts name this file — because
  * the arms vary model and effort per call and both seams own those on purpose.
  * Every request goes through `withDeclaredExternalCall`, which refuses to run
  * without an open ledger, and `declaredFetch`, which refuses to run outside a
@@ -43,7 +43,7 @@ import { isStructural } from "../../src/block-policy.js";
 import { MESSAGES_PROVIDER, wasRefused } from "../../src/messages-stream.js";
 import { parseJsonFrom, stripFence } from "../../src/parse-json.js";
 import { appendSupplement, splitBlocks } from "../../src/supplement.js";
-import { buildTree, structureRequest, type BuildReport, type ModelNode } from "../../src/toc.js";
+import { buildTree, structureRequest, type BuildReport, type ModelNode } from "../../src/hierarchy.js";
 import { assertTreeSound } from "../../src/tree-invariants.js";
 import type { Block, Tree, TreeNode } from "../../src/types.js";
 import type { ArmSpec, CallSpec } from "./arms.js";
@@ -115,7 +115,7 @@ export function assertCallAccounted(stats: CallStats, label: string): void {
    test.ts) forbids a raw fetch in a declared file — a metered declaration
    covers only what declaredFetch guards, and that rule is right. The
    generation-endpoint reconciliation is therefore its own GET-only step,
-   evals/toc-structure/verify-costs.ts, run against a finished run.json; a run
+   evals/hierarchy-structure/verify-costs.ts, run against a finished run.json; a run
    is not quotable until it passes. In-process, `costUsd` comes in-band:
    OpenRouter puts `cost` in the raw stream events on the Messages wire — the
    fact src/messages-stream.ts § meterStream is built on, pinned by
@@ -129,7 +129,7 @@ export interface ModelArmRun {
    * What the pipeline mended in this arm's answer on the way to a tree — a
    * one-block partition slip snapped shut, a `sourceHeading` claim dropped.
    * **Recorded rather than merely permitted**: these are the two failure
-   * families this eval was built to count, and since src/toc.ts started
+   * families this eval was built to count, and since src/hierarchy.ts started
    * repairing them an arm that makes either mistake comes back `ok`. Without
    * this field the throw rate would have quietly stopped meaning what
    * evals/README.md says it means.
@@ -150,9 +150,23 @@ export interface ModelArmRun {
  */
 export class ArmFailure extends Error {
   readonly calls: CallStats[];
-  constructor(message: string, calls: CallStats[]) {
+  /**
+   * **What the builder had already mended before it threw**, when there was a
+   * builder in the picture at all.
+   *
+   * `buildTree` fills its report in on the way down, so an answer that mended a
+   * boundary at depth one and *then* hit an invented id at depth three has both
+   * facts to tell — and until 2026-08-31 the failure carried only the second,
+   * so the repair figures for a refused answer went nowhere. Production's own
+   * catch preserves them for exactly this reason
+   * (src/hierarchy.ts § `generateHierarchy`); the eval was the half that did
+   * not. GPT Sol's review of the tiling change, finding 5.
+   */
+  readonly built: BuildReport | undefined;
+  constructor(message: string, calls: CallStats[], built?: BuildReport) {
     super(message);
     this.calls = calls;
+    this.built = built;
   }
 }
 
@@ -199,7 +213,7 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
     fetch: declaredFetch,
   });
   const startedAt = Date.now();
-  return withDeclaredExternalCall("toc-structure-messages", { model: call.model }, async ({ observe }) => {
+  return withDeclaredExternalCall("hierarchy-structure-messages", { model: call.model }, async ({ observe }) => {
     /* Streamed, not for anybody watching — for the COST. `finalMessage()`'s
        merge drops the `cost` field the Skin puts in the raw `message_delta`
        usage (src/messages-stream.ts § the three things that fail silently
@@ -282,7 +296,7 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
 export const sendChat: ChatSend = async ({ call, system, user, maxTokens }) => {
   const key = apiKey();
   const startedAt = Date.now();
-  return withDeclaredExternalCall("toc-structure-chat", { model: call.model }, async ({ observe }) => {
+  return withDeclaredExternalCall("hierarchy-structure-chat", { model: call.model }, async ({ observe }) => {
     const res = await declaredFetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -409,7 +423,7 @@ export function assembleTree(
   /**
    * **Threaded out, because otherwise the eval stops being able to see the
    * faults it exists to count.** `buildTree` now mends a one-block partition
-   * slip and drops an unbacked `sourceHeading` (src/toc.ts). Those are the
+   * slip and drops an unbacked `sourceHeading` (src/hierarchy.ts). Those are the
    * right production outcomes, and they are the two failure families this
    * eval measured — so an arm that makes either mistake would come back
    * `outcome: "ok"` with nothing recorded, and `sourceHeadingValid` would read
@@ -524,7 +538,7 @@ async function runWaves(
   };
   const send = senderFor(arm.call.model);
   const calls: CallStats[] = [];
-  const built: BuildReport = { repairs: [], droppedHeadings: [] };
+  const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
   try {
   // Wave 1: the whole article, chapters only.
   const base = structureRequest(body);
@@ -627,7 +641,7 @@ async function runRevise(
       maxTokens: base.maxTokens,
     });
     calls.push(revised.stats);
-    const built: BuildReport = { repairs: [], droppedHeadings: [] };
+    const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
     return { tree: parseStructureResponse(revised.raw, blocks, slug, built), calls, built };
   } catch (err) {
     // The bill travels with the failure — see ArmFailure.
@@ -659,14 +673,14 @@ export async function runModelArm(
         user: `${user}${seed}`,
         maxTokens,
       });
-      const built: BuildReport = { repairs: [], droppedHeadings: [] };
+      const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
       try {
         return { tree: parseStructureResponse(raw, blocks, slug, built), calls: [stats], built };
       } catch (err) {
         /* The call succeeded and the answer failed the pipeline's rules — a
            tiling gap, an invented id. The money is spent and the outcome is
            "produced nothing"; both travel with the failure. See ArmFailure. */
-        throw new ArmFailure((err as Error).message, [stats]);
+        throw new ArmFailure((err as Error).message, [stats], built);
       }
     }
     case "waves":

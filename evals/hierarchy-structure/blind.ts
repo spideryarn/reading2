@@ -3,9 +3,9 @@
  * input, since every mechanical measure in score.ts can be won by a worse arm
  * (the phase-2 review has the table).
  *
- *   npx tsx evals/toc-structure/blind.ts data/scaling-hypothesis \
- *     evals/results/toc-structure/<run>/trees/incumbent.scaling-hypothesis.json \
- *     evals/results/toc-structure/<run>/trees/cheap-high.scaling-hypothesis.json \
+ *   npx tsx evals/hierarchy-structure/blind.ts data/scaling-hypothesis \
+ *     evals/results/hierarchy-structure/<run>/trees/incumbent.scaling-hypothesis.json \
+ *     evals/results/hierarchy-structure/<run>/trees/cheap-high.scaling-hypothesis.json \
  *     --out /tmp/judging
  *
  * **The judge is a model, not Greg — his call, 2026-08-30 — with a budget of
@@ -22,7 +22,7 @@
  *   anchor, and a judge that ranks it above a paid arm is saying something no
  *   style preference explains.
  * - **Labels are shuffled per document** (Fisher-Yates — the same reasoning
- *   as evals/toc-labels.ts § printShuffled: a sort-comparator shuffle leaks
+ *   as evals/hierarchy-labels.ts § printShuffled: a sort-comparator shuffle leaks
  *   positional bias) and the mapping goes to a separate key file the judge
  *   prompt never contains.
  *
@@ -131,7 +131,7 @@ async function main(): Promise<void> {
   const [articleDir, ...treeFiles] = positional;
   if (!articleDir) {
     console.error(
-      "Usage: tsx evals/toc-structure/blind.ts <article-dir> <tree.json>… [--out <dir>]\n" +
+      "Usage: tsx evals/hierarchy-structure/blind.ts <article-dir> <tree.json>… [--out <dir>]\n" +
         "Arm zero (the free heading tree) is always added to the lineup here — do not pass it.",
     );
     process.exit(1);

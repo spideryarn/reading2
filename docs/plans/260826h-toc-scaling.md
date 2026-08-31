@@ -76,7 +76,7 @@ claim about one paragraph. It has four consumers:
   *"I really like the Outline 1-sentence-paragraphs. But I also always want to be able to see the
   full text"* ([granularity-zoom.md](../project/granularity-zoom.md#both-at-once-the-paragraph-outline-beside-the-prose))
 - the **spine's hover tooltip** ([`Spine.tsx`](../../src/web/Spine.tsx))
-- **outline-mode rows** via [`toc-flatten.ts`](../../src/toc-flatten.ts)
+- **outline-mode rows** via [`toc-flatten.ts`](../../src/hierarchy-flatten.ts)
 
 It is deliberately *not* in the column-context panels — [`context.ts`](../../src/web/context.ts)
 keeps leaves out of every list.
@@ -170,7 +170,7 @@ What this still does not give us is a way to tell a *stale* complete set from a 
 needs a manifest carrying the source hash, the model and both prompt versions, and it is on the open
 list below.
 
-[`checkCoverage`](../../src/toc.ts)'s floor and its invented-id check tighten rather than move: the
+[`checkCoverage`](../../src/hierarchy.ts)'s floor and its invented-id check tighten rather than move: the
 floor goes from 95% to **100%**, because each batch is now asked for an exact set of paragraph
 numbers and refuses any other, so there is no longer a way for a block to be legitimately unlabelled.
 It stays in `generateToc` and is joined by `assertEveryBlockLabelled` inside the label stage, which
@@ -186,7 +186,7 @@ partial-state work lands yet. That single change:
 - lifts the refusal ceiling from 876 to ~2,000 blocks
 - removes the unbounded term from the budget
 - restores `effort: "high"` to the call that deserves it
-- is contained to [`src/toc.ts`](../../src/toc.ts) and its tests
+- is contained to [`src/toc.ts`](../../src/hierarchy.ts) and its tests
 
 Everything else in this document waits on a measurement.
 
@@ -747,7 +747,7 @@ Instrument it before promising anything.
 
 ## See also
 
-- [table-of-contents.md § The budget](../project/table-of-contents.md#the-budget) — where the design
+- [hierarchy.md § The budget](../project/hierarchy.md#the-budget) — where the design
   lives once this lands
 - [260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md) — the bug, and why the bridge was a bridge
 - [silent-success.md](../reusable/silent-success.md) — why nothing partial is published

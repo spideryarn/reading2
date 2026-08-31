@@ -488,7 +488,7 @@ export const ANSWER_OVERFLOWED: ReaderFacingFailure = {
  * the provider's own words about a request that contained the whole article,
  * and we cannot promise it holds none of it back.
  *
- * Six pipeline stages — arc, labels, toc, glossary, tweets, quotes — each
+ * Six pipeline stages — arc, labels, hierarchy, glossary, tweets, quotes — each
  * threw `Model refused: ${JSON.stringify(message.stop_details)}` until
  * 2026-08-26, and that string is not thrown away afterwards: `jobs.ts` copies a
  * step's error onto the job, and the job's error is rendered on the progress

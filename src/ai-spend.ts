@@ -961,7 +961,7 @@ export function totalSpend(calls: readonly SpendRecord[]): {
        otherwise fall through to `unpriced` — which is precisely what it is not.
 
        This was missed once already. The persistent report was corrected and
-       *this* function was not, so the line `npm run toc` and every eval prints
+       *this* function was not, so the line `npm run hierarchy` and every eval prints
        at the end of its own run said `$0.0000` about money it had just spent.
        GPT Sol found it: the command that made the spend was the one output that
        could not see it. */

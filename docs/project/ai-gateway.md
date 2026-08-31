@@ -61,7 +61,7 @@ fail without saying so.
 
 ## What it replaced
 
-Until that day there were two vendors. The seven pipeline stages — [`toc`](../../src/toc.ts),
+Until that day there were two vendors. The seven pipeline stages — [`hierarchy`](../../src/hierarchy.ts),
 [`labels`](../../src/labels.ts), [`arc`](../../src/arc.ts), [`tweets`](../../src/tweets.ts),
 [`glossary`](../../src/glossary.ts), `summarise`,
 [`ideas`](../../src/ideas.ts) — each built their own `new Anthropic({ logLevel: "off" })` and talked
@@ -356,7 +356,7 @@ obvious ways to reconstruct that are each wrong in a different direction:
 |---|---|---|
 | `sum(durationMs)` for a step | a step whose calls run **concurrently** | `summarise` reported as 240.3s; its wall time is 91.3s across ten overlapping calls. Nav labels reported as 65.2s; actually 23.1s |
 | group by `runId` | a **batch** — a CLI or eval walking several articles in one process | a `sketch` "step" of 408.1s was three *different articles* run sequentially by `evals/sketch/run.ts`, each one call of 125–145s |
-| group by `(slug, job)` | unrelated runs, when `slug` is **null** | three `toc` runs *five hours apart* collapsed into one 324s step |
+| group by `(slug, job)` | unrelated runs, when `slug` is **null** | three `hierarchy` runs *five hours apart* collapsed into one 324s step |
 
 **What actually answers "did this step fit?"** — wall clock, over rows that belong to one step:
 
@@ -370,7 +370,7 @@ and a row belongs to one step only if you have checked **`scopeKind`** as well a
 cannot separate them either.
 
 **The one case where all four agree is a single-call step**, which is why the number that survived
-every correction is `toc` at **320.4s in one call** — sum, wall, and any grouping give the same
+every correction is `hierarchy` at **320.4s in one call** — sum, wall, and any grouping give the same
 answer when there is nothing to aggregate. That is the measurement
 [`tests/jobs-lease-budget.test.ts`](../../tests/jobs-lease-budget.test.ts) pins the step deadline
 against, and it is deliberately the only one it cites.
@@ -394,7 +394,7 @@ Three properties of that write are load-bearing and none of them is obvious:
   take down a reader-facing feature — [logging.md](logging.md) quotes it as the thing not to copy.
 
 **A CLI stage run is in the ledger too**, via one line at each stage's `isMain`
-([`src/cli-ledger.ts`](../../src/cli-ledger.ts)) — so `npm run toc` is money that appears in
+([`src/cli-ledger.ts`](../../src/cli-ledger.ts)) — so `npm run hierarchy` is money that appears in
 `npm run cost`. `evals/` is not: it calls models outside both gateways, and the report says so on
 every run rather than being quietly partial.
 

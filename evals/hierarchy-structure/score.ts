@@ -1,16 +1,16 @@
 /**
  * Deterministic measures over one (blocks, tree) pair — the scoring half of the
  * ToC *structure* eval. No model calls, no file writes, no clock. The runner
- * (evals/toc-structure/run.ts) decides what to score; this file only measures.
+ * (evals/hierarchy-structure/run.ts) decides what to score; this file only measures.
  *
  * Everything here is mechanical, and none of it decides whether a tree is
  * *good*; each measure is a proxy for a specific way the structure pass could
  * go wrong, or a fact two arms can be compared on. See evals/README.md
- * § toc-structure for what each one is a proxy for and — just as important —
+ * § hierarchy-structure for what each one is a proxy for and — just as important —
  * which ones are deliberately NOT scores where higher is better.
  *
  * `contentWords` and `sameHeading` are imported from the stages themselves
- * rather than redefined, for the reason evals/toc-labels.ts gives: a measure
+ * rather than redefined, for the reason evals/hierarchy-labels.ts gives: a measure
  * that disagreed with its own gate would be worse than no measure.
  */
 
@@ -33,7 +33,7 @@ function wordsIn(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }
 
-/** The first two words, lower-cased — how a formula announces itself. Same as evals/toc-labels.ts. */
+/** The first two words, lower-cased — how a formula announces itself. Same as evals/hierarchy-labels.ts. */
 function openingBigram(text: string): string {
   return text.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 2).join(" ");
 }
@@ -84,6 +84,21 @@ export interface StructureScore {
    * move a problem between the two buckets. (Typed issue codes on `checkTree`
    * itself were considered and declined, 2026-08-30: tree-invariants.ts is
    * load-bearing and this construction needs nothing from it.)
+   *
+   * **`otherProblems` can no longer report a tiling fault for any tree that came
+   * through `buildTree`**, since 2026-08-31. The partition is derived from the
+   * model's proposal rather than checked against it
+   * (src/hierarchy.ts § `planChildRanges`), so gaps, overlaps and children
+   * running past their parent are not faults an arm can commit any more — this
+   * counts what is left, which is what a tree read off disk can still be wrong
+   * about.
+   *
+   * This is the same trap `sourceHeadingValid` fell into below, and it is worth
+   * saying twice: **a repair inside the code under measurement silently
+   * redefines the measurement, and nothing fails when it does.** What replaced
+   * the signal is `repaired` in the run file — its `ranges`, `blocks`,
+   * `largest` and `droppedChildren`. An arm whose answer did not tile now scores
+   * a clean `otherProblems: 0` and says so only there, so read the two together.
    */
   validity: {
     gistProblems: number;
@@ -191,7 +206,7 @@ export interface StructureScore {
    * content words that appear in its own range's text — the proxy for naming
    * the section in the author's words. Titles that are a copied heading are
    * excluded from `retention` (they score ~1.0 by construction and would
-   * measure the article's heading count, the exact mistake evals/toc-labels.ts
+   * measure the article's heading count, the exact mistake evals/hierarchy-labels.ts
    * records making once); `copiedHeadings` says how many were excluded.
    */
   titles: {

@@ -1,8 +1,8 @@
 /**
  * Pipeline stage 4 — build the deeply-nested table of contents / granularity
- * tree over a block sequence. See docs/project/table-of-contents.md.
+ * tree over a block sequence. See docs/project/hierarchy.md.
  *
- *   npm run toc -- output/noema-mythology-of-conscious-ai.blocks.json
+ *   npm run hierarchy -- output/noema-mythology-of-conscious-ai.blocks.json
  *
  * The model proposes INTERNAL nodes only. Leaves are generated here,
  * mechanically, one per block — which removes the whole class of partition
@@ -21,7 +21,7 @@
  * bound — 73% of this stage's answer on a 360-block article — and they took the
  * whole stage over the 128,000-token ceiling on a single response. They now live
  * in src/labels.ts, batched along this tree's own section boundaries and run in
- * parallel. `generateToc` still drives both and still returns one set of
+ * parallel. `generateHierarchy` still drives both and still returns one set of
  * artefacts, so the pipeline sees one step. docs/plans/260826h-toc-scaling.md.
  *
  * **The stage reads no path and writes no file.** It is handed the blocks and
@@ -93,7 +93,7 @@ const PROMPT_VERSION = "toc/2";
  * shut and repaired rather than thrown away, so an arm can score `ok` having
  * been repaired into shape — and a boundary one paragraph out and a section
  * handed forty of its neighbour's blocks would otherwise look identical.
- * `evals/toc-structure/run.ts` records both.
+ * `evals/hierarchy-structure/run.ts` records both.
  *
  * See docs/plans/260826h-toc-scaling.md and docs/postmortems/260826a-toc-max-tokens.md.
  */
@@ -156,7 +156,7 @@ export interface ModelNode {
  * The article, as the structure model sees it.
  *
  * **A supplement's prose is withheld, and its id is not.** On the ordinary path
- * `generateToc` hands this only the body, so the branch never fires — but the
+ * `generateHierarchy` hands this only the body, so the branch never fires — but the
  * split falls back to the whole article whenever the apparatus is not one
  * trailing run (src/supplement.ts), and on that path this function is the only
  * thing between a bibliography and the largest prompt the pipeline sends. A
@@ -218,25 +218,25 @@ function renderBlocks(blocks: Block[]): string {
  * allowance the model doesn't spend is not billed.
  * tests/token-budget.test.ts holds this to the committed fixture.
  */
-export function estimateTocTokens(blocks: Block[]): number {
+export function estimateHierarchyTokens(blocks: Block[]): number {
   const internal = Math.ceil(blocks.length / 4) + 6;
   return 500 + internal * 175;
 }
 
 /**
- * The structure call's request, assembled in the one place `generateToc`
+ * The structure call's request, assembled in the one place `generateHierarchy`
  * itself uses.
  *
- * Exported for the structure eval (evals/toc-structure/model-arms.ts), whose
+ * Exported for the structure eval (evals/hierarchy-structure/model-arms.ts), whose
  * incumbent arm must send byte-identical bytes to what ships — a copied
  * prompt drifts silently, and an executor one byte adrift is measuring a
  * recipe the pipeline does not run. Because this is the single assembly
  * point, parity is by construction rather than by assertion; the pin that
  * proves it — and was seen red under two perturbations (a space in SYSTEM, a
  * flipped effort) before being trusted — is
- * tests/toc-structure-request-parity.test.ts.
+ * tests/hierarchy-structure-request-parity.test.ts.
  *
- * Takes the BODY, after `splitBlocks`, exactly as `generateToc` sends it:
+ * Takes the BODY, after `splitBlocks`, exactly as `generateHierarchy` sends it:
  * the apparatus is never shown to the structure model. `budgetFor` throws
  * here for an article whose answer cannot fit one response, which is the
  * same moment it threw before the extraction — before the call, not six
@@ -251,7 +251,7 @@ export function structureRequest(body: Block[]): {
   return {
     system: SYSTEM,
     user: renderBlocks(body),
-    maxTokens: budgetFor("table of contents", estimateTocTokens(body)),
+    maxTokens: budgetFor("table of contents", estimateHierarchyTokens(body)),
     effort: EFFORT,
   };
 }
@@ -264,7 +264,7 @@ export function structureRequest(body: Block[]): {
  * imported it from this module had to change. The same move `structureHash` made
  * out of this file, for the same reason: the check it feeds has to happen on
  * both ways into stage 4, and a second copy of the number in the other file
- * could only ever drift. `generateToc` still applies it through `checkCoverage`
+ * could only ever drift. `generateHierarchy` still applies it through `checkCoverage`
  * below, over the tree's own leaves — a different measurement of the same floor,
  * and the one that would catch a merge that lost labels rather than a run that
  * dropped them.
@@ -489,7 +489,7 @@ function assertChildrenPartition(
  * **What `buildTree` mended on the way past, and what it refused to.**
  *
  * Both fields are filled in by `buildTree` when it is given one, and both are
- * counted into `TocRun`, printed by the CLI every run including when they are
+ * counted into `HierarchyRun`, printed by the CLI every run including when they are
  * zero, and logged by src/pipeline.ts. That is deliberate and it follows
  * `strandedSupplement`: a repair nobody is told about is the same shape as the
  * bug it repaired (docs/reusable/silent-success.md). If these numbers start
@@ -501,13 +501,28 @@ export interface BuildReport {
    * however much they missed.**
    *
    * This said "off-by-one" until 2026-08-31, and it was left behind when the
-   * one-block bound went (see `repairedChildRanges`, and Greg's ruling that we
+   * one-block bound went (see `planChildRanges`, and Greg's ruling that we
    * should allow gaps). A repair can now move a section's boundary by forty
    * blocks, and a field description promising off-by-one is the kind of thing a
    * reader believes instead of reading the code. `size` is the number that says
    * how far, and `repairedBlockCount` is how to add them up.
    */
   repairs: PartitionRepair[];
+  /**
+   * **Children that were not built at all**, by position in the model's
+   * proposal — the one thing `planChildRanges` does that loses something the
+   * model asked for.
+   *
+   * A child whose start is not strictly after the previous kept child's start
+   * marks no split point: two sections were proposed as beginning in the same
+   * place, so one of them is dropped along with its whole subtree. It is
+   * counted separately from `repairs` rather than as another `kind` of one,
+   * because it is a different kind of loss — a boundary that moved still leaves
+   * every section the model named, and this does not. A run with a non-zero
+   * figure here stored fewer sections than the model proposed, and that is
+   * exactly the sort of thing nobody notices unless it is printed.
+   */
+  droppedChildren: string[];
   /**
    * Nodes whose `sourceHeading` claim no heading block in their range backed
    * up, by position in the model's proposal. The node keeps its title; it
@@ -523,21 +538,42 @@ export interface PartitionRepair {
    * safe to log; see `where` in `buildTree`.
    */
   where: string;
-  /** Which end was wrong: the child started late, started early, or stopped early. */
-  kind: "gap" | "overlap" | "short";
   /**
-   * The block index the boundary was moved to. **This is what the budget below
-   * counts**, and it is why a cascade is free: a repaired node and its first
-   * child are the same boundary seen at two depths, so they share a coordinate.
+   * Which way the model's two claims about this boundary disagreed: the next
+   * section started late (`gap`) or early (`overlap`), or the last child stopped
+   * before its parent ended (`short`) or ran past it (`over`).
+   */
+  kind: "gap" | "overlap" | "short" | "over";
+  /**
+   * **The boundary's coordinate: the index of the first block after it.** A
+   * node's own start, a child's start, and one past the parent's last block are
+   * all boundaries, and all are named this way — so `at` identifies a boundary
+   * and nothing else.
+   *
+   * That is what lets `repairedBlockCount` tell a cascade from two faults: a
+   * repaired node and its first child are one boundary seen at two depths and
+   * share a coordinate, while two faults in one node cannot, because the
+   * interior boundaries are strictly increasing starts and the closing one is
+   * `parentEnd + 1`, which is past all of them. It was `parentEnd` until the
+   * coordinates were made uniform, and a last child that both started and ended
+   * in the wrong place reported two faults at one coordinate — counted as one,
+   * understating the only figure anyone watches.
    */
   at: number;
   /**
-   * How many blocks the boundary moved — **the number that used to be the
-   * bound, and is now the whole of what replaced it.**
+   * **How many blocks changed hands at this boundary** — which is both how far
+   * apart the model's two claims about it were, and how much of the article
+   * ended up in a different section than the answer asked for. They are the
+   * same number: the model said one child ends at `E` and the next starts at
+   * `S`, and `|S - (E + 1)|` is the stretch that has to go to one side or the
+   * other.
+   *
+   * **This is the number that used to be a bound, and is now the whole of what
+   * replaced it.**
    *
    * While a repair could only ever be one block, its size was not worth
    * recording: every repair was the same size and the count said everything.
-   * Since the bound was lifted (see `repairedChildRanges`) the count no longer
+   * Since the bound was lifted (see `planChildRanges`) the count no longer
    * distinguishes a boundary a paragraph out from a section handed forty blocks
    * that belonged to its neighbour, and those are not the same event. A repair
    * nobody is told the size of is now the shape of the bug it repaired, which is
@@ -574,140 +610,150 @@ export interface PartitionRepair {
  * here for symmetry.
  */
 export function repairedBlockCount(repairs: PartitionRepair[]): number {
-  const perBoundary = new Map<number, number>();
-  for (const r of repairs) perBoundary.set(r.at, Math.max(perBoundary.get(r.at) ?? 0, r.size));
-  return [...perBoundary.values()].reduce((n, size) => n + size, 0);
+  const byBoundary = new Map<number, PartitionRepair[]>();
+  for (const r of repairs) byBoundary.set(r.at, [...(byBoundary.get(r.at) ?? []), r]);
+
+  let total = 0;
+  for (const group of byBoundary.values()) {
+    /* **A shared coordinate is not enough to make two faults one.** Grouping by
+       `at` alone was wrong, and GPT Sol found the case: a node's last child
+       stopping short and its *next sibling's* first child starting late are two
+       independent faults about two different blocks, and they meet at the
+       coordinate between the siblings. Deduplicating them reported one block
+       moved where two had.
+
+       A cascade is a boundary seen at several *depths*, so its entries are
+       nested: "P > child 1" and "P > child 1 > child 1" and so on down. Shortest
+       `where` first, so a chain's outermost entry is the one that starts it. */
+    const chains: PartitionRepair[][] = [];
+    for (const r of [...group].sort((a, b) => a.where.length - b.where.length)) {
+      const chain = chains.find((c) => r.where.startsWith(`${c[0]!.where} > `));
+      if (chain) chain.push(r);
+      else chains.push([r]);
+    }
+    /* Within a chain, the maximum: one physical movement of one set of blocks,
+       recorded once per level it passes through, and it can widen on the way
+       down. Across chains, the sum: different blocks. */
+    for (const chain of chains) total += Math.max(...chain.map((r) => r.size));
+  }
+  return total;
 }
 
 /**
- * **How many distinct boundaries one answer may have wrong and still be mended.**
+ * **What to do with each of the model's proposed children**: build it over this
+ * range, or drop it.
  *
- * One, and the number is the evidence rather than a round figure. Every
- * recorded tiling failure — the two in the 2026-08-30 calibration and the two
- * in docs/postmortems/260830a-the-article-with-one-heading.md — was a *single* slipped
- * boundary. An answer with several independent ones is not the same event
- * observed again; it is a different failure, and mending each of them
- * separately would let a systematically misaligned tree through one block at a
- * time while every individual step looked defensible. GPT Sol's review of this
- * change made the point and I took it: the bound as first written was per
- * boundary, which is not a bound on the answer at all.
- *
- * A cascade of the *same* boundary through nested levels stays free, because it
- * is one mistake — see `at`.
- *
- * **What would justify raising it** is a measured distribution, not an argument:
- * if answers with two independent slips turn out to be common, that is the
- * evidence. Thirteen calls is not it.
- *
- * **Where that evidence comes from, since it is not the pipeline log.** This
- * comment used to say the repair counts reach the log and leave it there, which
- * was true of every run except the ones this bound refuses: when it fires,
- * `buildTree` throws, `generateToc` never returns, and the success log never
- * gets a report — the monitoring path went dark precisely when somebody would go
- * looking. `generateToc` now puts what it had mended into the *error* as well
- * (search for `MAX_REPAIRED_BOUNDARIES` there), so a refused answer says how
- * many boundaries it had already spent and how far each moved. What no amount of
- * logging can supply is the other half of the old claim — whether the repaired
- * tree would have been *good* — because the answer is refused rather than
- * repaired. Deciding that needs the eval, evals/toc-structure, with the bound
- * raised on an arm. GPT Sol's review of stage 1, 2026-08-31, finding 7.
- *
- * **It is now the only bound, and it was one of two.** The per-repair size bound
- * went on 2026-08-30 (`repairedChildRanges`), so this is what is left between a
- * slipped boundary and an answer that is misaligned throughout. It still asks
- * the right question — *how many separate places did the model get wrong*, which
- * is what distinguishes a slip from a different reading of the article, and
- * unlike size that does not vary with how long the article is.
- *
- * But it is carrying more than it was fitted for, and it is fitted to the same
- * four HTML-with-headings observations the size bound was. **A headingless PDF
- * with two independent slips still loses its whole ToC** — which is the fatal
- * failure Greg's ruling was about, arriving by the other door. That is a known
- * gap, left open deliberately: one observation is not enough to move two bounds
- * at once, and the honest fix for both is the re-ask he describes rather than a
- * larger number here. **It is one character to change when the evidence arrives**
- * — which is the reason to leave it rather than to guess now.
+ * A plan is produced for *every* child, always with an explicit range, because
+ * `planChildRanges` derives all of them rather than accepting some and mending
+ * others. There is no "use what the model wrote" case left: the model's ends
+ * are not used at all (see `planChildRanges`), so a child whose range comes
+ * back unchanged is one whose proposal happened to agree with the plan.
  */
-const MAX_REPAIRED_BOUNDARIES = 1;
+type ChildPlan = { keep: true; range: readonly [string, string] } | { keep: false };
 
 /**
- * **Snap a partition that misses, by however much it misses.**
+ * **Derive a tiling from the model's proposal instead of checking one.**
  *
- * The argument for repairing at all is measured rather than assumed. A paid
- * calibration of this stage threw on 4 of 13 structure calls, and every tiling
- * failure recorded up to 2026-08-30 — those two, plus the two in
- * docs/postmortems/260830a-the-article-with-one-heading.md — was **off by a single
- * block**. So the practical choice is not between trusting the model and
- * checking it; it is whether a two-and-a-half-minute call that put one boundary
- * one paragraph out should cost the reader the article. It should not, and a
- * fifth of structure calls were costing exactly that
- * (docs/research/260830a-opening-an-article-before-the-toc.md § 7b).
+ * Read [docs/project/hierarchy.md § the partition is derived, not
+ * checked](../docs/project/hierarchy.md#derived-partition) for the
+ * reasoning; what follows is why the code looks like this.
  *
- * **Why here, on the model's proposal, rather than in `assertChildrenPartition`.**
- * By the time that check runs, `visit` has already walked the children and
- * grown their leaves, so moving a boundary there would mean growing a leaf to
- * match and splicing it into the right position — the tree repairing itself
- * after the fact, which is the shape that produces two leaves for one block.
- * Repairing the *proposal* means nothing has been built yet: the recursion then
- * sees the mended range and grows exactly the leaves it implies. It is also
- * what makes the cascade fall out for free — moving a node's start moves its
- * first child's start too, and a repair that stopped at one level would trade a
- * broken partition at depth 1 for a broken one at depth 2.
+ * ## The rule
  *
- * **This was bounded at one block until 2026-08-30, and the bound was overridden
- * rather than refuted.** The argument for it was: a repair that grows with the
- * size of the mistake is the model marking its own homework, and two blocks out
- * is not a slip, it is a different reading of the article. That is still true,
- * and it is still the reason to be uncomfortable with this function. What
- * changed is the price of acting on it.
+ * **A child's start is believed; every end is computed.** For a parent
+ * `[P0, P1]` with children whose proposed starts are `s1 … sn`:
  *
- * The bound was fitted to four observations, and they were **all off by one and
- * all from HTML articles with headings** — the half of the corpus where the
- * model has the author's own structure to agree with. PDFs are headingless, they
- * are the half where the model is measured disagreeing with *itself* between
- * runs (docs/research/260830a-opening-an-article-before-the-toc.md § 7b), and PDF ingest
- * reached production on the day this changed. The first thing it did was fail a
- * 9-page arXiv paper on a gap of **three**: one completed call, $0.1617 spent,
- * article lost, and nothing the reader could do about it. Greg, 2026-08-30:
+ * - the first kept child starts at `P0`, because children must cover their
+ *   parent and nothing else can supply that block;
+ * - every later child starts where the model said it starts, clamped into the
+ *   parent and required to be strictly after the previous kept child's start;
+ * - every child ends one block before the next kept child starts, and the last
+ *   ends at `P1`.
  *
- * > I think for now, we should allow gaps. It's not ideal, but it's not the end
- * > of the world, and better than things failing fatally. Perhaps in future, it
- * > should trigger a re-run of the LLM, where we feed in the previous output,
- * > with information about the gaps and ask it to adjust. But that's for later.
+ * That is the whole algorithm. A gap, an overlap, a last child that stops short
+ * and children that run past their parent are not four cases to detect and mend
+ * — **they cannot be expressed**. A list of ordered split points tiles its
+ * parent by construction, so there is nothing left to check and nothing left to
+ * refuse. `assertChildrenPartition` still runs afterwards and should now never
+ * fire on a planned node; it is the proof that this is total, not a second
+ * chance to reject the answer.
  *
- * **That re-ask is the proper fix and this is not it.** Snapping puts the
- * orphaned blocks in the section beside them, which is a guess — the reader gets
- * a paragraph filed under a heading that may not describe it. The re-ask would
- * get the model to redraw the boundary it actually meant. What snapping buys in
- * the meantime is that every block is reachable, which is the invariant that
- * cannot be traded (a block in no node cannot be addressed by granularity zoom
- * at all), and an article that opens rather than one that does not.
+ * ## Why starts and not ends
  *
- * **So the size of every repair is reported** — `PartitionRepair.size`, summed
- * and maxed into `TocRun`, printed by the CLI and logged by src/pipeline.ts.
- * That is the whole of what stands where the bound used to: if these numbers
- * start showing sections handed forty blocks that belonged to their neighbour,
- * the prompt has drifted or the model cannot read this kind of document, and
- * either way somebody has to be able to see it.
+ * This replaced a cursor walk that did the opposite — it believed each child's
+ * *end* and moved the next child's start up to meet it. Both are single rules;
+ * they differ in which of the model's two claims about a boundary survives when
+ * they disagree, and in which section an orphaned paragraph lands in.
  *
- * What still throws, unchanged: an answer with two *independent* slipped
- * boundaries (`MAX_REPAIRED_BOUNDARIES`), a backwards range, an invented id, a
- * root that misses the article's ends, and children that run past their parent.
- * Nothing is repaired that would leave a node covering no blocks at all.
+ * A start is a claim the model has a reason for: it is where the section
+ * begins, where its heading is, and what `sourceHeading` names. An end is the
+ * same boundary stated a second time from the other side — a redundant field,
+ * and redundant fields are where inconsistency lives. When two claims about one
+ * boundary disagree, believe the one carrying meaning.
  *
- * Returns one entry per child: a mended `[start, end]`, or `undefined` for
- * "use what the model wrote".
+ * The visible consequence: a gap used to hand the orphaned block to the section
+ * that *follows* it, and now hands it to the one *before*. That reads better on
+ * the fixture in tests/hierarchy-repairs.test.ts, where the orphan is "Body of the
+ * first part" — the old rule filed it under "Second" — and it is what the rule
+ * implies rather than a case anyone wrote. A gap means the model stopped a
+ * section early while knowing where the next one starts, so the loose blocks
+ * are the tail of the section before them.
+ *
+ * ## What is still refused, and what is dropped
+ *
+ * **Refused, by returning `null` and letting the precise error fire.** A child
+ * range that is not a resolvable, forward pair of ids — an invented id, a
+ * phrase of the article, a range running backwards. Those are faults in what
+ * the model *said*, not in how its sections line up, they have exact messages
+ * of their own, and planning around a start that means nothing would replace a
+ * precise error with a vague one.
+ *
+ * **Dropped, and counted.** A child whose start is not strictly after the
+ * previous kept child's start. There is no split point there: the model
+ * proposed two sections beginning in the same place, which is one section. The
+ * old code refused this outright, on the argument that emptying a child deletes
+ * a section the model asked for — true, and still the reason this is reported
+ * as its own figure. What changed is the price: refusing costs the reader the
+ * whole article, and the alternative of squeezing the child into one borrowed
+ * block writes a boundary nobody proposed and cascades absurdly when a start is
+ * badly out. Dropping is the honest reading of two starts in one place.
+ *
+ * ## What stands where the two bounds stood
+ *
+ * There were two, and both are gone: the per-repair size bound on 2026-08-30,
+ * and the per-answer boundary count (`MAX_REPAIRED_BOUNDARIES`) here. What is
+ * left is measurement. Every boundary the model got wrong is recorded with
+ * `where`, `kind`, `at` and `size`, summed and maxed into `HierarchyRun`, printed by
+ * the CLI at zero as well as above it, logged by src/pipeline.ts and scored per
+ * result by evals/hierarchy-structure — because a repair nobody is told about is the
+ * same shape as the bug it repaired (docs/reusable/silent-success.md).
+ *
+ * **A count that used to be a gate is now the trigger for the next stage.**
+ * Greg, 2026-08-30, on allowing gaps rather than failing fatally:
+ *
+ * > Perhaps in future, it should trigger a re-run of the LLM, where we feed in
+ * > the previous output, with information about the gaps and ask it to adjust.
+ * > But that's for later.
+ *
+ * That re-ask is still the right long-term answer, and this is deliberately the
+ * step toward it rather than a detour: it supplies the two things the re-ask
+ * needs — a fallback that always yields a usable tree when the second call is
+ * also wrong, and a number (`repairedBlocks` against `blocks`) to decide when a
+ * second call is worth buying. See docs/plans/260831ai-hierarchy-tiling-normalisation.md
+ * § What this is a step toward.
+ *
+ * Returns one plan per child in the model's own order, or `null` for "do not
+ * plan this node".
  */
-function repairedChildRanges(
+function planChildRanges(
   children: ModelNode[],
   parent: readonly [number, number],
   index: Map<string, number>,
   blocks: Block[],
   where: string,
   repairs: PartitionRepair[],
-): (readonly [string, string] | undefined)[] {
-  const out: (readonly [string, string] | undefined)[] = children.map(() => undefined);
-
+  droppedChildren: string[],
+): ChildPlan[] | null {
   /** A child's range as block indices, or null if it is not a resolvable, forward pair. */
   const spanOf = (mn: ModelNode): [number, number] | null => {
     const raw: unknown = mn.range;
@@ -719,84 +765,166 @@ function repairedChildRanges(
     return lo === undefined || hi === undefined || lo > hi ? null : [lo, hi];
   };
 
-  /* The budget is over the whole answer, not this node: `repairs` is the array
-     `buildTree` threads through every level, so a cascade and a second
-     independent slip are told apart by coordinate rather than by depth. */
-    const affordable = (at: number): boolean =>
-    repairs.some((r) => r.at === at) ||
-    new Set(repairs.map((r) => r.at)).size < MAX_REPAIRED_BOUNDARIES;
+  const spans: ([number, number] | null)[] = children.map(spanOf);
+  /* One unresolvable child and the whole node is left alone. Not because the
+     others cannot be planned around it, but because the message that names the
+     invented id is more use than a tree built as though the child had never
+     been proposed — and `visit` and `assertChildrenPartition` produce it. */
+  if (spans.some((s) => s === null)) return null;
 
-  let cursor = parent[0];
-  for (const [i, child] of children.entries()) {
-    const span = spanOf(child);
-    /* Not repairable, and not this function's to report. An unresolvable or
-       backwards range is a different fault with a message of its own, and
-       guessing at a repair here would replace a precise error with a vague
-       one. Stop, and let `visit` and `assertChildrenPartition` say what is
-       wrong — including about the children after this one, whose offsets are
-       now measured from a cursor that means nothing. */
-    if (!span) return out;
-    const [lo, hi] = span;
-    /* `cursor <= hi` is the guard against repairing a node into nothing: an
-       overlap snap moves the start forward, and a child its neighbour has
-       already eaten whole has no snap that leaves it non-empty. Without this
-       the repair would hand `visit` a range running backwards, and the error
-       two lines later would describe a range we wrote ourselves.
+  const [p0, p1] = parent;
 
-       **This one clause still refuses, and it refuses more often now that an
-       overlap of any size is snapped.** A large overlap can swallow the next
-       child entirely, and that is where the repair stops being the same kind of
-       act: moving a boundary keeps every section the model asked for and
-       changes where one ends, while emptying a child *deletes a section* — the
-       model said this article has eight parts and we would be storing seven.
-       Nothing here knows whether the right answer is to drop that section or to
-       give it back a block from either side, and guessing wrong writes a
-       structure nobody proposed. The size bound went because refusing cost the
-       reader an article that was nearly right; this refusal is not that, and it
-       is the one place `repairedChildRanges` still says no to a slip it can see.
-       tests/toc-repairs.test.ts § "does not repair an overlap that would leave
-       the node covering nothing". */
-    if (lo !== cursor && cursor <= hi && affordable(cursor)) {
-      out[i] = [blocks[cursor]!.id, (child.range as [string, string])[1]] as const;
-      repairs.push({
-        where: `${where} > child ${i + 1}`,
-        kind: lo > cursor ? "gap" : "overlap",
-        at: cursor,
-        size: Math.abs(lo - cursor),
-      });
+  const clamp = (v: number) => Math.min(Math.max(v, p0), p1);
+
+  /**
+   * The split points, in the model's order. The first kept child is pinned to
+   * the parent's start; every later one is the model's own start, clamped into
+   * the parent and required to be strictly after the previous kept start.
+   *
+   * **When a start says nothing, the previous child's end is the evidence that
+   * is left.** A start that does not advance past the previous section's start
+   * is not a split point, and taking it at face value would drop a section for
+   * a fault that is not about that section at all. GPT Sol found the case, and
+   * it is not a corner:
+   *
+   * ```text
+   * child 1  [0,0]   "Preamble"
+   * child 2  [0,4]   "Large middle"   ← starts where child 1 does
+   * child 3  [5,5]   "Close"
+   * ```
+   *
+   * One overlap of one block, and dropping on the start alone deletes the
+   * article's largest section and its whole subtree. Falling back to child 1's
+   * *end* gives child 2 a start of 1, and all three sections survive with the
+   * ranges the answer plainly meant — which is what the cursor walk this
+   * replaced would have done, and the one case where believing ends is better.
+   *
+   * So the rule is not "starts win"; it is **believe the start, and fall back to
+   * the end when the start carries no information**. A child is dropped only
+   * when *neither* claim yields a usable split point, which is a genuinely
+   * degenerate answer rather than one boundary out of place.
+   */
+  const kept: KeptChild[] = [];
+  for (const [i, span] of spans.entries()) {
+    const previous = kept.at(-1);
+    if (previous === undefined) {
+      kept.push({ childIndex: i, start: p0 });
+      continue;
     }
-    cursor = hi + 1;
+    const claimed = clamp(span![0]);
+    const start =
+      claimed > previous.start ? claimed : clamp(spans[previous.childIndex]![1] + 1);
+    if (start <= previous.start) {
+      droppedChildren.push(`${where} > child ${i + 1}`);
+      continue;
+    }
+    kept.push({ childIndex: i, start });
   }
 
-  /* The same fault at the other end: the children stop before their parent does,
-     and every block after them would grow no leaf anywhere. `cursor` is one past
-     the last child's end, so `cursor <= parent[1]` is short by `parent[1] + 1 -
-     cursor` blocks.
-
-     **`<=`, not `===`, since the size bound went.** It was `=== 1` for the same
-     reason the loop above was, and leaving it behind would have left the repair
-     mending a gap of forty in the middle of an article and refusing a gap of two
-     at the end of it — one rule, applied at both ends, or the next person has to
-     discover which end they are at before they can predict what happens.
-
-     The overrun (`cursor > parent[1] + 1`) is deliberately not repaired here and
-     never was: children claiming blocks their parent does not have is a
-     different fault, and its two honest repairs — shrink the child, or grow the
-     parent — are two different readings of the answer with nothing to choose
-     between them. `assertChildrenPartition` still refuses it. */
-  const last = children.length - 1;
-  if (last >= 0 && cursor <= parent[1] && affordable(parent[1])) {
-    const start = out[last]?.[0] ?? (children[last]!.range as [string, string])[0];
-    out[last] = [start, blocks[parent[1]]!.id] as const;
-    repairs.push({
-      where: `${where} > child ${last + 1}`,
-      kind: "short",
-      at: parent[1],
-      size: parent[1] + 1 - cursor,
-    });
+  const plans: ChildPlan[] = children.map(() => ({ keep: false }));
+  for (const [k, child] of kept.entries()) {
+    const next = kept[k + 1];
+    const end = next === undefined ? p1 : next.start - 1;
+    /* In range: `start` is clamped into [p0, p1] and `end` is either `p1` or one
+       before a start that was, and both index `blocks` because the parent's own
+       range came out of `index`. `end >= start` because the starts are strictly
+       increasing, so no plan can describe a node covering nothing. */
+    plans[child.childIndex] = {
+      keep: true,
+      range: [blocks[child.start]!.id, blocks[end]!.id] as const,
+    };
   }
 
-  return out;
+  recordBoundaryFaults(kept, spans, parent, where, repairs);
+  return plans;
+}
+
+/** One kept child: where it sits in the model's proposal, and where it starts. */
+type KeptChild = { childIndex: number; start: number };
+
+/**
+ * **What the model got wrong, measured against the tiling derived from it** —
+ * separate from `planChildRanges` because the plan and the report on the plan
+ * are different jobs. Nothing here changes what is built.
+ *
+ * **One entry per boundary, not one per child whose range moved.** Every child's
+ * end moves whenever the boundary after it does, so counting children would
+ * report one mistake twice and make `repairedBlocks` depend on which side of a
+ * boundary you happened to look from.
+ *
+ * A node with `n` kept children has `n + 1` boundaries: its own start, the
+ * `n - 1` between the children, and one past its end. The model states each
+ * interior one **twice** — as a child's start, and as the previous child's end —
+ * so this walks the three groups asking, of each, whether its claims agreed.
+ * `size` is how far apart they were, which is the same number as how many blocks
+ * changed hands (`PartitionRepair.size` has the arithmetic).
+ */
+function recordBoundaryFaults(
+  kept: KeptChild[],
+  spans: ([number, number] | null)[],
+  parent: readonly [number, number],
+  where: string,
+  repairs: PartitionRepair[],
+): void {
+  const [p0, p1] = parent;
+  /**
+   * `size` is **the total distance from where the boundary ended up to each of
+   * the model's claims about it** — one claim at the ends of a node, two in the
+   * middle, where the model states the same boundary twice.
+   *
+   * **Measured against the raw proposal, never against a clamped or fallen-back
+   * value.** GPT Sol caught this reporting less than happened: for an inner
+   * parent `[0,3]` with children `[0,1]` and `[5,5]`, the model's two claims
+   * about the interior boundary are 2 and 5, three apart — but the start is
+   * clamped to 3 before the comparison, so it was reported as a gap of one. The
+   * clamped value is right for building the tree and wrong for measuring the
+   * answer, and this is the number a re-ask would be triggered by and told
+   * about.
+   *
+   * A boundary the model got right and we did not move scores 0 and is not
+   * recorded, which is why the guard lives here rather than at each call.
+   */
+  const fault = (child: KeptChild, kind: PartitionRepair["kind"], at: number, size: number) => {
+    if (size > 0) repairs.push({ where: `${where} > child ${child.childIndex + 1}`, kind, at, size });
+  };
+
+  // The node's own start, against what its first child claimed. One claim.
+  const head = kept[0];
+  if (head !== undefined) {
+    const claimed = spans[head.childIndex]![0];
+    fault(head, claimed > p0 ? "gap" : "overlap", p0, Math.abs(p0 - claimed));
+  }
+
+  /* Each interior boundary, where the model states it twice: as the previous
+     child's end, and as this child's start. They agree on a well-formed answer,
+     and the distance between them is how many blocks change hands. */
+  for (let k = 1; k < kept.length; k++) {
+    const child = kept[k]!;
+    const after = spans[kept[k - 1]!.childIndex]![1] + 1;
+    const claimed = spans[child.childIndex]![0];
+    const size = Math.abs(child.start - claimed) + Math.abs(child.start - after);
+    /* Which way the answer was wrong: by its own two claims where they
+       disagree, and otherwise by how far we had to move the boundary from the
+       one place it did name. */
+    const late = claimed === after ? child.start > claimed : claimed > after;
+    fault(child, late ? "gap" : "overlap", child.start, size);
+  }
+
+  /* The closing boundary, at one *past* the parent's last block so it can never
+     share a coordinate with a child's start — `PartitionRepair.at` has the
+     undercount that caused.
+
+     **"over" is the fault the old code refused outright**: children claiming
+     blocks their parent does not have. Its two honest repairs — shrink the
+     child, or grow the parent — used to be "two different readings with nothing
+     to choose between them". There is something to choose between them now: the
+     parent's range was itself derived one level up, so it is the claim with a
+     tiling behind it, and the child's overrun gives way. */
+  const tail = kept.at(-1);
+  if (tail !== undefined) {
+    const claimed = spans[tail.childIndex]![1];
+    fault(tail, claimed < p1 ? "short" : "over", p1 + 1, Math.abs(p1 - claimed));
+  }
 }
 
 /**
@@ -812,13 +940,14 @@ export function buildTree(
   /**
    * Filled in with what was mended on the way past. Optional so that the
    * callers who only want a tree — the tests, src/validate-tree.ts — stay one
-   * argument long; `generateToc` always passes one, because a repair nobody
+   * argument long; `generateHierarchy` always passes one, because a repair nobody
    * counts is a repair nobody can notice going wrong.
    */
   report?: BuildReport,
 ): Tree {
   const index = new Map(blocks.map((b, i) => [b.id, i]));
   const repairs = report?.repairs ?? [];
+  const droppedChildren = report?.droppedChildren ?? [];
   const dropped = report?.droppedHeadings ?? [];
   const nodes: Record<NodeId, TreeNode> = {};
   let counter = 0;
@@ -921,20 +1050,46 @@ export function buildTree(
     }
 
     if (mn.children?.length) {
-      /* Mend before descending, so the recursion grows leaves for the range the
-         children will actually be checked against — and so a moved start
-         cascades into that child's own first child. `repairedChildRanges` says
-         why this cannot be done after the walk. A parent whose own range does
-         not resolve is left alone: `assertChildrenPartition` has a precise
-         message for that, and repairing against a cursor that means nothing
-         would bury it. */
-      const mended =
+      /**
+       * **Plan before descending, not after the walk.**
+       *
+       * By the time `assertChildrenPartition` runs, `visit` has already grown
+       * every child's leaves, so changing a range there would mean growing a
+       * leaf to match and splicing it into position — the tree repairing itself
+       * after the fact, which is the shape that produces two leaves for one
+       * block. Planning the *proposal* means nothing is built yet: the
+       * recursion sees the derived range and grows exactly the leaves it
+       * implies.
+       *
+       * It is also what makes the cascade fall out for free. A child's start
+       * becomes its own children's `p0` one level down, so a boundary decided
+       * here is the boundary every descendant inherits, and there is no way to
+       * mend depth 1 into a break at depth 2.
+       *
+       * A parent whose own range does not resolve is left alone, and so is a
+       * node with a child whose range does not (`planChildRanges` returns
+       * `null`): `assertChildrenPartition` and the leaf branch have exact
+       * messages for those, and planning around an endpoint that means nothing
+       * would bury them.
+       */
+      const plans =
         lo !== undefined && hi !== undefined
-          ? repairedChildRanges(mn.children, [lo, hi], index, blocks, where, repairs)
-          : mn.children.map(() => undefined);
-      node.children = mn.children.map((c, i) =>
-        visit(c, id, depth + 1, `${where} > child ${i + 1}`, mended[i]),
-      );
+          ? planChildRanges(mn.children, [lo, hi], index, blocks, where, repairs, droppedChildren)
+          : null;
+      /* `flatMap`, because a plan can say a child is not built at all. `where`
+         still counts children by their position in the *model's* proposal, so
+         a dropped child does not renumber its siblings in any message or
+         report — the numbers a reader compares against the answer stay put. */
+      node.children = mn.children.flatMap((c, i) => {
+        const plan = plans?.[i];
+        if (plan !== undefined && !plan.keep) return [];
+        return [visit(c, id, depth + 1, `${where} > child ${i + 1}`, plan?.range)];
+      });
+      /* Kept, and it should now never fire on a planned node: a list of ordered
+         split points tiles its parent by construction. That is the point of
+         leaving it here — it is the standing proof that `planChildRanges` is
+         total, and the day it fires is the day that stopped being true. It
+         still does real work on the nodes that were not planned. */
       assertChildrenPartition(node, nodes, index, where);
       return id;
     }
@@ -985,7 +1140,7 @@ export function buildTree(
      ends at the last; and `checkCoverage` further down counts only *gistable*
      blocks, so a root that drops a leading image or a trailing rule passes
      everything while breaking the contract that every block gets exactly one
-     leaf (docs/project/table-of-contents.md). Every id resolver in the reading
+     leaf (docs/project/hierarchy.md). Every id resolver in the reading
      view then finds no leaf for those blocks. Caught by GPT-5.6-sol,
      2026-08-26. */
   const rootNode = nodes[rootId]!;
@@ -1017,11 +1172,11 @@ export function slugForBlocksPath(blocksPath: string): string {
  * and not the labels would publish exactly that, and the step that stored them
  * as three separate calls had a window in which it could.
  *
- * So the shape refuses it: **a `generateToc` that returned the tree without the
+ * So the shape refuses it: **a `generateHierarchy` that returned the tree without the
  * labels would not compile**, which is a guarantee no test has to be remembered
  * for (docs/project/typechecking.md § Let the types catch it). What the type
  * cannot say is that the three are *about each other*, and that is why
- * `generateToc` runs `assertTreeSound` and `checkCoverage` over this object
+ * `generateHierarchy` runs `assertTreeSound` and `checkCoverage` over this object
  * rather than over the locals it was built from.
  *
  * `blocks` is `ReturnType<typeof blocksArtefact>` rather than `{ blocks }`, so
@@ -1029,19 +1184,19 @@ export function slugForBlocksPath(blocksPath: string): string {
  * declaration — an absent stamp reads as stale and costs every reader a
  * re-clean on every load (see the note at the write in `main` below).
  */
-export interface TocArtefacts {
+export interface HierarchyArtefacts {
   tree: Tree;
   labels: LabelsFile;
   blocks: ReturnType<typeof blocksArtefact>;
 }
 
-export interface TocRun {
+export interface HierarchyRun {
   /**
    * What this run produced, for the caller to store. Assignable to
    * `ArtifactParts` (src/store/artifacts.ts) as it stands, so the pipeline step
    * hands the whole object to one `write` and the three land together.
    */
-  parts: TocArtefacts;
+  parts: HierarchyArtefacts;
   /**
    * **The hash the caller must record for this step**, read off `labels.json`
    * rather than computed beside it.
@@ -1122,7 +1277,7 @@ export interface TocRun {
    * worst single one.
    *
    * **Two numbers because the count stopped being enough** when the size bound
-   * was lifted (src/toc.ts § `repairedChildRanges`). "One repair" now covers
+   * was lifted (src/hierarchy.ts § `planChildRanges`). "One repair" now covers
    * both a boundary a paragraph out and a section handed forty blocks that
    * belonged to its neighbour, and those need opposite responses: the first is
    * the slip this stage was built to forgive, the second means the model could
@@ -1134,6 +1289,17 @@ export interface TocRun {
    */
   repairedBlocks: number;
   largestRepair: number;
+  /**
+   * **Sections the model proposed that were not stored**, because two of its
+   * children started in the same place and only one of them can.
+   *
+   * Normally 0, and reported at 0 for the reason `strandedSupplement` is. This
+   * is the one figure in the group that means something was *lost* rather than
+   * moved: a repaired boundary keeps every section the model named and changes
+   * where one of them ends, while this stores fewer sections than the answer
+   * proposed. src/hierarchy.ts § `BuildReport.droppedChildren`.
+   */
+  droppedChildren: number;
   droppedHeadings: number;
   labelled: number;
   internal: number;
@@ -1183,7 +1349,7 @@ export interface TocRun {
  * Write JSON so that it is either wholly there or not there at all.
  *
  * **`main()`'s, and nothing else's.** The stage itself no longer writes: it
- * returns `TocArtefacts` and the pipeline hands all three to the store in one
+ * returns `HierarchyArtefacts` and the pipeline hands all three to the store in one
  * call. This is the command line's own writer, and the three files it produces
  * are the same three files in the same three places.
  *
@@ -1223,7 +1389,7 @@ async function writeAtomic(file: string, value: unknown): Promise<void> {
  * (docs/plans/260826h-toc-scaling.md), not so it can be published separately — a tree
  * stored with a third of its labels missing is a valid-looking artefact that
  * quietly describes part of an article, which is
- * docs/reusable/silent-success.md exactly. `TocArtefacts` is what now makes
+ * docs/reusable/silent-success.md exactly. `HierarchyArtefacts` is what now makes
  * that unsayable rather than merely undone. Deferring the labels so a reader
  * can start sooner is a real option and a deliberate later one; it needs a
  * state that says "still arriving" rather than an absence that says nothing.
@@ -1233,7 +1399,7 @@ async function writeAtomic(file: string, value: unknown): Promise<void> {
  * is complete — so it reports that something is still coming. The label pass can
  * do better, and counts finished sections.
  */
-export async function generateToc(opts: {
+export async function generateHierarchy(opts: {
   blocks: Block[];
   /** Stamped into the tree and the labels file; the article's own name. */
   slug: string;
@@ -1251,14 +1417,14 @@ export async function generateToc(opts: {
    *
    * **No directory, no checkpoint**, exactly as `generateLabels` has it: a
    * caller that has one passes it, and a test or a one-off gets nothing on
-   * disk. `TocRun.labelsResumed` is how a caller that meant to checkpoint and
+   * disk. `HierarchyRun.labelsResumed` is how a caller that meant to checkpoint and
    * did not finds out.
    */
   checkpointDir?: string;
   onProgress?: (detail: string) => void;
   /** Cancel the call. The queue passes its job's signal — src/jobs.ts. */
   signal?: AbortSignal;
-}): Promise<TocRun> {
+}): Promise<HierarchyRun> {
   const { blocks, slug } = opts;
   const structural = blocks.filter((b) => isStructural(b)).length;
   const started = Date.now();
@@ -1275,7 +1441,7 @@ export async function generateToc(opts: {
      whose table of contents cannot fit in one response is refused here rather
      than discovered six minutes in. `budgetFor`, inside `structureRequest`,
      throws for that case. */
-  const answerTokens = estimateTocTokens(body);
+  const answerTokens = estimateHierarchyTokens(body);
   const { system, user, maxTokens, effort } = structureRequest(body);
 
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
@@ -1345,23 +1511,23 @@ export async function generateToc(opts: {
   /* `body`, so the root's range ends at the last body block and every check in
      `buildTree` — the tiling, the "covers the whole article" guard — is asked
      about the argument the model was actually shown. */
-  const built: BuildReport = { repairs: [], droppedHeadings: [] };
+  const built: BuildReport = { repairs: [], droppedChildren: [], droppedHeadings: [] };
   let structure: Tree;
   try {
     structure = appendSupplement(buildTree(root, {}, body, slug, built), groups);
   } catch (err) {
     /**
-     * **The one place the repair figures are unreachable is the place they
-     * decide something**, so they are put in the error instead.
+     * **A run that threw still says what it had mended on the way**, because the
+     * success log at src/pipeline.ts never gets a report when `buildTree`
+     * throws — a monitoring path that goes dark exactly when somebody would
+     * look at it. GPT Sol, finding 7.
      *
-     * `MAX_REPAIRED_BOUNDARIES` says out loud that what would justify raising it
-     * is a measured distribution, and that the counts now reach the pipeline
-     * log. Both halves were true only of runs that *succeeded*: when the bound
-     * fires, `buildTree` throws here, `generateToc` never returns, and the
-     * success log at src/pipeline.ts never gets a report — so the evidence for
-     * revisiting the bound could be collected on every run except the ones the
-     * bound refused. That is a monitoring path that goes dark exactly when
-     * somebody would look at it. GPT Sol, finding 7.
+     * No tiling fault reaches here any more (`planChildRanges` derives the
+     * partition rather than checking it), so what throws now is a range that
+     * runs backwards, an endpoint that is not a block id, or a root that misses
+     * the article's ends. The repair figures are still worth attaching: a node
+     * whose siblings were all mended and which then failed on an invented id
+     * is a different story from one that failed on its own.
      *
      * `where`, `kind`, `at` and `size` are all derived from the shape of the
      * answer rather than from anything in it, so they are safe to put in a
@@ -1375,8 +1541,7 @@ export async function generateToc(opts: {
         `  Before this it mended ${spent} boundary(ies), moving ` +
         `${repairedBlockCount(built.repairs)} block(s): ` +
         `${built.repairs.map((r) => `${r.where} (${r.kind}, ${r.size})`).join("; ")}. ` +
-        `The bound is MAX_REPAIRED_BOUNDARIES in src/toc.ts, and this line is the only place ` +
-        `these numbers are visible on a run that failed.`,
+        `This line is the only place those numbers are visible on a run that failed.`,
     );
     /* No `cause`, for the reason the label stage gives at the same shape:
        src/log.ts follows cause chains and would write the original message into
@@ -1465,7 +1630,7 @@ export async function generateToc(opts: {
    * run, "is stage 3 writing the stamp?", answers yes. It is, into a different
    * file. See docs/project/security.md.
    */
-  const parts: TocArtefacts = {
+  const parts: HierarchyArtefacts = {
     labels: labelRun.file,
     blocks: blocksArtefact(blocks),
     tree: mergeLabels(structure, labelRun.file.labels),
@@ -1580,6 +1745,7 @@ export async function generateToc(opts: {
     /* `Math.max` of an empty list is -Infinity, which would print and log as
        nonsense on the run where nothing was repaired — the common case. */
     largestRepair: built.repairs.reduce((n, r) => Math.max(n, r.size), 0),
+    droppedChildren: built.droppedChildren.length,
     droppedHeadings: built.droppedHeadings.length,
     labelled: Object.values(parts.tree.nodes).filter((n) => n.navLabel).length,
     internal: Object.values(parts.tree.nodes).filter((n) => n.children.length > 0).length,
@@ -1598,7 +1764,7 @@ export async function generateToc(opts: {
 }
 
 /**
- * `npm run toc -- <blocks.json> [outDir]` — **the only caller that still turns
+ * `npm run hierarchy -- <blocks.json> [outDir]` — **the only caller that still turns
  * these artefacts into files.**
  *
  * It reads the blocks itself and writes the three files itself, which is what
@@ -1609,7 +1775,7 @@ export async function generateToc(opts: {
 async function main(): Promise<void> {
   const blocksPath = process.argv[2];
   if (!blocksPath) {
-    console.error("Usage: tsx src/toc.ts <blocks.json> [outDir]");
+    console.error("Usage: tsx src/hierarchy.ts <blocks.json> [outDir]");
     process.exit(1);
   }
   const slug = slugForBlocksPath(blocksPath);
@@ -1640,8 +1806,8 @@ async function main(): Promise<void> {
   console.log(`Building the tree with ${CAPABLE_MODEL}\u2026`);
   /* The checkpoint lands in the output directory, as it always has, so a CLI
      run killed eight batches into a book resumes rather than paying again.
-     `generateToc` makes the directory before the first batch can save into it. */
-  const run = await generateToc({
+     `generateHierarchy` makes the directory before the first batch can save into it. */
+  const run = await generateHierarchy({
     blocks,
     slug,
     checkpointDir: outDir,
@@ -1656,12 +1822,12 @@ async function main(): Promise<void> {
      other two are already there.
      The stage itself no longer does any of this: it returns all three and the
      pipeline stores them in one call, where a partial set is not a state that
-     exists. See the note at the end of `generateToc`. */
+     exists. See the note at the end of `generateHierarchy`. */
   await writeAtomic(path.join(outDir, "labels.json"), run.parts.labels);
   await writeAtomic(path.join(outDir, "blocks.json"), run.parts.blocks);
   await writeAtomic(path.join(outDir, "tree.json"), run.parts.tree);
   /* Only now is the working state safe to throw away — see
-     `TocRun.clearCheckpoint`, and src/labels.ts for what it protects. */
+     `HierarchyRun.clearCheckpoint`, and src/labels.ts for what it protects. */
   await run.clearCheckpoint();
 
   console.log(`\n${run.blocks} blocks (${run.structural} to label) → ${CAPABLE_MODEL}`);
@@ -1702,19 +1868,26 @@ async function main(): Promise<void> {
   /* The size goes on the same line as the count, because the count on its own
      stopped meaning anything the day the size bound was lifted: one repair can
      be a paragraph or it can be a section handed forty blocks that belonged to
-     its neighbour. src/toc.ts § `repairedChildRanges`. */
+     its neighbour. src/hierarchy.ts § `planChildRanges`.
+
+     **These are now the only thing standing between a slipped boundary and a
+     tree that is misaligned throughout**, since nothing about the tiling
+     refuses an answer any more. `repairedBlocks` against `blocks` above is the
+     fraction of the article that changed hands, and it is the number to read
+     first. */
   console.log(
-    `Repaired:  ${run.repairedRanges} misaligned range(s)` +
+    `Repaired:  ${run.repairedRanges} misaligned boundary(ies)` +
       (run.repairedRanges > 0
         ? ` moving ${run.repairedBlocks} block(s), largest ${run.largestRepair}`
         : "") +
+      `, ${run.droppedChildren} dropped section(s)` +
       `, ${run.droppedHeadings} unbacked heading claim(s)`,
   );
   console.log(`Tokens:    ${run.inputTokens} in, ${run.outputTokens} out`);
   console.log(`Elapsed:   ${(run.elapsedMs / 1000).toFixed(1)}s`);
   console.log(`\nWrote:     ${path.resolve(outDir)}/tree.json`);
   console.log(`Validate:  npm run validate-tree -- ${outDir}`);
-  console.log(`Eval:      npm run eval:toc -- ${outDir}`);
+  console.log(`Eval:      npm run eval:hierarchy -- ${outDir}`);
 }
 
 /* Compared as resolved paths, not by suffix. `import.meta.url.endsWith(basename)`

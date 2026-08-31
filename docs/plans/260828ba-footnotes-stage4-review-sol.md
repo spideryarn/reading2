@@ -21,10 +21,10 @@ Verdict: **BLOCK**. I found two blockers, plus several lower-severity correctnes
 
 2. **The stranded-apparatus fallback is silent in every normal output path.**
 
-   [src/toc.ts:830](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:830) returns `strandedSupplement`, but:
+   [src/toc.ts:830](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:830) returns `strandedSupplement`, but:
 
    - [src/pipeline.ts:1150](/Users/greg/Dropbox/dev/experim/spideryarn2/src/pipeline.ts:1150) omits it from both the server log and the job result.
-   - [src/toc.ts:875](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:875) omits it from CLI output.
+   - [src/toc.ts:875](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:875) omits it from CLI output.
    - Nothing else consumes it.
 
    Concrete failure: body blocks followed by one note, another body block, then trailing notes cause `splitBlocks` to abandon grouping. Stage 4 publishes an ordinary legacy tree, reports normal success, and gives the operator no indication that the apparatus disappeared from the structure.
@@ -76,7 +76,7 @@ Verdict: **BLOCK**. I found two blockers, plus several lower-severity correctnes
 
 5. **The six supplement invariants do not guard the direct stage-4 write.**
 
-   After tree construction, [src/toc.ts:793](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:793) calls `checkCoverage`, then writes labels, blocks and the tree. It does not call `checkTree`.
+   After tree construction, [src/toc.ts:793](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:793) calls `checkCoverage`, then writes labels, blocks and the tree. It does not call `checkTree`.
 
    The only production `checkTree` call I found is in the Postgres revision path. The direct filesystem/CLI path can therefore write a tree where the supplement has a gist, is nested, has the wrong range, or swallows body blocks, provided ordinary label coverage still passes.
 

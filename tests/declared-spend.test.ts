@@ -326,7 +326,7 @@ describe("the observer", () => {
  * geography — so the row carried the right money and had quietly stopped saying
  * anything else. GPT Sol found it in review of the judge migration; both
  * Messages-wire bypasses (`evals/embedding-retrieval.ts`,
- * `evals/toc-structure/model-arms.ts`) were doing it.
+ * `evals/hierarchy-structure/model-arms.ts`) were doing it.
  */
 describe("the Messages wire through OpenRouter", () => {
   const messagesViaOr = DECLARATIONS.find(

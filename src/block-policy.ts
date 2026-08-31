@@ -12,7 +12,7 @@
  * |---|---|
  * | src/library-search.ts, src/chat-tools.ts | skipped the block |
  * | src/article-prompt.ts | included every block regardless |
- * | src/labels.ts, src/toc.ts | no nav label, no gist |
+ * | src/labels.ts, src/hierarchy.ts | no nav label, no gist |
  * | src/article-vectors.ts, src/similar.ts | not embedded |
  * | src/library-scalars.ts, src/web/stats.ts | counted anyway |
  *

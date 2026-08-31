@@ -5,11 +5,11 @@ R3 is sound. R2’s arithmetic is sound per boundary, but the implementation rep
 ### Findings
 
 1. **High — the structure eval silently stops measuring these faults.**  
-   [`assembleTree`](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/toc-structure/model-arms.ts:393) calls `buildTree` without a report. One-block faults now become `outcome: "ok"` rather than `"threw"`, with no repair count. Invalid headings are removed before [`sourceHeadingValid`](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/toc-structure/score.ts:334), making that measure necessarily `1` or `null` for paid arms.  
+   [`assembleTree`](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/hierarchy-structure/model-arms.ts:393) calls `buildTree` without a report. One-block faults now become `outcome: "ok"` rather than `"threw"`, with no repair count. Invalid headings are removed before [`sourceHeadingValid`](/Users/greg/Dropbox/dev/experim/spideryarn2/evals/hierarchy-structure/score.ts:334), making that measure necessarily `1` or `null` for paid arms.  
    Keep the production outcome repaired, but add repairs to each eval result—or give `buildTree` an explicit strict/raw mode. The current optional report controls observation, not behavior.
 
 2. **Medium — “one-block bounded” is local, not per answer.**  
-   [`repairedChildRanges`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:527) permits unlimited independent one-block repairs. I confirmed:
+   [`repairedChildRanges`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:527) permits unlimited independent one-block repairs. I confirmed:
 
    - A sole child `[parentStart+1, parentEnd-1]` receives both `gap` and `short`, changing its range by two blocks total.
    - A five-level first-child chain cascades the same correction five times.
@@ -18,7 +18,7 @@ R3 is sound. R2’s arithmetic is sound per boundary, but the implementation rep
    All resulting trees pass `checkTree`, but this goes beyond evidence of “one slipped boundary.” I would cap distinct repaired boundary coordinates per answer—initially one. A cascade of the same boundary through nested nodes can remain allowed.
 
 3. **Medium — malformed headings are forgiven without being counted.**  
-   [`claim`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:665) turns non-string and whitespace-only values into `undefined`; [`dropped.push`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:675) then does not run. The new test explicitly accepts `sourceHeading: 42` without checking the report. Either reject the malformed field safely or count it as dropped. Otherwise “nothing is repaired quietly” is false.
+   [`claim`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:665) turns non-string and whitespace-only values into `undefined`; [`dropped.push`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:675) then does not run. The new test explicitly accepts `sourceHeading: 42` without checking the report. Either reject the malformed field safely or count it as dropped. Otherwise “nothing is repaired quietly” is false.
 
 A smaller test gap: nothing currently proves that the `BuildReport` totals reach `TocRun`, the CLI line, and the pipeline log.
 
@@ -30,7 +30,7 @@ A smaller test gap: nothing currently proves that the `BuildReport` totals reach
    - `cursor <= hi` prevents an overlap repair from making the child empty or backwards.
    - After the loop, `cursor = lastHi + 1`; therefore `cursor === parentHi` means `lastHi === parentHi - 1`, exactly one trailing block short.
    - A last child may safely receive both a start snap and an end extension, but that is two total changed blocks and two repairs—the policy caveat above.
-   - Two-block displacement of any single boundary still throws. Root ends remain unrepairable and are checked exactly at [`toc.ts:768`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/toc.ts:768).
+   - Two-block displacement of any single boundary still throws. Root ends remain unrepairable and are checked exactly at [`toc.ts:768`](/Users/greg/Dropbox/dev/experim/spideryarn2/src/hierarchy.ts:768).
 
 2. **Cascade:** It terminates and produces a consistent tree. Parsed JSON cannot be cyclic; each proposal node is visited once. A correction can cascade through arbitrary depth, but each descendant endpoint moves at most one block. If an override makes the next discrepancy two blocks, it is not repaired and the partition check throws.
 

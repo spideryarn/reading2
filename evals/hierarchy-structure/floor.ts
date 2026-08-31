@@ -2,7 +2,7 @@
  * The noise floor, per document, from a run of repeats — the number that
  * decides whether any arm-to-arm gap is a result at all.
  *
- *   npx tsx evals/toc-structure/floor.ts evals/results/toc-structure/<run-dir>
+ *   npx tsx evals/hierarchy-structure/floor.ts evals/results/hierarchy-structure/<run-dir>
  *
  * Reads a run.json produced with `--repeat`, and for each document reports:
  * every scalar measure's range and MAD (median absolute deviation) across the
@@ -34,6 +34,13 @@ interface RunLike {
     error?: string;
     score?: StructureScore;
     calls?: { ms: number; costUsd: number | null }[];
+    repaired?: {
+      ranges: number;
+      blocks: number;
+      largest: number;
+      droppedChildren: string[];
+      droppedHeadings: string[];
+    };
   }[];
 }
 
@@ -53,14 +60,52 @@ const MEASURES: Record<string, (s: StructureScore) => number | null> = {
 };
 
 /**
+ * **The scalars that say how badly the answer tiled** — read off the result's
+ * `repaired` block rather than its score, because a repaired answer has a
+ * perfect score.
+ *
+ * These exist because this file's tiling instrument stopped working.
+ * `throwAnatomy` below parses the anatomy of a *throw*, and it was the whole
+ * measure of how often and how badly an arm failed to tile — which was fine
+ * while a tiling fault threw. It does not any more: since 2026-08-31 the
+ * partition is derived from the answer rather than checked against it
+ * (src/hierarchy.ts § `planChildRanges`), so every one of those answers is now
+ * `outcome: "ok"` with `validity.otherProblems` necessarily zero and no throw to
+ * anatomise. **Without these rows the floor would be measuring the spread of the
+ * normaliser's output rather than the spread of the model's.** GPT Sol's review
+ * of the tiling change, finding 4 — and it is the third time this eval has had
+ * to be told that a repair inside the code under measurement redefines the
+ * measurement.
+ *
+ * `throwAnatomy` is kept: it still reads historical result files, and the faults
+ * that are still refused — a backwards range, an invented id — still throw.
+ */
+const REPAIRED: Record<string, (r: NonNullable<RunLike["results"][number]["repaired"]>) => number> = {
+  repairedRanges: (r) => r.ranges,
+  repairedBlocks: (r) => r.blocks,
+  largestRepair: (r) => r.largest,
+  droppedSections: (r) => r.droppedChildren.length,
+};
+
+/**
  * The anatomy of a tiling throw, parsed back out of the message
- * `assertChildrenPartition` (src/toc.ts) wrote — kind, size in blocks, and the
- * depth of the node whose children failed to tile. **The size distribution is
- * what decides whether a bounded repair exists** (team lead, 2026-08-30): if
- * most failures are off by one block, snapping a child's start to the cursor
- * would recover most of a ~20% failure rate; if they are large, a repair
- * would mask a badly wrong answer and must not be built. A throw count alone
- * cannot tell those worlds apart.
+ * `assertChildrenPartition` (src/hierarchy.ts) wrote — kind, size in blocks, and
+ * the depth of the node whose children failed to tile.
+ *
+ * **It was written to answer a question that has since been answered, and then
+ * settled the other way.** The question (team lead, 2026-08-30) was whether the
+ * size distribution justified a *bounded* repair: off by one block mostly, and
+ * snapping a child's start would recover most of a ~20% failure rate; large, and
+ * a repair would mask a badly wrong answer. The measurement said off by one, the
+ * repair was built and bounded — and then both bounds were overridden within two
+ * days by articles they cost, until the partition stopped being checked at all
+ * (src/hierarchy.ts § `planChildRanges`, 2026-08-31).
+ *
+ * **So a tiling fault no longer arrives here.** This still runs, and still
+ * earns its place, for two reasons: historical result files were written when
+ * those faults threw, and the faults that are still refused — a backwards range,
+ * an invented id, a root that misses the article's ends — still throw with
+ * messages this parses. What replaced it for tiling is `REPAIRED` above.
  */
 export interface ThrowAnatomy {
   kind: "gap" | "overlap" | "short-at-end" | "unparsed";
@@ -76,7 +121,7 @@ export interface ThrowAnatomy {
  * genuinely new fourth failure mode, must surface as `unparsed` rather than
  * making "no tiling failures" and "the parser stopped working" the same
  * report (docs/reusable/silent-success.md, with the parser on our side of
- * the line). tests/toc-structure-eval.test.ts holds the reworded control.
+ * the line). tests/hierarchy-structure-eval.test.ts holds the reworded control.
  */
 export function throwAnatomy(error: string): ThrowAnatomy {
   const forms = [
@@ -121,7 +166,7 @@ const mad = (xs: number[]): number => {
 async function main(): Promise<void> {
   const runDir = process.argv[2];
   if (!runDir) {
-    console.error("Usage: tsx evals/toc-structure/floor.ts <run directory produced with --repeat>");
+    console.error("Usage: tsx evals/hierarchy-structure/floor.ts <run directory produced with --repeat>");
     process.exit(1);
   }
   const run = parseJsonFrom<RunLike>(
@@ -159,6 +204,23 @@ async function main(): Promise<void> {
         console.log(
           `  throw kinds: ${[...kinds.entries()].map(([k, n]) => `${k}×${n}`).join(", ")}`,
         );
+      }
+      /* Before the score measures, because a run whose answers all needed
+         mending has a stable-looking floor for a reason that is not stability.
+         Printed only when something was mended — unlike the pipeline's own
+         `Repaired:` line, which is at zero every run, this is a per-document
+         table and a row of zeros on every document would bury the rest. */
+      const repairedRows = repeats.filter((r) => r.repaired);
+      if (repairedRows.some((r) => r.repaired!.ranges > 0 || r.repaired!.droppedChildren.length > 0)) {
+        for (const [name, read] of Object.entries(REPAIRED)) {
+          const values = repairedRows.map((r) => read(r.repaired!));
+          const lo = Math.min(...values);
+          const hi = Math.max(...values);
+          console.log(
+            `  ${name.padEnd(22)} ${values.map((v) => v.toFixed(0)).join("  ")}   ` +
+              `range ${(hi - lo).toFixed(0)}  MAD ${mad(values).toFixed(3)}`,
+          );
+        }
       }
       for (const [name, read] of Object.entries(MEASURES)) {
         const values = scored

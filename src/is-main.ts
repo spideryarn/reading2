@@ -12,7 +12,7 @@
  * That is where `stageCli` lives, and `stageCli` is the *metered* entrypoint:
  * it opens the spend ledger. Most CLIs in this repo spend nothing —
  * `src/blocks.ts`, `src/extract.ts`, `src/fetch.ts`, `src/pdf.ts`,
- * `src/toc-flatten.ts` — and importing `cli-ledger.js` to ask a question about
+ * `src/hierarchy-flatten.ts` — and importing `cli-ledger.js` to ask a question about
  * `process.argv` would drag `ai-spend.ts`, `owner.ts` and the Postgres cost
  * store into five modules that have no use for any of it. The plan says the
  * same thing in one line: *"Keep a generic `isMain` separate from the metered
@@ -25,7 +25,7 @@
  * not comparable as text, and every way of pretending they are has a failure:
  *
  * - `import.meta.url.endsWith(path.basename(process.argv[1]))` — the spelling
- *   that was in `src/fetch.ts` and `src/toc-flatten.ts`. Wrong three ways, and
+ *   that was in `src/fetch.ts` and `src/hierarchy-flatten.ts`. Wrong three ways, and
  *   `tests/is-main.test.ts` holds a failing input for each: a same-named file in
  *   another directory runs this module's CLI on import; a *different* file whose
  *   name merely ends with ours (`fetch.ts` starting while `prefetch.ts` is

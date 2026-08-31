@@ -133,7 +133,7 @@ describe("loadArticle", () => {
  *
  * There is deliberately no staleness test, because there is deliberately no
  * staleness verdict — mtimes cannot prove what a file was built from, and the
- * obvious comparison marks every *successful* toc run stale. The reasoning is
+ * obvious comparison marks every *successful* hierarchy run stale. The reasoning is
  * on `articleMetadata` itself and in docs/plans/260825e-metadata-page.md.
  */
 describe("articleMetadata", () => {
@@ -144,12 +144,12 @@ describe("articleMetadata", () => {
 
   it("names the real files each stage writes, not a prettier version of them", async () => {
     const m = await articleMetadata("example");
-    const toc = m.stages.find((s) => s.step === "toc");
+    const hierarchy = m.stages.find((s) => s.step === "toc");
     // All three: stage 4 writes the tree, the nav labels its second model pass
     // produced, AND copies the blocks beside them, so a caller checking only
-    // the first would call a half-finished run done. src/toc.ts writes the tree
+    // the first would call a half-finished run done. src/hierarchy.ts writes the tree
     // last for the same reason — docs/plans/260826h-toc-scaling.md.
-    expect(toc?.outputs).toEqual([
+    expect(hierarchy?.outputs).toEqual([
       "example/tree.json",
       "example/labels.json",
       "example/blocks.json",
@@ -204,13 +204,13 @@ describe("articleMetadata", () => {
     // checks the shape and the honesty of the absence, and there is still no
     // staleness comparison anywhere for it to check.
     const m = await articleMetadata("example");
-    const toc = m.stages.find((s) => s.step === "toc");
+    const hierarchy = m.stages.find((s) => s.step === "toc");
     // The fixture's tree.json is committed, so this is whenever the repo was
     // checked out — which is exactly why the tooltip says "when, never what
     // from". A parseable ISO string is all that can be asserted about it.
-    expect(toc?.ranAt).toBeTypeOf("string");
-    expect(Number.isNaN(Date.parse(toc?.ranAt ?? ""))).toBe(false);
-    expect(toc?.bytes).toBeGreaterThan(0);
+    expect(hierarchy?.ranAt).toBeTypeOf("string");
+    expect(Number.isNaN(Date.parse(hierarchy?.ranAt ?? ""))).toBe(false);
+    expect(hierarchy?.bytes).toBeGreaterThan(0);
 
     // `fetch` never ran for the fixture and wrote nothing, so both are null —
     // "we cannot say", and specifically NOT a zero, which would read as a

@@ -1,7 +1,7 @@
 /**
  * Reconcile a finished run's paid calls against OpenRouter's own records.
  *
- *   npx tsx evals/toc-structure/verify-costs.ts evals/results/toc-structure/<run-dir>
+ *   npx tsx evals/hierarchy-structure/verify-costs.ts evals/results/hierarchy-structure/<run-dir>
  *
  * **A run is not quotable until this passes.** Every call in `run.json`
  * stores the in-band cost the response reported (`costUsd`) and the id the
@@ -60,7 +60,7 @@ async function generationCostUsd(id: string, key: string): Promise<number | null
 async function main(): Promise<void> {
   const runDir = process.argv[2];
   if (!runDir) {
-    console.error("Usage: tsx evals/toc-structure/verify-costs.ts <run directory>");
+    console.error("Usage: tsx evals/hierarchy-structure/verify-costs.ts <run directory>");
     process.exit(1);
   }
   loadEnvLocal();

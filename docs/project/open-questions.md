@@ -33,7 +33,7 @@ Target branching factor ~5–9 so levels feel like even strides.
 
 Both settled on 2026-08-24 and written up where they belong. Anchors kept so older links still land.
 
-- **Q2 — who assigns block ids, and how stable are they?** Stage 3 (blocks + ToC agent), and ids are
+- **Q2 — who assigns block ids, and how stable are they?** Stage 3 (blocks + hierarchy agent), and ids are
   **random**, not sequential, because sequential ids silently break on re-extraction. See
   [block-ids.md](block-ids.md#why-random-and-not-sequential). Note this went *against* the
   recommendation recorded here, which was sequential-plus-`textHash`; the hash-migration step it

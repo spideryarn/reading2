@@ -112,7 +112,7 @@
  *
  * **Whether anything is stale.** The first version of this page led with a red
  * warning when a later artefact was older than an earlier one. That check is
- * wrong: a *successful* toc run writes `tree.json` and then copies
+ * wrong: a *successful* hierarchy run writes `tree.json` and then copies
  * `blocks.json` beside it, so every correct run tripped it. More deeply, an
  * mtime records when a file was written, not what it was written *from*. Until
  * `tree.json` and `arc.json` carry a hash of the blocks they consumed — the way
@@ -1630,7 +1630,7 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
         <Chip icon={Icon} />
         <span className="tw:font-mono tw:text-sm tw:text-foreground">{step}</span>
         {/* `done &&` is load-bearing. The generator string comes off the tree
-            and the arc, which are in hand because the article loaded — so a toc
+            and the arc, which are in hand because the article loaded — so a hierarchy
             stage whose blocks copy is missing would otherwise print a model
             name next to the words "not run". */}
         {done && generator && (

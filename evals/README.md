@@ -51,7 +51,7 @@ had to be added before the corpus could judge its own arm.
 npm run eval:caching -- data/noema-mythology-of-conscious-ai
 ```
 
-**This one calls a model**, unlike `toc-labels.ts`, and that is the whole point of it. Everything
+**This one calls a model**, unlike `hierarchy-labels.ts`, and that is the whole point of it. Everything
 deterministic about prompt caching is already pinned in
 [`tests/article-prompt.test.ts`](../tests/article-prompt.test.ts): that the cached prefix is
 byte-identical across two questions, two selections, two reading positions, a growing conversation.
@@ -75,7 +75,7 @@ See [docs/project/prompt-caching.md](../docs/project/prompt-caching.md).
 npm run eval:reorder -- data/constitution data/noema-mythology-of-conscious-ai
 ```
 
-Calls no model — it measures artefacts already on disk, like `toc-labels.ts`. It exists because
+Calls no model — it measures artefacts already on disk, like `hierarchy-labels.ts`. It exists because
 prompt caching required the arc, thread and glossary prompts to put the article *ahead* of each
 stage's instructions, and models weight recency. The direction of the move matches Anthropic's own
 long-context guidance, which is a reason to expect it to be fine rather than evidence that it is.
@@ -90,14 +90,14 @@ The incumbent numbers are committed at
 was regenerated. **They stop being obtainable once the artefacts are rebuilt**, which is why they are
 in the repo rather than left to be re-derived.
 
-## `toc-labels.ts` — are batched nav labels as good as whole-pass ones?
+## `hierarchy-labels.ts` — are batched nav labels as good as whole-pass ones?
 
 Written for [260826h-toc-scaling.md](../docs/plans/260826h-toc-scaling.md), which splits stage 4 into one
 whole-document structure call plus parallel label batches. The worry that split has to answer is
 coherence: labels written in separate calls, each blind to the others, might not read as a series.
 
 ```
-npm run eval:toc -- data/constitution data/noema-mythology-of-conscious-ai
+npm run eval:hierarchy -- data/constitution data/noema-mythology-of-conscious-ai
 ```
 
 It reads `tree.json`, `blocks.json` and — when the labels were generated in batches —
@@ -186,21 +186,21 @@ The direct test of a label's job needs a person: show a label with its 5–9 sib
 shuffled, and ask which paragraph it points to. Measure correct identification, time, and whether
 distinctive terms survived. `--shuffle` prints those sets ready to hand to someone.
 
-## `toc-structure/` — is the structure pass worth what it costs?
+## `hierarchy-structure/` — is the structure pass worth what it costs?
 
 Written for [260830a-opening-an-article-before-the-toc.md](../docs/research/260830a-opening-an-article-before-the-toc.md).
-`toc-labels.ts` above judges stage 4's *second* pass; this judges the first — the single model call
-in [src/toc.ts](../src/toc.ts) that proposes the nested structure, which is 163–320 seconds and
+`hierarchy-labels.ts` above judges stage 4's *second* pass; this judges the first — the single model call
+in [src/hierarchy.ts](../src/hierarchy.ts) that proposes the nested structure, which is 163–320 seconds and
 88% of the ingest wait now that the labels run concurrently and the arc is deferred. The decisions queued against it (progressive waves, seeding the
 author's headings, changing model or effort) need a number to decide against.
 
 ```
-npm run eval:toc-structure -- --arm headings --arm incumbent-disk   # free: no model, no network
-npm run eval:toc-structure -- --list                                # the declared arms
+npm run eval:hierarchy-structure -- --arm headings --arm incumbent-disk   # free: no model, no network
+npm run eval:hierarchy-structure -- --list                                # the declared arms
 ```
 
 The deterministic scoring (`score.ts`) is unit-tested in
-[`tests/toc-structure-eval.test.ts`](../tests/toc-structure-eval.test.ts) — the same split as
+[`tests/hierarchy-structure-eval.test.ts`](../tests/hierarchy-structure-eval.test.ts) — the same split as
 `extraction/`: the part that is cheap and repeatable is pinned as a test, the part that spends
 money is not one. The arms are declared as data in `arms.ts`; the ones that call a model **refuse
 to run** until their executor lands, loudly, so a results file cannot quietly mean "those arms were
@@ -208,7 +208,7 @@ skipped".
 
 ### The corpus is a committed manifest of seven documents
 
-The corpus lives in `toc-structure/corpus.ts` — one entry per document with its role, its
+The corpus lives in `hierarchy-structure/corpus.ts` — one entry per document with its role, its
 selection reason, and the sha256 of the `blocks.json` that was measured (data/ is gitignored and
 regenerates, so a results file that only named a slug would name bytes nothing can recover; the
 runner checks the hash and says so when it has drifted). `source`, `source-2` and
@@ -255,7 +255,7 @@ trees, which is the difference between a tuned number and a discovered one. Both
 together — "fitted" alone overstates the fragility, "plateau" alone hides where it came from.
 
 (Operational note, 2026-08-30: nine test files once went red at load average 187 — several agents
-running suites concurrently — because importing src/toc.js took 22 seconds and 5s-default timeouts
+running suites concurrently — because importing src/hierarchy.js took 22 seconds and 5s-default timeouts
 fired en masse. If you see many unrelated suites time out at once, check `uptime` before
 concluding your change broke something.)
 
@@ -289,7 +289,7 @@ built on it. Between an arm and the incumbent it is descriptive; between repeats
 it is **the noise floor**, the resolution of the whole instrument, to be reported before any
 comparison. The mechanical measures are diagnostics and guards, not the verdict — every one of
 them can be won by a worse arm (GPT Sol's review has the table) — so close arms go to a **blinded
-judging pass over the finalists' trees** (`toc-structure/blind.ts`, fed by the per-run `trees/`
+judging pass over the finalists' trees** (`hierarchy-structure/blind.ts`, fed by the per-run `trees/`
 directory). **The judge is a model, not a person** — Greg's decision, 2026-08-30, with a budget of
 about ten comparisons, spent on the documents where arms disagree. The weakness is stated here
 rather than discovered later: a model judging model output tends to prefer writing that resembles
@@ -315,7 +315,7 @@ corpus the means are `within1Block` 0.56 against exact `allBoundaries` 0.39 (0.6
 constitution alone), so **roughly a quarter to a third of the deep "disagreement" is one-block
 wobble** — which softens, without erasing, the claim that the model earns its money below L1.
 
-Each run writes a **directory** under `results/toc-structure/` — `run.json` (scores, arm specs,
+Each run writes a **directory** under `results/hierarchy-structure/` — `run.json` (scores, arm specs,
 the git commit, and the measured input hashes), rewritten incrementally after every article × arm
 so a run that dies after six paid calls keeps six results, plus every produced tree under
 `trees/`, the disk arm's included, because `data/` regenerates under old results.
@@ -334,10 +334,10 @@ model, wire and thinking semantics move together), `waves` (bakeoff, and it must
 levels — the book-length motivation is depth the single call cannot reach, so an L1→L2 pilot would
 not test the process it argues for), `cheap-then-revise` (bakeoff).
 
-Every paid arm sends **production's own prompt** through `structureRequest` (src/toc.ts) — the one
-assembly point, called by `generateToc` itself, pinned byte-for-byte (and seen red under
-perturbation) by [`tests/toc-structure-request-parity.test.ts`](../tests/toc-structure-request-parity.test.ts)
-— and its transports are declared bypasses (`toc-structure-messages` / `toc-structure-chat` in
+Every paid arm sends **production's own prompt** through `structureRequest` (src/hierarchy.ts) — the one
+assembly point, called by `generateHierarchy` itself, pinned byte-for-byte (and seen red under
+perturbation) by [`tests/hierarchy-structure-request-parity.test.ts`](../tests/hierarchy-structure-request-parity.test.ts)
+— and its transports are declared bypasses (`hierarchy-structure-messages` / `hierarchy-structure-chat` in
 src/spend-declarations.ts) that refuse to run without an open ledger.
 
 **Cost accounting is loud by construction, twice.** In-process, every paid call must return token
@@ -360,14 +360,20 @@ calibration call, and the raw-event ids are real `gen-…` OpenRouter generation
 returns a tree whose children do not tile (measured on HEAD, 2026-08-30 — and reproduced by this
 eval's own fourth calibration call).
 
-> **Read the throw rate together with `repaired`, from 2026-08-30 on.** `buildTree` now snaps a
-> one-block partition slip shut and drops an unbacked `sourceHeading`
-> ([table-of-contents.md](../docs/project/table-of-contents.md#two-slips-are-mended-rather-than-refused)),
-> which are the two families that produced every throw measured above. An arm that makes either
-> mistake now scores `outcome: "ok"`, so the throw rate on its own understates how often an answer
-> was wrong as written. Each result carries a `repaired` block saying what was mended, and the
-> runner prints it. `sourceHeadingValid` is the sharpest casualty: it is now necessarily 1 for any
-> tree built by today's code, and says something only beside `repaired`. The runner records that as `outcome: "threw"` with the error
+> **Read the throw rate together with `repaired`, from 2026-08-30 on — and since 2026-08-31 the
+> throw rate says almost nothing about tiling at all.** `buildTree` drops an unbacked
+> `sourceHeading`, and it no longer *checks* whether an answer's children tile their parent: it
+> derives a tiling from them ([hierarchy.md](../docs/project/hierarchy.md#derived-partition)).
+> Those were the two families that produced every throw measured above, so an arm that makes either
+> mistake now scores `outcome: "ok"` with a perfectly valid tree, and the throw rate understates how
+> often an answer was wrong as written. Each result carries a `repaired` block saying what was
+> mended — `ranges`, `blocks`, `largest`, `droppedChildren` — and the runner prints it.
+>
+> Two measures are casualties, for the same reason and in the same way. `sourceHeadingValid` is
+> necessarily 1 for any tree built by today's code. `validity.otherProblems` can no longer report a
+> tiling fault at all. **A repair inside the code under measurement redefines the measurement, and
+> nothing fails when it does** — so neither number says on its own what it used to, and `repaired`
+> is where the signal went. The runner records that as `outcome: "threw"` with the error
 and the bill, and continues — never a retry, because a floor computed over the surviving runs
 alone is the variance of the survivors, a selection effect that understates the floor; and the
 wasted call stays on the arm's cost and latency. A harness fault (a config error, a dead network)

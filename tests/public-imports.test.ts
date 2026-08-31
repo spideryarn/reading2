@@ -137,7 +137,7 @@ const WRITERS = [
   "src/labels.ts",
   "src/pdf-read.ts",
   "src/pipeline.ts",
-  "src/toc.ts",
+  "src/hierarchy.ts",
   "src/tweets.ts",
   /* Writes `timeline.json`, and spends. Listed the day the stage landed rather
      than the day it was wired, because a *missing* row here is a silent gap:

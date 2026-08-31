@@ -11,7 +11,7 @@
  * describes, because the numbers quoted in the floor report must be
  * recomputable from committed artefacts.
  *
- *   npx tsx evals/toc-structure/floor-combined.mts <run-dir> [<run-dir>…]
+ *   npx tsx evals/hierarchy-structure/floor-combined.mts <run-dir> [<run-dir>…]
  */
 
 import { readFileSync, readdirSync } from "node:fs";

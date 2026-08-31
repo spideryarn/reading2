@@ -132,13 +132,13 @@ $42/month against $150 uncached.
    node or passage. This costs nothing today and is the whole precondition for caching later. It is
    worth doing *now*, before there are a dozen call sites to reorder.
 2. **One place that builds the article block.** A single helper that returns the article's prompt
-   block, used by [`src/toc.ts`](../../../src/toc.ts), [`src/arc.ts`](../../../src/arc.ts) and
+   block, used by [`src/toc.ts`](../../../src/hierarchy.ts), [`src/arc.ts`](../../../src/arc.ts) and
    [`src/explain.ts`](../../../src/explain.ts) alike — because "similar" prefixes don't cache, only
    identical ones do, and three hand-written near-copies will drift. This is the same argument that
    put [`src/reading-time.ts`](../../../src/reading-time.ts) in a module of its own.
 3. **Settle the document wrapper now.** One tag, one shape, used by every prompt — the thing they
    had to do first and never did. Ours would be `<document>…</document>`, chosen once and written
-   into [table-of-contents.md § The generation prompt](../table-of-contents.md#the-generation-prompt).
+   into [hierarchy.md § The generation prompt](../hierarchy.md#the-generation-prompt).
 4. **Mark the breakpoint explicitly** on that block, and **log whether the cache was read or
    written** on every call. A cache that silently stops hitting looks exactly like a cache that is
    working, which is [silent-success.md](../../reusable/silent-success.md) again — the only

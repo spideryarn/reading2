@@ -799,7 +799,7 @@ export const confParam = createParser<number>({
    emphatic that their version regretted keeping that only in memory. It stays
    in memory here anyway, and the reason is the rule that governs everything
    else in this app: a per-node open/closed set can only be written down as a
-   list of node ids, node ids are **positional**, and a re-run of `npm run toc`
+   list of node ids, node ids are **positional**, and a re-run of `npm run hierarchy`
    renumbers them (docs/project/block-ids.md#why-random-and-not-sequential). A
    URL full of them would be long and, after any re-extraction, quietly wrong —
    it would open a set of sections that are no longer the ones you opened. What

@@ -152,7 +152,7 @@ async function writeBlocks(articleId: string, revisionId: string): Promise<void>
  * only thing varying between these tests is `status`. Vary two things and a
  * refusal proves nothing about either.
  */
-const tocRun = (revisionId: string, status: "running" | "done" | "error") =>
+const hierarchyRun = (revisionId: string, status: "running" | "done" | "error") =>
   recordStepRun({
     revisionId,
     stepName: "toc",
@@ -184,7 +184,7 @@ when("the publication guard", () => {
     // A first publication, so later drafts are the ordinary carried-forward
     // shape rather than the first-ever revision of an article.
     const revisionId = await draftReadyToPublish();
-    await tocRun(revisionId, "done");
+    await hierarchyRun(revisionId, "done");
     await publishRevision({ slug: SLUG, revisionId });
   }, 60_000);
 
@@ -202,21 +202,21 @@ when("the publication guard", () => {
 
   it("refuses a tree whose toc run errored, however well its hash matches", async () => {
     const revisionId = await draftReadyToPublish();
-    await tocRun(revisionId, "error");
+    await hierarchyRun(revisionId, "error");
 
     await expect(publishRevision({ slug: SLUG, revisionId })).rejects.toThrow(PublishRefused);
   });
 
   it("refuses a tree whose toc run is still running", async () => {
     const revisionId = await draftReadyToPublish();
-    await tocRun(revisionId, "running");
+    await hierarchyRun(revisionId, "running");
 
     await expect(publishRevision({ slug: SLUG, revisionId })).rejects.toThrow(PublishRefused);
   });
 
   it("says which of the two it was, rather than blaming the hash", async () => {
     const revisionId = await draftReadyToPublish();
-    await tocRun(revisionId, "error");
+    await hierarchyRun(revisionId, "error");
 
     /* The message matters more than usual here. The nearest existing reason
        string blames the hash — "the tree was built from different blocks" —
@@ -230,7 +230,7 @@ when("the publication guard", () => {
 
   it("still publishes a draft whose toc run finished", async () => {
     const revisionId = await draftReadyToPublish();
-    await tocRun(revisionId, "done");
+    await hierarchyRun(revisionId, "done");
 
     const published = await publishRevision({ slug: SLUG, revisionId });
     expect(published.revisionId).toBe(revisionId);

@@ -15,7 +15,7 @@ returns **zero hits** — nothing in this app sets a cache breakpoint anywhere, 
 
 | # | File : line | Function | Client / model | Calls per article | Static across calls? |
 |---|---|---|---|---|---|
-| 1 | [`src/toc.ts:473`](../../src/toc.ts) | `generateToc` | Anthropic SDK, `MODEL` | 1 (pipeline, once per content hash) | `system` only |
+| 1 | [`src/toc.ts:473`](../../src/hierarchy.ts) | `generateToc` | Anthropic SDK, `MODEL` | 1 (pipeline, once per content hash) | `system` only |
 | 2 | [`src/arc.ts:235`](../../src/arc.ts) | `generateArc` | Anthropic SDK, `MODEL` | 1 | `system` only |
 | 3 | [`src/tweets.ts:393`](../../src/tweets.ts) | (thread generator) | Anthropic SDK, `MODEL` | 1 | `system` only |
 | 4 | [`src/glossary.ts:774`](../../src/glossary.ts) | (glossary generator) | Anthropic SDK, `MODEL` | 1 per top-up (usually 1) | `system` only |
@@ -26,7 +26,7 @@ returns **zero hits** — nothing in this app sets a cache breakpoint anywhere, 
 | 9 | [`src/search.ts:293`](../../src/search.ts) (fetch at 335) | `findPassages` | OpenRouter fetch, `OPENROUTER_MODEL` | 1 per search, request path | `system` only |
 
 All six Anthropic-SDK stages instantiate their own client — `new Anthropic()` at
-[`toc.ts:473`](../../src/toc.ts), [`arc.ts:235`](../../src/arc.ts),
+[`toc.ts:473`](../../src/hierarchy.ts), [`arc.ts:235`](../../src/arc.ts),
 [`tweets.ts:393`](../../src/tweets.ts), [`glossary.ts:774`](../../src/glossary.ts),
 [`labels.ts:481`](../../src/labels.ts), `summarise.ts:824`. No shared
 client factory, no shared request-building wrapper. The three OpenRouter call sites each build their
@@ -69,7 +69,7 @@ stage's own article-rendering function:
 
 **Pipeline (Anthropic SDK), four different block-rendering formats:**
 
-- `toc.ts` — [`renderBlocks`](../../src/toc.ts) (line 122): `` `[${i}] ${b.id} <${b.tag}>${mark}: ${b.text}` `` joined by blank lines. Includes array index, block id, tag, gistable mark. The user message is *only* this — no instructions in the user turn at all, everything else lives in `system`.
+- `toc.ts` — [`renderBlocks`](../../src/hierarchy.ts) (line 122): `` `[${i}] ${b.id} <${b.tag}>${mark}: ${b.text}` `` joined by blank lines. Includes array index, block id, tag, gistable mark. The user message is *only* this — no instructions in the user turn at all, everything else lives in `system`.
 - `arc.ts` and `tweets.ts` — both use plain `blocks.map((b) => b.text).filter(Boolean).join("\n\n")`. This one line is byte-identical between the two files (same formula, copy-pasted rather than shared), but it's embedded in prompts that are not identical: `arc.ts`'s `renderPrompt` (line 114) puts dynamic instructions first, then `=== STRUCTURE ===`, then `=== FULL TEXT ===`; `tweets.ts`'s `renderPrompt` (line 245) puts dynamic instructions first, then `=== THE ARTICLE ===` (title/byline), then `=== ITS SHAPE ===`, then `=== ITS FULL TEXT ===`. Different headers, different section order, different preamble. `glossary.ts`'s `renderPrompt` (line 634) uses the same plain-text join again, under yet another set of headers (`=== THE ARTICLE ===` / `=== ITS SHAPE ===` / `=== ITS FULL TEXT ===`, plus a variable-length "already in the glossary" block inserted *before* the article section on later calls).
 - `labels.ts` — [`renderBatch`](../../src/labels.ts) (line 308): `` `[${n}] <${b.tag}>${kind}: ${b.text}` `` (ordinal, not block id; a `HEADING` flag) for a narrow window of blocks around the batch (`CONTEXT_BLOCKS = 1` either side) — not the whole article. The one part that *is* static per article is `renderOutline(tree)` (line 290), a short list of section titles, and it does come first in the prompt: `"THE ARTICLE'S OUTLINE\n\n${outline}\n\nTHE SECTIONS YOU ARE LABELLING\n\n..."`. That's the one call site already ordered cache-friendly — but the shared part is the outline (a few hundred tokens), not the full article.
 - `summarise.ts` — `renderPrompt` (line 404) calls `textOf(scope, blocks, order)` (line 393), which **slices to the target node's block range**, not the whole article, except when the target is depth 0 ("THE WHOLE ARTICLE"). So even within one summarise run, the "full text" block varies batch to batch by construction. A `repair` string is also prepended at position zero on retry, which would shift a cache-breakpoint hash on the very call it's most likely to matter for.

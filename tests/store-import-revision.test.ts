@@ -363,13 +363,13 @@ when("re-importing an article whose blocks have not changed", () => {
     /* And `toc` keeps the blocks hash, which is the one row that must:
        `reasonsNotToPublish` compares that column against the stored blocks and
        refuses the publication when they differ. */
-    const toc = await db
+    const hierarchy = await db
       .select({ hash: revisionStepRuns.inputHash })
       .from(revisionStepRuns)
       .where(
         and(eq(revisionStepRuns.revisionId, revision!.id), eq(revisionStepRuns.stepName, "toc")),
       );
-    expect(toc[0]?.hash).not.toBe("second-hash-after-the-tree-was-recut");
+    expect(hierarchy[0]?.hash).not.toBe("second-hash-after-the-tree-was-recut");
 
     await rm(path.join(DIR, "glossary.json"), { force: true });
   }, 30_000);

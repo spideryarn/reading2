@@ -17,7 +17,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { estimateTocTokens } from "../src/toc.js";
+import { estimateHierarchyTokens } from "../src/hierarchy.js";
 import {
   budgetFor,
   MODEL_MAX_TOKENS,
@@ -152,10 +152,10 @@ describe("truncatedMessage", () => {
   });
 });
 
-describe("estimateTocTokens", () => {
+describe("estimateHierarchyTokens", () => {
   it("grows with the article — the whole point", () => {
     // A fixed number was the bug. Anything that stops this growing brings it back.
-    expect(estimateTocTokens(blocks(400))).toBeGreaterThan(estimateTocTokens(blocks(40)) * 5);
+    expect(estimateHierarchyTokens(blocks(400))).toBeGreaterThan(estimateHierarchyTokens(blocks(40)) * 5);
   });
 
   it("no longer cares which blocks are gistable, because it no longer pays for labels", () => {
@@ -163,7 +163,7 @@ describe("estimateTocTokens", () => {
     // because it got no navLabel. The labels moved to src/labels.ts, and what is
     // left is the tree — which tiles every block regardless. If this ever starts
     // differing again, a label estimate has crept back into the structure call.
-    expect(estimateTocTokens(blocks(100, false))).toBe(estimateTocTokens(blocks(100)));
+    expect(estimateHierarchyTokens(blocks(100, false))).toBe(estimateHierarchyTokens(blocks(100)));
   });
 
   /**
@@ -196,20 +196,20 @@ describe("estimateTocTokens", () => {
     );
     const actualTokens = payload.length / 2.5;
 
-    expect(estimateTocTokens(fixtureBlocks)).toBeGreaterThan(actualTokens * 1.25);
+    expect(estimateHierarchyTokens(fixtureBlocks)).toBeGreaterThan(actualTokens * 1.25);
   });
 
   it("gives the article that broke it a budget the model will accept", () => {
     // 360 blocks, every one gistable — https://www.anthropic.com/constitution,
     // the article that found this bug. It must fit, and it must fit with the
     // reasoning allowance included.
-    expect(budgetFor("toc", estimateTocTokens(blocks(360)))).toBeLessThan(MODEL_MAX_TOKENS);
+    expect(budgetFor("toc", estimateHierarchyTokens(blocks(360)))).toBeLessThan(MODEL_MAX_TOKENS);
   });
 
   it("refuses an article too long to describe in one response", () => {
     // Not a number worth pinning — what matters is that some length is refused
     // out loud, before the call, instead of producing half a table of contents.
-    expect(() => budgetFor("toc", estimateTocTokens(blocks(5_000)))).toThrow(TooLongForOnePass);
+    expect(() => budgetFor("toc", estimateHierarchyTokens(blocks(5_000)))).toThrow(TooLongForOnePass);
   });
 
   it("fits a book, which is the point of taking the labels out", () => {
@@ -223,7 +223,7 @@ describe("estimateTocTokens", () => {
     // structure call has grown a term that scales with paragraphs again — which
     // is the bug this whole change exists to remove, and it would come back
     // silently as a slightly worse ceiling rather than as a failure.
-    expect(() => budgetFor("toc", estimateTocTokens(blocks(1_976)))).not.toThrow();
-    expect(() => budgetFor("toc", estimateTocTokens(blocks(1_977)))).toThrow(TooLongForOnePass);
+    expect(() => budgetFor("toc", estimateHierarchyTokens(blocks(1_976)))).not.toThrow();
+    expect(() => budgetFor("toc", estimateHierarchyTokens(blocks(1_977)))).toThrow(TooLongForOnePass);
   });
 });

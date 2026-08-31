@@ -346,7 +346,7 @@ queue, and it is one of the questions for Sol.
 ## 3. Splitting the ToC step in two
 
 Greg: *"This sounds promising."* Agreed, and the code agrees too — it names this option and its
-condition, unprompted, in [`src/toc.ts:648`](../../src/toc.ts):
+condition, unprompted, in [`src/toc.ts:648`](../../src/hierarchy.ts):
 
 > Deferring the labels so a reader can start sooner is a real option and a deliberate later one; it
 > needs a state that says "still arriving" rather than an absence that says nothing.
@@ -388,7 +388,7 @@ needs the "still arriving" state the docstring asks for, in two views.
 
 There is also a stamping question: `labels.json` records `structureHash(opts.tree)`, and the
 supplement is appended **before** `generateLabels` so the labels are not stale at birth
-([`src/toc.ts:762`](../../src/toc.ts)). Publishing the tree first must keep that ordering.
+([`src/toc.ts:762`](../../src/hierarchy.ts)). Publishing the tree first must keep that ordering.
 
 ---
 
@@ -523,7 +523,7 @@ manifest lands. This is a security property, not a polish item, and it belongs i
 
 Stage 3 writes `output/<slug>.blocks.json`. **The ToC stage is what copies them into
 `data/<slug>/blocks.json`** — the file the reading view actually opens
-([`src/toc.ts:826`](../../src/toc.ts)). So "write a placeholder tree at stage 3" is not one write; a
+([`src/toc.ts:826`](../../src/hierarchy.ts)). So "write a placeholder tree at stage 3" is not one write; a
 placeholder needs its own publication boundary that emits blocks **and** tree together, and does so
 atomically for the same reason the ToC stage already writes the tree last.
 
@@ -785,7 +785,7 @@ blocks): stage 3 strips its 80 Wolfram Language code cells to empty non-gistable
 bare lead-in fragments pointing at nothing — one of them the single word "or". That killed a
 production ingest twice in stage 4b, because the label prompt cannot both write 6–20 words about a
 fragment and introduce no fact that is not in it. Stage 4b now works around it
-([table-of-contents.md](../project/table-of-contents.md)); F is still the fix.
+([hierarchy.md](../project/hierarchy.md)); F is still the fix.
 
 ### Recommendation
 

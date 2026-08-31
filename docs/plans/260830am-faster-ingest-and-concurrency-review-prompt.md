@@ -111,7 +111,7 @@ A default ingest is `fetch + extract + blocks + toc + assets`. The measured brea
   total    ~350s worst case; ~250s on a more typical article
 ```
 
-And inside `toc`, [table-of-contents.md](../project/table-of-contents.md) measured the split:
+And inside `toc`, [hierarchy.md](../project/hierarchy.md) measured the split:
 
 ```
   structure call   163.1s   ████████████████████████████████  88%

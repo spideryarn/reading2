@@ -19,7 +19,7 @@ range. Every tiling failure ever recorded here is off by one block. The structur
 ## What was built
 
 **R2 — an off-by-one partition is snapped shut, not refused.** In
-[`src/toc.ts`](../../src/toc.ts), on the model's proposal *before* any node is built — repairing
+[`src/toc.ts`](../../src/hierarchy.ts), on the model's proposal *before* any node is built — repairing
 after the walk would mean growing a leaf to match and splicing it in, which is how you get two
 leaves for one block. Repairing the proposal also makes the cascade fall out for free: moving a
 node's start moves its first child's start, and a repair that stopped at one level would trade a
@@ -34,7 +34,7 @@ keeps the invariant keeps — a repair, not a second opinion.
 moved out of `evals/toc-structure/`, with a tree-level `provisional: "headings"` marker, a narrow
 `checkTree` exemption, and a named crossing at the public boundary. One implementation, two jobs:
 the eval's arm zero and the product's free tree. See
-[table-of-contents.md § the tree the author's headings give us for free](../project/table-of-contents.md#heading-tree).
+[hierarchy.md § the tree the author's headings give us for free](../project/hierarchy.md#heading-tree).
 
 ## What the review changed
 

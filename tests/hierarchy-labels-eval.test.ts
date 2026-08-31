@@ -1,7 +1,7 @@
 /**
  * **The label eval's accounting — does it check the ids, or only the totals?**
  *
- * `evals/toc-labels.ts` decides whether an article with unlabelled paragraphs is
+ * `evals/hierarchy-labels.ts` decides whether an article with unlabelled paragraphs is
  * behaving as designed or is broken, and the only thing it has to go on is the
  * `dropped` list `labels.json` writes. That list is produced by the code under
  * measurement, so the eval must not take it on trust any further than it has to:
@@ -15,7 +15,7 @@
  * GPT Sol's review of stage 1, finding 8. docs/reusable/silent-success.md.
  */
 import { describe, expect, it } from "vitest";
-import { evaluate } from "../evals/toc-labels.js";
+import { evaluate } from "../evals/hierarchy-labels.js";
 import type { LabelsFile } from "../src/labels.js";
 import type { Block, NodeId, Tree, TreeNode } from "../src/types.js";
 

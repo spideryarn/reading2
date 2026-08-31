@@ -147,7 +147,7 @@ export interface LoadOptions {
 
 /** A job's step list has to be non-empty and well-formed; nothing reads these. */
 const FIXTURE_STEPS: JobStep[] = [
-  { name: "toc", label: "Building the table of contents", status: "pending" },
+  { name: "toc", label: "Building the hierarchy", status: "pending" },
 ];
 
 /**

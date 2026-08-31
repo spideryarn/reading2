@@ -1,10 +1,10 @@
 /**
  * The ToC is derived from the tree, never stored alongside it — see
- * docs/project/table-of-contents.md. flattenTree is that derivation.
+ * docs/project/hierarchy.md. flattenTree is that derivation.
  */
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
-import { flattenTree } from "../src/toc-flatten.js";
+import { flattenTree } from "../src/hierarchy-flatten.js";
 import type { Tree, TreeNode } from "../src/types.js";
 
 /** A three-level toy tree over blocks b0…b3, tiled exactly. */

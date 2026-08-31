@@ -1,7 +1,7 @@
 /**
  * Eval — are batched nav labels as good as whole-pass ones?
  *
- *   npm run eval:toc -- data/constitution data/noema-mythology-of-conscious-ai
+ *   npm run eval:hierarchy -- data/constitution data/noema-mythology-of-conscious-ai
  *
  * Reads artefacts that already exist and calls no model, so it is cheap to
  * re-run and can be pointed at an old tree as easily as a new one. See
@@ -366,7 +366,7 @@ function print(report: EvalReport): void {
     console.log(`\n  seam test     ${s.seamPairs} call boundaries vs ${s.interiorPairs} matched interior`);
     console.log(
       `    similarity  seam ${s.seamSimilarity.toFixed(3)}  interior ${s.interiorSimilarity.toFixed(3)}` +
-        `   (not a verdict — see evals/toc-labels.ts)`,
+        `   (not a verdict — see evals/hierarchy-labels.ts)`,
     );
     console.log(
       `    same open   seam ${pct(s.seamSameOpening)}  interior ${pct(s.interiorSameOpening)}`,
@@ -442,7 +442,7 @@ async function main(): Promise<void> {
   const dirs = args.filter((a) => !a.startsWith("--"));
 
   if (dirs.length === 0) {
-    console.error("Usage: npm run eval:toc -- <dir with tree.json> [more dirs…] [--shuffle]");
+    console.error("Usage: npm run eval:hierarchy -- <dir with tree.json> [more dirs…] [--shuffle]");
     process.exit(1);
   }
 

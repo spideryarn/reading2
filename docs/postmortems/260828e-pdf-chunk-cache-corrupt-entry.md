@@ -68,7 +68,7 @@ the chain, so the `catch` covers it. That is the same decision made a different 
 > caller has no different response to — and it deliberately does not throw, because the alternative
 > to resuming is a run that works and costs money, not a run that cannot happen.
 
-The same is true of `writeAtomic`, which existed in [`src/toc.ts`](../../src/toc.ts) and
+The same is true of `writeAtomic`, which existed in [`src/toc.ts`](../../src/hierarchy.ts) and
 [`src/labels.ts`](../../src/labels.ts) — with a comment saying in as many words that `writeFile`
 truncates and a killed process leaves an invalid file — **eight hours before** the broken cache was
 written, on the same day.

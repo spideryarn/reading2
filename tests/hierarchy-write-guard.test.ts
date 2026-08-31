@@ -1,6 +1,6 @@
 /**
- * **`generateToc` refuses to hand back a tree that is not a valid tree** —
- * `assertTreeSound` in src/tree-invariants.ts, wired in at src/toc.ts.
+ * **`generateHierarchy` refuses to hand back a tree that is not a valid tree** —
+ * `assertTreeSound` in src/tree-invariants.ts, wired in at src/hierarchy.ts.
  *
  * The invariants existed long before this file. They ran in a CLI a human
  * invokes (src/validate-tree.ts) and in the publish guard, which collects
@@ -17,12 +17,12 @@
  * bad tree published?" becomes "did a bad tree come back?" — and the assertions
  * moved from `readdir` to the returned `parts`. A throw is still the whole of
  * what stops it: there is no half-way state in which the stage returns a tree
- * and the caller stores only some of it, because `TocArtefacts` requires all
+ * and the caller stores only some of it, because `HierarchyArtefacts` requires all
  * three and `run` is not reached at all when the stage throws.
  *
  * **Why this is an integration test and not a unit test of the guard.**
  * `assertTreeSound` throwing on a bad tree is worth about one line; whether
- * `generateToc` *calls* it is the entire finding, and no amount of testing the
+ * `generateHierarchy` *calls* it is the entire finding, and no amount of testing the
  * function proves the call site exists. A static check would not help either —
  * present-and-in-the-right-order passes for a call whose result is discarded, a
  * call inside a branch that never runs, or a call placed after the writes it
@@ -40,7 +40,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { Block } from "../src/types.js";
-import type { TocRun } from "../src/toc.js";
+import type { HierarchyRun } from "../src/hierarchy.js";
 
 /** The tree the structure model "returns", set per test before the call. */
 let modelTree: unknown = null;
@@ -112,7 +112,7 @@ vi.mock("../src/labels.js", async (importOriginal) => {
              against `hashBlocks` of the blocks it is about to return, because
              those are the two values `assertStampAgrees` and
              `reasonsNotToPublish` compare on the way into the store — see
-             `TocRun.inputHash` in src/toc.ts. A stub with a made-up hash
+             `HierarchyRun.inputHash` in src/hierarchy.ts. A stub with a made-up hash
              therefore fails the stage, which is what the "different blocks"
              test below deliberately does. */
           sourceHash: labelsSourceHash,
@@ -151,7 +151,7 @@ beforeAll(async () => {
   DIR = await mkdtemp(path.join(tmpdir(), "toc-write-guard-"));
   await cp(path.join(ROOT, "example"), DIR, { recursive: true });
   blocks = JSON.parse(await readFile(path.join(DIR, "blocks.json"), "utf8")).blocks;
-  ({ generateToc } = await import("../src/toc.js"));
+  ({ generateHierarchy } = await import("../src/hierarchy.js"));
   const { isStructural } = await import("../src/block-policy.js");
   const { hashBlocks } = await import("../src/source-hash.js");
   const { blocksArtefact } = await import("../src/blocks.js");
@@ -181,7 +181,7 @@ const wholeArticle = (over: Record<string, unknown> = {}) => ({
 });
 
 /**
- * Imported once in `beforeAll`, not per call. `src/toc.ts` is a big module and
+ * Imported once in `beforeAll`, not per call. `src/hierarchy.ts` is a big module and
  * vitest transforms it on first import, so importing it *inside* the first
  * test charged that test the compile — which put it over the 5-second default
  * whenever the machine was busy running the rest of the suite in parallel. It
@@ -189,11 +189,11 @@ const wholeArticle = (over: Record<string, unknown> = {}) => ({
  * for a flake to land: the control going red reads as "the harness is broken",
  * and the four tests it is the control for went on passing.
  */
-let generateToc!: typeof import("../src/toc.js")["generateToc"];
+let generateHierarchy!: typeof import("../src/hierarchy.js")["generateHierarchy"];
 
-async function run(): Promise<{ threw: Error | null; run?: TocRun }> {
+async function run(): Promise<{ threw: Error | null; run?: HierarchyRun }> {
   try {
-    const result = await generateToc({ blocks, slug: "toc-write-guard" });
+    const result = await generateHierarchy({ blocks, slug: "toc-write-guard" });
     return { threw: null, run: result };
   } catch (err) {
     return { threw: err as Error };
@@ -209,10 +209,10 @@ async function run(): Promise<{ threw: Error | null; run?: TocRun }> {
  * The type makes the first of those unreachable; this is what makes the test say
  * so rather than assume it.
  */
-const produced = (r: { run?: TocRun }): string[] =>
+const produced = (r: { run?: HierarchyRun }): string[] =>
   r.run ? Object.keys(r.run.parts).filter((k) => r.run!.parts[k as "tree"] !== undefined).sort() : [];
 
-describe("generateToc refuses to hand back an invalid tree", () => {
+describe("generateHierarchy refuses to hand back an invalid tree", () => {
   /* The control, and it comes first on purpose: without it, "nothing came back"
      is satisfied just as well by a stage that throws for some unrelated reason —
      a bad mock, a missing fixture, an env var. This proves the same harness
@@ -229,7 +229,7 @@ describe("generateToc refuses to hand back an invalid tree", () => {
    *
    * These tests used to make an invalid tree by claiming a `sourceHeading` the
    * node does not contain. `buildTree` now drops such a claim instead of
-   * letting it through to `checkTree` (src/toc.ts, tests/toc-repairs.test.ts),
+   * letting it through to `checkTree` (src/hierarchy.ts, tests/hierarchy-repairs.test.ts),
    * so that stopped being a way to build an invalid tree at all — and every
    * test here went green for the wrong reason: nothing threw, because nothing
    * was wrong any more.
@@ -266,45 +266,46 @@ describe("generateToc refuses to hand back an invalid tree", () => {
   });
 
   /**
-   * **The evidence for revisiting `MAX_REPAIRED_BOUNDARIES`, on the one run
-   * where it is not otherwise collectable.**
+   * **The repair figures on the one run where the log cannot carry them.**
    *
-   * The bound's own comment says what would justify raising it is a measured
-   * distribution, and it used to point at the pipeline log for that. The log
-   * only ever sees a run that returned: when the bound fires, `buildTree`
-   * throws, `generateToc` never returns, and the repair figures for the answer
-   * that was actually refused go nowhere. So the numbers go in the error, and
-   * this is the test that they do — an assertion about the log would have been
-   * green while the interesting case was invisible. GPT Sol, finding 7.
+   * They reach `HierarchyRun`, the CLI and the pipeline log on every run that
+   * *returns*. When `buildTree` throws, `generateHierarchy` never returns and what it
+   * had already mended for that answer goes nowhere — the monitoring path goes
+   * dark exactly when somebody would look at it. So the numbers go in the
+   * error, and this is the test that they do. An assertion about the log would
+   * have been green while the interesting case was invisible. GPT Sol, finding 7.
    *
-   * Two independent slipped boundaries: child 2 starts one late, and so does
-   * child 3. The first is mended, the second is past the bound.
+   * No tiling fault reaches this path any more, so the fixture mends a boundary
+   * and then fails on something else: the root's own range stops one block
+   * short of the article, which is a fault `planChildRanges` has no say in and
+   * `buildTree` still refuses.
    */
-  it("says what it had already mended when it refuses a second slipped boundary", async () => {
+  it("says what it had already mended when it refuses for another reason", async () => {
     const section = (title: string, from: number, to: number) => ({
       title,
       gist: `A stretch of the piece, from ${from} to ${to}.`,
       range: [blocks[from]!.id, blocks[to]!.id],
     });
+    const last = blocks.length - 1;
     modelTree = {
       root: {
         title: "The example",
-        gist: "Three parts, two of which start a block late.",
-        range: [blocks[0]!.id, blocks.at(-1)!.id],
+        gist: "Two parts, and a root that stops short of the article.",
+        // One block short at the end — every block still gets a leaf inside the
+        // tree, but the last one gets none at all, so nothing can resolve it.
+        range: [blocks[0]!.id, blocks[last - 1]!.id],
         children: [
           section("First", 0, 0),
-          // Skips block 1 — the slip that gets mended.
-          section("Second", 2, 3),
-          // Skips block 4 — a second, independent slip, and past the bound.
-          section("Third", 5, blocks.length - 1),
+          // Skips block 1 — the slip that gets mended before the root is checked.
+          section("Second", 2, last - 1),
         ],
       },
     };
     const result = await run();
     expect(result.threw).not.toBeNull();
+    expect(result.threw!.message).toMatch(/does not cover the whole article/);
     expect(result.threw!.message).toMatch(/mended 1 boundary/);
     expect(result.threw!.message).toMatch(/moving 1 block/);
-    expect(result.threw!.message).toContain("MAX_REPAIRED_BOUNDARIES");
     expect(produced(result)).toEqual([]);
   });
 
@@ -354,7 +355,7 @@ describe("generateToc refuses to hand back an invalid tree", () => {
   /**
    * **The counts have to arrive somewhere a person will see them**, and until
    * this test nothing checked that they did. `buildTree` fills in a report,
-   * `generateToc` counts it into `TocRun`, the CLI prints it every run and
+   * `generateHierarchy` counts it into `HierarchyRun`, the CLI prints it every run and
    * src/pipeline.ts logs it — four links, of which the tests covered the first.
    * A repair nobody is told about is indistinguishable from the bug it
    * repaired, so the wiring is the feature and not an extra
@@ -388,9 +389,9 @@ describe("generateToc refuses to hand back an invalid tree", () => {
   /**
    * **The set has to be about one article, and the type cannot say that.**
    *
-   * `TocArtefacts` makes "a tree and no labels" unsayable. What it cannot make
+   * `HierarchyArtefacts` makes "a tree and no labels" unsayable. What it cannot make
    * unsayable is a tree returned beside a `labels.json` written from *different
-   * blocks* — which is not hypothetical bookkeeping: `TocRun.inputHash` is read
+   * blocks* — which is not hypothetical bookkeeping: `HierarchyRun.inputHash` is read
    * off that file and is the value the store compares against the blocks it is
    * storing (`assertStampAgrees`), and the publish guard compares the same two
    * (`reasonsNotToPublish`). Disagreeing quietly means every article becomes

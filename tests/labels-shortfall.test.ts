@@ -273,7 +273,7 @@ describe("when the re-ask comes back short too", () => {
   it("records the drop in labels.json, so the eval is not left to guess", async () => {
     /* "The eval had to be told" — the sharpest lesson of the R2/R3 build. A
        repair inside the code under measurement silently redefines the
-       measurement: without this field, evals/toc-labels.ts reads coverage below
+       measurement: without this field, evals/hierarchy-labels.ts reads coverage below
        1 and prints INCOMPLETE for an article that is behaving as designed. */
     const { tree, blocks } = oneSection(58);
     wire.answers.push(allBut(58, [4]));
@@ -374,7 +374,7 @@ describe("when the re-ask comes back short too", () => {
      * `droppedBudget` is per batch and cannot see the article, so the floor of
      * one is spendable once per batch however small the batches are. Nineteen
      * paragraphs losing one is 94.7% covered, under `COVERAGE_FLOOR` — and
-     * `generateToc` would have refused it while `npm run labels -- <dir>` merged
+     * `generateHierarchy` would have refused it while `npm run labels -- <dir>` merged
      * and wrote `tree.json` regardless, because the only check was in the
      * caller. Both paths run `assertEveryBlockLabelled`, so that is where it
      * goes. GPT Sol's review of stage 1b, finding 4.

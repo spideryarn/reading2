@@ -3,7 +3,7 @@
  *
  *   npm run eval:caching -- data/noema-mythology-of-conscious-ai
  *
- * **This one spends money.** Unlike evals/toc-labels.ts, which measures
+ * **This one spends money.** Unlike evals/hierarchy-labels.ts, which measures
  * artefacts already on disk, this makes real model calls — that is the whole
  * point of it. Every deterministic thing about prompt caching is already pinned
  * in tests/article-prompt.test.ts: that the cached prefix is byte-identical

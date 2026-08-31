@@ -34,13 +34,13 @@ writing in its own right:
 
 That is a **ratio** rather than a length, and it is arguably the more useful instruction — it is
 roughly what our tree needs at every node, where a chapter's gist and a paragraph's gist should not
-be the same size ([table-of-contents.md § Entry length grows with depth](../table-of-contents.md#granularity)).
+be the same size ([hierarchy.md § Entry length grows with depth](../hierarchy.md#granularity)).
 
 Two things about this are worth more than the numbers.
 
 **They are named, not numbered.** "Sentence or two" is a thing a writer can aim at and a reader can
 recognise; "level 4" is not. Our prompts should ask for a *kind of line*, not a token count — and
-[table-of-contents.md § Entry length grows with depth](../table-of-contents.md#granularity) already
+[hierarchy.md § Entry length grows with depth](../hierarchy.md#granularity) already
 does this, with 2–6 words for a `title` and 6–20 for a `navLabel`.
 
 **The steps are not uniform.** 10, 15, 25, 30, 50, 100, 200, 400, 800 — roughly geometric at the
@@ -152,7 +152,7 @@ So the borrowings are specific:
    ours would be *one call per parent, returning gists for all its children*. Same shape, same
    saving, and it has a second benefit theirs didn't need: siblings generated together can be made
    to distinguish themselves from each other, which is exactly what
-   [table-of-contents.md](../table-of-contents.md#granularity) says a row's job is. Sibling gists
+   [hierarchy.md](../hierarchy.md#granularity) says a row's job is. Sibling gists
    written in isolation have no way to honour that rule.
 2. **But cap the batch and salvage partials.** Their failure mode is the cost of batching, and it
    compounds with the output-token ceiling that caused the glossary's 504s
@@ -206,7 +206,7 @@ all-or-nothing parse.
 - [../summaries.md](../summaries.md) — what we built from this page
 - [overview.md](overview.md) — the map to that codebase
 - [../granularity-zoom.md](../granularity-zoom.md) — our version: a gist per node, at every depth
-- [../table-of-contents.md#granularity](../table-of-contents.md#granularity) — our length rules, and why a row's job is to distinguish itself
+- [../hierarchy.md#granularity](../hierarchy.md#granularity) — our length rules, and why a row's job is to distinguish itself
 - [../open-questions.md#q4](../open-questions.md#q4) — discrete levels or continuous zoom
 - [prompt-caching.md](prompt-caching.md) — the alternative to batching, which they designed and never built
 - [llm-plumbing.md](llm-plumbing.md) — structured output, retries, and what they logged

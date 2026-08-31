@@ -49,7 +49,7 @@ Outside the body, the honest readout is probably `—` rather than pretending th
 
 4. Medium — “body block” is not literally “paragraph”
 
-The proposed ladder walks every `isBody` block. But `isBody` means only “not supplement” ([block-policy.ts:75](/home/greg/code/spideryarn2/src/block-policy.ts:75)). Blocks also include headings, code, media, captions, quotes, and other content ([types.ts:27](/home/greg/code/spideryarn2/src/types.ts:27)). A representative fixture has body headings and an image alongside prose paragraphs ([toc-structure-request-parity.test.ts:91](/home/greg/code/spideryarn2/tests/toc-structure-request-parity.test.ts:91)).
+The proposed ladder walks every `isBody` block. But `isBody` means only “not supplement” ([block-policy.ts:75](/home/greg/code/spideryarn2/src/block-policy.ts:75)). Blocks also include headings, code, media, captions, quotes, and other content ([types.ts:27](/home/greg/code/spideryarn2/src/types.ts:27)). A representative fixture has body headings and an image alongside prose paragraphs ([toc-structure-request-parity.test.ts:91](/home/greg/code/spideryarn2/tests/hierarchy-structure-request-parity.test.ts:91)).
 
 So make the design call explicit:
 

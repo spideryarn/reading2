@@ -91,7 +91,7 @@ import {
   sameStamp,
   type StepStamp,
 } from "./store/artifacts.js";
-import { generateToc } from "./toc.js";
+import { generateHierarchy } from "./hierarchy.js";
 import { generateTweets, PROMPT_VERSION as TWEETS_PROMPT_VERSION } from "./tweets.js";
 import type { Block, JobUpload, Meta, StepName } from "./types.js";
 import { getDb } from "./db/client.js";
@@ -113,7 +113,7 @@ import { ownedSlug } from "./store/owned-slug.js";
  * The numbers are all in scope *here*, at the seam the queue already owns, so
  * this file can answer that question without a single edit inside somebody
  * else's stage — see architecture.md#stage-ownership. The two exceptions are two
- * lines each: `toc` and `arc` keep `CAPABLE_MODEL` private, so they now return it.
+ * lines each: `hierarchy` and `arc` keep `CAPABLE_MODEL` private, so they now return it.
  *
  * A module-level logger is fine and rule 4 in src/log.ts does not forbid it: it
  * carries the component name and nothing else. What must never be module-level
@@ -1635,7 +1635,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * line above, so that case is one query away instead.
        */
       /* **`blocksArtefact`, not a bare `{ blocks }`.** Every writer of this
-         artefact goes through it — stage 3 here, stage 4 in src/toc.ts, the
+         artefact goes through it — stage 3 here, stage 4 in src/hierarchy.ts, the
          Postgres export — because the stamp it adds is what lets a reader tell
          blocks cleaned by the current sanitiser policy from blocks cleaned by
          nothing. A plain `{ blocks: run.blocks }` compiles, writes, and makes
@@ -1648,13 +1648,13 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
   },
 
   /* Stages 4 + 5 — one model call writes the structure and the gists together;
-     src/toc.ts says why they are not two passes. */
+     src/hierarchy.ts says why they are not two passes. */
   toc: {
     name: "toc",
-    label: "Building the table of contents",
+    label: "Building the hierarchy",
     /* `labels.json` is in here as well as the tree, because stage 4 is two model
        passes now and a directory with a tree but no labels is a half-run step,
-       not a finished one. src/toc.ts writes the tree last for the same reason. */
+       not a finished one. src/hierarchy.ts writes the tree last for the same reason. */
     outputs: (ctx) => [
       path.join(ctx.dir, "tree.json"),
       path.join(ctx.dir, "labels.json"),
@@ -1677,7 +1677,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
      * `arc` has no stamp at all, so it stays "done" and simply loses entries.
      *
      * The tree's own comment in src/web/tree.ts has said as much all along:
-     * *"ids are positional and a re-run of `npm run toc` renumbers them"*.
+     * *"ids are positional and a re-run of `npm run hierarchy` renumbers them"*.
      *
      * **So a stamp here needs consumer invalidation first**, which does not
      * exist: `cascadeForce` is computed once from explicit force flags when the
@@ -1711,7 +1711,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!file?.blocks) {
         throw stageFailure("ours", `No blocks for "${ctx.slug}" — run the blocks step first.`);
       }
-      const run = await generateToc({
+      const run = await generateHierarchy({
         blocks: file.blocks,
         slug: ctx.slug,
         /* Where the **label checkpoint** lives, and nothing else. Not where the
@@ -1746,8 +1746,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              prompt drift.
 
              **`repairedBlocks` and `largestRepair` are new since the tiling
-             repair stopped being bounded at one block** (src/toc.ts §
-             `repairedChildRanges`). The count alone used to say everything,
+             repair stopped being bounded at one block** (src/hierarchy.ts §
+             `planChildRanges`). The count alone used to say everything,
              because every repair was the same size; it now covers both a
              boundary a paragraph out and a section handed forty blocks that
              belonged to its neighbour. The largest is the one that says "go and
@@ -1755,6 +1755,12 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           repairedRanges: run.repairedRanges,
           repairedBlocks: run.repairedBlocks,
           largestRepair: run.largestRepair,
+          /* **Sections the answer proposed that were not stored.** The only one
+             of these that means something was lost rather than moved, and since
+             2026-08-31 the only remaining way a tiling fault costs the reader
+             anything at all — nothing about the tiling refuses an answer now.
+             src/hierarchy.ts § `BuildReport.droppedChildren`. */
+          droppedChildren: run.droppedChildren,
           droppedHeadings: run.droppedHeadings,
           /* The third thing this stage forgives, and the only one with no trace
              in the product: a paragraph the model would not label twice running
@@ -1772,7 +1778,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           blocks: run.blocks,
           sections: run.internal,
         },
-        `toc ${ctx.slug}: ${run.internal} sections over ${run.blocks} blocks`,
+        `hierarchy ${ctx.slug}: ${run.internal} sections over ${run.blocks} blocks`,
       );
       /* The drop is said on the progress card too, and only when there is one.
          The log line above is where an operator would look afterwards; this is
@@ -1787,7 +1793,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
        * crash-safety property its comments claimed. It held because `stepIsDone`
        * reads *file exists* as *step done* and `writeFile` truncates before it
        * writes. Under one map both halves of that reasoning are gone, and
-       * `src/toc.ts` now says so where it used to say the other thing.
+       * `src/hierarchy.ts` now says so where it used to say the other thing.
        *
        * **`inputHash` and nothing else.** `STAMP_SOURCE.toc` is `"labels"`, so
        * whatever is passed here is compared by `assertStampAgrees` against the
@@ -2005,7 +2011,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const over = run.over > 0 ? `, ${run.over} over ${run.thread.limit}` : "";
       /* `run.thread.generator` is this stage's model id — it is already stored
          on the thread, because the stamp compares it to decide whether a thread
-         needs rewriting. So unlike toc and arc, nothing had to be added to
+         needs rewriting. So unlike hierarchy and arc, nothing had to be added to
          src/tweets.ts to log it. */
       plog.info(
         {

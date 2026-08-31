@@ -1,13 +1,13 @@
 /**
- * Parity pin for the structure call — the exact bytes generateToc sends.
+ * Parity pin for the structure call — the exact bytes generateHierarchy sends.
  *
  * Written BEFORE the structureRequest extraction and seen passing against the
- * un-refactored src/toc.ts, so the refactor is provably a pure extraction: the
+ * un-refactored src/hierarchy.ts, so the refactor is provably a pure extraction: the
  * pinned bytes are a snapshot of what production sent on 2026-08-30, copied
  * here once, not derived at run time from the code under test (an expectation
  * derived from the thing it checks agrees with every value of it).
  *
- * It exists because the eval executor (evals/toc-structure/model-arms.ts)
+ * It exists because the eval executor (evals/hierarchy-structure/model-arms.ts)
  * builds the same request through the shared structureRequest export, and an
  * executor that drifted by one byte of prompt would be measuring a recipe the
  * pipeline does not ship — GPT Sol's finding 7, the phase-2 blocker.
@@ -20,7 +20,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Block } from "../src/types.js";
 
-/* The capture. streamMessage is mocked to record the one body generateToc
+/* The capture. streamMessage is mocked to record the one body generateHierarchy
    hands it and then fail the call, so nothing model-shaped runs and nothing
    past the structure call (the label pass, the artefact writes) executes. */
 const captured: { task: string; body: Record<string, unknown> }[] = [];
@@ -37,7 +37,7 @@ vi.mock("../src/messages-stream.js", () => ({
   wasRefused: () => false,
 }));
 
-const { generateToc, structureRequest } = await import("../src/toc.js");
+const { generateHierarchy, structureRequest } = await import("../src/hierarchy.js");
 
 /** The system prompt production sends, byte for byte. THE pin — do not "tidy" it. */
 const EXPECTED_SYSTEM = `You are building a nested table of contents for an article. It goes all the
@@ -102,7 +102,7 @@ const EXPECTED_USER = [
   "[4] spya-par005 <p>: More prose entirely.",
 ].join("\n\n");
 
-/* estimateTocTokens: 500 + (ceil(5/4) + 6) * 175 = 1900; budgetFor adds the
+/* estimateHierarchyTokens: 500 + (ceil(5/4) + 6) * 175 = 1900; budgetFor adds the
    40,000-token thinking headroom. Literals, not the formulae re-run. */
 const EXPECTED_MAX_TOKENS = 41_900;
 
@@ -113,7 +113,7 @@ describe("the structure call's request", () => {
   it("sends exactly the pinned bytes and settings", async () => {
     captured.length = 0;
     await expect(
-      generateToc({ blocks: BLOCKS, slug: "fixture" }),
+      generateHierarchy({ blocks: BLOCKS, slug: "fixture" }),
     ).rejects.toThrow(); // the mocked call fails on purpose, after capture
     expect(captured).toHaveLength(1);
 
@@ -125,7 +125,7 @@ describe("the structure call's request", () => {
     /* `medium` since 2026-08-30. Written out rather than read from `EFFORT`,
        which is the whole point of a pin: importing the constant would make this
        agree with any value the stage happens to hold. It fired when the value
-       changed, which is it working. See the note on `EFFORT` in src/toc.ts. */
+       changed, which is it working. See the note on `EFFORT` in src/hierarchy.ts. */
     expect(body.output_config).toEqual({ effort: "medium" });
     expect(body.max_tokens).toBe(EXPECTED_MAX_TOKENS);
     // Nothing else rides along: the exact key set is part of the request.
@@ -137,7 +137,7 @@ describe("the structure call's request", () => {
   it("structureRequest is the same request - parity by construction, checked anyway", async () => {
     captured.length = 0;
     await expect(
-      generateToc({ blocks: BLOCKS, slug: "fixture" }),
+      generateHierarchy({ blocks: BLOCKS, slug: "fixture" }),
     ).rejects.toThrow();
     const { body } = captured[0]!;
     const req = structureRequest(BLOCKS);
