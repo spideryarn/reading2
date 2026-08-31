@@ -95,6 +95,20 @@ characters for nothing — no model, no money, no latency. It removes `aria-hidd
 `[hidden]` and inline `display: none` are stronger claims, and the measurement that says so is on the
 function.
 
+**A class is gone before stage 3 can read it, and that is a second thing this stage has to catch.**
+Readability runs with `keepClasses: false` and unwraps the containers those classes were on, so
+markup that says *this box is set apart from the argument* — Substack's
+`<div data-callout class="callout-block">`, a MkDocs admonition — reaches stage 3 as a bare `<p>`,
+indistinguishable from body prose. Nine of them on the article that made us look. Same shape as
+footnotes, same answer: recognise it here, where the page is still as the author wrote it, and leave
+a stamp on the elements that survive — [`src/callouts.ts`](../../src/callouts.ts) and
+[`src/notes.ts`](../../src/notes.ts), and [../plans/callout-blocks.md](../plans/callout-blocks.md)
+for what is recognised and what is deliberately not.
+
+Both passes stamp and move on; neither rewrites the author's words, because stage 3 recovers a
+block's id by matching its tag and its text and a re-worded block is a re-minted id
+([block-ids.md](block-ids.md)).
+
 The rest is not fixed, and the largest of it is not truncation at all:
 
 > **13 of the 15 fixture pages lose 10% or more of some structural element** — tables, formulas,

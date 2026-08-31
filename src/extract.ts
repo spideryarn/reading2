@@ -28,6 +28,7 @@ import { fetchHtml } from "./fetch.js";
 import { escapeHtml } from "./html.js";
 import { slugFromUrl } from "./ingest.js";
 import { isMain } from "./is-main.js";
+import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
 import { sanitizeHtml } from "./sanitize.js";
 import type { Meta } from "./types.js";
@@ -162,6 +163,8 @@ export interface ExtractResult {
   excerpt: string | null;
   /** What the footnote canonicalisation did — see src/notes.ts. */
   notes: NoteStats;
+  /** What the callout pass found — see src/callouts.ts. */
+  callouts: CalloutStats;
 }
 
 /**
@@ -289,6 +292,11 @@ export async function runExtract(opts: {
      deletes the `<label>`/`<input>` that Tufte's sidenotes are made of. By stage
      3 there is nothing left to recognise a note by. See src/notes.ts. */
   const notes = canonicaliseNotes(dom.window.document);
+  /* After the notes, and for the same reason as the notes: Readability deletes
+     the element a callout is named on. Order between the two does not matter —
+     neither reads what the other writes — so it is simply the later arrival.
+     src/callouts.ts. */
+  const callouts = canonicaliseCallouts(dom.window.document);
   const article = new Readability(dom.window.document).parse();
   if (!article) {
     throw new Error("Readability could not parse this page.");
@@ -324,6 +332,7 @@ export async function runExtract(opts: {
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,
     notes,
+    callouts,
   };
 }
 
@@ -345,6 +354,10 @@ async function main(): Promise<void> {
   console.log(
     `Notes: ${result.notes.notes} (${result.notes.markers} markers, ` +
       `${JSON.stringify(result.notes.shapes)})`,
+  );
+  console.log(
+    `Callouts: ${result.callouts.containers} (${result.callouts.stamped} elements stamped, ` +
+      `${result.callouts.skipped} skipped, ${JSON.stringify(result.callouts.shapes)})`,
   );
   console.log(`Excerpt: ${result.excerpt}`);
   console.log(`\nWritten to: ${path.resolve(result.outFile)}`);

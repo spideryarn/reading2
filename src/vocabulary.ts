@@ -237,10 +237,18 @@ export function properNouns(text: string, limit = 40): string[] {
  *
  * `kind === "text"` rather than "not a heading", so a block kind invented later
  * has to be let in on purpose. src/types.ts owns the list.
+ *
+ * **`"callout"` was let in on 2026-08-31**, the day the kind was invented, and
+ * that is this comment earning its keep. A callout is the author's own voice in
+ * a box — the article this feature was built for names "Persistent-Astra" and
+ * "PHASEONE10841" almost entirely inside them — so leaving it out would have
+ * quietly cost the reader those words in dictation, on exactly the articles
+ * where they matter most. Found by GPT Sol's review, which went looking for the
+ * `kind` consumers the plan claimed did not exist.
  */
 export function proseOf(blocks: readonly { kind?: string; text?: string }[]): string {
   return blocks
-    .filter((b) => b.kind === "text")
+    .filter((b) => b.kind === "text" || b.kind === "callout")
     .map((b) => b.text ?? "")
     .filter(Boolean)
     .join("\n");

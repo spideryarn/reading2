@@ -18,6 +18,8 @@ import { isMain } from "./is-main.js";
 /* The three strings stage 2 stamped into the DOM, from the file that writes
    them. See noteFieldsFor. */
 import { BACK_ATTR, CONTAINER_ATTR, NOTE_ATTR, NOTE_ID_PATTERN, REF_ATTR } from "./notes.js";
+/* Stage 2's other stamp, from the file that writes it. See describeBlock. */
+import { CALLOUT_ATTR } from "./callouts.js";
 import { sanitizeInPlace, sanitizeStoredBlocks } from "./sanitize.js";
 import { SANITIZER_VERSION } from "./sanitize-policy.js";
 /* `Block` and `BlockKind` come from types.ts rather than being declared here.
@@ -210,9 +212,25 @@ function describeBlock(
     note = "boilerplate label";
   }
 
+  /* **The box an author drew round this, read off stage 2's stamp**
+     (src/callouts.ts) — the class that said so is gone by now, deleted with the
+     `<div>` it was on before Readability handed us the page.
+
+     `closest` rather than `hasAttribute`, because the stamp is on the container
+     *and* on the block-level elements inside it, and which of the two survives
+     Readability depends on the page.
+
+     **Only where the block would otherwise be `text`.** A heading inside a
+     callout stays a heading with its level, a `<blockquote>` inside one stays a
+     quote, a figure stays media. The tree is built from heading levels and the
+     figure rules are somebody else's; a box drawn round any of them changes how
+     it is set, not what it is. */
+  if (kind === "text" && el.closest(`[${CALLOUT_ATTR}]`)) kind = "callout";
+
   // Pull-quotes repeat a sentence that is already in the prose. Giving them
-  // gists would put the same claim in the ToC twice.
-  if (gistable && (kind === "quote" || el.closest("figure"))) {
+  // gists would put the same claim in the ToC twice. A callout repeating the
+  // paragraph above it is a pull-quote whatever its class said.
+  if (gistable && (kind === "quote" || kind === "callout" || el.closest("figure"))) {
     const probe = normalize(text).slice(0, 60);
     if (probe.length >= 30 && proseText.some((p) => p.includes(probe))) {
       gistable = false;
@@ -992,9 +1010,19 @@ export function splitIntoBlocks(html: string, previous?: Block[]): SplitResult {
     Array.from(doc.querySelectorAll("[id]"), (el) => el.id).filter(Boolean),
   );
 
-  // Prose text, for spotting pull-quotes that merely repeat it.
+  /* Prose text, for spotting pull-quotes that merely repeat it.
+
+     **A callout's own paragraphs are excluded, and leaving them in made every
+     callout a pull-quote.** A callout is a `<p>` outside any figure or
+     blockquote, so it was in this list — and the check then found its first
+     sixty characters in the prose, in itself. Nine of nine on the article this
+     feature was built for: `gistable: false`, no ToC row, no gist, for text
+     that appears exactly once in the piece. The rule wants "does this repeat
+     something *else*", and the selector is how it says so. */
   const proseText = elements
-    .filter((el) => el.tagName === "P" && !el.closest("figure, blockquote"))
+    .filter(
+      (el) => el.tagName === "P" && !el.closest(`figure, blockquote, [${CALLOUT_ATTR}]`),
+    )
     .map((el) => normalize(el.textContent ?? ""));
 
   let reused = 0;

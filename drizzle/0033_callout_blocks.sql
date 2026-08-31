@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."revision_blocks" DROP CONSTRAINT "revision_blocks_kind";--> statement-breakpoint
+ALTER TABLE "spideryarn"."revision_blocks" ADD CONSTRAINT "revision_blocks_kind" CHECK ("spideryarn"."revision_blocks"."kind" in ('heading','text','quote','callout','code','media','caption','other'));

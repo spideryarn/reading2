@@ -25,7 +25,14 @@ import type { Assets } from "./assets.js";
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
 export type BlockKind =
-  | "heading" | "text" | "quote" | "code" | "media" | "caption" | "other";
+  /* `callout` is the box an author sets apart from the argument — a Substack
+     callout, a MkDocs admonition, an RFC's editorial aside. It is stamped at
+     stage 2, before Readability deletes the element that says so
+     (src/callouts.ts), and it is *not* `quote`: in a callout the author is
+     usually still the one speaking. Added 2026-08-31; every article extracted
+     before then carries `text` on its callouts until it is re-extracted.
+     docs/plans/callout-blocks.md. */
+  | "heading" | "text" | "quote" | "callout" | "code" | "media" | "caption" | "other";
 
 /**
  * One block of the article. **Array order in blocks.json IS document order** —

@@ -786,9 +786,20 @@ export const revisionBlocks = spideryarn.table(
     index("revision_blocks_fts").using("gin", t.fts),
     unique("revision_blocks_revision_ordinal").on(t.revisionId, t.ordinal),
     check("revision_blocks_ordinal", sql`${t.ordinal} >= 0`),
+    /**
+     * `callout` joined the list on 2026-08-31 (migration 0033). Widening a
+     * CHECK is the safe direction — every row that satisfied the old one still
+     * satisfies this — but it has to land *before* an article extracted by the
+     * new stage 2 is imported. Blocks are written in one batched statement
+     * inside a transaction (src/store/import.ts, src/store/artifacts-pg.ts), so
+     * the failure is loud and total: the statement is refused and the whole
+     * revision rolls back. It does not leave half an article. `npm run deploy`
+     * migrates before it pushes code, which is the right order.
+     * docs/plans/callout-blocks.md.
+     */
     check(
       "revision_blocks_kind",
-      sql`${t.kind} in ('heading','text','quote','code','media','caption','other')`,
+      sql`${t.kind} in ('heading','text','quote','callout','code','media','caption','other')`,
     ),
     /**
      * The two closed axes, nullable — so `is null or in (…)`, where `kind`
