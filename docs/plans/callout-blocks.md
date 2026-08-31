@@ -220,3 +220,22 @@ against production, and the migration has to land first.
 
 Footnote and supplement blocks are left alone: `treatment: "supplement"` is the in-flight footnotes
 work ([footnotes.md](footnotes.md)) and styling it belongs with that.
+
+## The shape this is the second instance of
+
+Greg, seeing the sentence that documents the stamp: *"I wonder if there's a long-term-better/cleaner
+way to do this?"* The answer is in
+[stage2-stamps-design-sol.md](stage2-stamps-design-sol.md) (the question is
+[stage2-stamps-design-prompt.md](stage2-stamps-design-prompt.md)), and nothing here has been rewritten
+off the back of it. Two things from it are worth having in front of you before the *third* feature
+needs to carry evidence past Readability:
+
+- **`"callout"` should be the last contextual `kind`.** `kind` is the block's own form and the tree
+  is built from it; a box drawn *around* blocks is a different axis, which is why a heading inside a
+  callout has to keep `kind: "heading"` and therefore silently loses the box. The next one of these
+  wants a **context**: a group with an id and members, over blocks, addressed by block id and never
+  by its own.
+- **Most of the features that look like they will need a stamp do not.** Tables, definition lists,
+  figures, `lang`, `dir`, `<mark>`, `<ins>`/`<del>` all survive Readability as native markup; they
+  need the sanitiser and the splitter taught, not a new reserved attribute. The bridge is only for
+  evidence Readability demonstrably destroys, which is a much shorter list than it looked.
