@@ -143,6 +143,17 @@ not RLS. That is the safe default and it should stay until something specific ne
   expect from a container. Anything that matters belongs in a migration file.
 - **A stale socket looks like a running daemon.** `~/.orbstack/run/docker.sock` exists whether or not
   OrbStack is running. `ls` proves nothing; `docker info` is the check.
+- **`docker ps | grep supabase` finds somebody else's stack.** This machine runs more than one
+  Supabase project at a time — `_hellozenno` was up alongside `_spideryarn2` on 2026-08-31, twelve
+  healthy containers each. Grepping for `supabase` returns another project's stack looking perfectly
+  healthy, which is worse than returning nothing. **Filter on `_spideryarn2`**, the `project_id`
+  every one of our containers is named after.
+- **An empty `docker ps` is not proof there are no containers.** On 2026-08-31 a `docker ps -a`
+  piped through `grep` and `head` printed nothing and exited 0, and that was read as "the stack is
+  gone". It was not: 24 containers were running and `supabase_db_spideryarn2` had been up 46 hours.
+  Same family as the stale socket above — **a check that produces no output looks exactly like a
+  check that found nothing.** `docker info` answers "is the daemon up"; `docker ps --format
+  '{{.Names}}' | grep _spideryarn2` answers "is our stack up"; neither is answered by silence.
 
 ## The `sources` bucket, and the one thing about it that is local-only
 

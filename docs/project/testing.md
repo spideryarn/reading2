@@ -515,6 +515,13 @@ slow, the assertion says what failed. On 2026-08-30 six cases failed at 20,468 /
 the duration was read as though it were the failure. It was not — the assertions were ordinary diffs
 like `expected 'running' to be 'error'`, and the 20 seconds was the wait in front of them.
 
+**A wedged row's second symptom points at the database.** The suite it blocks hangs — 316 seconds
+on 2026-08-31, against 6 once the row was gone — and the *next* run then skips itself with
+`DATABASE_URL is set but these tests are skipping: could not reach it: Connection terminated due to
+connection timeout`. That reads as a sick database and is a knock-on from the hung run: Postgres was
+fine throughout, answering in 15ms on 32 of 100 connections. **Clear the row before believing
+anything about the database.**
+
 **The claimant is usually not another suite — it is a wedged row.** That day's holder was a job left
 `running` by an *aborted teardown*: `store-jobs-parity`'s `afterAll` deleted articles before jobs, the
 foreign key refused, the first delete threw, and the rest of the teardown never ran. Waiting cannot
