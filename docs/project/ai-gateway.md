@@ -475,6 +475,14 @@ than left for somebody to find at the bottom of a table.
   actually writes a row yet. `npm run cost` prints every `metered: false` entry **by name, every
   run**, which is what makes the list finishable — the sentence it replaced ("*not counted here:
   anything evals/ spends*") named nothing and so never could be.
+- [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts) `liveConversationGap()` — **the live-conversation
+  hole, printed on every run even though it is not in the register.** It has to be printed separately
+  because `undeclared()` reads `DECLARATIONS`, so on the day the last `metered: false` entry is wired
+  up this report would otherwise have announced that everything writes a row — while a reader could
+  be holding a live conversation billing audio by the minute into no total at all. Greg accepted the
+  gap knowingly on 2026-08-31; what it would take to close is in
+  [live-conversation.md § What is missing](../plans/live-conversation.md#what-is-missing). The
+  completeness line now says "every **declared** way", which is the true claim.
 - [`evals/declared-spend.ts`](../../evals/declared-spend.ts) — the wrapper, kept under `evals/` so
   nothing in `src/` can reach a second way of calling a model. `declaredFetch` refuses to run outside
   a declaration, and counts attempts: a default Anthropic client retries twice, so one call can be
