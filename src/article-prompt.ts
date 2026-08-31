@@ -70,18 +70,44 @@ export interface OpenRouterMessage {
 }
 
 /**
+ * **Who wrote it, where it appeared, and where it lives — kept or stripped.**
+ *
+ * `"named"` is what every stage has always sent and stays the default, so
+ * nothing that does not ask changes by a byte.
+ *
+ * `"anonymous"` drops `BY:`, `PUBLISHED IN:` and `URL:` and keeps `TITLE:`. It
+ * exists for Referee mode (docs/plans/260831an-referee-mode-for-peer-reviewers.md,
+ * rule 4) and the reason is measured rather than fastidious: the MIT study
+ * behind docs/research/260831e-helping-peer-reviewers/, 27,000 evaluations
+ * across four models, found the same paper rated higher when it carried a
+ * prestigious institution or a famous author. A referee-facing call that can
+ * see a byline is a call whose answer is partly about the byline.
+ */
+export type ArticleIdentity = "named" | "anonymous";
+
+/**
  * The head every article block starts with.
  *
  * Optional fields are dropped rather than emitted empty, so an article with no
  * byline does not carry a blank `BY:` line — but the *order* is fixed, because
  * a head assembled in a different order is a different prefix.
+ *
+ * **The title survives anonymisation, and that is a product call somebody else
+ * has to make.** A title can name its own subject — *"A GPT-4 replication of
+ * Smith et al."*, *"The Anthropic Constitution"* — and a preprint's title
+ * sometimes carries the group as plainly as the byline does. Stripping it is
+ * not obviously right either: a paper with no title is a paper the model
+ * cannot tell what it is about, and the criteria a referee asks about are
+ * usually about the claim the title states. So it stays, noted here, for Greg
+ * to decide rather than for this function to decide silently.
  */
-function head(meta: Meta): string {
+function head(meta: Meta, identity: ArticleIdentity): string {
+  const anonymous = identity === "anonymous";
   return [
     `TITLE: ${meta.title}`,
-    meta.byline ? `BY: ${meta.byline}` : null,
-    meta.siteName ? `PUBLISHED IN: ${meta.siteName}` : null,
-    meta.url ? `URL: ${meta.url}` : null,
+    !anonymous && meta.byline ? `BY: ${meta.byline}` : null,
+    !anonymous && meta.siteName ? `PUBLISHED IN: ${meta.siteName}` : null,
+    !anonymous && meta.url ? `URL: ${meta.url}` : null,
   ]
     .filter(Boolean)
     .join("\n");
@@ -94,10 +120,27 @@ function head(meta: Meta): string {
  * Every block carries its index and its id. **Nothing here depends on the
  * call**: no reading position, no selection, no timestamp. That is the whole
  * contract of this function, and `tests/article-prompt.test.ts` holds it to it.
+ *
+ * `identity` is the one thing that varies, and it varies per *task* rather than
+ * per call, which is what makes it safe for the cache. An anonymous head is a
+ * different prefix, so a referee call caches separately from a search over the
+ * same article — see docs/project/prompt-caching.md. That costs one cache write
+ * and nothing else: the two never interleave, because no stage sends both, and
+ * a referee session's own second call still lands on the referee prefix.
+ *
+ * Everything a fingerprint is computed over lives in src/source-hash.ts, and
+ * `articleWithIdsFingerprint` deliberately covers the *named* head. Nothing in
+ * the pipeline sends an anonymous one; if a cached artefact ever does, that
+ * function needs this argument too, or two different prompts will share one
+ * hash.
  */
-export function articleWithIds(meta: Meta, blocks: Block[]): string {
+export function articleWithIds(
+  meta: Meta,
+  blocks: Block[],
+  identity: ArticleIdentity = "named",
+): string {
   const body = blocks.map((b, i) => `[${i}] ${b.id}: ${b.text}`).join("\n\n");
-  return `${head(meta)}\n\n---\n\n${body}`;
+  return `${head(meta, identity)}\n\n---\n\n${body}`;
 }
 
 /**

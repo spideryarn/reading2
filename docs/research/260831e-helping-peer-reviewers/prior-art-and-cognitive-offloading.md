@@ -327,9 +327,16 @@ explicitly so a product write-up does not assume a stable norm.
   geographic skew, matching systems trained on it reproduce that skew
   ([survey, arXiv 2507.01903](https://arxiv.org/pdf/2507.01903); corroborated by the economics-paper
   bias study in §2).
-- **Gender homophily.** A large empirical study of about 43,000 Frontiers reviewers found women
-  underrepresented in the reviewer pool, and **editors of both genders show substantial same-gender
-  preference** ([Science Advances 2021](https://www.science.org/doi/10.1126/sciadv.abd0299)).
+- **Gender homophily.** A large empirical study of about 43,000 Frontiers reviewers (and 9,000
+  editors, across 142 journals, 2007–2015) found women underrepresented in the reviewer pool, and
+  **editors of both genders show substantial same-gender preference**
+  ([Helmer et al., *eLife* 2017](https://elifesciences.org/articles/21718)). This was first written up
+  here as *Science Advances* 2021, which is a different and larger study
+  ([Squazzoni et al.](https://www.science.org/doi/10.1126/sciadv.abd0299), ~740,000 referees) that
+  also finds selection-stage homophily. The correction was made on 2026-09-01, after a second research
+  pass flagged it and proposed *Murray et al., eLife 2019* — which is wrong too. The paper with these
+  numbers is eLife 21718, and the lesson is the one this repo already writes down: check the finding,
+  including the one correcting a finding.
 - **Imperfect anonymization leaking into matching and bias.** Even with blinded manuscripts,
   institutional and geographic cues leak author identity, which both human and algorithmic matching
   picks up on.
@@ -497,7 +504,7 @@ this note.
 39. [Web of Science Reviewer Locator](https://clarivate.com/academia-government/scientific-and-academic-research/publisher-solutions/web-of-science-reviewer-locator/)
 40. [Elsevier Reviewer Recommender](https://service.elsevier.com/app/answers/detail/a_id/29385/supporthub/publishing/~/reviewer-recommender-in-editorial-manager/)
 41. [Farber et al., AI-assisted reviewer selection, Learned Publishing 2024](https://onlinelibrary.wiley.com/doi/10.1002/leap.1638)
-42. [Gender bias in peer review, Science Advances](https://www.science.org/doi/10.1126/sciadv.abd0299)
+42. [Helmer et al., Gender bias in scholarly peer review, eLife 2017](https://elifesciences.org/articles/21718) · [Squazzoni et al., Science Advances 2021](https://www.science.org/doi/10.1126/sciadv.abd0299)
 43. [Hypothesis (Hypothes.is)](https://web.hypothes.is/)
 44. [Microsoft Research + CMU, CHI 2025 critical thinking study](https://www.microsoft.com/en-us/research/publication/the-impact-of-generative-ai-on-critical-thinking-self-reported-reductions-in-cognitive-effort-and-confidence-effects-from-a-survey-of-knowledge-workers/)
 45. [Anchoring bias in AI-assisted decision making, ScienceDirect](https://www.sciencedirect.com/science/article/pii/S0268401225000076)

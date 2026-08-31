@@ -92,6 +92,83 @@ describe("articleWithIds", () => {
   });
 });
 
+/**
+ * **The identity strip, and the guarantee that adding it changed nothing.**
+ *
+ * Referee mode's rule 4 (docs/plans/260831an-referee-mode-for-peer-reviewers.md):
+ * a call aimed at judging a manuscript must not see who wrote it. The option is
+ * additive, so the expensive failure is not "anonymous leaks a byline" — that
+ * one is loud — but "every other stage's prompt moved by a character", which
+ * would silently retire every warm cache in the app and show up only as a bill.
+ * Hence the first test here, which is about the callers that did not ask.
+ */
+describe("articleWithIds identity", () => {
+  it("is byte-identical by default to the two-argument call every stage makes", () => {
+    // The whole point of the option being additive. Not `toContain`, not "has
+    // the same lines": the same string, because a cache matches bytes.
+    const cases: Meta[] = [
+      meta,
+      { slug: "x", title: "Just A Title" },
+      { slug: "y", title: "T", url: "https://example.com/a" },
+      { slug: "z", title: "T", byline: "A. Writer" },
+      { slug: "w", title: "T", siteName: "Somewhere" },
+    ];
+    for (const m of cases) {
+      expect(articleWithIds(m, blocks, "named")).toBe(articleWithIds(m, blocks));
+    }
+  });
+
+  it("emits the head it emitted before the option existed, byte for byte", () => {
+    /* A written-out golden string rather than a comparison of the function
+       with itself, because the two-argument and three-argument calls agreeing
+       proves only that the default is wired up — it cannot notice a head that
+       moved for *both* of them. This literal was copied from the output on
+       2026-08-31, before the option landed. If it goes red, every warm cache
+       in the app has just been retired and somebody meant to do that. */
+    expect(articleWithIds(meta, blocks)).toBe(
+      "TITLE: An Example Article\n" +
+        "BY: A. Writer\n" +
+        "PUBLISHED IN: Somewhere\n" +
+        "URL: https://example.com/piece\n" +
+        "\n---\n\n" +
+        "[0] spya-aaaaaa: The first paragraph says one thing.\n\n" +
+        "[1] spya-bbbbbb: The second paragraph says another.\n\n" +
+        "[2] spya-cccccc: The third paragraph disagrees with both.",
+    );
+  });
+
+  it("strips the byline, the publication and the URL, and keeps the title", () => {
+    const out = articleWithIds(meta, blocks, "anonymous");
+    expect(out).toContain("TITLE: An Example Article");
+    expect(out).not.toContain("A. Writer");
+    expect(out).not.toContain("Somewhere");
+    expect(out).not.toContain("example.com");
+    expect(out).not.toContain("BY:");
+    expect(out).not.toContain("PUBLISHED IN:");
+    expect(out).not.toContain("URL:");
+  });
+
+  it("keeps the whole body, ids included — this strips a head, not evidence", () => {
+    const out = articleWithIds(meta, blocks, "anonymous");
+    for (const b of blocks) {
+      expect(out).toContain(b.id);
+      expect(out).toContain(b.text);
+    }
+  });
+
+  it("is a different cached prefix from the named one, deliberately", () => {
+    // Stated as a test so nobody 'fixes' it later: an anonymous call cannot
+    // share a cache entry with a named one, and that is the cost of the rule.
+    expect(articleWithIds(meta, blocks, "anonymous")).not.toBe(articleWithIds(meta, blocks));
+  });
+
+  it("still depends on nothing about the call", () => {
+    expect(articleWithIds(meta, blocks, "anonymous")).toBe(
+      articleWithIds(meta, blocks, "anonymous"),
+    );
+  });
+});
+
 describe("readerPositionLine", () => {
   it("names the block when there is one", () => {
     expect(readerPositionLine("spya-bbbbbb")).toContain("spya-bbbbbb");

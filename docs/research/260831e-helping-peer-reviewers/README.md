@@ -3,7 +3,8 @@
 This research was for designing a possible "Referee mode" in Spideryarn: a version of the reading
 view aimed at someone doing scientific peer review, not casual reading. It asks three questions —
 what does a reviewer actually have to do, what will publishers and funders let AI touch, and what has
-already been tried, with what evidence for or against it working.
+already been tried, with what evidence for or against it working. A fourth file looks at the same
+territory from the other side of the desk — the editor trying to find reviewers in the first place.
 
 ## Files here
 
@@ -17,6 +18,14 @@ already been tried, with what evidence for or against it working.
   that generate reviews outright (Liang et al.'s Stanford study, ReviewerGPT, DeepReviewer, the ICLR
   2025 Review Feedback Agent RCT), reviewer-matching tools and their bias failure modes, and the
   cognitive-science evidence on what AI assistance does to a reader's own judgment.
+- **[editors-and-finding-reviewers.md](editors-and-finding-reviewers.md)** — the editor's job, not the
+  reviewer's: what the reviewer search actually costs (declining acceptance rates, concentrated review
+  load), what editors want from a suggestion tool and what they distrust, conflict-of-interest rules in
+  their actual numeric detail across nine publishers, what existing tools (Prophy, WoS Reviewer
+  Locator, Elsevier's Find Reviewers) show per candidate, reviewer mills and selection-stage bias with
+  numbers, the seven public data sources that could back a suggestion (OpenAlex, Crossref, ORCID,
+  Semantic Scholar, PubMed, DBLP, OpenAIRE) and their licensing, and whether a conversational interface
+  is even the right fit for this job.
 - `ideas-fable.md`, `ideas-gpt-sol.md` — not yet written; another agent owns turning this research
   into concrete feature ideas. Not linked yet because they don't exist.
 

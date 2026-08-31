@@ -87,10 +87,11 @@ export function isRefereeCriterionKind(value: unknown): value is RefereeCriterio
  * as each end, because *"the controls are adequate"* and *"the controls are
  * pre-registered"* are different questions and only one of them is theirs.
  *
- * `against` is the −100 end and `forr`… no. `against` is −100, `favour` is
- * +100, and the panel prints those words rather than a colour —
- * docs/project/colour-scales.md is blunt that colour may never be the only
- * carrier of a direction.
+ * `against` is the −100 end, `favour` is +100 — and `favour` rather than `for`
+ * only because `for` is a reserved word and a field nobody can destructure is a
+ * field somebody renames later. The panel prints these words rather than
+ * relying on the colour: docs/project/colour-scales.md is blunt that colour may
+ * never be the only carrier of a direction.
  */
 export interface RefereePoles {
   /** What the −100 end means. Printed as "counts against". */
@@ -415,8 +416,8 @@ export function validateResults(
 
     if (kind === "diverging") {
       const rawValence =
-        typeof row["valence"] === "number" && Number.isFinite(row["valence"])
-          ? (row["valence"] as number)
+        typeof row.valence === "number" && Number.isFinite(row.valence)
+          ? (row.valence as number)
           : 0;
       if (rawValence !== 0 && Math.abs(rawValence) <= 1) dropped.subOneValence++;
       const valence = clampValence(rawValence);
@@ -425,12 +426,12 @@ export function validateResults(
       continue;
     }
 
-    const citations = readCitations(row["citations"]);
+    const citations = readCitations(row.citations);
     if (citations.length === 0) {
       dropped.uncited++;
       continue;
     }
-    const rawSearches = row["searches"];
+    const rawSearches = row.searches;
     const searches =
       typeof rawSearches === "number" && Number.isFinite(rawSearches) && rawSearches >= 0
         ? Math.round(rawSearches)
