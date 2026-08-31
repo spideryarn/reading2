@@ -73,6 +73,7 @@ import type {
   Glossary,
   Ideas,
   JobStep,
+  Quotes,
   SearchHit,
   Summaries,
   ToolRun,
@@ -572,6 +573,26 @@ export const articleRevisions = spideryarn.table(
      * article"* rather than take a delete with it or block one.
      */
     ideas: jsonb("ideas").$type<Ideas>(),
+
+    /**
+     * The lines worth keeping, in the author's own words — `Quotes`,
+     * src/types.ts, written by the `quotes` step. docs/project/quotes.md.
+     *
+     * The WHOLE artefact, like its neighbours, and here `sourceHash` earns its
+     * place twice over. Every quote carries a `blockId` **we** found rather than
+     * one the model named, and it carries `text` that was verified to be in the
+     * article at write time — so a re-extraction can invalidate a row in two
+     * ways at once: the block may be gone, and the words may no longer be in the
+     * piece. A column holding `quotes` without the hash could not answer either
+     * question, and the panel would go on offering the author's supposed
+     * sentences over an article that no longer contains them.
+     *
+     * **No foreign key from a quote's `blockId` to `revision_blocks`**, on the
+     * same argument the glossary, the ideas and the sketch make: a dropped
+     * paragraph should cost that quote its jump rather than take a delete with
+     * it or block one.
+     */
+    quotes: jsonb("quotes").$type<Quotes>(),
 
     /**
      * The picture a model drew of the argument — `Sketch`,
@@ -1296,7 +1317,14 @@ export const revisionStepRuns = spideryarn.table(
        * with the `toc` row. Verified against src/pipeline.ts rather than
        * inferred from the file existing.
        */
-      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','summary','ideas')`,
+      /* **This list is `STEP_ORDER` and it has drifted twice.** `sketch` was added
+         to the database by drizzle/0031 and never got back into this literal,
+         because `drizzle-kit generate` diffs the schema and knows nothing about a
+         CHECK expression — so this one is hand-maintained and the migrations are
+         the truth. `tests/db-step-constraint.test.ts` compares the last
+         `ADD CONSTRAINT` in the migrations against `STEP_ORDER` in both
+         directions, which is what makes there not be a third drift. */
+      sql`${t.stepName} in ('fetch','extract','blocks','toc','assets','arc','tweets','glossary','quotes','summary','ideas','sketch')`,
     ),
     check(
       "revision_step_runs_status",
@@ -1708,6 +1736,33 @@ export const chatMessages = spideryarn.table(
      * so, because an answer ending mid-sentence reads exactly like a bug.
      */
     stopped: boolean("stopped").notNull().default(false),
+    /**
+     * **Passages a spoken answer pointed at instead of citing in words.**
+     *
+     * `jsonb` and nullable, for exactly the reasons `tools` above gives at
+     * length: read only as the whole list for one message, never queried
+     * across messages, never joined to. Null — not `[]` — when the answer
+     * pointed at nothing, because the filesystem store omits the key and
+     * tests/store-roundtrip.test.ts compares the two byte for byte. That test
+     * is how `tools` was caught going missing, and this column is the same
+     * shape of thing arriving by the same door.
+     *
+     * See `ChatMessage.passages` in src/types.ts for why this is not folded
+     * into `citations` and not spliced into the text.
+     */
+    passages: jsonb("passages").$type<{ blockIds: string[]; why: string }[]>(),
+    /**
+     * **The reader talked over this answer, so it may contain words nobody
+     * heard.**
+     *
+     * Beside `stopped` and shaped like it — `notNull().default(false)`, so
+     * every existing row reads as "not interrupted", which is true of all of
+     * them. The two flags mean opposite things about history: a stopped
+     * answer's text is what the reader read and is kept; this one's tail is
+     * words the realtime server generated and then truncated out of the audio,
+     * so `recentHistory` in src/converse.ts drops the pair.
+     */
+    interrupted: boolean("interrupted").notNull().default(false),
     /** When the reader last rewrote this. User turns only; the old text is not kept. */
     editedAt: timestamp("edited_at", { withTimezone: true }),
     /**

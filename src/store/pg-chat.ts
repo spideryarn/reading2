@@ -127,6 +127,20 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
     ...(row.model === null ? {} : { model: row.model }),
     ...(row.error === null ? {} : { error: row.error }),
     ...(row.stopped ? { stopped: true } : {}),
+    /* **Both of these must be named here or they do not exist.** This mapping
+       enumerates fields, so a column the reader half of the store does not
+       mention is written, stored, and then silently dropped on the way out —
+       and every consumer sees an answer that pointed at nothing and was never
+       interrupted. Same rule as `citations` and `tools` above. */
+    /* Cast to the ARRAY, not to `ChatMessage["passages"]`. That alias includes
+       `undefined`, and under `exactOptionalPropertyTypes` spreading a
+       possibly-undefined value into an optional property is exactly the thing
+       the flag is on to forbid — the key would be present and undefined, which
+       the filesystem store never produces. */
+    ...(row.passages === null
+      ? {}
+      : { passages: row.passages as { blockIds: string[]; why: string }[] }),
+    ...(row.interrupted ? { interrupted: true } : {}),
     ...(row.editedAt === null ? {} : { editedAt: row.editedAt.toISOString() }),
     /* Absent, never `stance: undefined` — the filesystem store simply has no
        key on a chat answer, and tests/store-roundtrip.test.ts compares the two
@@ -445,6 +459,11 @@ export const pgChatStore: ChatStore = {
           model: null,
           error: null,
           stopped: false,
+          /* A retry answers the same question afresh, so last attempt's
+             pointers are as stale as its tool strip — and an `interrupted`
+             carried over would label an answer nobody has interrupted yet. */
+          passages: null,
+          interrupted: false,
           // A new attempt on the same row. This is what stops the previous
           // one's late answer landing here.
           attemptId: attempt,
