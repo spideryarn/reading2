@@ -1,9 +1,44 @@
 # One directory doing two jobs: splitting `data/` into scratch, fixtures and eval inputs
 
-**Status, 2026-09-01: designed and reviewed. Nothing built, nothing moved.** The design pass and the
-adversarial review are both in; the review returned *revise before building* and its corrections are
-folded in below. What is not yet done is the corrected experiment, which has to run before corpus
-membership is fixed.
+**Status, 2026-09-01: built and landed.** The corpus is committed and tracked — 57 files, 1.13 MB,
+five articles under `tests/fixtures/data-root/`. The deploy gate materialises from it rather than
+from a laptop, and **its `fixtures` check now passes without `--force-gate=test` for the first time**.
+
+```
+  the deploy gate's test failures, in a worktree with no laptop state
+  ────────────────────────────────────────────────────────────────────
+  before      50
+  after        3      and each of the three is a defect the corpus exposed,
+                      not a regression it caused
+```
+
+What shipped, in order: `5c503e5` the `.gitignore` anchor · `417dc1f` the corpus ·
+`30e2b1b` the gate reading the commit rather than the laptop · `6b325c2`, `755264a`, `fe0e7cc` the
+vacuous enumerators · `3b40441` the parity test that was passing on an archived shelf ·
+`2258f87` the id defect and the README.
+
+**The deferred half is deliberately still deferred.** The ~76 test files that compute their own
+`ROOT/data` were not swept, so a bare `npm test` in an unprepared checkout is still not hermetic.
+That was Greg's call on 2026-09-01, on the review's advice, because stage 4 of the store migration
+deletes both filesystem seams and sweeping now would move the same files twice.
+
+### What the corpus found, which is the point
+
+Every remaining failure is the same species — **a test that was green because of something on one
+laptop**, invisible until a checkout without that laptop's state ran it:
+
+| | |
+|---|---|
+| `store-parity` ×2 | green because `data/constitution/shelf.json` carries `archivedAt` — Greg archived it on 2026-08-27, so the filesystem library never listed it and the comparison never met it. Fixed in `3b40441`. |
+| `store-roundtrip` | the synthesised reader-state ids were `spya-fix…`; `src/ids.ts` excludes `i`, `l`, `o` and `1`, and Postgres enforces it as `chat_threads_id_format`. Fixed in `2258f87`. |
+| `store-artefact-manifest` | `raw.pdf` and `labels-progress.json` read as unhomed, because the corpus carries neither. Open. |
+| `doc-links` | `260828l-dictation-vocabulary-review-sol.md` links to `../../data/reader.json`, which is gitignored — so it resolves here and nowhere else. Open, and not this plan's to fix. |
+
+That last one is the tidiest illustration of the whole problem: `doc-links` was run four times during
+this work and called green each time. It was green because the file it points at happens to exist on
+this machine. [deployment.md](../project/deployment.md) had already named that exact seam — "the
+`doc-links` test will accept a link into gitignored `output/`, which nobody else can follow" — and it
+took a corpus to make it visible.
 
 `data/` (64 MB) and `output/` (11 MB) are gitignored and doing two jobs at once — the pipeline's
 disposable scratch store, and the test suite's fixture corpus. That is why the directory is
