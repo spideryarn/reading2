@@ -12,8 +12,16 @@ RUN=order-a npx tsx evals/pdf/bakeoff/bakeoff.mts harder 1   # one chunk, result
 npx tsx evals/pdf/bakeoff/score.mts                  # judge whatever is in the output directory
 ```
 
-Output goes to `scratch-bakeoff/` (git-ignored) unless `BAKEOFF_OUT` says otherwise. Needs
-`ANTHROPIC_API_KEY` and `OPENROUTER_API_KEY`.
+Output goes to `scratch-bakeoff/` (git-ignored) unless `BAKEOFF_OUT` says otherwise.
+
+**Needs `OPENROUTER_API_KEY`. `ANTHROPIC_API_KEY` is optional and no longer in `.env.local`** — this
+harness is the only thing in the repo that still wants it, because `transport: "anthropic"` versus
+`transport: "openrouter"` is half of what it measures and an arm forced onto OpenRouter would be
+comparing OpenRouter with itself. Without it, the four `haiku-native*` / `haiku-text-only` arms are
+skipped with a message naming them, and the other seven run. Put the key back in `.env.local` to run
+the transport comparison. See `bakeoff-anthropic-transport` in
+[`src/spend-declarations.ts`](../../../src/spend-declarations.ts) and
+[ai-gateway.md](../../../docs/project/ai-gateway.md).
 
 ## Two things to know before you read any number it prints
 

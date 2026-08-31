@@ -459,10 +459,38 @@ wrong.
   tripwire — its list of paid CLIs is kept honest only for an entry module that imports a seam
   *directly*, and one reaching a paid call transitively would need real dataflow to see.
 
-A declared bypass cannot be priced by OpenRouter, so its row carries `cost_source: "computed"` and a
-`price_version`, and `credits_used_nanos` stays null. That column means one thing — what OpenRouter
-deducted — and it is what `--reconcile` compares against their own running total, so an estimate must
-never land in it. The report keeps the two apart and says which half it has never checked.
+**A bypass is not the same thing as a second vendor**, and conflating the two is what
+`account: "anthropic"` on a declaration used to mean by accident. A bypass exists because
+`streamMessage` owns the model and the effort on purpose and an eval varies them per arm; that is a
+reason to go round the *seam*, not a reason to go round *OpenRouter*. So the wrapper offers two
+clients: `messagesSkinForDeclared()`, the SDK pointed at the Skin on `OPENROUTER_API_KEY`, which is
+what a bypass wants almost every time — and `anthropicDirectForDeclared()`, which is
+`api.anthropic.com` on `ANTHROPIC_API_KEY`.
+
+**There is one caller of the second, and `tests/no-undeclared-spend.test.ts` fails if a second
+appears.** It is the PDF bake-off's `transport: "anthropic"` arms, for the reason quoted above, and
+that is the whole of why the key exists in this project. It is not in `.env.local`, not on Vercel and
+not in `/api/health` — without it the bake-off skips those four arms and names them, and nothing else
+in the repo notices. The judge in [`evals/embedding-retrieval.ts`](../../evals/embedding-retrieval.ts)
+was the other caller until 2026-08-31; it had no such reason and moved onto the Skin, which also
+turned its row from our arithmetic into OpenRouter's own settled figure.
+
+**The same distinction had to be made a second time, in the observer**, and getting it wrong was
+invisible because the money stayed right. `account` decides which cost figure is authoritative;
+`wire` decides what shape the usage arrived in, and the two wires disagree about what an input token
+*is*. There were two observers, named after the accounts, so a bypass speaking the *Messages* shape
+to *OpenRouter* had only the chat-shaped one available — whose body has nowhere to put a cache split,
+a thinking count, a service tier or an inference geography. Both Messages-wire bypasses were doing
+that, and their rows carried the right cost and had quietly stopped explaining it. There is now a
+third, `messagesViaOpenRouter`, and handing either of the other two the wrong wire throws. GPT Sol,
+2026-08-31.
+
+Which is the difference the row carries. A bypass on the **openrouter** account is priced by
+OpenRouter like any other call — `usage.cost`, in band. Only an **anthropic**-account bypass has
+nobody to ask, so its row carries `cost_source: "computed"` and a `price_version`, and
+`credits_used_nanos` stays null. That column means one thing — what OpenRouter deducted — and it is
+what `--reconcile` compares against their own running total, so an estimate must never land in it.
+The report keeps the two apart and says which half it has never checked.
 
 Written up in [ai-spend-outside-the-gateway.md](../plans/ai-spend-outside-the-gateway.md).
 

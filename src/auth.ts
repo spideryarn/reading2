@@ -8,10 +8,11 @@
  *
  * There is one user. The gate exists because **a public site plus online
  * ingest plus no login is an open proxy and an open wallet**: anyone can make
- * the server fetch an arbitrary URL, and anyone can spend `ANTHROPIC_API_KEY`
- * two model calls at a time. That is not hypothetical — on 2026-08-26, before
- * this file existed, an anonymous `POST /api/jobs` against the production
- * hostname returned 202 and created a running job. See
+ * the server fetch an arbitrary URL, and anyone can spend `OPENROUTER_API_KEY`
+ * two model calls at a time — the one key every paid call in the app is on
+ * since 2026-08-27 (docs/project/ai-gateway.md). That is not hypothetical — on
+ * 2026-08-26, before this file existed, an anonymous `POST /api/jobs` against
+ * the production hostname returned 202 and created a running job. See
  * docs/plans/auth-ui-and-production.md.
  *
  * ## Why `getClaims` and not `getUser`, and never `getSession`

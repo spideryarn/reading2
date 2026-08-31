@@ -182,7 +182,8 @@ reading. GPT Sol raised it; it is the one thing in that review no spec could set
 
 The gate exists because **a public site plus online ingest plus no login is an open proxy and an open
 wallet** — anyone can make the server fetch an arbitrary URL, and anyone can spend
-`ANTHROPIC_API_KEY` two model calls at a time. That is not hypothetical: on 2026-08-26, before
+`OPENROUTER_API_KEY` two model calls at a time — and since 2026-08-27 that is the key the whole app
+runs on, not just the pipeline ([ai-gateway.md](ai-gateway.md)). That is not hypothetical: on 2026-08-26, before
 `src/auth.ts` existed, an anonymous `POST /api/jobs` against the production hostname returned 202 and
 created a running job.
 

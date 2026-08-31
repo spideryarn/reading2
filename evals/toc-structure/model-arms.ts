@@ -231,14 +231,16 @@ export const sendMessages: MessagesSend = async ({ call, system, user, maxTokens
       output_tokens?: number | null;
       output_tokens_details?: { thinking_tokens?: number | null } | null;
     };
-    observe.openRouter({
-      usage: {
-        prompt_tokens: u.input_tokens ?? null,
-        completion_tokens: u.output_tokens ?? null,
-        cost: streamCostUsd,
-      },
-      model: message.model,
-      provider: (message as unknown as { provider?: string | null }).provider ?? null,
+    /* **`messagesViaOpenRouter`, not `openRouter`** — OpenRouter's settled cost
+       *and* the Anthropic-shaped usage, which is what this wire answers in. It
+       was `openRouter` until 2026-08-31, and that observer's body shape has
+       nowhere to put a cache split, a thinking count, a service tier or an
+       inference geography: the ledger row carried the right money and had
+       quietly stopped explaining it. GPT Sol; evals/declared-spend.ts §
+       `Observer`. Nothing about the request changed. */
+    observe.messagesViaOpenRouter(message, {
+      costUsd: streamCostUsd,
+      upstream: (message as unknown as { provider?: string | null }).provider ?? null,
     });
 
     if (wasRefused(message)) throw new Error("the model refused the structure request");

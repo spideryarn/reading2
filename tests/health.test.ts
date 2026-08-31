@@ -299,7 +299,8 @@ describe("the environment a deployment needs", () => {
   function completeEnv(): void {
     vi.stubEnv("DATABASE_URL", "postgres://u:p@db.example.com:5432/postgres");
     vi.stubEnv("SPIDERYARN_STORE", "postgres");
-    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
+    /* No `ANTHROPIC_API_KEY` — it left `EXPECTED` on 2026-08-31 and the test
+       below is the one that stubs it, deliberately, to prove it is ignored. */
     vi.stubEnv("OPENROUTER_API_KEY", "sk-or-test");
     vi.stubEnv("SUPABASE_URL", "https://project.supabase.co");
     vi.stubEnv("SUPABASE_PUBLISHABLE_KEY", "");
@@ -386,16 +387,27 @@ describe("the environment a deployment needs", () => {
     expect(said).toMatch(/ingest|pipeline/i);
   });
 
-  it("no longer warns about ANTHROPIC_API_KEY, which nothing reads", async () => {
-    /* Reported but not warned about: the pipeline stopped using it the day it
-       moved to OpenRouter. A warning list that fires on a key nobody has to set
-       is a list that gets skimmed, and then the real ones are skimmed too. */
+  it("does not mention ANTHROPIC_API_KEY at all, in the env block or the warnings", async () => {
+    /* **The absence is the assertion, and it has to cover both halves.**
+       The version of this test before 2026-08-31 checked only that the key was
+       not *warned* about, which was true while it sat in `EXPECTED` with
+       `breaks: null` — and stayed true, unfalsifiably, once the row was deleted.
+       A test that cannot go red for either state is testing nothing.
+
+       Now nothing on a deployment wants the key: the pipeline moved to
+       OpenRouter on 2026-08-27, and the last caller is an eval that runs on a
+       laptop (docs/project/ai-gateway.md). Offering an operator a name they
+       cannot use, one line above the key that really does break everything, is
+       how the real warnings get skimmed. Put the row back and this reddens on
+       the env block. */
     completeEnv();
-    vi.stubEnv("ANTHROPIC_API_KEY", "");
+    vi.stubEnv("ANTHROPIC_API_KEY", "sk-ant-test");
 
-    const said = warningsFrom(await call("GET")).join(" ");
+    const answer = await call("GET");
+    const env = (answer.body as { env?: Record<string, boolean> }).env ?? {};
 
-    expect(said).not.toContain("ANTHROPIC_API_KEY");
+    expect(Object.keys(env)).not.toContain("ANTHROPIC_API_KEY");
+    expect(warningsFrom(answer).join(" ")).not.toContain("ANTHROPIC_API_KEY");
   });
 
   /* The other half. A warning list that fires on things nobody has to set is

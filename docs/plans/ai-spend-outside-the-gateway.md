@@ -48,6 +48,11 @@ finished.
 ### 2. Two accounts, and only one of them is reconciled
 
 `--reconcile` reads `GET /api/v1/key` and compares our rows against OpenRouter's own running total.
+*(Settled on 2026-08-31: `ANTHROPIC_API_KEY` is out of `.env.local`, the judge moved onto the Skin,
+and the bake-off's transport arms are the only Anthropic-direct caller left — pinned by
+`tests/no-undeclared-spend.test.ts`. [ai-gateway.md](../project/ai-gateway.md). What follows is what
+was true when this was written.)*
+
 `ANTHROPIC_API_KEY` is still live in `.env.local`, and two evals spend on it directly. Nothing in
 this repo reads the Anthropic side of the bill, and [question 0 of the previous
 plan](ai-cost-tracking.md#questions-for-greg) withdrew the only mechanism that could — the Admin

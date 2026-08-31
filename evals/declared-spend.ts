@@ -39,9 +39,9 @@
  * The bare Anthropic client retries twice by default. One `messages.create` can
  * therefore be three billable attempts, and a wrapper that records "the call"
  * would record a third of the money with nothing looking wrong. Also GPT Sol.
- * `anthropicForDeclared()` sets `maxRetries: 0`, and `declaredFetch` counts
- * attempts so that the setting has to keep working rather than merely having
- * been written down once.
+ * `anthropicDirectForDeclared()` and `messagesSkinForDeclared()` both set
+ * `maxRetries: 0`, and `declaredFetch` counts attempts so that the setting has
+ * to keep working rather than merely having been written down once.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -151,22 +151,58 @@ export type ObservedAnthropicUsage = AnthropicUsageLike & {
   output_tokens_details?: { thinking_tokens?: number | null } | null;
 };
 
+/**
+ * **Three observers, because account and wire are different questions.**
+ *
+ * `account` says who billed us, and picks which cost figure is authoritative.
+ * `wire` says what shape the usage arrived in, and the two wires disagree about
+ * what an input token *is* — the Messages shape reports cache reads and writes
+ * *outside* `input_tokens`, the chat shape reports them *inside*. Merging them
+ * is how a row ends up double-counting, so the wrapper never does.
+ *
+ * The pair used to be just `anthropic` and `openRouter`, which collapsed those
+ * two questions into one and was fine while every OpenRouter call was on the
+ * chat wire. It stopped being fine the moment a declared bypass spoke the
+ * Messages shape *to OpenRouter* — the only observer that would accept it was
+ * `openRouter`, whose body shape has nowhere to put a cache split, a thinking
+ * count, a service tier or an inference geography. The row still had the right
+ * money on it and had quietly stopped saying anything else. GPT Sol, 2026-08-31.
+ */
 export interface Observer {
   /**
-   * An Anthropic `Message` (or anything with its `usage`). Priced from
-   * `ANTHROPIC_PRICES`, because there is nobody to ask — the call did not go
-   * through OpenRouter and Anthropic charges no per-call figure back.
+   * An Anthropic `Message` (or anything with its `usage`), from a call that went
+   * **straight to Anthropic**. Priced from `ANTHROPIC_PRICES`, because there is
+   * nobody to ask — Anthropic charges no per-call figure back.
    */
   anthropic: (message: {
     usage?: ObservedAnthropicUsage | null;
     model?: string | null;
   }) => void;
-  /** An OpenRouter JSON body. Its own `usage.cost` is settled; ours is not. */
+  /** An OpenRouter JSON body, chat wire. Its own `usage.cost` is settled; ours is not. */
   openRouter: (body: {
     usage?: (OpenRouterUsageLike & { cost?: number | null }) | null;
     model?: string | null;
     provider?: string | null;
   }) => void;
+  /**
+   * **Both at once: OpenRouter's settled cost, and Anthropic-shaped usage.**
+   *
+   * For a bypass on the Messages wire pointed at OpenRouter's Skin. The message
+   * is the SDK's, so its `usage` is the additive Anthropic shape and lands in the
+   * same columns `anthropic` fills; `costUsd` is OpenRouter's own figure, which
+   * on this wire does **not** reach the accumulated message and has to be read
+   * off the raw stream events by the caller (`finalMessage()` merges only the
+   * fields the SDK's types know about — src/messages-stream.ts).
+   *
+   * Nothing is priced from `ANTHROPIC_PRICES` here. A settled figure and an
+   * estimate must never both land on one row, and when `costUsd` is `null` the
+   * row says `cost_source: "none"` — short by an unknown amount, which is the
+   * truth — rather than borrowing our arithmetic under OpenRouter's name.
+   */
+  messagesViaOpenRouter: (
+    message: { usage?: ObservedAnthropicUsage | null; model?: string | null },
+    settled: { costUsd?: number | null; upstream?: string | null },
+  ) => void;
 }
 
 export interface DeclaredCall<T> {
@@ -243,9 +279,9 @@ export async function withDeclaredExternalCall<T>(
    * a second observation: two answers to "what did this cost" is a bug in the
    * caller, and silently keeping the last one is how it stays a bug.
    */
-  const wrongProvider = (which: ProviderAccount) => (): never => {
+  const wrongObserver = (name: keyof Observer, wants: string) => (): never => {
     throw new Error(
-      `${id} is declared against ${declaration.account}; observe.${which === "anthropic" ? "anthropic" : "openRouter"}() is not the observer for it.`,
+      `${id} is declared as account=${declaration.account} wire=${declaration.wire}; observe.${name}() is not the observer for it — it is for ${wants}.`,
     );
   };
   const once = () => {
@@ -257,15 +293,26 @@ export async function withDeclaredExternalCall<T>(
     seen.observed = true;
   };
 
+  /* **The Anthropic-shaped half, shared by the two observers that receive it.**
+     One function rather than two copies, because the columns it fills are the
+     ones a reader compares between rows, and a second copy is where one of them
+     quietly stops being filled. */
+  const takeAnthropicUsage = (message: {
+    usage?: ObservedAnthropicUsage | null;
+    model?: string | null;
+  }): void => {
+    seen.answeredBy = message.model ?? seen.answeredBy;
+    if (message.usage) seen.anthropicUsage = message.usage;
+  };
+
   const observe: Observer = {
     anthropic:
       declaration.account !== "anthropic"
-        ? wrongProvider("anthropic")
+        ? wrongObserver("anthropic", "a call that went straight to Anthropic")
         : (message) => {
             once();
-            seen.answeredBy = message.model ?? seen.answeredBy;
+            takeAnthropicUsage(message);
             if (!message.usage) return;
-            seen.anthropicUsage = message.usage;
             const priced = priceAnthropicCall(
               message.model ?? spec.model,
               message.usage,
@@ -279,9 +326,12 @@ export async function withDeclaredExternalCall<T>(
               seen.priceVersion = priced.priceVersion;
             }
           },
+    /* **Chat wire only.** On the Messages wire the usage is Anthropic-shaped and
+       this observer's body type has nowhere to put the half of it that matters —
+       see `messagesViaOpenRouter` below, and the note on `Observer`. */
     openRouter:
-      declaration.account !== "openrouter"
-        ? wrongProvider("openrouter")
+      declaration.account !== "openrouter" || declaration.wire !== "chat"
+        ? wrongObserver("openRouter", "an OpenRouter call on the chat wire")
         : (body) => {
             once();
             seen.answeredBy = body.model ?? seen.answeredBy;
@@ -289,6 +339,20 @@ export async function withDeclaredExternalCall<T>(
             if (!body.usage) return;
             seen.openRouterUsage = body.usage;
             seen.costNanos = providerCostToNanos(body.usage.cost);
+          },
+    messagesViaOpenRouter:
+      declaration.account !== "openrouter" || declaration.wire !== "messages"
+        ? wrongObserver("messagesViaOpenRouter", "an OpenRouter call on the Messages wire")
+        : (message, settled) => {
+            once();
+            takeAnthropicUsage(message);
+            seen.upstream = settled.upstream ?? seen.upstream;
+            /* `null` when the figure never arrived, and deliberately not backed
+               by `priceAnthropicCall`. The row then reads `cost_source: "none"` —
+               short by an unknown amount — rather than putting our estimate under
+               OpenRouter's name, which is the one thing `--reconcile` compares
+               against their own running total. */
+            seen.costNanos = providerCostToNanos(settled.costUsd);
           },
   };
 
@@ -395,7 +459,7 @@ export async function withDeclaredExternalCall<T>(
            either way. */
         if (!bodyThrew) {
           throw new Error(
-            `${id} made ${call.attempts} HTTP attempts for one declared call — no trustworthy amount was recorded for it. Set maxRetries: 0 (see anthropicForDeclared).`,
+            `${id} made ${call.attempts} HTTP attempts for one declared call — no trustworthy amount was recorded for it. Set maxRetries: 0 (see anthropicDirectForDeclared).`,
           );
         }
       }
@@ -413,11 +477,66 @@ function fingerprintFor(account: ProviderAccount): string | null {
 }
 
 /**
- * An Anthropic client that can only be used inside a declaration.
+ * **The Anthropic SDK pointed at `api.anthropic.com`, on `ANTHROPIC_API_KEY`** —
+ * the one client in the repo that does not go through OpenRouter.
+ *
+ * Named for where it goes rather than for the SDK it uses, because its sibling
+ * below uses the same SDK and reaches a different vendor, and a pair of names
+ * that do not say which is which is how the wrong one gets picked. It used to be
+ * `anthropicForDeclared`, back when it was the only one.
+ *
+ * **Exactly one file may call it**, and that file is the PDF bake-off, whose
+ * whole question is Anthropic-direct versus OpenRouter — see
+ * `bakeoff-anthropic-transport` in [`src/spend-declarations.ts`](../src/spend-declarations.ts),
+ * and the test below it in `tests/no-undeclared-spend.test.ts` that pins the
+ * count at one. Everything else that speaks the Messages shape uses the Skin.
  *
  * `maxRetries: 0` is the load-bearing option and the reason this is a function
  * rather than a note in a comment — see the header. `fetch` is the guard.
  */
-export function anthropicForDeclared(): Anthropic {
+export function anthropicDirectForDeclared(): Anthropic {
   return new Anthropic({ maxRetries: 0, fetch: declaredFetch });
+}
+
+/**
+ * **The Anthropic SDK pointed at OpenRouter's Anthropic Skin**, on
+ * `OPENROUTER_API_KEY` — the same endpoint, key and wire shape the seven
+ * pipeline stages use, minus the seam's ownership of the model.
+ *
+ * This is what a declared bypass wants almost every time. A bypass exists
+ * because [`streamMessage`](../src/messages-stream.ts) owns the model and the
+ * effort on purpose, and an eval varies them per arm; it does *not* exist
+ * because the eval wanted a second vendor. Routing through the Skin keeps the
+ * cost figure OpenRouter settles in-band, so the row carries a provider's own
+ * number instead of our arithmetic over `ANTHROPIC_PRICES`.
+ *
+ * `authToken` as well as `apiKey` is the load-bearing part, for the reason
+ * `messagesClient()` in [`src/messages-stream.ts`](../src/messages-stream.ts)
+ * gives: the SDK sends `apiKey` as Anthropic's `x-api-key`, and OpenRouter
+ * wants `Authorization: Bearer`. Both are passed because the SDK refuses to
+ * construct without one of them.
+ *
+ * **What it does not do is set `provider`** — that is a field on the request
+ * body, not on the client, and each caller's arms differ about it on purpose.
+ * `MESSAGES_PROVIDER` is exported from `src/messages-stream.ts` for a caller
+ * that wants production's pin.
+ */
+export function messagesSkinForDeclared(): Anthropic {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) {
+    throw new Error(
+      "OPENROUTER_API_KEY is not set. An eval loads .env.local at its own edge; " +
+        "nothing deeper reads credentials (src/messages-stream.ts § loadEnvLocal).",
+    );
+  }
+  return new Anthropic({
+    baseURL: "https://openrouter.ai/api",
+    apiKey: key,
+    authToken: key,
+    logLevel: "off",
+    /* One logical call is one billed attempt, or the row understates the spend
+       by a factor — the same reason streamMessage sets it. */
+    maxRetries: 0,
+    fetch: declaredFetch,
+  });
 }

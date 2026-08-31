@@ -88,11 +88,21 @@ const SDKS = ["@anthropic-ai/sdk", "openai"];
 const CLIENT_EXPORTS = ["Anthropic", "OpenAI", "AnthropicBedrock", "AnthropicVertex"];
 
 /**
- * The two ways a declared bypass is allowed to reach the wire. Calling either is
- * as much a capability as `new Anthropic()` — they exist so that a bypass keeps
- * an account, not so that it stops counting as one.
+ * The three ways a declared bypass is allowed to reach the wire. Calling any of
+ * them is as much a capability as `new Anthropic()` — they exist so that a
+ * bypass keeps an account, not so that it stops counting as one.
+ *
+ * The first two are the same SDK pointed at different vendors, which is why they
+ * are named for the vendor rather than the SDK: `anthropicDirectForDeclared`
+ * goes to `api.anthropic.com` on `ANTHROPIC_API_KEY` and `messagesSkinForDeclared`
+ * goes to OpenRouter on `OPENROUTER_API_KEY`. The test below pins how many
+ * callers the first is allowed.
  */
-const GUARDED_TRANSPORTS = ["anthropicForDeclared", "declaredFetch"];
+const GUARDED_TRANSPORTS = [
+  "anthropicDirectForDeclared",
+  "messagesSkinForDeclared",
+  "declaredFetch",
+];
 
 /** The credentials that pay for inference. Not Supabase's, not the database's. */
 const CREDENTIALS = ["OPENROUTER_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"];
@@ -144,6 +154,28 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "src/pdf-read.ts": "Presence check only; the call goes through openRouterJson.",
   "src/embeddings.ts":
     "Presence check, plus a settings URL in a help message. The call goes through openRouterJson.",
+
+  /* **Three for live conversation mode, and they are the first real exception
+     to "everything goes through OpenRouter" since that rule was written.**
+
+     Not a preference. OpenRouter has no realtime API — checked 2026-08-31, its
+     two audio endpoints are batch speech and batch transcription, and there is
+     no duplex speech-to-speech to route to. The choice was OpenAI directly or
+     no live mode.
+
+     They are listed here rather than in DECLARATIONS because a `Declaration`
+     cannot currently be written for this call: `ProviderAccount` is
+     `"openrouter" | "anthropic"` and `Wire` is `"messages" | "chat" |
+     "embeddings"`, so there is nowhere to say "OpenAI, over realtime". Widening
+     both is part of metering this properly, and metering it is not built —
+     src/live.ts § What this does not do says so out loud, and this spike must
+     not be shipped to readers before it is. docs/plans/live-conversation.md. */
+  "src/live.ts":
+    "Live conversation mode's session builder — the one file allowed to name OpenAI, because OpenRouter has no realtime API to route to. It mints a short-lived browser token and carries no audio; the spend happens on a wire this server never sees, which is also why it is not yet metered.",
+  "scripts/live-spike.ts":
+    "The spike's local-only server. Names the credential to warn when it is missing; the call itself goes through src/live.ts.",
+  "src/web/live/useLiveConversation.ts":
+    "The browser half. It posts an SDP offer to api.openai.com with an EPHEMERAL token our server minted — the API key is not in this bundle and cannot be. Caught because the matcher is hostname-based, which is right: this is the file to look at if that ever stops being true.",
 };
 
 interface Finding {
@@ -244,6 +276,18 @@ export function capabilitiesOf(file: string, source: string): Scan {
   let rawFetches = 0;
   /** Local names bound to a provider SDK — default, namespace, or renamed. */
   const sdkNames = new Set<string>();
+  /**
+   * **Local name → the guarded transport it actually is.**
+   *
+   * The same treatment `sdkNames` gets, and for the same reason. Matching the
+   * bare identifier at the call site was all this did until 2026-08-31, and GPT
+   * Sol pointed out that `import { anthropicDirectForDeclared as direct }` then
+   * walks past — which matters more now that one of the transports is pinned to
+   * a single caller, because the evasion is a rename anybody might do innocently.
+   */
+  const transportLocals = new Map<string, string>();
+  /** Locals bound to the whole wrapper module, for `spend.declaredFetch(…)`. */
+  const transportNamespaces = new Set<string>();
 
   /* Two passes: an import can be anywhere in the file, and a `new` above it
      would otherwise be missed. Cheap — these are single files. */
@@ -273,8 +317,27 @@ export function capabilitiesOf(file: string, source: string): Scan {
     }
     if (n.type !== "ImportDeclaration") return;
     const spec = (n.source as { value?: string } | undefined)?.value;
-    if (!spec || !SDKS.includes(spec)) return;
+    if (!spec) return;
     if (n.importKind === "type") return;
+
+    /* The wrapper module, by whatever relative path reached it. A specifier
+       rather than a resolved path: this scan never touches the filesystem, and
+       the basename is unambiguous in this repo. */
+    if (/(^|\/)declared-spend\.(js|ts)$/.test(spec)) {
+      for (const sp of (n.specifiers ?? []) as Record<string, unknown>[]) {
+        if (sp.type === "ImportNamespaceSpecifier") {
+          transportNamespaces.add((sp.local as { name: string }).name);
+        }
+        if (sp.type === "ImportSpecifier" && sp.importKind !== "type") {
+          const imported = (sp.imported as { name?: string } | undefined)?.name ?? "";
+          if (GUARDED_TRANSPORTS.includes(imported)) {
+            transportLocals.set((sp.local as { name: string }).name, imported);
+          }
+        }
+      }
+    }
+
+    if (!SDKS.includes(spec)) return;
     for (const sp of (n.specifiers ?? []) as Record<string, unknown>[]) {
       /* The default and the namespace both yield a client. So does a **named**
          import — `import { Anthropic } from "@anthropic-ai/sdk"` works, because
@@ -334,7 +397,12 @@ export function capabilitiesOf(file: string, source: string): Scan {
        wrapper, which is the only way to use one. */
     if (n.type === "CallExpression") {
       const callee = n.callee as
-        | { type?: string; name?: string; property?: { name?: string } }
+        | {
+            type?: string;
+            name?: string;
+            property?: { name?: string };
+            object?: { name?: string };
+          }
         | undefined;
       if (callee?.type === "Identifier" && callee.name === "withDeclaredExternalCall") {
         const first = (n.arguments as Record<string, unknown>[])[0];
@@ -342,16 +410,26 @@ export function capabilitiesOf(file: string, source: string): Scan {
       }
       /* **The guarded transports count as transport.** They are the whole point
          of the wrapper — `evals/embedding-retrieval.ts` builds its client with
-         `anthropicForDeclared()` and names no host at all, and under a matcher
+         `messagesSkinForDeclared()` and names no host at all, and under a matcher
          that only knows about `new Anthropic()` its own declaration read as
          stale. Which is the correct behaviour of that check and the wrong answer
          from this one. */
-      if (
-        callee?.type === "Identifier" &&
-        GUARDED_TRANSPORTS.includes(callee.name as string)
-      ) {
-        found.push({ file, what: `uses ${callee.name}` });
-      }
+      /* **Resolved to the canonical export name**, so the finding reads the same
+         however the caller spelt it — `uses anthropicDirectForDeclared` whether
+         it was imported plainly, renamed, or reached through a namespace. The
+         bare-identifier fallback stays: a file that gets one of these names from
+         somewhere this scan does not model still counts, which is the tripwire
+         behaviour and is the direction to fail in. */
+      const transport =
+        callee?.type === "Identifier"
+          ? (transportLocals.get(callee.name as string) ??
+            (GUARDED_TRANSPORTS.includes(callee.name as string) ? (callee.name as string) : null))
+          : callee?.type === "MemberExpression" &&
+              transportNamespaces.has(callee.object?.name ?? "") &&
+              GUARDED_TRANSPORTS.includes(callee.property?.name ?? "")
+            ? (callee.property?.name as string)
+            : null;
+      if (transport) found.push({ file, what: `uses ${transport}` });
       /* **A bare `fetch` at a provider — the one capability a declaration never
          covers.** GPT Sol found both holes it closes: a declared file could grow
          an unrelated raw request beside its declared call and stay exempt, and a
@@ -582,6 +660,55 @@ describe("no undeclared spend", () => {
     }
   });
 
+  /**
+   * **One caller of `ANTHROPIC_API_KEY`, and it is the transport bake-off.**
+   *
+   * Every model call the app makes went through OpenRouter on 2026-08-27
+   * (docs/project/ai-gateway.md), and on 2026-08-31 the last two eval callers
+   * followed it — all but one. The bake-off keeps its `transport: "anthropic"`
+   * arms because *which transport wins* is the question it exists to answer, and
+   * an arm forced onto OpenRouter would be comparing OpenRouter with itself.
+   *
+   * Everything else that speaks the Messages shape has no such reason, and this
+   * is the difference between that being true and it being merely true today.
+   * A second Anthropic-direct caller is a second vendor, a second bill and a
+   * second key to rotate, acquired without anyone deciding to — and it would
+   * look exactly like the first: a declared bypass with a plausible sentence
+   * attached. So the count is pinned, and adding one means editing this test and
+   * writing down why the Skin is wrong for it.
+   *
+   * Both halves are asserted, because the declaration and the code go stale
+   * independently: an entry whose file stopped calling the direct client, and a
+   * file that calls it with no entry, are different bugs.
+   *
+   * **What it does not catch, said out loud** (GPT Sol, 2026-08-31): it counts
+   * *files*, not call sites, so a second direct call inside the bake-off is
+   * still green — which is fine, since that file's whole permission is to make
+   * them. And it cannot stop `evals/declared-spend.ts` growing a *second*
+   * factory around `new Anthropic()`, because that file is the allow-listed one
+   * by construction. `src/live.ts` is a separate, declared exception to
+   * "everything through OpenRouter" on a different axis — OpenAI's realtime API,
+   * which OpenRouter does not serve — and is nothing to do with this count.
+   */
+  it("has exactly one Anthropic-direct caller, and it is the transport bake-off", () => {
+    const direct = DECLARATIONS.filter((d) => d.account === "anthropic");
+    expect(
+      direct.map((d) => d.id),
+      "Every other Anthropic/Messages caller in this repo goes through OpenRouter's Skin (docs/project/ai-gateway.md). A new `account: \"anthropic\"` declaration is a second vendor — say here why the Skin is wrong for it, or use messagesSkinForDeclared().",
+    ).toEqual(["bakeoff-anthropic-transport"]);
+
+    const callers = [...scans.entries()]
+      .filter(([file, scan]) =>
+        file !== "evals/declared-spend.ts" &&
+        scan.findings.some((f) => f.what === "uses anthropicDirectForDeclared"),
+      )
+      .map(([file]) => file);
+    expect(
+      callers,
+      "anthropicDirectForDeclared() talks to api.anthropic.com on ANTHROPIC_API_KEY, which is not in .env.local. Use messagesSkinForDeclared() unless the point of the call is the transport itself.",
+    ).toEqual([direct[0]?.file]);
+  });
+
   it("an `unscoped` declaration is never marked metered", () => {
     /* `unscoped` means "uses the seam, opens no collector". If it were metered
        there would be nothing to declare. */
@@ -663,6 +790,25 @@ describe("no undeclared spend", () => {
       ],
       ["a destructured credential", "const { OPENROUTER_API_KEY } = process.env;"],
     ];
+    /* **Three spellings of the same guarded transport, resolved to one name.**
+       The matcher knew only the bare identifier until 2026-08-31; GPT Sol showed
+       that a rename or a namespace import walks straight past it, which matters
+       because `anthropicDirectForDeclared` is now pinned to a single caller and
+       the evasion is something anybody might type without meaning anything by
+       it. The finding has to read the *canonical* name, not the local one, or
+       the pin is comparing spellings. */
+    const spellings: [string, string][] = [
+      ["imported plainly", 'import { anthropicDirectForDeclared } from "../declared-spend.js";\nconst c = anthropicDirectForDeclared();'],
+      ["renamed on import", 'import { anthropicDirectForDeclared as direct } from "../declared-spend.js";\nconst c = direct();'],
+      ["through a namespace import", 'import * as spend from "../declared-spend.js";\nconst c = spend.anthropicDirectForDeclared();'],
+    ];
+    for (const [name, source] of spellings) {
+      it(`resolves a guarded transport ${name}`, () => {
+        expect(capabilitiesOf("scratch.ts", source).findings.map((f) => f.what)).toContain(
+          "uses anthropicDirectForDeclared",
+        );
+      });
+    }
     for (const [name, source] of cases) {
       it(name, () => {
         expect(capabilitiesOf("scratch.ts", source).findings.length).toBeGreaterThan(0);

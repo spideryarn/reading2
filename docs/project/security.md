@@ -876,7 +876,8 @@ here because they are properties of this system rather than of that feature.
 [`src/auth.ts`](../../src/auth.ts) returns true — and that is Greg's explicit decision, made twice
 and in writing ([auth-supabase.md § Who gets in](../plans/auth-supabase.md#who-gets-in)). A security
 doc that did not say so would be wrong. What it buys somebody is the ingest pipeline and
-`ANTHROPIC_API_KEY` at two model calls per article; **the control that is actually missing is a
+`OPENROUTER_API_KEY` at two model calls per article — every paid call in the app is on that one key
+since 2026-08-27 ([ai-gateway.md](ai-gateway.md)); **the control that is actually missing is a
 spend limit**, and an allowlist of one never limited what Greg could spend either.
 
 **And until 2026-08-27 it did not say whose data is whose.** `currentOwnerId()` was process-wide and

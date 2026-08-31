@@ -90,7 +90,15 @@ through the Anthropic SDK, pointed at OpenRouter's Anthropic-compatible endpoint
 [ai-gateway.md](ai-gateway.md) and the header of
 [`src/messages-stream.ts`](../../src/messages-stream.ts), which is the source of truth for it.
 
-`ANTHROPIC_API_KEY` is no longer read by any model call in `src/`.
+`ANTHROPIC_API_KEY` is no longer read by any model call in `src/`, and **since 2026-08-31 it is not
+in `.env.local` either.** The last two things that still spent on it directly were evals; one of
+them — the judge in [`evals/embedding-retrieval.ts`](../../evals/embedding-retrieval.ts) — moved
+onto the same Skin the pipeline uses, having had no reason not to. The other did not, and cannot:
+the PDF bake-off compares talking to Anthropic directly against going through OpenRouter, so an arm
+forced onto OpenRouter would be comparing OpenRouter with itself. Without the key that bake-off
+skips its four `transport: "anthropic"` arms and says so; everything else in the repo is unaffected.
+[`tests/no-undeclared-spend.test.ts`](../../tests/no-undeclared-spend.test.ts) fails if a second
+Anthropic-direct caller appears.
 
 **`.env.local` wins over the shell**, so `SPIDERYARN_CHAT_MODEL=… npm run dev` does *not* do what
 it looks like it does — put the line in the file instead. This paragraph said the opposite until

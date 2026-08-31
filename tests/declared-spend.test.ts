@@ -315,6 +315,161 @@ describe("the observer", () => {
   });
 });
 
+/**
+ * **The Messages shape, billed by OpenRouter — which is two facts, not one.**
+ *
+ * `account` says who billed us and picks the authoritative cost figure; `wire`
+ * says what shape the usage arrived in. Collapsing them is what the observer pair
+ * did until 2026-08-31: a bypass speaking Anthropic's Messages shape *to
+ * OpenRouter* had only `observe.openRouter` available, whose body type has
+ * nowhere to put a cache split, a thinking count, a service tier or an inference
+ * geography — so the row carried the right money and had quietly stopped saying
+ * anything else. GPT Sol found it in review of the judge migration; both
+ * Messages-wire bypasses (`evals/embedding-retrieval.ts`,
+ * `evals/toc-structure/model-arms.ts`) were doing it.
+ */
+describe("the Messages wire through OpenRouter", () => {
+  const messagesViaOr = DECLARATIONS.find(
+    (d) => d.metered && d.account === "openrouter" && d.wire === "messages",
+  );
+  const chatViaOr = DECLARATIONS.find(
+    (d) => d.metered && d.account === "openrouter" && d.wire === "chat",
+  );
+
+  it("has a metered declaration of each wire to test against", () => {
+    /* Not decoration: these are found from the register rather than named, so a
+       `?.` below would otherwise skip the whole block in silence the day the
+       register changes shape. */
+    expect(messagesViaOr).toBeDefined();
+    expect(chatViaOr).toBeDefined();
+  });
+
+  it("keeps OpenRouter's settled cost AND the Anthropic-shaped token detail", async () => {
+    const rows = await rowsFrom(() =>
+      withDeclaredExternalCall(
+        messagesViaOr!.id,
+        { model: "anthropic/claude-sonnet-5" },
+        async ({ observe }) => {
+          observe.messagesViaOpenRouter(
+            {
+              model: "anthropic/claude-sonnet-5",
+              usage: {
+                input_tokens: 40,
+                output_tokens: 600,
+                cache_read_input_tokens: 13_863,
+                cache_creation_input_tokens: 90,
+                cache_creation: { ephemeral_5m_input_tokens: 60, ephemeral_1h_input_tokens: 30 },
+                service_tier: "standard",
+                inference_geo: "us",
+                output_tokens_details: { thinking_tokens: 128 },
+              },
+            },
+            { costUsd: 0.002_838_6, upstream: "Anthropic" },
+          );
+        },
+      ),
+    );
+
+    /* The money is OpenRouter's own, so nothing of ours may sit beside it. */
+    expect(rows[0]?.costSource).toBe("provider");
+    expect(rows[0]?.creditsUsedNanos).toBe(2_838_600);
+    expect(rows[0]?.computedCostNanos).toBeNull();
+    expect(rows[0]?.priceVersion).toBeNull();
+    expect(rows[0]?.providerAccount).toBe("openrouter");
+    expect(rows[0]?.upstream).toBe("Anthropic");
+
+    /* And the half that went missing. Every one of these is a column
+       `observe.openRouter` cannot fill, which is why the method exists. */
+    /* **`reportedInputTokens`, not `inputTokens`** — the row names it that
+       because the two wires disagree about what an input token is, which is the
+       same disagreement this observer exists for (src/ai-spend.ts). */
+    expect(rows[0]?.reportedInputTokens).toBe(40);
+    expect(rows[0]?.outputTokens).toBe(600);
+    expect(rows[0]?.cacheReadTokens).toBe(13_863);
+    expect(rows[0]?.cacheWrite5mTokens).toBe(60);
+    expect(rows[0]?.cacheWrite1hTokens).toBe(30);
+    expect(rows[0]?.reasoningTokens).toBe(128);
+    expect(rows[0]?.serviceTier).toBe("standard");
+    expect(rows[0]?.inferenceGeo).toBe("us");
+  });
+
+  it("says it does not know, rather than borrowing our price table, when no cost arrives", async () => {
+    /* The Skin puts `cost` in the raw `message_delta`, and the SDK's stream
+       accumulator drops it — so a caller reading the merged message gets
+       `undefined` for ever. The row must then be short by an *unknown* amount:
+       `computed`, under OpenRouter's account, would put our arithmetic where
+       `--reconcile` compares against their running total. */
+    const rows = await rowsFrom(() =>
+      withDeclaredExternalCall(
+        messagesViaOr!.id,
+        { model: "anthropic/claude-sonnet-5" },
+        async ({ observe }) => {
+          observe.messagesViaOpenRouter(
+            { model: "anthropic/claude-sonnet-5", usage: { input_tokens: 40, output_tokens: 600 } },
+            { costUsd: null },
+          );
+        },
+      ),
+    );
+
+    expect(rows[0]?.costSource).toBe("none");
+    expect(rows[0]?.creditsUsedNanos).toBeNull();
+    expect(rows[0]?.computedCostNanos).toBeNull();
+    /* The tokens still arrived, so the row is not empty — it is honest. */
+    expect(rows[0]?.reportedInputTokens).toBe(40);
+  });
+
+  it("refuses the chat wire's observer for a Messages-wire declaration", async () => {
+    /* **This is the guard, and it is the whole finding.** `observe.openRouter`
+       accepted a Messages-wire call happily; the loss was invisible because the
+       cost was right. Now the wrong shape cannot be handed over at all. */
+    await expect(
+      collectSpend(
+        () =>
+          withDeclaredExternalCall(
+            messagesViaOr!.id,
+            { model: "anthropic/claude-sonnet-5" },
+            async ({ observe }) => {
+              observe.openRouter({
+                usage: { prompt_tokens: 40, completion_tokens: 600, cost: 0.002 },
+              });
+            },
+          ),
+        {
+          attribution: { scopeKind: "eval", ownerId: "00000000-0000-4000-8000-00000000d001" },
+          sink: async () => undefined,
+        },
+      ),
+    ).rejects.toThrow(/not the observer for it/);
+  });
+
+  it("refuses the Messages observer for a chat-wire declaration", async () => {
+    /* The other direction, because the two wires disagree about what an input
+       token is — the Messages shape reports cache reads outside `input_tokens`,
+       the chat shape inside — so a chat body read as Anthropic-shaped would
+       double-count them. */
+    await expect(
+      collectSpend(
+        () =>
+          withDeclaredExternalCall(
+            chatViaOr!.id,
+            { model: "google/gemini-3.7-flash" },
+            async ({ observe }) => {
+              observe.messagesViaOpenRouter(
+                { usage: { input_tokens: 1, output_tokens: 1 } },
+                { costUsd: 0.001 },
+              );
+            },
+          ),
+        {
+          attribution: { scopeKind: "eval", ownerId: "00000000-0000-4000-8000-00000000d001" },
+          sink: async () => undefined,
+        },
+      ),
+    ).rejects.toThrow(/not the observer for it/);
+  });
+});
+
 describe("work that outlives the call", () => {
   /* **`AsyncLocalStorage` follows into anything created inside its callback**,
      so "a store exists" is not "the call is still running". GPT Sol drove both

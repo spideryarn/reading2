@@ -512,12 +512,19 @@ is read by nothing.
 | `PGSSLROOTCERT=certs/supabase-ca.crt` | **required here, unlike locally** — see [the certificate](#the-certificate-moved-and-nothing-would-have-said-so) |
 | `NODE_OPTIONS=--experimental-require-module` | see [require(ESM)](#the-runtime-has-requireesm-turned-off). **Set on Production and, since 2026-08-27, Preview.** It was Production-only until then (measured 2026-08-26), which meant a preview deployment used to check anything failed for a reason unrelated to whatever you were checking |
 | `NODEJS_HELPERS=0` | see [the request body](#the-request-body) |
-| `ANTHROPIC_API_KEY` | the pipeline stages. Note it is *not* in `.env.local` — it comes from Greg's shell, so it is the easy one to forget |
-| `OPENROUTER_API_KEY` | explain, and chat |
+| `OPENROUTER_API_KEY` | **every paid call in the app**, since 2026-08-27 — the pipeline as well as explain, chat, search, PDF reading and embeddings. Without it nothing can be ingested at all. [ai-gateway.md](ai-gateway.md) |
 | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | the gate verifies tokens with these. `SUPABASE_ANON_KEY` is the legacy fallback and is what is set today |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | **set on Production, 2026-08-27 — and they are read at BUILD time**, which is the part to remember. Vite compiles them into the bundle, so setting them after a deploy changes nothing until the next build. Missing means [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) throws at module load and the site is a **blank page** — which is what `www.spideryarn.com` was for a few hours that day. **Set on Preview too, 2026-08-27** — until then a preview was a blank page for this reason and no other, which looks identical to a build that never ran. Note that Preview builds predating that setting keep the missing values baked in; only a new build picks them up. The values came from `.env.prod`, where the publishable key lives under the legacy name `SUPABASE_ANON_KEY` and its value is an `sb_publishable_…`. [auth.md](auth.md), [auth-ui-and-production.md § The release fence](../plans/auth-ui-and-production.md#the-release-fence) |
 | `SPIDERYARN_OWNER_ID` | the uuid in `auth.users` that rows are stamped with **when there is no signed-in reader** — the CLI, the pipeline, `npm run db:import`. Inside a request the session user wins and this is ignored, and that ordering is load-bearing: were it the other way round, setting this here would have handed every signed-in stranger Greg's own shelf and every query would have matched. Unset in production is a thrown error rather than a default. [`src/owner.ts`](../../src/owner.ts), [auth.md](auth.md) |
 | `LOG_LEVEL=info` | [logging.md](logging.md) |
+
+**`ANTHROPIC_API_KEY` was a row in that table until 2026-08-31, described as "the pipeline stages".**
+It stopped being that on 2026-08-27, when the pipeline moved to OpenRouter
+([ai-gateway.md](ai-gateway.md)), and no deployment has wanted it since. It is not in the table, it
+is not in `/api/health`'s `env` block, and setting it on Vercel does nothing at all. The one thing
+left in the repo that reads it is an eval that runs on a laptop — the PDF bake-off's
+`transport: "anthropic"` arms, whose whole question is Anthropic-direct versus OpenRouter
+(`bakeoff-anthropic-transport` in [`src/spend-declarations.ts`](../../src/spend-declarations.ts)).
 
 ## `/api/health`, and why to look at it first
 
