@@ -60,6 +60,13 @@ Asked on 2026-08-31, with diagrams:
   foot. Rejected: a word plus a hover card, and both-at-once.
 - **Scope:** the full mode, run as [engineering-manager.md](../reusable/engineering-manager.md).
 
+Then twice more on 2026-08-31, after the review and the spike had turned up what the first draft got
+wrong, and both answers cut rather than added:
+
+- **How much to resolve in code:** *parse the date, fill in the year, stop there.* No relative
+  arithmetic, no `basis`.
+- **Sorting:** *don't sort by date at all — use the model's reading.*
+
 The one place the answers pull against each other: the mark vocabulary Greg picked included a bar
 "drawn to its width", which needs the axis he rejected. Resolved in
 [§ The marks](#the-marks-a-bracket-a-dot-and-a-bracket) — the bar becomes symbolic and fixed-width,
@@ -156,240 +163,232 @@ implementation has to handle:
 
 ## The data model
 
-### One interval, two flags
+**Revised 2026-08-31 after the review and the spike, and after two decisions from Greg.** The
+history is in [§ What the review and the spike found](#what-the-review-and-the-spike-found-2026-08-31);
+this section is what we are building.
 
-The temptation is a discriminated union with a member per phrasing — `exact`, `about`, `range`,
-`before`, `after`, `relative`, `none` — and it collapses under the first article, because the
-phrasings compose ("by the next morning, July 11" is relative *and* bounded *and* sub-day). So there
-is **one shape**, and the phrasings are readings of it:
+Greg's two calls:
+
+> **Parse the date, fill in the year, stop there.**
+> **Don't sort by date at all — use the model's reading.**
+
+Between them they delete the three parts of the first draft that the review said were unsound, rather
+than repairing them.
+
+### The model supplies evidence; code supplies dates
+
+This is the whole architecture, and it is the fix for
+[the safety hole](#what-the-review-and-the-spike-found-2026-08-31). The model is **never** asked for
+a normalised date. It is asked for the article's own temporal words, and a small deterministic parser
+turns those words into a date.
+
+```
+   MODEL RETURNS                          CODE PRODUCES
+   ─────────────                          ─────────────
+   phrase: "By the next morning,          earliest: null
+            July 11"                      latest:   "2026-07-11"
+   blockId, quote                         extent:   "instant"
+   order, modality                        yearFilled: true
+```
+
+Three things fall out of this that no amount of prompt-writing could have bought:
+
+1. **A date that is not in the article cannot be displayed**, because the only route to a date is the
+   parser, and the parser reads the article's characters. This is what
+   [§ Nothing is dated](#nothing-is-dated-unless-the-article-dates-it) actually needed.
+2. **`basis` disappears.** It was a coin toss — 16 `"stated"` in one spike run, 13 `"derived"` in the
+   next, off the same prompt — because in "July 7" the month is stated and the year is derived and
+   one field cannot say both. Now the code knows exactly which component it filled in, so it is a
+   fact rather than a judgement.
+3. **The bracket bug becomes harmless.** `[F]rom July 13 through July 19` defeated
+   `findQuote` on the model's normalised copy. The parser reads the **block's own text**, so the
+   brackets are ours to skip rather than the model's to reproduce.
+
+### `When`
 
 ```ts
 interface When {
-  /** Earliest this could have been. null = unbounded below ("by July 4"). */
-  earliest: string | null;      // ISO 8601, to the precision we actually have
+  /** Earliest this could have been. null = unbounded below ("by 4 July"). */
+  earliest: string | null;      // ISO, day precision
   /** Latest this could have been. null = unbounded above ("after that"). */
   latest: string | null;
   /** Does the event FILL this interval, or sit somewhere inside it? */
   extent: "instant" | "extended";
-  /** Where the interval came from. */
-  basis: "stated" | "derived" | "inferred";
-  /** The article's own words that the date was read out of. Checked. */
+  /** The article's own words this was read out of. Located in the block, by us. */
   phrase: string;
+  /** Where in the block `phrase` starts — so the panel can show it and the reader can check. */
+  at: { blockId: BlockId; start: number; end: number };
+  /** True when the parser supplied the year from the publication date. */
+  yearFilled: boolean;
 }
 ```
 
-**`extent` is the field that stops the two kinds of width being confused**, and every design that
-skips it produces nonsense on one of the rows above:
+`when` is **nullable on the event**. An undated event has no `When` at all, rather than a `When` full
+of nulls and a fake `phrase` — which is what the spike produced five times per run, with
+`basis: "inferred"` on rows carrying no date, where the field meant nothing.
 
-- *"from July 13 through July 19"* — six days wide, and we know exactly when. `extended`, bounds firm.
-- *"at some point on July 12"* — one day wide, and we do **not** know when within it. `instant`,
-  bounds a day apart.
+`extent` stays. It was the most stable field in the spike — correct on both showcase rows in both
+runs, never flipped — and it is the difference between "this lasted six days" and "this took a moment
+and we cannot say which".
 
-Same interval width, opposite meanings. Collapse them and row 18 renders as "we're not sure which day"
-and row 16 renders as "it went on all day", both wrong.
+**No `basis`. No relative arithmetic. No `granularity`.** Month precision is carried by the interval
+itself: "During May" is `2026-05-01 .. 2026-05-31, extended`, which is what it means.
 
-`basis` is the other axis:
+### Relative expressions are shown, not solved
 
-- **stated** — the article gives it: *"on July 7"*.
-- **derived** — we computed it, deterministically, in TypeScript, from something the article states:
-  the missing year, or "two weeks later" plus a dated anchor. Reproducible, and we can show our
-  working.
-- **inferred** — the model's judgement from context, with nothing to compute from. Allowed, marked,
-  and never drawn as though it were stated.
+"Another month later" is displayed as *"another month later"* — the article's words, in the date
+column, where a date would otherwise be. We do not compute ~26 June.
 
-### Order is always present; a date is not
+Greg's call, and the spike is why it is cheap: the model obeyed the arithmetic ban **completely** —
+nine relative structures per run, zero computed dates — so we already know it will hand back the
+phrase rather than a number. What we lose is one row on the test article reading "another month
+later" instead of "~26 June". What we do not build is offset ranges, anchor edges, cycle detection by
+strongly-connected components, and the four-deep resolution chain the spike produced.
 
-Every event carries an `order` — the model's reading of where it sits in the sequence — **whether or
-not it has a date**. That is the "resorting to ordering" half of Greg's ask, and it is not a fallback
-bolted on at the end: it is the primary key, and dates are a refinement that most rows happen to have.
-
-Row 10 is why. *"Within a few hours of the board being created"* is anchored to an event with no date
-of its own. There is no arithmetic that produces a date here, and there never will be — but the
-reader knows exactly where it goes, and so does the model.
+It also removes an invention we would otherwise have shipped: **"a few hours" came back as
+`{ value: 3, unit: "hour" }`**, and the 3 is the model's, not the article's. Under this design that
+number never exists.
 
 ### The event
 
 ```ts
 interface TimelineEvent {
-  id: TimelineEventId;          // minted once, preserved across runs
-  label: string;                // SHORT. the row's headline. see the awkward thing, above
-  when: When;
-  order: number;                // position in the sequence, dated or not
+  id: TimelineEventId;               // minted once, preserved across runs
+  label: string;                     // SHORT. a handle, not a retelling
+  when: When | null;                 // null = the article gives no date
+  order: number;                     // the model's reading of the sequence — THE SORT KEY
   modality: "happened" | "predicted" | "hypothetical";
-  relative: RelativeAnchor | null;   // see below
-  occurrences: TimelineOccurrence[]; // block id + quote, validated
+  occurrences: TimelineOccurrence[]; // block id + quote, validated as Ideas validates them
 }
 ```
-
-`modality` is a **separate axis from certainty**, deliberately. *"I expect rapid advances over the
-next six months"* (row 23) is not an uncertain date — it is a confident statement about a thing that
-has not happened. Rendering a prediction with the same mark as a fuzzy past date tells the reader
-those are the same kind of doubt. They are not, and this is precisely the laundering that
-[the Ideas panel is shaped against](../project/ideas.md#it-is-a-hypothesis).
-
-### Relative dates: the model returns the structure, we do the arithmetic
-
-```ts
-interface RelativeAnchor {
-  toEventId: TimelineEventId;
-  offset: { value: number; unit: "hour" | "day" | "week" | "month" | "year" } | null;
-  direction: "before" | "after";
-  approximate: boolean;         // "a few hours", "about a month"
-}
-```
-
-The model is **not** asked to compute "26 May". It is asked to say *fourteen days after that one*, and
-[`resolveRelative`](#stage-1-the-arithmetic-and-nothing-else) does the sum. Three reasons, and the
-third is the one that matters:
-
-1. It is deterministic, so it is unit-testable with no model call.
-2. When it fails — the anchor has no date either — it fails *visibly*, into an undated event, instead
-   of into a plausible-looking invented date.
-3. **It marks its own output.** A date we computed is `basis: "derived"` by construction, because the
-   function that produced it says so. A model asked for the answer returns a string that looks
-   identical to a stated one, and nothing downstream can tell them apart.
-
-`approximate: true` widens the interval rather than moving it: "about a month later" from a firm
-26 May gives roughly 26 June with a window either side, not a false point.
-
-**Cycles are possible** — the model can hand back A-after-B and B-after-A — so resolution is a
-fixed-point pass with a visited set, and an unresolvable cycle demotes both events to undated and is
-counted. It must not hang, and it must not throw away the events.
-
-### The reference frame, and the year nobody writes down
-
-Nineteen of twenty-four expressions on the test article have no year. The frame is **the article's
-publication date**, from `meta`. With it: *"July 7"* on a piece published 29 Aug 2026 is 2026-07-07,
-`basis: "derived"`. *"just six months ago"* is around Feb 2026, `derived` and wide.
-
-Without a publication date — and plenty of articles have none — **the year is not guessed**. A dateless
-frame means every year-less expression stays year-less: the interval is `null`-bounded and the event
-falls back to `order`, which is the whole reason `order` exists. It does not quietly become *this*
-year, which is the failure that would put 2026 on an essay from 2011.
-
-One trap: a year-less date can land *after* publication (a piece published in January mentioning
-"December"). The rule is **the most recent instance at or before publication**, and where that is
-ambiguous the interval widens to span both candidates rather than picking.
-
-`meta` is therefore an input to the artefact's freshness hash, exactly as it is for `ideas` — and for
-the same reason, one door along.
-
-### There is no publication date, and that was found by looking
-
-**`Meta` has no publication date field.** Checked on 2026-08-31 by ingesting the test article:
-
-```
-data/openai-huggingface/meta.json
-  { slug, title, byline, siteName, lang, url, fetchedAt, excerpt }
-```
-
-`fetchedAt` is when *we* downloaded it, which on this article is two days after publication and on an
-older one could be fifteen years after. Using it as the reference frame would put 2026 on an essay
-from 2011 — the exact failure [§ The reference frame](#the-reference-frame-and-the-year-nobody-writes-down)
-says must not happen. So it is not a fallback; it is the wrong number wearing the right shape.
-
-The date **is** in the page. `data/openai-huggingface/raw.html` carries it twice:
-
-```
-"datePublished":"2026-08-29T22:47:53+00:00"
-"post_date\":\"2026-08-29T22:47:53.666Z\"
-```
-
-Stage 2 simply never reads it. So the plan needs a decision, and the recommendation is the boring one:
-
-**Add `publishedAt?: string` to `Meta`, populated in stage 2 from JSON-LD `datePublished` or
-`<meta property="article:published_time">`, absent when neither is there.** It is a few lines, it is
-in the artefact where a date about the article belongs, and it is useful beyond this mode — the
-library sorts on `fetchedAt` today, which is the wrong key for a shelf.
-
-Two things follow, and both are already true of the design:
-
-1. **Every article ingested before this change has no `publishedAt`**, and always will unless it is
-   re-extracted. So the no-frame path is not an edge case to be handled for completeness — it is the
-   path most of the corpus takes on day one, and it must be the well-tested one.
-2. **This is a change to somebody else's stage.** [AGENTS.md](../../AGENTS.md) says stay inside your
-   stage and talk to the others through the artefacts they write. Adding a field to a shared artefact
-   is the sanctioned way to do exactly that, but it is still stage 2's file, so it goes in as its own
-   small, separately-reviewable piece of work with the reasoning attached — not smuggled into
-   `src/timeline.ts`.
-
-**It is not a blocker.** Stages 1 and 3 do not touch it, and stage 2 works without it — every
-year-less date on an article with no frame simply stays year-less and falls back to `order`, which is
-the behaviour the mode was designed around. The Dwarkesh article would then show nineteen undated
-rows in the right sequence, which is a correct answer and a much less useful one.
 
 ---
+
+## Ordering: the model's reading, and the dates as a check on it
+
+Greg's second call. **The list is in the order the model says the story goes.** Dates hang off the
+rows as labels; they do not move anything.
+
+```
+  sort by (modality partition, order)
+```
+
+That is the whole function. Predictions and hypotheticals sort after everything that happened;
+within each partition, `order`, with the event's index as a stable tie-break for duplicate values.
+
+The first draft had a four-rule precedence, a conflict counter and a dozen edge cases, and the review
+was right that even that asserted more than the evidence supports: an event known only to be "by 4
+July" may have happened on the 1st, and placing it at the 4th claims otherwise. The proper fix is a
+partial order with a topological sort. **The cheaper fix is not to sort by date at all**, which is
+what we are doing.
+
+### The dates still get compared — as a counter, not a sort key
+
+This is the part worth keeping from the discarded design, and it now costs nothing.
+
+Where two events both carry dates whose intervals prove an order — `A.latest < B.earliest` — and the
+model put them the other way round, that is a **definite contradiction between the article's own
+dates and the model's reading of the sequence**. It changes nothing on screen. It increments
+`orderConflicts`, and it is the only signal we have that the model has misread the chronology.
+
+The test article is the reason to want it: it recounts the same three months three times, once per
+civilisation, and `spya-z6c3dr` says out loud *"we're getting a little bit ahead of the story"*. A
+run with a high conflict count on that piece may be the mode working; a high count on a plainly
+linear article is the mode failing. Without the counter we would not be able to tell the difference,
+and with no sort to protect, the counter is four lines.
 
 ## Nothing is dated unless the article dates it
 
-The single rule this mode lives or dies by, and the reason it is enforced in code rather than asked
-for in the prompt.
+Still the rule the mode lives or dies by. **The mechanism changed completely**, because the first
+one did not work — see
+[§ What the review and the spike found](#what-the-review-and-the-spike-found-2026-08-31) for the two
+proofs.
 
-`When.phrase` is **the article's own words that the date was read out of** — *"By the next morning,
-July 11"*. It is not decoration and it is not for the tooltip. It is checked:
+The first design asked the model for a date plus the words it came from, then checked the words were
+in the block. That check both **rejected correct dates** (an editorial `[F]rom` bracket) and
+**accepted wrong ones** (`findQuote` is substring matching, so `July 1` is found inside `July 11`,
+and four of this article's blocks hold two dates each).
 
-> The phrase must be locatable, by [`findQuote`](../../src/quote-match.ts), inside one of the blocks
-> the event cites. If it is not there, **the date is dropped and the event becomes undated** — it
-> keeps its `order`, its label and its occurrences, and loses the thing we could not source.
+**The rule now is structural rather than checked.** Code parses the block's own characters, so a date
+the article does not contain has no way into the artefact. There is nothing to validate, because
+there is nothing to distrust: the model never handed us a date.
 
-That is the check that makes an invented date expensive to produce and cheap to catch. A model that
-wants to write `1998-04-02` must also produce a run of characters that actually appears in a named
-block, and `findQuote` will not find one that does not. It is the same discipline
-[`validateOccurrences` in `src/ideas.ts`](../../src/ideas.ts) runs on block ids, pointed at the field
-where this mode's lies will live.
+What is still validated, exactly as `src/ideas.ts` does it:
 
-**Demote, do not drop.** An event whose date fails the check is still a real event with real
-evidence; it has simply lost its claim to a date. Dropping it would delete a row the reader can see in
-the prose, which reads as the panel missing things. This is the opposite of the Ideas rule — where an
-idea with no surviving occurrence is dropped whole — and the difference is that an idea with no
-evidence is *nothing*, whereas a dated event minus its date is still an event.
+- **the occurrence** — block id must exist in `blocks.json`, quote must be locatable by `findQuote`;
+- **the phrase's location** — the parser must find the temporal expression inside the occurrence, and
+  records where. A phrase we cannot locate means no date, not a guessed one.
 
-Counted, in the same shape as `Dropped` in `src/ideas.ts`: `unsourcedDates`, `unknownIds`, `unquoted`,
-`unresolvableRelatives`, `cycles`, `malformed`, `overCap`. Counts only — never the prose, never the
-quote, never the raw parse error.
+### Three outcomes, not two
 
-**`inferred` is the one hole in this**, and it is deliberate. An `inferred` date has no phrase to check
-by definition, so the rule above cannot reach it. Three things contain it: the mark says so on screen,
-the prompt makes it a last resort, and the stage caps the proportion of inferred dates in one artefact
-— a run that comes back mostly-inferred is a run that has misunderstood the article, not a run that
-found a subtle chronology.
+The review's point, and it holds: a rejected date must not render identically to a genuine absence.
 
----
+| | The row shows |
+|---|---|
+| occurrence invalid | the event is dropped |
+| occurrence valid, date parsed | the date, with its marks |
+| occurrence valid, date evidence rejected | the event, and **"this piece dates this, and we could not read the date"** |
 
-## The marks: a bracket, a dot, and a bracket
+The third is the one the first design got wrong: it demoted silently to an ordinary undated row, so
+"fails visibly" was only true inside a counter.
 
-Greg picked "show it in the drawing itself". Four ad-hoc glyphs would be a hieroglyphic to memorise,
-so the notation is **compositional** — three slots, each meaning one thing, read left to right:
+Counters, in the shape of `Dropped` in `src/ideas.ts` — counts only, never prose, never quotes, never
+the raw parse error: `unknownIds`, `unquoted`, `unparseablePhrase`, `phraseNotInOccurrence`,
+`noYearFrame`, `orderConflicts`, `overCap`, `malformed`.
+
+## The marks: two brackets and what sits between them
+
+Greg picked "show it in the drawing itself". The notation is **compositional** rather than six
+symbols to memorise — three slots, each meaning one thing, read left to right.
+
+**It got simpler when `basis` was cut.** The first draft used a filled dot for a date the article
+stated and a hollow one for a date we worked out. With the parser reading the article's own
+characters, *every* date is the article's, so the distinction had nothing left to mark — and since
+the year is filled in on every row of a piece like this one, a "we touched this" mark would be on
+every row and say nothing.
+
+So the dot is just a dot, and **the brackets carry all of it**:
 
 ```
-   ┌──────────── how firm is the EARLIER edge?
-   │   ┌──────── did the article state this, or did we work it out?
-   │   │   ┌──── how firm is the LATER edge?
+   ┌──────────── is there a bound on the EARLIER side?
+   │   ┌──────── the event
+   │   │   ┌──── is there a bound on the LATER side?
    │   │   │
-   │   ●   │        a date the article states outright
-   ┊   ○   ┊        we worked it out, and it is roughly here
-   ⋯   ○   │        we know only that it was at or before this
-   │   ○   ⋯        we know only that it was at or after this
-   ⋯   ○   ⋯        no date at all — this row is placed by order alone
-   │ ▬▬▬▬▬ │        the event LASTS this long, and both ends are stated
+   │   ●   │        26 May          the article gives a date
+   ⋯   ●   │        by 12 May       at or before this, and no earlier bound
+   │   ●   ⋯        after 12 Jul    at or after this, and no later bound
+   ⋯   ●   ⋯        —               no date; this row is placed by the story alone
+   │ ▬▬▬▬▬ │        13–19 Jul       the event LASTS this long
+   │   ⊘   │        —               the piece dates this and we could not read it
 ```
 
-- **`│` hard edge** — the article gives this bound.
-- **`┊` soft edge** — the bound is ours: derived, or approximate.
-- **`⋯` open edge** — there is no bound on this side at all.
-- **`●` filled dot** — `basis: "stated"`.
-- **`○` hollow dot** — `basis: "derived"` or `"inferred"`; hollow means *we* put it there.
-- **`▬▬▬` bar** — `extent: "extended"`. The event fills the interval rather than sitting in it.
+- **`│` bound** — the article gives this edge.
+- **`⋯` open** — no bound on this side at all.
+- **`▬▬▬` bar** — `extent: "extended"`. The event fills the interval rather than sitting inside it.
+  Fixed width, because Greg chose the un-scaled list; the duration is said in words beside the date.
+- **`⊘`** — the third outcome from
+  [§ Three outcomes](#three-outcomes-not-two). Rare, and it must not look like an ordinary blank.
 
-Two axes, six glyphs, and every row above is a composition rather than a symbol to learn. The legend
-sits at the foot of the panel and shows exactly these six lines.
+Five marks on one axis, and each is a composition rather than a symbol. The legend sits at the foot
+of the panel and shows exactly these lines.
 
-The bar is **fixed width**, because Greg chose the un-scaled list: it says *this lasted a while*, and
-the duration is said in words beside the date ("6 days"). A bar drawn to scale would need the axis he
-turned down.
+**A relative expression has no marks and no interval.** "Another month later" sits in the date column
+as the article's own words. That is honest — we know where it goes in the sequence and nothing more —
+and it needs no notation to say so.
 
-`modality` is not in this notation. A prediction is not a kind of doubt, so it gets a different
-treatment — see the panel sketch.
+`modality` is not in this notation. A prediction is not a kind of doubt about a date, so it gets a
+divider and a heading rather than a glyph.
+
+### Accessibility is not the legend
+
+Raised by the review, and it is right: a panel whose meaning is carried by typographic glyphs is
+unreadable to a screen reader and fragile across fonts.
+
+- Every glyph is `aria-hidden`. Each row carries a complete spoken sentence — *"at or before 12 May;
+  year taken from the publication date"* — not a symbol name.
+- The marks are drawn as CSS or inline SVG rather than Unicode characters, so they do not depend on
+  what the reader has installed.
+- Both themes, and the selected and focused states, checked in a browser rather than asserted.
 
 ### What the panel looks like
 
@@ -482,17 +481,24 @@ model will flatten every one of them:
 > "2026-07-04"`. The same goes for "after", "since", "not until", "by then", "already". These are
 > bounds, and you must not turn a bound into a point.
 
-**The extent rule**, which is the `instant` / `extended` distinction made operational:
+**The extent rule** — the one judgement still asked of the model, and the spike says it is good at
+it (correct on both showcase rows in both runs, never flipped):
 
 > Two different things make an interval wide. "From July 13 through July 19" is an event that LASTS
 > six days — `extended`. "At some point on July 12" is an event that took a moment, and we do not know
 > which moment — `instant`, with the interval one day wide. Ask yourself: was the thing still
 > happening in the middle of the interval? If yes, `extended`.
 
-**The arithmetic ban**, from [§ Relative dates](#relative-dates-the-model-returns-the-structure-we-do-the-arithmetic):
+**The no-dates rule**, which replaced the arithmetic ban when
+[the parser took over](#the-model-supplies-evidence-code-supplies-dates) and is now the first thing
+the prompt says:
 
-> Do NOT compute relative dates. If the article says "two weeks later", give the offset and the event
-> it is later than, and stop. We do the sum, and we do it in a way that marks the answer as ours.
+> Do not give dates at all. Give the article's own words — "By the next morning, July 11" — copied
+> from the paragraph, and stop. We read the date out of them ourselves. If the article does not put a
+> time on something, say so; an undated event is a correct answer and often the right one.
+
+The spike is why this is safe rather than hopeful: asked to withhold arithmetic, the model withheld
+it completely — nine relative structures per run, zero computed dates.
 
 **The article-is-hedging rule**, which is row 16 and is the thing no other mode notices:
 
@@ -538,62 +544,6 @@ The skeleton before the full text, in the order `arc`, `glossary` and `ideas` al
 thing they do not need: **the publication date, named as the reference frame**, and an explicit line
 saying what to do when there is not one.
 
-
----
-
-## Ordering, which is the part that has to be a pure function
-
-Sorting a list of events where most have partial dates, some have none, and the model has also given
-its own opinion about the sequence is the one piece of real algorithm here. It is
-**`orderEvents(events) → TimelineEvent[]`**, it takes no model call, and it is where the tests go.
-
-The rule, in order of precedence:
-
-1. **A dated event sorts by `earliest`**, falling back to `latest` when `earliest` is null (a "by July
-   4" event sorts as though it were July 4, because that is the only thing we know about it, and it
-   is drawn with an open left edge so the reader can see why).
-2. **Ties break on `order`** — the model's sequence. This is what puts "by July 10, coordinating
-   hundreds" before "on the morning of July 10, an agent found credentials" when both resolve to the
-   same day and neither carries a time.
-3. **An undated event is placed by `order` alone**, between the dated events that bracket it in the
-   model's sequence. It does not sink to the bottom of the list and it does not float to the top: it
-   goes where the story puts it, which is the only information we have about it and is usually
-   enough.
-4. **`modality` partitions last.** Everything `predicted` or `hypothetical` sorts after everything
-   `happened`, regardless of date, because "six months from now" and "six months before the piece was
-   written" are not points on one line the reader should scan across.
-
-### Where the model's order and the dates disagree
-
-They will. The interesting question is which wins, and the answer is **the dates**, with the
-disagreement *counted* rather than silently smoothed over.
-
-The reason is asymmetric reliability: a date has a `phrase` that was checked against the article's own
-characters, and `order` is the model's unchecked opinion. When they conflict, one of them has been
-verified and the other has not.
-
-But a high conflict count is a signal that something is wrong with the whole run — either the model
-misread the chronology, or the article is genuinely non-linear in a way this mode is mis-serving — so
-`orderConflicts` is one of the counters, and a run where it is large is a run to look at rather than
-ship. This is the number to check first on the Dwarkesh article, because that piece deliberately
-recounts the same three months three times over.
-
-### The cases the tests must cover
-
-Written before the implementation, red first:
-
-- all events dated, no ties
-- all events undated — the list is the model's `order`, unchanged
-- mixed, with undated events between dated ones
-- two events resolving to the same day, broken by `order`
-- an event with only `latest` ("by July 4") against one with only `earliest` ("after that")
-- an `extended` event overlapping several `instant` ones
-- the model's `order` contradicting the dates — dates win, counter increments
-- a relative chain resolving three deep (A stated → B = A+14d → C = B+1mo)
-- a relative anchor that is itself undated — stays undated, counter increments
-- a relative **cycle** — both demoted, counter increments, and the function returns
-- predictions interleaved with past events by date — they still partition to the end
-- an empty list, and a one-event list
 
 ---
 
@@ -810,83 +760,87 @@ database it is his call every single time.
 
 ## The stages of work
 
-Five, each ending green and committable, run as
-[engineering-manager.md](../reusable/engineering-manager.md). The cut is set by **which files are
-contended**, not by which pieces are conceptually neighbours: everything that can be done in a file
-nobody else is holding comes first, and the plumbing that has to reach into five files another
-session is mid-edit on goes last and goes fast.
+**Recut 2026-08-31.** The review's sequencing point is taken: building the panel against a contract
+the evidence has not validated is the mistake
+[ideas-mode.md § Run the eval before building any of it](ideas-mode.md#run-the-eval-before-building-any-of-it)
+already corrected once. The spike has now done that job — the extraction works, twice, and the
+numbers are in
+[§ What the review and the spike found](#what-the-review-and-the-spike-found-2026-08-31) — so the
+contract can be frozen.
 
-### Stage 1 — the arithmetic, and nothing else
+The remaining cut is set by **which files other sessions are holding**: everything doable in a file
+nobody else has open comes first, and the plumbing that reaches into five contended files goes last
+and goes fast.
 
-`src/timeline-time.ts` + `src/types.ts` + `tests/timeline-time.test.ts` + a hand-written fixture
-artefact. No model call, no DB, no UI, no pipeline wiring.
+### Stage 0 — the publication date
 
-This stage exists so that **the hard part is solved before either of the other two starts**, and so
-that stages 2 and 3 can then run in parallel against a fixed contract. Everything in
-[§ Ordering](#ordering-which-is-the-part-that-has-to-be-a-pure-function) is here, red first.
+`publishedAt` on `Meta`, populated in `src/extract.ts`, and added explicitly to the metadata
+fingerprint. **One line of extraction**, not a scraper: Readability already returns
+`publishedTime: "2026-08-29T22:47:53+00:00"` and the stage simply drops it on the floor.
 
-Done looks like: every case in that section has a test, `npm test` and `npm run typecheck` green, and
-a `fixtures/timeline-dwarkesh.json` hand-written from [the table above](#the-test-article) that the
-panel can be built against without a model call ever running.
+It is another stage's file, so it goes in as its own small, separately reviewable change with the
+reasoning attached — the sanctioned way to talk to another stage is through the artefact it writes.
 
-### Stage 2 — the generator, in its own file (parallel with 3)
+Done: the test article re-extracted and `data/openai-huggingface/meta.json` carrying the date; every
+article ingested before today still has none, so **the no-frame path is the common one and gets the
+tests**.
 
-`src/timeline.ts` alone: the prompt, the model call, the parsing, the validation, the counters, the
-CLI, `tests/timeline.test.ts`. **It writes `data/<slug>/timeline.json` and touches nothing else** —
-`npm run timeline -- data/openai-huggingface`, filesystem in, filesystem out, no store, no database,
-no pipeline registration. That is exactly how every stage's CLI already works, so this is not a
-throwaway scaffold; it is the finished stage minus its wiring.
+### Stage 1 — the parser, and nothing else
 
-Splitting the wiring off is deliberate. The plumbing lives in five files another session is editing
-right now, and none of it is needed to find out whether the extraction works.
+`src/timeline-time.ts`: read a block's text and a temporal phrase, return a `When` or nothing. Plus
+the trivial ordering function and the `orderConflicts` comparison. No model call, no I/O, no UI.
 
-Done looks like: the stage run for real against the Dwarkesh article, the counters from
-[§ Nothing is dated](#nothing-is-dated-unless-the-article-dates-it) reported for that run, and
-[§ Where the bans relocate to](#negative-examples) checked against what actually came back rather
-than against a hope.
+This is now the heart of the feature rather than a support library, because
+[the model supplies evidence and code supplies dates](#the-model-supplies-evidence-code-supplies-dates).
+Everything the review said about correctness lands here, red first.
 
-### Stage 3 — the panel (parallel with 2)
+Cases, from the article and from the review: `on July 7` · `By May 12` · `after July 12` ·
+`During May` · `from July 13 through July 19` (**seven dates, not six**) · `at some point on July 12`
+· `the night of July 8` · `2026-07-19` · `[F]rom July 13…` (editorial brackets) · a year-less date
+with no frame · a year-less date that would land after publication · inclusive "through" vs exclusive
+"before" vs "not until" · a phrase that is not in the block · a phrase that is in the block but not
+in the occurrence · month-end and leap-day arithmetic · duplicate and invalid `order`.
+
+**No `Date` objects anywhere.** ISO strings end to end, compared as strings, so a timezone cannot
+move a day across the server/client line.
+
+### Stage 2 — the generator, in its own file
+
+`src/timeline.ts`: the prompt, the call, the parsing, the occurrence validation, the counters, the
+CLI. It writes `data/<slug>/timeline.json` and touches nothing else —
+`npm run timeline -- data/openai-huggingface`, filesystem in, filesystem out. That is how every
+stage's CLI already works, so it is the finished stage minus its wiring.
+
+The prompt is the spike's, which is measured rather than hoped for. Done: run for real, counters
+reported, output read by eye against the twenty-four expressions.
+
+### Stage 3 — the panel
 
 `TimelinePanel.tsx`, `useTimeline.ts`, `modes.ts`, `title-text.ts`, `Dock.tsx`, `visitor.ts`,
-`params.ts`, `App.tsx`, `styles.css`, `search-hits.ts`, the preview page,
-`tests/timeline-resolve.test.ts`, and the three table-tests that name every mode. Built entirely
-against Stage 1's fixture, so it neither waits for Stage 2 nor spends a model call.
+`params.ts`, `App.tsx`, `styles.css`, `search-hits.ts`, a preview page, and the three table-tests
+that name every mode. Built against Stage 2's real artefact.
 
-Two things the survey says will otherwise be got wrong: the preview page's wrapper must carry
-`className="reader spine-on"` **and** the custom properties `App.tsx` normally sets on `.reader`, or
-the band's `position: fixed` resolves against nothing and renders about three times too wide; and
-every scrollable child of `.mode-band` needs `flex: 1; min-height: 0; overflow-y: auto;
-overscroll-behavior: contain`, without which the bottom of the list is genuinely unreachable on a
-short window.
+Two traps the survey already found: the preview page's wrapper needs `className="reader spine-on"`
+**and** the custom properties `App.tsx` normally sets on `.reader`, or the band renders about three
+times too wide; and every scrollable child of `.mode-band` needs
+`flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain`.
 
-Done looks like: the preview page showing all six marks, the legend, the prediction divider, an
-expanded row, the empty state and the two-event state — **looked at in a browser**, in both themes,
-in a Sonnet subagent, not asserted in jsdom.
+Done: all five marks, the `⊘` state, the legend, the prediction divider, an expanded row, the empty
+state and the two-event state — **looked at in a browser**, in both themes, in a subagent.
 
-### Stage 3b — the plumbing, last and quickly
+### Stage 4 — the plumbing, last and fast
 
 `pipeline.ts`, `models.ts`, `jobs.ts`, `store/*`, `db/schema.ts`, the migration, `routes.ts`,
-`api.ts`, and the seven table-tests in [§ Changed — the tests](#changed--the-tests-that-are-tables).
-Mechanical, compiler-guided, and touching the contended files — so it is done in one short sitting,
-against a freshly-read `src/ideas.ts`, at whatever moment the other session's stage-1a work has
-landed.
+`api.ts`, and the table-tests in [§ Changed — the tests](#changed--the-tests-that-are-tables).
+Mechanical and compiler-guided, done in one sitting against a freshly-read `src/ideas.ts`.
 
 **Writing the migration is free; applying it is Greg's call**, locally as well as remotely.
 
-### Stage 4 — join up
-
-The real artefact through the real route into the real panel. The browser pass on the actual article.
-`docs/project/timeline.md` written and linked from
-[reading-view-overview.md](../project/reading-view-overview.md). `npm test`, `npm run typecheck`,
-`npm run check`, `npm run lint` on the touched files. This plan updated with what actually happened.
-
 ### Reviews
 
-GPT Sol on this plan before Stage 1 starts, and at the end of every stage on the scoped diff —
-obligatory, per the working agreement, and the code review weighted higher than the plan review.
-
-
----
+Sol has reviewed the plan once and this is the revision answering it. The next review is on **code**,
+at the end of Stage 2 — which the working agreement says to weight higher anyway, because a
+plan-stage review reads prose and cannot find the bug that does not exist yet.
 
 ## Questions for Greg
 
