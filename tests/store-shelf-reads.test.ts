@@ -867,10 +867,37 @@ when("every published revision's stored scalars", { timeout: 60_000 }, () => {
          and its own tests pin that. What this is about is a column that is
          present and wrong, which nothing else can see. */
       if (row.wordCount === null) continue;
-      const blocks = await db
-        .select({ words: revisionBlocks.words })
+      /* **`treatment` is in this projection because the rule reads it, and
+         nothing but this line makes it so.** `wordCount` became *body* words on
+         2026-08-28 — `countsTowardReadingTime` is `treatment !== "supplement"`
+         (src/block-policy.ts) — and this audit kept selecting `words` alone for
+         three days.
+
+         It compiles either way, and that is the trap. `Treated` is
+         `{ treatment?: Block["treatment"] | null }`, so a row without the field
+         satisfies it; every block then arrives `undefined`, every block reads as
+         body, and this recomputes the **total**, which is the definition
+         `wordCount` had before 2026-08-28. It then reports the column as wrong.
+
+         Nothing could see it. No typecheck can — the field is optional. And the
+         only article in the local database had zero supplement blocks, so
+         `stored` and `actual` agreed by having nothing to disagree about, until
+         an import brought in one article with endnotes and the two numbers came
+         out 12,646 against 16,855. src/store/pg.ts § the shelf's fallback warns
+         about this exact substitution in this exact shape; this is the case that
+         comment did not reach. */
+      const rows = await db
+        .select({ words: revisionBlocks.words, treatment: revisionBlocks.treatment })
         .from(revisionBlocks)
         .where(eq(revisionBlocks.revisionId, row.id));
+      /* The column is `text`, so it arrives as `string | null` and the narrowing
+         is ours to justify: `revision_blocks_treatment` in src/db/schema.ts is a
+         CHECK that allows `null` or `'supplement'` and nothing else. Same cast,
+         for the same reason, as src/store/pg.ts § the block read. */
+      const blocks = rows.map((b) => ({
+        words: b.words,
+        treatment: b.treatment as Block["treatment"] | null,
+      }));
       const actual = deriveLibraryScalars({
         blocks,
         tree: row.tree as Parameters<typeof deriveLibraryScalars>[0]["tree"],
