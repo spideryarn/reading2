@@ -97,30 +97,34 @@ function ssh(remote: string, opts: { check?: boolean } = {}): string {
  * That failure looks exactly like a blocked firewall — two causes, one symptom.
  */
 function moshProbe(): { ok: boolean; detail: string } {
+  // script(1) calls tcgetattr on its stdin. Handed a pipe, it dies with
+  // "tcgetattr/ioctl: Operation not supported on socket" — which is what this
+  // probe did on EVERY network, while reporting "UDP blocked?". It was never
+  // testing reachability at all. stdin must be the real terminal.
+  if (!process.stdin.isTTY) {
+    return { ok: false, detail: "cannot probe without a terminal; assuming ssh" };
+  }
   const probe = `stty rows 40 cols 120; exec env LANG=C.UTF-8 mosh ${shq(HOST())} -- true`;
   const r = spawnSync("script", ["-q", "/dev/null", "sh", "-c", probe], {
     encoding: "utf8",
-    // 15s, not 6: a first connection has to bootstrap over ssh before mosh's own
-    // handshake even starts, and a too-short timeout reports "UDP blocked" for
-    // what was only slowness. mosh itself retries forever on a blocked network,
-    // so some timeout is required.
+    // 15s, not 6: a first connection bootstraps over ssh before mosh's own
+    // handshake starts, and a short timeout reports a blocked network for what
+    // was only slowness. Some timeout is required — mosh retries forever.
     timeout: 15_000,
+    stdio: ["inherit", "pipe", "pipe"],
   });
   if (r.status === 0) return { ok: true, detail: "" };
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`
     .split("\n")
     .map((l) => l.trim())
-    .filter((l) => l && !/^\s*$/.test(l))
+    .filter(Boolean)
     .slice(-4)
     .join("  ");
-  const detail = r.signal === "SIGTERM" || r.error?.message?.includes("ETIMEDOUT")
-    ? "timed out — mosh retries forever when UDP is blocked, so this is the usual shape of a blocked network"
-    : out || `exit ${r.status}`;
+  const detail =
+    r.signal === "SIGTERM" || r.error?.message?.includes("ETIMEDOUT")
+      ? "timed out — mosh retries forever when UDP is blocked, so this is the usual shape of a blocked network"
+      : out || `exit ${r.status}`;
   return { ok: false, detail };
-}
-
-function moshWorks(): boolean {
-  return moshProbe().ok;
 }
 
 /**
@@ -142,9 +146,23 @@ function attachCmd(name: string, transport: "mosh" | "ssh"): string {
     : `ssh -t ${shq(HOST())} ${shq(inner)}`;
 }
 
-function attach(name: string): never {
-  const transport = moshWorks() ? "mosh" : "ssh";
-  if (transport === "ssh") console.error(dim("mosh unreachable, falling back to ssh"));
+/**
+ * mosh, ssh, or decide by probing. Forced to ssh with GJD_REMOTE_TRANSPORT=ssh
+ * or --ssh, which matters on networks where mosh's UDP does not get through —
+ * a ferry's satellite link being the case that prompted it. The probe costs a
+ * round trip and mosh retries forever when blocked, so on a known-bad network
+ * you want to skip asking rather than wait to be told.
+ */
+function chooseTransport(force?: string): "mosh" | "ssh" {
+  const pref = force ?? process.env.GJD_REMOTE_TRANSPORT ?? "auto";
+  if (pref === "ssh" || pref === "mosh") return pref;
+  const probe = moshProbe();
+  if (!probe.ok) console.error(dim(`mosh unavailable (${probe.detail}); using ssh`));
+  return probe.ok ? "mosh" : "ssh";
+}
+
+function attach(name: string, force?: string): never {
+  const transport = chooseTransport(force);
   const r = spawnSync("sh", ["-c", attachCmd(name, transport)], { stdio: "inherit" });
   process.exit(r.status ?? 0);
 }
@@ -210,7 +228,7 @@ function cmdLs(): void {
  */
 function cmdNew(
   name: string,
-  opts: { prompt?: string | undefined; dir?: string | undefined; attach: boolean },
+  opts: { prompt?: string | undefined; dir?: string | undefined; attach: boolean; transport?: string | undefined },
 ): void {
   if (!SLUG.test(name)) die(`'${name}' is not a valid name (lower-case letters, digits, hyphens; max 41)`);
   if (sessions().some((s) => s.name === name)) die(`session '${name}' already exists — 'gjd-remote resume ${name}'`);
@@ -268,7 +286,7 @@ function cmdNew(
   ssh(`tmux new-session -d -s ${name} ${shq(`bash ${jobPath}`)}`);
 
   console.log(green(`✓ started '${name}'`) + dim(opts.prompt ? " with a prompt" : ""));
-  if (opts.attach) attach(name);
+  if (opts.attach) attach(name, opts.transport);
   else console.log(dim(`  gjd-remote resume ${name}`));
 }
 
@@ -351,6 +369,7 @@ const HELP = `${bold("gjd-remote")} — Claude Code sessions on the Hetzner serv
        -d, --dir DIR              working directory on the box
            --no-attach            create it but stay here
   gjd-remote resume [name]        reattach; no name means the newest
+       --ssh                      skip mosh (satellite, or any UDP-hostile net)
   gjd-remote kill <name>          end a session
   gjd-remote doctor               check the box and print what is wrong
   gjd-remote ssh                  a plain shell, no tmux
@@ -360,7 +379,7 @@ Sessions survive your laptop sleeping, losing wifi, or rebooting — tmux keeps
 them, and mosh reconnects. They do not survive the server rebooting.
 
 The address is read from Terraform state, so it is never stale. Override with
-GJD_REMOTE_HOST=<ip>.`;
+GJD_REMOTE_HOST=<ip>. Force the transport with GJD_REMOTE_TRANSPORT=ssh|mosh.`;
 
 function main(): void {
   const [cmd, ...rest] = process.argv.slice(2);
@@ -379,11 +398,17 @@ function main(): void {
           prompt: { type: "string", short: "p" },
           dir: { type: "string", short: "d" },
           "no-attach": { type: "boolean", default: false },
+          ssh: { type: "boolean", default: false },
         },
       });
       const name = positionals[0];
       if (!name) die("gjd-remote new <name>");
-      return cmdNew(name, { prompt: values.prompt, dir: values.dir, attach: !values["no-attach"] });
+      return cmdNew(name, {
+        prompt: values.prompt,
+        dir: values.dir,
+        attach: !values["no-attach"],
+        transport: values.ssh ? "ssh" : undefined,
+      });
     }
 
     case "resume":
@@ -391,7 +416,7 @@ function main(): void {
       const live = sessions();
       // `tmux ls` order is not a newest-first contract, so sort explicitly.
       const newest = [...live].sort((a, b) => a.created.getTime() - b.created.getTime()).at(-1);
-      const name = rest[0] ?? newest?.name;
+      const name = rest.find((a) => !a.startsWith("-")) ?? newest?.name;
       if (!name) die("no sessions to attach to");
       if (!SLUG.test(name)) die(`'${name}' is not a valid session name`);
       // Without this, a typo'd name lands you in a login shell that looks
@@ -399,7 +424,7 @@ function main(): void {
       if (!live.some((x) => x.name === name)) {
         die(`no session '${name}'. Live: ${live.map((x) => x.name).join(", ") || "none"}`);
       }
-      return attach(name);
+      return attach(name, rest.includes("--ssh") ? "ssh" : undefined);
     }
 
     case "kill": {

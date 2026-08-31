@@ -180,6 +180,12 @@ write_files:
       if [ ! -d /mnt/data/home ]; then
         mkdir -p /mnt/data/home
         rsync -a /home/ /mnt/data/home/
+      elif [ /home/"$USER_NAME"/.ssh/authorized_keys -ef /mnt/data/home/"$USER_NAME"/.ssh/authorized_keys ]; then
+        # Re-running provision.sh on an already-provisioned box: /home IS the
+        # volume by now, so source and destination are literally the same file
+        # and `install` refuses ("are the same file"), taking the whole run down
+        # with it under set -e. There is nothing to copy in this case.
+        echo "/home is already bound to the volume; key already in place"
       else
         # Rebuild. The Terraform-managed key is the single source of truth, so
         # REPLACE rather than append: appending would leave a rotated-out key
