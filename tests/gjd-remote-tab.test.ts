@@ -117,6 +117,15 @@ describe("canColourTab", () => {
     expect(canColourTab({}, true)).toBe(false);
   });
 
+  it("refuses over ssh, and when CI is set", () => {
+    // TERM_PROGRAM is an ordinary inherited variable: on the far side of an ssh
+    // it describes the machine you came FROM, exactly as iterm.md says of
+    // ITERM_SESSION_ID. And nothing in CI has a tab to colour.
+    expect(canColourTab({ ...ITERM, SSH_CONNECTION: "10.0.0.1 52 10.0.0.2 22" }, true)).toBe(false);
+    expect(canColourTab({ ...ITERM, SSH_TTY: "/dev/pts/0" }, true)).toBe(false);
+    expect(canColourTab({ ...ITERM, CI: "true" }, true)).toBe(false);
+  });
+
   it("refuses inside tmux or screen", () => {
     // iTerm's own docs say its proprietary sequences may not survive a
     // multiplexer, and TERM_PROGRAM is inherited, so it can say iTerm.app
